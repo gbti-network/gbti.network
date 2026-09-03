@@ -1,11 +1,11 @@
 ---
-// sow-174: one breadcrumb renderer, shared by the product hero and the article editorial layout.
+// sow-174: one breadcrumb renderer, shared by the project hero and the article editorial layout.
 //
 // It exists because the same flattened-string pattern was written three times: `breadcrumb(cats).join(' › ')`
 // produced one inert string, so no crumb could be linked and the keys an href needs were already thrown away.
 // `breadcrumbPairs` keeps the keys; this renders them.
 //
-// DESTINATION: the cross-type feed, `/feeds/?cat=<key>`. Owner decision 2026-08-24, option B. The products
+// DESTINATION: the cross-type feed, `/feeds/?cat=<key>`. Owner decision 2026-08-24, option B. The projects
 // directory is a curated slider with no filtering at all, and bolting a grid onto it is a larger visual change
 // than the ask; the feed already filters and already serves `?tag=`, so it is one destination for every type.
 //

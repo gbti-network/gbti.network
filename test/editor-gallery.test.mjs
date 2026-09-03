@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { galleryRowsFromValue, galleryValueFromRows, uniqueImageName } from '../client-ui/src/gallery.mjs';
 import { gatherInput } from '../client-ui/src/form.mjs';
 
-// Ryker's actual committed gallery (bare path strings), the shape all ten existing products use.
+// Ryker's actual committed gallery (bare path strings), the shape all ten existing projects use.
 const RYKER = [
   './images/ryker-shot-1.webp',
   './images/ryker-shot-2.webp',

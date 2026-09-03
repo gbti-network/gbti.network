@@ -28,7 +28,7 @@ test('renderBodyTemplate: {body} is verbatim; the wrapper renders; a raw body is
 // SOW-139: the per-type default crosspost cover (mirrors src/lib/feature-image.ts TYPE_TO_FEATURE).
 test('defaultSyndicationCover maps each content type to its branded feature card', () => {
   assert.equal(defaultSyndicationCover('post'), 'https://gbti.network/brand/feature/feature-article.png');
-  assert.equal(defaultSyndicationCover('product'), 'https://gbti.network/brand/feature/feature-product.png');
+  assert.equal(defaultSyndicationCover('project'), 'https://gbti.network/brand/feature/feature-project.png');
   assert.equal(defaultSyndicationCover('prompt'), 'https://gbti.network/brand/feature/feature-prompt.png');
   assert.equal(defaultSyndicationCover('share'), 'https://gbti.network/brand/feature/feature-share.png');
   assert.equal(defaultSyndicationCover('unknown'), 'https://gbti.network/brand/feature/feature-article.png', 'unknown falls back to the article banner');

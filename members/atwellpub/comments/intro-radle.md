@@ -2,7 +2,7 @@
 type: comment
 id: intro-radle
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: radle
 status: published
 visibility: public

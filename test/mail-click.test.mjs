@@ -30,7 +30,7 @@ function frozenIssue() {
     issueId: 'weekly-2026-08-24',
     sections: {
       article: [{ kind: 'article', title: 'Ours', url: '/articles/ours/', author: 'hudson', date: 3 }],
-      product: [], prompt: [], share: [],
+      project: [], prompt: [], share: [],
     },
     topNews: [{ title: 'Theirs', url: 'https://www.theregister.com/a/?sponsored=1', source: 'The Register', date: 2 }],
     layout: [
@@ -38,7 +38,7 @@ function frozenIssue() {
         { kind: 'article', title: 'Ours', url: '/articles/ours/', author: 'hudson', date: 3 }] },
       { key: 'news', label: 'News', empty: false, items: [
         { title: 'Theirs', url: 'https://www.theregister.com/a/?sponsored=1', source: 'The Register', date: 2 }] },
-      { key: 'product', label: 'Products', empty: true, note: 'None.', items: [] },
+      { key: 'project', label: 'Projects', empty: true, note: 'None.', items: [] },
     ],
   };
 }

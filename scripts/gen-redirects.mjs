@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 
 // Build the set of /<seg>/<slug>/ paths that WILL be public pages: published AND (public OR a Mode B stub).
-const SEG = { posts: 'articles', products: 'products', prompts: 'prompts' };
+const SEG = { posts: 'articles', projects: 'projects', products: 'projects', prompts: 'prompts' };
 const field = (txt, k) => {
   const m = new RegExp('^' + k + ':\\s*"?([^"\\n]+?)"?\\s*$', 'm').exec(txt);
   return m ? m[1].trim() : null;
@@ -58,7 +58,7 @@ if (fs.existsSync(membersDir)) {
   }
 }
 
-const CONTENT_DEST = /^\/(articles|products|prompts)\/[^/]+\/$/;
+const CONTENT_DEST = /^\/(articles|projects|products|prompts)\/[^/]+\/$/;
 const MEMBER_DEST = /^\/members\/[^/]+\/$/;
 const MEMBERS_INDEX = '/members/';
 const MEMBERSHIP = '/membership/';
@@ -89,7 +89,7 @@ for (const row of csv) {
 }
 
 // Non-legacy redirects (site reclassifications, not from the legacy CSV). SOW-022: the two GBTI tools moved
-// from the `product` collection to the `applet` collection, so their old /products/<slug>/ detail URLs now
+// from the `project` collection to the `applet` collection, so their old /projects/<slug>/ detail URLs now
 // 301 to the running tool at /utilities/<slug>/ (which is also each applet card's launchUrl).
 const EXTRA = [
   // sow-230: /linkedin-invite/ is RETIRED into /member-invite/. It shipped 2026-08-15 with benefit prose
@@ -101,8 +101,21 @@ const EXTRA = [
   // nothing LinkedIn-specific to preserve at the old path.
   ['/linkedin-invite/', '/member-invite/'],
 
-  ['/products/js-animate-hue/', '/utilities/js-animate-hue/'],
-  ['/products/email-signature-generator/', '/utilities/email-signature-generator/'],
+  ['/projects/js-animate-hue/', '/utilities/js-animate-hue/'],
+  ['/projects/email-signature-generator/', '/utilities/email-signature-generator/'],
+
+  // sow-196 (2026-09-02): the `product` content type became `project`, so /products/ became /projects/.
+  // Per-ITEM 301s are composed from each item's frontmatter redirectFrom by scripts/compose-redirects.mjs;
+  // these are the collection-level routes, which have no frontmatter to carry one. They live here rather
+  // than hand-written into public/_redirects because that file carries a do-not-edit header and the next
+  // run of this generator would drop them.
+  ['/projects/', '/projects/'],
+  ['/feeds/projects/', '/feeds/projects/'],
+  ['/projects-index.json', '/projects-index.json'],
+  // The two applet URLs above keep their /projects/ form; these are their /projects/ twins, needed because
+  // an applet has no detail page under either collection route.
+  ['/projects/js-animate-hue/', '/utilities/js-animate-hue/'],
+  ['/projects/email-signature-generator/', '/utilities/email-signature-generator/'],
 
   // Outbound partner links. The WordPress site cloaked its affiliate links behind /outbound/ and
   // /outsourcing/ paths served by the Redirection plugin. The content migrated and the redirect rules did
@@ -123,7 +136,7 @@ const EXTRA = [
   //
   // THE COMMENT THAT STOOD HERE UNTIL 2026-08-25 WAS WRONG, AND IT COST REAL REFERRALS. It said the legacy
   // target https://partners.bugherd.com/gbti-network "is DEAD AT THE VENDOR: that URL 404s and so does the
-  // bare partners.bugherd.com root", and on that basis the path was pointed at the bare product page, which
+  // bare partners.bugherd.com root", and on that basis the path was pointed at the bare project page, which
   // credits nobody. Measured 2026-08-25: that URL answers **302** into PartnerStack carrying our partner key
   // (ps_partner_key / gspk), and only the bare SUBDOMAIN ROOT 404s, which is ordinary for a PartnerStack
   // subdomain with no index page. Checking the root and generalising from it to the path is what produced
@@ -171,7 +184,7 @@ const EXTRA = [
   ['/outbound/cloudways', 'https://cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti'],
 
   // Tailscale, added 2026-08-28. PLACEHOLDER DESTINATION, owner-flagged as such: this points at the bare
-  // product page and carries NO affiliate or referral parameters, so a click through it credits nobody
+  // project page and carries NO affiliate or referral parameters, so a click through it credits nobody
   // today. It exists so the path can be published and linked now and repointed once a real referral URL
   // is issued. Do not cite it as a tracked affiliate link, and when the real URL arrives keep the explicit
   // path before any query, per the Cloudways note above.

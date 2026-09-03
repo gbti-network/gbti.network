@@ -2,7 +2,7 @@
 // store, via the signup Worker's POST/GET /membership/activity. Mirrors member-content.mjs: thin, injectable
 // fetch wrappers that send the GitHub bearer token. Unit-tested with a fake fetch (no network).
 //
-// Collections let a member organize prompts (and posts/products) into named lists, in ADDITION to favoriting
+// Collections let a member organize prompts (and posts/projects) into named lists, in ADDITION to favoriting
 // them. Both live in the edge store keyed by github_id, so they are private and erasable (SOW-024), unlike the
 // git-native SOW-013 favorites.yml. New write surfaces should prefer this store.
 
@@ -28,7 +28,7 @@ export async function getActivity(opts) {
   return call('GET', null, opts);
 }
 
-/** Toggle a favorite. targetType in {post,product,prompt}. */
+/** Toggle a favorite. targetType in {post,project,prompt}. */
 export async function setFavorite({ targetType, targetSlug, on = true, ...opts }) {
   return call('POST', { action: 'favorite', type: targetType, slug: targetSlug, on }, opts);
 }

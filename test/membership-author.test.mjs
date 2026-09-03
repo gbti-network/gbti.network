@@ -107,7 +107,7 @@ test('sow-203: the Worker still 400s a co-located path that is not a real item i
     files: [{ path: 'members/atwellpub/roles/x/images/a.png', contentBase64: b64 }],
   };
   const r = await membershipAuthor(req(body), env, deps(rec));
-  assert.equal(r.status, 400, 'only posts/products/prompts may carry a co-located image');
+  assert.equal(r.status, 400, 'only posts/projects/prompts may carry a co-located image');
   assert.equal(rec.length, 0, 'nothing is committed on a rejected request');
 });
 

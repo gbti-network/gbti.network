@@ -1,6 +1,6 @@
 // sow-187: the ONE source for the feed navigation, so the seven feed entries are not duplicated across the
 // header dropdown, the FeedView tab strip, and the footer (they were, and would drift). A future label change,
-// for example the Products -> Projects rename carried by sow-196, is then a single edit here rather than three.
+// for example the Projects -> Projects rename carried by sow-196, is then a single edit here rather than three.
 
 export interface FeedNavItem {
   /** The narrow key (matches src/pages/feeds/[narrow].astro getStaticPaths + FeedView Props['narrow']). */
@@ -17,7 +17,7 @@ export const FEED_NAV: readonly FeedNavItem[] = [
   { key: 'news', label: 'News', href: '/feeds/news/', inFooter: true },
   { key: 'network', label: 'Network', href: '/feeds/network/', inFooter: false },
   { key: 'articles', label: 'Articles', href: '/feeds/articles/', inFooter: true },
-  { key: 'products', label: 'Products', href: '/feeds/products/', inFooter: true },
+  { key: 'projects', label: 'Projects', href: '/feeds/projects/', inFooter: true },
   { key: 'prompts', label: 'Prompts & Skills', href: '/feeds/prompts/', inFooter: true },
   { key: 'shares', label: 'Shares', href: '/feeds/shares/', inFooter: true },
 ];
@@ -30,13 +30,13 @@ export const FOOTER_FEED_LINKS: readonly [string, string][] = FEED_NAV
 /**
  * sow-187: the flat SIGNED-IN header nav (no Feeds dropdown, drops All + Network). News points at the unified
  * `/feeds/news/` view: the interactive `/news/` page was retired into the feeds view (owner, 2026-08-27), so
- * every News link now targets `/feeds/news/` directly rather than 301-ing through the retired route. "Products"
+ * every News link now targets `/feeds/news/` directly rather than 301-ing through the retired route. "Projects"
  * keeps its current label until sow-196 renames the content type to Projects and ships `/projects/`.
  */
 export const SIGNED_IN_NAV: readonly { label: string; href: string }[] = [
   { label: 'News', href: '/feeds/news/' },
   { label: 'Articles', href: '/feeds/articles/' },
-  { label: 'Products', href: '/feeds/products/' },
+  { label: 'Projects', href: '/feeds/projects/' },
   { label: 'Prompts & Skills', href: '/feeds/prompts/' },
   { label: 'Shares', href: '/feeds/shares/' },
 ];
@@ -51,7 +51,7 @@ export const SIGNED_IN_NAV: readonly { label: string; href: string }[] = [
 export const SIGNED_OUT_NAV: readonly { label: string; href: string }[] = [
   { label: 'Network', href: '/feeds/network/' },
   { label: 'Articles', href: '/feeds/articles/' },
-  { label: 'Products', href: '/feeds/products/' },
+  { label: 'Projects', href: '/feeds/projects/' },
   { label: 'Prompts & Skills', href: '/feeds/prompts/' },
   { label: 'Shares', href: '/feeds/shares/' },
 ];

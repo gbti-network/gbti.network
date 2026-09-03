@@ -205,7 +205,7 @@ test('SOW-044: a public comment on a SHARE fails the build even with authorNote'
 
 test('SOW-044: a from-the-author intro (authorNote on a product) is allowed public', () => {
   const root = tmpRoot();
-  writeComment(root, 'house/comments/intro-radle.md', { type: 'comment', visibility: 'public', authorNote: true, targetType: 'product', __body: 'why I built this' });
+  writeComment(root, 'house/comments/intro-radle.md', { type: 'comment', visibility: 'public', authorNote: true, targetType: 'project', __body: 'why I built this' });
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors, []);
   fs.rmSync(root, { recursive: true, force: true });

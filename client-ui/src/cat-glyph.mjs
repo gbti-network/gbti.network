@@ -45,11 +45,11 @@ export function catGlyph(category) {
 
 // SOW-041: a Share carries no category (it has tags), so its glyph falls back on its TYPE. Other content types
 // keep their category glyph; the type fallback only fires when the category is missing/unknown.
-const TYPE_GLYPH = { share: 'share', post: 'pencil', product: 'box', prompt: 'spark', news: 'news' }; // SOW-069: share -> a share glyph, not a coin
+const TYPE_GLYPH = { share: 'share', post: 'pencil', project: 'box', prompt: 'spark', news: 'news' }; // SOW-069: share -> a share glyph, not a coin
 // Per-TYPE accent (article/product/prompt/share/news). Used by glyphFor's type fallback AND by the activity
-// feed's separation treatment (typeAccent below). Article = blue, Product = orange, Prompt = green, Share = gold:
+// feed's separation treatment (typeAccent below). Article = blue, Project = orange, Prompt = green, Share = gold:
 // a distinct, vivid spread so member contributions stand out from the News stream in the blended feed.
-const TYPE_ACCENT = { share: '#b3791f', post: '#3f74c9', product: '#c9683b', prompt: '#1f9e5f', news: '#3a6ea5' };
+const TYPE_ACCENT = { share: '#b3791f', post: '#3f74c9', project: '#c9683b', prompt: '#1f9e5f', news: '#3a6ea5' };
 
 /** Resolve an item's fallback glyph by category first, then by type (for Shares + any category-less item). */
 export function glyphFor(category, type) {

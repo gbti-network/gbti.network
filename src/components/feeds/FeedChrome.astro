@@ -8,7 +8,7 @@
 import { FEED_NAV } from '../../lib/site-nav';
 
 interface Props {
-  narrow: 'all' | 'news' | 'network' | 'articles' | 'products' | 'prompts' | 'shares';
+  narrow: 'all' | 'news' | 'network' | 'articles' | 'projects' | 'projects' | 'prompts' | 'shares';
 }
 const { narrow } = Astro.props;
 
@@ -18,7 +18,7 @@ const SUB: Record<Props['narrow'], string> = {
   news: 'Member curated news stream',
   network: 'Publications from across the network',
   articles: 'Member articles',
-  products: 'Member products, tools & plugins',
+  projects: 'Member projects, tools & plugins',
   prompts: 'Reusable AI prompts from members',
   shares: 'Links members are sharing',
 };

@@ -24,7 +24,7 @@ test('resolveUsername: Map and plain-object indexes', () => {
 
 test('contentPath: per-type folder layout', () => {
   assert.equal(contentPath('post', 'alice', 'hello'), 'members/alice/posts/hello/index.md');
-  assert.equal(contentPath('product', 'alice', 'thing'), 'members/alice/products/thing/index.md');
+  assert.equal(contentPath('project', 'alice', 'thing'), 'members/alice/projects/thing/index.md');
   assert.equal(contentPath('prompt', 'alice', 'p'), 'members/alice/prompts/p/index.md');
   assert.equal(contentPath('profile', 'alice'), 'members/alice/profile.md');
   assert.throws(() => contentPath('post', 'alice'), /requires a slug/);
@@ -49,7 +49,7 @@ test('resolveTarget: member scope, and the network scope resolving to the gbtila
 
 test('contentPath: the network scope emits members/gbtilabs/<sub>/<slug>/index.md', () => {
   assert.equal(contentPath('post', 'gbtilabs', 'welcome', 'house'), 'members/gbtilabs/posts/welcome/index.md');
-  assert.equal(contentPath('product', 'gbtilabs', 'hue', 'house'), 'members/gbtilabs/products/hue/index.md');
+  assert.equal(contentPath('project', 'gbtilabs', 'hue', 'house'), 'members/gbtilabs/projects/hue/index.md');
   assert.equal(contentPath('prompt', 'gbtilabs', 'seo', 'house'), 'members/gbtilabs/prompts/seo/index.md');
   // The actor's username never leaks into a house path.
   assert.equal(contentPath('post', undefined, 'welcome', 'house'), 'members/gbtilabs/posts/welcome/index.md');
@@ -69,7 +69,7 @@ test('canAuthorPath: own folder only, no traversal', () => {
 // traversal is rejected even with allowHouse (the server gate is the real enforcement, this is UX scoping).
 test('canAuthorPath: allowHouse permits house/ only for a superadmin', () => {
   assert.equal(canAuthorPath('house/posts/x/index.md', 'gbtilabs', { allowHouse: true }), true);
-  assert.equal(canAuthorPath('house/products/hue/index.md', 'gbtilabs', { allowHouse: true }), true);
+  assert.equal(canAuthorPath('house/projects/hue/index.md', 'gbtilabs', { allowHouse: true }), true);
   // Without allowHouse a house/ path is rejected (a plain member).
   assert.equal(canAuthorPath('house/posts/x/index.md', 'alice'), false);
   assert.equal(canAuthorPath('house/posts/x/index.md', 'alice', { allowHouse: false }), false);
@@ -140,13 +140,13 @@ test('buildContentFile: a non-authorable type is rejected', () => {
 
 test('buildContentFile: product requires its mandatory fields', () => {
   const ok = buildContentFile({
-    type: 'product',
+    type: 'project',
     username: 'alice',
     input: { title: 'Tool', slug: 'tool', shortDescription: 'A tool', category: 'utilities', icon: 'icon.png', featuredImage: 'cover.png' },
   });
-  assert.equal(ok.path, 'members/alice/products/tool/index.md');
+  assert.equal(ok.path, 'members/alice/projects/tool/index.md');
   assert.throws(
-    () => buildContentFile({ type: 'product', username: 'alice', input: { title: 'Tool', slug: 'tool' } }),
+    () => buildContentFile({ type: 'project', username: 'alice', input: { title: 'Tool', slug: 'tool' } }),
     ContentValidationError,
   );
 });
@@ -221,20 +221,20 @@ test('planAuthorshipMove: from and to resolve to the same path -> a noop, no fil
 });
 
 test('planAuthorshipMove: an encryptedBody item re-derives the .enc at the new target and moves both', () => {
-  const oldFm = { type: 'product', title: 'T', slug: 'thing', author: 'alice', visibility: 'members', encryptedBody: 'members/alice/_enc/product-thing-body.enc' };
+  const oldFm = { type: 'project', title: 'T', slug: 'thing', author: 'alice', visibility: 'members', encryptedBody: 'members/alice/_enc/project-thing-body.enc' };
   const r = planAuthorshipMove({
-    type: 'product', slug: 'thing',
+    type: 'project', slug: 'thing',
     from: { scope: 'member', username: 'alice' }, to: { scope: 'member', username: 'bob' },
     oldFrontmatter: oldFm, oldBody: '', oldEncText: '{"v":1,"ct":"opaque"}',
   });
-  assert.equal(r.frontmatter.encryptedBody, 'members/bob/_enc/product-thing-body.enc');
-  const encWrite = r.files.find((f) => f.path === 'members/bob/_enc/product-thing-body.enc');
-  const encDelete = r.files.find((f) => f.path === 'members/alice/_enc/product-thing-body.enc');
+  assert.equal(r.frontmatter.encryptedBody, 'members/bob/_enc/project-thing-body.enc');
+  const encWrite = r.files.find((f) => f.path === 'members/bob/_enc/project-thing-body.enc');
+  const encDelete = r.files.find((f) => f.path === 'members/alice/_enc/project-thing-body.enc');
   assert.equal(encWrite.content, '{"v":1,"ct":"opaque"}');
   assert.equal(encDelete.content, null);
   // the index.md write reflects the NEW encryptedBody pointer, not the old one
-  const idxWrite = r.files.find((f) => f.path === 'members/bob/products/thing/index.md');
-  assert.match(idxWrite.content, /encryptedBody: members\/bob\/_enc\/product-thing-body\.enc/);
+  const idxWrite = r.files.find((f) => f.path === 'members/bob/projects/thing/index.md');
+  assert.match(idxWrite.content, /encryptedBody: members\/bob\/_enc\/project-thing-body\.enc/);
 });
 
 test('planAuthorshipMove: an encryptedBody item with no oldEncText throws (fail closed, never drops a gated body)', () => {
@@ -256,11 +256,11 @@ test('planAuthorshipMove: no encryptedBody -> no .enc files at all, just the ind
 });
 
 test('planAuthorshipMove: a product/prompt intro comment moves + re-stamps author, slug/id untouched', () => {
-  const introText = serializeContentFile({ id: 'intro-thing', targetType: 'product', targetSlug: 'thing', author: 'alice', authorNote: true, visibility: 'public' }, 'From the author.');
+  const introText = serializeContentFile({ id: 'intro-thing', targetType: 'project', targetSlug: 'thing', author: 'alice', authorNote: true, visibility: 'public' }, 'From the author.');
   const r = planAuthorshipMove({
-    type: 'product', slug: 'thing',
+    type: 'project', slug: 'thing',
     from: { scope: 'member', username: 'alice' }, to: { scope: 'member', username: 'bob' },
-    oldFrontmatter: { type: 'product', slug: 'thing', author: 'alice' }, oldBody: 'x',
+    oldFrontmatter: { type: 'project', slug: 'thing', author: 'alice' }, oldBody: 'x',
     introText,
   });
   const introWrite = r.files.find((f) => f.path === 'members/bob/comments/intro-thing.md');
@@ -298,9 +298,9 @@ test('planAuthorshipMove: a post has no intro-comment concept, introText is igno
 
 test('planAuthorshipMove: no introText -> no intro files (the item never had one)', () => {
   const r = planAuthorshipMove({
-    type: 'product', slug: 'thing',
+    type: 'project', slug: 'thing',
     from: { scope: 'member', username: 'alice' }, to: { scope: 'house' },
-    oldFrontmatter: { type: 'product', slug: 'thing', author: 'alice' }, oldBody: 'x',
+    oldFrontmatter: { type: 'project', slug: 'thing', author: 'alice' }, oldBody: 'x',
   });
   assert.equal(r.files.some((f) => f.path.includes('/comments/intro-')), false);
 });

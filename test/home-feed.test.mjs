@@ -14,13 +14,13 @@ test('decodeEntities resolves numeric + common named entities in scraped share m
 test('feedCounts (sow-192): per-tab counts from the build arrays, news is null, members-only excluded', () => {
   const content = [
     { kind: 'article' }, { kind: 'article' }, { kind: 'article' },
-    { kind: 'product' }, { kind: 'product' },
+    { kind: 'project' }, { kind: 'project' },
     { kind: 'prompt' },
   ];
   const shares = [{ kind: 'share' }, { kind: 'share' }]; // loadFeedItems() only ever puts PUBLIC shares here
   const c = feedCounts(content, shares);
   assert.equal(c.articles, 3);
-  assert.equal(c.products, 2);
+  assert.equal(c.projects, 2);
   assert.equal(c.prompts, 1);
   assert.equal(c.shares, 2);
   assert.equal(c.network, 6); // publications only, no shares
@@ -62,7 +62,7 @@ test('personalizeOrder (sow-192 Phase D): defaults to newest-first over every ro
   const rows = [
     { index: 0, kind: 'article', author: 'a', tags: [], comments: 1, date: 100, read: false },
     { index: 1, kind: 'share', author: 'b', tags: [], comments: 9, date: 300, read: false },
-    { index: 2, kind: 'product', author: 'a', tags: [], comments: 4, date: 200, read: true },
+    { index: 2, kind: 'project', author: 'a', tags: [], comments: 4, date: 200, read: true },
   ];
   assert.deepEqual(personalizeOrder(rows), [1, 2, 0]); // newest first, all visible
   assert.deepEqual(personalizeOrder([]), []);
@@ -72,7 +72,7 @@ test('personalizeOrder: scope=followed keeps only followed authors; hideRead + s
   const rows = [
     { index: 0, kind: 'article', author: 'Alice', tags: [], comments: 1, date: 100, read: false },
     { index: 1, kind: 'share', author: 'Bob', tags: [], comments: 0, date: 300, read: false },
-    { index: 2, kind: 'product', author: 'alice', tags: [], comments: 4, date: 200, read: true },
+    { index: 2, kind: 'project', author: 'alice', tags: [], comments: 4, date: 200, read: true },
     { index: 3, kind: 'news', author: 'wired.com', tags: [], comments: 0, date: 400, read: false },
   ];
   // only followed 'alice' (case-insensitive) -> rows 0 and 2, newest first
@@ -160,7 +160,7 @@ test('rankNewAndPopular caps each kind at maxPerKind, backfilling when kinds run
     { id: 'p2', kind: 'prompt', date: 80 },
     { id: 'p3', kind: 'prompt', date: 70 },
     { id: 'a1', kind: 'article', date: 60 },
-    { id: 'pr1', kind: 'product', date: 50 },
+    { id: 'pr1', kind: 'project', date: 50 },
   ];
   // the cap keeps the third prompt out while other kinds fill the grid...
   assert.deepEqual(rankNewAndPopular(items, 4, 2).map((x) => x.id), ['p1', 'p2', 'a1', 'pr1']);
@@ -199,7 +199,7 @@ test('matchesNarrow maps the six narrows and fails closed on unknown values', ()
   const share = { kind: 'share', author: 'alice' };
   assert.equal(matchesNarrow(art, 'all'), true);
   assert.equal(matchesNarrow(art, 'articles'), true);
-  assert.equal(matchesNarrow(art, 'products'), false);
+  assert.equal(matchesNarrow(art, 'projects'), false);
   // owner QA 2026-07-21: network = the publications from across the whole network (no shares)
   assert.equal(matchesNarrow(house, 'network'), true);
   assert.equal(matchesNarrow(art, 'network'), true);

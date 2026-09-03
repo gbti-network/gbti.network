@@ -88,7 +88,7 @@ test('publishComment: SOW-044 a plain comment is members-only + ENCRYPTED by def
 
 test('publishComment: SOW-044 a from-the-author intro (authorNote on a product) stays PUBLIC + plaintext', async () => {
   const puts = [];
-  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'product', targetSlug: 'radle', body: 'why I built this', authorNote: true, visibility: 'public' });
+  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'project', targetSlug: 'radle', body: 'why I built this', authorNote: true, visibility: 'public' });
   assert.equal(r.visibility, 'public');
   assert.equal(r.encrypted, false); // a public intro is plain (it is the public teaser on the product page)
   const md = decodeOf(puts, /comments\/.*\.md$/);
@@ -123,13 +123,13 @@ test('publishComment: a trial member is blocked before any PR (paid-only)', asyn
 test('editComment: preserves createdAt + target, sets updatedAt, re-publishes the same id (a public intro stays public)', async () => {
   const puts = [];
   // A from-the-author intro on a product (the legit public comment): editing keeps it public + plaintext.
-  const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'product', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z', __body: 'first version' };
+  const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'project', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z', __body: 'first version' };
   const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'edited version' });
   assert.equal(r.edited, true);
   assert.equal(r.id, '20260101000000-old');
   // SOW-032: editComment carries the target back (like publishComment) so the gbti-comment-edited event can
   // refresh the right open discussion thread.
-  assert.equal(r.targetType, 'product');
+  assert.equal(r.targetType, 'project');
   assert.equal(r.targetSlug, 'radle');
   // the re-published file carries the original createdAt + a new updatedAt + the new body (a public intro is plaintext)
   const file = Buffer.from(puts.find((p) => /comments\/20260101000000-old\.md$/.test(p.path)).content, 'base64').toString('utf8');
@@ -141,7 +141,7 @@ test('editComment: preserves createdAt + target, sets updatedAt, re-publishes th
 
 test('editComment: SOW-044 un-flagging an intro (authorNote->false) coerces it to members + encrypts (no plaintext strand)', async () => {
   const puts = [];
-  const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'product', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z', __body: 'was an intro' };
+  const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'project', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z', __body: 'was an intro' };
   // Explicitly drop the author-note flag on edit: the comment is no longer a from-the-author intro, so it must
   // become members-only + encrypted rather than stranding as a public non-intro plaintext comment.
   const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'now just a reply', authorNote: false });

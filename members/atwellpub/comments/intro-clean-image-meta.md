@@ -2,7 +2,7 @@
 type: comment
 id: intro-clean-image-meta
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: clean-image-meta
 status: published
 visibility: public

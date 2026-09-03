@@ -48,7 +48,7 @@ test('mergeRepoDrafts: same slug but DIFFERENT type is NOT a collision (both kep
 });
 
 test('mergeRepoDrafts: the optional type filter keeps only repo rows of that type', () => {
-  const items = [ITEM, { type: 'product', slug: 'prod', path: 'members/alice/products/prod/index.md' }];
+  const items = [ITEM, { type: 'project', slug: 'prod', path: 'members/alice/projects/prod/index.md' }];
   const merged = mergeRepoDrafts([], items, { type: 'post' });
   assert.deepEqual(merged.map((d) => d.slug), ['my-wip']);
 });

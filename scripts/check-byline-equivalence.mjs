@@ -74,13 +74,13 @@ const MEMBER_HREF = /^\/members\/([^/]+)\/$/;
 //
 // SO: if `shares` (or any new type) ever gains a ContentMeta byline, ADD IT HERE. Until someone does, the
 // guard will keep silently not checking it, which is this SOW's own partial-rename hole one level up.
-const CONTENT_SECTIONS = Object.freeze({ posts: 'articles', products: 'products', prompts: 'prompts' });
+const CONTENT_SECTIONS = Object.freeze({ posts: 'articles', projects: 'projects', products: 'projects', prompts: 'prompts' });
 
 /**
  * The built sections that MUST yield at least one checked byline, derived from content on disk.
  *
  * WHY THIS EXISTS. The guard used to fail only when the WHOLE run checked zero bylines, and articles alone
- * keep that non-zero. So a PARTIAL rename passed green: @UnifiedWorker reproduced it by giving a product
+ * keep that non-zero. So a PARTIAL rename passed green: @UnifiedWorker reproduced it by giving a project
  * page a byline class sharing no `cm-name` token, and the guard stayed green because the 50 article bylines
  * carried the run. A per-section floor is what turns that from invisible into red.
  *

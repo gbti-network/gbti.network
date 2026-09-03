@@ -92,7 +92,7 @@ test('the block omits the mode switch and Copy when they would do nothing', () =
 test('a prompt preview has no Contents rail, and the rail builder asks the same question', () => {
   assert.equal(shellHasToc('prompt'), false);
   assert.equal(shellHasToc('post'), true);
-  assert.equal(shellHasToc('product'), true);
+  assert.equal(shellHasToc('project'), true);
   // buildRail must consult it BEFORE it can set nav.hidden from the toc length, or the hide is undone again.
   const rail = previewSrc.slice(previewSrc.indexOf('const buildRail'), previewSrc.indexOf('nav.hidden = toc.length'));
   assert.ok(rail.includes('shellHasToc(type)'), 'buildRail no longer honours the shell, so the rail can come back');

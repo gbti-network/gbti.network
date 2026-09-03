@@ -33,7 +33,7 @@ function walk(dir, out = []) {
 function typeOf(rel) {
   if (/(^|\/)profile\.md$/.test(rel)) return 'profile';
   if (/\/posts\//.test(rel)) return 'post';
-  if (/\/products\//.test(rel)) return 'product';
+  if (/\/projects\//.test(rel)) return 'project';
   if (/\/prompts\//.test(rel)) return 'prompt';
   return null;
 }

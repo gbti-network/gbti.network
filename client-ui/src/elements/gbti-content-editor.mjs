@@ -13,7 +13,7 @@ import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor 
 import './gbti-discussion.mjs'; // SOW-062 P6: the shared discussion thread, embedded in the editor for published items
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174: the curated banner-color swatches
-import { detectLinkSource } from '../../../src/lib/product-page.mjs'; // sow-175: wordpress.org/github.com URL detection
+import { detectLinkSource } from '../../../src/lib/project-page.mjs'; // sow-175: wordpress.org/github.com URL detection
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
 import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow, uniqueImageName } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break) + P3 unique upload names
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165/sow-268: reuse an image from the member's own published items into a frontmatter field or a gallery row
@@ -42,14 +42,14 @@ const COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S} stroke-w
 const CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: markdown view toggle
 const PLUS = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S} stroke-width="2" stroke-linecap="round"/>`); // SOW-062 P6: add link row
 const TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: remove link row
-const VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`); // SOW-062 P6: product video section
+const VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`); // SOW-062 P6: project video section
 const CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S} stroke-width="1.8" stroke-linejoin="round"/>`); // SOW-062 P6: from-the-author section
 const USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`); // SOW-062 P6: discussion section
 const CHECK = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: save-chip "saved" tick
 const SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
 // SOW-062 P6: keys rendered in a DOCUMENT-CANVAS section (not the rail) for a given type, so they are excluded from
-// the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the product Video section.
-const DOC_SECTION_KEYS = { product: new Set(['video']) };
+// the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the project Video section.
+const DOC_SECTION_KEYS = { project: new Set(['video']) };
 // SOW-062 P6 rail-2: the stat tiles (hi-fi rail footer). Discussions is live now (client.listComments count); the
 // rest are wired to an optional client.itemStats() that a later backend phase provides -- until then they show a
 // pending dash. Order matches the mockup.
@@ -60,9 +60,9 @@ const STAT_DEFS = [
   { key: 'referrals', label: 'Referrals' },
   { key: 'discussions', label: 'Discussions' },
 ];
-const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', profile: 'Profile' };
+const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', profile: 'Profile' };
 
-const TYPES = ['post', 'product', 'prompt', 'profile'];
+const TYPES = ['post', 'project', 'prompt', 'profile'];
 
 // SOW-062 Phase 2: fields HIDDEN from the editor UI but PRESERVED on save. They are still rendered into the DOM
 // (a hidden block) carrying their preset value, and gather() filters by showIf (not DOM-hidden), so it still reads
@@ -76,8 +76,8 @@ const HIDDEN_KEYS = new Set(['canonicalUrl']);
 // This is a LITERAL rather than an import on purpose: the two cores that own the same set
 // (client/src/operations.mjs and src/lib/workbench-client-core.mjs) sit behind bundle boundaries this
 // component cannot cross. test/publish-intro-comment.test.mjs reads this file's source and fails if the three
-// copies disagree. A note stays OPTIONAL for a post; only a product/prompt is required to have one.
-const AUTHOR_NOTE_TYPES = new Set(['post', 'product', 'prompt']);
+// copies disagree. A note stays OPTIONAL for a post; only a project/prompt is required to have one.
+const AUTHOR_NOTE_TYPES = new Set(['post', 'project', 'prompt']);
 
 const RAIL_SCHEMA = {
   post: [
@@ -88,7 +88,7 @@ const RAIL_SCHEMA = {
     { title: 'Article layout', open: true, keys: ['layout'] },
     { title: 'Media', open: false, keys: ['coverImage', 'coverAlt'] },
   ],
-  product: [
+  project: [
     { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'categories', 'tags'] },
     { title: 'Layout', open: true, keys: ['sidebarPosition'] },
     { title: 'Pricing', open: true, keys: ['pricing', 'pricingUrl'] },
@@ -144,9 +144,9 @@ const MD_CHEAT = {
       MEM_MARKER, '', 'Extra guidance reserved for members.',
     ]),
   },
-  product: {
-    label: 'Product',
-    blurb: 'Software products. Adds a callout, a video embed, and a members-only split.',
+  project: {
+    label: 'Project',
+    blurb: 'Software projects. Adds a callout, a video embed, and a members-only split.',
     directives: [
       ['```callout tip', 'aside / highlight (note, tip, warning)'],
       ['```embed', 'video embed (YouTube or Vimeo URL)'],
@@ -180,7 +180,7 @@ class GbtiContentEditor extends GbtiElement {
     const list = Array.isArray(this.preset?.input?.redirectFrom) ? this.preset.input.redirectFrom : [];
     const out = [];
     for (const e of list) {
-      const m = /^\/(articles|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || '').trim());
+      const m = /^\/(articles|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || '').trim());
       if (m && m[2] !== this.preset?.input?.slug && !out.includes(m[2])) out.push(m[2]);
     }
     return out;
@@ -329,7 +329,7 @@ class GbtiContentEditor extends GbtiElement {
       return `<details ${sec.open ? 'open' : ''} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
     }).join('');
     const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join('');
-    const typePath = ({ post: 'articles', product: 'products', prompt: 'prompts' })[this.type] || this.type;
+    const typePath = ({ post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' })[this.type] || this.type;
     const isPub = String(p.status || '').toLowerCase() === 'published';
     const statusLabel = isPub ? (p.publishedAt ? String(p.publishedAt).slice(0, 10) : 'published') : 'draft';
     // sow-184 (design 3a): the Status-card descriptor (pill label + tone + published date). `staged` wins over the
@@ -348,7 +348,7 @@ class GbtiContentEditor extends GbtiElement {
     const videoField = fieldByKey.get('video');
     const videoSection = (docSecKeys.has('video') && videoField) ? `
              <section class="docsec" id="secVideo">
-               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the product page</span></div>
+               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the project page</span></div>
                <input class="inp" data-key="video" data-kind="${esc(videoField.kind || 'text')}" type="text" value="${esc(this.presetStr(p.video) || '')}" placeholder="https://youtube.com/watch?v=…" />
              </section>` : '';
     const showAuthorNote = AUTHOR_NOTE_TYPES.has(this.type);
@@ -358,7 +358,7 @@ class GbtiContentEditor extends GbtiElement {
                <div class="authornote"><span class="an-av">${esc(authorInitial)}</span>
                  <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
              </section>` : '';
-    const discussionSection = (isPub && slug && ['post', 'product', 'prompt'].includes(this.type)) ? `
+    const discussionSection = (isPub && slug && ['post', 'project', 'prompt'].includes(this.type)) ? `
              <section class="docsec" id="secDiscussion">
                <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
                <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(','))}"` : ''}></gbti-discussion>
@@ -381,7 +381,7 @@ class GbtiContentEditor extends GbtiElement {
       return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
     })() : '';
     // SOW-062 P6 rail-2: the stat tiles footer, shown for a published post/product/prompt (in the rail).
-    const showStats = isPub && slug && ['post', 'product', 'prompt'].includes(this.type);
+    const showStats = isPub && slug && ['post', 'project', 'prompt'].includes(this.type);
     // sow-184 (design 3a): the stat tiles now live in an "Activity" rail card (was a borderless footer), matching
     // the mockup. Same STAT_DEFS + live Discussions count + jump-to-discussion button.
     const railFootHtml = showStats ? `
@@ -573,7 +573,7 @@ class GbtiContentEditor extends GbtiElement {
         .gs-name { font-size:12.5px; font-weight:700; color:var(--s-fg); }
         .gs-card.on .gs-name { color:var(--s-green-fg); }
         .gs-desc { font-size:11px; line-height:1.35; color:var(--s-fg-mute); }
-        /* SOW-062 P6: product links[] row editor */
+        /* SOW-062 P6: project links[] row editor */
         .linkrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
         .linkrow { display:flex; flex-direction:column; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
         .linkrow .lr-top, .linkrow .lr-bot { display:flex; align-items:center; gap:8px; }
@@ -775,8 +775,8 @@ class GbtiContentEditor extends GbtiElement {
     this.$('.rail')?.addEventListener('click', (e) => { if (e.target.closest('button:not([data-frame]), [data-rm]') && !e.target.closest('summary')) this._markDirty(); });
     this._bindHeader(); // SOW-062 P6: the inline title/tagline/slug mirror to their hidden [data-key] inputs
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
-    this._wireLinks(); // SOW-062 P6: the product links[] row editor (serializes into the hidden json input)
-    this._wireGallery(); // sow-268: the product gallery[] row editor (serializes into the hidden json input)
+    this._wireLinks(); // SOW-062 P6: the project links[] row editor (serializes into the hidden json input)
+    this._wireGallery(); // sow-268: the project gallery[] row editor (serializes into the hidden json input)
     // SOW-062 P6: prefill the from-the-author note from the existing intro-<slug> comment (existing item).
     const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : '';
     if (introSlug) {
@@ -929,7 +929,7 @@ class GbtiContentEditor extends GbtiElement {
         <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join('');
       return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
     }
-    // Product sidebar position -> two illustrated cards (Left / Right), same pattern as the article-layout
+    // Project sidebar position -> two illustrated cards (Left / Right), same pattern as the article-layout
     // picker above (reuses its .gs-* CSS and the generic [data-gscards] click handler as-is).
     if (f.kind === 'enum' && f.key === 'sidebarPosition') {
       const cards = [
@@ -961,7 +961,7 @@ class GbtiContentEditor extends GbtiElement {
     if (f.kind === 'image') {
       const url = v ? this.resolveCover(v) : '';
       const has = !!url;
-      // A field that declares its own aspect (product icon 1:1, featured 16:10, banner 3:1) locks the preview
+      // A field that declares its own aspect (project icon 1:1, featured 16:10, banner 3:1) locks the preview
       // to it: the old shared 4:3/Hero toggle matched none of them, so an icon stretched into a 4:3 box and a
       // 16:10 cover showed letterbox bars. Fields with no declared frame keep the toggle.
       const framed = typeof f.frame === 'string' && f.frame.includes('/');
@@ -971,7 +971,7 @@ class GbtiContentEditor extends GbtiElement {
         : '<div class="framepick"><button type="button" class="on" data-frame="card4">4:3 card</button><button type="button" data-frame="hero">Hero</button></div>';
       const hint = f.hint ? `<div class="urlprev" style="color:var(--s-fg-soft)">${esc(f.hint)}</div>` : '';
       // sow-174: the banner field alone also offers a curated color preset, an alternative to uploading an
-      // image (resolveHero() in product-page.mjs treats an uploaded image and a chosen preset as mutually
+      // image (resolveHero() in project-page.mjs treats an uploaded image and a chosen preset as mutually
       // exclusive). bannerPreset is not its own row -- it is excluded from RAIL_SCHEMA and hiddenFields both,
       // and folded in here exactly like publicStub is folded into the visibility field above.
       const presetVal = f.key === 'banner' ? String(this.preset?.input?.bannerPreset || '') : '';
@@ -989,15 +989,15 @@ class GbtiContentEditor extends GbtiElement {
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
         </div></div>`;
     }
-    // SOW-062 P6: the product links[] editor -> structured rows (was a raw JSON textarea). The rows serialize back
+    // SOW-062 P6: the project links[] editor -> structured rows (was a raw JSON textarea). The rows serialize back
     // into the SAME hidden [data-key="links"] json input gather() reads, and each row preserves its original extra
     // fields (primary, encrypted, ...) so the round-trip never drops data.
     if (f.kind === 'json' && f.key === 'links') {
       return wrap(this._linksInner(f, value));
     }
-    // sow-268: the product gallery[] editor -> structured rows (was a raw JSON textarea that could not
+    // sow-268: the project gallery[] editor -> structured rows (was a raw JSON textarea that could not
     // round-trip: an array value renders comma-joined at line ~773, and coerceValue('json') then JSON.parse'd
-    // that string and threw, so every product with screenshots was unsaveable and Preview was a dead button).
+    // that string and threw, so every project with screenshots was unsaveable and Preview was a dead button).
     // Same shape as links: rows serialize into the SAME hidden [data-key="gallery"] json input gather() reads.
     if (f.kind === 'json' && f.key === 'gallery') {
       return wrap(this._galleryInner(f, value));
@@ -1011,16 +1011,16 @@ class GbtiContentEditor extends GbtiElement {
     return wrap(`${label}<input class="inp${mono ? ' mono' : ''}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc(v)}" placeholder="${esc(f.placeholder || '')}" />`);
   }
 
-  // SOW-062 P6: the product links[] editor. One row per link + an Add button + a hidden json input that gather()
+  // SOW-062 P6: the project links[] editor. One row per link + an Add button + a hidden json input that gather()
   // reads (unchanged contract). _serializeLinks rebuilds the array on every edit, preserving each row's extra fields.
   _linksInner(f, value) {
     let links = [];
     try { links = Array.isArray(value) ? value : (typeof value === 'string' && value ? JSON.parse(value) : []); } catch { links = []; }
     const rows = links.map((l, i) => this._linkRowHtml(l, i)).join('');
-    return `<label>Links <span class="hint">· buttons on the product page</span></label>
+    return `<label>Links <span class="hint">· buttons on the project page</span></label>
       <div class="linkrows" data-links>${rows}</div>
       <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
-      <datalist id="lk-types">${['download', 'product', 'repository', 'github', 'website', 'docs', 'demo'].map((k) => `<option value="${k}"></option>`).join('')}</datalist>
+      <datalist id="lk-types">${['download', 'project', 'repository', 'github', 'website', 'docs', 'demo'].map((k) => `<option value="${k}"></option>`).join('')}</datalist>
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(links))}" />`;
   }
 
@@ -1107,13 +1107,13 @@ class GbtiContentEditor extends GbtiElement {
     });
   }
 
-  // sow-268: the product gallery[] editor. One row per screenshot + an Add button + a hidden json input that
+  // sow-268: the project gallery[] editor. One row per screenshot + an Add button + a hidden json input that
   // gather() reads (unchanged contract). Mirrors _linksInner: galleryValueFromRows rebuilds the array on every
-  // edit, emitting a bare string for an uncaptioned row so the ten existing products do not churn.
+  // edit, emitting a bare string for an uncaptioned row so the ten existing projects do not churn.
   _galleryInner(f, value) {
     const rows = galleryRowsFromValue(value);
     const rowsHtml = rows.map((r, i) => this._galleryRowHtml(r, i)).join('');
-    return `<label>Gallery <span class="hint">· screenshots on the product page</span></label>
+    return `<label>Gallery <span class="hint">· screenshots on the project page</span></label>
       <div class="galrows" data-gallery>${rowsHtml}</div>
       <div class="galactions">
         <button class="ebtn" type="button" data-galupload>${IMG} Upload screenshots</button>
@@ -1555,7 +1555,7 @@ class GbtiContentEditor extends GbtiElement {
   // description. Changing it stages like any other edit (Save draft), and the actual rename (move + redirect)
   // happens at the PUBLISH event — no separate rename action, no dialogs.
   permalinkFieldHtml() {
-    const typePath = ({ post: 'articles', product: 'products', prompt: 'prompts' })[this.type] || this.type;
+    const typePath = ({ post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' })[this.type] || this.type;
     const loaded = this.presetStr(this.preset?.input?.slug) || '';
     const existing = Boolean(this.itemPath);
     const val = this._slugVal ?? loaded;
@@ -1568,7 +1568,7 @@ class GbtiContentEditor extends GbtiElement {
   _wirePermalinkField() {
     const input = this.$('#slugfield');
     if (!input) return;
-    const typePath = ({ post: 'articles', product: 'products', prompt: 'prompts' })[this.type] || this.type;
+    const typePath = ({ post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' })[this.type] || this.type;
     const loaded = this.presetStr(this.preset?.input?.slug) || '';
     input.addEventListener('input', () => {
       const v = String(input.value || '').trim().toLowerCase();
@@ -1601,14 +1601,14 @@ class GbtiContentEditor extends GbtiElement {
     }
   }
 
-  // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, product -> /products/,
+  // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, project -> /projects/,
   // prompt -> /prompts/). Drives the "View Public Entry" button, which is only shown when the item is published.
   publicUrl() {
     const p = this.preset?.input ?? {};
     const slug = this.presetStr(p.slug) || (this.$('[data-header="slug"]')?.textContent || '').trim();
     // SOW-265: delegate to the shared scheme so the editor and the My Content table cannot diverge.
     // Passing itemPath lets the helper recover the slug from a nested item path when frontmatter omits
-    // it, which previously built a broken https://gbti.network/products// URL.
+    // it, which previously built a broken https://gbti.network/projects// URL.
     return publicUrlFor({ type: this.type, slug, path: this.itemPath });
   }
 
@@ -1652,7 +1652,7 @@ class GbtiContentEditor extends GbtiElement {
     this.out('Publishing…');
     try {
       const { type, input, body } = this.gather();
-      // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (product/prompt).
+      // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (project/prompt).
       const authorNote = this.$('#authornote')?.value?.trim() || undefined;
       if (this.fields.some((f) => f.key === 'status')) input.status = 'published'; // status is action-driven (no rail dropdown)
       // SOW-062 P6: stamp `updatedAt` so the meta can show last-updated-on-live vs -locally.
@@ -1662,7 +1662,7 @@ class GbtiContentEditor extends GbtiElement {
       // operations.mjs (publishContent) already sets publishedAt only when it is ABSENT and otherwise preserves
       // the prior value, so a first publish still gets its date and a re-publish keeps it. Resurfacing is now
       // the feed's job: feedTime sorts on the later of publishedAt/updatedAt and the row marks itself Updated.
-      if (['post', 'product', 'prompt'].includes(type)) { input.updatedAt = new Date().toISOString(); }
+      if (['post', 'project', 'prompt'].includes(type)) { input.updatedAt = new Date().toISOString(); }
       // publish() already stages to the member's OWN fork first (publishFiles -> commitToBranchOnFork) and opens the
       // network PR FROM that fork branch, so no separate pre-publish saveDraft is needed.
       // SOW-112 v2: `path` names the loaded canonical item; a changed permalink makes this publish a RENAME.
@@ -1795,7 +1795,7 @@ class GbtiContentEditor extends GbtiElement {
     try {
       const { type, input, body } = this.gather();
       if (this.fields.some((f) => f.key === 'status')) input.status = 'draft'; // SOW-062 P6: status is action-driven (no rail dropdown)
-      if (['post', 'product', 'prompt'].includes(type)) input.updatedAt = new Date().toISOString(); // SOW-062 P6: last-updated-locally
+      if (['post', 'project', 'prompt'].includes(type)) input.updatedAt = new Date().toISOString(); // SOW-062 P6: last-updated-locally
       const authorNote = this.$('#authornote')?.value ?? undefined;
       // The pending author reassignment travels WITH the draft. Before this it lived only in the DOM, so saving
       // and reloading discarded the superadmin's choice, and publishing that draft from the Drafts list

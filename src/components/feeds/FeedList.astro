@@ -29,7 +29,7 @@ const { items, avatarIndex, pageSize = 10, ctaAfter } = Astro.props;
 const chunks = chunkPages(items, pageSize) as FeedItem[][];
 const pages = chunks.length;
 const NOW = Date.now();
-const kindLabel: Record<string, string> = { article: 'article', product: 'product', prompt: 'prompt' };
+const kindLabel: Record<string, string> = { article: 'article', project: 'project', prompt: 'prompt' };
 const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
 // sow-174: every segment of the category path, so a breadcrumb at any depth can drill down here.
 const catsOf = (it: FeedItem) => catsAttr(it.categories);

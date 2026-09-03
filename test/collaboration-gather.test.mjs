@@ -12,7 +12,7 @@ const after = '2026-07-01';
 const membersIndex = new Map([['100', 'alice'], ['200', 'bob'], ['300', 'dana']]);
 const reverseIndex = reverseMembersIndex(membersIndex);
 const firstItem = { owner: '100', type: 'post', slug: 'a' };  // alice
-const lastItem = { owner: '200', type: 'product', slug: 'b' }; // bob
+const lastItem = { owner: '200', type: 'project', slug: 'b' }; // bob
 
 test('reverseMembersIndex inverts github_id->username to username(lower)->github_id', () => {
   assert.equal(reverseIndex.get('alice'), '100');
@@ -38,7 +38,7 @@ test('readCommentsIndex maps target type+slug -> comments (author, date, authorI
     'skip.md': `---\ntype: post\n---\nnot a comment`,
   }[f]);
   const idx = readCommentsIndex('/root', { files, readFile });
-  const list = idx.get(typeSlugKey('product', 'b'));
+  const list = idx.get(typeSlugKey('project', 'b'));
   assert.equal(list.length, 2);
   assert.equal(list.find((c) => c.author === 'alice').authorIntro, true);
   assert.equal(list.find((c) => c.author === 'dana').authorIntro, false);
@@ -51,7 +51,7 @@ test('readCommentsIndex EXCLUDES a removed (status:draft) comment from the payou
     'removed.md': `---\ntype: comment\nauthor: spammer\ntargetType: product\ntargetSlug: b\ncreatedAt: ${before}\nstatus: draft\n---\nx`, // hideContent removal -> excluded
     'explicit.md': `---\ntype: comment\nauthor: erin\ntargetType: product\ntargetSlug: b\ncreatedAt: ${before}\nstatus: published\n---\nx`,
   }[f]);
-  const list = readCommentsIndex('/root', { files, readFile }).get(typeSlugKey('product', 'b'));
+  const list = readCommentsIndex('/root', { files, readFile }).get(typeSlugKey('project', 'b'));
   assert.equal(list.length, 2);
   assert.ok(!list.some((c) => c.author === 'spammer'), 'the removed (draft) comment earns no collaboration point');
   assert.ok(list.some((c) => c.author === 'dana') && list.some((c) => c.author === 'erin'));
@@ -59,7 +59,7 @@ test('readCommentsIndex EXCLUDES a removed (status:draft) comment from the payou
 
 test('buildCollaborationEvents resolves actors to github_ids and drops non-members', () => {
   const contributorsByItem = new Map([[itemKey(firstItem), [{ login: 'dana', at: before }, { login: 'ghost', at: before }]]]);
-  const commentsIndex = new Map([[typeSlugKey('product', 'b'), [{ author: 'dana', at: before, authorIntro: false }]]]);
+  const commentsIndex = new Map([[typeSlugKey('project', 'b'), [{ author: 'dana', at: before, authorIntro: false }]]]);
   const events = buildCollaborationEvents({ items: [firstItem, lastItem], contributorsByItem, commentsIndex, reverseIndex });
   // dana resolves (300); ghost is dropped (not in the index)
   assert.deepEqual(events.map((e) => e.member).sort(), ['300', '300']);

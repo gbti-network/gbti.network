@@ -2,7 +2,7 @@
 type: comment
 id: intro-wordpress-perplexity-plugin
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: wordpress-perplexity-plugin
 status: published
 visibility: public

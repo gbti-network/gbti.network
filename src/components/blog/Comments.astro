@@ -1,20 +1,21 @@
 ---
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, authorAvatar, formatDate } from '../../lib/authors';
+import { canonicalType } from '../../../membership/content-types.mjs';
 import { commitHistoryHref } from '../../lib/comments';
 import Avatar from '../Avatar.astro';
 import LockedBody from '../LockedBody.astro';
 import CommentBox from './CommentBox.astro';
 
 interface Props {
-  targetType: 'post' | 'product' | 'prompt' | 'share'; // sow-094: the public share page mounts the discussion
+  targetType: 'post' | 'project' | 'prompt' | 'share'; // sow-094: the public share page mounts the discussion
   targetSlug: string;
   author?: string; // content owner; their earliest comment renders as the pinned "From the author" block (SOW-014)
   wide?: boolean; // when true, span the full content width (prompt detail) instead of the 800px reading column
 }
 const { targetType, targetSlug, author, wide = false, aliases = [] } = Astro.props;
 // SOW-112 QA: the parent item's index.md path, for the paid-member open-in-extension reader deep link.
-const SUB = { post: 'posts', product: 'products', prompt: 'prompts' } as Record<string, string>;
+const SUB = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' } as Record<string, string>;
 // sow-094: a share's targetSlug is "<author>/<id>" and its file is flat (members/<author>/shares/<id>.md).
 const itemReaderPath = targetType === 'share'
   ? `members/${targetSlug.split('/')[0]}/shares/${targetSlug.split('/').slice(1).join('/')}.md`
@@ -28,7 +29,9 @@ const slugSet = new Set([targetSlug, ...aliases]);
 // rendered here read-only. See .data/specs/comments.md.
 const published = (await getCollection('comment'))
   .filter((c) => c.data.status === 'published') // SOW-016: drop drafts only; member-only comments render locked
-  .filter((c) => c.data.targetType === targetType && slugSet.has(c.data.targetSlug))
+  // sow-196: match on the CANONICAL type, so a comment stored under the retired `product` name still
+  // attaches to its item instead of silently vanishing from the thread. See src/lib/comments.ts.
+  .filter((c) => canonicalType(c.data.targetType) === canonicalType(targetType) && slugSet.has(c.data.targetSlug))
   .sort((a, b) => a.data.createdAt.valueOf() - b.data.createdAt.valueOf());
 
 // SOW-014: the content author's deliberate note (flagged `authorNote`) is the required "from the author"

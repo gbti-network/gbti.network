@@ -30,7 +30,7 @@ test('addTouch: revisiting the same item WIDENS [firstAt, lastAt], no duplicate'
 
 test('addTouch: distinct items are kept separately', () => {
   let r = addTouch(emptyTouches(), { ...item('alice', 'a'), at: 100 });
-  r = addTouch(r, { ...item('bob', 'b', 'product'), at: 200 });
+  r = addTouch(r, { ...item('bob', 'b', 'project'), at: 200 });
   assert.equal(r.items.length, 2);
   assert.deepEqual(r.items.map((i) => i.owner).sort(), ['alice', 'bob']);
 });
@@ -85,7 +85,7 @@ test('normalizeTouches: tolerant of garbage; merges duplicate items; coerces', (
 test('toTouchLog: expands first + last per item (one entry when they coincide)', () => {
   const r = { items: [
     { owner: 'a', type: 'post', slug: 'x', firstAt: 10, lastAt: 90 }, // -> two entries
-    { owner: 'b', type: 'product', slug: 'y', firstAt: 50, lastAt: 50 }, // -> one entry
+    { owner: 'b', type: 'project', slug: 'y', firstAt: 50, lastAt: 50 }, // -> one entry
   ], invite: null, updatedAt: 0 };
   const log = toTouchLog(r);
   assert.equal(log.length, 3);
@@ -100,7 +100,7 @@ test('integration: addTouch x N -> toTouchLog -> resolveTouches resolves earlies
   let r = emptyTouches();
   r = addTouch(r, { ...item('old', 'expired'), at: conv - 120 * day }); // out of window
   r = addTouch(r, { ...item('alice', 'a'), at: conv - 80 * day });       // earliest in-window -> first
-  r = addTouch(r, { ...item('clara', 'c', 'product'), at: conv - 40 * day });
+  r = addTouch(r, { ...item('clara', 'c', 'project'), at: conv - 40 * day });
   r = addTouch(r, { ...item('bob', 'b', 'prompt'), at: conv - 1 * day }); // latest -> last
   const { firstTouch, lastTouch } = resolveTouches(toTouchLog(r), { conversionAt: conv, windowMs });
   assert.equal(firstTouch.owner, 'alice');

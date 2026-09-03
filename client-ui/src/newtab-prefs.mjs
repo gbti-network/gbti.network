@@ -21,11 +21,11 @@ export const VIEW_MODES = new Set(['compact', 'detailed', 'card']);
 export const DEFAULT_VIEW = Object.freeze({
   all: 'card',
   post: 'card',
-  product: 'detailed',
+  project: 'detailed',
   prompt: 'compact',
   share: 'detailed',
   news: 'card',
-  // sow-204 item 4a: the Network view (member publications: posts, products and prompts) is a blended river
+  // sow-204 item 4a: the Network view (member publications: posts, projects and prompts) is a blended river
   // like `all`, not a single-type directory, so it follows the same "Cards is the default" direction rather
   // than one of the per-type densities.
   network: 'card',

@@ -33,20 +33,20 @@ function loadSources(): Source[] {
   return out;
 }
 
-// sow-140: admin-approved MEMBER sources (an RSS feed declared on a member-owned product and approved in
+// sow-140: admin-approved MEMBER sources (an RSS feed declared on a member-owned project and approved in
 // the admin-owned house/member-news-sources.yml) merge into the same pool. Fail closed in the pure helper:
-// only an approved slug resolving to a published + public product with an https newsFeed is emitted.
-function loadMemberApprovals(): Array<{ product?: string }> {
+// only an approved slug resolving to a published + public project with an https newsFeed is emitted.
+function loadMemberApprovals(): Array<{ project?: string }> {
   const file = path.resolve(process.cwd(), 'house', 'member-news-sources.yml');
   if (!fs.existsSync(file)) return [];
   const parsed = yaml.load(fs.readFileSync(file, 'utf8')) as { approved?: unknown } | null;
-  return Array.isArray(parsed?.approved) ? (parsed!.approved as Array<{ product?: string }>) : [];
+  return Array.isArray(parsed?.approved) ? (parsed!.approved as Array<{ project?: string }>) : [];
 }
 
 export const GET: APIRoute = async () => {
   const houseSources = loadSources();
   const approvals = loadMemberApprovals();
-  const products = (await getCollection('product')).map((p) => ({
+  const projects = (await getCollection('project')).map((p) => ({
     slug: p.data.slug,
     title: p.data.title,
     author: p.data.author,
@@ -54,7 +54,7 @@ export const GET: APIRoute = async () => {
     visibility: p.data.visibility,
     newsFeed: p.data.newsFeed,
   }));
-  const sources = mergeMemberSources(houseSources, approvals, products);
+  const sources = mergeMemberSources(houseSources, approvals, projects);
   const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: sources.length, sources });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 };

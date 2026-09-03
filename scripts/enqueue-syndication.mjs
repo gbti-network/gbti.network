@@ -154,7 +154,11 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   // SOW-112: a permalink RENAME adds the file at its new path, which this diff-of-adds would announce as a
   // brand-new publish. A rename-generated redirectFrom entry has the canonical URL shape (legacy migration
   // entries are WordPress-shaped and never match), so it is a precise, deterministic skip marker.
-  const RENAME_MARK_RE = /^\/(articles|products|prompts)\/[a-z0-9][a-z0-9-]*\/$/;
+  // sow-196: `products` MUST STAY in this alternation. The 2026-09-02 type rename moved eleven items to a
+  // new folder, which this diff-of-adds reads as eleven brand-new publishes; the ONLY thing that stops it
+  // re-announcing all of them to Discord, X, LinkedIn and dev.to is that each carries a `/projects/<slug>/`
+  // redirectFrom entry matching here. Drop `projects` and the next edit to any of them re-announces it.
+  const RENAME_MARK_RE = /^\/(articles|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/$/;
   const built = [];
   for (const rel of added) {
     const txt = readFile(rel);

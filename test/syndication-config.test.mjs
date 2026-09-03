@@ -39,7 +39,7 @@ test('SOW-131: isChannelEnabled + enabledChannelNames are MATRIX-DERIVED (any ce
   // mastodon: every cell explicitly off -> disabled. Everything else uses the default matrix (post/product/prompt
   // on), so it is enabled. bluesky: a `popular` share cell also counts as enabled.
   const c = syndicationConfigFromParsed({ auto_matrix: {
-    post: { mastodon: 'off' }, product: { mastodon: 'off' }, prompt: { mastodon: 'off' }, share: { mastodon: 'off', bluesky: 'popular' },
+    post: { mastodon: 'off' }, project: { mastodon: 'off' }, prompt: { mastodon: 'off' }, share: { mastodon: 'off', bluesky: 'popular' },
   } });
   assert.equal(isChannelEnabled(c, 'discord'), true);   // default post/product/prompt on
   assert.equal(isChannelEnabled(c, 'mastodon'), false);  // every cell off
@@ -130,7 +130,7 @@ test('SOW-125: the default matrix is shares off, every other type on, backward-c
   const c = syndicationConfigFromParsed({}); // no matrix in the file
   for (const ch of AUTO_CHANNELS) {
     assert.equal(autoModeFor(c, 'share', ch), 'off');
-    for (const t of ['post', 'product', 'prompt']) assert.equal(autoModeFor(c, t, ch), 'on');
+    for (const t of ['post', 'project', 'prompt']) assert.equal(autoModeFor(c, t, ch), 'on');
   }
   assert.equal(defaultAutoMode('share'), 'off');
   assert.equal(defaultAutoMode('post'), 'on');
@@ -217,7 +217,7 @@ test('templateFor: configured template wins, blank/missing falls back to the typ
   // sow-180: the SHARE default is content-first with no member credit (post/product below keep DEFAULT_FORMAT).
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'share'), 'Shared on the GBTI Network: "{title}" {url}');
   assert.equal(templateFor(undefined, 'share'), 'Shared on the GBTI Network: "{title}" {url}');
-  assert.equal(templateFor(undefined, 'product'), 'New {content-type} published by {member-discord-username}: "{title}" {url}');
+  assert.equal(templateFor(undefined, 'project'), 'New {content-type} published by {member-discord-username}: "{title}" {url}');
 });
 
 // SOW-111: the news engagement auto-share block.

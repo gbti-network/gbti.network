@@ -67,7 +67,7 @@ const CSS = `
 let QUEUE_CACHE = null; // { data, at }
 const CACHE_FRESH_MS = 30_000;
 
-const SRC_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
+const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
 const STATUSES = ['pending', 'approved', 'sent', 'failed', 'cancelled'];
 
 class GbtiSyndicationTracker extends GbtiElement {

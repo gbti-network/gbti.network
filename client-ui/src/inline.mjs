@@ -4,7 +4,7 @@
 // other metadata. No DOM here: the component passes a dataset-like object + the edited regions; these stay
 // pure so they are unit-tested in node.
 
-const TYPE_RE = /^(post|product|prompt|profile)$/;
+const TYPE_RE = /^(post|project|product|prompt|profile)$/;
 
 /**
  * Read the editing hooks from a page region's dataset (element.dataset or a plain object).

@@ -58,7 +58,7 @@ export const CLOSE_NUDGE = Object.freeze({
     'paid membership at https://gbti.network, then your client will publish your staged drafts. See ' +
     'CONTRIBUTING.md for how trial authoring works.',
   'rejected-not-creator':
-    'Thanks for your work. Publishing articles, products and prompts on gbti.network is a Content Creator ' +
+    'Thanks for your work. Publishing articles, projects and prompts on gbti.network is a Content Creator ' +
     'feature, so this pull request cannot merge on the Network Member plan. Nothing is lost: your draft ' +
     'stays where you staged it. Upgrade to Content Creator at https://gbti.network, then your client will ' +
     'publish your staged drafts. See CONTRIBUTING.md for how content authoring works.',

@@ -1,6 +1,6 @@
 ---
 // The Member Handbook: one canonical, searchable reference for how the network works, with a sticky
-// section sidebar (scrollspy) and client-side search (the ProductDirectory filter idiom: vanilla JS,
+// section sidebar (scrollspy) and client-side search (the ProjectDirectory filter idiom: vanilla JS,
 // substring match over block text, show/hide + per-section counts). Site-owned copy, hand-authored like
 // membership.astro / revenue-model.astro; every number imports from src/lib/membership.ts so the page
 // can never drift from the real config. Honest-status rules apply: only live capabilities are stated as
@@ -80,7 +80,7 @@ const sections = [
             perks: follow the news feed, save favorites, build collections, follow members and topics.
             <strong>Network Member</strong> adds commenting across the network, the full Discord community,
             member-only content, and the member Shares stream. <strong>Content Creator</strong> unlocks
-            publishing your articles, products, and prompts, your creator profile, syndication, and posting
+            publishing your articles, projects, and prompts, your creator profile, syndication, and posting
             to Shares. The <a href="/membership/">membership page</a> has pricing and the complete
             comparison.</p></div>
           <div class="blk" data-blk><p>After setup, a welcome view walks you through the first two moves:
@@ -141,13 +141,13 @@ const sections = [
           <h2>Publishing &amp; Workbench</h2>
           <div class="blk" data-blk><p>You author through either of two surfaces, and both use the same
             flow. The <strong>extension workbench</strong> gives you a workspace (your articles, prompts,
-            products, and their pull requests), a browse view, and an in-extension reader. The
+            projects, and their pull requests), a browse view, and an in-extension reader. The
             <strong>npm CMS</strong> (<code>gbti-network</code>) runs a local editor in your browser plus
             an MCP server, so your AI agents can author through the exact same guarded flow you do.</p></div>
           <div class="blk" data-blk><p>Under the hood every edit is <strong>fork, branch, pull
             request</strong> against the public content repository. The membership gate is the only
             authority on what merges; the tools handle the git motions for you. Your content lives in
-            your own folder (<code>members/&lt;username&gt;/</code>) with posts, products, prompts, and
+            your own folder (<code>members/&lt;username&gt;/</code>) with posts, projects, prompts, and
             images, and your pull requests auto-merge only inside that folder.</p></div>
           <div class="blk" data-blk><p>Until you have a paid membership, drafts stay on your fork; nothing you
             stage reaches the canonical repository. Publishing is for paid members. The moment you upgrade, the
@@ -191,7 +191,7 @@ const sections = [
           <div class="blk" data-blk><p>Everything about you lives in exactly one of three homes, chosen by
             what the data is. There is no hidden application database.</p>
             <ul>
-              <li><strong>Published works</strong> (your profile, posts, products, prompts, and comments)
+              <li><strong>Published works</strong> (your profile, posts, projects, prompts, and comments)
                 live in the public git repository, which is public on purpose: your work stays versioned and
                 portable under your own name.</li>
               <li><strong>Billing identity</strong> lives in Stripe and only in Stripe. Your email is passed
@@ -243,12 +243,12 @@ const sections = [
         <!-- 8. DISCORD COMMUNITY -->
         <section class="hb-sec" id="discord" data-sec>
           <h2>Discord Community</h2>
-          <div class="blk" data-blk><p>The community is the product. The Discord guild runs on three
+          <div class="blk" data-blk><p>The community is the project. The Discord guild runs on three
             roles, exactly one per member, swapped automatically as your status changes: <strong>Member</strong>
             (paid, full access), <strong>Trial</strong> (read along while you evaluate), and
             <strong>Locked</strong> (lapsed or banned; you stay in the guild but the gated channels close).
             Nobody is ever kicked by the system.</p></div>
-          <div class="blk" data-blk><p>The weekly two hour shop-talk session anchors the community: product
+          <div class="blk" data-blk><p>The weekly two hour shop-talk session anchors the community: project
             development, publishing, business progress, technical decisions, and member coaching.</p></div>
           <div class="blk" data-blk><p>The #shares channel carries everything members publish, and each
             item posts again into its category channel, so following a topic means watching one channel.
@@ -281,7 +281,7 @@ const sections = [
 </BaseLayout>
 
 <script>
-  // Handbook search + scrollspy (vanilla, the ProductDirectory filter idiom). Search matches each
+  // Handbook search + scrollspy (vanilla, the ProjectDirectory filter idiom). Search matches each
   // content block's text; a section with no visible blocks collapses; the sidebar shows per-section
   // match counts while a query is active. Scrollspy pauses during a search.
   document.querySelectorAll<HTMLElement>('.hb-wrap').forEach((root) => {

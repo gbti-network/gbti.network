@@ -47,9 +47,9 @@ const P = {
   ink: '#232029', inkSoft: '#4a4653', meta: '#7c7784', accent: '#187a4b', footerLink: '#4a4653', postalMeta: '#9b96a1',
 };
 
-// The human label for a content type. The notification issue carries the syndication type ('post'|'product'|
+// The human label for a content type. The notification issue carries the syndication type ('post'|'project'|
 // 'prompt'); 'article' is the reader-facing word for a post, matching the site and the digest.
-const TYPE_LABEL = { post: 'article', article: 'article', product: 'product', prompt: 'prompt' };
+const TYPE_LABEL = { post: 'article', article: 'article', project: 'project', prompt: 'prompt' };
 
 /** An ABSOLUTE, safe url for an email: safeUrl fails an unsafe value closed to ''; a surviving site-relative path
  *  is prefixed with siteUrl (a bare "/articles/x/" is a dead link in a mail client); an external http(s) url

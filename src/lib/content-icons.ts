@@ -4,7 +4,7 @@
 export const CONTENT_ICON: Record<string, string> = {
   article: 'ico-pencil',
   post: 'ico-pencil',
-  product: 'ico-box',
+  project: 'ico-box',
   prompt: 'ico-bot',
   skill: 'ico-bot',
   fun: 'ico-bot',

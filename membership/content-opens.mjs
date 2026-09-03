@@ -15,7 +15,7 @@ export class ContentOpenError extends Error {}
 
 const id = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
 
-export const CONTENT_OPEN_TYPES = Object.freeze(['post', 'product', 'prompt', 'share']);
+export const CONTENT_OPEN_TYPES = Object.freeze(['post', 'project', 'prompt', 'share']);
 
 export function emptyContentOpens() {
   return { openers: [], updatedAt: null };

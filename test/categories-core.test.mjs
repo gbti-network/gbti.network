@@ -28,13 +28,13 @@ test('countRollup: descendants roll up to every ancestor; empty nodes stay 0; or
       { categories: ['ghost-category'] }, // orphaned: not in the tree
     ],
     prompt: [{ categories: ['devops'] }],
-    product: [],
+    project: [],
   };
   const c = countRollup(TREE, items);
-  assert.deepEqual(c.get('devops'), { post: 2, prompt: 1, product: 0, total: 3 });
-  assert.deepEqual(c.get('devops/frameworks'), { post: 1, prompt: 0, product: 0, total: 1 });
-  assert.deepEqual(c.get('devops/frameworks/wordpress'), { post: 1, prompt: 0, product: 0, total: 1 });
-  assert.deepEqual(c.get('ai'), { post: 0, prompt: 0, product: 0, total: 0 }); // empty renders 0
+  assert.deepEqual(c.get('devops'), { post: 2, prompt: 1, project: 0, total: 3 });
+  assert.deepEqual(c.get('devops/frameworks'), { post: 1, prompt: 0, project: 0, total: 1 });
+  assert.deepEqual(c.get('devops/frameworks/wordpress'), { post: 1, prompt: 0, project: 0, total: 1 });
+  assert.deepEqual(c.get('ai'), { post: 0, prompt: 0, project: 0, total: 0 }); // empty renders 0
   assert.equal(c.has('ghost-category'), false);
 });
 

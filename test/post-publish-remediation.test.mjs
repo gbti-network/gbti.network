@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { parseError, planRemediation, flipFilesToDraft } from '../scripts/lib/post-publish-remediation.mjs';
 
 const POST = 'members/alice/posts/x/index.md';
-const HOUSE = 'house/products/y/index.md';
+const HOUSE = 'house/projects/y/index.md';
 
 test('parseError extracts a content-path file prefix; a global error has no file', () => {
   assert.deepEqual(parseError(`${POST}: categories must be an array path`), { file: POST, message: 'categories must be an array path' });

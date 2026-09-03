@@ -1,11 +1,11 @@
-// SOW-031: pure helpers for the per-type content index endpoints (/blog-index.json, /products-index.json,
+// SOW-031: pure helpers for the per-type content index endpoints (/blog-index.json, /projects-index.json,
 // /prompts-index.json) AND the reader read-route allowlist. Node-free so the Astro endpoints map collections
 // into it and node --test covers the edge-case logic (house vs member owner, the nested <slug>/index.md layout,
 // the read allowlist regex). Metadata only (no body, no behavioral data) -> same privacy posture as
 // activity-index.json. The reader fetches bodies on demand via the token-holding worker, never from this JSON.
 
-const SUBDIR = { post: 'posts', product: 'products', prompt: 'prompts' };
-const URLBASE = { post: '/articles', product: '/products', prompt: '/prompts' };
+const SUBDIR = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' };
+const URLBASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' } // sow-196: the retired name resolves to the current URL;
 
 /** Repo-relative index.md path for a content item: house/gbti owner -> house/<sub>/<slug>/index.md; a member
  *  owner -> members/<owner>/<sub>/<slug>/index.md. Null when the type/slug is unsupported. */
@@ -17,9 +17,9 @@ export function contentItemPath(type, owner, slug) {
   return `members/${o}/${sub}/${slug}/index.md`;
 }
 
-// The image field(s) that supply a card thumbnail per type, in preference order. A product prefers its square
+// The image field(s) that supply a card thumbnail per type, in preference order. A project prefers its square
 // `icon` for a list-row thumb (then the 16:10 featuredImage, then banner); posts use coverImage; prompts use image.
-const THUMB_FIELDS = { post: ['coverImage'], product: ['iconLarge', 'icon', 'featuredImage', 'banner'], prompt: ['image'] };
+const THUMB_FIELDS = { post: ['coverImage'], project: ['iconLarge', 'icon', 'featuredImage', 'banner'], prompt: ['image'] };
 
 /** Resolve one image field value to a URL string the in-extension UI can render. An Astro `image()` field is an
  *  ImageMetadata object ({ src, width, height }), so we emit its build-optimized `.src` (a SITE-relative
@@ -58,7 +58,7 @@ export function aliasSlugsOf(d) {
   const list = Array.isArray(d?.redirectFrom) ? d.redirectFrom : [];
   const out = [];
   for (const e of list) {
-    const m = /^\/(articles|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || '').trim());
+    const m = /^\/(articles|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || '').trim());
     if (m && m[2] !== d?.slug && !out.includes(m[2])) out.push(m[2]);
   }
   return out;
@@ -89,7 +89,7 @@ export function toIndexItem(entry, type) {
 // The reader read-route allowlist: ONLY a content index.md in the three public subtrees, member or house, with
 // no traversal. Keeps the member token from becoming a general repo-file oracle (no roles.yml, no house/pages,
 // no .. escape). Cover with the unit test.
-export const READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+export const READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
 
 export function isReadablePath(path) {
   return typeof path === 'string' && !path.includes('..') && !path.includes('\\') && READ_PATH_RE.test(path);

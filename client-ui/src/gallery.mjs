@@ -5,13 +5,13 @@
 // Why this exists: `gallery` is a `kind: 'json'` field, and the editor used to render it through the generic
 // json control. An ARRAY value is comma-joined for display (gbti-content-editor.mjs, the `v` expression), so
 // the textarea showed `./images/a.webp, ./images/b.webp`, and gather()'s coerceValue('json', ...) then
-// JSON.parse'd that string and threw. Every product with screenshots was unsaveable, and Preview (whose
+// JSON.parse'd that string and threw. Every project with screenshots was unsaveable, and Preview (whose
 // gather() sits outside a try) was a dead button. The fix mirrors the links[] structured rows: a hidden json
 // input holds JSON.stringify(the serialized value), and these helpers are the parse/serialize either side.
 //
-// The serialize side MUST round-trip the ten existing products byte-for-byte: they all use bare path strings,
+// The serialize side MUST round-trip the ten existing projects byte-for-byte: they all use bare path strings,
 // so an uncaptioned row serializes back to a bare string, NOT { src, caption: '' }, or opening and saving a
-// product would churn its own frontmatter. This mirrors normalizeGallery (src/lib/product-page.mjs), which
+// project would churn its own frontmatter. This mirrors normalizeGallery (src/lib/project-page.mjs), which
 // reads a bare string or a { src, caption } object in any mix.
 
 /**

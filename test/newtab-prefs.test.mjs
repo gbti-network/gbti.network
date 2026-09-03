@@ -23,7 +23,7 @@ test('the storage contract: key names are pinned', () => {
   assert.equal(LEGACY_MODE_KEY, 'gbti-nt-mode');
   assert.equal(viewKey('prompt'), 'gbti-nt-view-prompt');
   assert.equal(viewKey('all'), 'gbti-nt-view-all');
-  assert.notEqual(viewKey('post'), viewKey('product'));
+  assert.notEqual(viewKey('post'), viewKey('project'));
 });
 
 test('viewModeFor: a valid stored value wins over the default', () => {
@@ -33,7 +33,7 @@ test('viewModeFor: a valid stored value wins over the default', () => {
 });
 
 test('viewModeFor: absent or invalid stored falls to the per-type default', () => {
-  const expected = { all: 'card', post: 'card', product: 'detailed', prompt: 'compact', share: 'detailed', news: 'card' };
+  const expected = { all: 'card', post: 'card', project: 'detailed', prompt: 'compact', share: 'detailed', news: 'card' };
   for (const [t, want] of Object.entries(expected)) {
     for (const bad of [null, undefined, '', 'bogus', 'CARD']) {
       assert.equal(viewModeFor(t, bad), want, `${t} with stored=${String(bad)}`);

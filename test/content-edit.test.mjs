@@ -1,5 +1,5 @@
-// sow-183: canEditItem (relocated out of product-page.mjs now that every content-detail page uses it, not
-// just products). Tests carried over verbatim from their old home in test/product-page.test.mjs.
+// sow-183: canEditItem (relocated out of project-page.mjs now that every content-detail page uses it, not
+// just projects). Tests carried over verbatim from their old home in test/product-page.test.mjs.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

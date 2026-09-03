@@ -5,7 +5,7 @@ import { modPathFor, visibleActions } from '../client-ui/src/mod-actions-core.mj
 
 test('modPathFor builds the canonical per-type member path', () => {
   assert.equal(modPathFor({ type: 'post', author: 'alice', slug: 'x' }), 'members/alice/posts/x/index.md');
-  assert.equal(modPathFor({ type: 'product', author: 'alice', slug: 'x' }), 'members/alice/products/x/index.md');
+  assert.equal(modPathFor({ type: 'project', author: 'alice', slug: 'x' }), 'members/alice/projects/x/index.md');
   assert.equal(modPathFor({ type: 'prompt', author: 'alice', slug: 'x' }), 'members/alice/prompts/x/index.md');
   assert.equal(modPathFor({ type: 'share', author: 'alice', id: '2026-06-28-note' }), 'members/alice/shares/2026-06-28-note.md');
 });

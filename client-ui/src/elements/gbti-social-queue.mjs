@@ -46,7 +46,7 @@ const composeUrl = (task) => {
 // enqueued for Hashnode: that is decided upstream by CHANNELS and MANUAL_DESTS, both of which dropped it.
 const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', linkedin: 'LinkedIn', bluesky: 'Bluesky' };
 const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', hashnode: 'hashnode', dailydev: 'dailydev', linkedin: 'linkedin', bluesky: 'bluesky' };
-const SRC_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
+const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
 const PAGE_SIZE = 12;
 const fmtDate = (ms) => { try { return new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };
 

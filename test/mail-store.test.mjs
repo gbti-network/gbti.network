@@ -32,7 +32,7 @@ function makeKV({ throwOn = () => false } = {}) {
   };
 }
 
-const issueOf = (id) => ({ issueId: id, sections: { article: [], product: [], prompt: [], share: [] }, topNews: [], counts: {}, isEmpty: false, generatedAt: 0 });
+const issueOf = (id) => ({ issueId: id, sections: { article: [], project: [], prompt: [], share: [] }, topNews: [], counts: {}, isEmpty: false, generatedAt: 0 });
 
 test('putIssue / getIssue round-trip; a missing issue is null', async () => {
   const kv = makeKV();

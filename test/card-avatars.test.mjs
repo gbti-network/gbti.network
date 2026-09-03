@@ -54,7 +54,7 @@ test('avatarFor: a member item -> github avatar + the name as the tooltip', () =
 
 test('avatarFor: a gbti/house item -> the GBTI org avatar + "GBTI Network" tooltip', () => {
   for (const author of ['gbti', 'house', 'GBTI']) {
-    const h = avatarFor({ type: 'product', author });
+    const h = avatarFor({ type: 'project', author });
     assert.match(h.src, /github\.com\/gbti-network\.png/);
     assert.equal(h.title, 'GBTI Network');
   }

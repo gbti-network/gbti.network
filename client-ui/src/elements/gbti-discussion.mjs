@@ -1,5 +1,5 @@
 // <gbti-discussion> (SOW-041): the shared comment-thread engine for ANY content type, factored out of
-// gbti-shares-feed (SOW-032) so the SAME discussion renders under a Share, a post, a product, or a prompt — in
+// gbti-shares-feed (SOW-032) so the SAME discussion renders under a Share, a post, a project, or a prompt — in
 // the expanded reader and the shares stream alike. Lazy-loads the thread via client.listComments({targetType,
 // targetSlug}), resolves each comment body (public -> preview; members -> Worker-decrypt -> preview, SOW-016),
 // renders oldest-first, and mounts an inert <gbti-comment-box> for paid members to reply. Reloads only itself
@@ -187,7 +187,7 @@ class GbtiDiscussion extends GbtiElement {
       const hideBtn = canMod && modPath ? `<button class="abtn" type="button" data-hidec="${esc(modPath)}"${noteFlag}>${EYE} Hide</button>` : '';
       // Admin+ hard-delete (the existing admin 'remove' rail); a member deletes their OWN comment (a real
       // canonical file only — an in-flight echo has no path and reaps on its own; own-delete deliberately
-      // excludes the author-note intro, which products/prompts REQUIRE).
+      // excludes the author-note intro, which projects/prompts REQUIRE).
       const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
       const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}"${noteFlag}>${TRASH} Delete</button>`
         : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH} Delete</button>` : '';
@@ -216,7 +216,7 @@ class GbtiDiscussion extends GbtiElement {
   // (optimistic) -> the server result upgrades it, or flips it to an error card on failure.
   async _deleteComment(path, isAuthorNote = false) {
     const msg = isAuthorNote
-      ? 'Delete this AUTHOR INTRO? Products and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?'
+      ? 'Delete this AUTHOR INTRO? Projects and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?'
       : 'Delete this comment? The file is removed from the network (it remains in git history).';
     if (typeof confirm === 'function' && !confirm(msg)) return;
     this._tombstone(path, 'busy');
@@ -241,10 +241,10 @@ class GbtiDiscussion extends GbtiElement {
 
   // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.
   async _hideComment(path, isAuthorNote = false) {
-    // An author-note intro is REQUIRED by products/prompts (SOW-014): hiding/removing it also drops the
+    // An author-note intro is REQUIRED by projects/prompts (SOW-014): hiding/removing it also drops the
     // pinned From-the-author block, and the item's NEXT edit fails CI until a new intro ships with it.
     const msg = isAuthorNote
-      ? 'Hide this AUTHOR INTRO? Products and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?'
+      ? 'Hide this AUTHOR INTRO? Projects and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?'
       : 'Hide this comment? It is set to draft and removed from the thread.';
     if (typeof confirm === 'function' && !confirm(msg)) return;
     try { await this.client.admin('deplatform', { path }); this.load(); }

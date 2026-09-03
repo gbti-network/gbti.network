@@ -7,7 +7,7 @@ import { TYPE_FILTERS, NETWORK_KINDS, parseTypeFromHash, typeForHash, railKeyFor
 
 test('parseTypeFromHash reads a known type from #type=<X> (leading # optional)', () => {
   assert.equal(parseTypeFromHash('#type=post'), 'post');
-  assert.equal(parseTypeFromHash('type=product'), 'product');
+  assert.equal(parseTypeFromHash('type=project'), 'project');
   assert.equal(parseTypeFromHash('#type=prompt'), 'prompt');
   assert.equal(parseTypeFromHash('#type=share'), 'share');
   assert.equal(parseTypeFromHash('#type=news'), 'news');
@@ -41,7 +41,7 @@ test('typeForHash falls back to the all-types river when the hash carries no typ
 test('railKeyForType maps each TYPE to its rail item; all -> activity (Activity IS the All river)', () => {
   assert.equal(railKeyForType('all'), 'activity');
   assert.equal(railKeyForType('post'), 'articles');
-  assert.equal(railKeyForType('product'), 'products');
+  assert.equal(railKeyForType('project'), 'projects');
   assert.equal(railKeyForType('prompt'), 'prompts');
   assert.equal(railKeyForType('share'), 'shares');
   assert.equal(railKeyForType('news'), 'news');
@@ -60,7 +60,7 @@ test('there is no "all" rail key: the Browse "All" item was dropped', () => {
 });
 
 test('TYPE_FILTERS is the canonical set the feed + chips share', () => {
-  assert.deepEqual([...TYPE_FILTERS].sort(), ['all', 'network', 'news', 'post', 'product', 'prompt', 'share']);
+  assert.deepEqual([...TYPE_FILTERS].sort(), ['all', 'network', 'news', 'post', 'project', 'prompt', 'share']);
 });
 
 test('feedSources: Activity (all) blends member content + Shares but NO news', () => {
@@ -76,7 +76,7 @@ test('feedSources: Shares loads Shares then narrows to that type', () => {
 });
 
 test('feedSources: a single content type narrows, no Shares, no news', () => {
-  for (const t of ['post', 'product', 'prompt']) {
+  for (const t of ['post', 'project', 'prompt']) {
     assert.deepEqual(feedSources(t), { wantNews: false, wantShares: false, narrow: true, kinds: [t] }, t);
   }
 });
@@ -100,7 +100,7 @@ test('feedSources: only the News view wants news; the three blended views are al
 
 test('feedSources: NETWORK is member publications only, and must agree with the WEBSITE feed', () => {
   const s = feedSources('network');
-  assert.deepEqual(s, { wantNews: false, wantShares: false, narrow: false, kinds: ['post', 'product', 'prompt'] });
+  assert.deepEqual(s, { wantNews: false, wantShares: false, narrow: false, kinds: ['post', 'project', 'prompt'] });
   // The POINT of adopting the website's set is that a rail item means the SAME thing on both hosts. The
   // website's matchesNarrow('network') admits article/product/prompt and excludes shares and news (the
   // extension calls that content type 'post' where the site calls it 'article'). If these drift, one rail

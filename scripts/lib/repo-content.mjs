@@ -3,7 +3,7 @@
 // (published|draft) and `visibility` (public|members), parsed from frontmatter with a simple
 // line scan (the same style as scripts/validate-content.mjs, no YAML parser needed for two fields).
 //
-// We index ONLY member-owned content (members/<username>/{profile.md, posts, products, prompts}).
+// We index ONLY member-owned content (members/<username>/{profile.md, posts, projects, prompts}).
 // house/** is GBTI-Network's own content and is not membership-gated, so the reconcile leaves it
 // alone.
 //
@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const CONTENT_DIRS = ['posts', 'products', 'prompts'];
+const CONTENT_DIRS = ['posts', 'projects', 'products', 'prompts'];
 
 /** Read one frontmatter scalar by key (first match), tolerant of optional quotes. Mirrors validate-content.mjs. */
 function field(txt, key) {
@@ -72,7 +72,7 @@ function readContentFile(root, abs) {
 }
 
 /**
- * Collect content files for one member folder (profile.md plus posts/products/prompts/<slug>/index.md)
+ * Collect content files for one member folder (profile.md plus posts/projects/prompts/<slug>/index.md)
  * and the profile-derived identity ({ githubLogin, githubId }). The identity is read from profile.md
  * (links.github URL for the login, an optional top-level github_id field).
  */

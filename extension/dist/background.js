@@ -17016,7 +17016,7 @@ var postSchema = external_exports.object({
   redirectFrom: external_exports.array(external_exports.string()).default([])
 });
 var productSchema = external_exports.object({
-  type: external_exports.literal("product").default("product"),
+  type: external_exports.literal("project").default("project"),
   title: external_exports.string(),
   slug: external_exports.string().regex(/^[a-z0-9-]+$/),
   author: external_exports.string(),
@@ -17039,7 +17039,7 @@ var productSchema = external_exports.object({
   icon: external_exports.string(),
   // REQUIRED, 1:1. The SMALL icon: the directory card renders it at 64 (shown 56).
   // Optional 1:1 LARGE icon for the detail page's 96px slot, which a 128px source cannot serve crisply at
-  // 2x. Optional on purpose: every existing product predates it, and their 128x128 sources cannot be
+  // 2x. Optional on purpose: every existing project predates it, and their 128x128 sources cannot be
   // upscaled into a genuine large asset. The render falls back to `icon`.
   iconLarge: external_exports.string().optional(),
   banner: external_exports.string().optional(),
@@ -17047,7 +17047,7 @@ var productSchema = external_exports.object({
   bannerPreset: external_exports.enum(BANNER_PRESET_KEYS).optional(),
   featuredImage: external_exports.string(),
   // REQUIRED, mirrors src/content.config.ts (the 16:10 spotlight cover). Was optional
-  // here: a product published without it passed the client but broke the Astro build (SOW-025, same drift class).
+  // here: a project published without it passed the client but broke the Astro build (SOW-025, same drift class).
   // sow-172/174: a gallery entry is EITHER a bare path OR { src, caption }. Mirrors src/content.config.ts.
   // The union matters beyond validation: zod STRIPS unknown keys, so without it a caption would silently
   // vanish the next time this schema validated a save.
@@ -17056,7 +17056,7 @@ var productSchema = external_exports.object({
   // sow-172: unset resolves by shot count
   video: external_exports.string().optional(),
   links: contentLinks,
-  // Mirrors src/content.config.ts. Which side the Contents rail renders on for this product's detail page.
+  // Mirrors src/content.config.ts. Which side the Contents rail renders on for this project's detail page.
   sidebarPosition: external_exports.enum(["left", "right"]).default("right"),
   publishedAt: external_exports.coerce.date().optional(),
   redirectFrom: external_exports.array(external_exports.string()).default([])
@@ -17140,7 +17140,7 @@ var commentSchema = external_exports.object({
   type: external_exports.literal("comment").default("comment"),
   id: external_exports.string().min(1),
   author: external_exports.string(),
-  targetType: external_exports.enum(["post", "product", "prompt", "share", "news"]),
+  targetType: external_exports.enum(["post", "project", "prompt", "share", "news"]),
   // SOW-032: 'share'; SOW-046 D: 'news' discussion
   targetSlug: external_exports.string(),
   // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
@@ -17158,14 +17158,14 @@ var commentSchema = external_exports.object({
 });
 var SCHEMAS = Object.freeze({
   post: postSchema,
-  product: productSchema,
+  project: productSchema,
   profile: profileSchema,
   prompt: promptSchema
 });
-var AUTHORABLE_TYPES = Object.freeze(["post", "product", "prompt", "profile"]);
+var AUTHORABLE_TYPES = Object.freeze(["post", "project", "prompt", "profile"]);
 var SYSTEM_MANAGED = Object.freeze({
   post: ["contributors"],
-  product: ["contributors"],
+  project: ["contributors"],
   prompt: ["contributors"],
   profile: ["tier", "joinedAt"]
 });
@@ -17270,7 +17270,7 @@ function stripTrackingParams(input) {
 }
 
 // client/src/content-ops.mjs
-var SUBDIR = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
+var SUBDIR = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
 var MAX_BODY_BYTES = 1e6;
 var NETWORK_CONTENT_OWNER = "gbtilabs";
 function resolveTarget({ scope = "member", username } = {}) {
@@ -17474,14 +17474,14 @@ function parseContentFile(text) {
 }
 
 // src/lib/content-index.mjs
-var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
 function isReadablePath(path) {
   return typeof path === "string" && !path.includes("..") && !path.includes("\\") && READ_PATH_RE.test(path);
 }
 
 // client/src/github-reader.mjs
-var SUBDIR2 = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
-var TYPES = ["post", "product", "prompt", "profile"];
+var SUBDIR2 = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
+var TYPES = ["post", "project", "prompt", "profile"];
 var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
@@ -17580,7 +17580,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
     get,
     // SOW-031: read ANY member's or house's PUBLISHED content index.md for the in-extension reader. Unlike
     // get() (own-folder-scoped for editing), this is read-only over the public repo, gated by a strict
-    // allowlist (only posts/products/prompts index.md, no traversal, no roles.yml / house/pages) so the member
+    // allowlist (only posts/projects/prompts index.md, no traversal, no roles.yml / house/pages) so the member
     // token cannot become a general file-exfil oracle. Member-only BODIES are not here: the public teaser comes
     // back as `body`, and frontmatter.encryptedBody points at the .enc the reader decrypts via the Worker.
     async read(relPath) {
@@ -18392,7 +18392,7 @@ async function requireSuperadminForHouse(ctx) {
   if (role !== "superadmin") throw new OperationError("forbidden", `house content is superadmin-only (you are ${role})`);
   return { id, role };
 }
-var NETWORK_CONTENT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
+var NETWORK_CONTENT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|projects|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
 var isNetworkContentPath = (p) => String(p || "").startsWith(`members/${NETWORK_CONTENT_OWNER}/`);
 async function membershipOf(ctx) {
   const m = await (ctx.membershipResolved ? ctx.membershipResolved() : ctx.membership?.());
@@ -18514,7 +18514,7 @@ async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) 
 async function listShareComments(ctx, { targetSlug, limit } = {}) {
   return listComments(ctx, { targetType: "share", targetSlug, limit });
 }
-var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share", "news"]);
 var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
 var COMMENTS_INDEX_TTL_MS = 6e4;
 var commentsIndexCache = null;
@@ -18697,7 +18697,7 @@ function renameOriginOf({ path, username, type }) {
   if (m[2].slice(0, -1) !== type) return null;
   return { oldSlug: m[3], oldPath: String(path) };
 }
-var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFork } = {}) {
   try {
     const fork = await repo.ensureFork();
@@ -18971,7 +18971,7 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const createdAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const cid = commentId(createdAt, commentSuffix());
   const input = { id: cid, targetType, targetSlug, createdAt, status: "published" };
-  const isPublicIntro = authorNote === true && ["post", "product", "prompt"].includes(targetType);
+  const isPublicIntro = authorNote === true && ["post", "project", "prompt"].includes(targetType);
   input.visibility = visibility === "public" && isPublicIntro ? "public" : "members";
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
@@ -19059,7 +19059,7 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
   const fm = existing.frontmatter ?? {};
   const updatedAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const effAuthorNote = authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote);
-  const isPublicIntro = effAuthorNote && ["post", "product", "prompt"].includes(fm.targetType);
+  const isPublicIntro = effAuthorNote && ["post", "project", "prompt"].includes(fm.targetType);
   const input = {
     id,
     targetType: fm.targetType,
@@ -19401,8 +19401,19 @@ var STEPS = {
   }
 };
 
+// membership/content-types.mjs
+var LEGACY_TYPE_ALIASES = Object.freeze({
+  product: "project"
+  // sow-196, 2026-09-02
+});
+var CONTENT_TYPES = Object.freeze(["post", "project", "prompt", "share", "news"]);
+function canonicalType(type) {
+  const t = typeof type === "string" ? type : "";
+  return Object.prototype.hasOwnProperty.call(LEGACY_TYPE_ALIASES, t) ? LEGACY_TYPE_ALIASES[t] : t;
+}
+
 // membership/member-activity.mjs
-var CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+var CONTENT_TYPES2 = /* @__PURE__ */ new Set(["post", "project", "prompt", "share"]);
 var MAX_NAME_LEN = 80;
 var SLUG_RE = /^[a-z0-9-]+$/;
 var SHARE_SLUG_RE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
@@ -19415,15 +19426,16 @@ function normalizeTargetList(raw) {
   if (!Array.isArray(raw)) return out;
   const seen = /* @__PURE__ */ new Set();
   for (const f of raw) {
-    if (!f || !isTarget(f.type, f.slug)) continue;
-    const k = targetKey(f);
+    const type = canonicalType(f?.type);
+    if (!f || !isTarget(type, f.slug)) continue;
+    const k = targetKey({ type, slug: f.slug });
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push({ type: f.type, slug: f.slug, addedAt: Number(f.addedAt) || 0 });
+    out.push({ type, slug: f.slug, addedAt: Number(f.addedAt) || 0 });
   }
   return out;
 }
-var isTarget = (type, slug) => CONTENT_TYPES.has(type) && typeof slug === "string" && slugOk(type, slug);
+var isTarget = (type, slug) => CONTENT_TYPES2.has(type) && typeof slug === "string" && slugOk(type, slug);
 var targetKey = (t) => `${t.type}:${t.slug}`;
 function normalizeActivity(raw) {
   const a = emptyActivity();
@@ -19440,11 +19452,12 @@ function normalizeActivity(raw) {
       const seenItems = /* @__PURE__ */ new Set();
       if (Array.isArray(c.items)) {
         for (const it of c.items) {
-          if (!it || !isTarget(it.type, it.slug)) continue;
-          const k = targetKey(it);
+          const ct = canonicalType(it?.type);
+          if (!it || !isTarget(ct, it.slug)) continue;
+          const k = targetKey({ type: ct, slug: it.slug });
           if (seenItems.has(k)) continue;
           seenItems.add(k);
-          items.push({ type: it.type, slug: it.slug, addedAt: Number(it.addedAt) || 0 });
+          items.push({ type: ct, slug: it.slug, addedAt: Number(it.addedAt) || 0 });
         }
       }
       a.collections.push({ id: c.id, name: c.name.slice(0, MAX_NAME_LEN), createdAt: Number(c.createdAt) || 0, items });
@@ -19456,7 +19469,7 @@ function normalizeActivity(raw) {
 function filterActivity(activity, types2) {
   const a = normalizeActivity(activity);
   if (!Array.isArray(types2) || types2.length === 0) return a;
-  const allow = new Set(types2);
+  const allow = new Set(types2.map(canonicalType));
   a.favorites = a.favorites.filter((f) => allow.has(f.type));
   a.upvotes = a.upvotes.filter((u) => allow.has(u.type));
   a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
@@ -20986,7 +20999,7 @@ var CHANNEL_CAPABILITY = Object.freeze({
 function channelCapability(name) {
   return CHANNEL_CAPABILITY[name] ?? "building";
 }
-var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
 var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
 var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
 var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
@@ -21015,20 +21028,20 @@ var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
   signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
   // opens = the owner's chosen counter
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
 var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
 var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
 var DEFAULT_DEVTO_BODY = "{body}";
-var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT,
   // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,
-  product: DEFAULT_FORMAT,
+  project: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
   "reddit-body": DEFAULT_REDDIT_BODY,
   "reddit-comment": DEFAULT_REDDIT_COMMENT,
@@ -21050,7 +21063,7 @@ var DEFAULT_STUB_TEMPLATES = Object.freeze({
   share: SHARE_STUB_FORMAT,
   // sow-180: content-first, no member credit
   post: STUB_FORMAT,
-  product: STUB_FORMAT,
+  project: STUB_FORMAT,
   prompt: STUB_FORMAT,
   "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
   "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.",
@@ -21073,22 +21086,22 @@ var MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". J
 var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 var DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
 var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-  discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
-  "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
-  reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
+  "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+  reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
-  devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
   // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
   // its members stub is sentence-shaped like the other manual channels.
-  hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
-  x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
-  linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
+  hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+  x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, project: X_STUB, prompt: X_STUB }),
+  linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, project: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
   // SOW-127
-  dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+  dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
   // SOW-135
-  bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
-  mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
+  bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+  mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB })
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
@@ -21950,7 +21963,7 @@ async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
   const dest = act === "retire" ? null : String(to || "").trim().toLowerCase();
   if (act !== "retire" && !dest) throw new OperationError("bad-request", `${act} needs a destination tag`);
   if (dest === src) throw new OperationError("bad-request", "the destination equals the source");
-  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
   if (!list.length || list.length > 100) throw new OperationError("bad-request", "between 1 and 100 content paths are required");
   const files = [];
   for (const rel of list) {

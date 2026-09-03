@@ -2,7 +2,7 @@
 //   1. the per-member upvote in the deletable activity store (activity:<github_id>, the same value favorites use)
 //   2. the per-TARGET voter set (upvotes:share:<author>/<id>) that drives the visible upvote count
 // SOW-087 RETIRED the upvote-threshold syndication trigger: a share now enqueues at PUBLISH time
-// (scripts/enqueue-syndication.mjs, the same path as posts/products/prompts), so an upvote here only records
+// (scripts/enqueue-syndication.mjs, the same path as posts/projects/prompts), so an upvote here only records
 // the vote and the count. The historical enqueuedAt watermark on old vote records is preserved (read-only).
 //
 // Gating is authorizePaid (ban > staff > grandfather > Stripe, fail-closed) — stricter than favorites' bare

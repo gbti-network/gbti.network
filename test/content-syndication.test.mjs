@@ -10,12 +10,12 @@ import {
 import { reverseMembersIndex, createMentionResolver } from '../scripts/lib/discord-mention.mjs';
 import { main as runSyndicate, parseArgs } from '../scripts/syndicate-content.mjs';
 
-const CHANNELS = { post: 'C_POST', product: 'C_PROD', prompt: 'C_PROMPT', share: 'C_SHARE' };
+const CHANNELS = { post: 'C_POST', project: 'C_PROD', prompt: 'C_PROMPT', share: 'C_SHARE' };
 
 // ---- classification ----
 test('classifyContentPath: maps the four content shapes, rejects everything else', () => {
   assert.deepEqual(classifyContentPath('members/alice/posts/hello/index.md'), { type: 'post', slug: 'hello' });
-  assert.deepEqual(classifyContentPath('house/products/radle/index.md'), { type: 'product', slug: 'radle' });
+  assert.deepEqual(classifyContentPath('house/projects/radle/index.md'), { type: 'project', slug: 'radle' });
   assert.deepEqual(classifyContentPath('members/bob/prompts/p/index.md'), { type: 'prompt', slug: 'p' });
   assert.deepEqual(classifyContentPath('members/bob/shares/20260616-x.md'), { type: 'share', slug: '20260616-x' });
   for (const bad of ['house/roles.yml', 'members/alice/profile.md', 'members/a/posts/x/cover.png',
@@ -35,7 +35,7 @@ test('hasPublicPage: public yes, Mode B stub yes, Mode A no, draft no, share no'
 
 test('publicUrlFor: per-type slug url for a public item; null for Mode A / share', () => {
   assert.equal(publicUrlFor({ type: 'post', slug: 'hello', hasPublicPage: true }), 'https://gbti.network/articles/hello/');
-  assert.equal(publicUrlFor({ type: 'product', slug: 'radle', hasPublicPage: true }, 'https://gbti.network/'), 'https://gbti.network/products/radle/');
+  assert.equal(publicUrlFor({ type: 'project', slug: 'radle', hasPublicPage: true }, 'https://gbti.network/'), 'https://gbti.network/projects/radle/');
   assert.equal(publicUrlFor({ type: 'prompt', slug: 'p', hasPublicPage: true }), 'https://gbti.network/prompts/p/');
   assert.equal(publicUrlFor({ type: 'post', slug: 'x', hasPublicPage: false }), null); // Mode A
   assert.equal(publicUrlFor({ type: 'share', slug: 's', hasPublicPage: false }), null);
@@ -50,7 +50,7 @@ test('buildSyndicationItem: published only; title required (non-share); type-mis
   // missing title (non-share) -> null
   assert.equal(buildSyndicationItem('members/a/posts/x/index.md', { status: 'published' }), null);
   // a frontmatter type that disagrees with the path subtree -> null (cannot retarget a channel)
-  assert.equal(buildSyndicationItem('members/a/posts/x/index.md', { type: 'product', title: 'X', status: 'published' }), null);
+  assert.equal(buildSyndicationItem('members/a/posts/x/index.md', { type: 'project', title: 'X', status: 'published' }), null);
   // members-only Mode A post -> built, hasPublicPage false
   const a = buildSyndicationItem('members/a/posts/secret/index.md', { type: 'post', title: 'Secret', author: 'a', status: 'published', visibility: 'members', publicStub: false });
   assert.equal(a.hasPublicPage, false);

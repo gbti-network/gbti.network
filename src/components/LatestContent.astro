@@ -1,12 +1,12 @@
 ---
 // SOW-022: a reusable "latest from the co-op" discovery block for the tool/applet pages (and reusable
-// elsewhere). Shows the newest published blog posts, products, and prompts using the same cards as the
+// elsewhere). Shows the newest published blog posts, projects, and prompts using the same cards as the
 // indexes, so a free-tool visitor is funneled into the community's content. Each section omits itself when
 // empty, and the whole block omits when there is nothing to show.
 import { getCollection } from 'astro:content';
 import { isListed, byNewest } from '../lib/content';
 import ArticleTeaser from './blog/ArticleTeaser.astro';
-import ProductCard from './products/ProductCard.astro';
+import ProjectCard from './projects/ProjectCard.astro';
 import PromptCard from './prompts/PromptCard.astro';
 
 interface Props {
@@ -19,9 +19,9 @@ const allPosts = (await getCollection('post')).filter(isListed).sort(byNewest);
 // Pin the featured post to the front, then fill the rest with the newest (deduped).
 const pinned = featurePost ? allPosts.filter((p) => p.data.slug === featurePost) : [];
 const posts = [...pinned, ...allPosts.filter((p) => !pinned.includes(p))].slice(0, count);
-const products = (await getCollection('product')).filter(isListed).sort(byNewest).slice(0, count);
+const projects = (await getCollection('project')).filter(isListed).sort(byNewest).slice(0, count);
 const prompts = (await getCollection('prompt')).filter(isListed).sort(byNewest).slice(0, count);
-const any = posts.length + products.length + prompts.length;
+const any = posts.length + projects.length + prompts.length;
 ---
 {any > 0 && (
   <section class="band tint latest-band">
@@ -32,10 +32,10 @@ const any = posts.length + products.length + prompts.length;
           <div class="latest-grid">{posts.map((p) => <ArticleTeaser post={p} />)}</div>
         </div>
       )}
-      {products.length > 0 && (
+      {projects.length > 0 && (
         <div class="latest-sec">
-          <div class="latest-head"><h2 class="h3">Latest products</h2><a class="link" href="/products/">All products</a></div>
-          <div class="latest-grid">{products.map((p) => <ProductCard product={p} />)}</div>
+          <div class="latest-head"><h2 class="h3">Latest projects</h2><a class="link" href="/projects/">All projects</a></div>
+          <div class="latest-grid">{projects.map((p) => <ProjectCard project={p} />)}</div>
         </div>
       )}
       {prompts.length > 0 && (

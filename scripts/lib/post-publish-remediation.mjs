@@ -7,8 +7,8 @@
 
 import { flipStatus } from '../reconcile.mjs'; // SOW-076 Phase 3: reuse the SOW-005 status flip (status: published -> draft)
 
-// A content item that CAN be flipped to draft: members/<user>/{posts,products,prompts}/<slug>/index.md or house/...
-const CONTENT_FILE = /^(members\/[^/]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/;
+// A content item that CAN be flipped to draft: members/<user>/{posts,projects,prompts}/<slug>/index.md or house/...
+const CONTENT_FILE = /^(members\/[^/]+|house)\/(posts|projects|products|prompts)\/[^/]+\/index\.md$/;
 const toB64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const fromB64 = (b) => Buffer.from(b, 'base64').toString('utf8');
 

@@ -125,7 +125,7 @@ function leadLower(s) {
  * can contradict this file; a page that composes one from here cannot. sow-201 / sow-185 section 7.
  *
  * The separator is a SEMICOLON, not a comma: benefit labels carry their own internal commas ("Publish
- * articles, products, and prompts"), so a comma-joined list reads as one long undifferentiated run.
+ * articles, projects, and prompts"), so a comma-joined list reads as one long undifferentiated run.
  */
 export function benefitProse(tier) {
   const items = (tier?.benefits || [])

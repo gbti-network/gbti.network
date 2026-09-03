@@ -1,6 +1,6 @@
 ---
 id: intro-ryker
-targetType: product
+targetType: project
 targetSlug: ryker
 createdAt: '2026-08-24T17:49:26.232Z'
 status: published

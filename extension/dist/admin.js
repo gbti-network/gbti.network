@@ -2005,18 +2005,30 @@ ${String(body ?? "")}`;
   };
   define("gbti-doc-editor", GbtiDocEditor);
 
+  // client-ui/src/content-types.mjs
+  var LEGACY_TYPE_ALIASES = Object.freeze({
+    product: "project"
+    // sow-196, 2026-09-02
+  });
+  function canonicalType(type) {
+    const t = typeof type === "string" ? type : "";
+    return Object.prototype.hasOwnProperty.call(LEGACY_TYPE_ALIASES, t) ? LEGACY_TYPE_ALIASES[t] : t;
+  }
+
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "prs", "inbox", "saved", "subs", "earnings"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-    return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+    const tab = m ? canonicalType(m[1]) : null;
+    return tab && WORKSPACE_TABS.has(tab) ? tab : null;
   }
-  var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
+  var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
   function parseWorkspaceNew(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
-    return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
+    const nt = m ? canonicalType(m[1]) : null;
+    return nt && WORKSPACE_NEW_TYPES.has(nt) ? nt : null;
   }
-  var EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
+  var EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
   function parseWorkspaceEdit(hash) {
     const m = /(?:^|[#&])edit=([^&]+)/.exec(String(hash || ""));
     if (!m) return null;
@@ -2029,7 +2041,7 @@ ${String(body ?? "")}`;
     return EDIT_PATH_RE.test(path) ? path : null;
   }
   function parseWorkspaceDraft(hash) {
-    const m = /(?:^|[#&])draft=(post|product|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
+    const m = /(?:^|[#&])draft=(post|project|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
     return m ? { type: m[1], slug: m[2] } : null;
   }
   function planHashRoute(hash, { editing = false, reviewing = false, tab = "overview" } = {}) {
@@ -2043,10 +2055,10 @@ ${String(body ?? "")}`;
     return { action: "none" };
   }
   function typeForContentPath(path) {
-    const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\//.exec(String(path || ""));
+    const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts)\//.exec(String(path || ""));
     return m ? m[1].slice(0, -1) : null;
   }
-  var PUBLIC_ROUTE = { post: "articles", product: "products", prompt: "prompts" };
+  var PUBLIC_ROUTE = { post: "articles", project: "projects", product: "projects", prompt: "prompts" };
   function publicPathFor({ type, path } = {}) {
     const route = PUBLIC_ROUTE[type];
     if (!route) return null;
@@ -2263,7 +2275,7 @@ ${String(body ?? "")}`;
   }
   var MEDIA_FIELDS = {
     post: { keys: ["coverImage"], one: "cover", many: "covers" },
-    product: { keys: ["icon", "featuredImage", "banner"], one: "image", many: "images" },
+    project: { keys: ["icon", "featuredImage", "banner"], one: "image", many: "images" },
     prompt: { keys: ["image"], one: "image", many: "images" }
   };
   function hasValue(v) {
@@ -2504,7 +2516,7 @@ ${String(body ?? "")}`;
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit }) {
-      const isIntroTarget = ["post", "product", "prompt"].includes(this._target().type);
+      const isIntroTarget = ["post", "project", "prompt"].includes(this._target().type);
       const noteRow = !edit && isIntroTarget ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>` : "";
       this.set(this.css(CSS2) + `
       <div class="form">
@@ -2530,7 +2542,7 @@ ${String(body ?? "")}`;
         return;
       }
       const t = this._target();
-      const authorNote = !!this.$("[data-authornote]")?.checked && ["post", "product", "prompt"].includes(t.type);
+      const authorNote = !!this.$("[data-authornote]")?.checked && ["post", "project", "prompt"].includes(t.type);
       const visibility = authorNote ? "public" : "members";
       wrap?.classList.add("busy");
       try {
@@ -2577,7 +2589,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/mod-actions-core.mjs
   var RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var TYPE_DIR = { post: "posts", product: "products", prompt: "prompts" };
+  var TYPE_DIR = { post: "posts", project: "projects", product: "projects", prompt: "prompts" };
   var SAFE = /^[A-Za-z0-9_-]+$/;
   function modPathFor({ type, author, slug, id } = {}) {
     if (!SAFE.test(String(author || ""))) return null;
@@ -2793,7 +2805,7 @@ ${String(body ?? "")}`;
     // SOW-112 QA (owner-directed flow): popup confirm -> the card swaps to a tombstone IMMEDIATELY
     // (optimistic) -> the server result upgrades it, or flips it to an error card on failure.
     async _deleteComment(path, isAuthorNote = false) {
-      const msg = isAuthorNote ? "Delete this AUTHOR INTRO? Products and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?" : "Delete this comment? The file is removed from the network (it remains in git history).";
+      const msg = isAuthorNote ? "Delete this AUTHOR INTRO? Projects and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?" : "Delete this comment? The file is removed from the network (it remains in git history).";
       if (typeof confirm === "function" && !confirm(msg)) return;
       this._tombstone(path, "busy");
       try {
@@ -2822,7 +2834,7 @@ ${String(body ?? "")}`;
     }
     // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.
     async _hideComment(path, isAuthorNote = false) {
-      const msg = isAuthorNote ? "Hide this AUTHOR INTRO? Products and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?" : "Hide this comment? It is set to draft and removed from the thread.";
+      const msg = isAuthorNote ? "Hide this AUTHOR INTRO? Projects and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?" : "Hide this comment? It is set to draft and removed from the thread.";
       if (typeof confirm === "function" && !confirm(msg)) return;
       try {
         await this.client.admin("deplatform", { path });
@@ -2863,7 +2875,7 @@ ${String(body ?? "")}`;
   ];
   var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 
-  // src/lib/product-page.mjs
+  // src/lib/project-page.mjs
   function detectLinkSource(url) {
     if (!url) return null;
     let u;
@@ -2880,7 +2892,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/public-url.mjs
   var SITE_ORIGIN = "https://gbti.network";
-  var TYPE_BASE = { post: "articles", product: "products", prompt: "prompts" };
+  var TYPE_BASE = { post: "articles", project: "projects", product: "projects", prompt: "prompts" };
   function slugFromPath(path) {
     const parts = String(path || "").split("/").filter(Boolean);
     const last = parts[parts.length - 1];
@@ -2982,7 +2994,7 @@ ${String(body ?? "")}`;
   var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`);
   var CHECK = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
-  var DOC_SECTION_KEYS = { product: /* @__PURE__ */ new Set(["video"]) };
+  var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]) };
   var STAT_DEFS = [
     { key: "revisions", label: "Live revisions" },
     { key: "forkRevisions", label: "Draft revisions" },
@@ -2990,8 +3002,8 @@ ${String(body ?? "")}`;
     { key: "referrals", label: "Referrals" },
     { key: "discussions", label: "Discussions" }
   ];
-  var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", profile: "Profile" };
-  var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt"]);
+  var TYPE_LABEL = { post: "Article", project: "Project", prompt: "Prompt", profile: "Profile" };
+  var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
   var RAIL_SCHEMA = {
     post: [
       { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
@@ -3001,7 +3013,7 @@ ${String(body ?? "")}`;
       { title: "Article layout", open: true, keys: ["layout"] },
       { title: "Media", open: false, keys: ["coverImage", "coverAlt"] }
     ],
-    product: [
+    project: [
       { title: "Details", open: true, keys: ["visibility", "shortDescription", "categories", "tags"] },
       { title: "Layout", open: true, keys: ["sidebarPosition"] },
       { title: "Pricing", open: true, keys: ["pricing", "pricingUrl"] },
@@ -3082,9 +3094,9 @@ ${String(body ?? "")}`;
         "Extra guidance reserved for members."
       ])
     },
-    product: {
-      label: "Product",
-      blurb: "Software products. Adds a callout, a video embed, and a members-only split.",
+    project: {
+      label: "Project",
+      blurb: "Software projects. Adds a callout, a video embed, and a members-only split.",
       directives: [
         ["```callout tip", "aside / highlight (note, tip, warning)"],
         ["```embed", "video embed (YouTube or Vimeo URL)"],
@@ -3133,7 +3145,7 @@ ${String(body ?? "")}`;
       const list = Array.isArray(this.preset?.input?.redirectFrom) ? this.preset.input.redirectFrom : [];
       const out = [];
       for (const e of list) {
-        const m = /^\/(articles|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || "").trim());
+        const m = /^\/(articles|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || "").trim());
         if (m && m[2] !== this.preset?.input?.slug && !out.includes(m[2])) out.push(m[2]);
       }
       return out;
@@ -3246,7 +3258,7 @@ ${String(body ?? "")}`;
         return `<details ${sec.open ? "open" : ""} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
       }).join("");
       const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
-      const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
+      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
       const isPub = String(p.status || "").toLowerCase() === "published";
       const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
       const status = editorStatus({ staged: this.staged, status: p.status, publishedAt: p.publishedAt });
@@ -3262,7 +3274,7 @@ ${String(body ?? "")}`;
       const videoField = fieldByKey.get("video");
       const videoSection = docSecKeys.has("video") && videoField ? `
              <section class="docsec" id="secVideo">
-               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the product page</span></div>
+               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the project page</span></div>
                <input class="inp" data-key="video" data-kind="${esc(videoField.kind || "text")}" type="text" value="${esc(this.presetStr(p.video) || "")}" placeholder="https://youtube.com/watch?v=…" />
              </section>` : "";
       const showAuthorNote = AUTHOR_NOTE_TYPES.has(this.type);
@@ -3272,7 +3284,7 @@ ${String(body ?? "")}`;
                <div class="authornote"><span class="an-av">${esc(authorInitial)}</span>
                  <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
              </section>` : "";
-      const discussionSection = isPub && slug && ["post", "product", "prompt"].includes(this.type) ? `
+      const discussionSection = isPub && slug && ["post", "project", "prompt"].includes(this.type) ? `
              <section class="docsec" id="secDiscussion">
                <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
                <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
@@ -3286,7 +3298,7 @@ ${String(body ?? "")}`;
         const options = (known ? "" : opt("", "Keep the current author", true)) + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join("");
         return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
       })() : "";
-      const showStats = isPub && slug && ["post", "product", "prompt"].includes(this.type);
+      const showStats = isPub && slug && ["post", "project", "prompt"].includes(this.type);
       const railFootHtml = showStats ? `
              <section class="rcard rcard-activity">
                <div class="rcard-h"><span class="rcard-t">Activity</span></div>
@@ -3473,7 +3485,7 @@ ${String(body ?? "")}`;
         .gs-name { font-size:12.5px; font-weight:700; color:var(--s-fg); }
         .gs-card.on .gs-name { color:var(--s-green-fg); }
         .gs-desc { font-size:11px; line-height:1.35; color:var(--s-fg-mute); }
-        /* SOW-062 P6: product links[] row editor */
+        /* SOW-062 P6: project links[] row editor */
         .linkrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
         .linkrow { display:flex; flex-direction:column; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
         .linkrow .lr-top, .linkrow .lr-bot { display:flex; align-items:center; gap:8px; }
@@ -3843,7 +3855,7 @@ ${String(body ?? "")}`;
       const mono = f.kind === "date" || f.key === "slug";
       return wrap(`${label}<input class="inp${mono ? " mono" : ""}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc(v)}" placeholder="${esc(f.placeholder || "")}" />`);
     }
-    // SOW-062 P6: the product links[] editor. One row per link + an Add button + a hidden json input that gather()
+    // SOW-062 P6: the project links[] editor. One row per link + an Add button + a hidden json input that gather()
     // reads (unchanged contract). _serializeLinks rebuilds the array on every edit, preserving each row's extra fields.
     _linksInner(f, value) {
       let links = [];
@@ -3853,10 +3865,10 @@ ${String(body ?? "")}`;
         links = [];
       }
       const rows = links.map((l, i) => this._linkRowHtml(l, i)).join("");
-      return `<label>Links <span class="hint">· buttons on the product page</span></label>
+      return `<label>Links <span class="hint">· buttons on the project page</span></label>
       <div class="linkrows" data-links>${rows}</div>
       <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
-      <datalist id="lk-types">${["download", "product", "repository", "github", "website", "docs", "demo"].map((k) => `<option value="${k}"></option>`).join("")}</datalist>
+      <datalist id="lk-types">${["download", "project", "repository", "github", "website", "docs", "demo"].map((k) => `<option value="${k}"></option>`).join("")}</datalist>
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(links))}" />`;
     }
     _linkRowHtml(l = {}, i) {
@@ -3949,13 +3961,13 @@ ${String(body ?? "")}`;
         }
       });
     }
-    // sow-268: the product gallery[] editor. One row per screenshot + an Add button + a hidden json input that
+    // sow-268: the project gallery[] editor. One row per screenshot + an Add button + a hidden json input that
     // gather() reads (unchanged contract). Mirrors _linksInner: galleryValueFromRows rebuilds the array on every
-    // edit, emitting a bare string for an uncaptioned row so the ten existing products do not churn.
+    // edit, emitting a bare string for an uncaptioned row so the ten existing projects do not churn.
     _galleryInner(f, value) {
       const rows = galleryRowsFromValue(value);
       const rowsHtml = rows.map((r, i) => this._galleryRowHtml(r, i)).join("");
-      return `<label>Gallery <span class="hint">· screenshots on the product page</span></label>
+      return `<label>Gallery <span class="hint">· screenshots on the project page</span></label>
       <div class="galrows" data-gallery>${rowsHtml}</div>
       <div class="galactions">
         <button class="ebtn" type="button" data-galupload>${IMG} Upload screenshots</button>
@@ -4435,7 +4447,7 @@ ${String(body ?? "")}`;
     // description. Changing it stages like any other edit (Save draft), and the actual rename (move + redirect)
     // happens at the PUBLISH event — no separate rename action, no dialogs.
     permalinkFieldHtml() {
-      const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
+      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
       const loaded = this.presetStr(this.preset?.input?.slug) || "";
       const existing = Boolean(this.itemPath);
       const val = this._slugVal ?? loaded;
@@ -4445,7 +4457,7 @@ ${String(body ?? "")}`;
     _wirePermalinkField() {
       const input = this.$("#slugfield");
       if (!input) return;
-      const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
+      const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
       const loaded = this.presetStr(this.preset?.input?.slug) || "";
       input.addEventListener("input", () => {
         const v = String(input.value || "").trim().toLowerCase();
@@ -4478,7 +4490,7 @@ ${String(body ?? "")}`;
         this.out(`Content ID: <code>${esc(id)}</code> (copy it manually)`);
       }
     }
-    // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, product -> /products/,
+    // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, project -> /projects/,
     // prompt -> /prompts/). Drives the "View Public Entry" button, which is only shown when the item is published.
     publicUrl() {
       const p = this.preset?.input ?? {};
@@ -4541,7 +4553,7 @@ ${String(body ?? "")}`;
         const { type, input, body } = this.gather();
         const authorNote = this.$("#authornote")?.value?.trim() || void 0;
         if (this.fields.some((f) => f.key === "status")) input.status = "published";
-        if (["post", "product", "prompt"].includes(type)) {
+        if (["post", "project", "prompt"].includes(type)) {
           input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         }
         const authorTarget = authorTargetFor(this.$("#ownerSelect")?.value, this._ownerSelInitial);
@@ -4659,7 +4671,7 @@ ${String(body ?? "")}`;
       try {
         const { type, input, body } = this.gather();
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
-        if (["post", "product", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        if (["post", "project", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         const authorNote = this.$("#authornote")?.value ?? void 0;
         const ownerSel = this.$("#ownerSelect");
         const trueOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
@@ -4939,7 +4951,7 @@ ${String(body ?? "")}`;
       if (list.length === 0) {
         return `<div class="panel"><h2>Contributions to review</h2>
         <p class="muted">No one has proposed a change to your content yet. When a member improves one of your
-        articles, products, or prompts, it shows up here for you to review and accept.</p></div>`;
+        articles, projects, or prompts, it shows up here for you to review and accept.</p></div>`;
       }
       return `<div class="panel">
       <h2>Contributions to review<span class="count">${list.length}</span></h2>
@@ -5869,9 +5881,9 @@ ${String(body ?? "")}`;
   define("gbti-admin", GbtiAdmin);
 
   // client-ui/src/saved-core.mjs
-  var TYPE_INDEX = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
-  var TYPE_LABEL2 = { post: "Articles", product: "Products", prompt: "Prompts", share: "Shares" };
-  var ORDER = ["post", "product", "prompt", "share"];
+  var TYPE_INDEX = { post: "blog-index.json", project: "projects-index.json", prompt: "prompts-index.json" };
+  var TYPE_LABEL2 = { post: "Articles", project: "Projects", prompt: "Prompts", share: "Shares" };
+  var ORDER = ["post", "project", "prompt", "share"];
   function indexFileFor(type) {
     return TYPE_INDEX[type] || null;
   }
@@ -6466,7 +6478,7 @@ ${String(body ?? "")}`;
   }
   function countRollup(tree, itemsByType = {}) {
     const nodes = flattenTree(tree);
-    const counts = new Map(nodes.map((n) => [n.path.join("/"), { post: 0, prompt: 0, product: 0, total: 0 }]));
+    const counts = new Map(nodes.map((n) => [n.path.join("/"), { post: 0, prompt: 0, project: 0, total: 0 }]));
     for (const [type, items] of Object.entries(itemsByType)) {
       for (const it of items || []) {
         const cats = Array.isArray(it?.categories) ? it.categories : [];
@@ -6563,8 +6575,8 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
   var SITE4 = "https://gbti.network";
-  var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", product: "products-index.json" };
-  var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", product: "Products" };
+  var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
+  var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
   var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; --r7:7px; } /* default border radius is 7px (owner) */
@@ -6900,7 +6912,7 @@ ${String(body ?? "")}`;
       const label = this.labelOf(path);
       const lvl = path.length === 1 ? "Top level" : node.children && Object.keys(node.children).length ? "Subcategory" : "Leaf";
       const crumb = [`<b data-desel>Taxonomy</b>`, ...path.slice(0, -1).map((k, i) => `<b data-crumb="${esc(path.slice(0, i + 1).join("/"))}">${esc(this.labelOf(path.slice(0, i + 1)))}</b>`)].join(" / ");
-      const c = this._counts?.get(path.join("/")) || { post: 0, prompt: 0, product: 0, total: 0 };
+      const c = this._counts?.get(path.join("/")) || { post: 0, prompt: 0, project: 0, total: 0 };
       const kids = Object.entries(node.children || {});
       const editor = `
       <div class="card">
@@ -6935,7 +6947,7 @@ ${String(body ?? "")}`;
           <div class="stat accent"><div class="n">${kids.length}</div><div class="l">Subcategories</div></div>
           <div class="stat"><div class="n">${c.post}</div><div class="l">Articles</div></div>
           <div class="stat"><div class="n">${c.prompt}</div><div class="l">Prompts</div></div>
-          <div class="stat"><div class="n">${c.product}</div><div class="l">Products</div></div>
+          <div class="stat"><div class="n">${c.project}</div><div class="l">Projects</div></div>
         </div>
         <div class="card">${this._browserHtml(path)}</div>
       </div>`;
@@ -7217,8 +7229,8 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
   var SITE5 = "https://gbti.network";
-  var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", product: "products-index.json" };
-  var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["product", "Products"]];
+  var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
+  var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
   var TAG_ICO = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h7.9a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8Z"></path><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"></circle></svg>';
   var KEBAB = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
@@ -7322,7 +7334,7 @@ ${String(body ?? "")}`;
   .badge { font-family:var(--font-mono, monospace); font-size:9px; text-transform:uppercase; letter-spacing:.06em; padding:2px 6px; border-radius:3px; flex:none; }
   .badge.prompt { color:var(--greenfg); background:var(--green-dim); }
   .badge.post { color:#8fb8f0; background:rgba(120,150,220,.15); }
-  .badge.product { color:var(--amberfg); background:var(--amber-dim); }
+  .badge.project { color:var(--amberfg); background:var(--amber-dim); }
   .item .iauth { color:var(--muted); font-size:11.5px; }
   .muted { color:var(--muted); font-size:13.5px; }
 `;
@@ -7374,10 +7386,10 @@ ${String(body ?? "")}`;
         if (to) {
           let destRow = this._rows.find((r) => r.tag === to);
           if (!destRow) {
-            destRow = { tag: to, post: 0, prompt: 0, product: 0, total: 0, items: [] };
+            destRow = { tag: to, post: 0, prompt: 0, project: 0, total: 0, items: [] };
             this._rows.push(destRow);
           }
-          for (const t of ["post", "prompt", "product"]) destRow[t] += sel[t];
+          for (const t of ["post", "prompt", "project"]) destRow[t] += sel[t];
           destRow.total += sel.total;
           destRow.items.push(...sel.items);
           this._sel = to;
@@ -7402,7 +7414,7 @@ ${String(body ?? "")}`;
               if (!tag) continue;
               let row = byTag.get(tag);
               if (!row) {
-                row = { tag, post: 0, prompt: 0, product: 0, total: 0, items: [] };
+                row = { tag, post: 0, prompt: 0, project: 0, total: 0, items: [] };
                 byTag.set(tag, row);
               }
               row[type] += 1;
@@ -7456,7 +7468,7 @@ ${String(body ?? "")}`;
       const maxNow = Math.max(1, ...list.map((d) => this._activeTotal(d)));
       const uses = list.reduce((n, d) => n + this._activeTotal(d), 0);
       const car = this._dir < 0 ? "▼" : "▲";
-      const head = [["tag", "Tag", ""], ["total", "Usage", " usehead"], ["post", "Art", " num"], ["prompt", "Prm", " num"], ["product", "Prd", " num"]].map(([k, l, cls]) => `<div class="col${cls}${this._sort === k ? " sorted" : ""}" data-s="${k}"><span>${l}</span><span class="car">${car}</span></div>`).join("") + "<div></div>";
+      const head = [["tag", "Tag", ""], ["total", "Usage", " usehead"], ["post", "Art", " num"], ["prompt", "Prm", " num"], ["project", "Prj", " num"]].map(([k, l, cls]) => `<div class="col${cls}${this._sort === k ? " sorted" : ""}" data-s="${k}"><span>${l}</span><span class="car">${car}</span></div>`).join("") + "<div></div>";
       const rowsHtml = list.map((d) => {
         const t = this._activeTotal(d);
         const pct = Math.max(4, Math.round(t / maxNow * 100));
@@ -7466,7 +7478,7 @@ ${String(body ?? "")}`;
         <div class="usage"><div class="bar"><i style="width:${pct}%"></i></div><span class="tot">${t}</span></div>
         <div class="num${z(d.post)}">${d.post}</div>
         <div class="num${z(d.prompt)}">${d.prompt}</div>
-        <div class="num${z(d.product)}">${d.product}</div>
+        <div class="num${z(d.project)}">${d.project}</div>
         <div class="rowact" title="Tag curation is a follow-up">${KEBAB}</div>
       </div>`;
       }).join("");
@@ -7480,7 +7492,7 @@ ${String(body ?? "")}`;
       const sel = this._sel ? this._rows.find((r) => r.tag === this._sel) : null;
       const detail = sel ? `<div class="detail">
         <div class="dhead"><div class="dtag">${esc(sel.tag)}</div>
-          <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? "" : "s"}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? "" : "s"}` : ""}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? "" : "s"}` : ""}${sel.product ? ` · ${sel.product} product${sel.product === 1 ? "" : "s"}` : ""}</div></div>
+          <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? "" : "s"}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? "" : "s"}` : ""}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? "" : "s"}` : ""}${sel.project ? ` · ${sel.project} product${sel.project === 1 ? "" : "s"}` : ""}</div></div>
         <div class="dactions">
           <button type="button" id="act-rename" title="Rename this tag everywhere">${icon("pencil")} Rename</button>
           <button type="button" id="act-merge" title="Merge this tag into another">${icon("merge")} Merge</button>
@@ -8222,7 +8234,7 @@ ${String(body ?? "")}`;
 `;
   var QUEUE_CACHE = null;
   var CACHE_FRESH_MS = 3e4;
-  var SRC_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
+  var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
   var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
     // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
@@ -8423,7 +8435,7 @@ ${String(body ?? "")}`;
   function channelCapability(name) {
     return CHANNEL_CAPABILITY[name] ?? "building";
   }
-  var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+  var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
   var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
   var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
   var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
@@ -8452,20 +8464,20 @@ ${String(body ?? "")}`;
     signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
     // opens = the owner's chosen counter
   });
-  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
   var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
   var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
   var DEFAULT_DEVTO_BODY = "{body}";
-  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
   var DEFAULT_TEMPLATES = Object.freeze({
     share: DEFAULT_SHARE_FORMAT,
     // sow-180: content-first, no member credit
     post: DEFAULT_FORMAT,
-    product: DEFAULT_FORMAT,
+    project: DEFAULT_FORMAT,
     prompt: DEFAULT_FORMAT,
     "reddit-body": DEFAULT_REDDIT_BODY,
     "reddit-comment": DEFAULT_REDDIT_COMMENT,
@@ -8487,7 +8499,7 @@ ${String(body ?? "")}`;
     share: SHARE_STUB_FORMAT,
     // sow-180: content-first, no member credit
     post: STUB_FORMAT,
-    product: STUB_FORMAT,
+    project: STUB_FORMAT,
     prompt: STUB_FORMAT,
     "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
     "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.",
@@ -8510,22 +8522,22 @@ ${String(body ?? "")}`;
   var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
   var DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
-    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
-    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
+    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
-    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
     // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
     // its members stub is sentence-shaped like the other manual channels.
-    hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
-    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
-    linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
+    hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, project: X_STUB, prompt: X_STUB }),
+    linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, project: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
     // SOW-127
-    dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+    dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
     // SOW-135
-    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
-    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
+    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB })
   });
   var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
     enabled: false,
@@ -8767,13 +8779,13 @@ ${String(body ?? "")}`;
       note: "Substack has no public write API, so posts are cross-posted by hand. This card will never toggle on as built."
     }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
-  var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
+  var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
   var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
   var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
-    { key: "product", nm: "Product", df: "product" },
+    { key: "project", nm: "Project", df: "project" },
     { key: "prompt", nm: "Prompt", df: "prompt" }
   ];
   var VARS = [
@@ -8808,7 +8820,7 @@ ${String(body ?? "")}`;
   ];
   var SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
   var SYND_SUB_KEY = "gbti-synd-sub";
-  var TMPL_KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub"];
+  var TMPL_KEYS = ["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub"];
   var GbtiChannelMapManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -9491,7 +9503,7 @@ ${String(body ?? "")}`;
   define("gbti-channel-map-manager", GbtiChannelMapManager);
 
   // client-ui/src/inline.mjs
-  var TYPE_RE = /^(post|product|prompt|profile)$/;
+  var TYPE_RE = /^(post|project|product|prompt|profile)$/;
   function readHooks(dataset = {}) {
     const path = dataset.gbtiPath || null;
     const type = TYPE_RE.test(dataset.gbtiType || "") ? dataset.gbtiType : null;
@@ -9974,7 +9986,7 @@ ${String(body ?? "")}`;
     }
     return out;
   }
-  var NOTIFY_EVENTS = Object.freeze(["article", "prompt", "product", "share"]);
+  var NOTIFY_EVENTS = Object.freeze(["article", "prompt", "project", "share"]);
   var NOTIFY_EVENT_KEY_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
   function normalizeNotify(raw) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return void 0;
@@ -9995,7 +10007,7 @@ ${String(body ?? "")}`;
   // client-ui/src/notify-matrix-core.mjs
   var MATRIX_ROWS = Object.freeze([
     { key: "article", label: "Articles" },
-    { key: "product", label: "Products" },
+    { key: "project", label: "Projects" },
     { key: "prompt", label: "Prompts and skills" },
     { key: "share", label: "Shares" },
     { key: "news", label: "News they curate" }
@@ -10666,7 +10678,7 @@ ${String(body ?? "")}`;
     _renderNotCreator() {
       this.set(this.css(CSS23) + this._noticeHtml(
         "Posting Shares is a Content Creator perk",
-        'Your membership covers reading the community stream. Posting Shares, articles, products and prompts is part of Content Creator membership. <a href="https://gbti.network/membership/">See the membership tiers</a> to upgrade.',
+        'Your membership covers reading the community stream. Posting Shares, articles, projects and prompts is part of Content Creator membership. <a href="https://gbti.network/membership/">See the membership tiers</a> to upgrade.',
         "✍️"
       ));
     }
@@ -10696,7 +10708,7 @@ ${String(body ?? "")}`;
           <div class="row">
             <input type="url" placeholder="https://… (optional link)" />
           </div>
-          <p class="hint">Works with articles, videos, repos and product pages.</p>
+          <p class="hint">Works with articles, videos, repos and project pages.</p>
         </section>
 
         <section class="step" data-step="2" hidden>
@@ -11139,10 +11151,10 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "project", "prompt", "share", "news"]);
   var DO_ACTIONS = /* @__PURE__ */ new Set(["favorite", "collect"]);
   function buildReadHash(type, path, doAction) {
-    const t = TAB_IDS.has(type) ? type : "post";
+    const t = TAB_IDS.has(canonicalType(type)) ? canonicalType(type) : "post";
     if (!path) return `tab=${t}`;
     const act = DO_ACTIONS.has(doAction) ? `&do=${doAction}` : "";
     return `tab=${t}&read=${encodeURIComponent(path)}${act}`;
@@ -11152,7 +11164,8 @@ ${String(body ?? "")}`;
     const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     const readM = s.match(/(?:^|&)read=([^&]+)/);
     const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
-    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    const tabC = tabM ? canonicalType(tabM[1]) : null;
+    const tab = tabC && TAB_IDS.has(tabC) ? tabC : null;
     let read2 = null;
     if (readM) {
       try {
@@ -11235,8 +11248,8 @@ ${String(body ?? "")}`;
     skill: "#b0316f"
   };
   var OTHER_ACCENT = "#5b6472";
-  var TYPE_GLYPH = { share: "share", post: "pencil", product: "box", prompt: "spark", news: "news" };
-  var TYPE_ACCENT = { share: "#b3791f", post: "#3f74c9", product: "#c9683b", prompt: "#1f9e5f", news: "#3a6ea5" };
+  var TYPE_GLYPH = { share: "share", post: "pencil", project: "box", prompt: "spark", news: "news" };
+  var TYPE_ACCENT = { share: "#b3791f", post: "#3f74c9", project: "#c9683b", prompt: "#1f9e5f", news: "#3a6ea5" };
   function glyphFor(category, type) {
     const key = String(category || "").toLowerCase();
     if (CAT_GLYPH[key]) return { svg: GLYPH_SVG[CAT_GLYPH[key]], accent: CAT_ACCENT[key] };
@@ -11250,7 +11263,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-card-list.mjs
   var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
-  var TYPE_LABEL4 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share", news: "News" };
+  var TYPE_LABEL4 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share", news: "News" };
   var lc2 = (s) => String(s || "").toLowerCase();
   var authorName2 = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "GBTI Network" : a;
   function faviconFor(urlOrHost) {
@@ -14559,7 +14572,7 @@ ${String(body ?? "")}`;
         return {
           phase: "coupon",
           title: "Your free membership period is active",
-          body: `Your coupon covers full membership through ${end}: your profile, posts, products, and prompts publish under your name. No card is on file and nothing bills automatically.`,
+          body: `Your coupon covers full membership through ${end}: your profile, posts, projects, and prompts publish under your name. No card is on file and nothing bills automatically.`,
           upgrade: false,
           until: until.toISOString()
         };
@@ -14567,7 +14580,7 @@ ${String(body ?? "")}`;
     }
     switch (membership) {
       case "paid":
-        return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, products, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
+        return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, projects, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
       case "trialing":
         return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and stage drafts on your own fork now. Upgrade to a paid membership any time to publish under your name.", upgrade: true };
       default:
@@ -14935,7 +14948,7 @@ ${String(body ?? "")}`;
   ];
   var DONE_HEADING = "You are all set";
   var GBTI_CHANNELS = [
-    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, products, and prompts syndicate to our community subreddit. Open it and hit Join.", "r/GBTI_network"],
+    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, projects, and prompts syndicate to our community subreddit. Open it and hit Join.", "r/GBTI_network"],
     ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish.", "@gbti_network"],
     ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky.", "@gbti.bsky.social"],
     ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network.", "@gbti_network"],
@@ -15387,7 +15400,7 @@ ${String(body ?? "")}`;
       <div class="head">
         <span class="ic">${check2}</span>
         <h2>Sign in to GBTI Network</h2>
-        <p>The developer co-op. Sign in with your GitHub account to publish articles, products, and prompts, follow members, read the members-only news, and join the community.</p>
+        <p>The developer co-op. Sign in with your GitHub account to publish articles, projects, and prompts, follow members, read the members-only news, and join the community.</p>
       </div>
       <div class="card">
         ${expired}${action}
@@ -15588,7 +15601,7 @@ ${String(body ?? "")}`;
       </div>`;
       }).join("");
       return `
-      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours. Following these channels will help build the network's reach.</p>
+      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and projects through these, including yours. Following these channels will help build the network's reach.</p>
       <div class="grid">${cards}</div>`;
     }
     // The socials step: collect the member's handles across the platform set. Raw values stage locally
@@ -15620,7 +15633,7 @@ ${String(body ?? "")}`;
       <gbti-topic-picker seed-defaults></gbti-topic-picker>`;
     }
     _membersCard() {
-      const intro = `<p class="intro">Following a member alerts you when they publish new articles, prompts, and products in your feed.</p>`;
+      const intro = `<p class="intro">Following a member alerts you when they publish new articles, prompts, and projects in your feed.</p>`;
       if (this._follows === null) {
         return `${intro}<p class="note">We could not load your follow list right now. This is a temporary problem on our side. Try again shortly, or follow members any time from a member profile.</p>`;
       }
@@ -16042,14 +16055,14 @@ ${String(body ?? "")}`;
   define("gbti-subscriptions", GbtiSubscriptions);
 
   // client-ui/src/elements/gbti-workspace.mjs
-  var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
+  var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
   var SITE11 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
     { id: "post", label: "Articles", type: "post", authoring: true },
     { id: "prompt", label: "Prompts", type: "prompt", authoring: true },
-    { id: "product", label: "Products", type: "product", authoring: true },
+    { id: "project", label: "Projects", type: "project", authoring: true },
     // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
     // type's list (a draft article under Articles), reached by the per-type Drafts filter.
     { id: "prs", label: "Pull requests" },
@@ -16209,10 +16222,10 @@ ${String(body ?? "")}`;
         }
       }
       const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null);
-      const [post, prompt2, product, prs, activity, follows, status] = await Promise.all([
+      const [post, prompt2, project, prs, activity, follows, status] = await Promise.all([
         num(this.client?.listContent?.({ type: "post" })),
         num(this.client?.listContent?.({ type: "prompt" })),
-        num(this.client?.listContent?.({ type: "product" })),
+        num(this.client?.listContent?.({ type: "project" })),
         num(this.client?.listPRs?.()),
         num(this.client?.getActivity?.()),
         num(this.client?.getFollows?.()),
@@ -16221,9 +16234,9 @@ ${String(body ?? "")}`;
       const items = (r) => Array.isArray(r?.items) ? r.items : [];
       this._cache.post = items(post);
       this._cache.prompt = items(prompt2);
-      this._cache.product = items(product);
+      this._cache.project = items(project);
       this._prs = Array.isArray(prs?.prs) ? prs.prs : this._prs || [];
-      const drafts = [...items(post), ...items(prompt2), ...items(product)].filter((it) => it.status === "draft").length;
+      const drafts = [...items(post), ...items(prompt2), ...items(project)].filter((it) => it.status === "draft").length;
       const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
       const followN = Array.isArray(follows) ? follows.length : follows?.following?.length || 0;
       const attention = (this._prs || []).map((pr) => ({ pr, c: classifyPull(pr, null) })).filter(({ pr, c }) => c.label === "Declined" || pr.state !== "closed" && pr.merged !== true).slice(0, 6).map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || "", label: c.label, tone: c.tone }));
@@ -16231,7 +16244,7 @@ ${String(body ?? "")}`;
       this._overview = {
         membership: status?.membership || "unknown",
         role: status?.role || "member",
-        counts: { post: items(post).length, prompt: items(prompt2).length, product: items(product).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+        counts: { post: items(post).length, prompt: items(prompt2).length, project: items(project).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
         attention,
         _trusted: trusted
       };
@@ -16241,14 +16254,14 @@ ${String(body ?? "")}`;
           wbCacheSet(ck, "overview", [this._overview], { allowEmpty: true });
           wbCacheSet(ck, "post", this._cache.post, { allowEmpty: true });
           wbCacheSet(ck, "prompt", this._cache.prompt, { allowEmpty: true });
-          wbCacheSet(ck, "product", this._cache.product, { allowEmpty: true });
+          wbCacheSet(ck, "project", this._cache.project, { allowEmpty: true });
           if (Array.isArray(this._prs)) wbCacheSet(ck, "prs", this._prs, { allowEmpty: true });
         }
       }
       if (trusted && !this._scopeResolved) {
         this._scopeResolved = true;
         const stored = typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SCOPE_KEY) : null;
-        const personalCount = items(post).length + items(prompt2).length + items(product).length;
+        const personalCount = items(post).length + items(prompt2).length + items(project).length;
         const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
         const moved = resolved !== this._scopeNow();
         this._scope = resolved;
@@ -16772,7 +16785,7 @@ ${String(body ?? "")}`;
         // _onHash listener switches the tab in place, no reload, on BOTH hosts.
         { nm: "Articles", href: "#tab=post", n: c.post },
         { nm: "Prompts", href: "#tab=prompt", n: c.prompt },
-        { nm: "Products", href: "#tab=product", n: c.product },
+        { nm: "Projects", href: "#tab=project", n: c.project },
         { nm: "Pull requests", href: "#tab=prs", n: c.prs },
         { nm: "Saved", href: "#tab=saved", n: c.saved },
         { nm: "Following", href: "#tab=subs", n: c.subs },
@@ -17151,7 +17164,7 @@ ${String(body ?? "")}`;
     async _approvals() {
       const q = await this.client.syndicationQueue() || {};
       const pending = Array.isArray(q.pending) ? q.pending : [];
-      const TYPE = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
+      const TYPE = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
       return pending.map((it) => {
         const flagged = Array.isArray(it.flags) && it.flags.length;
         const type = TYPE[it.source] || "Item";
@@ -17309,7 +17322,7 @@ ${String(body ?? "")}`;
   // client-ui/src/notification-bell-core.mjs
   var NOTIFY_ACTION = {
     article: "published",
-    product: "published",
+    project: "published",
     prompt: "published",
     share: "shared",
     news: "curated"
@@ -18206,7 +18219,7 @@ ${String(body ?? "")}`;
   }
 
   // membership/syndication-format.mjs
-  var TYPE_LABEL5 = { post: "article", product: "product", prompt: "prompt", share: "link" };
+  var TYPE_LABEL5 = { post: "article", project: "project", prompt: "prompt", share: "link" };
   function sanitizeMentions(text) {
     return String(text || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
   }
@@ -18316,7 +18329,7 @@ ${String(body ?? "")}`;
       authornoteitalic: sanitizeMentions(item.authorNote || "").split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n"),
       // {author-note-block}: the whole labelled, quoted "From the author:" paragraph set (for long-form channels
       // like LinkedIn), or EMPTY when the item has no from-the-author note (a note-less post shows no dangling
-      // label). Real newlines; sanitized. Products/prompts always carry a note; posts may not.
+      // label). Real newlines; sanitized. Projects/prompts always carry a note; posts may not.
       authornoteblock: String(item.authorNote || "").trim() ? `
 
 From the author:
@@ -19246,10 +19259,10 @@ From the author:
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
     if (it.slug) return String(it.slug);
-    const m = String(it.path || "").match(/\/(?:posts|products|prompts)\/([^/]+)\/index\.md$/);
+    const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
     return m ? m[1] : "";
   }
-  var TYPE_LABEL6 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var TYPE_LABEL6 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
       return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
@@ -19483,7 +19496,7 @@ From the author:
     _backfillFromFrontmatter(it) {
       const fm = this._fm;
       if (!fm) return;
-      const URL_BASE = { post: "/articles", product: "/products", prompt: "/prompts" };
+      const URL_BASE = { post: "/articles", project: "/projects", product: "/projects", prompt: "/prompts" };
       this._item = {
         ...it,
         title: it.title || fm.title || "",
@@ -19604,7 +19617,7 @@ From the author:
     _authorCardHtml(it) {
       const a = this._author;
       if (!a || a.house) {
-        return `<div class="author"><div class="a-top"><span class="a-av"><img src="${esc(githubAvatar("gbti"))}" alt=""></span><div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div><p class="a-note">Articles, products, and prompts from the GBTI Network co-op.</p></div>`;
+        return `<div class="author"><div class="a-top"><span class="a-av"><img src="${esc(githubAvatar("gbti"))}" alt=""></span><div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div><p class="a-note">Articles, projects, and prompts from the GBTI Network co-op.</p></div>`;
       }
       const e = a.entry || {};
       const name = e.displayName || it.author;
@@ -19613,7 +19626,7 @@ From the author:
       const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
       let follow = "";
       const wsBase = typeof location !== "undefined" && location.protocol === "chrome-extension:" ? "workspace.html" : "/workbench/";
-      if (a.isSelf) follow = ["post", "product", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
+      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE16}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
@@ -19674,7 +19687,7 @@ From the author:
       const authorReddit = this._author?.entry?.links?.reddit || "";
       const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : Array.isArray(it.tags) ? it.tags : [];
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS41) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
@@ -19779,7 +19792,7 @@ From the author:
   var lc10 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
     { type: "post", json: "blog-index.json", label: "Articles" },
-    { type: "product", json: "products-index.json", label: "Products" },
+    { type: "project", json: "projects-index.json", label: "Projects" },
     { type: "prompt", json: "prompts-index.json", label: "Prompts" }
   ]);
   function memberContent(items, username, cap = 24) {
@@ -19964,13 +19977,13 @@ From the author:
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
-    { id: "product", label: "Products", json: "products-index.json" },
+    { id: "project", label: "Projects", json: "projects-index.json" },
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
     { id: "share", label: "Shares" },
     { id: "news", label: "News" }
     // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
-  var CONTENT_TYPES = ["post", "product", "prompt"];
+  var CONTENT_TYPES = ["post", "project", "prompt"];
   function consumeDo() {
     if (typeof location === "undefined" || typeof history === "undefined") return;
     const rest = stripDoParam(location.hash);
@@ -20588,7 +20601,7 @@ From the author:
   };
   var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky" };
   var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky" };
-  var SRC_LABEL2 = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
+  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
   var PAGE_SIZE2 = 12;
   var fmtDate2 = (ms) => {
     try {
@@ -21229,7 +21242,7 @@ From the author:
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
     // inkwell + quill (Articles)
-    product: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m4 8.5 8 4.5 8-4.5M12 13v7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    project: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m4 8.5 8 4.5 8-4.5M12 13v7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     coin: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.5c-.6-.8-1.6-1.2-2.7-1.2-1.5 0-2.6.8-2.6 2s1 1.7 2.6 1.9c1.6.2 2.7.7 2.7 2s-1.1 2-2.7 2c-1.2 0-2.2-.5-2.8-1.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
     news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
     activity: '<path d="M3 12h4l2.5-7 5 14 2.5-7H21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -21267,7 +21280,7 @@ From the author:
     { key: "activity", href: "newtab.html#type=all", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
     // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
     { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, limited trial" },
-    // sow-204 item 4a: NETWORK, the member-publications river (posts, products and prompts; no shares, no news).
+    // sow-204 item 4a: NETWORK, the member-publications river (posts, projects and prompts; no shares, no news).
     // It is the one entry the extension was missing against the website's feed set, and it is what makes a rail
     // item mean the same thing on both hosts. Its membership is NETWORK_KINDS in client-ui/src/feed-route.mjs,
     // which must keep agreeing with matchesNarrow('network') in src/lib/home-feed.mjs.
@@ -21277,7 +21290,7 @@ From the author:
     // presented the same seven destinations as two unrelated groups. One heading, the website's order.
     // Activity IS the all-types river (bare newtab.html), so it stands in for the website's "All".
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
-    { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
+    { key: "projects", href: "newtab.html#type=project", ico: "project", nm: "Projects", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
     { key: "shares", href: "newtab.html#type=share", ico: "share", nm: "Shares", sub: "The co-op stream" },
     // SOW-069: a share glyph, not a coin (Shares are not monetary)
@@ -21285,10 +21298,10 @@ From the author:
     // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
     { key: "workspace", href: "workspace.html", ico: "grid", nm: "WorkBench", sub: "Your content + tools", children: [
       // SOW-101: quick deep-links into the member's OWN content-management tabs (distinct from the Member Activity
-      // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/products/prompts/shares
+      // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/projects/prompts/shares
       // feed items. Shares has no workspace tab yet (SOW-093), so it points at the co-op stream like the feed item.
       { key: "wb-post", href: "workspace.html#tab=post", ico: "article", nm: "Articles" },
-      { key: "wb-product", href: "workspace.html#tab=product", ico: "product", nm: "Products" },
+      { key: "wb-product", href: "workspace.html#tab=project", ico: "project", nm: "Projects" },
       { key: "wb-prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts" },
       { key: "wb-shares", href: "newtab.html#type=share", ico: "share", nm: "Shares" },
       { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests" },
@@ -21304,7 +21317,7 @@ From the author:
     { group: "My Content" },
     { key: "post", href: "workspace.html#tab=post", ico: "article", nm: "Articles", sub: "Your posts" },
     { key: "prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Your prompts" },
-    { key: "product", href: "workspace.html#tab=product", ico: "product", nm: "Products", sub: "Your products" },
+    { key: "project", href: "workspace.html#tab=project", ico: "project", nm: "Projects", sub: "Your projects" },
     { group: "Activity" },
     { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted" },
     { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved", sub: "Favorites + collections" },
@@ -21765,7 +21778,7 @@ From the author:
       <div class="expiry-count">${count}</div>
       <h2>${headline}</h2>
       ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ""}
-      <p class="expiry-note">Becoming a paying member keeps your profile, articles, products, and prompts
+      <p class="expiry-note">Becoming a paying member keeps your profile, articles, projects, and prompts
         published, your Discord access open, and your revenue share active. Nothing bills automatically;
         if you do nothing, your work simply unpublishes at the end and comes back whenever you join.</p>
       <a class="expiry-cta" href="https://gbti.network/membership/" target="_blank" rel="noopener">Become a paying member</a>

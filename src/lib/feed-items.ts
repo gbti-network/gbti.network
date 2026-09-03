@@ -14,8 +14,8 @@ import { defaultFeatureImage } from './feature-image';
 import { feedTime, isPublicShare, readMinutes, decodeEntities } from './home-feed.mjs';
 
 export type FeedItem = {
-  kind: 'article' | 'product' | 'prompt' | 'share';
-  targetType: 'post' | 'product' | 'prompt' | 'share';
+  kind: 'article' | 'project' | 'prompt' | 'share';
+  targetType: 'post' | 'project' | 'prompt' | 'share';
   slug: string; // the favorites/upvotes/comments key: content slug, or "<author>/<id>" for a share
   title: string;
   href: string | null;
@@ -35,9 +35,9 @@ export type FeedItem = {
   read?: number; // article: minutes
 };
 
-async function contentItem(entry: any, kind: 'article' | 'product' | 'prompt', comments: CollectionEntry<'comment'>[]): Promise<FeedItem> {
+async function contentItem(entry: any, kind: 'article' | 'project' | 'prompt', comments: CollectionEntry<'comment'>[]): Promise<FeedItem> {
   const d = entry.data;
-  const tt: 'post' | 'product' | 'prompt' = kind === 'article' ? 'post' : kind === 'prompt' ? 'prompt' : 'product';
+  const tt: 'post' | 'project' | 'prompt' = kind === 'article' ? 'post' : kind === 'prompt' ? 'prompt' : 'project';
   const hasImage = !!imageFieldOf(d, tt);
   const thumbs = await resolveThumb(d, tt);
   return {
@@ -95,7 +95,7 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
 }
 
 export interface FeedData {
-  contentItems: FeedItem[]; // articles + products/applets + prompts (isListed; Mode B stubs included)
+  contentItems: FeedItem[]; // articles + projects/applets + prompts (isListed; Mode B stubs included)
   shareItems: FeedItem[]; // PUBLIC shares only (the scoped SOW-018 reversal, fail closed)
   membersShareCount: number; // published members-only shares (for the aggregate locked card; no titles)
   profiles: CollectionEntry<'profile'>[]; // public member profiles (gbti excluded)
@@ -106,8 +106,8 @@ export interface FeedData {
 export async function loadFeedItems(): Promise<FeedData> {
   const comments = await getCollection('comment');
   const posts = (await getCollection('post')).filter(isListed);
-  // SOW-022: applets list among products; their cards link to the running tool via catalogHref.
-  const products = [...(await getCollection('product')), ...(await getCollection('applet'))].filter(isListed);
+  // SOW-022: applets list among projects; their cards link to the running tool via catalogHref.
+  const projects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isListed);
   const prompts = (await getCollection('prompt')).filter(isListed);
   const allShares = await getCollection('share');
   const shares = allShares.filter((s) => isPublicShare(s.data));
@@ -116,7 +116,7 @@ export async function loadFeedItems(): Promise<FeedData> {
 
   const contentItems: FeedItem[] = [
     ...(await Promise.all(posts.map((p) => contentItem(p, 'article', comments)))),
-    ...(await Promise.all(products.map((p) => contentItem(p, 'product', comments)))),
+    ...(await Promise.all(projects.map((p) => contentItem(p, 'project', comments)))),
     ...(await Promise.all(prompts.map((p) => contentItem(p, 'prompt', comments)))),
   ];
   const shareItems = shares.map((s) => shareItem(s, comments));

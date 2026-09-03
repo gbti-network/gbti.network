@@ -5,9 +5,9 @@
 // A favorite's type is the content type ('post' for an article). Map it to its build-time index file + label.
 // SOW-050 P3: 'share' is a first-class saved type. Shares have no public page/index, so there is no index file
 // (indexFileFor('share') -> null and resolveItem falls back to the slug); they still get a label + sort slot.
-const TYPE_INDEX = { post: 'blog-index.json', product: 'products-index.json', prompt: 'prompts-index.json' };
-const TYPE_LABEL = { post: 'Articles', product: 'Products', prompt: 'Prompts', share: 'Shares' };
-const ORDER = ['post', 'product', 'prompt', 'share'];
+const TYPE_INDEX = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
+const TYPE_LABEL = { post: 'Articles', project: 'Projects', prompt: 'Prompts', share: 'Shares' };
+const ORDER = ['post', 'project', 'prompt', 'share'];
 
 export function indexFileFor(type) { return TYPE_INDEX[type] || null; }
 export function typeLabel(type) { return TYPE_LABEL[type] || String(type || ''); }

@@ -12,7 +12,9 @@ import path from 'node:path';
 import yaml from 'js-yaml';
 import { qualifyingCollaboration } from '../../membership/revenue-model.mjs';
 
-const TYPE_DIR = { post: 'posts', product: 'products', prompt: 'prompts' };
+import { canonicalType } from '../../membership/content-types.mjs';
+
+const TYPE_DIR = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' };
 export const itemKey = (it) => `${it.owner}::${it.type}::${it.slug}`;
 export const typeSlugKey = (type, slug) => `${type}::${slug}`;
 
@@ -60,7 +62,10 @@ export function readCommentsIndex(root, { files = null, readFile = (p) => fs.rea
     // repo) must NOT earn a collaboration point. Mirror src/lib/comments.ts (published-only); status-less = the Zod
     // default 'published', so a legitimately-published comment with no explicit status field still counts.
     if (!fm || fm.type !== 'comment' || (fm.status ?? 'published') !== 'published' || !fm.targetType || !fm.targetSlug || !fm.author) continue;
-    const key = typeSlugKey(fm.targetType, fm.targetSlug);
+    // sow-196: key on the CURRENT type name. Every comment left on a project before the 2026-09-02 rename
+    // stores targetType: product; indexed under that, it never matches the item's lookup, and the members
+    // who commented drop out of the payout pool for it with no error and no missing-data signal.
+    const key = typeSlugKey(canonicalType(fm.targetType), fm.targetSlug);
     let arr = index.get(key); if (!arr) { arr = []; index.set(key, arr); }
     arr.push({ author: String(fm.author), at: fm.createdAt ?? fm.publishedAt, authorIntro: fm.authorNote === true });
   }

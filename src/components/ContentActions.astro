@@ -1,5 +1,5 @@
 ---
-// SOW-050: the unified content action cluster, identical across articles / products / prompts. Favorite +
+// SOW-050: the unified content action cluster, identical across articles / projects / prompts. Favorite +
 // Collection (the existing inert <gbti-favorite>/<gbti-collection> the client upgrades) + the shared ShareRow
 // icons rendered directly (sow-179: no more a <details> disclosure behind a "Share" toggle, the four targets
 // are visible immediately, matching the design handoff). One row, one look everywhere.
@@ -13,7 +13,7 @@ import { contentItemPath } from '../lib/content-index.mjs';
 import type { ShareType } from '../lib/share';
 
 interface Props {
-  type: ShareType; // 'post' | 'product' | 'prompt'
+  type: ShareType; // 'post' | 'project' | 'prompt'
   slug: string;
   title: string;
   url: string; // absolute canonical URL for sharing

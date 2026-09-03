@@ -242,7 +242,7 @@ class GbtiShareComposer extends GbtiElement {
   _renderNotCreator() {
     this.set(this.css(CSS) + this._noticeHtml(
       'Posting Shares is a Content Creator perk',
-      'Your membership covers reading the community stream. Posting Shares, articles, products and prompts is part of Content Creator membership. <a href="https://gbti.network/membership/">See the membership tiers</a> to upgrade.',
+      'Your membership covers reading the community stream. Posting Shares, articles, projects and prompts is part of Content Creator membership. <a href="https://gbti.network/membership/">See the membership tiers</a> to upgrade.',
       '✍️',
     ));
   }
@@ -262,7 +262,7 @@ class GbtiShareComposer extends GbtiElement {
   _renderComposer() {
     this._step = 1;
     this._noteTab = 'write';
-    this._visibility = 'members'; // shares stay members-only by default (unchanged product behavior)
+    this._visibility = 'members'; // shares stay members-only by default (unchanged project behavior)
     const rail = STEP_LABELS.map((l, i) =>
       `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join('');
     this.set(this.css(CSS) + `
@@ -275,7 +275,7 @@ class GbtiShareComposer extends GbtiElement {
           <div class="row">
             <input type="url" placeholder="https://… (optional link)" />
           </div>
-          <p class="hint">Works with articles, videos, repos and product pages.</p>
+          <p class="hint">Works with articles, videos, repos and project pages.</p>
         </section>
 
         <section class="step" data-step="2" hidden>

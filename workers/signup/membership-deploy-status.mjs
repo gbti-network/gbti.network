@@ -8,7 +8,9 @@
 // never a gate, so a misconfiguration must never block or blank a page render.
 import { shapeDeployStatus } from '../../membership/deploy-status.mjs';
 
-const VALID_TYPES = new Set(['post', 'product', 'prompt']);
+import { canonicalType } from '../../membership/content-types.mjs';
+
+const VALID_TYPES = new Set(['post', 'project', 'prompt']);
 // Must be at least as permissive as the real content schema's own slug regex (src/content.config.ts:
 // z.string().regex(/^[a-z0-9-]+$/), no leading-character restriction, no length cap) -- a stricter check here
 // would 400 for a schema-valid slug (e.g. a leading hyphen) and the client fails open to silently never
@@ -19,7 +21,7 @@ export async function membershipDeployStatus(request, env, { kv = env?.SIGNUP_KV
   const url = new URL(request.url);
   const type = url.searchParams.get('type') || '';
   const slug = url.searchParams.get('slug') || '';
-  if (!VALID_TYPES.has(type) || !validSlug(slug)) {
+  if (!VALID_TYPES.has(canonicalType(type)) || !validSlug(slug)) {
     return { status: 400, body: { error: 'bad_request', message: 'a valid type + slug is required' } };
   }
   if (!kv) return { status: 200, body: { pending: false } };

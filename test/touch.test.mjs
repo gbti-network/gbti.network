@@ -35,7 +35,7 @@ test('sessionIdFromBytes is deterministic for given bytes', () => {
 
 test('validTouchSignal: needs a known type + owner + slug', () => {
   assert.equal(validTouchSignal({ owner: '123', type: 'post', slug: 'a' }), true);
-  assert.equal(validTouchSignal({ owner: '123', type: 'product', slug: 'a' }), true);
+  assert.equal(validTouchSignal({ owner: '123', type: 'project', slug: 'a' }), true);
   assert.equal(validTouchSignal({ owner: '123', type: 'prompt', slug: 'a' }), true);
   assert.equal(validTouchSignal({ owner: '', type: 'post', slug: 'a' }), false);   // house / unindexed -> no owner
   assert.equal(validTouchSignal({ owner: '123', type: 'page', slug: 'a' }), false); // not an earning type

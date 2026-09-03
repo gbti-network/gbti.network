@@ -10,19 +10,19 @@ import { splitMemberMarkdown, encAssetFor, MEMBER_MARKER } from '../../client/sr
 // SOW-027: the valid comment targets (mirrors operations.listComments' COMMENT_TARGET_TYPES).
 // sow-158 News track: 'news' enables the shared <gbti-discussion> news thread on the website (read is public;
 // posting stays paid-gated via postComment's membership check). The comments-index already carries news rows.
-export const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']);
+export const COMMENT_TARGET_TYPES = new Set(['post', 'project', 'prompt', 'share', 'news']);
 
 // SOW-014 + 2026-08-11: the content types that MAY carry a from-the-author note. Distinct from the types that
-// REQUIRE one, which is product/prompt and lives in validate-content.mjs -- an article's note is optional and
+// REQUIRE one, which is project/prompt and lives in validate-content.mjs -- an article's note is optional and
 // always has been permitted on the READ side (validate-content's public-comment rule, Comments.astro's pinned
 // block), so widening this only closes the write path that never caught up. Declared here AND in
 // operations.mjs AUTHOR_NOTE_TYPES: the two cores are separate bundle boundaries and already mirror
 // COMMENT_TARGET_TYPES the same way. test/publish-intro-comment.test.mjs asserts every copy agrees, including
 // the literal in the client-ui editor, which can import neither core.
-export const AUTHOR_NOTE_TYPES = new Set(['post', 'product', 'prompt']);
+export const AUTHOR_NOTE_TYPES = new Set(['post', 'project', 'prompt']);
 
 // sow-158 image upload: the frontmatter keys that hold an uploaded image path (per the editor RAIL_SCHEMA:
-// coverImage on a post; icon/iconLarge/featuredImage/banner on a product; image on a prompt). coverAlt is text,
+// coverImage on a post; icon/iconLarge/featuredImage/banner on a project; image on a prompt). coverAlt is text,
 // not a path. `gallery` is handled separately below because its entries are a list, not a scalar.
 //
 // iconLarge and gallery were MISSING here, so an image staged into either was never flushed into the publish
@@ -44,7 +44,7 @@ const WEB_IMAGE_EXT_RE = /\.(?:png|jpe?g|webp|gif)$/;
 //
 // The owner name comes from content-ops.mjs rather than a second literal here, because a duplicated constant is
 // precisely how the two halves drifted apart.
-const NETWORK_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
+const NETWORK_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|projects|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
 
 export function isNetworkPath(path) {
   return NETWORK_PATH_RE.test(String(path || ''));
@@ -384,7 +384,7 @@ export function filterThreadComments(all, { targetType, targetSlug, aliases = []
  * The id + timestamps are passed in (impure clock/random stays in the .ts adapter). Pure.
  */
 export function coerceCommentInput({ id, targetType, targetSlug, createdAt, updatedAt, authorNote, parentId, visibility } = {}) {
-  const isPublicIntro = authorNote === true && ['post', 'product', 'prompt'].includes(targetType);
+  const isPublicIntro = authorNote === true && ['post', 'project', 'prompt'].includes(targetType);
   const input = { id, targetType, targetSlug, status: 'published', visibility: (visibility === 'public' && isPublicIntro) ? 'public' : 'members' };
   if (createdAt) input.createdAt = createdAt;
   if (updatedAt) input.updatedAt = updatedAt;
@@ -421,10 +421,10 @@ export function reassembleMemberBody(frontmatter, indexBody, memberText) {
 // these later; the extension path is deliberately left untouched here (zero regression risk). ----
 
 // The public URL base per content type; a rename records the OLD url in redirectFrom so the build 301s it.
-export const RENAME_URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
-const OWN_ITEM_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
-const HOUSE_ITEM_PATH_RE = /^house\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
-const FOLDER_TYPE = { posts: 'post', products: 'product', prompts: 'prompt' };
+export const RENAME_URL_BASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' } // sow-196: the retired name resolves to the current URL;
+const OWN_ITEM_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+const HOUSE_ITEM_PATH_RE = /^house\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+const FOLDER_TYPE = { posts: 'post', projects: 'project', products: 'project', prompts: 'prompt' };
 
 // Resolve the ORIGIN of an edit: the canonical item the editor loaded (`path`). Returns
 // { scope, username, oldSlug, oldPath } when the path is an item of the SAME type, else null. The slug in the

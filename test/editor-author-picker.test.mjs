@@ -1,7 +1,7 @@
 // The superadmin Author picker in gbti-content-editor.mjs must not move an item nobody asked it to move.
 //
 // WHAT HAPPENED. On 2026-08-24 publishing the live Ryker product from the WorkBench moved index.md and its
-// intro comment out of members/atwellpub/products/ryker/ into members/gbtilabs/products/ryker/, left the
+// intro comment out of members/atwellpub/projects/ryker/ into members/gbtilabs/projects/ryker/, left the
 // co-located images/ behind, and stopped the Astro build on main. The repository was repaired in 36a1567d;
 // the client-side cause was recorded as needing its own fix and was not fixed, and it recurred.
 //

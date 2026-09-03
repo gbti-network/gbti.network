@@ -14,7 +14,7 @@
 // activity-index.json uses `type` (post/product/prompt); shares-index.json uses `type: 'share'`. composeIssue
 // groups on `kind` (article/product/prompt/share). An unknown type maps to null and the entry is dropped (it
 // would land in no section). `post -> article` because the blog's public kind is "article".
-const TYPE_TO_KIND = { post: 'article', product: 'product', prompt: 'prompt', share: 'share' };
+const TYPE_TO_KIND = { post: 'article', project: 'project', prompt: 'prompt', share: 'share' };
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 const numOrNull = (v) => {

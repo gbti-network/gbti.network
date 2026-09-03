@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Migrate the 11 legacy products → house/products/<slug>/index.md (SOW-001 Phase 3).
+// Migrate the 11 legacy projects → house/projects/<slug>/index.md (SOW-001 Phase 3).
 // Product content.html is a FULL page; the description lives in `.product-description`.
-//   node scripts/migrate-products.mjs          # dry run
-//   node scripts/migrate-products.mjs --write
+//   node scripts/migrate-projects.mjs          # dry run
+//   node scripts/migrate-projects.mjs --write
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,7 @@ import { gfm } from 'turndown-plugin-gfm';
 import * as cheerio from 'cheerio';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-const LEGACY = path.join(ROOT, '.data/legacy/products');
+const LEGACY = path.join(ROOT, '.data/legacy/projects');
 const WRITE = process.argv.includes('--write');
 
 // Controlled vocab (content-schemas.md): ide-plugins | minecraft-mods | utilities | wordpress
@@ -37,11 +37,11 @@ const cleanTitle = (t) => t.replace(/\s*[|\-–]\s*GBTI Network\s*$/i, '').trim(
 const stripSize = (n) => n.replace(/-\d+x\d+(?=\.[a-z0-9]+$)/i, '');
 const slugOf = (url) => url.replace(/\/$/, '').split('/').pop();
 
-if (WRITE) fs.rmSync(path.join(ROOT, 'house/products'), { recursive: true, force: true });
+if (WRITE) fs.rmSync(path.join(ROOT, 'house/projects'), { recursive: true, force: true });
 
 const dirs = fs
   .readdirSync(LEGACY)
-  .filter((d) => d.startsWith('products_') && d !== 'products') // skip the bare directory index
+  .filter((d) => d.startsWith('products_') && d !== 'projects') // skip the bare directory index
   .map((d) => path.join(LEGACY, d))
   .filter((d) => fs.statSync(d).isDirectory());
 
@@ -52,8 +52,8 @@ for (const dir of dirs) {
   const category = CATEGORY[slug] || 'utilities';
   const localImages = new Set(fs.existsSync(path.join(dir, 'images')) ? fs.readdirSync(path.join(dir, 'images')) : []);
 
-  // icon: each product page archives EVERY product's icon, so match the one whose filename
-  // contains this product's full slug; fall back to the first slug word, then og_image/first.
+  // icon: each project page archives EVERY project's icon, so match the one whose filename
+  // contains this project's full slug; fall back to the first slug word, then og_image/first.
   const iconMatch = [...localImages].find((f) => /icon/i.test(f) && f.includes(slug))
     || [...localImages].find((f) => /icon/i.test(f) && f.includes(slug.split('-')[0]));
   const ogBase = meta.og_image ? stripSize(meta.og_image.split('?')[0].split('/').pop()) : null;
@@ -76,7 +76,7 @@ for (const dir of dirs) {
     : '';
 
   const fm = {
-    type: 'product',
+    type: 'project',
     title: cleanTitle(meta.title),
     slug,
     author: 'gbti',
@@ -90,7 +90,7 @@ for (const dir of dirs) {
   rows.push({ slug, category, icon: icon || '∅', imgs: used.size, bodyKB: Math.round(body.length / 1024) });
 
   if (WRITE) {
-    const destBase = path.join(ROOT, 'house/products', slug);
+    const destBase = path.join(ROOT, 'house/projects', slug);
     fs.mkdirSync(path.join(destBase, 'images'), { recursive: true });
     for (const img of used) {
       const from = path.join(dir, 'images', img);
@@ -105,5 +105,5 @@ for (const dir of dirs) {
     fs.writeFileSync(path.join(destBase, 'index.md'), `${lines.join('\n')}\n\n${body || meta.description || ''}\n`);
   }
 }
-console.log(`${WRITE ? 'WROTE' : 'DRY RUN'} ${rows.length} product(s).`);
+console.log(`${WRITE ? 'WROTE' : 'DRY RUN'} ${rows.length} project(s).`);
 console.table(rows);

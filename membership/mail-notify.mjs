@@ -32,7 +32,7 @@ import { resolveNotify } from './notify-resolve.mjs';
 export const NOTIFY_EVENT_FOR_TYPE = Object.freeze({
   post: 'article',
   article: 'article',
-  product: 'product',
+  project: 'project',
   prompt: 'prompt',
 });
 

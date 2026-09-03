@@ -92,7 +92,7 @@ test('sow-165: grouping keeps arrival order and drops authorless records', () =>
 
 /** Walk the real content tree the way the endpoint does, returning { listed, excluded } item records. */
 function realItems() {
-  const SUB = { post: 'posts', product: 'products', prompt: 'prompts' };
+  const SUB = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' };
   const roots = ['house', ...readdirSync(join(ROOT, 'members')).map((u) => `members/${u}`)];
   const listed = [];
   for (const root of roots) {
@@ -137,7 +137,7 @@ test('sow-165: the picker finds the real corpus, not half of it', () => {
   const byAuthor = groupMediaByAuthor(records);
   assert.ok(Object.keys(byAuthor).length >= 3, `expected at least 3 authors with images, got ${Object.keys(byAuthor).length}`);
   for (const r of records) {
-    assert.match(r.itemPath, /^(members\/[a-z0-9-]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/, `bad itemPath ${r.itemPath}`);
+    assert.match(r.itemPath, /^(members\/[a-z0-9-]+|house)\/(posts|projects|products|prompts)\/[^/]+\/index\.md$/, `bad itemPath ${r.itemPath}`);
     assert.doesNotMatch(r.name, /[/\\]/, `an image name must be a bare filename, got ${r.name}`);
   }
 });

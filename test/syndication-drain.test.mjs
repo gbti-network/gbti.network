@@ -22,7 +22,7 @@ const AFTER_HOLD = 4 * 60 * 60_000;
 // their own matrix explicitly.
 function allOn(channels) {
   const row = {}; for (const [k, v] of Object.entries(channels)) if (v) row[k] = 'on';
-  return { share: { ...row }, post: { ...row }, product: { ...row }, prompt: { ...row } };
+  return { share: { ...row }, post: { ...row }, project: { ...row }, prompt: { ...row } };
 }
 // The mechanics tests below exercise the legacy auto-hold path (require_approval:false); the approval-model gate
 // (the default) is covered by the dedicated block at the end.

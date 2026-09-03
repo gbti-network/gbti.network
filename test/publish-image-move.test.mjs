@@ -68,7 +68,7 @@ test('the Worker hands back the base64 it already holds, without widening what i
   // The allow-list is the only thing keeping this from being a general repo-file oracle. It must not have
   // grown to accommodate images: co-located image paths already sit under members/ and the house content
   // folders, so this change needed nothing from it.
-  assert.match(worker, /const HOUSE_CONTENT = \['house\/posts\/', 'house\/products\/', 'house\/prompts\/'\];/,
+  assert.match(worker, /const HOUSE_CONTENT = \['house\/posts\/', 'house\/projects\/', 'house\/prompts\/'\];/,
     'the house content allow-list changed; base64 must reach exactly the paths text already reached');
   assert.match(worker, /const allowedPrefix = path\.startsWith\('members\/'\) \|\| HOUSE_CONTENT\.some\(\(p\) => path\.startsWith\(p\)\);/,
     'the allow-list rule changed');

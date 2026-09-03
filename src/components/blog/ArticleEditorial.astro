@@ -22,7 +22,7 @@ import { contentRepoPath } from '../../lib/content';
 interface Props {
   d: any; // CollectionEntry<'post'>['data']
   isStub: boolean;
-  postId: string; // post.id, for LockedBody's extension deep-link (SOW-112 QA parity with the product page)
+  postId: string; // post.id, for LockedBody's extension deep-link (SOW-112 QA parity with the project page)
   postUrl: string;
   stack: any[]; // avatarStack() result, ContentMeta's stacked byline avatars
   toc: { id: string; label: string }[]; // buildArticleToc() result, computed once by [slug].astro
@@ -34,7 +34,7 @@ const category = breadcrumb(d.categories).join(' › ');
 // same as every other layout.
 const hasHero = Boolean(d.coverImage) && !d.video;
 const dims = coverDimensions('editorial');
-// sow-183: the owner/superadmin Edit affordance, matching the product page's hero pill. The href is public
+// sow-183: the owner/superadmin Edit affordance, matching the project page's hero pill. The href is public
 // build-time data; only visibility is a runtime decision (this component's own script block, below).
 const editPath = contentRepoPath('post', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(editPath)}` : null;
@@ -116,7 +116,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
   initToc(document, 'art');
 
   // sow-183: the owner/superadmin Edit pill (either the hero or the flat-header variant -- exactly one
-  // renders, never both). See products/[slug].astro / src/lib/content.ts for the shared pattern.
+  // renders, never both). See projects/[slug].astro / src/lib/content.ts for the shared pattern.
   import { wireEditAffordance } from '../../lib/content';
   wireEditAffordance('[data-detail-edit]', 'data-detail-owner');
 </script>

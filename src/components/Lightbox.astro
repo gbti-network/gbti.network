@@ -4,10 +4,10 @@
 //
 // It wires two kinds of trigger:
 //   1. Every body image (`.prose-gbti img`) becomes zoom-in clickable, site-wide, across all content types
-//      that render through the shared Prose renderer (articles, products, prompts, generic pages, the
+//      that render through the shared Prose renderer (articles, projects, prompts, generic pages, the
 //      workbench preview). A linked body image is left alone so its link still works.
 //   2. Any element carrying `data-lightbox` opts in explicitly; `data-lightbox-group="<key>"` groups triggers
-//      into one gallery with prev/next (the product screenshot grid + carousel use this). `data-full` names
+//      into one gallery with prev/next (the project screenshot grid + carousel use this). `data-full` names
 //      the full-resolution source; `data-cap` an optional caption.
 //
 // Native <dialog> gives Esc-to-close and focus handling for free; backdrop click and arrow-key navigation are
@@ -33,7 +33,7 @@
   /* Body images invite a click everywhere Prose renders (SOW-175). A linked body image keeps its own cursor. */
   .prose-gbti img { cursor: zoom-in; }
   .prose-gbti a img { cursor: pointer; }
-  /* Explicit opt-in triggers (the product galleries). */
+  /* Explicit opt-in triggers (the project galleries). */
   [data-lightbox] { cursor: zoom-in; }
 
   .lb {

@@ -14,8 +14,12 @@ export const ECHO_TTL_SECONDS = 6 * 60 * 60; // a backstop: an un-reaped echo ag
 // SOW-046 D allowed 'news' discussion at the client, but this whitelist never learned it, so a news
 // comment stored NO echo (the write 400d fail-soft) and the fresh comment stayed invisible until the next
 // deploy. Keep this set in lockstep with COMMENT_TARGET_TYPES (client/src/operations.mjs).
-const TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']);
-const validTarget = (t, s) => TARGET_TYPES.has(t) && typeof s === 'string' && !!s && s.length <= 200;
+import { canonicalType } from '../../membership/content-types.mjs';
+
+const TARGET_TYPES = new Set(['post', 'project', 'prompt', 'share', 'news']);
+// sow-196: canonicalize before the membership check. A record or request carrying the retired `product`
+// type name would otherwise be rejected or dropped here rather than resolved to `project`.
+const validTarget = (t, s) => TARGET_TYPES.has(canonicalType(t)) && typeof s === 'string' && !!s && s.length <= 200;
 
 export async function handleCommentEcho(request, env, { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, kv = env?.SIGNUP_KV, now = Date.now, authorize = authorizeMemberCheap } = {}) {
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the comment echo store is not configured' } };

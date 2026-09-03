@@ -155,8 +155,8 @@ test('devto adapter: SOW-139 defaults the cover to the branded per-type card whe
   assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-article.png');
   await ad.post({ ...ITEM, source: 'prompt' });
   assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-prompt.png');
-  await ad.post({ ...ITEM, source: 'product' });
-  assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-product.png');
+  await ad.post({ ...ITEM, source: 'project' });
+  assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-project.png');
   await ad.post({ ...ITEM, image: '/_astro/cover.webp' }); // a custom cover still wins
   assert.equal(lastBody.article.main_image, 'https://gbti.network/_astro/cover.webp');
 });

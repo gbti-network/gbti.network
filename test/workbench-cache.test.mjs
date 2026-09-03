@@ -40,13 +40,13 @@ test('invalidate removes one type; invalidateMany removes several', async () => 
   _resetWbMemoryStore();
   await wbCacheSet('me', 'post', [{ slug: 'a' }]);
   await wbCacheSet('me', 'prompt', [{ slug: 'b' }]);
-  await wbCacheSet('me', 'product', [{ slug: 'c' }]);
+  await wbCacheSet('me', 'project', [{ slug: 'c' }]);
   await wbCacheInvalidate('me', 'post');
   assert.equal(await wbCacheGet('me', 'post'), null);
   assert.ok(await wbCacheGet('me', 'prompt'));
-  await wbCacheInvalidateMany('me', ['prompt', 'product']);
+  await wbCacheInvalidateMany('me', ['prompt', 'project']);
   assert.equal(await wbCacheGet('me', 'prompt'), null);
-  assert.equal(await wbCacheGet('me', 'product'), null);
+  assert.equal(await wbCacheGet('me', 'project'), null);
 });
 
 test('clear wipes a member entirely (sign-out / account switch GDPR guard)', async () => {

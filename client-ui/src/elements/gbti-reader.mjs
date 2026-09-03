@@ -39,10 +39,10 @@ const githubAvatar = (a) => (a ? `https://github.com/${encodeURIComponent(github
 function targetSlugFor(it) {
   if (it.type === 'share') return it.author && it.id ? `${it.author}/${it.id}` : '';
   if (it.slug) return String(it.slug);
-  const m = String(it.path || '').match(/\/(?:posts|products|prompts)\/([^/]+)\/index\.md$/);
+  const m = String(it.path || '').match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
   return m ? m[1] : '';
 }
-const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', share: 'Share' };
+const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', share: 'Share' };
 const dateStr = (ms) => { try { return ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''; } catch { return ''; } };
 const lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
 
@@ -282,7 +282,7 @@ class GbtiReader extends GbtiElement {
   _backfillFromFrontmatter(it) {
     const fm = this._fm;
     if (!fm) return;
-    const URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
+    const URL_BASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' }; // sow-196: the retired type name maps to the SAME current URL
     this._item = {
       ...it,
       title: it.title || fm.title || '',
@@ -429,7 +429,7 @@ class GbtiReader extends GbtiElement {
       return `<div class="author"><div class="a-top">`
         + `<span class="a-av"><img src="${esc(githubAvatar('gbti'))}" alt=""></span>`
         + `<div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div>`
-        + `<p class="a-note">Articles, products, and prompts from the GBTI Network co-op.</p></div>`;
+        + `<p class="a-note">Articles, projects, and prompts from the GBTI Network co-op.</p></div>`;
     }
     const e = a.entry || {};
     const name = e.displayName || it.author;
@@ -443,7 +443,7 @@ class GbtiReader extends GbtiElement {
     // `/workbench/` on the website (gbti.network), so pick the base by host or a website /browse reader links to
     // /browse/workspace.html -> 404. npm-CMS hosts have no WorkBench page; the link is inert there as before.
     const wsBase = (typeof location !== 'undefined' && location.protocol === 'chrome-extension:') ? 'workspace.html' : '/workbench/';
-    if (a.isSelf) follow = ['post', 'product', 'prompt'].includes(it.type)
+    if (a.isSelf) follow = ['post', 'project', 'prompt'].includes(it.type)
       ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : '';
     else if (a.canFollow) follow = `<button class="follow${a.following ? ' on' : ''}" data-follow type="button">${a.following ? 'Following' : 'Follow'}</button>`;
     else follow = `<a class="follow muted" href="${SITE}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
@@ -545,7 +545,7 @@ class GbtiReader extends GbtiElement {
     const authorReddit = this._author?.entry?.links?.reddit || ''; // {member-reddit-handle}
     const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : (Array.isArray(it.tags) ? it.tags : []);
     const syndTags = tagsList.filter((t) => typeof t === 'string' && t.trim()).join(',');
-    const synd = (resolved && slug && ['post', 'product', 'prompt', 'share'].includes(it.type))
+    const synd = (resolved && slug && ['post', 'project', 'prompt', 'share'].includes(it.type))
       ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || '')}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ''} data-gbti-title="${esc(it.title || '')}"${(it.shortDescription || this._fm?.shortDescription) ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ''} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || 'public'))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ''}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ''}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ''}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ''}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ''}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ''}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ''}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ''}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ''}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ''}></gbti-syndicate-now>`
       : '';
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.

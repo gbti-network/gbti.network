@@ -41,7 +41,7 @@ test('glyphFor prefers a known category over the type', () => {
 test('glyphFor falls back to TYPE when the category is missing/unknown (Shares -> share glyph, SOW-069)', () => {
   assert.equal(glyphFor(null, 'share').svg, GLYPH_SVG.share);
   assert.equal(glyphFor('', 'share').svg, GLYPH_SVG.share);
-  assert.equal(glyphFor('not-a-category', 'product').svg, GLYPH_SVG.box);
+  assert.equal(glyphFor('not-a-category', 'project').svg, GLYPH_SVG.box);
   assert.equal(glyphFor(undefined, 'prompt').svg, GLYPH_SVG.spark);
   assert.equal(glyphFor('zzz', 'post').svg, GLYPH_SVG.pencil);
 });
@@ -55,7 +55,7 @@ test('glyphFor with neither a known category nor type -> the neutral puzzle glyp
 // The activity-feed separation treatment (accent bar + tint + colored chip) keys on the per-TYPE accent.
 test('typeAccent returns a distinct color per member type; unknown -> neutral', () => {
   assert.equal(typeAccent('post'), '#3f74c9');     // Article = blue
-  assert.equal(typeAccent('product'), '#c9683b');  // Product = orange
+  assert.equal(typeAccent('project'), '#c9683b');  // Product = orange
   assert.equal(typeAccent('prompt'), '#1f9e5f');   // Prompt = green
   assert.equal(typeAccent('share'), '#b3791f');    // Share = gold
   assert.equal(typeAccent('news'), '#3a6ea5');     // News (the renderer omits the bar/tint for it)

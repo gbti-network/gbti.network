@@ -80,7 +80,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       const m = new RegExp('^' + key + ':\\s*"?([^"\\n]+?)"?\\s*$', 'm').exec(txt);
       return m ? m[1].trim() : null;
     };
-    const SUBS = [['posts', 'blog'], ['products', 'products'], ['prompts', 'prompts']];
+    const SUBS = [['posts', 'blog'], ['projects', 'projects'], ['prompts', 'prompts']];
     const baseDirs = [path.join(root, 'house')];
     const membersDir = path.join(root, 'members');
     if (fs.existsSync(membersDir)) {
@@ -330,7 +330,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
         const rel = path.relative(root, path.join(cd, f));
         const txt = fs.readFileSync(path.join(cd, f), 'utf8');
         const vis = fmField(txt, 'visibility') ?? 'members';
-        const isPublicIntro = /^true$/i.test(String(fmField(txt, 'authorNote') ?? '')) && ['post', 'product', 'prompt'].includes(String(fmField(txt, 'targetType')));
+        const isPublicIntro = /^true$/i.test(String(fmField(txt, 'authorNote') ?? '')) && ['post', 'project', 'prompt'].includes(String(fmField(txt, 'targetType')));
         const body = txt.replace(/^---\n[\s\S]*?\n---/, '').trim();
         if (vis === 'public' && !isPublicIntro) {
           errors.push(`${rel}: a public comment is only allowed as a from-the-author intro (authorNote on a post/product/prompt); a discussion or share comment must be visibility:members. See SOW-044.`);

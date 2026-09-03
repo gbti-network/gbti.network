@@ -445,7 +445,7 @@ export async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
   const dest = act === 'retire' ? null : String(to || '').trim().toLowerCase();
   if (act !== 'retire' && !dest) throw new OperationError('bad-request', `${act} needs a destination tag`);
   if (dest === src) throw new OperationError('bad-request', 'the destination equals the source');
-  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
   if (!list.length || list.length > 100) throw new OperationError('bad-request', 'between 1 and 100 content paths are required');
   const files = [];
   for (const rel of list) {

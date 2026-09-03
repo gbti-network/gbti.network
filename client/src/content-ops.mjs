@@ -10,7 +10,7 @@ import { AUTHORABLE_TYPES, SYSTEM_MANAGED, schemaFor, shareSchema, commentSchema
 import { encAssetFor } from './member-content.mjs';
 import { stripTrackingParams } from './url-normalize.mjs';
 
-const SUBDIR = Object.freeze({ post: 'posts', product: 'products', prompt: 'prompts' });
+const SUBDIR = Object.freeze({ post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' });
 const MAX_BODY_BYTES = 1_000_000; // 1MB cap on a content body (well under GitHub's per-file limit + the 2MB HTTP cap)
 
 /** Resolve a github_id to its folder username via the members-index (Map or plain object). */
@@ -23,7 +23,7 @@ export function resolveUsername(githubId, membersIndex) {
 
 /**
  * The username that owns the NETWORK's own content (sow-195). It is a real member folder now, not a
- * pseudo-folder: `house/posts`, `house/products` and `house/prompts` no longer exist. One exported constant
+ * pseudo-folder: `house/posts`, `house/projects` and `house/prompts` no longer exist. One exported constant
  * so the client core has a single source of truth, the way src/lib/authors.ts does for the rendered byline.
  */
 export const NETWORK_CONTENT_OWNER = 'gbtilabs';
@@ -158,7 +158,7 @@ export function buildContentFile({ type, username, input, body = '', scope = 'me
  * frontmatter `author:` edit with no file move would leave the item unreachable at its new author's computed
  * path. This function always produces both the delete of the old path and the write of the new one together.
  *
- * @param {'post'|'product'|'prompt'} type
+ * @param {'post'|'project'|'prompt'} type
  * @param {string} slug                                unchanged across the move
  * @param {{scope:'member'|'house', username?:string}} from   the item's CURRENT target
  * @param {{scope:'member'|'house', username?:string}} to     the NEW target
@@ -169,7 +169,7 @@ export function buildContentFile({ type, username, input, body = '', scope = 'me
  * @param {string|null} [oldEncText]     the current .enc envelope's raw text; REQUIRED when
  *                                       oldFrontmatter.encryptedBody is set (throws otherwise, fail closed
  *                                       rather than silently dropping a gated body)
- * @param {string|null} [introText]      the current from-the-author intro comment's raw text, product/prompt
+ * @param {string|null} [introText]      the current from-the-author intro comment's raw text, project/prompt
  *                                       only; null/omitted when the item has none
  * @returns {{ path: string, noop?: boolean, files: Array<{path:string, content:string|null}>, frontmatter: object }}
  */
@@ -195,9 +195,9 @@ export function planAuthorshipMove({ type, slug, from, to, oldFrontmatter, oldBo
 
   files.push({ path: newPath, content: serializeContentFile(fm, oldBody) }, { path: oldPath, content: null });
 
-  // The from-the-author intro comment (product/prompt only) moves + re-stamps its author; the slug (and so
+  // The from-the-author intro comment (project/prompt only) moves + re-stamps its author; the slug (and so
   // its id/targetSlug, both keyed on slug) is unchanged by an authorship-only move, unlike a slug rename.
-  if (['product', 'prompt'].includes(type) && introText != null) {
+  if (['project', 'prompt'].includes(type) && introText != null) {
     const oldIntroPath = `${fromTarget.folder}/comments/intro-${slug}.md`;
     const newIntroPath = `${toTarget.folder}/comments/intro-${slug}.md`;
     const intro = parseContentFile(introText);
@@ -371,7 +371,7 @@ export function commentId(createdAt, suffix) {
  */
 export function buildCommentFile({ username, input, body = '', scope = 'member' } = {}) {
   if (!username) throw new Error('buildCommentFile: username is required');
-  // SOW-145: a house comment (e.g. a house product/prompt author intro) lives at house/comments/<id>.md with
+  // SOW-145: a house comment (e.g. a house project/prompt author intro) lives at house/comments/<id>.md with
   // author 'gbti', while the actor's username stays on the result (fork/commit context). Member scope is
   // unchanged (folder members/<username>, author == username).
   const target = resolveTarget({ scope, username });

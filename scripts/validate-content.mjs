@@ -20,7 +20,7 @@ import { CATEGORY_NAMES } from '../workers/signup/news/config/categories.mjs'; /
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
-const slugs = { post: new Map(), product: new Map(), prompt: new Map(), applet: new Map() };
+const slugs = { post: new Map(), project: new Map(), prompt: new Map(), applet: new Map() };
 
 // Canonical taxonomy (house/taxonomy.yml). Every content `categories` path must resolve in this tree
 // (SOW-012) — the single source of truth shared with src/lib/taxonomy.ts. A path may stop at any node.
@@ -53,13 +53,13 @@ function validCategoryPath(arr) {
   return true;
 }
 
-/** sow-140: a product's newsFeed (the member-owned RSS the admin registry may approve into the news pool)
+/** sow-140: a project's newsFeed (the member-owned RSS the admin registry may approve into the news pool)
  *  must be an https URL. RSS VALIDITY is verified by the moderator at approval time (CI stays offline). */
 function checkNewsFeed(fm, rel) {
   const v = fm?.newsFeed;
   if (v === undefined || v === null) return;
   if (typeof v !== 'string' || !/^https:\/\/[^\s]+$/i.test(v)) {
-    errors.push(`${rel}: newsFeed must be an https URL to the product's RSS feed (got ${JSON.stringify(v)}). See sow-140.`);
+    errors.push(`${rel}: newsFeed must be an https URL to the project's RSS feed (got ${JSON.stringify(v)}). See sow-140.`);
   }
 }
 
@@ -210,13 +210,13 @@ function checkContent(file, owner, type) {
   //   - over the cap (posts, 50 of them): the item sorts dead last and is CUT from the index entirely. It has a
   //     live public page the whole time, so nothing looks broken. Three published articles were missing from
   //     the index, the extension feed and the digest this way, found 2026-08-23.
-  //   - under the cap (products, 11): the item survives into the index but keeps date 0, which is below every
+  //   - under the cap (projects, 11): the item survives into the index but keeps date 0, which is below every
   //     possible digest floor, so it can never be mailed in any issue, ever. That was Ryker.
   //
   // Both were invisible: the page renders, the build passes, the guards pass, and the item is simply absent
   // downstream. Rejecting at authoring time is the only layer that fails LOUDLY, which is why it is here and
   // not a fallback in the index. A fallback would keep the item working while hiding the omission.
-  if (status === 'published' && ['post', 'product', 'prompt'].includes(type) && !field(txt, 'publishedAt')) {
+  if (status === 'published' && ['post', 'project', 'prompt'].includes(type) && !field(txt, 'publishedAt')) {
     errors.push(`${rel}: a published ${type} must set publishedAt (e.g. publishedAt: 2026-08-22). Without it the item sorts as epoch 0, so it is cut from activity-index.json by the 40-per-type cap and can never appear in the weekly digest. See sow-166.`);
   }
   const slug = field(txt, 'slug');
@@ -225,11 +225,11 @@ function checkContent(file, owner, type) {
     else slugs[type].set(slug, rel);
   }
   const bodyOf = (t) => t.replace(/^---\n[\s\S]*?\n---/, '');
-  if (type === 'post' || type === 'product' || type === 'prompt' || type === 'applet') {
+  if (type === 'post' || type === 'project' || type === 'prompt' || type === 'applet') {
     const fm = frontmatter(txt);
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
-    if (type === 'product') checkNewsFeed(fm, rel); // sow-140
+    if (type === 'project') checkNewsFeed(fm, rel); // sow-140
     checkMemberGating(fm, rel, bodyOf(txt)); // SOW-016
     checkBodyImages(file, rel, bodyOf(txt)); // sow-165
   } else if (type === 'comment' || type === 'share') {
@@ -247,7 +247,7 @@ function checkContent(file, owner, type) {
     // member-scoped timestamp-slug, not globally unique), so it stays unambiguous across members. The shareId stamp
     // is VARIABLE length: shareId() slices the createdAt digits to 14, so a date-only createdAt yields an 8-digit
     // stamp (e.g. 20260610-...) while a full timestamp yields 14 (20260615120000-...). Accept 1-14 leading digits.
-    // The from-the-author intro requirement (SOW-014) only targets products/prompts, so a share never demands one.
+    // The from-the-author intro requirement (SOW-014) only targets projects/prompts, so a share never demands one.
     if (type === 'comment' && fmc.targetType === 'share' && !/^[a-z0-9][a-z0-9-]*\/[0-9]{1,14}-[a-z0-9-]+$/.test(String(fmc.targetSlug || ''))) {
       errors.push(`${rel}: a share comment targetSlug must be "<author>/<shareId>" (e.g. alice/20260615120000-x or alice/20260610-x). See SOW-032.`);
     }
@@ -261,7 +261,7 @@ function checkContent(file, owner, type) {
     // members. A members comment must carry its body in an encrypted envelope, never as committed plaintext.
     if (type === 'comment') {
       const cvis = fmc.visibility ?? 'members';
-      const isPublicIntro = fmc.authorNote === true && ['post', 'product', 'prompt'].includes(fmc.targetType);
+      const isPublicIntro = fmc.authorNote === true && ['post', 'project', 'prompt'].includes(fmc.targetType);
       if (cvis === 'public' && !isPublicIntro) {
         errors.push(`${rel}: a public comment is only allowed as a from-the-author intro (authorNote:true on a post/product/prompt). A discussion comment, and any comment on a share, must be visibility:members. See SOW-044.`);
       }
@@ -282,7 +282,7 @@ function* walkFiles(dir) {
   }
 }
 function eachSlug(base, owner) {
-  for (const sub of ['posts', 'products', 'prompts']) {
+  for (const sub of ['posts', 'projects', 'products', 'prompts']) {
     const dir = path.join(base, sub);
     if (!has(dir)) continue;
     for (const slug of fs.readdirSync(dir)) {
@@ -295,7 +295,7 @@ function eachSlug(base, owner) {
 // house = org content (no per-author scoping)
 eachSlug(path.join(ROOT, 'house'), null);
 // SOW-022: applets are a SUPERADMIN-only content type, GBTI-only (house/applets/<slug>/index.md). Validate
-// like a product (author scoping null, categories, slug). Members cannot author them (checked below).
+// like a project (author scoping null, categories, slug). Members cannot author them (checked below).
 const houseApplets = path.join(ROOT, 'house/applets');
 if (has(houseApplets)) for (const slug of fs.readdirSync(houseApplets)) {
   const idx = path.join(houseApplets, slug, 'index.md');
@@ -304,8 +304,8 @@ if (has(houseApplets)) for (const slug of fs.readdirSync(houseApplets)) {
 for (const page of has(path.join(ROOT, 'house/pages')) ? fs.readdirSync(path.join(ROOT, 'house/pages')) : []) {
   if (page.endsWith('.md')) checkContent(path.join(ROOT, 'house/pages', page), null, 'page');
 }
-// house/comments: GBTI's own comments (e.g. the from-the-author intro on house products/prompts). Author must be `gbti`.
-// house/comments: GBTI-hosted comments (e.g. the from-the-author intro on house products/prompts). The
+// house/comments: GBTI's own comments (e.g. the from-the-author intro on house projects/prompts). Author must be `gbti`.
+// house/comments: GBTI-hosted comments (e.g. the from-the-author intro on house projects/prompts). The
 // author is the content owner (which may be a member handle like atwellpub now, not only `gbti`), so no
 // fixed-author scoping here; house is admin-owned (CODEOWNERS) and ungated.
 const houseComments = path.join(ROOT, 'house/comments');
@@ -318,8 +318,8 @@ if (has(membersDir)) {
     const base = path.join(membersDir, user);
     if (!fs.statSync(base).isDirectory()) continue;
     eachSlug(base, user);
-    // SOW-022: applets are superadmin-only. A member must never publish one; they link out from a product instead.
-    if (has(path.join(base, 'applets'))) errors.push(`members/${user}/applets/: applets are a superadmin-only content type (SOW-022); members link out from a product instead`);
+    // SOW-022: applets are superadmin-only. A member must never publish one; they link out from a project instead.
+    if (has(path.join(base, 'applets'))) errors.push(`members/${user}/applets/: applets are a superadmin-only content type (SOW-022); members link out from a project instead`);
     // sow-158: member content is .md ONLY. MDX runs through a different pipeline than the sanitized
     // markdown config, so a member .mdx would be an unsanitized-HTML bypass; the collections no longer
     // load it, and this error gives the PR a clear message instead of a silently unrendered file.
@@ -357,7 +357,7 @@ if (has(membersDir)) {
   }
 }
 
-// SOW-014: a published product/prompt requires a from-the-author introduction comment (a published
+// SOW-014: a published project/prompt requires a from-the-author introduction comment (a published
 // comment by the content author targeting it). Enforced ONLY over the files changed in the PR
 // (CHANGED_FILES, set by .github/workflows/content-check.yml), so already-published content is
 // grandfathered and local full-repo runs skip it. The metadata-only merge gate is unchanged.
@@ -396,9 +396,9 @@ function validateAuthorIntro() {
   const changed = raw.split(/\s+/).filter(Boolean);
   const idx = buildCommentIndex();
   for (const rel of changed) {
-    const m = /^(?:house|members\/[^/]+)\/(products|prompts)\/[^/]+\/index\.md$/.exec(rel.replace(/^\.?\//, ''));
+    const m = /^(?:house|members\/[^/]+)\/(projects|prompts)\/[^/]+\/index\.md$/.exec(rel.replace(/^\.?\//, ''));
     if (!m) continue;
-    const type = m[1].slice(0, -1); // 'product' | 'prompt'
+    const type = m[1].slice(0, -1); // 'project' | 'prompt'
     const abs = path.join(ROOT, rel);
     if (!has(abs)) continue; // deleted in the PR
     const txt = fs.readFileSync(abs, 'utf8');
@@ -442,7 +442,7 @@ function validateTagShape() {
     // file, not a folder with an index.md), not because a share's tags were meant to be unpoliced. They are
     // now generated programmatically from an AI suggestion, so the backstop matters more than it did when
     // every share tag was hand-typed by the one person who knew the rule.
-    const isContentItem = /^(members\/[^/]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/.test(rel);
+    const isContentItem = /^(members\/[^/]+|house)\/(posts|projects|products|prompts)\/[^/]+\/index\.md$/.test(rel);
     const isShare = /^members\/[^/]+\/shares\/[^/]+\.md$/.test(rel);
     if (!isContentItem && !isShare) continue;
     let fm;

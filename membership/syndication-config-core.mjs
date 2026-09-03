@@ -97,7 +97,7 @@ export function channelCapability(name) { return CHANNEL_CAPABILITY[name] ?? 'bu
 // on/off/popular per (type, channel) for every channel they see in the UI, including X (manual-assist). The
 // `auto` subset drives the drain's adapter posts + the per-channel delay; a `manual` channel that is `on`
 // enqueues a Social Queue task instead. `building` channels (no adapter, e.g. LinkedIn) are excluded.
-export const AUTO_TYPES = Object.freeze(['share', 'post', 'product', 'prompt']);
+export const AUTO_TYPES = Object.freeze(['share', 'post', 'project', 'prompt']);
 export const AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === 'auto'));
 export const MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== 'building'));
 // The per-cell auto-share mode. `off` = never; `on` = On-Automatic (auto-enqueue at publish; the adapter
@@ -141,7 +141,7 @@ export const DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-body', 'hashnode-footer', 'hashnode-stub']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'project', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-body', 'hashnode-footer', 'hashnode-stub']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // sow-180: a SHARE is somebody else's link, so its default is CONTENT-first with NO member credit (unlike the
@@ -172,9 +172,9 @@ const DEFAULT_HASHNODE_INTRO = '**By [{fullName}]({member-url}), GBTI Network Me
 const DEFAULT_DEVTO_BODY = '{body}';
 // The CTA appended to EVERY dev.to post, full and stub alike (owner-authored, mirroring the Reddit
 // first-comment closing).
-const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
+const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 // SOW-088 + side-quest 2026-07-16: the Reddit first comment credits the poster. It uses {short-description}
-// (which BOTH content items and SHARES carry) rather than {author-note-italic} (a posts/products/prompts-only
+// (which BOTH content items and SHARES carry) rather than {author-note-italic} (a posts/projects/prompts-only
 // intro), so it also fires for a share; the popup's _redditStored guard blanks a comment that references the
 // author note when none exists, which is why a share got no crediting comment before.
 // The first comment credits the member's Reddit username when their profile lists one ({member-reddit-handle}
@@ -196,7 +196,7 @@ const DEFAULT_REDDIT_COMMENT = '{author-note-attributed}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT, // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,
-  product: DEFAULT_FORMAT,
+  project: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
   'reddit-body': DEFAULT_REDDIT_BODY,
   'reddit-comment': DEFAULT_REDDIT_COMMENT,
@@ -223,7 +223,7 @@ const SHARE_STUB_FORMAT = 'A members-only link on the GBTI Network: "{title}". {
 export const DEFAULT_STUB_TEMPLATES = Object.freeze({
   share: SHARE_STUB_FORMAT, // sow-180: content-first, no member credit
   post: STUB_FORMAT,
-  product: STUB_FORMAT,
+  project: STUB_FORMAT,
   prompt: STUB_FORMAT,
   'reddit-body': '{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}',
   'devto-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.',
@@ -253,20 +253,20 @@ const MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}".
 const DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 const DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}'; // sow-180: no member credit
 export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-  discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
-  'discord-category': Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
-  reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
+  'discord-category': Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+  reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
-  devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
   // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
   // its members stub is sentence-shaped like the other manual channels.
-  hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
-  x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
-  linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
-  dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }), // SOW-135
-  bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
-  mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB }),
+  hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+  x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, project: X_STUB, prompt: X_STUB }),
+  linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, project: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
+  dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }), // SOW-135
+  bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+  mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB }),
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({

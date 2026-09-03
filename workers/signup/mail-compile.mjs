@@ -36,7 +36,7 @@ const MAIL_ISSUE_PREFIX = 'mail:issue:';
 // unsubscribed from yet. This widens the INAUGURAL issue ONLY; every later issue stays weekly via the rolling
 // floor + exclude below, which do not read this constant.
 const BOOTSTRAP_MS = 90 * 24 * 3600 * 1000;
-const MEMBER_SECTION_KEYS = ['article', 'product', 'prompt', 'share'];
+const MEMBER_SECTION_KEYS = ['article', 'project', 'prompt', 'share'];
 
 /**
  * The prior frozen issue ids, canonical `weekly-YYYY-MM-DD` shape only, strictly before currentIssueId. Enumerates

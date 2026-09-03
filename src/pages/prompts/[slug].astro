@@ -61,7 +61,7 @@ const linkLabel = (l: { type: string; label?: string }) => l.label ?? LINK_LABEL
 // Canonical URL for the unified share control (ContentActions -> ShareRow builds the per-platform links).
 const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
 
-// sow-183: the owner/superadmin Edit affordance, matching the product page's hero pill. The href is public
+// sow-183: the owner/superadmin Edit affordance, matching the project page's hero pill. The href is public
 // build-time data; only visibility is a runtime decision (this page's own script block, below).
 const editPath = contentRepoPath('prompt', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(editPath)}` : null;
@@ -251,7 +251,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
   </style>
 
   <script>
-    // sow-183: the owner/superadmin Edit pill. See products/[slug].astro / src/lib/content.ts for the shared pattern.
+    // sow-183: the owner/superadmin Edit pill. See projects/[slug].astro / src/lib/content.ts for the shared pattern.
     import { wireEditAffordance } from '../../lib/content';
     wireEditAffordance('[data-detail-edit]', 'data-detail-owner');
 

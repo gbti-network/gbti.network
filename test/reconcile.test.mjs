@@ -312,7 +312,7 @@ test('resubscribed (paid) member gets the member role and their drafts stay draf
       files: [
         file('members/rhea/profile.md', 'draft'),
         file('members/rhea/posts/p/index.md', 'draft'),
-        file('members/rhea/products/q/index.md', 'published'), // already published, skip
+        file('members/rhea/projects/q/index.md', 'published'), // already published, skip
       ],
     },
   };

@@ -6,7 +6,9 @@
 // SOW-042: 'all' is the cross-type directory tab (browse.html#tab=all). buildReadHash is never called with 'all'
 // (feed rows always deep-link a concrete type), so its 'post' fallback is unaffected; parseBrowseHash recognizing
 // 'all' lets the rail's "All" link + the gbti-browse All tab round-trip.
-const TAB_IDS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news']);
+import { canonicalType } from './content-types.mjs';
+
+const TAB_IDS = new Set(['all', 'post', 'project', 'prompt', 'share', 'news']);
 
 // SOW-114: the bounded force-action set a deep-link may carry (do=). The public content pages send
 // do=favorite|collect through the SOW-036 relay so a click on the site's inert Favorite/Save lands in the
@@ -17,7 +19,7 @@ const DO_ACTIONS = new Set(['favorite', 'collect']);
  *  Falls back to a tab-only hash when there is no path (so the row still lands on the right Browse tab).
  *  SOW-114: an optional third arg appends a bounded force-action (do=favorite|collect). */
 export function buildReadHash(type, path, doAction) {
-  const t = TAB_IDS.has(type) ? type : 'post';
+  const t = TAB_IDS.has(canonicalType(type)) ? canonicalType(type) : 'post'; // sow-196
   if (!path) return `tab=${t}`;
   const act = DO_ACTIONS.has(doAction) ? `&do=${doAction}` : '';
   return `tab=${t}&read=${encodeURIComponent(path)}${act}`;
@@ -32,7 +34,10 @@ export function parseBrowseHash(hash) {
   const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
   const readM = s.match(/(?:^|&)read=([^&]+)/);
   const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
-  const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+  // sow-196: a #type=product / tab=product deep link, emitted for months and now bookmarked and
+  // syndicated, must still resolve. Unresolved it falls through to a default view with no explanation.
+  const tabC = tabM ? canonicalType(tabM[1]) : null;
+  const tab = tabC && TAB_IDS.has(tabC) ? tabC : null;
   let read = null;
   if (readM) {
     try { read = decodeURIComponent(readM[1]); } catch { read = readM[1]; }

@@ -21,7 +21,7 @@ export function flattenTree(tree, parentPath = []) {
  *  (each carries a full `categories` path). Keys are path joins ('devops/frameworks'). Zero-item nodes get 0. */
 export function countRollup(tree, itemsByType = {}) {
   const nodes = flattenTree(tree);
-  const counts = new Map(nodes.map((n) => [n.path.join('/'), { post: 0, prompt: 0, product: 0, total: 0 }]));
+  const counts = new Map(nodes.map((n) => [n.path.join('/'), { post: 0, prompt: 0, project: 0, total: 0 }]));
   for (const [type, items] of Object.entries(itemsByType)) {
     for (const it of items || []) {
       const cats = Array.isArray(it?.categories) ? it.categories : [];

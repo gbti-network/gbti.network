@@ -16,7 +16,7 @@ import { parseContentFile, serializeContentFile } from '../client/src/content-op
 import { createGitHubClient } from '../clients/github.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TYPES = ['posts', 'products', 'prompts'];
+const TYPES = ['posts', 'projects', 'products', 'prompts'];
 
 /** Walk every content item (house + members) -> [{ path, frontmatter, body }]. */
 export function scanBodies(root) {

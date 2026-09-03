@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-const SEG = { posts: 'articles', products: 'products', prompts: 'prompts' };
+const SEG = { posts: 'articles', projects: 'projects', products: 'projects', prompts: 'prompts' };
 const MEMBERSHIP = '/membership/';
 
 /** Parse the leading YAML frontmatter block, or null. Never throws. */

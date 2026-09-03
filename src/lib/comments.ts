@@ -1,4 +1,11 @@
 import type { CollectionEntry } from 'astro:content';
+import { canonicalType } from '../../membership/content-types.mjs';
+
+// sow-196: the comment collection still ACCEPTS targetType 'product' (see src/content.config.ts), because
+// every comment written before the 2026-09-02 rename carries it and a fork may still be producing them.
+// These readers match on strict equality, so without canonicalizing the stored side a legacy comment
+// detaches from its item and simply stops rendering, with no error and no empty-state to notice.
+const sameType = (stored: string, want: string) => canonicalType(stored) === canonicalType(want);
 
 // The public content repo is the database, so a comment's edit history IS the git history of its file.
 // Link the "edited" affordance straight to GitHub's per-file commit log (no stored history, no cost).
@@ -18,13 +25,13 @@ export function commitHistoryHref(filePath?: string): string | null {
  */
 export function commentThreadCount(
   comments: CollectionEntry<'comment'>[],
-  targetType: 'post' | 'product' | 'prompt' | 'share',
+  targetType: 'post' | 'project' | 'prompt' | 'share',
   targetSlug: string,
   owner?: string,
 ): number {
   const published = comments
     .filter((c) => c.data.status === 'published')
-    .filter((c) => c.data.targetType === targetType && c.data.targetSlug === targetSlug)
+    .filter((c) => sameType(c.data.targetType, targetType) && c.data.targetSlug === targetSlug)
     .sort((a, b) => a.data.createdAt.valueOf() - b.data.createdAt.valueOf());
   const introIdx = owner ? published.findIndex((c) => c.data.author === owner && c.data.visibility === 'public' && c.data.authorNote) : -1;
   const thread = (introIdx >= 0 ? published.filter((_, i) => i !== introIdx) : published)
@@ -40,7 +47,7 @@ export function commentThreadCount(
  */
 export function hasAuthorNote(
   comments: CollectionEntry<'comment'>[],
-  targetType: 'post' | 'product' | 'prompt' | 'share',
+  targetType: 'post' | 'project' | 'prompt' | 'share',
   targetSlug: string,
   author?: string,
   aliases: string[] = [],
@@ -50,7 +57,7 @@ export function hasAuthorNote(
   return comments.some(
     (c) =>
       c.data.status === 'published' &&
-      c.data.targetType === targetType &&
+      sameType(c.data.targetType, targetType) &&
       slugSet.has(c.data.targetSlug) &&
       c.data.author === author &&
       c.data.visibility === 'public' &&

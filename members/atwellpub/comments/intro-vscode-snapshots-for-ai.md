@@ -2,7 +2,7 @@
 type: comment
 id: intro-vscode-snapshots-for-ai
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: vscode-snapshots-for-ai
 status: published
 visibility: public

@@ -7,10 +7,10 @@ import { BANNER_PRESET_KEYS } from './lib/banner-presets.mjs';
  * These same definitions are reused by SOW-003 (CI validation) and SOW-005 (the gate).
  *
  * Repository layout (content lives at the PROJECT ROOT, not under src/):
- *   members/<username>/{profile.md, posts/, products/, prompts/, images/}
- *   house/{posts/, products/, prompts/, pages/, images/}
+ *   members/<username>/{profile.md, posts/, projects/, prompts/, images/}
+ *   house/{posts/, projects/, prompts/, pages/, images/}
  *
- * The blog / products / prompts collections are the AGGREGATE of every member folder
+ * The blog / projects / prompts collections are the AGGREGATE of every member folder
  * plus house/, achieved with multi-pattern glob loaders rooted at the project base.
  *
  * Two independent concerns (do not conflate):
@@ -43,10 +43,10 @@ const contributors = z
   )
   .default([]);
 
-// SOW-014: typed, visibility-tagged outbound links for products + prompts. `visibility: members`
+// SOW-014: typed, visibility-tagged outbound links for projects + prompts. `visibility: members`
 // links are rendered INERT (locked) on the public static site (open in the client to unlock); they are
 // NOT a confidentiality control (public-repo encryption is obfuscation, see SOW-014). `primary` marks
-// the CTA in the "Get <product>" card.
+// the CTA in the "Get <project>" card.
 const contentLinks = z
   .array(
     z.object({
@@ -140,11 +140,11 @@ const post = defineCollection({
   }),
 });
 
-// 2. Product — members/<username>/products/<slug>.md (or house/products/<slug>.md)
-// The product field set is factored out so the `applet` collection (SOW-022) reuses it VERBATIM and thus
-// lists/renders identically to a product (the owner's "treat applets as products in the frontmatter").
-const productShape = ({ image }: { image: any }) => ({
-  type: z.literal('product').default('product'),
+// 2. Project — members/<username>/projects/<slug>.md (or house/projects/<slug>.md)
+// The project field set is factored out so the `applet` collection (SOW-022) reuses it VERBATIM and thus
+// lists/renders identically to a project (the owner's "treat applets as projects in the frontmatter").
+const projectShape = ({ image }: { image: any }) => ({
+  type: z.literal('project').default('project'),
   title: z.string(),
   slug: z.string().regex(/^[a-z0-9-]+$/),
   author: z.string(),
@@ -161,55 +161,57 @@ const productShape = ({ image }: { image: any }) => ({
   platforms: z.array(z.string()).default([]),
   pricing: z.enum(['free', 'freemium', 'paid']).optional(),
   version: z.string().optional(),
-  // sow-172: the minimum host/runtime the product needs ("WordPress 6.0+", "VS Code 1.90+"). Distinct
+  // sow-172: the minimum host/runtime the project needs ("WordPress 6.0+", "VS Code 1.90+"). Distinct
   // from `platforms`, which lists WHICH hosts it runs on; this is the version floor for one of them.
   // Rendered as a spec row in the detail page's left rail and in the end-of-body install panel.
   requires: z.string().optional(),
   pricingUrl: z.string().url().optional(), // SOW-014: where to buy/upgrade, shown when pricing !== 'free'
-  // sow-140: the RSS feed of the member-owned product/site. Declaring it does NOTHING by itself: the feed
-  // only reaches the network's news pool once an admin approves the product slug in the admin-owned
+  // sow-140: the RSS feed of the member-owned project/site. Declaring it does NOTHING by itself: the feed
+  // only reaches the network's news pool once an admin approves the project slug in the admin-owned
   // house/member-news-sources.yml registry (moderation boundary; see the ops SOP).
   newsFeed: z.string().url().optional(),
   icon: image(), // REQUIRED, 1:1. The SMALL icon (directory card renders it at 64, shown 56).
   iconLarge: image().optional(), // Optional 1:1 LARGE icon for the 96px detail slot; falls back to `icon`.
   banner: image().optional(),
   // sow-174: an alternative to uploading a banner image. Curated presets only (see banner-presets.mjs for
-  // why); mutually exclusive with `banner` in the editor, resolved by resolveHero() in product-page.mjs.
+  // why); mutually exclusive with `banner` in the editor, resolved by resolveHero() in project-page.mjs.
   bannerPreset: z.enum(BANNER_PRESET_KEYS as [string, ...string[]]).optional(),
   featuredImage: image(), // REQUIRED marquee cover for the Featured-product spotlight. Must be 16:10 (1280x800); the spotlight media box is locked to 16:10 so the image fills it without cropping.
-  // sow-172: a gallery entry is EITHER a bare image path (every product published before captions existed)
-  // OR { src, caption }. Both shapes normalize through normalizeGallery() in src/lib/product-page.mjs, so
+  // sow-172: a gallery entry is EITHER a bare image path (every project published before captions existed)
+  // OR { src, caption }. Both shapes normalize through normalizeGallery() in src/lib/project-page.mjs, so
   // the page never branches on the shape. Captions are content, not decoration: the captioned-grid layout
   // is built around them.
   gallery: z.array(z.union([image(), z.object({ src: image(), caption: z.string().optional() })])).default([]),
   // sow-172: how the screenshots render. Left unset it resolves by count (6+ shots -> carousel, fewer ->
-  // captioned grid), which is the rule the design handoff states in prose; set it to pin one per product.
+  // captioned grid), which is the rule the design handoff states in prose; set it to pin one per project.
   galleryStyle: z.enum(['grid', 'carousel']).optional(),
-  video: z.string().optional(), // YouTube/Vimeo URL or id (embed-only); a product demo rendered by VideoEmbed
+  video: z.string().optional(), // YouTube/Vimeo URL or id (embed-only); a project demo rendered by VideoEmbed
   links: contentLinks, // SOW-014: array of typed, visibility-tagged links (was a flat object)
-  // Which side the .pd-rail Contents sidebar renders on for this product's detail page. Defaults to 'left',
-  // the only behavior that existed before this field -- every product predating it renders identically.
+  // Which side the .pd-rail Contents sidebar renders on for this project's detail page. Defaults to 'left',
+  // the only behavior that existed before this field -- every project predating it renders identically.
   sidebarPosition: z.enum(['left', 'right']).default('right'),
   publishedAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(), // sow-172: last meaningful revision; shown in the byline + rail spec block
   redirectFrom: z.array(z.string()).default([]),
 });
-const product = defineCollection({
-  loader: glob({ base: '.', pattern: ['members/*/products/**/*.md', 'house/products/**/*.{md,mdx}'] }),
-  schema: ({ image }) => z.object(productShape({ image })),
+// sow-196: `products/` stays in the glob alongside `projects/`. It costs one pattern and means an
+// unmigrated fork, or a branch cut before the rename, still builds instead of losing every item silently.
+const project = defineCollection({
+  loader: glob({ base: '.', pattern: ['members/*/projects/**/*.md', 'house/projects/**/*.{md,mdx}', 'members/*/projects/**/*.md', 'house/projects/**/*.{md,mdx}'] }),
+  schema: ({ image }) => z.object(projectShape({ image })),
 });
 
 // 2b. Applet — house/applets/<slug>/index.md ONLY (SOW-022). A self-contained client-side tool. SUPERADMIN-only
 // by construction: the glob excludes member folders entirely, CODEOWNERS makes /house/applets/ superadmin-owned,
 // and the client never offers `applet` as an authorable type, so a member cannot publish one. GBTI does not host
-// member code (a member links out from a normal product instead). Reuses the product field set so applets list +
-// render exactly like products; `icon`/`featuredImage` are OPTIONAL here (the directory falls back to the category
+// member code (a member links out from a normal project instead). Reuses the project field set so applets list +
+// render exactly like projects; `icon`/`featuredImage` are OPTIONAL here (the directory falls back to the category
 // glyph), and `launchUrl` is where the running tool lives (e.g. /utilities/<slug>/ for GBTI's embedded exceptions,
-// or an external URL), playing the same role a product's download/pricing link does.
+// or an external URL), playing the same role a project's download/pricing link does.
 const applet = defineCollection({
   loader: glob({ base: '.', pattern: ['house/applets/**/*.{md,mdx}'] }),
   schema: ({ image }) => z.object({
-    ...productShape({ image }),
+    ...projectShape({ image }),
     type: z.literal('applet').default('applet'),
     icon: image().optional(),
     featuredImage: image().optional(),
@@ -302,7 +304,10 @@ const comment = defineCollection({
     type: z.literal('comment').default('comment'),
     id: z.string(),
     author: z.string(),
-    targetType: z.enum(['post', 'product', 'prompt', 'share', 'news']), // SOW-032: 'share'; SOW-046 D: 'news' discussion
+    // sow-196: 'product' is RETAINED alongside 'project'. Every comment left before the 2026-09-02
+    // rename carries targetType: project, and dropping the value here detaches all of them from
+    // their items with no error anywhere. See membership/content-types.mjs.
+    targetType: z.enum(['post', 'project', 'project', 'prompt', 'share', 'news']), // SOW-032: 'share'; SOW-046 D: 'news' discussion
     targetSlug: z.string(), // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
     status: STATUS.default('published'),
     visibility: VISIBILITY.default('members'), // SOW-044: comments are members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
@@ -351,4 +356,4 @@ const share = defineCollection({
   }),
 });
 
-export const collections = { post, product, applet, profile, page, prompt, comment, share };
+export const collections = { post, project, applet, profile, page, prompt, comment, share };

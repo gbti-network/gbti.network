@@ -14,13 +14,13 @@ test('freezeSnapshot: resolves first/last owner + items + invite from the touch 
   const conv = 100 * day; const windowMs = 90 * day;
   let rec = emptyTouches();
   rec = addTouch(rec, { owner: 'alice', type: 'post', slug: 'a', at: conv - 60 * day });
-  rec = addTouch(rec, { owner: 'bob', type: 'product', slug: 'b', at: conv - 2 * day });
+  rec = addTouch(rec, { owner: 'bob', type: 'project', slug: 'b', at: conv - 2 * day });
   rec = setInvite(rec, 'carol', { now: () => conv - 61 * day });
   const snap = freezeSnapshot({ touchRecord: rec, conversionAt: conv, windowMs });
   assert.equal(snap.firstOwner, 'alice');
   assert.equal(snap.lastOwner, 'bob');
   assert.deepEqual(snap.firstItem, { owner: 'alice', type: 'post', slug: 'a' });
-  assert.deepEqual(snap.lastItem, { owner: 'bob', type: 'product', slug: 'b' });
+  assert.deepEqual(snap.lastItem, { owner: 'bob', type: 'project', slug: 'b' });
   assert.equal(snap.inviter, 'carol');
   assert.deepEqual(snap.points, []); // no collaboration events supplied
 });
@@ -29,9 +29,9 @@ test('END TO END: touch + invite + a collaborator -> freeze -> distribute = 30 /
   const conv = 100 * day; const windowMs = 90 * day;
   let rec = emptyTouches();
   rec = addTouch(rec, { owner: 'alice', type: 'post', slug: 'a', at: conv - 60 * day });   // first
-  rec = addTouch(rec, { owner: 'bob', type: 'product', slug: 'b', at: conv - 2 * day });    // last
+  rec = addTouch(rec, { owner: 'bob', type: 'project', slug: 'b', at: conv - 2 * day });    // last
   rec = setInvite(rec, 'carol');                                                            // invite lane
-  const events = [{ member: 'dana', item: { owner: 'bob', type: 'product', slug: 'b' }, kind: 'comment', at: conv - 1 * day }];
+  const events = [{ member: 'dana', item: { owner: 'bob', type: 'project', slug: 'b' }, kind: 'comment', at: conv - 1 * day }];
   const snap = freezeSnapshot({ touchRecord: rec, conversionAt: conv, windowMs, collaborationEvents: events });
   const d = distributeSnapshot(snap, { eligible: () => true });
   assert.equal(d.shares.alice, 30);
@@ -46,7 +46,7 @@ test('END TO END no-double-dip: an invite from the first-touch owner pays the co
   const conv = 100 * day; const windowMs = 90 * day;
   let rec = emptyTouches();
   rec = addTouch(rec, { owner: 'alice', type: 'post', slug: 'a', at: conv - 30 * day });
-  rec = addTouch(rec, { owner: 'bob', type: 'product', slug: 'b', at: conv - 1 * day });
+  rec = addTouch(rec, { owner: 'bob', type: 'project', slug: 'b', at: conv - 1 * day });
   rec = setInvite(rec, 'alice'); // alice invited them to her own content
   const d = distributeSnapshot(freezeSnapshot({ touchRecord: rec, conversionAt: conv, windowMs }), {});
   assert.equal(d.shares.alice, 30);

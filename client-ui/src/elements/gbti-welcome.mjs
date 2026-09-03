@@ -33,7 +33,7 @@ const DONE_HEADING = 'You are all set';
 // GBTI's own channels (mirrors src/lib/social.ts, the site footer; the extension cannot import site TS).
 // Rendered as a card grid per the design handoff; Follow opens the channel and marks the card followed.
 const GBTI_CHANNELS = [
-  ['reddit', 'Reddit', 'https://www.reddit.com/r/GBTI_network', 'Member articles, products, and prompts syndicate to our community subreddit. Open it and hit Join.', 'r/GBTI_network'],
+  ['reddit', 'Reddit', 'https://www.reddit.com/r/GBTI_network', 'Member articles, projects, and prompts syndicate to our community subreddit. Open it and hit Join.', 'r/GBTI_network'],
   ['x', 'X', 'https://x.com/gbti_network', 'Syndicated member work and network updates, as they publish.', '@gbti_network'],
   ['bluesky', 'Bluesky', 'https://bsky.app/profile/gbti.bsky.social', 'The same syndicated stream on Bluesky.', '@gbti.bsky.social'],
   ['youtube', 'YouTube', 'https://www.youtube.com/@gbti_network', 'Video sessions and walkthroughs from the network.', '@gbti_network'],
@@ -491,7 +491,7 @@ class GbtiWelcome extends GbtiElement {
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>
-        <p>The developer co-op. Sign in with your GitHub account to publish articles, products, and prompts, follow members, read the members-only news, and join the community.</p>
+        <p>The developer co-op. Sign in with your GitHub account to publish articles, projects, and prompts, follow members, read the members-only news, and join the community.</p>
       </div>
       <div class="card">
         ${expired}${action}
@@ -704,7 +704,7 @@ class GbtiWelcome extends GbtiElement {
       </div>`;
     }).join('');
     return `
-      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours. Following these channels will help build the network's reach.</p>
+      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and projects through these, including yours. Following these channels will help build the network's reach.</p>
       <div class="grid">${cards}</div>`;
   }
 
@@ -742,7 +742,7 @@ class GbtiWelcome extends GbtiElement {
   }
 
   _membersCard() {
-    const intro = `<p class="intro">Following a member alerts you when they publish new articles, prompts, and products in your feed.</p>`;
+    const intro = `<p class="intro">Following a member alerts you when they publish new articles, prompts, and projects in your feed.</p>`;
     // SOW-060: following is a FREE perk for any signed-in member, so there is no paywall state here. A null follow
     // list means a transient read failure (or a stale/missing KV overrides mirror for a since-banned account), not
     // a membership gate, so show a retry, never an upgrade prompt.

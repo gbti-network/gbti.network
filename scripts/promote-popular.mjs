@@ -73,14 +73,14 @@ export function selectPromotions({ items = [], opens = {}, favorites = {}, upvot
   return out;
 }
 
-/** List every published member content path (posts/products/prompts index.md + shares .md) under the repo. */
+/** List every published member content path (posts/projects/prompts index.md + shares .md) under the repo. */
 function listContentPaths(root) {
   const out = [];
   const membersDir = path.join(root, 'members');
   let members = [];
   try { members = fs.readdirSync(membersDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return out; }
   for (const u of members) {
-    for (const sub of ['posts', 'products', 'prompts']) {
+    for (const sub of ['posts', 'projects', 'products', 'prompts']) {
       const dir = path.join(membersDir, u, sub);
       let slugs = [];
       try { slugs = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { slugs = []; }

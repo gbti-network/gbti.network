@@ -130,7 +130,7 @@ function trackUrl(url, links, content) {
   // external url is rewritten, and it is deliberate: the owner elected on 2026-08-24 to count news clicks,
   // because which curated sources actually get read is the most useful thing the digest can tell us.
   // The utm tags STAY on the underlying url regardless. An email cannot be retagged after it is sent, so a
-  // product that can read them later still gets a complete history from today onward.
+  // project that can read them later still gets a complete history from today onward.
   // The slot hashes the PLAIN absolute url, because that is what the route rebuilds from the frozen issue.
   if (links?.clickBase && links?.campaign) {
     const path = clickPath(links.campaign, content, clickSlot(abs));
@@ -158,9 +158,9 @@ const PALETTES = {
 // public route.
 // SECTION_FEED now lives in mail-click.mjs, imported above: the click route must resolve these exact
 // paths, and a second copy here would drift and silently break those links.
-const COUNT_ORDER = ['article', 'prompt', 'product', 'share', 'news'];
+const COUNT_ORDER = ['article', 'prompt', 'project', 'share', 'news'];
 const COUNT_NOUNS = {
-  article: ['article', 'articles'], prompt: ['prompt', 'prompts'], product: ['product', 'products'],
+  article: ['article', 'articles'], prompt: ['prompt', 'prompts'], project: ['project', 'projects'],
   share: ['member share', 'member shares'], news: ['news pick', 'news picks'],
 };
 const DAY_MS = 24 * 3600 * 1000;
@@ -175,7 +175,7 @@ function plural(n, key) {
 //
 // Owner ruling, 2026-08-24. This replaced a span, which itself replaced a fixed seven days that had been
 // lying: the launch issue selects over ninety days, so an email headed "Aug 17-23" listed prompts from June
-// and products from May, and the owner read it as missing content rather than as a wrong label. A week
+// and projects from May, and the owner read it as missing content rather than as a wrong label. A week
 // number cannot make that mistake, because it labels WHEN the issue was sent and claims nothing about what
 // it reaches back to. What the issue covers is said in words instead, by the note under the greeting and by
 // the empty-section line, where a reader can actually act on it.
@@ -214,7 +214,7 @@ function totalItems(counts) {
 // one sentence and leave the other behind, which is exactly how "this week" survived into a 90-day inbox.
 const BOOTSTRAP_PHRASE = 'in the past 90 days';
 
-// The preheader summary, natural language, non-zero sections only: "4 articles, 2 products and 3 news picks".
+// The preheader summary, natural language, non-zero sections only: "4 articles, 2 projects and 3 news picks".
 // It names the SPAN, and the span is not always a week: a first or welcome issue reaches back 90 days, so a
 // preheader saying "this week" contradicts the header, the launch note and the date range beside it. This was
 // the THIRD hardcoded copy of the cadence in the template and the last one to be found, by reading a delivered
@@ -325,7 +325,7 @@ function sectionHtml(section, p, links) {
   const name = escapeHtml(str(section.label));
   // "Latest Articles", "Latest News" (owner, 2026-08-23). The prefix is applied HERE, to the heading, and
   // NOT to SECTION_LABELS, because that same label is also the feed name in the "See all in the Articles
-  // feed" link below and the type list in the collapsed empty line ("Nothing new in Articles, Products").
+  // feed" link below and the type list in the collapsed empty line ("Nothing new in Articles, Projects").
   // Prefixing at the source would produce "See all in the Latest Articles feed" and "Nothing new in Latest
   // Articles", both of which read as a mistake.
   const heading = escapeHtml(`Latest ${str(section.label)}`);
@@ -383,7 +383,7 @@ function membershipCtaHtml(p, links) {
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:18px">`
-    + `Membership adds comments on any item and the members Discord. Publishing your own prompts, skills and products is part of the Content Creator plan. `
+    + `Membership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the Content Creator plan. `
     + `<a href="${href}" style="color:${p.footerLink};text-decoration:underline">Compare plans</a>`
     + `</div>`
     + `</td></tr></table>`
@@ -579,7 +579,7 @@ export function renderIssue(issue, ctx = {}) {
   const emptyText = empties.length ? `\n\n${emptyPhrase(empties, firstIssue)}` : '';
   // The text-side CTA mirrors the html: one modest line, after all editorial, only when the html renders it.
   const ctaText = showCta
-    ? `\n\nMembership adds comments on any item and the members Discord. Publishing your own prompts, skills and products is part of the Content Creator plan. Compare plans: ${trackUrl('/membership/', links, 'membership-cta')}`
+    ? `\n\nMembership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the Content Creator plan. Compare plans: ${trackUrl('/membership/', links, 'membership-cta')}`
     : '';
 
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n`

@@ -10,8 +10,8 @@
 // (keyed on the content path) remain as layered safety on top of this selection.
 import { execFileSync } from 'node:child_process';
 
-// The same content-path shapes the workflow used before (posts/products/prompts index.md + shares).
-const CONTENT_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+// The same content-path shapes the workflow used before (posts/projects/prompts index.md + shares).
+const CONTENT_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
 const SHARE_RE = /^members\/[a-z0-9][a-z0-9-]*\/shares\/[a-z0-9][a-z0-9._-]*\.(md|mdx)$/;
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 

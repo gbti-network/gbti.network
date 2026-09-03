@@ -53,12 +53,12 @@ export async function requireSuperadminForHouse(ctx) {
 }
 
 
-// SOW-145, retargeted by sow-195: a valid NETWORK content path (the superadmin surface). Posts/products/
+// SOW-145, retargeted by sow-195: a valid NETWORK content path (the superadmin surface). Posts/projects/
 // prompts only, one nested item folder, no traversal. The leading-anchored, char-classed pattern is what
 // rejects `members/gbtilabs/../roles.yml` and anything else that is not a content item, so keep that shape.
 // It used to match `house/<sub>/...`; those folders no longer exist, which is why the WorkBench network
 // scope listed nothing and opening an item failed until this moved.
-export const NETWORK_CONTENT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
+export const NETWORK_CONTENT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|projects|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
 
 
 /** True for a path inside the network's own content folder (the superadmin-gated target). */

@@ -11,7 +11,7 @@ import { toMs } from './all-merge.mjs';
 // ("<b>actor</b> action <target>"). Anything unmapped reads as a plain "published".
 export const NOTIFY_ACTION = {
   article: 'published',
-  product: 'published',
+  project: 'published',
   prompt: 'published',
   share: 'shared',
   news: 'curated',

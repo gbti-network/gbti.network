@@ -99,7 +99,7 @@ test('SOW-050 P3: a Share favorite accepts the composite "<author>/<id>" slug; o
 
 test('SOW-050 P2: filterActivity narrows favorites + collection items to the allowed types, keeps every collection', () => {
   const activity = {
-    favorites: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n1' }, { type: 'product', slug: 'b' }],
+    favorites: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n1' }, { type: 'project', slug: 'b' }],
     collections: [{ id: 'c1', name: 'Mix', items: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n1' }] }],
     updatedAt: 7,
   };
@@ -112,8 +112,8 @@ test('SOW-050 P2: filterActivity narrows favorites + collection items to the all
   assert.equal(shares.collections.length, 1); // the collection is KEPT
   assert.deepEqual(shares.collections[0].items.map((i) => i.slug), ['me/n1']); // its items are narrowed
   // multiple types
-  const pp = filterActivity(activity, ['post', 'product']);
-  assert.deepEqual(pp.favorites.map((f) => f.type).sort(), ['post', 'product']);
+  const pp = filterActivity(activity, ['post', 'project']);
+  assert.deepEqual(pp.favorites.map((f) => f.type).sort(), ['post', 'project']);
 });
 
 test('normalizeActivity drops malformed entries and caps the name length', () => {

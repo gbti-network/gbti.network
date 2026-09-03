@@ -84,11 +84,13 @@ export function aggregateTags(items, n = 9) {
 }
 
 /** The public feed narrows (sow-131 + sow-139 news): route segment -> predicate over a normalized feed item. */
-export const FEED_NARROWS = ['all', 'news', 'network', 'articles', 'products', 'prompts', 'shares'];
+// sow-196: 'products' is RETAINED beside 'projects' so /feeds/products/ still builds as a real route and
+// 301s from the committed redirect rather than 404-ing. It is a live URL in the digest emails already sent.
+export const FEED_NARROWS = ['all', 'news', 'network', 'articles', 'projects', 'projects', 'prompts', 'shares'];
 
 /**
  * Does a feed item belong to a narrow? `all` = everything; `network` = the PUBLICATIONS from across
- * the whole network, member and house alike (articles/products/prompts, no shares; owner QA
+ * the whole network, member and house alike (articles/projects/prompts, no shares; owner QA
  * 2026-07-21 redefined this from the house-only reading); `news` matches NO static item (the News
  * view is client-rendered from the worker, sow-139); the rest match the item's kind. Unknown narrows
  * match nothing (fail closed).
@@ -97,9 +99,9 @@ export function matchesNarrow(item, narrow) {
   switch (narrow) {
     case 'all': return true;
     case 'news': return false;
-    case 'network': return item?.kind === 'article' || item?.kind === 'product' || item?.kind === 'prompt';
+    case 'network': return item?.kind === 'article' || item?.kind === 'project' || item?.kind === 'prompt';
     case 'articles': return item?.kind === 'article';
-    case 'products': return item?.kind === 'product';
+    case 'projects': case 'projects': return item?.kind === 'project';
     case 'prompts': return item?.kind === 'prompt';
     case 'shares': return item?.kind === 'share';
     default: return false;
@@ -109,19 +111,21 @@ export function matchesNarrow(item, narrow) {
 /**
  * sow-192 (homepage v2): the per-tab counts the tabbed feed shows beside each label. Derived purely from
  * the build-time arrays, so counts reflect only what a visitor can open: `contentItems` are the listed
- * articles/products/prompts, `shareItems` are the PUBLIC shares only (members-only shares are aggregated
+ * articles/projects/prompts, `shareItems` are the PUBLIC shares only (members-only shares are aggregated
  * elsewhere and never reach this array), so members-only content is excluded by construction. `news` is
  * deliberately null: the news tab is runtime worker data (sow-139) with no build-time count. `network` is
  * the publications total (no shares), matching matchesNarrow('network').
  */
 export function feedCounts(contentItems = [], shareItems = []) {
-  const c = { article: 0, product: 0, prompt: 0 };
+  const c = { article: 0, project: 0, prompt: 0 };
   for (const it of contentItems) {
-    if (it && (it.kind === 'article' || it.kind === 'product' || it.kind === 'prompt')) c[it.kind]++;
+    if (it && (it.kind === 'article' || it.kind === 'project' || it.kind === 'prompt')) c[it.kind]++;
   }
   const shares = Array.isArray(shareItems) ? shareItems.length : 0;
-  const network = c.article + c.product + c.prompt;
-  return { all: network + shares, news: null, network, articles: c.article, products: c.product, prompts: c.prompt, shares };
+  const network = c.article + c.project + c.prompt;
+  // sow-196: `products` is emitted alongside `projects` with the same value, so the legacy /feeds/products/
+  // route and any caller still reading counts.projects keeps working through the rename.
+  return { all: network + shares, news: null, network, articles: c.article, projects: c.project, products: c.project, prompts: c.prompt, shares };
 }
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

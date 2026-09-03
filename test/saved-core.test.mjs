@@ -5,7 +5,7 @@ import { buildItemIndex, resolveItem, groupFavoritesByType, savedCount, indexFil
 
 test('indexFileFor / typeLabel map content types to their index + label', () => {
   assert.equal(indexFileFor('post'), 'blog-index.json');
-  assert.equal(indexFileFor('product'), 'products-index.json');
+  assert.equal(indexFileFor('project'), 'projects-index.json');
   assert.equal(indexFileFor('prompt'), 'prompts-index.json');
   assert.equal(indexFileFor('bogus'), null);
   assert.equal(typeLabel('post'), 'Articles');
@@ -39,11 +39,11 @@ test('groupFavoritesByType groups in a stable order and drops malformed', () => 
     { type: 'prompt', slug: 'a' },
     { type: 'post', slug: 'b' },
     { type: 'prompt', slug: 'c' },
-    { type: 'product', slug: 'd' },
+    { type: 'project', slug: 'd' },
     null,
     { type: 'post' }, // no slug -> dropped
   ]);
-  assert.deepEqual(groups.map((g) => g.type), ['post', 'product', 'prompt']);
+  assert.deepEqual(groups.map((g) => g.type), ['post', 'project', 'prompt']);
   assert.equal(groups.find((g) => g.type === 'prompt').items.length, 2);
   assert.equal(groups.find((g) => g.type === 'post').items.length, 1);
 });

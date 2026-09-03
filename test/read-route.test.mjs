@@ -28,13 +28,13 @@ function tmpRepoWith(files) {
 test('repo-fs read: reads a published index.md anywhere in the three subtrees (cross-member)', () => {
   const repo = tmpRepoWith({
     'members/alice/posts/hello/index.md': POST,
-    'house/products/thing/index.md': POST.replace('post', 'product').replace('alice', 'gbti'),
+    'house/projects/thing/index.md': POST.replace('post', 'project').replace('alice', 'gbti'),
   });
   const reader = createReader(repo);
   const a = reader.read('members/alice/posts/hello/index.md');
   assert.equal(a.frontmatter.title, 'Hello');
   assert.equal(a.body.trim(), 'Body here');
-  assert.equal(reader.read('house/products/thing/index.md').frontmatter.type, 'product');
+  assert.equal(reader.read('house/projects/thing/index.md').frontmatter.type, 'project');
   fs.rmSync(repo, { recursive: true, force: true });
 });
 
@@ -96,8 +96,8 @@ test('buildReadHash / parseBrowseHash round-trip (SOW-031 feed-row deep link)', 
   assert.equal(hash, `tab=post&read=${encodeURIComponent(p)}`);
   assert.deepEqual(parseBrowseHash('#' + hash), { tab: 'post', read: p, action: null });
   // tab-only when no path
-  assert.equal(buildReadHash('product', null), 'tab=product');
-  assert.deepEqual(parseBrowseHash('tab=product'), { tab: 'product', read: null, action: null });
+  assert.equal(buildReadHash('project', null), 'tab=project');
+  assert.deepEqual(parseBrowseHash('tab=project'), { tab: 'project', read: null, action: null });
   // unknown tab -> null tab (caller defaults to post); a bad type in build falls back to post
   assert.deepEqual(parseBrowseHash('tab=bogus&read=x'), { tab: null, read: 'x', action: null });
   assert.equal(buildReadHash('bogus', p).startsWith('tab=post&read='), true);

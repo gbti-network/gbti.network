@@ -63,7 +63,7 @@ test('planMemberFiles: a PUBLIC Share returns null -> the caller commits a singl
 
 test('planMemberFiles: a public intro (no marker) returns null -> the caller commits the plaintext .md', async () => {
   const id = commentId('2026-01-02T03:04:05Z', 'pub1');
-  const built = buildCommentFile({ username: 'gwen', input: { id, targetType: 'product', targetSlug: 'radle', createdAt: '2026-01-02T03:04:05Z', status: 'published', visibility: 'public', authorNote: true }, body: 'why I built this' });
+  const built = buildCommentFile({ username: 'gwen', input: { id, targetType: 'project', targetSlug: 'radle', createdAt: '2026-01-02T03:04:05Z', status: 'published', visibility: 'public', authorNote: true }, body: 'why I built this' });
   assert.equal(await planMemberFiles({ built, body: 'why I built this', encrypt: fakeEncrypt }), null);
 });
 
@@ -99,8 +99,8 @@ test('coerceCommentInput: a discussion reply is coerced to members; only an auth
   // a plain reply, even if the client asks for public -> members
   assert.equal(coerceCommentInput({ id: 'c1', targetType: 'post', targetSlug: 's', visibility: 'public' }).visibility, 'members');
   // an author-note intro on a post/product/prompt -> public
-  assert.equal(coerceCommentInput({ id: 'c2', targetType: 'product', targetSlug: 's', authorNote: true, visibility: 'public' }).visibility, 'public');
-  assert.equal(coerceCommentInput({ id: 'c2', targetType: 'product', targetSlug: 's', authorNote: true, visibility: 'public' }).authorNote, true);
+  assert.equal(coerceCommentInput({ id: 'c2', targetType: 'project', targetSlug: 's', authorNote: true, visibility: 'public' }).visibility, 'public');
+  assert.equal(coerceCommentInput({ id: 'c2', targetType: 'project', targetSlug: 's', authorNote: true, visibility: 'public' }).authorNote, true);
   // an author-note on a SHARE is never public (SOW-044) -> members
   assert.equal(coerceCommentInput({ id: 'c3', targetType: 'share', targetSlug: 's', authorNote: true, visibility: 'public' }).visibility, 'members');
   // a reply carries its parentId + createdAt through
@@ -114,7 +114,7 @@ const thread = [
   { id: 'b', targetType: 'post', targetSlug: 'hello', status: 'published', visibility: 'public', body: 'second', createdAt: '2026-01-02T00:00:02Z' },
   { id: 'a', targetType: 'post', targetSlug: 'hello', status: 'published', visibility: 'members', body: '', createdAt: '2026-01-02T00:00:01Z' },
   { id: 'c', targetType: 'post', targetSlug: 'other', status: 'published', visibility: 'public', body: 'nope', createdAt: '2026-01-02T00:00:03Z' },
-  { id: 'd', targetType: 'product', targetSlug: 'hello', status: 'published', visibility: 'public', body: 'wrongtype', createdAt: '2026-01-02T00:00:04Z' },
+  { id: 'd', targetType: 'project', targetSlug: 'hello', status: 'published', visibility: 'public', body: 'wrongtype', createdAt: '2026-01-02T00:00:04Z' },
   { id: 'e', targetType: 'post', targetSlug: 'renamed-old', status: 'published', visibility: 'public', body: 'alias', createdAt: '2026-01-02T00:00:05Z' },
   { id: 'f', targetType: 'post', targetSlug: 'hello', status: 'draft', visibility: 'public', body: 'draft', createdAt: '2026-01-02T00:00:06Z' },
 ];
@@ -135,7 +135,7 @@ test('filterThreadComments: an invalid target or missing slug returns empty', ()
 });
 
 test('favoritedFrom: derives favorited from the activity favorites list', () => {
-  const activity = { favorites: [{ type: 'post', slug: 'x' }, { type: 'product', slug: 'y' }] };
+  const activity = { favorites: [{ type: 'post', slug: 'x' }, { type: 'project', slug: 'y' }] };
   assert.equal(favoritedFrom(activity, 'post', 'x'), true);
   assert.equal(favoritedFrom(activity, 'post', 'z'), false);
   assert.equal(favoritedFrom(null, 'post', 'x'), false);
@@ -301,11 +301,11 @@ test('renameOriginOf: resolves an own item of the same type, else null', () => {
     { scope: 'member', username: 'gwen', oldSlug: 'old-slug', oldPath: 'members/gwen/posts/old-slug/index.md' },
   );
   // Case-insensitive username match (the folder is lowercase).
-  assert.ok(renameOriginOf({ path: 'members/gwen/products/x/index.md', username: 'Gwen', type: 'product' }));
+  assert.ok(renameOriginOf({ path: 'members/gwen/projects/x/index.md', username: 'Gwen', type: 'project' }));
   // Another member's path -> null (you may only rename your own) UNLESS allowAnyFolder (sow-183).
   assert.equal(renameOriginOf({ path: 'members/alice/posts/x/index.md', username: 'gwen', type: 'post' }), null);
   // Wrong type (a product path while publishing a post) -> null.
-  assert.equal(renameOriginOf({ path: 'members/gwen/products/x/index.md', username: 'gwen', type: 'post' }), null);
+  assert.equal(renameOriginOf({ path: 'members/gwen/projects/x/index.md', username: 'gwen', type: 'post' }), null);
   // A non-item path (a comment, or house) -> null.
   assert.equal(renameOriginOf({ path: 'members/gwen/comments/intro-x.md', username: 'gwen', type: 'post' }), null);
   assert.equal(renameOriginOf({ path: 'house/posts/x/index.md', username: 'gwen', type: 'post' }), null);
@@ -321,11 +321,11 @@ test('renameOriginOf: allowAnyFolder resolves house/ and any member folder; stil
     { scope: 'house', username: null, oldSlug: 'quarterly-update', oldPath: 'house/posts/quarterly-update/index.md' },
   );
   assert.deepEqual(
-    renameOriginOf({ path: 'members/rfilipo/products/gizmo/index.md', username: 'atwellpub', type: 'product', allowAnyFolder: true }),
-    { scope: 'member', username: 'rfilipo', oldSlug: 'gizmo', oldPath: 'members/rfilipo/products/gizmo/index.md' },
+    renameOriginOf({ path: 'members/rfilipo/projects/gizmo/index.md', username: 'atwellpub', type: 'project', allowAnyFolder: true }),
+    { scope: 'member', username: 'rfilipo', oldSlug: 'gizmo', oldPath: 'members/rfilipo/projects/gizmo/index.md' },
   );
   // Still rejects a mismatched type and a non-item path even with allowAnyFolder.
-  assert.equal(renameOriginOf({ path: 'house/products/gizmo/index.md', type: 'post', allowAnyFolder: true }), null);
+  assert.equal(renameOriginOf({ path: 'house/projects/gizmo/index.md', type: 'post', allowAnyFolder: true }), null);
   assert.equal(renameOriginOf({ path: 'house/roles.yml', type: 'post', allowAnyFolder: true }), null);
 });
 
@@ -340,10 +340,10 @@ test('mergedRedirectFrom: a rename appends + dedupes the old URL; a plain re-pub
     mergedRedirectFrom({ oldFm: { redirectFrom: ['/articles/old/'] }, inputRedirectFrom: [], renaming: true, type: 'post', oldSlug: 'old' }),
     ['/articles/old/'],
   );
-  // Product base.
+  // Project base.
   assert.deepEqual(
-    mergedRedirectFrom({ oldFm: {}, inputRedirectFrom: [], renaming: true, type: 'product', oldSlug: 'gizmo' }),
-    ['/products/gizmo/'],
+    mergedRedirectFrom({ oldFm: {}, inputRedirectFrom: [], renaming: true, type: 'project', oldSlug: 'gizmo' }),
+    ['/projects/gizmo/'],
   );
   // REGRESSION: a plain re-publish (no rename) must PRESERVE the item's existing redirectFrom, not drop it.
   assert.deepEqual(
@@ -355,9 +355,9 @@ test('mergedRedirectFrom: a rename appends + dedupes the old URL; a plain re-pub
 });
 
 test('renameIntroMoveFiles: an intro moves + retargets; no-intro or a note-less type is empty', () => {
-  const introText = serializeContentFile({ id: 'intro-old', targetType: 'product', targetSlug: 'old', authorNote: true, visibility: 'public' }, 'From the author.');
+  const introText = serializeContentFile({ id: 'intro-old', targetType: 'project', targetSlug: 'old', authorNote: true, visibility: 'public' }, 'From the author.');
   const from = { scope: 'member', username: 'gwen' };
-  const files = renameIntroMoveFiles({ from, type: 'product', oldSlug: 'old', newSlug: 'new', introText });
+  const files = renameIntroMoveFiles({ from, type: 'project', oldSlug: 'old', newSlug: 'new', introText });
   assert.equal(files.length, 2);
   assert.equal(files[0].path, 'members/gwen/comments/intro-new.md');
   const movedFm = parseContentFile(files[0].content).frontmatter;
@@ -375,14 +375,14 @@ test('renameIntroMoveFiles: an intro moves + retargets; no-intro or a note-less 
   // A type that cannot carry a note at all is still empty.
   assert.deepEqual(renameIntroMoveFiles({ from, type: 'share', oldSlug: 'old', newSlug: 'new', introText }), []);
   // No existing intro (introText null) -> nothing to move.
-  assert.deepEqual(renameIntroMoveFiles({ from, type: 'product', oldSlug: 'old', newSlug: 'new', introText: null }), []);
+  assert.deepEqual(renameIntroMoveFiles({ from, type: 'project', oldSlug: 'old', newSlug: 'new', introText: null }), []);
 });
 
 // sow-183: a `to` different from `from` moves the intro to the NEW owner's folder (house<->member reassignment),
 // not just a same-folder rename.
 test('renameIntroMoveFiles: a different `to` moves the intro to the new owner (network<->member)', () => {
-  const introText = serializeContentFile({ id: 'intro-gizmo', targetType: 'product', targetSlug: 'gizmo', authorNote: true, visibility: 'public' }, 'From the author.');
-  const houseToMember = renameIntroMoveFiles({ from: { scope: 'house' }, to: { scope: 'member', username: 'atwellpub' }, type: 'product', oldSlug: 'gizmo', newSlug: 'gizmo', introText });
+  const introText = serializeContentFile({ id: 'intro-gizmo', targetType: 'project', targetSlug: 'gizmo', authorNote: true, visibility: 'public' }, 'From the author.');
+  const houseToMember = renameIntroMoveFiles({ from: { scope: 'house' }, to: { scope: 'member', username: 'atwellpub' }, type: 'project', oldSlug: 'gizmo', newSlug: 'gizmo', introText });
   assert.equal(houseToMember[0].path, 'members/atwellpub/comments/intro-gizmo.md');
   assert.equal(houseToMember[1].path, 'members/gbtilabs/comments/intro-gizmo.md'); // sow-195: the network folder, not house/
   const memberToHouse = renameIntroMoveFiles({ from: { scope: 'member', username: 'atwellpub' }, to: { scope: 'house' }, type: 'prompt', oldSlug: 'gizmo', newSlug: 'gizmo', introText });
@@ -404,7 +404,7 @@ const houseItems = [
 
 test('isNetworkPath: matches the network folder only, and no longer the emptied house/ paths', () => {
   assert.equal(isNetworkPath('members/gbtilabs/posts/hello/index.md'), true);
-  assert.equal(isNetworkPath('members/gbtilabs/products/thing/index.md'), true);
+  assert.equal(isNetworkPath('members/gbtilabs/projects/thing/index.md'), true);
   assert.equal(isNetworkPath('members/gbtilabs/prompts/thing/index.md'), true);
   // sow-195: house/ holds no content any more. Matching it is what made the website WorkBench show nothing,
   // so the OLD paths must now be false, not merely unused.

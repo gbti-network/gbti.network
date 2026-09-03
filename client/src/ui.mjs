@@ -62,7 +62,7 @@ export const UI_HTML = `<!doctype html>
     <div class="panel">
       <h2>New content</h2>
       <label>Type</label>
-      <select id="type"><option value="post">Post</option><option value="product">Product</option><option value="prompt">Prompt</option><option value="profile">Profile</option></select>
+      <select id="type"><option value="post">Post</option><option value="project">Project</option><option value="prompt">Prompt</option><option value="profile">Profile</option></select>
       <div id="dynFields"></div>
       <label>Body (Markdown)</label><textarea id="body"></textarea>
       <div class="actions">

@@ -81,16 +81,16 @@
 // issue, and the cost of an over-loose one is the back-catalogue drain described above.
 //
 // Item shape IN (the Worker normalizes activity-index entries + public shares to this):
-//   { kind: 'article'|'product'|'prompt'|'share', title, url, author, authorName?, date: number,
+//   { kind: 'article'|'project'|'prompt'|'share', title, url, author, authorName?, date: number,
 //     visibility: 'public'|'members', ... (any extra fields are dropped by the projection) }
 // News shape IN (the Worker attaches the distinct-opener count):
 //   { title, url, source?, opens?: number, date?: number }
 
-export const SECTION_KINDS = ['article', 'product', 'prompt', 'share'];
+export const SECTION_KINDS = ['article', 'project', 'prompt', 'share'];
 
 // THE PER-SECTION CAPS, AND WHY SHARES GET A BIGGER ONE (owner ruling, sow-297, 2026-08-31). A cap is a
 // ceiling on how much of one week a section can carry, so it has to be read against the ARRIVAL RATE of that
-// section, and the four rates are not alike. Articles, products and prompts land at a handful a month, so a
+// section, and the four rates are not alike. Articles, projects and prompts land at a handful a month, so a
 // cap of five is never reached and is a pure safety rail. Shares land at five to eight a WEEK, so five is a
 // live ceiling: under the weekly window it would silently drop the overflow every busy week, and a dropped
 // item is dropped for good, because next week it is no longer new.
@@ -98,7 +98,7 @@ export const SECTION_KINDS = ['article', 'product', 'prompt', 'share'];
 // So the cap is per KIND rather than one number. Ten is chosen to sit above the observed weekly rate with
 // room, not as a display preference: the point is that the ceiling stops binding, and a section that binds
 // its ceiling loses content invisibly.
-export const DEFAULT_SECTION_CAPS = Object.freeze({ article: 5, product: 5, prompt: 5, share: 10 });
+export const DEFAULT_SECTION_CAPS = Object.freeze({ article: 5, project: 5, prompt: 5, share: 10 });
 
 // THE SECTION CONTRACT (owner ruling, sow-166, 2026-08-21). An issue ALWAYS carries every section. A
 // section with nothing in it is not dropped: it is rendered with a note saying no new member items were
@@ -108,19 +108,19 @@ export const DEFAULT_SECTION_CAPS = Object.freeze({ article: 5, product: 5, prom
 // ORDER, and it REVERSED on 2026-08-23 after the owner read the first delivered issue. It was "the types
 // that have content first, news especially", which put curated third-party links above everything the
 // members wrote. The owner's ruling is that NEWS GOES LAST, and the member types run in the newsletter
-// design handoff's own order (Articles, Prompts, Products, Shares). That is the design and the owner
+// design handoff's own order (Articles, Prompts, Projects, Shares). That is the design and the owner
 // agreeing, where before they disagreed: `sow-166-assets/SOURCE.md` register item 1 recorded the conflict
 // as unresolved precisely because nobody could tell whether the design predated the earlier ruling.
 //
 // `layout` splits on this order: filled sections in it, then empty sections collapsed into ONE trailing
 // line. So the relative order never changes week to week (a reader learns where Prompts sits), News is last
 // among everything visible, and the only thing that moves is the line between published and not.
-export const SECTION_ORDER = ['article', 'prompt', 'product', 'share', 'news'];
+export const SECTION_ORDER = ['article', 'prompt', 'project', 'share', 'news'];
 
 export const SECTION_LABELS = {
   news: 'News',
   article: 'Articles',
-  product: 'Products',
+  project: 'Projects',
   prompt: 'Prompts',
   share: 'Shares',
 };
@@ -145,8 +145,8 @@ export const EMPTY_SECTION_NOTES = {
   news: 'No news items have been added since the last issue.',
   article:
     'No new articles have been published since the last issue. The blog runs on what members write, so a draft you have been sitting on would land well here.',
-  product:
-    'No new products since the last issue. If you have shipped something recently, adding it to the directory takes a few minutes.',
+  project:
+    'No new projects since the last issue. If you have shipped something recently, adding it to the directory takes a few minutes.',
   prompt:
     'No new prompts since the last issue. If you have one you reach for often, it will probably work for somebody else too.',
   share:
@@ -252,7 +252,7 @@ function publicItem(it) {
     // TWO NAMES ADDED 2026-08-23, AND THE GUARD IS NOT WIDENED BEYOND THEM.
     //
     // `blurb` is the item's PUBLIC FRONTMATTER description and nothing else: post.excerpt,
-    // product.shortDescription, prompt.shortDescription, share.shortDescription. It is author-written, length
+    // project.shortDescription, prompt.shortDescription, share.shortDescription. It is author-written, length
     // capped by the content schema, and already served in the HTML of every item page. It is NOT derived from
     // a body, and there is deliberately no fallback that could reach one.
     //
@@ -272,7 +272,7 @@ function publicItem(it) {
     // the delivered issue on 2026-08-24 carried the same prompt banner FIVE times in one section, which reads
     // as a rendering fault rather than as branding. A row with no image is a clean single-column row, which
     // the template already supports, so dropping it costs nothing and the repetition goes away.
-    // Applied to every content type, not only prompts. It is a no-op for posts and products today (all 40 and
+    // Applied to every content type, not only prompts. It is a no-op for posts and projects today (all 40 and
     // all 11 carry their own image), and it does the right thing the day one of them does not.
     thumb: isGenericBanner(it.thumb) ? null : trimOrNull(it.thumb),
   };
@@ -336,7 +336,7 @@ function resolveSectionCaps(perSection) {
   if (perSection == null) return { ...DEFAULT_SECTION_CAPS };
   if (typeof perSection !== 'object') {
     const n = capNum(perSection);
-    return { article: n, product: n, prompt: n, share: n };
+    return { article: n, project: n, prompt: n, share: n };
   }
   const has = (k) => Object.prototype.hasOwnProperty.call(perSection, k) && perSection[k] != null;
   const fallbackFor = (k) => (has('default') ? capNum(perSection.default) : DEFAULT_SECTION_CAPS[k]);
@@ -483,7 +483,7 @@ export function composeIssue(
     // tolerance the producer does not need and quietly excluding a near-miss that is a different item.
     .filter((it) => excluded === null || !excluded.has(it.url));
 
-  const sections = { article: [], product: [], prompt: [], share: [] };
+  const sections = { article: [], project: [], prompt: [], share: [] };
   for (const it of publicItems) {
     if (Object.prototype.hasOwnProperty.call(sections, it.kind)) sections[it.kind].push(it);
   }
@@ -503,7 +503,7 @@ export function composeIssue(
 
   const counts = {
     article: sections.article.length,
-    product: sections.product.length,
+    project: sections.project.length,
     prompt: sections.prompt.length,
     share: sections.share.length,
     news: topNews.length,

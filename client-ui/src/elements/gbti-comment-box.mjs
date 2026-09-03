@@ -83,7 +83,7 @@ class GbtiCommentBox extends GbtiElement {
     // comment is a from-the-author intro (authorNote), and only on a post/product/prompt — never on a Share. So
     // the author-note checkbox is the sole public path, shown only for those targets in compose mode. Edit mode
     // preserves the comment's existing audience (it only changes the body).
-    const isIntroTarget = ['post', 'product', 'prompt'].includes(this._target().type);
+    const isIntroTarget = ['post', 'project', 'prompt'].includes(this._target().type);
     const noteRow = (!edit && isIntroTarget)
       ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>`
       : '';
@@ -110,7 +110,7 @@ class GbtiCommentBox extends GbtiElement {
     const t = this._target();
     // A checked author-note on a post/product/prompt is the public intro; everything else is members-only. The
     // server (publishComment) coerces independently, so this only sets the UX-correct intent.
-    const authorNote = !!this.$('[data-authornote]')?.checked && ['post', 'product', 'prompt'].includes(t.type);
+    const authorNote = !!this.$('[data-authornote]')?.checked && ['post', 'project', 'prompt'].includes(t.type);
     const visibility = authorNote ? 'public' : 'members';
     wrap?.classList.add('busy');
     try {

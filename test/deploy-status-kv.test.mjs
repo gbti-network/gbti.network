@@ -15,15 +15,15 @@ const NOW = new Date('2026-08-06T02:00:00Z');
 test('contentPathsChanged classifies changed paths, dedupes, and skips non-content/share paths', () => {
   const items = contentPathsChanged([
     'house/posts/my-post/index.md',
-    'members/alice/products/widget/index.md',
-    'members/alice/products/widget/index.md', // duplicate, same push touching two files under one item
+    'members/alice/projects/widget/index.md',
+    'members/alice/projects/widget/index.md', // duplicate, same push touching two files under one item
     'members/alice/shares/2026-x.md', // shares have no public page, excluded
     'house/roles.yml', // governance, not content
     'README.md',
   ]);
   assert.deepEqual(items, [
     { type: 'post', slug: 'my-post' },
-    { type: 'product', slug: 'widget' },
+    { type: 'project', slug: 'widget' },
   ]);
 });
 
@@ -79,15 +79,15 @@ test('writeWatermark PUTs the SHA as the raw body', async () => {
 test('markPendingDeploy PUTs one key per item with the TTL query param and a startedAt body', async () => {
   const puts = [];
   const fetchImpl = async (url, opts) => { puts.push({ url, opts }); return { ok: true }; };
-  const items = [{ type: 'post', slug: 'a' }, { type: 'product', slug: 'b' }];
+  const items = [{ type: 'post', slug: 'a' }, { type: 'project', slug: 'b' }];
   const r = await markPendingDeploy(items, { env: CREDS, fetchImpl, now: NOW });
   assert.equal(r.written, true);
   assert.equal(puts.length, 2);
   assert.match(puts[0].url, /values\/pendingdeploy%3Apost%3Aa\?expiration_ttl=600$/);
-  assert.match(puts[1].url, /values\/pendingdeploy%3Aproduct%3Ab\?expiration_ttl=600$/);
+  assert.match(puts[1].url, /values\/pendingdeploy%3Aproject%3Ab\?expiration_ttl=600$/);
   assert.deepEqual(JSON.parse(puts[0].opts.body), { startedAt: '2026-08-06T02:00:00.000Z' });
   assert.deepEqual(r.marked, [
-    'pendingdeploy:post:a', 'pendingdeploy:product:b',
+    'pendingdeploy:post:a', 'pendingdeploy:project:b',
   ]);
 });
 

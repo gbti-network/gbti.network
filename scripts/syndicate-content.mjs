@@ -55,7 +55,7 @@ function loadMembersIndex(root) {
 function channelMapFromEnv(env) {
   return {
     post: env.DISCORD_CHANNEL_POSTS || null,
-    product: env.DISCORD_CHANNEL_PRODUCTS || null,
+    project: env.DISCORD_CHANNEL_PRODUCTS || null,
     prompt: env.DISCORD_CHANNEL_PROMPTS || null,
     share: env.DISCORD_CHANNEL_SHARES || null,
   };

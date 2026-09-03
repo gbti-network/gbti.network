@@ -18,7 +18,7 @@ function writeItem(root, rel, frontmatter, body = 'hello') {
 function fixtureRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-drafts-'));
   writeItem(root, 'members/alice/posts/my-wip/index.md', { title: 'My WIP', status: 'draft', visibility: 'public' });
-  writeItem(root, 'members/alice/products/shipped/index.md', { title: 'Shipped', status: 'published' });
+  writeItem(root, 'members/alice/projects/shipped/index.md', { title: 'Shipped', status: 'published' });
   writeItem(root, 'members/Bob/prompts/secret-prompt/index.md', { title: 'Secret Prompt', status: 'draft', visibility: 'members' });
   writeItem(root, 'members/carol/posts/unindexed/index.md', { title: 'Carol', status: 'draft' }); // NOT in members-index
   writeItem(root, 'house/posts/airllm/index.md', { title: 'AirLLM', status: 'draft' });

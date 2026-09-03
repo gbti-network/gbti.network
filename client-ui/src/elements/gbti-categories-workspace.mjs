@@ -15,8 +15,8 @@ import {
 } from '../categories-core.mjs';
 
 const SITE = 'https://gbti.network';
-const INDEXES = { post: 'blog-index.json', prompt: 'prompts-index.json', product: 'products-index.json' };
-const TYPE_LABEL = { post: 'Articles', prompt: 'Prompts', product: 'Products' };
+const INDEXES = { post: 'blog-index.json', prompt: 'prompts-index.json', project: 'projects-index.json' };
+const TYPE_LABEL = { post: 'Articles', prompt: 'Prompts', project: 'Projects' };
 const CB_PER = 6;
 
 const CSS = `
@@ -171,7 +171,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
   connectedCallback() {
     this._tree = null;       // taxonomy tree ({key:{label,children}})
     this._pool = null;       // [{category, channelId}]
-    this._items = null;      // {post:[], prompt:[], product:[]} from the index JSONs
+    this._items = null;      // {post:[], prompt:[], project:[]} from the index JSONs
     this._counts = null;     // Map pathKey -> counts
     this._sel = null;        // selected path array or null (empty state)
     this._collapsed = new Set();
@@ -329,7 +329,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
     const label = this.labelOf(path);
     const lvl = path.length === 1 ? 'Top level' : node.children && Object.keys(node.children).length ? 'Subcategory' : 'Leaf';
     const crumb = [`<b data-desel>Taxonomy</b>`, ...path.slice(0, -1).map((k, i) => `<b data-crumb="${esc(path.slice(0, i + 1).join('/'))}">${esc(this.labelOf(path.slice(0, i + 1)))}</b>`)].join(' / ');
-    const c = this._counts?.get(path.join('/')) || { post: 0, prompt: 0, product: 0, total: 0 };
+    const c = this._counts?.get(path.join('/')) || { post: 0, prompt: 0, project: 0, total: 0 };
     const kids = Object.entries(node.children || {});
     const editor = `
       <div class="card">
@@ -364,7 +364,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
           <div class="stat accent"><div class="n">${kids.length}</div><div class="l">Subcategories</div></div>
           <div class="stat"><div class="n">${c.post}</div><div class="l">Articles</div></div>
           <div class="stat"><div class="n">${c.prompt}</div><div class="l">Prompts</div></div>
-          <div class="stat"><div class="n">${c.product}</div><div class="l">Products</div></div>
+          <div class="stat"><div class="n">${c.project}</div><div class="l">Projects</div></div>
         </div>
         <div class="card">${this._browserHtml(path)}</div>
       </div>`;

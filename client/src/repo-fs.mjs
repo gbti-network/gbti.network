@@ -11,8 +11,8 @@ import { parseContentFile, shareSummary, byShareNewest, commentSummary, byCommen
 import { rolesFromText } from './roles.mjs';
 import { isReadablePath } from '../../src/lib/content-index.mjs';
 
-const SUBDIR = Object.freeze({ post: 'posts', product: 'products', prompt: 'prompts' });
-const TYPES = ['post', 'product', 'prompt', 'profile'];
+const SUBDIR = Object.freeze({ post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' });
+const TYPES = ['post', 'project', 'prompt', 'profile'];
 
 /** Reject a path that escapes the repo root (traversal, backslash, absolute). */
 function safeRel(relPath) {
@@ -112,7 +112,7 @@ export function createReader(repoPath) {
         for (const e of entries) {
           const full = path.join(dir, e.name);
           if (e.isDirectory()) walk(full);
-          else if (/\.(md|mdx)$/.test(e.name) && /\/(posts|products|prompts)\//.test(full.split(path.sep).join('/'))) {
+          else if (/\.(md|mdx)$/.test(e.name) && /\/(posts|projects|products|prompts)\//.test(full.split(path.sep).join('/'))) {
             const { frontmatter } = parseContentFile(fs.readFileSync(full, 'utf8'));
             if (frontmatter.visibility === 'members') {
               out.push({
@@ -205,7 +205,7 @@ export function createReader(repoPath) {
     /**
      * SOW-031: read ANY published content index.md for the in-extension reader (parity with the extension
      * github-reader.read). Unlike get() (own-folder-scoped for editing), this is a cross-member READ over the
-     * local clone, gated by the SAME isReadablePath allowlist the extension uses (only posts/products/prompts
+     * local clone, gated by the SAME isReadablePath allowlist the extension uses (only posts/projects/prompts
      * index.md, no traversal, no roles.yml / house/pages) so the npm host is not a broader file oracle than the
      * extension. Synchronous (local fs); returns { path, frontmatter, body } or null.
      */

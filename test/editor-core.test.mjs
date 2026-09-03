@@ -57,9 +57,9 @@ test('mediaSummary: post counts its one cover', () => {
 });
 
 test('mediaSummary: product counts icon + featuredImage + banner', () => {
-  assert.equal(mediaSummary('product', { icon: 'a.png', featuredImage: 'b.png', banner: 'c.png' }), '3 images');
-  assert.equal(mediaSummary('product', { icon: 'a.png' }), '1 image');
-  assert.equal(mediaSummary('product', {}), '');
+  assert.equal(mediaSummary('project', { icon: 'a.png', featuredImage: 'b.png', banner: 'c.png' }), '3 images');
+  assert.equal(mediaSummary('project', { icon: 'a.png' }), '1 image');
+  assert.equal(mediaSummary('project', {}), '');
 });
 
 test('mediaSummary: prompt counts its one image; unknown type -> empty', () => {

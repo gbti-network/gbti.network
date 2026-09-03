@@ -15,7 +15,7 @@ import { putKvJson } from './kv-mirror.mjs';
 
 export const REPO_DRAFTS_KV_KEY = 'repo-drafts:index';
 
-const TYPE_DIRS = Object.freeze({ posts: 'post', products: 'product', prompts: 'prompt' });
+const TYPE_DIRS = Object.freeze({ posts: 'post', projects: 'project', products: 'project', prompts: 'prompt' });
 
 /** Read + parse ONLY the YAML frontmatter block of a content file, tolerant of a not-fully-valid draft. */
 function readFrontmatter(abs) {
@@ -92,7 +92,7 @@ function collectDrafts(root, base, owner, githubId, out) {
 /**
  * Walk the repo for every `status: draft` content item. Returns a stable, path-sorted array of
  * { path, type, slug, owner, title, visibility }. `owner` is the member login (lowercased) or 'house'.
- * Governance / non-content paths never match (only posts/products/prompts item folders are walked). Pure.
+ * Governance / non-content paths never match (only posts/projects/prompts item folders are walked). Pure.
  */
 export function buildRepoDraftsIndex(root) {
   const out = [];

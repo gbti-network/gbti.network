@@ -133,7 +133,10 @@ export function decideCustomer(existingCustomer) {
  * safe: a bad/spoofed via just yields no attribution, the owner keeps their share). It is NOT the earner key,
  * only the content pointer: the earner is `referred_by` (the content author's github_id), set independently.
  */
-const VIA_RE = /^(post|product|prompt):[a-z0-9-]+$/;
+// sow-196: `product` MUST STAY here. `?via=product:<slug>` is baked into referral links already published
+// and syndicated, which cannot be edited. Drop the alternative and every one of those visits stops
+// recording a touch, so the member who earned the referral silently stops being credited for it.
+const VIA_RE = /^(post|project|product|prompt):[a-z0-9-]+$/;
 export function normalizeVia(via) {
   if (!via) return null;
   const v = String(via).trim().slice(0, 200);

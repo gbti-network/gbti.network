@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Enrich migrated products with real data from the production DB: GitHub repo link, banner image,
+// Enrich migrated projects with real data from the production DB: GitHub repo link, banner image,
 // and download URL. Banner images are copied from the local media library. Idempotent.
 //   node scripts/extract-product-media.mjs          # dry run
 //   node scripts/extract-product-media.mjs --write
@@ -40,7 +40,7 @@ function parseTuples(blob) {
   return rows;
 }
 
-// wp_posts: products (type github_product) -> slug
+// wp_posts: projects (type github_product) -> slug
 const slugById = new Map();
 for (const blob of valuesBlobs('wp_posts')) for (const r of parseTuples(blob)) {
   if (r[20] === 'github_product') slugById.set(r[0], r[11]);
@@ -62,7 +62,7 @@ function attachmentFilename(id) {
   const m = new RegExp(`\\(${id},\\d+,'[^']*','[^']*','','([^']*\\.(?:png|jpe?g|webp|gif))'`, 'i').exec(SQL);
   return m ? m[1] : null;
 }
-// wp_postmeta: collect media keys per product id
+// wp_postmeta: collect media keys per project id
 const KEYS = new Set(['_github_repo', '_github_repo_banner', '_github_download_button_url']);
 const pm = new Map();
 for (const blob of valuesBlobs('wp_postmeta')) for (const r of parseTuples(blob)) {
@@ -84,8 +84,8 @@ const rows = [];
 for (const [pid, slug] of slugById) {
   const meta = pm.get(pid);
   if (!meta) continue;
-  const dir = path.join(ROOT, 'house/products', slug);
-  if (!fs.existsSync(path.join(dir, 'index.md'))) continue; // only our migrated products
+  const dir = path.join(ROOT, 'house/projects', slug);
+  if (!fs.existsSync(path.join(dir, 'index.md'))) continue; // only our migrated projects
 
   const repo = meta._github_repo ? `https://github.com/${meta._github_repo}` : null;
   const download = meta._github_download_button_url || null;
@@ -116,5 +116,5 @@ for (const [pid, slug] of slugById) {
   }
 }
 
-console.log(`${WRITE ? 'WROTE' : 'DRY RUN'} media for ${rows.length} product(s).`);
+console.log(`${WRITE ? 'WROTE' : 'DRY RUN'} media for ${rows.length} project(s).`);
 console.table(rows);

@@ -105,8 +105,8 @@ test('applyFollow: a notify payload on an already-followed member UPDATES the ma
 
 test('applyFollowNotify: edits an existing follow, throws when not following', () => {
   let f = applyFollow(emptyFollows(), { username: 'alice', on: true }, { now });
-  f = applyFollowNotify(f, { username: 'alice', notify: { product: { email: true, api: true } } }, { now });
-  assert.deepEqual(f.following[0].notify, { product: { email: true, api: true } });
+  f = applyFollowNotify(f, { username: 'alice', notify: { project: { email: true, api: true } } }, { now });
+  assert.deepEqual(f.following[0].notify, { project: { email: true, api: true } });
   assert.equal(f.updatedAt, 1000);
   assert.throws(() => applyFollowNotify(f, { username: 'nobody', notify: { article: { email: true } } }, { now }), FollowError);
 });

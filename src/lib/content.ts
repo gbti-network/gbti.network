@@ -46,11 +46,11 @@ export function hasPublicFootprint(entry: Gatable): boolean {
 
 /**
  * SOW-022: where a directory card points. Applets link out to their running tool (`launchUrl`, e.g.
- * `/utilities/<slug>/` for GBTI's embedded ones, or an external URL), exactly the way a product card would link
- * to a download; products link to their `/products/<slug>/` detail page.
+ * `/utilities/<slug>/` for GBTI's embedded ones, or an external URL), exactly the way a project card would link
+ * to a download; projects link to their `/projects/<slug>/` detail page.
  */
 export function catalogHref(entry: { data: { type?: string; slug: string; launchUrl?: string } }): string {
-  return entry.data.type === 'applet' && entry.data.launchUrl ? entry.data.launchUrl : `/products/${entry.data.slug}/`;
+  return entry.data.type === 'applet' && entry.data.launchUrl ? entry.data.launchUrl : `/projects/${entry.data.slug}/`;
 }
 
 /** Newest-first by publishedAt (falls back to updatedAt, then epoch). */
@@ -61,7 +61,7 @@ export function byNewest(a: { data: { publishedAt?: Date; updatedAt?: Date } }, 
 }
 
 /** Resolve the member/house owner segment from a content entry id (e.g. "members/hudson/posts/x" → "hudson"). */
-export function ownerOf(entry: CollectionEntry<'post' | 'product' | 'prompt'>): string {
+export function ownerOf(entry: CollectionEntry<'post' | 'project' | 'prompt'>): string {
   const parts = entry.id.split('/');
   return parts[0] === 'members' ? parts[1] : 'house';
 }
@@ -81,7 +81,7 @@ export function ownerOf(entry: CollectionEntry<'post' | 'product' | 'prompt'>): 
  * item, not silently "house" (contentItemPath alone treats '' as house, which is right for its own build-time
  * callers but wrong for a page rendering an edit link off possibly-missing data).
  */
-export function contentRepoPath(type: 'post' | 'product' | 'prompt' | 'profile', owner: string, slug?: string): string | null {
+export function contentRepoPath(type: 'post' | 'project' | 'prompt' | 'profile', owner: string, slug?: string): string | null {
   if (!owner) return null;
   if (type === 'profile') return (owner === 'house' || owner === 'gbti') ? null : `members/${owner}/profile.md`;
   return contentItemPath(type, owner, slug);
@@ -89,7 +89,7 @@ export function contentRepoPath(type: 'post' | 'product' | 'prompt' | 'profile',
 
 /**
  * sow-183: wire a server-rendered-hidden Edit pill to the member signal, client-side. Every detail page's Edit
- * affordance (product's hero pill, the article/prompt variants) shares this one resolve/toggle instead of each
+ * affordance (project's hero pill, the article/prompt variants) shares this one resolve/toggle instead of each
  * repeating the same few lines. `ownerAttr` names the data attribute the page stamped the item's owner into.
  * No-ops off the browser (this module is also imported server-side, e.g. EditHooks.astro's frontmatter).
  */

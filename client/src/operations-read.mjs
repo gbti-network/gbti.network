@@ -101,12 +101,12 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
 // SOW-041: the generic comment thread for ANY content type (post/product/prompt/share). Powers the shared
 // <gbti-discussion> in the expanded reader; listShareComments is the 'share' specialization. Same read surface
 // (the COMMENT_PATH enumeration + the published filter), just parameterized on targetType.
-export const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']); // SOW-046 D: 'news' enables news discussion
+export const COMMENT_TARGET_TYPES = new Set(['post', 'project', 'prompt', 'share', 'news']); // SOW-046 D: 'news' enables news discussion
 
 // SOW-014 + 2026-08-11: the content types that MAY carry a from-the-author note. NOT the types that REQUIRE
-// one (product/prompt, enforced in validate-content.mjs) -- an article's note is optional. Mirrors
+// one (project/prompt, enforced in validate-content.mjs) -- an article's note is optional. Mirrors
 // workbench-client-core.mjs AUTHOR_NOTE_TYPES; a drift test asserts every copy agrees.
-export const AUTHOR_NOTE_TYPES = new Set(['post', 'product', 'prompt']);
+export const AUTHOR_NOTE_TYPES = new Set(['post', 'project', 'prompt']);
 
 // SOW-089: the comments INDEX fast path. /comments-index.json is one CDN fetch carrying every published
 // comment (public bodies inline; members rows pointer-only) — replacing the reader walk that downloaded
@@ -162,7 +162,7 @@ export async function listComments(ctx, { targetType, targetSlug, limit, aliases
 /**
  * SOW-031: read ANY published content index.md for the in-extension reader (cross-member, allowlist-gated),
  * unlike getContentItem which is own-folder-scoped for editing. The reader's `read` enforces isReadablePath
- * (only posts/products/prompts index.md, no traversal), so the member token / local clone cannot become a
+ * (only posts/projects/prompts index.md, no traversal), so the member token / local clone cannot become a
  * general file-exfil oracle. Async so the SAME op serves the sync npm reader (repo-fs) and the async extension
  * (github) reader. requireIdentity only: the body is public-repo content (a members body comes back gated, its
  * .enc decrypted client-side via the Worker), but gating on a signed-in identity matches the extension dispatch.

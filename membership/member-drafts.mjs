@@ -8,7 +8,7 @@ export const DRAFTS_MAX_ITEMS = 50;
 export const DRAFT_MAX_BYTES = 150_000;
 export const DRAFTS_MAX_TOTAL_BYTES = 1_000_000;
 
-const TYPE_RE = /^(post|product|prompt|profile)$/;
+const TYPE_RE = /^(post|project|product|prompt|profile)$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
 // A github login, matched exactly as the folder segment it becomes. Deliberately the same shape the Author
 // picker's `member:<login>` value carries, so a value that round-trips through the store is one the picker

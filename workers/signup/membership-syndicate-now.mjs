@@ -35,7 +35,10 @@ import { createDiscordClient } from '../../clients/discord.mjs';
 // removed hashnode again on retirement. Keep in step with CHANNELS and SYNDICATION_CHANNEL_NAMES.
 const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'bluesky', 'devto', 'dailydev'];
 
-const FEATURED_ENV = { post: 'DISCORD_CHANNEL_POSTS', product: 'DISCORD_CHANNEL_PRODUCTS', prompt: 'DISCORD_CHANNEL_PROMPTS', share: 'DISCORD_CHANNEL_SHARES' };
+// sow-196: the KEY is the current type name; the VALUE is the Cloudflare-provisioned variable NAME,
+// which deliberately still reads PRODUCTS. Renaming the variable means re-provisioning the Worker
+// secret, and a mismatch there silently stops every project announcement reaching Discord.
+const FEATURED_ENV = { post: 'DISCORD_CHANNEL_POSTS', project: 'DISCORD_CHANNEL_PRODUCTS', prompt: 'DISCORD_CHANNEL_PROMPTS', share: 'DISCORD_CHANNEL_SHARES' };
 
 async function gate(request, env, { fetchImpl, authorize }) {
   const auth = await authorize(request, env, { fetchImpl });

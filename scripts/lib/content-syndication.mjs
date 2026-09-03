@@ -6,16 +6,16 @@
 // / Mode A item (no public page) posts the TITLE only (plaintext frontmatter; the encrypted body is never read).
 
 const DISCORD_MAX = 2000;
-const SUBDIR_TYPE = { posts: 'post', products: 'product', prompts: 'prompt' };
-const URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
-const TYPE_LABEL = { post: 'article', product: 'product', prompt: 'prompt', share: 'Share' };
+const SUBDIR_TYPE = { posts: 'post', projects: 'project', products: 'project', prompts: 'prompt' };
+const URL_BASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' } // sow-196: the retired name resolves to the current URL;
+const TYPE_LABEL = { post: 'article', project: 'project', prompt: 'prompt', share: 'Share' };
 
-// members/<owner>/(posts|products|prompts)/<slug>/index.md  OR  house/(posts|products|prompts)/<slug>/index.md
-const CONTENT_RE = /^(?:members\/[a-z0-9][a-z0-9-]*|house)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+// members/<owner>/(posts|projects|products|prompts)/<slug>/index.md  OR  house/(posts|projects|products|prompts)/<slug>/index.md
+const CONTENT_RE = /^(?:members\/[a-z0-9][a-z0-9-]*|house)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 // members/<owner>/shares/<id>.md (strict id charset, matching the workflow's diff filter)
 const SHARE_RE = /^members\/[a-z0-9][a-z0-9-]*\/shares\/([a-z0-9][a-z0-9._-]*)\.(?:md|mdx)$/;
 
-/** Classify a repo-relative path to { type, slug } (post|product|prompt|share), or null if not syndicatable. */
+/** Classify a repo-relative path to { type, slug } (post|project|prompt|share), or null if not syndicatable. */
 export function classifyContentPath(path) {
   if (typeof path !== 'string' || path.includes('..')) return null;
   const c = CONTENT_RE.exec(path);
@@ -46,7 +46,7 @@ export function publicUrlFor(item, siteOrigin = 'https://gbti.network') {
  * syndicated share carries: since sow-094 a PUBLIC share has its own page, so callers resolve the link through
  * sharePageUrl and fall back to `shareUrl` only for a members-only share, which has no page.
  *
- * `hasPublicPage` stays FALSE for every share on purpose. It means "has a page under /articles|/products|/prompts",
+ * `hasPublicPage` stays FALSE for every share on purpose. It means "has a page under /articles|/projects|/prompts",
  * and formatPublishMessage reads it to pick the members-only Share heading. Do not widen it to mean /shares/.
  */
 export function buildSyndicationItem(path, frontmatter = {}) {
@@ -57,7 +57,7 @@ export function buildSyndicationItem(path, frontmatter = {}) {
   // Defensive: the file's declared type must match the path subtree (a stray type field cannot retarget a channel).
   if (fm.type && fm.type !== cls.type) return null;
   const title = (fm.title != null ? String(fm.title) : '').trim();
-  if (cls.type !== 'share' && !title) return null; // posts/products/prompts need a title to announce
+  if (cls.type !== 'share' && !title) return null; // posts/projects/prompts need a title to announce
   return {
     type: cls.type,
     slug: cls.slug,
@@ -110,7 +110,7 @@ export function sharePageUrl(item, siteOrigin = 'https://gbti.network') {
   return `${String(siteOrigin).replace(/\/$/, '')}/shares/${item.author}/${item.slug}/`;
 }
 
-/** Resolve the Discord channel id for a content type from a { post, product, prompt, share } map. */
+/** Resolve the Discord channel id for a content type from a { post, project, prompt, share } map. */
 export function channelForType(type, channelMap = {}) {
   return channelMap[type] || null;
 }

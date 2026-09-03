@@ -113,7 +113,7 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
   // (authorNote) on a post/product/prompt; a discussion reply, and ANY comment on a Share, is always members. The
   // server is the boundary: coerce anything that is not a legitimate public intro to members, regardless of what
   // the client sent (a members body is then encrypted by planMemberFiles, never committed plaintext).
-  const isPublicIntro = authorNote === true && ['post', 'product', 'prompt'].includes(targetType);
+  const isPublicIntro = authorNote === true && ['post', 'project', 'prompt'].includes(targetType);
   input.visibility = (visibility === 'public' && isPublicIntro) ? 'public' : 'members';
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
@@ -217,7 +217,7 @@ export async function editComment(ctx, { id, body, authorNote } = {}) {
   // from-the-author intro (authorNote) on a post/product/prompt; anything else is coerced to members and its body
   // is re-encrypted on re-publish. Symmetric with publishComment (the CI guards are the backstop, not the boundary).
   const effAuthorNote = authorNote !== undefined ? Boolean(authorNote) : Boolean(fm.authorNote);
-  const isPublicIntro = effAuthorNote && ['post', 'product', 'prompt'].includes(fm.targetType);
+  const isPublicIntro = effAuthorNote && ['post', 'project', 'prompt'].includes(fm.targetType);
   // Preserve identity-defining fields; set updatedAt so the "edited . view history" link renders.
   const input = {
     id,

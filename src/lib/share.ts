@@ -2,18 +2,18 @@
 // type drives the lead sentence and the base discovery hashtags; the content's top-level category adds
 // one more hashtag. X carries the lead + hashtags in its own intent params; LinkedIn and Reddit scrape or
 // accept a title from the URL itself, so they need no text payload. No SDKs, no trackers, every target is
-// a plain intent URL, plus a client-side copy-link. Reused across prompt / post / product pages.
+// a plain intent URL, plus a client-side copy-link. Reused across prompt / post / project pages.
 
 import { categoryLabel, topKey } from './taxonomy';
 
-export type ShareType = 'prompt' | 'post' | 'product';
+export type ShareType = 'prompt' | 'post' | 'project';
 
 // Per-type share schema: the conversational lead and the base hashtags. Edit here to retune the voice
 // or discovery tags for a whole content type in one place.
 const SHARE_SCHEMA: Record<ShareType, { lead: string; hashtags: string[] }> = {
   prompt: { lead: 'Have a look at this AI prompt I found:', hashtags: ['gbti', 'aiprompts'] },
   post: { lead: 'Worth a read from GBTI Network:', hashtags: ['gbti', 'devblog'] },
-  product: { lead: 'Check out this tool on GBTI Network:', hashtags: ['gbti', 'devtools'] },
+  project: { lead: 'Check out this tool on GBTI Network:', hashtags: ['gbti', 'devtools'] },
 };
 
 /** Slugify any word/label into a bare hashtag token (letters + digits only, lowercased). '' if nothing usable. */
@@ -40,7 +40,7 @@ export interface ShareLinks {
 
 /**
  * Build every share variant for one content item. Pure + framework-free, so it is unit-testable and the
- * same logic serves prompts, posts, and products. Platform shaping:
+ * same logic serves prompts, posts, and projects. Platform shaping:
  *  - X: text = "lead title", url + hashtags ride their own intent params (hashtags help discovery).
  *  - LinkedIn: url only, its share-offsite endpoint pulls title/description from the page's OG tags.
  *  - Reddit: url + title as separate params, its submit page has no hashtag concept.

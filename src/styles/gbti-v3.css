@@ -33,7 +33,7 @@
   --clay:       #c9683b;
 
   /* amber — the LOCKED signal (sow-172). Green says "yours", amber says "members only", so a gated panel
-     never reads as a call to action. Introduced by the product page's locked-tail treatment; reusable. */
+     never reads as a call to action. Introduced by the project page's locked-tail treatment; reusable. */
   --amber:      #b57616;
   --amber-text: #8a5a10;
   --amber-tint: rgba(224,169,75,.12);
@@ -103,7 +103,7 @@ section { position: relative; }
 .band { padding: 104px 0; }
 .band-sm { padding: 72px 0; }
 
-/* sow-169 / sow-172: the product detail layout lives site-wide (see the ".pd-* — product detail" section at
+/* sow-169 / sow-172: the project detail layout lives site-wide (see the ".pd-* — project detail" section at
    the foot of this file), not in a page-scoped <style>, because the WorkBench preview renders the same
    structure and must not drift from the published page. */
 .band-lg { padding: 128px 0; }
@@ -387,7 +387,7 @@ section { position: relative; }
 .work-feat .cover img, .work-feat .cover .cover-fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
 .work-feat .cover .cover-fallback { background: linear-gradient(140deg, var(--green-tint), var(--tint)); }
 .work-feat .body { padding: 26px 28px; display: flex; flex-direction: column; }
-/* right column: two products stacked, filling the height beside the featured article */
+/* right column: two projects stacked, filling the height beside the featured article */
 .work-col { display: flex; flex-direction: column; gap: 22px; }
 .work-col .work-card { flex: 1; }
 .work-card { padding: 20px; display: flex; flex-direction: column; }
@@ -690,7 +690,7 @@ section { position: relative; }
    chip in the category's lighter shade so it reads on dark cards. Higher specificity than the scoped
    component .pchip rule so it wins regardless of stylesheet order. */
 html[data-theme="dark"] .pchip { background: rgba(255,255,255,.05); border-color: var(--cb); color: var(--cb); }
-/* homepage: the Featured-products spotlight gets the standard band rhythm (104px) above it; the
+/* homepage: the Featured-projects spotlight gets the standard band rhythm (104px) above it; the
    space below comes from the #product-directory band's own bottom padding (also 104px), so the gap
    above == below == the gap above the Prompt Directory headline. */
 #product-directory .spot-band { padding-top: 104px; padding-bottom: 0; }
@@ -1378,7 +1378,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
    .pd-* — PRODUCT DETAIL, the "Doc Shell" layout (sow-172, design direction 1b)
 
    Site-wide rather than page-scoped because TWO routes render this structure: the published page
-   (src/pages/products/[slug].astro) and the WorkBench draft preview (src/pages/workbench/preview.astro).
+   (src/pages/projects/[slug].astro) and the WorkBench draft preview (src/pages/workbench/preview.astro).
    One definition, so a preview cannot drift from the page it is previewing.
 
    The page's job is an install click, so the shape is: a banner hero, an install bar that pins under the
@@ -1408,7 +1408,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
   background: linear-gradient(150deg, var(--ink-3), var(--ink));
 }
 /* sow-174: a color preset the author chose instead of uploading a banner image. `data-preset` is only ever
-   present when there is no hero image (resolveHero() in product-page.mjs makes the two mutually exclusive),
+   present when there is no hero image (resolveHero() in project-page.mjs makes the two mutually exclusive),
    so these never compete with a real banner. The hex values mirror src/lib/banner-presets.mjs, the one JS
    source of truth for the six options (see that file for why they cannot instead be a shared CSS variable).
    "ink" restates the base rule above verbatim: it is today's existing default look, reachable both as the
@@ -1419,7 +1419,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .pd-hero[data-preset="wordpress"] { background: linear-gradient(150deg, #5a8de0, #25232b); }
 .pd-hero[data-preset="ide-plugins"] { background: linear-gradient(150deg, #9277d4, #25232b); }
 .pd-hero[data-preset="mods"] { background: linear-gradient(150deg, #d8a847, #25232b); }
-/* Anchored to the TOP of the frame, not the middle. The existing product banners are 3:1 strips with their
+/* Anchored to the TOP of the frame, not the middle. The existing project banners are 3:1 strips with their
    artwork in the lower-left, and the hero crops to roughly 5.7:1; a centred crop slices that artwork in half,
    while a top crop drops it cleanly. The scrim is near-opaque over the lower third anyway, so nothing that
    was readable is lost. */
@@ -1741,7 +1741,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 }
 
 /* ==================== article layouts (sow-179) ==================== */
-/* Editorial and Journal "mirror the product Doc Shell" in STRUCTURE per the design handoff, not literally:
+/* Editorial and Journal "mirror the project Doc Shell" in STRUCTURE per the design handoff, not literally:
    this is a deliberate separate .art-* namespace copying the .pd-* patterns worth copying, rather than
    reusing .pd-* classes on article markup, so a future product-only tweak can never silently affect an
    article page. Only the pieces genuinely identical in both new layouts (per the design mock) live here;
@@ -1755,7 +1755,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 
 .art-rail-lab { font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); }
 
-/* Contents rail: identical square-left-edge active/inactive treatment as the product page's .pd-toc, the
+/* Contents rail: identical square-left-edge active/inactive treatment as the project page's .pd-toc, the
    design mock's own tocDemo script data matches this almost verbatim. */
 .art-toc { display: flex; flex-direction: column; gap: 2px; }
 .art-toc .art-rail-lab { padding: 0 0 9px 11px; }
@@ -1768,7 +1768,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .art-toc a.on { border-left-color: var(--green); color: var(--fg); background: var(--green-tint); }
 
 /* Gating (SOW-016): a Mode B stub teaser and a Mode C locked tail, styled for the first time on articles --
-   the product page's .pd-teaser/.pd-locked-tail is the working reference this copies, green for "the whole
+   the project page's .pd-teaser/.pd-locked-tail is the working reference this copies, green for "the whole
    piece opens with membership," amber for "the rest of this piece opens with membership." */
 .art-teaser, .art-locked-tail { border: 1.5px solid var(--green); border-radius: 2px; background: var(--green-tint); padding: 24px 26px; }
 .art-locked-tail { margin-top: 30px; border-color: var(--amber); background: var(--amber-tint); }
@@ -1786,11 +1786,11 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .art-locked-tail .locked-notice > svg { color: var(--amber-text); }
 .art-locked-tail .locked-sub a, .art-locked-tail .open-ext { color: var(--amber-text); border-color: var(--amber-text); }
 
-/* Favorited-by, rail context: strips the standalone card chrome exactly like the product rail already does
+/* Favorited-by, rail context: strips the standalone card chrome exactly like the project rail already does
    (.pd-rail .card), so FavoritedBy.astro reads as one more rail block rather than a boxed card inside a box. */
 .art-rail .card { background: none; border: 0; box-shadow: none; padding: 0 !important; }
 
-/* Tag chips: identical shape to the product page's .pd-tags/.pd-tag, kept under this own prefix per the
+/* Tag chips: identical shape to the project page's .pd-tags/.pd-tag, kept under this own prefix per the
    .art-* namespace decision above. */
 .art-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .art-tag {
@@ -1886,7 +1886,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 
 /* ==================== Journal layout (sow-179 Phase 4) ==================== */
 /* One combined left rail (byline, actions, contents, tags, favorited-by) plus a single reading column; the
-   cover sits inset in the column instead of as a hero. Mirrors the product Doc Shell in STRUCTURE, not
+   cover sits inset in the column instead of as a hero. Mirrors the project Doc Shell in STRUCTURE, not
    literally -- see the .art-* namespace note above this section. */
 /* sow-183 responsive audit: the rail width + gap are now clamp()-driven (were fixed 212px/34px), the same
    continuous-compression reasoning as art-e-grid above -- a narrowing desktop browser shrinks this 2-column

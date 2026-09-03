@@ -9,7 +9,7 @@ const items = () => ([
   { path: 'members/a/posts/p1/index.md', categories: ['devops', 'frameworks', 'react'] },
   { path: 'members/a/posts/p2/index.md', categories: ['devops', 'frameworks'] },
   { path: 'house/posts/p3/index.md', categories: ['ai'] },                 // unaffected by devops changes
-  { path: 'members/b/products/x/index.md', categories: [] },               // uncategorized
+  { path: 'members/b/projects/x/index.md', categories: [] },               // uncategorized
 ]);
 
 test('plan move: rewrites affected items, leaves others, edits the tree', () => {

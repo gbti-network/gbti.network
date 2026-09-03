@@ -1,5 +1,5 @@
 // Canonical taxonomy access (SOW-012). Loads house/taxonomy.yml once and exposes label/path helpers
-// shared by every content type (posts, products, prompts). The same tree validates `categories` in
+// shared by every content type (posts, projects, prompts). The same tree validates `categories` in
 // scripts/validate-content.mjs, so the site and CI never disagree on what a valid category is.
 import fs from 'node:fs';
 import path from 'node:path';

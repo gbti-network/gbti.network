@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /** The content types that render a `/<type>/<slug>/` detail page. */
-export const DETAIL_PAGE_TYPES = Object.freeze(['articles', 'products', 'prompts']);
+export const DETAIL_PAGE_TYPES = Object.freeze(['articles', 'projects', 'prompts']);
 
 /**
  * Slugs of built detail pages for one type, or [] when the section was not built at all.

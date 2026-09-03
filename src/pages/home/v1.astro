@@ -14,8 +14,8 @@ import { extensionCtaEnabled } from '../../lib/site-settings';
 
 // Real content drives the dynamic sections (hero members, activity, what-members-ship).
 const posts = (await getCollection('post')).filter(isPublic).sort(byNewest);
-// SOW-022: applets list among products (their cards link via catalogHref to the running tool).
-const products = [...(await getCollection('product')), ...(await getCollection('applet'))].filter(isPublic).sort(byNewest);
+// SOW-022: applets list among projects (their cards link via catalogHref to the running tool).
+const projects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isPublic).sort(byNewest);
 const prompts = (await getCollection('prompt')).filter(isPublic).sort(byNewest);
 const members = (await getCollection('profile')).filter(isPublic).filter((p) => p.data.username !== 'gbti');
 const avatarIndex = buildAvatarIndex(members);
@@ -24,10 +24,10 @@ const avatarIndex = buildAvatarIndex(members);
 const memberCount = members.length;
 const heroMembers = members.slice(0, 50);
 
-// "What members ship": a featured post (left), two products stacked (right column), and recent
+// "What members ship": a featured post (left), two projects stacked (right column), and recent
 // prompts + articles as minis. Prompts come first, then articles (each article mini shows its cover).
 const featured = posts[0];
-const featuredProducts = products.slice(0, 2);
+const featuredProducts = projects.slice(0, 2);
 const promptMinis = prompts.map((p) => ({ kind: 'Prompt', title: p.data.title, href: `/prompts/${p.data.slug}/`, img: undefined, desc: p.data.shortDescription, author: p.data.author, date: p.data.publishedAt }));
 const articleMinis = posts.slice(1).map((p) => ({ kind: 'Article', title: p.data.title, href: `/articles/${p.data.slug}/`, img: p.data.coverImage, desc: undefined as string | undefined, author: p.data.author, date: p.data.publishedAt }));
 const minis = [...promptMinis, ...articleMinis].slice(0, 6);
@@ -35,7 +35,7 @@ const minis = [...promptMinis, ...articleMinis].slice(0, 6);
 // Activity feed: the latest content across types, newest first.
 const feed = [
   ...posts.map((p) => ({ kind: 'Article', title: p.data.title, href: `/articles/${p.data.slug}/`, author: p.data.author, date: p.data.publishedAt })),
-  ...products.map((p) => ({ kind: 'Product', title: p.data.title, href: `/products/${p.data.slug}/`, author: p.data.author, date: p.data.publishedAt })),
+  ...projects.map((p) => ({ kind: 'Project', title: p.data.title, href: `/projects/${p.data.slug}/`, author: p.data.author, date: p.data.publishedAt })),
 ]
   .sort((a, b) => Number(b.date ?? 0) - Number(a.date ?? 0))
   .slice(0, 5);
@@ -53,13 +53,13 @@ function relTime(d?: Date): string {
 
 const stats = [
   { n: posts.length, l: posts.length === 1 ? 'article' : 'articles' },
-  { n: products.length, l: products.length === 1 ? 'product' : 'products' },
+  { n: projects.length, l: projects.length === 1 ? 'project' : 'projects' },
   { n: memberCount, l: memberCount === 1 ? 'member' : 'members' },
 ];
 
 // Contribution heatmap from REAL publishing activity: bucket every content publish date across the
 // project's history into 126 cells (7 rows x 18 cols), coloured by volume (level 0..4).
-const stamps = [...posts, ...products, ...prompts]
+const stamps = [...posts, ...projects, ...prompts]
   .map((c) => c.data.publishedAt)
   .filter((d): d is Date => !!d)
   .map((d) => Number(d))
@@ -76,7 +76,7 @@ if (stamps.length) {
 const extensionCtaShown = extensionCtaEnabled();
 ---
 <!-- The v1 homepage, archived unindexed at /home/v1/ when the feed homepage replaced it (SOW-136). -->
-<BaseLayout noindex={true} title="Publish your work. Build with peers. Share the revenue." description={`A creator network powered by Git. Publish articles, products, and prompts, build with peers, and earn from the members your work brings in: ${FIRST_TOUCH_PCT} for the first touch, ${LAST_TOUCH_PCT} for the last touch, plus a ${INVITE_PCT} invite lane. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
+<BaseLayout noindex={true} title="Publish your work. Build with peers. Share the revenue." description={`A creator network powered by Git. Publish articles, projects, and prompts, build with peers, and earn from the members your work brings in: ${FIRST_TOUCH_PCT} for the first touch, ${LAST_TOUCH_PCT} for the last touch, plus a ${INVITE_PCT} invite lane. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
 
 <!-- ============ HERO (centered) ============ -->
 <section class="hero hero-centered">
@@ -161,7 +161,7 @@ const extensionCtaShown = extensionCtaEnabled();
       <div class="card cap-card">
         <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-box"/></svg></span>
         <h3 class="h3">List your work</h3>
-        <p class="body-sm muted mt12">Promote products, plugins, tools, and creative work in the directory.</p>
+        <p class="body-sm muted mt12">Promote projects, plugins, tools, and creative work in the directory.</p>
       </div>
       <div class="card cap-card">
         <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-users"/></svg></span>
@@ -196,7 +196,7 @@ const extensionCtaShown = extensionCtaEnabled();
       <div class="git-left">
         <p class="eyebrow">Built on Git</p>
         <h2 class="h2 mt12">The entire ecosystem is powered through Git.</h2>
-        <p class="lead mt16">Every post, product, prompt, profile, and comment is a file in a public Git repository, but you never touch Git directly. All content management happens through a Chrome extension, MCP servers, or agent-ready publishing.</p>
+        <p class="lead mt16">Every post, project, prompt, profile, and comment is a file in a public Git repository, but you never touch Git directly. All content management happens through a Chrome extension, MCP servers, or agent-ready publishing.</p>
         <div class="git-logo" aria-hidden="true">
           <svg viewBox="0 0 496 512" role="img" aria-label="GitHub"><path fill="currentColor" d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
         </div>
@@ -207,7 +207,7 @@ const extensionCtaShown = extensionCtaEnabled();
           <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-puzzle"/></svg></span>
           <div>
             <div class="flex items-center g12"><span class="num">01</span><h3 class="h3">Chrome extension</h3></div>
-            <p class="body-sm muted mt8">Manage all your content right in the browser: draft, edit, and submit articles, products, and prompts. No Git knowledge required.</p>
+            <p class="body-sm muted mt8">Manage all your content right in the browser: draft, edit, and submit articles, projects, and prompts. No Git knowledge required.</p>
           </div>
         </div>
         <div class="card git-card">
@@ -274,7 +274,7 @@ const extensionCtaShown = extensionCtaEnabled();
           <div class="nt-search"><svg viewBox="0 0 24 24" width="16" height="16" style="opacity:.5"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Search the network…</div>
           <div class="nt-tiles">
             <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-pencil"/></svg></span>Articles</div>
-            <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-box"/></svg></span>Products</div>
+            <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-box"/></svg></span>Projects</div>
             <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-spark"/></svg></span>Prompts</div>
             <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-mega"/></svg></span>Shares</div>
           </div>
@@ -304,14 +304,14 @@ const extensionCtaShown = extensionCtaEnabled();
     <div class="sec-head">
       <div>
         <h2 class="h2">Recent Activity</h2>
-        <p class="lead">Articles, products, plugins, and prompts from across the membership.</p>
+        <p class="lead">Articles, projects, plugins, and prompts from across the membership.</p>
       </div>
       <a href="/articles/" class="link">Browse everything <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
     </div>
     <div class="filter-row">
       <button type="button" class="chip filter on" aria-pressed="true" data-filter="all">All</button>
       <button type="button" class="chip filter" aria-pressed="false" data-filter="Article">Articles</button>
-      <button type="button" class="chip filter" aria-pressed="false" data-filter="Product">Products</button>
+      <button type="button" class="chip filter" aria-pressed="false" data-filter="Project">Projects</button>
       <button type="button" class="chip filter" aria-pressed="false" data-filter="Prompt">Prompts</button>
     </div>
     <div class="works-grid">
@@ -334,12 +334,12 @@ const extensionCtaShown = extensionCtaEnabled();
         </article>
       )}
       {featuredProducts.length > 0 && (
-        <div class="work-col" data-type="Product">
+        <div class="work-col" data-type="Project">
           {featuredProducts.map((fp) => (
             <article class="card card-hover work-card">
               <Image src={fp.data.icon} width={152} height={152} alt="" class="work-icon" style="object-fit:cover;border-radius:8px" />
-              <span class="chip" style="align-self:flex-start">Product</span>
-              <h3 class="h4 mt12"><a href={`/products/${fp.data.slug}/`} style="color:var(--fg)">{fp.data.title}</a></h3>
+              <span class="chip" style="align-self:flex-start">Project</span>
+              <h3 class="h4 mt12"><a href={`/projects/${fp.data.slug}/`} style="color:var(--fg)">{fp.data.title}</a></h3>
               <p class="body-sm muted mt8" style="flex:1">{fp.data.shortDescription}</p>
               <div class="byline mt16">
                 <Avatar item={authorItem(fp.data.author, avatarIndex)} class="av" size={28} />
@@ -472,7 +472,7 @@ const extensionCtaShown = extensionCtaEnabled();
   // client behavior, scoped per section so the directories and the "Recent Activity" row do not clash.
   (function () {
     // "Recent Activity" chips filter the grid by content type. Each top-level card in .works-grid
-    // carries a data-type (Article | Product | Prompt); each chip a data-filter ("all" or a type).
+    // carries a data-type (Article | Project | Prompt); each chip a data-filter ("all" or a type).
     var row = document.querySelector('.filter-row');
     var grid = document.querySelector('.works-grid');
     if (row && grid) {

@@ -35,10 +35,10 @@ import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
 const PROTOCOL_VERSION = '2024-11-05';
 
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: true });
-const TYPE_ENUM = { type: 'string', enum: ['post', 'product', 'prompt', 'profile'] };
+const TYPE_ENUM = { type: 'string', enum: ['post', 'project', 'prompt', 'profile'] };
 // SOW-106: the REQUIRED author intent. "published" merges to the network (public); "draft" stages on the fork.
 const STATUS_ENUM = { type: 'string', enum: ['draft', 'published'], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
-const COMMENT_TARGET = { type: 'string', enum: ['post', 'product', 'prompt', 'share', 'news'] }; // SOW-072
+const COMMENT_TARGET = { type: 'string', enum: ['post', 'project', 'prompt', 'share', 'news'] }; // SOW-072
 // sow-193: `path` + `scope`, which authorContent forwards to publish()/saveDraft() now. `path` is what turns a
 // re-publish under a changed slug into a RENAME (one PR that moves the item and 301s the old URL) instead of a
 // duplicate item with the old page still live. `scope` targets the non-member house/ folder (superadmin only,
@@ -110,7 +110,7 @@ export const TOOLS = [
   },
   {
     name: 'list_my_content',
-    description: "List the member's own content (posts/products/prompts/profile). Optional `type` filter.",
+    description: "List the member's own content (posts/projects/prompts/profile). Optional `type` filter.",
     inputSchema: obj({ type: TYPE_ENUM, scope: SCOPE_PARAM }),
     handler: (ctx, args) => listContent(ctx, { type: args?.type, scope: args?.scope }),
   },
@@ -128,7 +128,7 @@ export const TOOLS = [
   },
   {
     name: 'publish_content',
-    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
     inputSchema: obj(
       { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM },
       ['type', 'input', 'status'],
@@ -146,9 +146,9 @@ export const TOOLS = [
   },
   {
     name: 'add_product',
-    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
-    handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'product' }),
+    handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'project' }),
   },
   {
     name: 'add_post',
@@ -223,7 +223,7 @@ export const TOOLS = [
   // your own post/product/prompt is public; every reply, and ALL Share comments, are members-only + encrypted).
   {
     name: 'post_comment',
-    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
+    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
       { targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, body: { type: 'string' }, authorNote: { type: 'boolean' }, parentId: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } },
       ['targetType', 'targetSlug', 'body'],
@@ -269,7 +269,7 @@ export const TOOLS = [
   },
   {
     name: 'list_comments',
-    description: 'Read the published comment thread for a target. Args: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
+    description: 'Read the published comment thread for a target. Args: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
     inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, limit: { type: 'integer' } }, ['targetType', 'targetSlug']),
     handler: (ctx, args) => listComments(ctx, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit }),
   },

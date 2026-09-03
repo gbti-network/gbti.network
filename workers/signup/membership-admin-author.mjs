@@ -51,9 +51,9 @@ const ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
 // Increment 1: content moderation (moderator+). remove is a delete; the others flip status.
 const CONTENT_ACTIONS = new Set(['deplatform', 'republish', 'remove']);
 const STATUS_FOR = { deplatform: 'draft', republish: 'published' };
-// A content item index.md under a member OR house content folder (posts/products/prompts). The gate re-checks the
+// A content item index.md under a member OR house content folder (posts/projects/prompts). The gate re-checks the
 // caller's authority over this path; this regex only bounds the shape (a clean content item, never a config file).
-const CONTENT_ITEM_RE = /^(?:members\/[a-z0-9][a-z0-9-]*|house)\/(?:posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+const CONTENT_ITEM_RE = /^(?:members\/[a-z0-9][a-z0-9-]*|house)\/(?:posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
 
 // Increments 2-3: governance mutations. Each action targets a FIXED governance file (never derived from input) and
 // applies a pure, node-free core from superadmin-actions.mjs. github_id-keyed. Per-action REQUIRED rank: member

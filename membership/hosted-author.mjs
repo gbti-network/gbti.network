@@ -53,7 +53,7 @@ export const HOSTED_MAX_IMAGE_TOTAL_BYTES = 4_194_304; // 4 MB of images per req
 // non-web client, which gets a precise error telling it exactly what to change. An explicit rejection turns
 // an invisible failure into a visible one; silently lowercasing here would fix the render and leave the
 // member wondering why their file has a different name.
-const IMAGE_PATH_TAIL_RE = /^(?:(?:posts|products|prompts)\/[a-z0-9][a-z0-9-]{0,63}\/)?images\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp|gif)$/;
+const IMAGE_PATH_TAIL_RE = /^(?:(?:posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]{0,63}\/)?images\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp|gif)$/;
 // The same pattern with `i` restored, used ONLY to tell "wrong case" apart from "wrong shape" so the error
 // can say which. It is never a gate: a tail must satisfy the strict pattern above to be accepted.
 const IMAGE_PATH_TAIL_ANYCASE_RE = new RegExp(IMAGE_PATH_TAIL_RE.source, 'i');
@@ -169,7 +169,7 @@ function utf8Bytes(s) {
 // the hosted-authoring endpoint's own shape check, same rigor as its existing own-folder-only pattern.
 const ANY_MEMBER_FOLDER_RE = /^members\/[a-z0-9][a-z0-9-]{0,63}\//;
 // EXPLICIT house CONTENT subdirectories only -- never a bare 'house/' prefix. house/ also holds Tier-S/A
-// sow-195 REMOVED the house content allowlist that used to sit here. house/posts, house/products and
+// sow-195 REMOVED the house content allowlist that used to sit here. house/posts, house/projects and
 // house/prompts no longer exist: the network's content moved into members/gbtilabs/, which the
 // ANY_MEMBER_FOLDER_RE arm below already covers for a superadmin. This TIGHTENS the surface rather
 // than loosening it. All of house/** is now uniformly governance (roles.yml, bans.yml, taxonomy.yml

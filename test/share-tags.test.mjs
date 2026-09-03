@@ -159,7 +159,7 @@ test('a share with NO tags still carries its category and the brand', () => {
 test('the brand is SHARES ONLY, which is the owner scope and not a technical limit', () => {
   // LinkedIn's post, product and prompt templates use the same merged token, so an unscoped brand would put
   // #gbti on article syndication that was never asked about. Two existing prompt tests caught this.
-  for (const source of ['post', 'product', 'prompt']) {
+  for (const source of ['post', 'project', 'prompt']) {
     const out = renderTemplate('{hashtags}', { source, category: 'ai', tags: ['prompts'] }, { limit: 300 });
     assert.equal(out, '#ai #prompts', `${source} must not be branded`);
   }

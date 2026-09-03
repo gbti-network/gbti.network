@@ -2,7 +2,7 @@
 type: comment
 id: intro-travelers-lectern
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: travelers-lectern
 status: published
 visibility: public

@@ -11,7 +11,7 @@ import { resolveNotify, normalizeNotify } from '../../membership/notify-resolve.
 // the key), with no live delivery yet, consistent with the dormant email path.
 export const MATRIX_ROWS = Object.freeze([
   { key: 'article', label: 'Articles' },
-  { key: 'product', label: 'Products' },
+  { key: 'project', label: 'Projects' },
   { key: 'prompt', label: 'Prompts and skills' },
   { key: 'share', label: 'Shares' },
   { key: 'news', label: 'News they curate' },
@@ -60,7 +60,7 @@ export function isCustomFollow(follow) {
 
 /** The one-line summary of a follow's EFFECTIVE prefs, for the account follows list. Mirrors the design's
  *  summarise(): "Muted, nothing arrives" | "Everything, in app and by email" | "Everything, in app only" |
- *  "Articles, products, email on". `follow` may be a default-mode follow (no notify) or a custom one. */
+ *  "Articles, projects, email on". `follow` may be a default-mode follow (no notify) or a custom one. */
 export function summarizeFollow(follow, globalNotify) {
   const matrix = resolveMatrix(follow && follow.notify, globalNotify);
   return summarizeMatrix(matrix);

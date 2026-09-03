@@ -22,7 +22,7 @@ import { AUTHOR_NOTE_TYPES } from './operations-read.mjs';
 // while a staged draft or an open PR exists for either slug (v1 safety), and fail-CLOSED when the old file
 // cannot resolve on the branch base (the delete half needs it; the SOW-106 fork sync provides it) — never a
 // half-move. Paid-only, own-folder, post/product/prompt only. publishedAt is preserved (feeds stay stable).
-export const RENAME_URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
+export const RENAME_URL_BASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' }; // sow-196: the retired type name maps to the SAME current URL
 
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -40,11 +40,11 @@ export function renameOriginOf({ path, username, type }) {
 }
 
 
-// SOW-112 v2: the intro-comment move files (product/prompt): read intro-<old>.md, rewrite id + targetSlug to
+// SOW-112 v2: the intro-comment move files (project/prompt): read intro-<old>.md, rewrite id + targetSlug to
 // the new slug, emit the new file + the old delete. Empty when no intro exists. Shared by renameContent and
 // the publish-time rename.
 export async function introMoveFiles(ctx, { username, type, oldSlug, newSlug }) {
-  if (!['product', 'prompt'].includes(type)) return [];
+  if (!['project', 'prompt'].includes(type)) return [];
   const oldIntro = `members/${username}/comments/intro-${oldSlug}.md`;
   const introText = await ctx.reader?.readFile?.(oldIntro);
   if (introText == null) return [];
@@ -61,7 +61,7 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const m = OWN_STATUS_PATH_RE.exec(String(rel || ''));
-  if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|products|prompts)/<slug>/index.md');
+  if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|projects|products|prompts)/<slug>/index.md');
   if (m[1] !== String(id.username).toLowerCase()) {
     throw new OperationError('forbidden', 'you may only rename your own content');
   }
@@ -115,7 +115,7 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
     files.push({ path: newEnc, content: encText }, { path: oldEnc, content: null });
   }
   files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
-  // The from-the-author intro comment (product/prompt) moves + retargets in the same PR.
+  // The from-the-author intro comment (project/prompt) moves + retargets in the same PR.
   files.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug, newSlug: slug }));
 
   const branch = `gbti/rename-${type}-${oldSlug}`;
@@ -146,7 +146,7 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
 // SOW-106 Phase B: a member's reversible self-unpublish/republish. Only their OWN post/product/prompt, only a
 // status flip (visibility and every other field untouched), through the normal gated own-folder PR so the
 // SOW-005 gate stays the authority. Idempotent: already in the requested state = a clean no-op, no PR.
-export const OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+export const OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 
 
 export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
@@ -171,7 +171,7 @@ export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
     branch = `gbti/status-house-${type}-${slug}`;
   } else {
     const m = OWN_STATUS_PATH_RE.exec(String(rel || ''));
-    if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|products|prompts)/<slug>/index.md');
+    if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|projects|products|prompts)/<slug>/index.md');
     if (m[1] !== String(id.username).toLowerCase()) {
       throw new OperationError('forbidden', 'you may only change the status of your own content');
     }
@@ -292,7 +292,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // whole block so updatedAt never bumped (SOW-258, hit live 2026-08-18 on the /qa prompt; DeployStatusNotice
   // and the "Recently updated" sort both read updatedAt and went stale). The two publishedAt WRITES stay guarded
   // by `!effInput.publishedAt`, so a supplied publishedAt is preserved; only the updatedAt stamp is newly reached.
-  if (['post', 'product', 'prompt'].includes(type)) {
+  if (['post', 'project', 'prompt'].includes(type)) {
     const nowIso = new Date().toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === 'string' && effInput.slug) {
@@ -347,7 +347,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
     }
     throw err;
   }
-  // SOW-014: a published product/prompt must carry a from-the-author intro comment IN THE SAME PR. When authorNote
+  // SOW-014: a published project/prompt must carry a from-the-author intro comment IN THE SAME PR. When authorNote
   // is provided, seed intro-<slug>.md (public, authorNote:true) into this same publish, so validate-content's
   // diff-scoped intro check passes and a compliant prompt/product ships in ONE PR (deterministic id -> a re-publish
   // updates the same comment, never duplicating it).
@@ -449,7 +449,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
  * (gbti-activity-bell reads the PR title). Pure + exported for unit tests.
  */
 export function describeContentPublish(built, { hasIntro } = {}) {
-  const LABEL = { post: 'article', product: 'product', prompt: 'prompt', profile: 'profile' };
+  const LABEL = { post: 'article', project: 'project', prompt: 'prompt', profile: 'profile' };
   const label = LABEL[built?.type] ?? built?.type ?? 'content';
   if (built?.type === 'profile') {
     const t = `Update the ${built.username} member profile`;
@@ -475,14 +475,14 @@ export function describeContentPublish(built, { hasIntro } = {}) {
  * { path, content } or null (no note, or a type that cannot carry one). Pure + exported for unit tests. The id
  * is deterministic (intro-<slug>) so a re-publish updates the same comment file, never duplicating it.
  * 2026-08-11: posts included. The note stays OPTIONAL for a post (validate-content requires one only for a
- * product/prompt); this returning null for a post is what silently discarded a note typed on an article.
+ * project/prompt); this returning null for a post is what silently discarded a note typed on an article.
  */
 export function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
   const note = String(authorNote ?? '').trim();
   if (!note || !built?.slug || !AUTHOR_NOTE_TYPES.has(built.type)) return null;
   const introBuilt = buildCommentFile({
     username,
-    // SOW-145: a house product/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
+    // SOW-145: a house project/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
     scope: built.scope || 'member',
     input: {
       id: `intro-${built.slug}`,

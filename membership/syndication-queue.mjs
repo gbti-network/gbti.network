@@ -19,7 +19,11 @@
 // second, category-channel Discord post; `authorName` (the profile displayName) feeds the no-ping template;
 // `flags` (moderation word-list hits, membership/moderation-flags.mjs) forces superadmin approval in isDue.
 
-export const QUEUE_TYPES = new Set(['share', 'post', 'product', 'prompt']);
+import { canonicalType } from './content-types.mjs';
+
+// sow-196: canonicalize before the membership check. A record or request carrying the retired `product`
+// type name would otherwise be rejected or dropped here rather than resolved to `project`.
+export const QUEUE_TYPES = new Set(['share', 'post', 'project', 'prompt']);
 // SOW-058 (approval model): 'pending' = enqueued, AWAITING superadmin approval (never posts on its own);
 // 'approved' = a superadmin approved it, so the drain will post it on the next tick; then 'sent' / 'failed';
 // 'cancelled' = rejected (from pending) or cancelled before send (from approved). When require_approval is off
@@ -65,7 +69,7 @@ export function dedupeKey({ source, targetSlug, trigger } = {}) {
  * copied: there is deliberately NO body/encryptedBody field, so this function cannot carry a member body.
  */
 export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HOLD_MS } = {}) {
-  const source = str(input.source);
+  const source = canonicalType(str(input.source)); // sow-196: a legacy type name resolves to its current one
   if (!QUEUE_TYPES.has(source)) throw new SyndicationError(`invalid syndication source: ${source || '(none)'}`);
   const targetSlug = trimOrNull(input.targetSlug);
   if (!targetSlug) throw new SyndicationError('targetSlug is required');
@@ -124,7 +128,7 @@ export function normalizeItem(raw) {
   const source = str(raw.source);
   const id = str(raw.id);
   const targetSlug = trimOrNull(raw.targetSlug);
-  if (!id || !QUEUE_TYPES.has(source) || !targetSlug) return null;
+  if (!id || !QUEUE_TYPES.has(canonicalType(source)) || !targetSlug) return null;
   const status = QUEUE_STATUS.has(raw.status) ? raw.status : 'pending';
   const perChannel = raw.perChannel && typeof raw.perChannel === 'object' && !Array.isArray(raw.perChannel) ? raw.perChannel : {};
   const num = (v) => {

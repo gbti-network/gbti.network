@@ -14,7 +14,7 @@ import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
 export const DEVTO_CDN_BASE = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main';
 export const MEMBERS_MARKER = '<!-- members-only -->';
-const SUB = { post: 'posts', product: 'products', prompt: 'prompts' };
+const SUB = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' };
 
 /**
  * The canonical repo path for a content item; null for shares (a share has no article body).

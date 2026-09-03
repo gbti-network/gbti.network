@@ -15,7 +15,10 @@ import { templateFor } from '../../membership/syndication-config-core.mjs';
 
 const CHANNEL_ENV = {
   post: 'DISCORD_CHANNEL_POSTS',
-  product: 'DISCORD_CHANNEL_PRODUCTS',
+// sow-196: the KEY is the current type name; the VALUE is the Cloudflare-provisioned variable NAME,
+// which deliberately still reads PRODUCTS. Renaming the variable means re-provisioning the Worker
+// secret, and a mismatch there silently stops every project announcement reaching Discord.
+  project: 'DISCORD_CHANNEL_PRODUCTS',
   prompt: 'DISCORD_CHANNEL_PROMPTS',
   share: 'DISCORD_CHANNEL_SHARES',
 };
@@ -54,7 +57,7 @@ export async function postToChannel(channelId, item, { env, fetchImpl, client, c
   return { ok: true, id, url };
 }
 
-/** The FEATURED per-type post (#articles/#products/#prompts/#shares). */
+/** The FEATURED per-type post (#articles/#projects/#prompts/#shares). */
 export function createDiscordAdapter({ env = {}, fetchImpl = globalThis.fetch, client = null, cfg = null } = {}) {
   return {
     name: 'discord',

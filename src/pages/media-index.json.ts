@@ -27,7 +27,7 @@ import { contentItemPath } from '../lib/content-index.mjs';
 
 export const prerender = true;
 
-const TYPES = ['post', 'product', 'prompt'] as const;
+const TYPES = ['post', 'project', 'prompt'] as const;
 
 export const GET: APIRoute = async () => {
   const records = [];

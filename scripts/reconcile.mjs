@@ -273,10 +273,10 @@ async function enactReminder(action, { resend, discord, env = {} } = {}) {
   const untilDate = isCoupon && action.until ? action.until.slice(0, 10) : null;
   const body = isCoupon
     ? `Your complimentary GBTI Network membership ends on ${untilDate}. Add a membership to keep your ` +
-      'profile, posts, products, and prompts published and to stay in the community. Visit your account ' +
+      'profile, posts, projects, and prompts published and to stay in the community. Visit your account ' +
       'to add a membership before it ends.'
     : 'Your GBTI Network trial ends in a few days. Add a membership to keep your profile, posts, ' +
-      'products, and prompts published. Visit your account to add a membership before day 90.';
+      'projects, and prompts published. Visit your account to add a membership before day 90.';
   const subject = isCoupon
     ? 'Your complimentary GBTI Network membership ends soon'
     : 'Your GBTI Network trial ends soon: add a membership to stay published';

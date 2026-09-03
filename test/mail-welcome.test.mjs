@@ -235,11 +235,11 @@ test('dropping the span from the note did NOT drop it from the issue', () => {
   // months of items under a week number with nothing to explain it. This is that guard.
   const layout = [
     { key: 'article', label: 'Articles', empty: false, items: [{ title: 'A', url: 'https://gbti.network/a', author: 'x' }] },
-    { key: 'product', label: 'Products', empty: true, note: 'x', items: [] },
+    { key: 'project', label: 'Projects', empty: true, note: 'x', items: [] },
   ];
   const { html } = renderIssue({ launchNote: WELCOME_NOTE, layout, counts: { article: 4 } }, {});
   assert.match(html, /from the network in the past 90 days\./, 'the preheader still names the span');
-  assert.match(html, /Nothing new in Products in the past 90 days\./, 'and so does the empty-section line');
+  assert.match(html, /Nothing new in Projects in the past 90 days\./, 'and so does the empty-section line');
 });
 
 test('a composed WELCOME issue renders the welcome note and the 90-day empty-section wording', () => {
@@ -273,7 +273,7 @@ test('the PREHEADER names the span it covers, and does not say "this week" on a 
   const layout = [
     { key: 'article', label: 'Articles', empty: false, items: [{ title: 'A', url: 'https://gbti.network/a', author: 'x' }] },
   ];
-  const counts = { article: 4, product: 2 };
+  const counts = { article: 4, project: 2 };
 
   const first = renderIssue({ launchNote: FIRST_ISSUE_NOTE, layout, counts }, {}).html;
   assert.match(first, /from the network in the past 90 days\./);

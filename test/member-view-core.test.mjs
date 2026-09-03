@@ -37,8 +37,8 @@ test('memberContent: a non-array input returns []', () => {
 });
 
 test('MEMBER_SECTIONS: the three content types in order', () => {
-  assert.deepEqual(MEMBER_SECTIONS.map((s) => s.type), ['post', 'product', 'prompt']);
-  assert.deepEqual(MEMBER_SECTIONS.map((s) => s.json), ['blog-index.json', 'products-index.json', 'prompts-index.json']);
+  assert.deepEqual(MEMBER_SECTIONS.map((s) => s.type), ['post', 'project', 'prompt']);
+  assert.deepEqual(MEMBER_SECTIONS.map((s) => s.json), ['blog-index.json', 'projects-index.json', 'prompts-index.json']);
 });
 
 test('directoryMap: keys by lowercase username, tolerates junk', () => {

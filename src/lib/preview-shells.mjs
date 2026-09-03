@@ -1,9 +1,9 @@
 /**
- * Reshape the workbench preview's product Doc Shell into the page a given content type actually publishes as.
+ * Reshape the workbench preview's project Doc Shell into the page a given content type actually publishes as.
  *
- * The preview page (src/pages/workbench/preview.astro) ships ONE document, the product detail shell, and
- * injects a staged draft into it. That was fine while products were the only authorable type. It stopped
- * being fine the moment articles and prompts existed: a post preview showed a product hero, and a prompt
+ * The preview page (src/pages/workbench/preview.astro) ships ONE document, the project detail shell, and
+ * injects a staged draft into it. That was fine while projects were the only authorable type. It stopped
+ * being fine the moment articles and prompts existed: a post preview showed a project hero, and a prompt
  * preview showed a Contents rail, a sticky spec bar and a pricing badge, none of which those pages have.
  *
  * Every branch here RESHAPES rather than re-emits. The preview's rail wiring, body injection, contents
@@ -27,7 +27,7 @@ import {
 /**
  * Does this type's published page carry a Contents rail?
  *
- * A prompt page does not: it is one enclosed prompt block, and a rail over it is product chrome. The
+ * A prompt page does not: it is one enclosed prompt block, and a rail over it is project chrome. The
  * reshape below hides the nav, but preview.astro's buildRail runs AFTERWARDS and ends with
  * `nav.hidden = toc.length === 0`, which un-hid it again the moment a body carried two h2s. That is
  * exactly what shipped, and the drift test missed it because it asserts class names, not visibility.
@@ -42,7 +42,7 @@ export function shellHasToc(type) {
 /**
  * @param {Document} document the preview document to reshape in place
  * @param {object} ctx
- * @param {string} ctx.type      'post' | 'prompt' | anything else (a product, which needs no reshape)
+ * @param {string} ctx.type      'post' | 'prompt' | anything else (a project, which needs no reshape)
  * @param {object} ctx.fm        the draft's frontmatter
  * @param {string} ctx.slug      used as the title fallback
  * @param {string[]} ctx.cats    category keys, in breadcrumb order
@@ -54,9 +54,9 @@ export function shellHasToc(type) {
  * @param {string} ctx.itemPath  the draft's repo path, for `asset`
  */
 export function applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath }) {
-  // sow-214: an ARTICLE is not a product, and until now the preview rendered it as one. The published
+  // sow-214: an ARTICLE is not a project, and until now the preview rendered it as one. The published
   // page picks ArticleJournal / ArticleEditorial / ArticleCard from `layout`; this preview rendered every
-  // type through the product Doc Shell, so an article preview was a different page from the article and
+  // type through the project Doc Shell, so an article preview was a different page from the article and
   // the editor's layout picker changed nothing on screen.
   //
   // Reshaped rather than rebuilt: the rail, the body injection, the contents scroll-spy and the
@@ -68,7 +68,7 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
   if (type === 'post') {
     const layout = ARTICLE_LAYOUTS.includes(fm.layout) ? fm.layout : 'journal';
     const shell = articleShell(layout);
-    // The product chrome has no article equivalent: no hero band, no sticky spec bar.
+    // The project chrome has no article equivalent: no hero band, no sticky spec bar.
     (document.querySelector('.pd-hero'))?.setAttribute('hidden', '');
     (document.querySelector('.pd-bar'))?.setAttribute('hidden', '');
     // Adopt the real article geometry. These classes already ship on this page: .art-* lives in
@@ -79,7 +79,7 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     // sow-215 Check B: adopt the published page's OUTER band too, not only the grid.
     //
     // This was the article branch's half of a fix the PROMPT branch already made below, and the omission was
-    // invisible because nothing asserted applied output. `.pd-wrap` is the product measure (1000px, 34px
+    // invisible because nothing asserted applied output. `.pd-wrap` is the project measure (1000px, 34px
     // padding); `shell.grid` carries `art-wrap` (1140px, 34px). Leaving the wrapper in place nested the two,
     // so every article preview rendered 140px narrower with doubled side padding than the page it previewed.
     // The published markup is `section.art-shell.band > div.art-j-grid.art-wrap` with nothing between, and
@@ -120,8 +120,8 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     const anchor = shell.leadIn === 'section' ? grid : document.getElementById('pd-overview');
     if (anchor && lead) anchor.insertAdjacentHTML('beforebegin', lead);
   } else if (type === 'prompt') {
-    // sow-214 fixed the ARTICLE preview and left every other type on the product Doc Shell. A prompt is
-    // the next worst fit: the product hero, the sticky spec bar, the Contents rail and the pricing badge
+    // sow-214 fixed the ARTICLE preview and left every other type on the project Doc Shell. A prompt is
+    // the next worst fit: the project hero, the sticky spec bar, the Contents rail and the pricing badge
     // are chrome a prompt page does not have, and the one thing it does have, the enclosed prompt block,
     // was missing entirely. Same treatment and the same reason as sow-214: RESHAPE rather than re-emit,
     // so the body injection, the sow-235 edit path and the member toggle stay bound to the elements they
@@ -141,7 +141,7 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
       pwrap.parentElement.insertBefore(band, pwrap);
       band.appendChild(pwrap);
     }
-    // The published page lays the prompt out inside the site .wrap; .pd-wrap is the narrower product
+    // The published page lays the prompt out inside the site .wrap; .pd-wrap is the narrower project
     // measure (1000px), which made the preview's reading column ~20% narrower than the real one and so
     // wrapped the prompt's lines somewhere else. Line breaks are one of the things an author previews.
     if (pwrap) pwrap.className = PROMPT_SHELL.wrap;

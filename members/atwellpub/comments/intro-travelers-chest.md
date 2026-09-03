@@ -2,7 +2,7 @@
 type: comment
 id: intro-travelers-chest
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: travelers-chest
 status: published
 visibility: public

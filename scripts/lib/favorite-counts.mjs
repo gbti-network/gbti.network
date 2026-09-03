@@ -15,7 +15,12 @@ import yaml from 'js-yaml';
 export const FAVORITE_COUNTS_PATH = 'house/favorite-counts.yml';
 export const FAVORITED_BY_PATH = 'house/favorited-by.yml'; // SOW-114: the OPT-IN public favoriter lists
 
-const FAVORITE_TYPES = new Set(['post', 'product', 'prompt']);
+import { canonicalType } from '../../membership/content-types.mjs';
+
+const FAVORITE_TYPES = new Set(['post', 'project', 'prompt']);
+// sow-196: a member's KV favorites written before the 2026-09-02 rename store `product`. Canonicalizing
+// here is what stops reconcile writing a stale `product:<slug>` row back into house/favorite-counts.yml
+// on its next sync, which would split one item's count across two keys and show 0 on the page.
 const SLUG_RE = /^[a-z0-9-]+$/;
 const USERNAME_RE = /^[a-z0-9-]+$/i;
 
@@ -46,8 +51,9 @@ export function aggregateFavoriteCounts(activities) {
     const list = Array.isArray(a?.favorites) ? a.favorites : [];
     const seen = new Set();
     for (const f of list) {
-      if (!f || !FAVORITE_TYPES.has(f.type) || typeof f.slug !== 'string' || !SLUG_RE.test(f.slug)) continue;
-      const k = `${f.type}:${f.slug}`;
+      const type = canonicalType(f?.type); // sow-196
+      if (!f || !FAVORITE_TYPES.has(type) || typeof f.slug !== 'string' || !SLUG_RE.test(f.slug)) continue;
+      const k = `${type}:${f.slug}`;
       if (seen.has(k)) continue; // a member counts at most once per target
       seen.add(k);
       m.set(k, (m.get(k) ?? 0) + 1);
@@ -87,8 +93,9 @@ export function aggregateFavoritedBy(entries, { optedIn, membersIndex } = {}) {
     if (typeof username !== 'string' || !USERNAME_RE.test(username)) continue;
     const list = Array.isArray(e?.activity?.favorites) ? e.activity.favorites : [];
     for (const f of list) {
-      if (!f || !FAVORITE_TYPES.has(f.type) || typeof f.slug !== 'string' || !SLUG_RE.test(f.slug)) continue;
-      const k = `${f.type}:${f.slug}`;
+      const type = canonicalType(f?.type); // sow-196
+      if (!f || !FAVORITE_TYPES.has(type) || typeof f.slug !== 'string' || !SLUG_RE.test(f.slug)) continue;
+      const k = `${type}:${f.slug}`;
       if (!m.has(k)) m.set(k, new Set());
       m.get(k).add(username);
     }

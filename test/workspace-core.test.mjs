@@ -138,7 +138,7 @@ test('shouldPollPr: poll a pending PR, stop on accepted/rejected/blocked', () =>
 // SOW-036 P4: the workspace deep-link tab hint.
 test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, extra params ignored)', () => {
   assert.equal(parseWorkspaceTab('#tab=prompt'), 'prompt');
-  assert.equal(parseWorkspaceTab('tab=product'), 'product');
+  assert.equal(parseWorkspaceTab('tab=project'), 'project');
   assert.equal(parseWorkspaceTab('#tab=prs&foo=1'), 'prs');
   assert.equal(parseWorkspaceTab('#x=1&tab=inbox'), 'inbox');
   assert.equal(parseWorkspaceTab('#tab=post'), 'post');
@@ -151,7 +151,7 @@ test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, ext
 test('SOW-064: parseWorkspaceNew reads a valid #new=<type>; null otherwise', () => {
   assert.equal(parseWorkspaceNew('#new=post'), 'post');
   assert.equal(parseWorkspaceNew('new=prompt'), 'prompt');
-  assert.equal(parseWorkspaceNew('#new=product&x=1'), 'product');
+  assert.equal(parseWorkspaceNew('#new=project&x=1'), 'project');
   assert.equal(parseWorkspaceNew('#new=profile'), null); // profile is not a quick-create content type
   assert.equal(parseWorkspaceNew('#new=bogus'), null);
   assert.equal(parseWorkspaceNew('#tab=post'), null); // a tab hash is not a new-target
@@ -184,7 +184,7 @@ test('parseWorkspaceDraft: `draft=<type>:<slug>` with a valid type + kebab slug'
 
 test('typeForContentPath derives the content type from the path subtree', () => {
   assert.equal(typeForContentPath('members/alice/posts/x/index.md'), 'post');
-  assert.equal(typeForContentPath('members/alice/products/y/index.md'), 'product');
+  assert.equal(typeForContentPath('members/alice/projects/y/index.md'), 'project');
   assert.equal(typeForContentPath('members/alice/profile.md'), null);
 });
 
@@ -192,25 +192,25 @@ test('typeForContentPath derives the content type from the path subtree', () => 
 test('publicPathFor maps each type to its public route and derives the slug', () => {
   // post -> /articles/ (SOW-136 flattened posts to the articles route), from a member folder
   assert.equal(publicPathFor({ type: 'post', path: 'members/alice/posts/hello-world/index.md' }), '/articles/hello-world/');
-  assert.equal(publicPathFor({ type: 'product', path: 'members/bob/products/my-tool/index.md' }), '/products/my-tool/');
+  assert.equal(publicPathFor({ type: 'project', path: 'members/bob/projects/my-tool/index.md' }), '/projects/my-tool/');
   assert.equal(publicPathFor({ type: 'prompt', path: 'members/cara/prompts/deep-focus/index.md' }), '/prompts/deep-focus/');
   // house content shares the same routes (no member/house special case)
   assert.equal(publicPathFor({ type: 'post', path: 'house/posts/launch-notes/index.md' }), '/articles/launch-notes/');
   // a trailing folder path without index.md still resolves
-  assert.equal(publicPathFor({ type: 'product', path: 'members/bob/products/my-tool' }), '/products/my-tool/');
+  assert.equal(publicPathFor({ type: 'project', path: 'members/bob/projects/my-tool' }), '/projects/my-tool/');
 });
 
 test('publicPathFor returns null for an unknown type or an underivable slug', () => {
   assert.equal(publicPathFor({ type: 'profile', path: 'members/alice/profile.md' }), null);
   assert.equal(publicPathFor({ type: 'share', path: 'members/alice/shares/x.md' }), null);
-  assert.equal(publicPathFor({ type: 'product', path: '' }), null);
-  assert.equal(publicPathFor({ type: 'product', path: 'index.md' }), null);
+  assert.equal(publicPathFor({ type: 'project', path: '' }), null);
+  assert.equal(publicPathFor({ type: 'project', path: 'index.md' }), null);
   assert.equal(publicPathFor({}), null);
 });
 
 // SOW-104: planHashRoute -- a rail nav exits the WorkBench editor instead of being swallowed.
 test('planHashRoute: editing + a plain DIFFERENT tab route exits to that tab', () => {
-  assert.deepEqual(planHashRoute('#tab=product', { editing: true, tab: 'post' }), { action: 'exit', tab: 'product' });
+  assert.deepEqual(planHashRoute('#tab=project', { editing: true, tab: 'post' }), { action: 'exit', tab: 'project' });
 });
 test('planHashRoute: editing + the SAME section route still exits (Articles while editing a post)', () => {
   assert.deepEqual(planHashRoute('#tab=post', { editing: true, tab: 'post' }), { action: 'exit', tab: 'post' });
@@ -225,7 +225,7 @@ test('planHashRoute: not editing, a #new= route opens the editor', () => {
   assert.deepEqual(planHashRoute('#new=prompt', { editing: false, tab: 'overview' }), { action: 'openNew', type: 'prompt' });
 });
 test('planHashRoute: while editing, a #new= route is ignored (no double-open, no exit)', () => {
-  assert.deepEqual(planHashRoute('#new=product', { editing: true, tab: 'post' }), { action: 'none' });
+  assert.deepEqual(planHashRoute('#new=project', { editing: true, tab: 'post' }), { action: 'none' });
 });
 test('planHashRoute: not editing, a different plain tab switches', () => {
   assert.deepEqual(planHashRoute('#tab=subs', { editing: false, tab: 'overview' }), { action: 'switchTab', tab: 'subs' });
@@ -345,12 +345,12 @@ test('scopeFor: a superadmin — stored pref wins, else empty-personal defaults 
 test('authorSelectValue: the item PATH decides the owner, because a draft persists the path and not the author', () => {
   assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/prompts/grok-skill-for-claude-code/index.md' }), 'member:atwellpub');
   assert.equal(authorSelectValue({ itemPath: 'members/gbtilabs/posts/x/index.md' }), 'member:gbtilabs');
-  assert.equal(authorSelectValue({ itemPath: 'house/products/y/index.md' }), 'house');
+  assert.equal(authorSelectValue({ itemPath: 'house/projects/y/index.md' }), 'house');
   // THE REGRESSION: a draft saved from the editor carries no author at all, because author is not a form field
   // and gather() only returns form fields. Before the fix this resolved to nothing, no option was marked
   // selected, and the browser picked the first option, which moves the item to gbtilabs.
-  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/products/ryker/index.md', author: undefined }), 'member:atwellpub');
-  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/products/ryker/index.md', author: '' }), 'member:atwellpub');
+  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/projects/ryker/index.md', author: undefined }), 'member:atwellpub');
+  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/projects/ryker/index.md', author: '' }), 'member:atwellpub');
   // Case and the uppercase folder form both normalise to the members-index username.
   assert.equal(authorSelectValue({ itemPath: 'members/AtwellPub/posts/x/index.md' }), 'member:atwellpub');
 });

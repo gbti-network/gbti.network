@@ -218,13 +218,13 @@ const TILE_CHANNELS = [
 
 // SOW-125: labels for the auto-share matrix (content types down the rows, deliverable channels across the top)
 // and the per-channel delay inputs.
-const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
+const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
 const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn' };
 const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual', popular: 'Popular' };
 const TMPL_TYPES = [
   { key: 'share', nm: 'Share', df: 'reshare line' },
   { key: 'post', nm: 'Post', df: 'article' },
-  { key: 'product', nm: 'Product', df: 'product' },
+  { key: 'project', nm: 'Project', df: 'project' },
   { key: 'prompt', nm: 'Prompt', df: 'prompt' },
 ];
 const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{author-note-italic}', '{member-url}', '{short-description}',
@@ -248,7 +248,7 @@ const SYND_TABS = [
 const SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
 const SYND_SUB_KEY = 'gbti-synd-sub';
 // The template keys a channel's working copy tracks (the four content types + the Reddit/dev.to sub-templates).
-const TMPL_KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub']; // SOW-138: *-body = the public crosspost body
+const TMPL_KEYS = ['share', 'post', 'project', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub']; // SOW-138: *-body = the public crosspost body
 
 class GbtiChannelMapManager extends GbtiElement {
   connectedCallback() { super.connectedCallback?.(); }

@@ -76,7 +76,7 @@ export function resolveNotify({ event = 'author-publish', follow, global } = {})
 // src/lib/feed-items.ts). The stored shape is GENERIC over the key: normalizeNotify keeps any well-formed
 // event key, so the owner's fifth "skill" row (Q25, not a content type yet) and any future type are carried
 // with NO migration the day they ship. This list is what a UI seeds; it is not an allow-list.
-export const NOTIFY_EVENTS = Object.freeze(['article', 'prompt', 'product', 'share']);
+export const NOTIFY_EVENTS = Object.freeze(['article', 'prompt', 'project', 'share']);
 
 // A stored event key: a slug (a content-type kind, or the special `default` that bagFor reads as an
 // all-events fallback). Bounded so a stored preference cannot smuggle an unexpected key into the UI or a

@@ -1,10 +1,10 @@
 // sow-174: curated banner-color presets, an alternative to uploading a banner image. Six options only, no
 // free color input: every value here already exists as a design token elsewhere (the brand green/amber/ink,
-// plus the category colors ProductDirectory.astro already uses for wordpress/ide-plugins/mods), so a choice
+// plus the category colors ProjectDirectory.astro already uses for wordpress/ide-plugins/mods), so a choice
 // can never land on a public page with poor contrast under the hero's white title or a color that clashes
 // with the rest of the site.
 //
-// The `from` hex values for wordpress/ide-plugins/mods are the exact `--cb` values from ProductDirectory
+// The `from` hex values for wordpress/ide-plugins/mods are the exact `--cb` values from ProjectDirectory
 // .astro's scoped `.c-wp`/`.c-ide`/`.c-mod` styles. That block is page-scoped CSS, not a shared custom
 // property, so this file is the one place both sides (the schema's enum and the editor's swatch picker) get
 // the same six values from; gbti-v3.css's `.pd-hero[data-preset]` rules restate them as literal hex for the

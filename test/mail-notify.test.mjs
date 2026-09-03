@@ -15,7 +15,7 @@ import { renderMailIssue } from '../membership/mail-render-dispatch.mjs';
 test('eventForType maps a post to the article notify event and 1:1 for the rest; a share has none', () => {
   assert.equal(eventForType('post'), 'article');
   assert.equal(eventForType('article'), 'article');
-  assert.equal(eventForType('product'), 'product');
+  assert.equal(eventForType('project'), 'project');
   assert.equal(eventForType('prompt'), 'prompt');
   assert.equal(eventForType('share'), null, 'shares have no email notification in this cut');
   assert.equal(eventForType('nonsense'), null);
@@ -29,7 +29,7 @@ test('notificationIssueId is deterministic and carries no timestamp (idempotent 
   const b = notificationIssueId({ type: 'post', author: 'alice', slug: 'x' });
   assert.equal(a, b);
   assert.equal(a, 'notify:post:alice:x');
-  assert.notEqual(a, notificationIssueId({ type: 'product', author: 'alice', slug: 'x' }));
+  assert.notEqual(a, notificationIssueId({ type: 'project', author: 'alice', slug: 'x' }));
 });
 
 // ---------- buildNotificationIssue: metadata only, NO body field ----------
@@ -118,7 +118,7 @@ test('selectEmailRecipients dedupes a hash that appears twice', () => {
 test('selectEmailRecipients resolves per EVENT: article-on does not fire for a product publish', () => {
   const out = selectEmailRecipients(
     [{ githubId: '11', mailHash: 'hA', globalNotify: { article: { email: true } } }],
-    { event: 'product' },
+    { event: 'project' },
   );
   assert.deepEqual(out, [], 'the article opt-in does not leak into a product notification');
 });

@@ -8,14 +8,17 @@ import { loadFeedItems } from '../../lib/feed-items';
 export function getStaticPaths() {
   return [
     { params: { narrow: 'news' }, props: { title: 'News Feed', description: 'The member curated news stream the GBTI Network follows, refreshed hourly.' } },
-    { params: { narrow: 'network' }, props: { title: 'Network Feed', description: 'Publications from across the GBTI Network: member and house articles, products, and prompts, newest first.' } },
+    { params: { narrow: 'network' }, props: { title: 'Network Feed', description: 'Publications from across the GBTI Network: member and house articles, projects, and prompts, newest first.' } },
     { params: { narrow: 'articles' }, props: { title: 'Articles Feed', description: 'Member articles across the GBTI Network, newest first.' } },
-    { params: { narrow: 'products' }, props: { title: 'Products Feed', description: 'Member products, tools, and plugins across the GBTI Network, newest first.' } },
+    { params: { narrow: 'projects' }, props: { title: 'Projects Feed', description: 'Member projects, tools, and plugins across the GBTI Network, newest first.' } },
+    // sow-196: the pre-rename route stays BUILDABLE rather than 404-ing. Its URL is in digest emails that
+    // have already been delivered, and public/_redirects 301s it to /feeds/projects/.
+    { params: { narrow: 'projects' }, props: { title: 'Projects Feed', description: 'Member projects, tools, and plugins across the GBTI Network, newest first.' } },
     { params: { narrow: 'prompts' }, props: { title: 'Prompts & Skills Feed', description: 'Reusable AI prompts from GBTI Network members, newest first.' } },
     { params: { narrow: 'shares' }, props: { title: 'Shares Feed', description: 'Links and finds GBTI Network members are sharing publicly, newest first.' } },
   ];
 }
-const { narrow } = Astro.params as { narrow: 'news' | 'network' | 'articles' | 'products' | 'prompts' | 'shares' };
+const { narrow } = Astro.params as { narrow: 'news' | 'network' | 'articles' | 'projects' | 'projects' | 'prompts' | 'shares' };
 const { title, description } = Astro.props;
 
 const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();

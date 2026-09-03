@@ -57,8 +57,8 @@ let ENTRIES = [];
 // SOW-111 QA fix: the single-type views are the UNCAPPED directories, but /activity-index.json is a capped
 // river (40 newest), so filtering it silently dropped older items (e.g. only 8 of 46 articles). Each content
 // type lazily loads its full per-type index (SOW-031) and the narrow view renders from THAT.
-const DIRECTORY_URL = { post: 'blog-index.json', product: 'products-index.json', prompt: 'prompts-index.json' };
-const DIRECTORY = { post: null, product: null, prompt: null };
+const DIRECTORY_URL = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
+const DIRECTORY = { post: null, project: null, prompt: null };
 const DIRECTORY_LOADING = new Set();
 // SOW-023: the personalized "Following" view. FOLLOWING is a Set of followed usernames once loaded for an
 // effective-paid member, or null when unknown (not signed in, trial, or the paid-only Worker denied the read).
@@ -72,7 +72,7 @@ let PREFS_LOADED = false;
 // with per-type defaults. Resolved in init() once the landing TYPE is final, and re-resolved on every
 // selectType switch; this placeholder only covers the window before init runs.
 let MODE = 'compact';
-// SOW-042/043: the active type filter (all | post | product | prompt | share | news). 'all' blends the
+// SOW-042/043: the active type filter (all | post | project | prompt | share | news). 'all' blends the
 // activity-index with the member's Shares + members-only News (capped river). MEMBERSHIP gates both; SHARES + NEWS
 // are the raw lists, loaded once on demand. News is PAID-only; Shares are paid-or-trial. (TYPE_FILTERS,
 // parseTypeFromHash, typeForHash, railKeyForType live in client-ui/src/feed-route.mjs so they are node-testable.)
@@ -162,7 +162,7 @@ function renderFeed(filter = '') {
   // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
   if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
   // sow-204 item 4a: filter by `kinds` rather than by TYPE, because NETWORK admits THREE item types
-  // (posts, products, prompts) and the old single-type equality could not express it. A single-type view
+  // (posts, projects, prompts) and the old single-type equality could not express it. A single-type view
   // reports kinds:[itsOwnType], so this is the same behaviour for every pre-existing view; `all` and `news`
   // report kinds:null and are not filtered at all.
   if (kinds) rows = rows.filter((e) => kinds.includes(e.type));
@@ -494,7 +494,7 @@ function selectType(next) {
 }
 
 /** SOW-111 QA fix: lazily load the ACTIVE content type's full per-type index (uncapped, SOW-031) so the
- *  Articles/Products/Prompts views show everything, not the capped river's slice. Cached per type; a failed
+ *  Articles/Projects/Prompts views show everything, not the capped river's slice. Cached per type; a failed
  *  fetch leaves the capped fallback in place and retries on the next visit to that view. */
 async function ensureDirectoryForFilter() {
   const t = TYPE;
@@ -784,7 +784,7 @@ function init() {
     renderFeed($('[data-filter]')?.value || '');
   }));
 
-  // SOW-042/043: the type filter chip-row (All / Articles / Products / Prompts / Shares / News). Persist +
+  // SOW-042/043: the type filter chip-row (All / Articles / Projects / Prompts / Shares / News). Persist +
   // re-render; selecting All/Shares lazily loads Shares, All/News lazily loads News, the first time.
   document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', () => selectType(b.dataset.type)));
 

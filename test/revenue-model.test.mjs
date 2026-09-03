@@ -46,7 +46,7 @@ test('Example 4: one member with multiple points (Chris 2, Dana 1 -> 3.3334 / 1.
 
 test('Example 5: a comment on an in-between item does not count (only first/last items)', () => {
   const first = { owner: 'alice', type: 'post', slug: 'a' };
-  const between = { owner: 'clara', type: 'product', slug: 'c' };
+  const between = { owner: 'clara', type: 'project', slug: 'c' };
   const last = { owner: 'bob', type: 'prompt', slug: 'b' };
   const points = qualifyingCollaboration({ firstTouch: first, lastTouch: last, conversionAt: 100, events: [
     { member: 'dana', item: between, kind: 'comment', at: 50 }, // in-between -> excluded
@@ -61,7 +61,7 @@ test('Example 5: a comment on an in-between item does not count (only first/last
 
 test('Example 6: an author self-comment (and author-intro) on their own item does not count', () => {
   const first = { owner: 'alice', type: 'post', slug: 'a' };
-  const last = { owner: 'bob', type: 'product', slug: 'b' };
+  const last = { owner: 'bob', type: 'project', slug: 'b' };
   const points = qualifyingCollaboration({ firstTouch: first, lastTouch: last, conversionAt: 100, events: [
     { member: 'alice', item: first, kind: 'comment', at: 10, authorIntro: true }, // self author-intro -> excluded
     { member: 'chris', item: first, kind: 'comment', at: 20 },
@@ -188,7 +188,7 @@ test('resolveTouches: earliest in-window is first, latest is last; an expired to
   const touches = [
     { owner: 'old', type: 'post', slug: 'x', at: conv - 120 * day }, // expired (>90d) -> not first
     { owner: 'alice', type: 'post', slug: 'a', at: conv - 80 * day }, // earliest in-window -> first
-    { owner: 'clara', type: 'product', slug: 'c', at: conv - 40 * day },
+    { owner: 'clara', type: 'project', slug: 'c', at: conv - 40 * day },
     { owner: 'bob', type: 'prompt', slug: 'b', at: conv - 1 * day }, // latest -> last
   ];
   const { firstTouch, lastTouch } = resolveTouches(touches, { conversionAt: conv, windowMs });

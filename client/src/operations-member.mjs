@@ -19,7 +19,7 @@ import { getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as 
 import { OperationError, requireIdentity } from './operations-core.mjs';
 
 // SOW-024: member activity (favorites + collections) in the deletable edge store, via the signup Worker.
-// Collections let a member organize prompts (and posts/products) into named lists, in addition to favoriting.
+// Collections let a member organize prompts (and posts/projects) into named lists, in addition to favoriting.
 // The host holds the member's GitHub token; signupBase is the Worker. Errors map to OperationError codes.
 export function mapActivityError(err) {
   if (err instanceof ActivityClientError && /not signed in/i.test(err.message)) {

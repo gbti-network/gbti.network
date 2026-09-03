@@ -31,7 +31,7 @@ export const draftImagePrefix = (githubId) => `draftimg:${String(githubId)}:`;
 // (membership/member-drafts.mjs draftKeyOf). Reusing that identity is deliberate: an image belongs to a draft,
 // applyDraftPut already refuses a draft with no valid slug, and a PENDING rename does not move the draft's key
 // (pendingSlug is a separate field), so images live and die with the draft they were staged for.
-const ITEM_TOKEN_RE = /^(post|product|prompt|profile):[a-z0-9][a-z0-9-]{0,79}$/;
+const ITEM_TOKEN_RE = /^(post|project|product|prompt|profile):[a-z0-9][a-z0-9-]{0,79}$/;
 
 /** The validated item token, or null. Every caller treats null as a refusal rather than a default. */
 export function itemTokenOf(item) {

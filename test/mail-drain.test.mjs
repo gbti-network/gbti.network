@@ -11,7 +11,7 @@ import { buildSubscriber } from '../membership/mail-subscriber.mjs';
 import { renderIssue as realRenderIssue } from '../membership/mail-render.mjs';
 
 const at = (t) => () => t;
-const issueOf = (id) => ({ issueId: id, sections: { article: [], product: [], prompt: [], share: [] }, topNews: [], counts: {}, isEmpty: false, generatedAt: 0 });
+const issueOf = (id) => ({ issueId: id, sections: { article: [], project: [], prompt: [], share: [] }, topNews: [], counts: {}, isEmpty: false, generatedAt: 0 });
 
 function makeKV({ throwOn = () => false } = {}) {
   const m = new Map();

@@ -24,7 +24,7 @@ import { TIER, meetsTier } from './tiers.mjs';
 // overrides-core.mjs, so this adds no cycle and keeps the module node-free for the MV3 bundle.
 import { rankForPath } from './path-rank.mjs';
 
-const CONTENT_DIRS = ['posts', 'products', 'prompts', 'comments'];
+const CONTENT_DIRS = ['posts', 'projects', 'products', 'prompts', 'comments'];
 const ROLE_RANK = { [ROLE.member]: 0, [ROLE.moderator]: 1, [ROLE.admin]: 2, [ROLE.superadmin]: 3 };
 
 /**
@@ -157,7 +157,7 @@ export function contributionTarget(paths, ownedFolder) {
 /**
  * The OWNER-side mirror of contributionTarget (SOW-028, the in-client review inbox). True when a PR is an
  * incoming contribution to `ownerFolder`: every changed path is canonical AND sits inside a REVIEWABLE
- * content dir of members/<ownerFolder>/ (posts/products/prompts/comments per CONTENT_DIRS, NOT a
+ * content dir of members/<ownerFolder>/ (posts/projects/prompts/comments per CONTENT_DIRS, NOT a
  * personal-activity dir like shares/), with at least one path. Because every path is under the owner's own prefix, no
  * other-member folder and no house/infra (Tier A/S) path can be present, so this exactly identifies the set
  * the gate would classify as a contribution awaiting THIS owner's approval (the caller still excludes PRs the
@@ -213,7 +213,7 @@ export function contentTypesTouched(paths, ownedFolder) {
 
 /**
  * sow-185: the minimum TIER required to author a set of content types (from contentTypesTouched). Content
- * Creator authors public presence (post / product / prompt / profile); a Network Member authors comments.
+ * Creator authors public presence (post / project / prompt / profile); a Network Member authors comments.
  * Fail closed: an empty or mixed set, or any non-comment type, requires creator, the higher tier, so a type we
  * cannot cleanly classify as comments-only never publishes on the member floor.
  */

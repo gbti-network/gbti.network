@@ -17073,7 +17073,7 @@ var postSchema = external_exports.object({
   redirectFrom: external_exports.array(external_exports.string()).default([])
 });
 var productSchema = external_exports.object({
-  type: external_exports.literal("product").default("product"),
+  type: external_exports.literal("project").default("project"),
   title: external_exports.string(),
   slug: external_exports.string().regex(/^[a-z0-9-]+$/),
   author: external_exports.string(),
@@ -17096,7 +17096,7 @@ var productSchema = external_exports.object({
   icon: external_exports.string(),
   // REQUIRED, 1:1. The SMALL icon: the directory card renders it at 64 (shown 56).
   // Optional 1:1 LARGE icon for the detail page's 96px slot, which a 128px source cannot serve crisply at
-  // 2x. Optional on purpose: every existing product predates it, and their 128x128 sources cannot be
+  // 2x. Optional on purpose: every existing project predates it, and their 128x128 sources cannot be
   // upscaled into a genuine large asset. The render falls back to `icon`.
   iconLarge: external_exports.string().optional(),
   banner: external_exports.string().optional(),
@@ -17104,7 +17104,7 @@ var productSchema = external_exports.object({
   bannerPreset: external_exports.enum(BANNER_PRESET_KEYS).optional(),
   featuredImage: external_exports.string(),
   // REQUIRED, mirrors src/content.config.ts (the 16:10 spotlight cover). Was optional
-  // here: a product published without it passed the client but broke the Astro build (SOW-025, same drift class).
+  // here: a project published without it passed the client but broke the Astro build (SOW-025, same drift class).
   // sow-172/174: a gallery entry is EITHER a bare path OR { src, caption }. Mirrors src/content.config.ts.
   // The union matters beyond validation: zod STRIPS unknown keys, so without it a caption would silently
   // vanish the next time this schema validated a save.
@@ -17113,7 +17113,7 @@ var productSchema = external_exports.object({
   // sow-172: unset resolves by shot count
   video: external_exports.string().optional(),
   links: contentLinks,
-  // Mirrors src/content.config.ts. Which side the Contents rail renders on for this product's detail page.
+  // Mirrors src/content.config.ts. Which side the Contents rail renders on for this project's detail page.
   sidebarPosition: external_exports.enum(["left", "right"]).default("right"),
   publishedAt: external_exports.coerce.date().optional(),
   redirectFrom: external_exports.array(external_exports.string()).default([])
@@ -17197,7 +17197,7 @@ var commentSchema = external_exports.object({
   type: external_exports.literal("comment").default("comment"),
   id: external_exports.string().min(1),
   author: external_exports.string(),
-  targetType: external_exports.enum(["post", "product", "prompt", "share", "news"]),
+  targetType: external_exports.enum(["post", "project", "prompt", "share", "news"]),
   // SOW-032: 'share'; SOW-046 D: 'news' discussion
   targetSlug: external_exports.string(),
   // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
@@ -17215,14 +17215,14 @@ var commentSchema = external_exports.object({
 });
 var SCHEMAS = Object.freeze({
   post: postSchema,
-  product: productSchema,
+  project: productSchema,
   profile: profileSchema,
   prompt: promptSchema
 });
-var AUTHORABLE_TYPES = Object.freeze(["post", "product", "prompt", "profile"]);
+var AUTHORABLE_TYPES = Object.freeze(["post", "project", "prompt", "profile"]);
 var SYSTEM_MANAGED = Object.freeze({
   post: ["contributors"],
-  product: ["contributors"],
+  project: ["contributors"],
   prompt: ["contributors"],
   profile: ["tier", "joinedAt"]
 });
@@ -17327,7 +17327,7 @@ function stripTrackingParams(input) {
 }
 
 // client/src/content-ops.mjs
-var SUBDIR = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
+var SUBDIR = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
 var MAX_BODY_BYTES = 1e6;
 var NETWORK_CONTENT_OWNER = "gbtilabs";
 function resolveTarget({ scope = "member", username } = {}) {
@@ -17564,14 +17564,14 @@ function curatorsFromText(text) {
 var canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator === true;
 
 // src/lib/content-index.mjs
-var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
 function isReadablePath(path4) {
   return typeof path4 === "string" && !path4.includes("..") && !path4.includes("\\") && READ_PATH_RE.test(path4);
 }
 
 // client/src/repo-fs.mjs
-var SUBDIR2 = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
-var TYPES = ["post", "product", "prompt", "profile"];
+var SUBDIR2 = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
+var TYPES = ["post", "project", "prompt", "profile"];
 function safeRel(relPath) {
   return typeof relPath === "string" && relPath.length > 0 && !relPath.includes("..") && !relPath.includes("\\") && !relPath.startsWith("/");
 }
@@ -17652,7 +17652,7 @@ function createReader(repoPath) {
         for (const e of entries) {
           const full = path2.join(dir, e.name);
           if (e.isDirectory()) walk(full);
-          else if (/\.(md|mdx)$/.test(e.name) && /\/(posts|products|prompts)\//.test(full.split(path2.sep).join("/"))) {
+          else if (/\.(md|mdx)$/.test(e.name) && /\/(posts|projects|products|prompts)\//.test(full.split(path2.sep).join("/"))) {
             const { frontmatter } = parseContentFile(fs2.readFileSync(full, "utf8"));
             if (frontmatter.visibility === "members") {
               out.push({
@@ -17764,7 +17764,7 @@ function createReader(repoPath) {
     /**
      * SOW-031: read ANY published content index.md for the in-extension reader (parity with the extension
      * github-reader.read). Unlike get() (own-folder-scoped for editing), this is a cross-member READ over the
-     * local clone, gated by the SAME isReadablePath allowlist the extension uses (only posts/products/prompts
+     * local clone, gated by the SAME isReadablePath allowlist the extension uses (only posts/projects/prompts
      * index.md, no traversal, no roles.yml / house/pages) so the npm host is not a broader file oracle than the
      * extension. Synchronous (local fs); returns { path, frontmatter, body } or null.
      */
@@ -17809,8 +17809,8 @@ function createStager(repoPath) {
 }
 
 // client/src/github-reader.mjs
-var SUBDIR3 = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
-var TYPES2 = ["post", "product", "prompt", "profile"];
+var SUBDIR3 = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
+var TYPES2 = ["post", "project", "prompt", "profile"];
 var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
@@ -17909,7 +17909,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
     get,
     // SOW-031: read ANY member's or house's PUBLISHED content index.md for the in-extension reader. Unlike
     // get() (own-folder-scoped for editing), this is read-only over the public repo, gated by a strict
-    // allowlist (only posts/products/prompts index.md, no traversal, no roles.yml / house/pages) so the member
+    // allowlist (only posts/projects/prompts index.md, no traversal, no roles.yml / house/pages) so the member
     // token cannot become a general file-exfil oracle. Member-only BODIES are not here: the public teaser comes
     // back as `body`, and frontmatter.encryptedBody points at the .enc the reader decrypts via the Worker.
     async read(relPath) {
@@ -18576,7 +18576,7 @@ async function requireSuperadminForHouse(ctx2) {
   if (role !== "superadmin") throw new OperationError("forbidden", `house content is superadmin-only (you are ${role})`);
   return { id, role };
 }
-var NETWORK_CONTENT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
+var NETWORK_CONTENT_PATH_RE = new RegExp(`^members/${NETWORK_CONTENT_OWNER}/(posts|projects|products|prompts)/[a-z0-9][a-z0-9-]*/index\\.md$`);
 var isNetworkContentPath = (p) => String(p || "").startsWith(`members/${NETWORK_CONTENT_OWNER}/`);
 function getStatus(ctx2) {
   const id = ctx2.identity?.() ?? null;
@@ -18695,8 +18695,8 @@ async function mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed })
   });
   return comments;
 }
-var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
-var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt"]);
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share", "news"]);
+var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
 var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
 var COMMENTS_INDEX_TTL_MS = 6e4;
 var commentsIndexCache = null;
@@ -18955,7 +18955,7 @@ async function hostedAuthor({ token, itemId, files, title, signupBase = SIGNUP_B
 }
 
 // client/src/operations-publish.mjs
-var RENAME_URL_BASE = { post: "/articles", product: "/products", prompt: "/prompts" };
+var RENAME_URL_BASE = { post: "/articles", project: "/projects", product: "/projects", prompt: "/prompts" };
 function renameOriginOf({ path: path4, username, type }) {
   const m = OWN_STATUS_PATH_RE.exec(String(path4 || ""));
   if (!m) return null;
@@ -18964,7 +18964,7 @@ function renameOriginOf({ path: path4, username, type }) {
   return { oldSlug: m[3], oldPath: String(path4) };
 }
 async function introMoveFiles(ctx2, { username, type, oldSlug, newSlug }) {
-  if (!["product", "prompt"].includes(type)) return [];
+  if (!["project", "prompt"].includes(type)) return [];
   const oldIntro = `members/${username}/comments/intro-${oldSlug}.md`;
   const introText = await ctx2.reader?.readFile?.(oldIntro);
   if (introText == null) return [];
@@ -18975,7 +18975,7 @@ async function introMoveFiles(ctx2, { username, type, oldSlug, newSlug }) {
     { path: oldIntro, content: null }
   ];
 }
-var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 async function setOwnContentStatus(ctx2, { path: rel, status } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
@@ -18993,7 +18993,7 @@ async function setOwnContentStatus(ctx2, { path: rel, status } = {}) {
     branch = `gbti/status-house-${type}-${slug}`;
   } else {
     const m = OWN_STATUS_PATH_RE.exec(String(rel || ""));
-    if (!m) throw new OperationError("bad-request", "path must be members/<you>/(posts|products|prompts)/<slug>/index.md");
+    if (!m) throw new OperationError("bad-request", "path must be members/<you>/(posts|projects|products|prompts)/<slug>/index.md");
     if (m[1] !== String(id.username).toLowerCase()) {
       throw new OperationError("forbidden", "you may only change the status of your own content");
     }
@@ -19073,7 +19073,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
     if (merged.length) effInput.redirectFrom = merged;
     if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
   }
-  if (["post", "product", "prompt"].includes(type)) {
+  if (["post", "project", "prompt"].includes(type)) {
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
@@ -19197,7 +19197,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
 }
 function describeContentPublish(built, { hasIntro } = {}) {
-  const LABEL = { post: "article", product: "product", prompt: "prompt", profile: "profile" };
+  const LABEL = { post: "article", project: "project", prompt: "prompt", profile: "profile" };
   const label = LABEL[built?.type] ?? built?.type ?? "content";
   if (built?.type === "profile") {
     const t = `Update the ${built.username} member profile`;
@@ -19221,7 +19221,7 @@ function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
   if (!note || !built?.slug || !AUTHOR_NOTE_TYPES.has(built.type)) return null;
   const introBuilt = buildCommentFile({
     username,
-    // SOW-145: a house product/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
+    // SOW-145: a house project/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
     scope: built.scope || "member",
     input: {
       id: `intro-${built.slug}`,
@@ -19282,7 +19282,7 @@ async function authorContent(ctx2, { type, input, body, status, message, title, 
 }
 function draftMetaFromBranch(branch) {
   if (branch === "gbti/profile") return { type: "profile", slug: null };
-  const m = String(branch || "").match(/^gbti\/(post|product|prompt)-(.+)$/);
+  const m = String(branch || "").match(/^gbti\/(post|project|product|prompt)-(.+)$/);
   return m ? { type: m[1], slug: m[2] } : null;
 }
 async function saveDraft(ctx2, { type, input, body, message, path: path4 } = {}) {
@@ -19724,7 +19724,7 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
   const createdAt = ctx2.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const cid = commentId(createdAt, commentSuffix());
   const input = { id: cid, targetType, targetSlug, createdAt, status: "published" };
-  const isPublicIntro = authorNote === true && ["post", "product", "prompt"].includes(targetType);
+  const isPublicIntro = authorNote === true && ["post", "project", "prompt"].includes(targetType);
   input.visibility = visibility === "public" && isPublicIntro ? "public" : "members";
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
@@ -19768,7 +19768,7 @@ async function editComment(ctx2, { id, body, authorNote } = {}) {
   const fm = existing.frontmatter ?? {};
   const updatedAt = ctx2.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const effAuthorNote = authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote);
-  const isPublicIntro = effAuthorNote && ["post", "product", "prompt"].includes(fm.targetType);
+  const isPublicIntro = effAuthorNote && ["post", "project", "prompt"].includes(fm.targetType);
   const input = {
     id,
     targetType: fm.targetType,
@@ -19814,6 +19814,13 @@ async function ogPreview({ url: url2, token, signupBase, fetch = globalThis.fetc
   return data;
 }
 
+// membership/content-types.mjs
+var LEGACY_TYPE_ALIASES = Object.freeze({
+  product: "project"
+  // sow-196, 2026-09-02
+});
+var CONTENT_TYPES = Object.freeze(["post", "project", "prompt", "share", "news"]);
+
 // client/src/operations-member.mjs
 async function ogPreview2(ctx2, { url: url2 } = {}) {
   requireIdentity(ctx2);
@@ -19846,7 +19853,7 @@ var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 
 var ROLE_RANK = Object.freeze({ [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 });
 
 // membership/classify-pr.mjs
-var CONTENT_DIRS = ["posts", "products", "prompts", "comments"];
+var CONTENT_DIRS = ["posts", "projects", "products", "prompts", "comments"];
 var ROLE_RANK2 = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
 function isCleanPath(p) {
   if (typeof p !== "string" || p.length === 0) return false;
@@ -20118,9 +20125,9 @@ function logout(ctx2) {
 // client/src/mcp-tools.mjs
 var PROTOCOL_VERSION = "2024-11-05";
 var obj = (properties, required2 = []) => ({ type: "object", properties, required: required2, additionalProperties: true });
-var TYPE_ENUM = { type: "string", enum: ["post", "product", "prompt", "profile"] };
+var TYPE_ENUM = { type: "string", enum: ["post", "project", "prompt", "profile"] };
 var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
-var COMMENT_TARGET = { type: "string", enum: ["post", "product", "prompt", "share", "news"] };
+var COMMENT_TARGET = { type: "string", enum: ["post", "project", "prompt", "share", "news"] };
 var PATH_PARAM = { type: "string", description: "The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate." };
 var SCOPE_PARAM = { type: "string", enum: ["member", "house"], description: 'Target folder. "member" (default) is your own folder; "house" is the non-member house/ content and is superadmin-only, re-checked server-side.' };
 async function resolveDraftRow(ctx2, { type, slug }) {
@@ -20167,7 +20174,7 @@ var TOOLS = [
   },
   {
     name: "list_my_content",
-    description: "List the member's own content (posts/products/prompts/profile). Optional `type` filter.",
+    description: "List the member's own content (posts/projects/prompts/profile). Optional `type` filter.",
     inputSchema: obj({ type: TYPE_ENUM, scope: SCOPE_PARAM }),
     handler: (ctx2, args) => listContent(ctx2, { type: args?.type, scope: args?.scope })
   },
@@ -20185,7 +20192,7 @@ var TOOLS = [
   },
   {
     name: "publish_content",
-    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
     inputSchema: obj(
       { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM },
       ["type", "input", "status"]
@@ -20203,9 +20210,9 @@ var TOOLS = [
   },
   {
     name: "add_product",
-    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
     inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
-    handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "product" })
+    handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "project" })
   },
   {
     name: "add_post",
@@ -20280,7 +20287,7 @@ var TOOLS = [
   // your own post/product/prompt is public; every reply, and ALL Share comments, are members-only + encrypted).
   {
     name: "post_comment",
-    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
+    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
       { targetType: COMMENT_TARGET, targetSlug: { type: "string" }, body: { type: "string" }, authorNote: { type: "boolean" }, parentId: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
       ["targetType", "targetSlug", "body"]
@@ -20327,7 +20334,7 @@ var TOOLS = [
   },
   {
     name: "list_comments",
-    description: 'Read the published comment thread for a target. Args: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
+    description: 'Read the published comment thread for a target. Args: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
     inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: "string" }, limit: { type: "integer" } }, ["targetType", "targetSlug"]),
     handler: (ctx2, args) => listComments(ctx2, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit })
   }

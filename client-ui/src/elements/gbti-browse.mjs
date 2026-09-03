@@ -1,4 +1,4 @@
-// <gbti-browse> (SOW-031): the in-extension content browser. Four tabs — Blog / Products / Prompts (each fetched
+// <gbti-browse> (SOW-031): the in-extension content browser. Four tabs — Blog / Projects / Prompts (each fetched
 // from the per-type build-time index JSON over the extension's gbti.network host permission) + Shares (the
 // existing authenticated <gbti-shares-feed>). A row opens <gbti-reader> in a detail pane IN the extension,
 // never navigating to gbti.network. Host-agnostic. Fail-soft: an unreachable index renders an empty state.
@@ -16,12 +16,12 @@ const SITE = 'https://gbti.network';
 const TABS = [
   { id: 'all', label: 'All' },
   { id: 'post', label: 'Articles', json: 'blog-index.json' },
-  { id: 'product', label: 'Products', json: 'products-index.json' },
+  { id: 'project', label: 'Projects', json: 'projects-index.json' },
   { id: 'prompt', label: 'Prompts', json: 'prompts-index.json' },
   { id: 'share', label: 'Shares' },
   { id: 'news', label: 'News' }, // SOW-043: a self-loading members-only feed (not a per-type index)
 ];
-const CONTENT_TYPES = ['post', 'product', 'prompt'];
+const CONTENT_TYPES = ['post', 'project', 'prompt'];
 
 // SOW-114: one-shot semantics for a do= force-action — replace the hash WITHOUT it so a refresh or the
 // hashchange listener never re-runs the action. replaceState adds no history entry and fires no hashchange.
@@ -88,7 +88,7 @@ class GbtiBrowse extends GbtiElement {
       const t = e.target;
       if (t && t.tagName === 'IMG' && t.classList?.contains('thumb')) t.style.display = 'none';
     }, true);
-    // SOW-036: react to hashchange so the shared left rail's Articles/Products/Prompts/Shares links switch the
+    // SOW-036: react to hashchange so the shared left rail's Articles/Projects/Prompts/Shares links switch the
     // active tab (and open a read=<path> deep-link) while already on the Browse page, not just on first load.
     this._onHash = () => {
       const { tab, read, action } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');

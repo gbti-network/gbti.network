@@ -12,9 +12,9 @@ test('statusOf: a missing status defaults to published (matches the enqueue guar
   assert.equal(statusOf(null), 'published');
 });
 
-test('isContentPath: posts/products/prompts index.md + shares, nothing else', () => {
+test('isContentPath: posts/projects/prompts index.md + shares, nothing else', () => {
   assert.ok(isContentPath('members/gbtilabs/posts/x/index.md'));
-  assert.ok(isContentPath('house/products/y/index.md'));
+  assert.ok(isContentPath('house/projects/y/index.md'));
   assert.ok(isContentPath('members/alice/prompts/z/index.md'));
   assert.ok(isContentPath('members/bob/shares/note.md'));
   assert.ok(!isContentPath('house/taxonomy.yml'));

@@ -16,7 +16,13 @@
 // SOW-050 P3: a Share is a first-class basket type alongside post/product/prompt. Its slug is the composite
 // "<author>/<id>" (the same targetSlug the comment system uses), so it legitimately carries one slash; every
 // other type stays a single segment.
-export const CONTENT_TYPES = new Set(['post', 'product', 'prompt', 'share']);
+import { canonicalType } from './content-types.mjs';
+
+export const CONTENT_TYPES = new Set(['post', 'project', 'prompt', 'share']);
+// sow-196: `product` was renamed to `project`. Every activity value written before 2026-09-02 stores the
+// old string, and normalizeTargetList DISCARDS anything not in CONTENT_TYPES without an error or a log
+// line, so without canonicalType() below a member's saved shelf silently empties of projects and nothing
+// anywhere reports a fault. Applied on READ (stored values) and on WRITE (a stale client's command).
 export const MAX_FAVORITES = 2000;
 export const MAX_UPVOTES = 2000;
 export const MAX_COLLECTIONS = 100;
@@ -39,11 +45,12 @@ function normalizeTargetList(raw) {
   if (!Array.isArray(raw)) return out;
   const seen = new Set();
   for (const f of raw) {
-    if (!f || !isTarget(f.type, f.slug)) continue;
-    const k = targetKey(f);
+    const type = canonicalType(f?.type); // sow-196: a stored legacy type name resolves to its current name
+    if (!f || !isTarget(type, f.slug)) continue;
+    const k = targetKey({ type, slug: f.slug });
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push({ type: f.type, slug: f.slug, addedAt: Number(f.addedAt) || 0 });
+    out.push({ type, slug: f.slug, addedAt: Number(f.addedAt) || 0 });
   }
   return out;
 }
@@ -68,11 +75,12 @@ export function normalizeActivity(raw) {
       const seenItems = new Set();
       if (Array.isArray(c.items)) {
         for (const it of c.items) {
-          if (!it || !isTarget(it.type, it.slug)) continue;
-          const k = targetKey(it);
+          const ct = canonicalType(it?.type); // sow-196
+          if (!it || !isTarget(ct, it.slug)) continue;
+          const k = targetKey({ type: ct, slug: it.slug });
           if (seenItems.has(k)) continue;
           seenItems.add(k);
-          items.push({ type: it.type, slug: it.slug, addedAt: Number(it.addedAt) || 0 });
+          items.push({ type: ct, slug: it.slug, addedAt: Number(it.addedAt) || 0 });
         }
       }
       a.collections.push({ id: c.id, name: c.name.slice(0, MAX_NAME_LEN), createdAt: Number(c.createdAt) || 0, items });
@@ -89,7 +97,8 @@ function cleanName(name) {
 }
 
 /** Toggle a favorite on/off. */
-export function applyFavorite(activity, { type, slug, on }, { now = Date.now } = {}) {
+export function applyFavorite(activity, { type: rawType, slug, on }, { now = Date.now } = {}) {
+  const type = canonicalType(rawType); // sow-196: a stale client may still send the old type name
   if (!isTarget(type, slug)) throw new ActivityError('invalid favorite target');
   const a = normalizeActivity(activity);
   const k = targetKey({ type, slug });
@@ -106,7 +115,8 @@ export function applyFavorite(activity, { type, slug, on }, { now = Date.now } =
 
 /** SOW-057: toggle a member's per-target upvote on/off (the per-member record; the per-target voter set + the
  *  syndication threshold live in membership/share-votes.mjs). Mirrors applyFavorite. */
-export function applyUpvote(activity, { type, slug, on }, { now = Date.now } = {}) {
+export function applyUpvote(activity, { type: rawType, slug, on }, { now = Date.now } = {}) {
+  const type = canonicalType(rawType); // sow-196: a stale client may still send the old type name
   if (!isTarget(type, slug)) throw new ActivityError('invalid upvote target');
   const a = normalizeActivity(activity);
   const k = targetKey({ type, slug });
@@ -159,7 +169,7 @@ export function deleteCollection(activity, { id }, { now = Date.now } = {}) {
 export function filterActivity(activity, types) {
   const a = normalizeActivity(activity);
   if (!Array.isArray(types) || types.length === 0) return a;
-  const allow = new Set(types);
+  const allow = new Set(types.map(canonicalType)); // sow-196: an old chip value still selects its items
   a.favorites = a.favorites.filter((f) => allow.has(f.type));
   a.upvotes = a.upvotes.filter((u) => allow.has(u.type));
   a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
@@ -167,7 +177,8 @@ export function filterActivity(activity, types) {
 }
 
 /** Add/remove a content item to/from a collection. */
-export function setCollectionItem(activity, { id, type, slug, on }, { now = Date.now } = {}) {
+export function setCollectionItem(activity, { id, type: rawType, slug, on }, { now = Date.now } = {}) {
+  const type = canonicalType(rawType); // sow-196: a stale client may still send the old type name
   if (!isTarget(type, slug)) throw new ActivityError('invalid collection item target');
   const a = normalizeActivity(activity);
   const c = a.collections.find((x) => x.id === id);

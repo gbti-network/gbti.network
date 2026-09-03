@@ -192,7 +192,7 @@ test('paid Content Creator, own-folder content => pass + auto-merge', () => {
 });
 
 test('trial member, own-folder content => rejected-not-paid (no profile carve-out; the draft stays on the fork)', () => {
-  for (const file of ['members/octocat/profile.md', 'members/octocat/posts/x/index.md', 'members/octocat/products/y/index.md']) {
+  for (const file of ['members/octocat/profile.md', 'members/octocat/posts/x/index.md', 'members/octocat/projects/y/index.md']) {
     const d = decide({ paths: [file], role: ROLE.member, effective: TRIAL, ownedFolder: 'octocat' });
     assert.equal(d.check, 'fail', file);
     assert.equal(d.label, 'rejected-not-paid', file);
@@ -291,7 +291,7 @@ test('members-only: a trial member is a member but cannot publish (rejected-not-
 // sow-185: the TIER gate. Public presence (post/product/prompt/profile) needs Content Creator; comments need
 // only Network Member. A paid member below the required tier is rejected-not-creator (auto-closed with a nudge).
 test('sow-185: a Network Member publishing own-folder public content => rejected-not-creator', () => {
-  for (const p of ['members/octocat/posts/x/index.md', 'members/octocat/products/y/index.md', 'members/octocat/prompts/z/index.md', 'members/octocat/profile.md']) {
+  for (const p of ['members/octocat/posts/x/index.md', 'members/octocat/projects/y/index.md', 'members/octocat/prompts/z/index.md', 'members/octocat/profile.md']) {
     const d = decide({ paths: [p], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
     assert.equal(d.check, 'fail', p);
     assert.equal(d.label, 'rejected-not-creator', p);
@@ -306,7 +306,7 @@ test('sow-185: a Network Member publishing an own-folder comment => pass (member
 });
 
 test('sow-185: a Content Creator publishes every own-folder content type', () => {
-  for (const p of ['members/octocat/posts/x/index.md', 'members/octocat/products/y/index.md', 'members/octocat/prompts/z/index.md', 'members/octocat/profile.md', 'members/octocat/comments/c.md']) {
+  for (const p of ['members/octocat/posts/x/index.md', 'members/octocat/projects/y/index.md', 'members/octocat/prompts/z/index.md', 'members/octocat/profile.md', 'members/octocat/comments/c.md']) {
     const d = decide({ paths: [p], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.creator });
     assert.equal(d.check, 'pass', p);
     assert.equal(d.label, 'paid', p);
@@ -338,7 +338,7 @@ test('sow-185 contribution: a comment by a Network Member into a Network Member 
 });
 
 test('sow-185 requiredTierFor: public types -> creator, comments-only -> member, mixed/empty -> creator', () => {
-  for (const t of ['post', 'product', 'prompt', 'profile']) assert.equal(requiredTierFor([t]), TIER.creator, t);
+  for (const t of ['post', 'project', 'prompt', 'profile']) assert.equal(requiredTierFor([t]), TIER.creator, t);
   assert.equal(requiredTierFor(['comment']), TIER.member);
   assert.equal(requiredTierFor(['comment', 'post']), TIER.creator);
   assert.equal(requiredTierFor([]), TIER.creator);
@@ -412,7 +412,7 @@ test('contributionTarget resolves a single other owner, else null', () => {
 test('isContributionToFolder is the owner-side mirror of contributionTarget (SOW-028)', () => {
   // True only when every path sits cleanly inside members/<owner>/.
   assert.equal(isContributionToFolder(['members/bob/posts/x/index.md'], 'bob'), true);
-  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'members/bob/products/y/index.md'], 'bob'), true);
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'members/bob/projects/y/index.md'], 'bob'), true);
   assert.equal(isContributionToFolder(['members/carol/posts/z/index.md'], 'bob'), false); // another folder
   assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'house/roles.yml'], 'bob'), false); // mixed w/ infra
   assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'members/carol/p/y/index.md'], 'bob'), false); // two owners
@@ -540,10 +540,10 @@ test('classifyPaths buckets own vs other vs tiers', () => {
 
 test('contentTypesTouched reports published types', () => {
   const types = contentTypesTouched(
-    ['members/octocat/profile.md', 'members/octocat/posts/a/index.md', 'members/octocat/products/b/index.md'],
+    ['members/octocat/profile.md', 'members/octocat/posts/a/index.md', 'members/octocat/projects/b/index.md'],
     'octocat',
   ).sort();
-  assert.deepEqual(types, ['post', 'product', 'profile']);
+  assert.deepEqual(types, ['post', 'profile', 'project']); // .sort() is alphabetical; sow-196 moved product -> project
 });
 
 // sow-218: a SHARE is Content Creator work, and nothing asserted it until now.

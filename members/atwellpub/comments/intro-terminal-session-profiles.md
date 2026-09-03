@@ -1,6 +1,6 @@
 ---
 id: intro-terminal-session-profiles
-targetType: product
+targetType: project
 targetSlug: terminal-session-profiles
 createdAt: '2026-08-07T14:19:54.810Z'
 status: published

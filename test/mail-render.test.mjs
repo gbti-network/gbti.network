@@ -31,7 +31,7 @@ function issueFixture() {
         ],
       },
       {
-        key: 'product', label: 'Products', empty: true, note: 'No new products since the last issue.', items: [],
+        key: 'project', label: 'Projects', empty: true, note: 'No new projects since the last issue.', items: [],
       },
     ],
   };
@@ -55,10 +55,10 @@ test('escapeHtml neutralizes markup characters', () => {
 
 test('renders filled sections IN ORDER with links; empty sections collapse to one line at the end', () => {
   const { html } = renderIssue(issueFixture(), {});
-  // order: News, then Articles, then the collapsed empty line naming Products
+  // order: News, then Articles, then the collapsed empty line naming Projects
   const iNews = html.indexOf('News');
   const iArticles = html.indexOf('Articles');
-  const iProducts = html.indexOf('Products');
+  const iProducts = html.indexOf('Projects');
   assert.ok(iNews >= 0 && iArticles > iNews && iProducts > iArticles, 'filled sections in order, empties after');
   // filled: titles are links
   assert.match(html, /<a href="https:\/\/news\.example\/edge"[^>]*>Edge AI roundup<\/a>/);
@@ -73,9 +73,9 @@ test('renders filled sections IN ORDER with links; empty sections collapse to on
   // filled sections carry a count label
   assert.match(html, /2 NEW/);
   assert.match(html, /1 NEW/);
-  // the empty Products section collapses to one compact line, NOT the per-section note or a section box
-  assert.match(html, /Nothing new in Products since the last issue\./);
-  assert.doesNotMatch(html, /No new products since the last issue\./, 'the per-section note is not rendered');
+  // the empty Projects section collapses to one compact line, NOT the per-section note or a section box
+  assert.match(html, /Nothing new in Projects since the last issue\./);
+  assert.doesNotMatch(html, /No new projects since the last issue\./, 'the per-section note is not rendered');
   assert.doesNotMatch(html, /NONE THIS WEEK/, 'an empty section gets no count label');
 });
 
@@ -191,7 +191,7 @@ test('the header and subject name the ISO week the issue went out in', () => {
   const issue = {
     generatedAt: Date.UTC(2026, 7, 23), // Sunday, ISO week 34
     window: { since: Date.UTC(2026, 7, 23) - 90 * 24 * 3600 * 1000 },
-    counts: { article: 1, product: 1, prompt: 5, share: 5, news: 5 },
+    counts: { article: 1, project: 1, prompt: 5, share: 5, news: 5 },
     layout: [],
   };
   const { subject, html } = renderIssue(issue, {});
@@ -210,7 +210,7 @@ test('the week is read from generatedAt alone, so a legacy issue with no window 
   // that needed a deliberate seven-day fallback; under a week number there is nothing to fall back FROM,
   // which is a real simplification rather than a coincidence, and worth pinning as behaviour.
   const generatedAt = Date.UTC(2026, 7, 21); // Friday, ISO week 34
-  const counts = { article: 2, product: 0, prompt: 0, share: 9, news: 4 };
+  const counts = { article: 2, project: 0, prompt: 0, share: 9, news: 4 };
   const bare = renderIssue({ generatedAt, counts, layout: [] }, {}).subject;
   assert.match(bare, /^GBTI Digest · 15 items · Week 34$/);
   for (const since of [0, null, undefined, NaN, generatedAt, generatedAt + 1000, generatedAt - 90 * 86400000]) {
@@ -243,9 +243,9 @@ test('an issue with no finite generatedAt carries no week label at all', () => {
 });
 
 test('the hidden preheader carries a natural-language counts summary in non-zero-section order', () => {
-  const issue = { generatedAt: Date.UTC(2026, 7, 21), counts: { article: 4, product: 2, prompt: 0, share: 0, news: 3 }, layout: [] };
+  const issue = { generatedAt: Date.UTC(2026, 7, 21), counts: { article: 4, project: 2, prompt: 0, share: 0, news: 3 }, layout: [] };
   const { html } = renderIssue(issue, {});
-  assert.match(html, /<span style="display:none[^"]*">4 articles, 2 products and 3 news picks from the network this week\.<\/span>/);
+  assert.match(html, /<span style="display:none[^"]*">4 articles, 2 projects and 3 news picks from the network this week\.<\/span>/);
 });
 
 test('the text alternative carries filled sections and the collapsed empty line', () => {
@@ -253,8 +253,8 @@ test('the text alternative carries filled sections and the collapsed empty line'
   assert.match(text, /NEWS \(2\)/);
   assert.match(text, /Edge AI roundup/);
   assert.match(text, /ARTICLES \(1\)/);
-  assert.match(text, /Nothing new in Products since the last issue\./);
-  assert.doesNotMatch(text, /No new products since the last issue\./, 'the per-section note is not carried into text');
+  assert.match(text, /Nothing new in Projects since the last issue\./);
+  assert.doesNotMatch(text, /No new projects since the last issue\./, 'the per-section note is not carried into text');
 });
 
 test('an item blurb renders when present and is escaped', () => {
@@ -365,7 +365,7 @@ test('CAN-SPAM 3: the CTA is a small, bounded fraction of the message', () => {
 });
 
 test('CAN-SPAM 4: the subject describes editorial content and matches no promotional pattern', () => {
-  const counts = renderIssue({ generatedAt: Date.UTC(2026, 7, 21), counts: { article: 2, product: 0, prompt: 0, share: 1, news: 3 }, layout: [] }, {}).subject;
+  const counts = renderIssue({ generatedAt: Date.UTC(2026, 7, 21), counts: { article: 2, project: 0, prompt: 0, share: 1, news: 3 }, layout: [] }, {}).subject;
   assert.match(counts, /GBTI Digest/, 'the counts subject carries the issue descriptor');
   for (const s of [counts, renderIssue(issueFixture(), {}).subject]) {
     assert.match(s, /GBTI/);
@@ -396,19 +396,19 @@ test('CAN-SPAM 7: however many sections are empty, they collapse to exactly one 
   const manyEmpty = { layout: [
     { key: 'news', label: 'News', empty: false, items: [{ title: 'N', url: 'https://n/x', source: 'S', date: 1 }] },
     { key: 'article', label: 'Articles', empty: true, note: 'No new articles have been published since the last issue.', items: [] },
-    { key: 'product', label: 'Products', empty: true, note: 'No new products since the last issue.', items: [] },
+    { key: 'project', label: 'Projects', empty: true, note: 'No new projects since the last issue.', items: [] },
     { key: 'prompt', label: 'Prompts', empty: true, note: 'No new prompts since the last issue.', items: [] },
     { key: 'share', label: 'Shares', empty: true, note: 'No shares since the last issue.', items: [] },
   ] };
   const { html } = renderIssue(manyEmpty, {});
   assert.equal((html.match(/Nothing new in/g) || []).length, 1, 'four empty sections collapse to ONE line, not a box each');
   // and the per-section notes are NOT restored as interspersed boxes (the exact regression the position forbids)
-  assert.doesNotMatch(html, /No new articles have been published|No new products since|No new prompts since|No shares since/);
+  assert.doesNotMatch(html, /No new articles have been published|No new projects since|No new prompts since|No shares since/);
 });
 
 test('CAN-SPAM 8: no CTA on an all-editorial-empty issue even when opted in (a solicitation with no editorial reads as promotional)', () => {
   const allEmpty = { layout: [
-    { key: 'product', label: 'Products', empty: true, items: [] },
+    { key: 'project', label: 'Projects', empty: true, items: [] },
     { key: 'prompt', label: 'Prompts', empty: true, items: [] },
   ] };
   const { html, text } = renderIssue(allEmpty, CTA_ON);
@@ -444,14 +444,14 @@ test('empty sections collapse to a single line naming them all; the first issue 
   const base = [
     { key: 'news', label: 'News', empty: false, items: [{ title: 'N', url: 'https://n/x', source: 'Src', date: 1 }] },
     { key: 'article', label: 'Articles', empty: true, note: 'x', items: [] },
-    { key: 'product', label: 'Products', empty: true, note: 'y', items: [] },
+    { key: 'project', label: 'Projects', empty: true, note: 'y', items: [] },
     { key: 'prompt', label: 'Prompts', empty: true, note: 'z', items: [] },
   ];
   const later = renderIssue({ layout: base }, {}).html;
-  assert.match(later, /Nothing new in Articles, Products and Prompts since the last issue\./);
+  assert.match(later, /Nothing new in Articles, Projects and Prompts since the last issue\./);
 
   const first = renderIssue({ launchNote: 'This is the first issue, so it covers the past 90 days rather than everything published before it.', layout: base }, {}).html;
-  assert.match(first, /Nothing new in Articles, Products and Prompts in the past 90 days\./);
+  assert.match(first, /Nothing new in Articles, Projects and Prompts in the past 90 days\./);
   assert.match(first, /This is the first issue/);
 });
 
@@ -473,7 +473,7 @@ const v2Issue = () => ({
         sourceName: 'The Verge', blurb: 'A one line news summary.', thumb: 'https://cdn.theverge.com/x.jpg', date: 1 },
       { title: 'An unlisted source', url: 'https://other/y', source: 'servethehome', sourceName: null, date: 1 },
     ] },
-    { key: 'product', label: 'Products', empty: true, items: [] },
+    { key: 'project', label: 'Projects', empty: true, items: [] },
   ],
 });
 
@@ -488,7 +488,7 @@ test('v2: the prefix is on the HEADING ONLY, never the feed link or the empty li
   assert.match(html, /See all in the Articles feed/, 'the feed link keeps the plain noun');
   assert.ok(!html.includes('See all in the Latest Articles feed'), 'the feed link must not inherit the prefix');
   assert.ok(!/Nothing new in Latest/.test(html), 'the collapsed empty line must not inherit the prefix');
-  assert.match(html, /Nothing new in Products/, 'and it still names the empty type plainly');
+  assert.match(html, /Nothing new in Projects/, 'and it still names the empty type plainly');
 });
 
 test('v2: NEWS rows carry a thumbnail (they were excluded before)', () => {
@@ -598,7 +598,7 @@ function mixedIssue() {
         { kind: 'article', title: 'Ours', url: '/articles/ours/', author: 'hudson', thumb: '/media/t.png', date: 3 } ] },
       { key: 'news', label: 'News', empty: false, items: [
         { title: 'Theirs', url: 'https://www.theregister.com/a/?sponsored=1', source: 'The Register', date: 2 } ] },
-      { key: 'product', label: 'Products', empty: true, note: 'None.', items: [] },
+      { key: 'project', label: 'Projects', empty: true, note: 'None.', items: [] },
     ],
   };
 }

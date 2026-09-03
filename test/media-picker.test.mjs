@@ -68,7 +68,7 @@ test('sow-165: a brand-new unsaved item still gets a usable plan', () => {
 
 test('sow-165: the author comes from the item folder, and a house item declines to guess', () => {
   assert.equal(authorFromItemPath('members/alice/posts/x/index.md'), 'alice');
-  assert.equal(authorFromItemPath('members/gbti-labs/products/y/index.md'), 'gbti-labs');
+  assert.equal(authorFromItemPath('members/gbti-labs/projects/y/index.md'), 'gbti-labs');
   // House content carries whatever author its frontmatter names, so the folder does not identify a member.
   // Offering the wrong person's library is worse than offering none.
   assert.equal(authorFromItemPath('house/posts/x/index.md'), null);

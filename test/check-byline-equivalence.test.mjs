@@ -20,7 +20,7 @@ const byline = (username, shown) =>
 // Build a throwaway root with members/<u>/profile.md and dist/<page>.
 function fixture({ profiles = {}, pages = {}, items = {} }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'byline-'));
-  // sow-215 phase 2: content ITEMS on disk, e.g. { atwellpub: ['posts', 'products'] }. The per-section floor
+  // sow-215 phase 2: content ITEMS on disk, e.g. { atwellpub: ['posts', 'projects'] }. The per-section floor
   // derives which built sections must prove themselves from this, not from a hardcoded list.
   for (const [username, dirs] of Object.entries(items)) {
     for (const d of dirs) {
@@ -205,10 +205,10 @@ const renamedByline = (username, shown) =>
 test('PHASE 2 RED: a partial rename in ONE section, while the others stay healthy', () => {
   const root = fixture({
     profiles: { atwellpub: 'Hudson Atwell' },
-    items: { atwellpub: ['posts', 'products'] },
+    items: { atwellpub: ['posts', 'projects'] },
     pages: {
       'articles/a/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
-      'products/p/index.html': `<main>${renamedByline('atwellpub', 'Hudson Atwell')}</main>`,
+      'projects/p/index.html': `<main>${renamedByline('atwellpub', 'Hudson Atwell')}</main>`,
     },
   });
   const { errors, checked } = checkBylineEquivalence({ root });
@@ -216,17 +216,17 @@ test('PHASE 2 RED: a partial rename in ONE section, while the others stay health
   // guard passed this. The failure must come from the per-section floor, not from a byline mismatch.
   assert.equal(checked, 1, 'the article byline still counts, which is what used to mask this');
   assert.equal(errors.length, 1, `expected exactly one error, got: ${JSON.stringify(errors)}`);
-  assert.match(errors[0], /products\//, 'the error must NAME the section that went uncovered');
+  assert.match(errors[0], /projects\//, 'the error must NAME the section that went uncovered');
   assert.match(errors[0], /ZERO checked bylines/);
 });
 
 test('PHASE 2 GREEN: every content type on disk yields a byline', () => {
   const root = fixture({
     profiles: { atwellpub: 'Hudson Atwell' },
-    items: { atwellpub: ['posts', 'products', 'prompts'] },
+    items: { atwellpub: ['posts', 'projects', 'projects', 'prompts'] },
     pages: {
       'articles/a/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
-      'products/p/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
+      'projects/p/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
       'prompts/q/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
     },
   });
@@ -236,7 +236,7 @@ test('PHASE 2 GREEN: every content type on disk yields a byline', () => {
 });
 
 test('PHASE 2 does NOT false-red on a content type with no items on disk', () => {
-  // The floor is derived from CONTENT, so a member with only posts is never asked to prove /products/.
+  // The floor is derived from CONTENT, so a member with only posts is never asked to prove /projects/.
   // Without this the guard would red on any repo that has not published one of the three types.
   const root = fixture({
     profiles: { atwellpub: 'Hudson Atwell' },

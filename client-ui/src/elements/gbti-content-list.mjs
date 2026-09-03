@@ -1,4 +1,4 @@
-// <gbti-content-list> (SOW-006 v2): the member's own content (posts/products/prompts/profile). Each row
+// <gbti-content-list> (SOW-006 v2): the member's own content (posts/projects/prompts/profile). Each row
 // opens the item in the editor (emits `gbti-edit` with the loaded item so <gbti-app> seeds the editor).
 // SOW-265: a published row also carries a View button that opens the live public page in a new tab,
 // reusing the shared URL scheme so the table and the editor's "View Public Entry" cannot diverge.

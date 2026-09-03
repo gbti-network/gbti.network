@@ -192,7 +192,7 @@ test('validateHostedRequest: a CO-LOCATED item image passes, for all three conte
   const b64 = Buffer.from('a fake png payload').toString('base64');
   const ok = (path, folder = 'atwellpub') => validateHostedRequest({ files: [{ path, contentBase64: b64 }], itemId: 'x', folder }).ok;
   assert.equal(ok('members/atwellpub/posts/hello/images/fig.webp'), true);
-  assert.equal(ok('members/atwellpub/products/thing/images/shot.jpg'), true);
+  assert.equal(ok('members/atwellpub/projects/thing/images/shot.jpg'), true);
   assert.equal(ok('members/atwellpub/prompts/p/images/a.gif'), true);
   // the flat per-member form still passes: the item segment is OPTIONAL, not a replacement
   assert.equal(ok('members/atwellpub/images/cover.png'), true);
@@ -202,7 +202,7 @@ test('validateHostedRequest: the widened image tail admits ONLY the item segment
   const b64 = Buffer.from('x').toString('base64');
   const reject = (path, folder = 'atwellpub') => validateHostedRequest({ files: [{ path, contentBase64: b64 }], itemId: 'x', folder });
   // not a content subdirectory: 'roles' must not become a path segment just because the shape matches
-  assert.equal(reject('members/atwellpub/roles/x/images/a.png').ok, false, 'only posts/products/prompts');
+  assert.equal(reject('members/atwellpub/roles/x/images/a.png').ok, false, 'only posts/projects/prompts');
   // exactly ONE item segment, never an arbitrary depth
   assert.equal(reject('members/atwellpub/posts/my/deep/images/a.png').ok, false, 'no extra nesting');
   // svg stays refused in the co-located form too, not just the flat one

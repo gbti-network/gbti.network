@@ -11,10 +11,10 @@ import {
 
 test('aggregateFavoriteCounts folds members into member-identity-free per-target totals', () => {
   const counts = aggregateFavoriteCounts([
-    { favorites: [{ type: 'product', slug: 'radle', addedAt: 1 }, { type: 'post', slug: 'hello', addedAt: 2 }], githubId: '111' },
-    { favorites: [{ type: 'product', slug: 'radle', addedAt: 3 }], githubId: '222' },
+    { favorites: [{ type: 'project', slug: 'radle', addedAt: 1 }, { type: 'post', slug: 'hello', addedAt: 2 }], githubId: '111' },
+    { favorites: [{ type: 'project', slug: 'radle', addedAt: 3 }], githubId: '222' },
   ]);
-  assert.deepEqual(counts, { 'post:hello': 1, 'product:radle': 2 });
+  assert.deepEqual(counts, { 'post:hello': 1, 'project:radle': 2 });
   // No member identity leaked: the result is a flat string->number map only.
   for (const v of Object.values(counts)) assert.equal(typeof v, 'number');
 });
@@ -51,7 +51,7 @@ test('listAllActivityFromKv paginates keys then reads each value', async () => {
   const env = { CF_ACCOUNT_ID: 'acct', CF_KV_NAMESPACE_ID: 'ns', CF_API_TOKEN: 'tok' };
   const store = {
     'activity:111': { favorites: [{ type: 'post', slug: 'a' }] },
-    'activity:222': { favorites: [{ type: 'post', slug: 'a' }, { type: 'product', slug: 'radle' }] },
+    'activity:222': { favorites: [{ type: 'post', slug: 'a' }, { type: 'project', slug: 'radle' }] },
   };
   const calls = [];
   const fetchImpl = async (url) => {
@@ -70,7 +70,7 @@ test('listAllActivityFromKv paginates keys then reads each value', async () => {
   const r = await listAllActivityFromKv({ env, fetchImpl });
   assert.equal(r.available, true);
   assert.equal(r.count, 2);
-  assert.deepEqual(aggregateFavoriteCounts(r.activities), { 'post:a': 2, 'product:radle': 1 });
+  assert.deepEqual(aggregateFavoriteCounts(r.activities), { 'post:a': 2, 'project:radle': 1 });
   assert.ok(calls.some((u) => u.includes('cursor=NEXT')), 'followed the pagination cursor');
 });
 
@@ -108,7 +108,7 @@ test('syncFavoriteCounts opens + merges a PR when the counts changed', async () 
     github, now,
     listActivities: async () => ({ available: true, activities: [
       { favorites: [{ type: 'post', slug: 'a' }] },
-      { favorites: [{ type: 'post', slug: 'a' }, { type: 'product', slug: 'radle' }] },
+      { favorites: [{ type: 'post', slug: 'a' }, { type: 'project', slug: 'radle' }] },
     ] }),
     readCurrentCounts: () => ({}), // empty -> changed
   });
@@ -121,13 +121,13 @@ test('syncFavoriteCounts opens + merges a PR when the counts changed', async () 
   // The written file carries totals + a timestamp, and NO per-member field (addedAt is the per-favorite field
   // that would leak if the aggregation passed records through; the published file must never contain it).
   assert.match(seen.content, /post:a: 2/);
-  assert.match(seen.content, /product:radle: 1/);
+  assert.match(seen.content, /project:radle: 1/);
   assert.match(seen.content, /generatedAt: '2026-06-13T00:00:00.000Z'/);
   assert.ok(!/addedAt/.test(seen.content), 'no per-member addedAt leaked into the published counts');
 });
 
 test('renderCountsFile produces a stable header + sorted YAML', () => {
-  const out = renderCountsFile({ 'post:a': 1, 'product:radle': 2 }, new Date('2026-06-13T00:00:00.000Z'));
+  const out = renderCountsFile({ 'post:a': 1, 'project:radle': 2 }, new Date('2026-06-13T00:00:00.000Z'));
   assert.match(out, /^# SOW-024: aggregate favorite counts/);
   assert.match(out, /counts:/);
   assert.match(out, /post:a: 1/);

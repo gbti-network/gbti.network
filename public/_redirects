@@ -65,3 +65,13 @@
 /outbound/cloudways https://cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti 301
 /outbound/tailscale https://tailscale.com/ 301
 /blog/* /articles/:splat 301
+
+# sow-196 (2026-09-02): the `product` content type became `project`. Per-item /products/<slug>/ 301s are
+# composed from each item's frontmatter redirectFrom by scripts/compose-redirects.mjs; these are the
+# collection-level routes, which have no frontmatter to carry them.
+/products/ /projects/ 301
+/feeds/products/ /feeds/projects/ 301
+/products-index.json /projects-index.json 301
+# The two SOW-022 applet URLs keep their existing /products/ lines above; these are their /projects/ twins.
+/projects/js-animate-hue/ /utilities/js-animate-hue/ 301
+/projects/email-signature-generator/ /utilities/email-signature-generator/ 301

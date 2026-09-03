@@ -30,7 +30,7 @@ test('DRIFT: the published block still selects a PUBLIC authorNote comment, whic
 
 test('introPathFor: derives the sibling comment path from the item path', () => {
   assert.equal(introPathFor('members/gbtilabs/posts/my-article/index.md', 'my-article'), 'members/gbtilabs/comments/intro-my-article.md');
-  assert.equal(introPathFor('members/alice/products/thing/index.md', 'thing'), 'members/alice/comments/intro-thing.md');
+  assert.equal(introPathFor('members/alice/projects/thing/index.md', 'thing'), 'members/alice/comments/intro-thing.md');
   assert.equal(introPathFor('house/posts/legacy/index.md', 'legacy'), 'house/comments/intro-legacy.md');
 });
 

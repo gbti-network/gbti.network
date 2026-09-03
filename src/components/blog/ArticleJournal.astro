@@ -31,7 +31,7 @@ interface Props {
 const { d, isStub, postId, postUrl, stack, toc } = Astro.props;
 const category = leafLabel(d.categories);
 const dims = coverDimensions('journal');
-// sow-183: the owner/superadmin Edit affordance, matching the product page's hero pill. The href is public
+// sow-183: the owner/superadmin Edit affordance, matching the project page's hero pill. The href is public
 // build-time data; only visibility is a runtime decision (this component's own script block, below).
 const editPath = contentRepoPath('post', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(editPath)}` : null;
@@ -115,7 +115,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
   import { initToc } from '../../lib/pd-enhance.mjs';
   initToc(document, 'art');
 
-  // sow-183: the owner/superadmin Edit pill. See products/[slug].astro / src/lib/content.ts for the shared pattern.
+  // sow-183: the owner/superadmin Edit pill. See projects/[slug].astro / src/lib/content.ts for the shared pattern.
   import { wireEditAffordance } from '../../lib/content';
   wireEditAffordance('[data-detail-edit]', 'data-detail-owner');
 </script>

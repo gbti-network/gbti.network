@@ -2,7 +2,7 @@
 type: comment
 id: intro-phpstorm-snapshots-for-ai
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: phpstorm-snapshots-for-ai
 status: published
 visibility: public

@@ -2,7 +2,7 @@
 type: comment
 id: intro-better-taxonomy-manager
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: better-taxonomy-manager
 status: published
 visibility: public

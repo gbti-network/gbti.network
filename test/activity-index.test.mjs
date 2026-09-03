@@ -24,7 +24,7 @@ test('buildActivityIndex caps PER TYPE and keeps the merged order newest-first',
   const items = [
     e('p1', 100, 'prompt'), e('p2', 90, 'prompt'), e('p3', 80, 'prompt'),
     e('a1', 95, 'post'), e('a2', 60, 'post'), e('a3', 50, 'post'),
-    e('x1', 85, 'product'),
+    e('x1', 85, 'project'),
   ];
   const out = buildActivityIndex(items, 2);
   // two prompts (newest two), two posts, one product; merged newest-first

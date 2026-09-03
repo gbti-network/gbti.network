@@ -11,7 +11,7 @@ const at = (t) => () => t;
 test('type -> kind: post->article, product->product, prompt->prompt, share->share; unknown -> null', () => {
   const k = (type) => normalizeContentEntry({ type, title: 't', url: '/u/', author: 'a', publishedAt: 1, visibility: 'public' })?.kind;
   assert.equal(k('post'), 'article');
-  assert.equal(k('product'), 'product');
+  assert.equal(k('project'), 'project');
   assert.equal(k('prompt'), 'prompt');
   assert.equal(k('share'), 'share');
   assert.equal(normalizeContentEntry({ type: 'news', title: 't', url: '/u/', visibility: 'public' }), null, 'an unmapped type is dropped');

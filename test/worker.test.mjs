@@ -190,7 +190,7 @@ test('SOW-059 P1c: the OAuth state blob round-trips the touch sid through both h
 
 test('normalizeVia accepts a strict <type>:<kebab-slug> and drops anything else (fail safe)', () => {
   assert.equal(normalizeVia('post:my-slug'), 'post:my-slug');
-  assert.equal(normalizeVia('product:cool-thing'), 'product:cool-thing');
+  assert.equal(normalizeVia('project:cool-thing'), 'project:cool-thing');
   assert.equal(normalizeVia('prompt:do-x'), 'prompt:do-x');
   // dropped: wrong type, path traversal, spaces, uppercase, empty, overlong
   assert.equal(normalizeVia('page:home'), null);
@@ -203,8 +203,8 @@ test('normalizeVia accepts a strict <type>:<kebab-slug> and drops anything else 
 });
 
 test('buildNewCustomerMetadata captures a valid via and omits an invalid one', () => {
-  const ok = buildNewCustomerMetadata({ githubId: '5', discordUserId: 'd9', trialStartedAt: 'x', via: 'product:thing' });
-  assert.equal(ok.via, 'product:thing');
+  const ok = buildNewCustomerMetadata({ githubId: '5', discordUserId: 'd9', trialStartedAt: 'x', via: 'project:thing' });
+  assert.equal(ok.via, 'project:thing');
   const bad = buildNewCustomerMetadata({ githubId: '5', discordUserId: 'd9', trialStartedAt: 'x', via: 'evil payload' });
   assert.ok(!('via' in bad), 'an invalid via is dropped, never written to Stripe metadata');
 });

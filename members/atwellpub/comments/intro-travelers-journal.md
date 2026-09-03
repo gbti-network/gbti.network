@@ -2,7 +2,7 @@
 type: comment
 id: intro-travelers-journal
 author: atwellpub
-targetType: product
+targetType: project
 targetSlug: travelers-journal
 status: published
 visibility: public

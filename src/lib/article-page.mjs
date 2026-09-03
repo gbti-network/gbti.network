@@ -1,23 +1,23 @@
 // sow-179: pure helpers for the three switchable article layouts (Editorial, Journal, Card). Mirrors
-// src/lib/product-page.mjs's naming and shape for the same content-type-per-file convention, but kept as an
-// independent module rather than extending product-page.mjs: the two content types diverge enough (no
+// src/lib/project-page.mjs's naming and shape for the same content-type-per-file convention, but kept as an
+// independent module rather than extending project-page.mjs: the two content types diverge enough (no
 // gallery/specs/pricing concept on an article, a different synthetic-anchor id) that sharing one function
 // would mean threading product-only options through an article call site, or the reverse. Duplication here is
 // deliberate, matching the same "new namespace over touching shared, tested, live code" call already made for
 // the .art-* CSS prefix (see .data/sow/1_progressing/website/sow-179-article-switchable-layouts.md).
 
-/** Below this many entries, a contents rail is not worth showing (matches product-page.mjs's own threshold). */
+/** Below this many entries, a contents rail is not worth showing (matches project-page.mjs's own threshold). */
 export const TOC_MIN_ENTRIES = 3;
 
 /**
  * Build the Editorial/Journal contents-rail entries from a rendered article's H2 headings, the same shape
  * Astro's render() already returns for the published page. An "Overview" entry is prepended for the body
  * itself (pointing at ART_OVERVIEW_ID, the id every article layout puts on its body wrapper), and a
- * "Discussion" entry appended when the page has a comment thread, matching product-page.mjs's buildToc()
+ * "Discussion" entry appended when the page has a comment thread, matching project-page.mjs's buildToc()
  * pattern minus the gallery concept an article does not have.
  *
  * Returns an empty list when the result would be too short to be worth a rail (the handoff's "under three
- * headings the contents rail collapses" behaviour, same rule as products).
+ * headings the contents rail collapses" behaviour, same rule as projects).
  *
  * @param {{depth:number, slug:string, text:string}[]} headings  from Astro's render()
  * @param {{hasBody?:boolean, hasDiscussion?:boolean}} opts
@@ -55,7 +55,7 @@ export function coverDimensions(layout) {
 // sow-214: the article SHELL, owned in one place so the published page and the WorkBench preview cannot
 // drift into different layouts again.
 //
-// They had. preview.astro rendered every content type through the product Doc Shell (.pd-*), never read
+// They had. preview.astro rendered every content type through the project Doc Shell (.pd-*), never read
 // `layout`, and imported one component from the article side, so an article preview was a different page
 // from the article. The editor's layout picker changed nothing on screen.
 //
@@ -168,7 +168,7 @@ function esc(s) {
  * The lead rather than the whole page, deliberately. The preview's rail, body injection, contents rail and
  * member toggle already work and are bound to existing elements, so replacing the whole document would
  * break working behaviour to share markup that is not where the drift actually hurts. What made the two
- * layouts look like different pages was the lead: a full-bleed product hero with the title over it, versus
+ * layouts look like different pages was the lead: a full-bleed project hero with the title over it, versus
  * a heading followed by an inset cover and its caption. That is what is shared here, and the surrounding
  * geometry comes from ARTICLE_SHELL's class names, which both hosts read.
  *

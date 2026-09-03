@@ -8,8 +8,8 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 
 const SITE = 'https://gbti.network';
-const INDEXES = { post: 'blog-index.json', prompt: 'prompts-index.json', product: 'products-index.json' };
-const SEG = [['all', 'All'], ['post', 'Articles'], ['prompt', 'Prompts'], ['product', 'Products']];
+const INDEXES = { post: 'blog-index.json', prompt: 'prompts-index.json', project: 'projects-index.json' };
+const SEG = [['all', 'All'], ['post', 'Articles'], ['prompt', 'Prompts'], ['project', 'Projects']];
 
 const SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
 const TAG_ICO = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h7.9a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8Z"></path><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"></circle></svg>';
@@ -115,7 +115,7 @@ const CSS = `
   .badge { font-family:var(--font-mono, monospace); font-size:9px; text-transform:uppercase; letter-spacing:.06em; padding:2px 6px; border-radius:3px; flex:none; }
   .badge.prompt { color:var(--greenfg); background:var(--green-dim); }
   .badge.post { color:#8fb8f0; background:rgba(120,150,220,.15); }
-  .badge.product { color:var(--amberfg); background:var(--amber-dim); }
+  .badge.project { color:var(--amberfg); background:var(--amber-dim); }
   .item .iauth { color:var(--muted); font-size:11.5px; }
   .muted { color:var(--muted); font-size:13.5px; }
 `;
@@ -166,8 +166,8 @@ class GbtiTagExplorer extends GbtiElement {
       this._rows = this._rows.filter((r) => r !== sel);
       if (to) {
         let destRow = this._rows.find((r) => r.tag === to);
-        if (!destRow) { destRow = { tag: to, post: 0, prompt: 0, product: 0, total: 0, items: [] }; this._rows.push(destRow); }
-        for (const t of ['post', 'prompt', 'product']) destRow[t] += sel[t];
+        if (!destRow) { destRow = { tag: to, post: 0, prompt: 0, project: 0, total: 0, items: [] }; this._rows.push(destRow); }
+        for (const t of ['post', 'prompt', 'project']) destRow[t] += sel[t];
         destRow.total += sel.total;
         destRow.items.push(...sel.items);
         this._sel = to;
@@ -192,7 +192,7 @@ class GbtiTagExplorer extends GbtiElement {
             const tag = String(raw).trim().toLowerCase();
             if (!tag) continue;
             let row = byTag.get(tag);
-            if (!row) { row = { tag, post: 0, prompt: 0, product: 0, total: 0, items: [] }; byTag.set(tag, row); }
+            if (!row) { row = { tag, post: 0, prompt: 0, project: 0, total: 0, items: [] }; byTag.set(tag, row); }
             row[type] += 1; row.total += 1;
             row.items.push({ type, title: it.title || it.slug, url: it.url, author: it.author, path: it.path });
           }
@@ -240,7 +240,7 @@ class GbtiTagExplorer extends GbtiElement {
     const maxNow = Math.max(1, ...list.map((d) => this._activeTotal(d)));
     const uses = list.reduce((n, d) => n + this._activeTotal(d), 0);
     const car = this._dir < 0 ? '▼' : '▲';
-    const head = [['tag', 'Tag', ''], ['total', 'Usage', ' usehead'], ['post', 'Art', ' num'], ['prompt', 'Prm', ' num'], ['product', 'Prd', ' num']]
+    const head = [['tag', 'Tag', ''], ['total', 'Usage', ' usehead'], ['post', 'Art', ' num'], ['prompt', 'Prm', ' num'], ['project', 'Prj', ' num']]
       .map(([k, l, cls]) => `<div class="col${cls}${this._sort === k ? ' sorted' : ''}" data-s="${k}"><span>${l}</span><span class="car">${car}</span></div>`).join('') + '<div></div>';
     const rowsHtml = list.map((d) => {
       const t = this._activeTotal(d);
@@ -251,7 +251,7 @@ class GbtiTagExplorer extends GbtiElement {
         <div class="usage"><div class="bar"><i style="width:${pct}%"></i></div><span class="tot">${t}</span></div>
         <div class="num${z(d.post)}">${d.post}</div>
         <div class="num${z(d.prompt)}">${d.prompt}</div>
-        <div class="num${z(d.product)}">${d.product}</div>
+        <div class="num${z(d.project)}">${d.project}</div>
         <div class="rowact" title="Tag curation is a follow-up">${KEBAB}</div>
       </div>`;
     }).join('');
@@ -265,7 +265,7 @@ class GbtiTagExplorer extends GbtiElement {
     const sel = this._sel ? this._rows.find((r) => r.tag === this._sel) : null;
     const detail = sel ? `<div class="detail">
         <div class="dhead"><div class="dtag">${esc(sel.tag)}</div>
-          <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? '' : 's'}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? '' : 's'}` : ''}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? '' : 's'}` : ''}${sel.product ? ` · ${sel.product} product${sel.product === 1 ? '' : 's'}` : ''}</div></div>
+          <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? '' : 's'}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? '' : 's'}` : ''}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? '' : 's'}` : ''}${sel.project ? ` · ${sel.project} product${sel.project === 1 ? '' : 's'}` : ''}</div></div>
         <div class="dactions">
           <button type="button" id="act-rename" title="Rename this tag everywhere">${icon('pencil')} Rename</button>
           <button type="button" id="act-merge" title="Merge this tag into another">${icon('merge')} Merge</button>

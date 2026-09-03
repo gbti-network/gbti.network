@@ -1,5 +1,5 @@
 // <gbti-workspace> (SOW-033): the member's management surface inside the extension. A tabbed view of everything
-// they own (Articles / Prompts / Products) plus their pull requests with live gate status, and a pinned profile
+// they own (Articles / Prompts / Projects) plus their pull requests with live gate status, and a pinned profile
 // row. Each content row opens the item IN PLACE in an embedded <gbti-content-editor> (open-inside-the-extension,
 // the SOW-031 tie), reusing the exact gbti-content-list -> editor.load flow. PR rows classify into Proposed /
 // Needs changes / Accepted / Declined via the pure classifyPull helper. Host-agnostic (consumes only the
@@ -10,7 +10,7 @@ import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, sh
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
-const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
+const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'project']); // SOW-073: types whose publish invalidates a tab
 const SITE = 'https://gbti.network'; // SOW-173: the live site origin, prefixed onto a View link from the extension host
 import { glyphFor } from '../cat-glyph.mjs'; // SOW-062: the SOW-049 type glyph, reused on the WorkBench list rows
 import './gbti-content-editor.mjs';
@@ -23,7 +23,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
   { id: 'post', label: 'Articles', type: 'post', authoring: true },
   { id: 'prompt', label: 'Prompts', type: 'prompt', authoring: true },
-  { id: 'product', label: 'Products', type: 'product', authoring: true },
+  { id: 'project', label: 'Projects', type: 'project', authoring: true },
   // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
   // type's list (a draft article under Articles), reached by the per-type Drafts filter.
   { id: 'prs', label: 'Pull requests' },
@@ -34,7 +34,7 @@ const TABS = [
 ];
 
 // sow-204: `authoring: true` above marks the four tabs the owner's Option A removes from the EXTENSION
-// (Articles, Prompts, Products, Inbox). Saved and Following are deliberately NOT flagged: they are the
+// (Articles, Prompts, Projects, Inbox). Saved and Following are deliberately NOT flagged: they are the
 // curation surface the same ruling keeps, and they exist nowhere else in the extension, so flagging them
 // would delete favorites, collections and follows from that host entirely. The decision logic is pure and
 // lives in workspace-core (authoringEnabled / visibleTabs / resolveTab) so it is testable without a browser.
@@ -120,7 +120,7 @@ class GbtiWorkspace extends GbtiElement {
     // dereferences this._cache/_tab, so they must exist first; otherwise a TypeError aborts the whole mount and
     // the workspace renders nothing. (Same fix as gbti-browse.)
     // SOW-036 P4: open on the tab named by the deep-link hash (workspace.html#tab=prompt), falling back to 'post'.
-    // Lets the avatar menu route the member straight to "My prompts" / "My products" / "My pull requests".
+    // Lets the avatar menu route the member straight to "My prompts" / "My projects" / "My pull requests".
     this._tab = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview'; // SOW-052 default
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
@@ -205,19 +205,19 @@ class GbtiWorkspace extends GbtiElement {
       if (cached?.items?.[0]) { this._overview = cached.items[0]; if (this._tab === 'overview' && !this._editing) this.render(); }
     }
     const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null); // tolerate a missing client method (undefined)
-    const [post, prompt, product, prs, activity, follows, status] = await Promise.all([
+    const [post, prompt, project, prs, activity, follows, status] = await Promise.all([
       num(this.client?.listContent?.({ type: 'post' })),
       num(this.client?.listContent?.({ type: 'prompt' })),
-      num(this.client?.listContent?.({ type: 'product' })),
+      num(this.client?.listContent?.({ type: 'project' })),
       num(this.client?.listPRs?.()),
       num(this.client?.getActivity?.()),
       num(this.client?.getFollows?.()),
       num(this.client?.status?.()),
     ]);
     const items = (r) => (Array.isArray(r?.items) ? r.items : []);
-    this._cache.post = items(post); this._cache.prompt = items(prompt); this._cache.product = items(product);
+    this._cache.post = items(post); this._cache.prompt = items(prompt); this._cache.project = items(project);
     this._prs = Array.isArray(prs?.prs) ? prs.prs : (this._prs || []);
-    const drafts = [...items(post), ...items(prompt), ...items(product)].filter((it) => it.status === 'draft').length;
+    const drafts = [...items(post), ...items(prompt), ...items(project)].filter((it) => it.status === 'draft').length;
     const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
     const followN = Array.isArray(follows) ? follows.length : (follows?.following?.length || 0);
     const attention = (this._prs || [])
@@ -231,7 +231,7 @@ class GbtiWorkspace extends GbtiElement {
     this._overview = {
       membership: status?.membership || 'unknown',
       role: status?.role || 'member',
-      counts: { post: items(post).length, prompt: items(prompt).length, product: items(product).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+      counts: { post: items(post).length, prompt: items(prompt).length, project: items(project).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
       attention,
       _trusted: trusted,
     };
@@ -242,7 +242,7 @@ class GbtiWorkspace extends GbtiElement {
         wbCacheSet(ck, 'overview', [this._overview], { allowEmpty: true });
         wbCacheSet(ck, 'post', this._cache.post, { allowEmpty: true });
         wbCacheSet(ck, 'prompt', this._cache.prompt, { allowEmpty: true });
-        wbCacheSet(ck, 'product', this._cache.product, { allowEmpty: true });
+        wbCacheSet(ck, 'project', this._cache.project, { allowEmpty: true });
         if (Array.isArray(this._prs)) wbCacheSet(ck, 'prs', this._prs, { allowEmpty: true });
       }
     }
@@ -252,7 +252,7 @@ class GbtiWorkspace extends GbtiElement {
     if (trusted && !this._scopeResolved) {
       this._scopeResolved = true;
       const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SCOPE_KEY) : null;
-      const personalCount = items(post).length + items(prompt).length + items(product).length;
+      const personalCount = items(post).length + items(prompt).length + items(project).length;
       const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
       const moved = resolved !== this._scopeNow(); // compare BEFORE assigning
       this._scope = resolved;
@@ -801,7 +801,7 @@ class GbtiWorkspace extends GbtiElement {
       // _onHash listener switches the tab in place, no reload, on BOTH hosts.
       { nm: 'Articles', href: '#tab=post', n: c.post },
       { nm: 'Prompts', href: '#tab=prompt', n: c.prompt },
-      { nm: 'Products', href: '#tab=product', n: c.product },
+      { nm: 'Projects', href: '#tab=project', n: c.project },
       { nm: 'Pull requests', href: '#tab=prs', n: c.prs },
       { nm: 'Saved', href: '#tab=saved', n: c.saved },
       { nm: 'Following', href: '#tab=subs', n: c.subs },

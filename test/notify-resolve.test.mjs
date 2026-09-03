@@ -92,12 +92,12 @@ test('normalizeNotify keeps a well-formed event-keyed matrix and only boolean ch
   const out = normalizeNotify({
     article: { api: true, email: false },
     prompt: { email: true },
-    product: { api: false, email: true },
+    project: { api: false, email: true },
   });
   assert.deepEqual(out, {
     article: { api: true, email: false },
     prompt: { email: true },
-    product: { api: false, email: true },
+    project: { api: false, email: true },
   });
 });
 
@@ -129,10 +129,10 @@ test('normalizeNotify output feeds resolveNotify end to end: a per-follow email:
   const follow = normalizeNotify({ article: { email: true } }); // email an article, nothing else
   assert.deepEqual(resolveNotify({ event: 'article', follow }), { api: true, email: true });
   // A different type falls through to the system default (email OFF), because the follow spoke only to article.
-  assert.deepEqual(resolveNotify({ event: 'product', follow }), { api: true, email: false });
+  assert.deepEqual(resolveNotify({ event: 'project', follow }), { api: true, email: false });
 });
 
 test('NOTIFY_EVENTS is the four real content-type kinds the matrix seeds today', () => {
-  assert.deepEqual([...NOTIFY_EVENTS], ['article', 'prompt', 'product', 'share']);
+  assert.deepEqual([...NOTIFY_EVENTS], ['article', 'prompt', 'project', 'share']);
   assert.ok(!NOTIFY_EVENTS.includes('skill'), 'skill is carried generically, not seeded as a real type');
 });

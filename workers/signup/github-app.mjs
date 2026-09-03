@@ -348,7 +348,7 @@ export async function reviewFileContent(request, env, deps = {}) {
   // file oracle. Safe: the repo is public by design (house index.md/.enc are already public), the caller must be a
   // signed-in member, a members-only house body is .enc ciphertext or a stub (no plaintext leak), and it only
   // decrypts through the paid-gated /membership/decrypt.
-  const HOUSE_CONTENT = ['house/posts/', 'house/products/', 'house/prompts/'];
+  const HOUSE_CONTENT = ['house/posts/', 'house/projects/', 'house/prompts/'];
   const allowedPrefix = path.startsWith('members/') || HOUSE_CONTENT.some((p) => path.startsWith(p));
   if (!clean || !allowedPrefix) return { status: 400, body: { error: 'bad_request', message: 'path must be a clean members/ or house content path' } };
   if (!ref) return { status: 400, body: { error: 'bad_request', message: 'a ref is required' } };

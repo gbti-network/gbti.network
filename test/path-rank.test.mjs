@@ -39,7 +39,7 @@ test('rankForPath: the rest of house/** is admin', () => {
 
 test('rankForPath: member content is member-tier (a curation op base rank covers editing it)', () => {
   assert.equal(rankForPath('members/atwellpub/posts/foo/index.md'), MEMBER);
-  assert.equal(rankForPath('members/dikafei/products/bar/index.md'), MEMBER);
+  assert.equal(rankForPath('members/dikafei/projects/bar/index.md'), MEMBER);
 });
 
 test('rankForPath: an unclean path fails closed to superadmin (no ../ escape into the admin bucket)', () => {

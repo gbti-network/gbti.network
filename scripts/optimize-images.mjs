@@ -26,7 +26,7 @@ function itemDirs() {
     }
   };
   scan(path.join(ROOT, 'house/posts'));
-  scan(path.join(ROOT, 'house/products'));
+  scan(path.join(ROOT, 'house/projects'));
   const members = path.join(ROOT, 'members');
   if (fs.existsSync(members)) for (const u of fs.readdirSync(members)) scan(path.join(members, u, 'posts'));
   return out;

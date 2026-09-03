@@ -62,7 +62,7 @@ syndication:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
-    product:
+    project:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
@@ -89,19 +89,19 @@ syndication:
         them directly: {member-url}
     x:
       post: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
-      product: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      project: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       share: 'Shared on the GBTI Network: "{title}" {url} {hashtags}'
     bluesky:
       post: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
-      product: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
+      project: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       share: 'Shared on the GBTI Network: "{title}" {url} {hashtags}'
     linkedin:
       post: >-
         New {content-type} by {fullName}:
         "{title}"\n\n{short-description}\n\n{url}{author-note-block}\n\n{hashtags}
-      product: >-
+      project: >-
         New {content-type} by {fullName}:
         "{title}"\n\n{short-description}\n\n{url}{author-note-block}\n\n{hashtags}
       prompt: >-

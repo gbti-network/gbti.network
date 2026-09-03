@@ -80,7 +80,7 @@ class GbtiContribInbox extends GbtiElement {
     if (list.length === 0) {
       return `<div class="panel"><h2>Contributions to review</h2>
         <p class="muted">No one has proposed a change to your content yet. When a member improves one of your
-        articles, products, or prompts, it shows up here for you to review and accept.</p></div>`;
+        articles, projects, or prompts, it shows up here for you to review and accept.</p></div>`;
     }
     return `<div class="panel">
       <h2>Contributions to review<span class="count">${list.length}</span></h2>

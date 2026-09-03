@@ -44,7 +44,10 @@ export async function authorContent(ctx, { type, input, body, status, message, t
  *  that is not a draftable content item (e.g. gbti/share-*, gbti/comment-*), so those are skipped by listDrafts. */
 export function draftMetaFromBranch(branch) {
   if (branch === 'gbti/profile') return { type: 'profile', slug: null };
-  const m = String(branch || '').match(/^gbti\/(post|product|prompt)-(.+)$/);
+  // sow-196: `product` MUST STAY here. Every draft branch a member staged on their fork before the
+  // 2026-09-02 rename is literally named `gbti/product-<slug>`, and those branches are not ours to rewrite.
+  // Drop the alternative and their staged, unpublished work stops being recognised as a draft at all.
+  const m = String(branch || '').match(/^gbti\/(post|project|product|prompt)-(.+)$/);
   return m ? { type: m[1], slug: m[2] } : null;
 }
 

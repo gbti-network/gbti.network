@@ -33,7 +33,7 @@ test('DRIFT: the client core, the website core and the editor agree on which typ
 test('an author note is PERMITTED on a post but never REQUIRED of one', () => {
   assert.ok(AUTHOR_NOTE_TYPES.has('post'));
   const validate = repoFile('scripts/validate-content.mjs');
-  assert.match(validate, /a published product\/prompt requires a from-the-author introduction comment/);
+  assert.match(validate, /a published project\/prompt requires a from-the-author introduction comment/);
   assert.doesNotMatch(validate, /requires? a from-the-author (introduction )?comment[^\n]*\bpost\b/);
 });
 

@@ -1,8 +1,8 @@
 ---
-// SOW-050: the unified author/byline for every content detail page (articles / products / prompts). One look:
+// SOW-050: the unified author/byline for every content detail page (articles / projects / prompts). One look:
 // avatar + author link + published date. Pass `stack` (the SOW-008/009 author+contributors+commenters set) to
-// render stacked avatars (articles); omit it for a single author avatar (products / prompts). `center` + `dark`
-// adapt it to each page's header (centered card, dark product banner, left-aligned prompt header). It renders the
+// render stacked avatars (articles); omit it for a single author avatar (projects / prompts). `center` + `dark`
+// adapt it to each page's header (centered card, dark project banner, left-aligned prompt header). It renders the
 // BYLINE only, never the <h1> (the page keeps data-gbti-region="title" on its own title).
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, authorAvatar, formatDate } from '../lib/authors';
@@ -46,7 +46,7 @@ const href = authorHref(author);
   .cm-name { font-family: var(--f-display); font-weight: 700; font-size: 16px; color: var(--fg); }
   .cm-name:hover { color: var(--green-700); }
   .cm-date { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); }
-  /* On the dark product banner, the byline sits on ink: lift the text to the on-dark palette. */
+  /* On the dark project banner, the byline sits on ink: lift the text to the on-dark palette. */
   .cm-dark .cm-name { color: #fff; }
   .cm-dark .cm-name:hover { color: var(--green-mint); }
   .cm-dark .cm-date { color: var(--on-dark-mute, rgba(255,255,255,.7)); }

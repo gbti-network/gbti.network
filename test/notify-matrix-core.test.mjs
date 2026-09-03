@@ -16,7 +16,7 @@ import {
 test('MATRIX_ROWS carries the five design rows in order', () => {
   assert.deepEqual(
     MATRIX_ROWS.map((r) => r.key),
-    ['article', 'product', 'prompt', 'share', 'news'],
+    ['article', 'project', 'prompt', 'share', 'news'],
   );
   assert.equal(MATRIX_ROWS.find((r) => r.key === 'prompt').label, 'Prompts and skills');
   assert.equal(MATRIX_ROWS.find((r) => r.key === 'news').label, 'News they curate');
@@ -31,7 +31,7 @@ test('the global default is read per row and email stays off unless the member s
   const m = defaultMatrix({ share: { api: false }, article: { email: true } });
   assert.deepEqual(m.share, { api: false, email: false }); // api overridden off, email fails closed off
   assert.deepEqual(m.article, { api: true, email: true }); // api falls through to system on, email turned on
-  assert.deepEqual(m.product, { api: true, email: false }); // untouched -> system default
+  assert.deepEqual(m.project, { api: true, email: false }); // untouched -> system default
 });
 
 test('a per-follow override wins per channel, then the global default, then the system default', () => {
@@ -39,14 +39,14 @@ test('a per-follow override wins per channel, then the global default, then the 
   const follow = { article: { api: true } }; // override only api; email must fall through to the global
   const m = resolveMatrix(follow, global);
   assert.deepEqual(m.article, { api: true, email: true });
-  assert.deepEqual(m.product, { api: true, email: false }); // neither set -> system default
+  assert.deepEqual(m.project, { api: true, email: false }); // neither set -> system default
 });
 
 test('matrixToNotify serializes all five rows explicitly, coercing to booleans', () => {
   const notify = matrixToNotify({ article: { api: true, email: true }, share: { email: true } });
   assert.deepEqual(notify, {
     article: { api: true, email: true },
-    product: { api: false, email: false },
+    project: { api: false, email: false },
     prompt: { api: false, email: false },
     share: { api: false, email: true },
     news: { api: false, email: false },
@@ -58,7 +58,7 @@ test('toggleCell flips one channel and never mutates the input', () => {
   const next = toggleCell(base, 'article', 'email');
   assert.equal(next.article.email, true);
   assert.equal(base.article.email, false, 'input untouched');
-  assert.equal(next.product.email, false, 'other rows untouched');
+  assert.equal(next.project.email, false, 'other rows untouched');
   const back = toggleCell(next, 'article', 'email');
   assert.equal(back.article.email, false);
 });
@@ -83,11 +83,11 @@ test('summarizeMatrix reads the muted, everything, and partial cases', () => {
   for (const r of MATRIX_ROWS) allBoth[r.key] = { api: true, email: true };
   assert.equal(summarizeMatrix(allBoth), 'Everything, in app and by email');
 
-  const partial = matrixToNotify({ article: { api: true }, product: { api: true } });
-  assert.equal(summarizeMatrix(partial), 'Articles, products');
+  const partial = matrixToNotify({ article: { api: true }, project: { api: true } });
+  assert.equal(summarizeMatrix(partial), 'Articles, projects');
 
-  const partialMail = matrixToNotify({ article: { api: true, email: true }, product: { api: true } });
-  assert.equal(summarizeMatrix(partialMail), 'Articles, products, email on');
+  const partialMail = matrixToNotify({ article: { api: true, email: true }, project: { api: true } });
+  assert.equal(summarizeMatrix(partialMail), 'Articles, projects, email on');
 });
 
 test('summarizeFollow resolves a default-mode follow against the global default', () => {

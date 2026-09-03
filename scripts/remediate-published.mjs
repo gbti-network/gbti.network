@@ -15,7 +15,7 @@ import { createGitHubClient } from '../clients/github.mjs';
 import { planRemediation, flipFilesToDraft } from './lib/post-publish-remediation.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-const CONTENT_FILE = /^(members\/[^/]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/;
+const CONTENT_FILE = /^(members\/[^/]+|house)\/(posts|projects|products|prompts)\/[^/]+\/index\.md$/;
 
 export function changedContentFiles(env) {
   return String(env.CHANGED_FILES || '').trim().split(/\s+/).filter((f) => CONTENT_FILE.test(f));

@@ -37,7 +37,7 @@ for (const p of PAGES) {
   const html = fs.readFileSync(path.join(dir, 'content.html'), 'utf8');
   const $ = cheerio.load(html);
   // strip chrome
-  $('script, style, noscript, nav, header, footer, form, .site-header, .site-footer, .main-navigation, .products-overlay, .products-dropdown, .slide-out-menu, .hamburger-menu').remove();
+  $('script, style, noscript, nav, header, footer, form, .site-header, .site-footer, .main-navigation, .projects-overlay, .projects-dropdown, .slide-out-menu, .hamburger-menu').remove();
   // pick the content region with the most text
   let best = null;
   let bestLen = 0;

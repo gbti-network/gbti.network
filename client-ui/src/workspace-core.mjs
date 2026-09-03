@@ -9,25 +9,31 @@
 // SOW-036: the workspace deep-link tab hint. The avatar menu opens workspace.html#tab=<id>; <gbti-workspace>
 // reads the hash on connect to open directly on that management tab. Returns a valid tab id, or null when the hash
 // carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
-const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'product', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs)
+import { canonicalType } from './content-types.mjs';
+
+const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs)
 export function parseWorkspaceTab(hash) {
   const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-  return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+  // sow-196: #tab=product still resolves. The avatar menu and the extension have been emitting that link
+  // for months and people have it bookmarked; unresolved, the workspace just opens on nothing.
+  const tab = m ? canonicalType(m[1]) : null;
+  return tab && WORKSPACE_TABS.has(tab) ? tab : null;
 }
 
 // SOW-064: the quick-create deep-link. The "+" menu opens workspace.html#new=<type>; <gbti-workspace> reads it on
 // connect to open a BLANK content editor for that type (start a new article/prompt/product). Returns a valid
 // content type, or null when the hash carries no/unknown new-target.
-const WORKSPACE_NEW_TYPES = new Set(['post', 'prompt', 'product']);
+const WORKSPACE_NEW_TYPES = new Set(['post', 'prompt', 'project']);
 export function parseWorkspaceNew(hash) {
   const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)new=([a-z]+)(?:&|$)/);
-  return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
+  const nt = m ? canonicalType(m[1]) : null; // sow-196
+  return nt && WORKSPACE_NEW_TYPES.has(nt) ? nt : null;
 }
 
 // SOW-106 QA fix: the editor deep-link vocabulary, so a refresh restores the open editor. `edit=` carries an
 // encoded canonical content path (validated hard: anything off-shape is null, so the hash can never point the
 // editor at an arbitrary file); `draft=` carries `<type>:<slug>` for a fork-staged draft.
-const EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
+const EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
 
 /** Parse `edit=<encoded members path>` from a hash into a validated canonical content path, or null. */
 export function parseWorkspaceEdit(hash) {
@@ -40,7 +46,7 @@ export function parseWorkspaceEdit(hash) {
 
 /** Parse `draft=<type>:<slug>` from a hash into { type, slug }, or null. */
 export function parseWorkspaceDraft(hash) {
-  const m = /(?:^|[#&])draft=(post|product|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ''));
+  const m = /(?:^|[#&])draft=(post|project|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ''));
   return m ? { type: m[1], slug: m[2] } : null;
 }
 
@@ -63,13 +69,13 @@ export function planHashRoute(hash, { editing = false, reviewing = false, tab = 
 
 /** The content type for a canonical content path (posts -> post), or null (a profile path has no list type). */
 export function typeForContentPath(path) {
-  const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\//.exec(String(path || ''));
+  const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts)\//.exec(String(path || ''));
   return m ? m[1].slice(0, -1) : null;
 }
 
 // SOW-173: the public site route per content type. `post` renders at /articles/ (SOW-136 flattened posts to the
-// articles route); products and prompts keep their own directory route. House and member content share these.
-const PUBLIC_ROUTE = { post: 'articles', product: 'products', prompt: 'prompts' };
+// articles route); projects and prompts keep their own directory route. House and member content share these.
+const PUBLIC_ROUTE = { post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' };
 
 /** SOW-173: the public page path for a published item, as a site-relative `/route/<slug>/`, or null when the
  *  type has no public route or a slug cannot be derived. `type` is the row's content type; `path` is the item's
@@ -310,7 +316,7 @@ export function mergeTypeItems(content = [], drafts = []) {
 // sow-183 Author picker: which owner a loaded item STARTS on, and when a pick is a real reassignment.
 //
 // WHY THESE ARE PURE AND HERE. The picker is the only control in the WorkBench that can MOVE an item between
-// member folders, and on 2026-08-24 it did exactly that without being touched: publishing the Ryker product
+// member folders, and on 2026-08-24 it did exactly that without being touched: publishing the Ryker project
 // moved it out of members/atwellpub/ into members/gbtilabs/ and red-ded the build on main. The repository was
 // repaired; the cause was not, and it recurred.
 //
@@ -425,7 +431,7 @@ export function resolveTab(requested, tabs, authoring) {
 /**
  * sow-204: the Overview hub's tiles, filtered to the tabs this host actually shows.
  *
- * The hub advertises nine destinations, three of which (Articles, Prompts, Products) point at tabs the
+ * The hub advertises nine destinations, three of which (Articles, Prompts, Projects) point at tabs the
  * authoring flag hides in the extension. A tile linking to a hidden tab is worse than no tile: `resolveTab`
  * silently lands the member somewhere else, so the click appears to do the wrong thing rather than to be
  * unavailable.

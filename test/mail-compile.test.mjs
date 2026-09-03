@@ -297,19 +297,19 @@ const EPOCH = Date.UTC(2026, 6, 28); // a newsletter that launched ~2026-07-28, 
 test('resolveWindow (THEREAFTER): a prior exists -> since = the newsletter EPOCH (a floor), exclude = the mailed member urls', async () => {
   const kv = makeKV();
   await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH, excluded: null, appliesTo: 'members' }, sections: {
-    article: [{ url: '/articles/a1/' }], product: [{ url: '/products/p1/' }], prompt: [], share: [{ url: '/shares/ann/s1/' }],
+    article: [{ url: '/articles/a1/' }], project: [{ url: '/projects/p1/' }], prompt: [], share: [{ url: '/shares/ann/s1/' }],
   // sow-297: the prior issue records what was VISIBLE at its compile, which is a SUPERSET of what it mailed
   // (the cap and the window both narrow the pool down to the sections). `/articles/unmailed/` is in it and in
   // no section, which is the case the two sets exist to tell apart.
-  }, topNews: [{ url: 'https://n/news-should-not-be-excluded' }], pool: ['/articles/a1/', '/articles/unmailed/', '/products/p1/', '/shares/ann/s1/'] });
+  }, topNews: [{ url: 'https://n/news-should-not-be-excluded' }], pool: ['/articles/a1/', '/articles/unmailed/', '/projects/p1/', '/shares/ann/s1/'] });
   const w = await resolveWindow(kv, { nowMs: gen(7, 25), currentIssueId: 'weekly-2026-08-25' });
   assert.equal(w.firstIssue, false);
   assert.equal(w.since, EPOCH, 'the floor is the newsletter epoch, not null; null would drain the pre-newsletter back catalogue');
-  assert.deepEqual([...w.exclude].sort(), ['/articles/a1/', '/products/p1/', '/shares/ann/s1/'], 'all member sections, unioned');
+  assert.deepEqual([...w.exclude].sort(), ['/articles/a1/', '/projects/p1/', '/shares/ann/s1/'], 'all member sections, unioned');
   assert.ok(!w.exclude.has('https://n/news-should-not-be-excluded'), 'news is NOT excluded (it re-ranks by opens)');
   // sow-297: and the WEEK, which is the prior pool. Distinct from exclude on both sides, so a mutant that
   // aliased the two would red here: `unmailed` is seen and not excluded.
-  assert.deepEqual([...w.seen].sort(), ['/articles/a1/', '/articles/unmailed/', '/products/p1/', '/shares/ann/s1/']);
+  assert.deepEqual([...w.seen].sort(), ['/articles/a1/', '/articles/unmailed/', '/projects/p1/', '/shares/ann/s1/']);
   assert.ok(w.seen.has('/articles/unmailed/') && !w.exclude.has('/articles/unmailed/'),
     'an item visible last week but never mailed is SEEN and not EXCLUDED: the two sets are not the same question');
 });
@@ -401,7 +401,7 @@ test('compileWeeklyIssue THEREAFTER: epoch floor + exclude keeps a held item, dr
   // compile so it was not visible, and `prenews` is left out so the EPOCH floor is the only thing that can drop
   // it: two mechanisms dropping the same item would make neither assertion discriminating.
   await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH, excluded: null, appliesTo: 'members' }, sections: {
-    article: [{ url: '/articles/mailed/', title: 'Already mailed' }], product: [], prompt: [], share: [],
+    article: [{ url: '/articles/mailed/', title: 'Already mailed' }], project: [], prompt: [], share: [],
   }, pool: ['/articles/mailed/'] });
   const activity = { entries: [
     { type: 'post', slug: 'mailed',  title: 'Already mailed',      url: '/articles/mailed/',  author: 'ann', publishedAt: Date.UTC(2026, 6, 30), visibility: 'public' }, // after epoch, already mailed
@@ -435,21 +435,21 @@ test('compileWeeklyIssue THEREAFTER: epoch floor + exclude keeps a held item, dr
 // The SEAM the two prior defects lived in: the time floor and the issue-count exclude window are TWO bounds, and
 // the unit tests above each exercise ONE compile. This one runs the composer forward over many issues, which is
 // the only object that can catch an item slipping BETWEEN the bounds. Without the coupling, a below-cap artifact
-// (products never turn over) escapes the exclude window at historyDepth and, still above a FIXED epoch floor, gets
+// (projects never turn over) escapes the exclude window at historyDepth and, still above a FIXED epoch floor, gets
 // re-mailed on a historyDepth cycle. historyDepth is small (3) so the escape point (issue 5) is reached fast.
 test('SEAM (multi-issue): a below-cap item is mailed exactly once, never re-mailed after it ages out of the exclude window', async () => {
   const kv = makeKV();
   seedSubscribers(kv, ['r1']);
   const TUE = (wk) => Date.UTC(2026, 0, 6 + 7 * wk, 13, 0, 0); // successive weekly compiles (distinct weekly- ids)
-  // Six products, all published INSIDE the first issue's launch window (so all are eligible from issue one) and all
+  // Six projects, all published INSIDE the first issue's launch window (so all are eligible from issue one) and all
   // below the 40-per-type artifact cap, so they are present in EVERY week's artifact and never turn over. That makes
   // the exclude set the ONLY thing that can stop a re-mail, which is exactly the condition the coupling must survive.
-  const products = [1, 2, 3, 4, 5, 6].map((n) => ({
-    type: 'product', slug: `p${n}`, title: `Product ${n}`, url: `/products/p${n}/`, author: 'ann',
+  const projects = [1, 2, 3, 4, 5, 6].map((n) => ({
+    type: 'project', slug: `p${n}`, title: `Project ${n}`, url: `/projects/p${n}/`, author: 'ann',
     publishedAt: TUE(0) - (7 - n) * 24 * 3600 * 1000, // week0 -6d (p1, oldest) .. -1d (p6, newest), all in the launch window
     visibility: 'public',
   }));
-  const activity = { entries: products };
+  const activity = { entries: projects };
   const mailedIn = new Map(); // product url -> [issueIds it appeared in]
   for (let wk = 0; wk < 8; wk++) {
     const d = {
@@ -461,12 +461,12 @@ test('SEAM (multi-issue): a below-cap item is mailed exactly once, never re-mail
     const r = await compileWeeklyIssue({ SIGNUP_KV: kv, NEWS_KV: {} }, d);
     // eslint-disable-next-line no-await-in-loop
     const issue = await getIssue(kv, r.issueId);
-    for (const p of issue.sections.product ?? []) {
+    for (const p of issue.sections.project ?? []) {
       if (!mailedIn.has(p.url)) mailedIn.set(p.url, []);
       mailedIn.get(p.url).push(r.issueId);
     }
   }
-  // Every product mailed AT MOST once across the whole run. Under a fixed epoch floor, products 2-6 (mailed in
+  // Every product mailed AT MOST once across the whole run. Under a fixed epoch floor, projects 2-6 (mailed in
   // issue one, then aged out of the depth-3 exclude window by issue five) are above the epoch and no longer
   // excluded, so they re-mail: length 2, and this assertion reds. That is the mutant this test exists to catch.
   // sow-297 adds a second, independent guard on the same property (an item in last week's pool is not new), so
@@ -480,7 +480,7 @@ test('SEAM (multi-issue): a below-cap item is mailed exactly once, never re-mail
   // week. The answer to a section that overflows is a bigger cap for that section, which is why shares carry 10
   // (DEFAULT_SECTION_CAPS), not a queue that walks the archive forward one item at a time.
   assert.equal(mailedIn.size, 5, 'the five that fit the cap were actually mailed (not vacuously passing by mailing nothing)');
-  assert.ok(!mailedIn.has('/products/p1/'), 'the overflow item is dropped, not carried over: it was visible and is no longer new');
+  assert.ok(!mailedIn.has('/projects/p1/'), 'the overflow item is dropped, not carried over: it was visible and is no longer new');
 });
 
 // The joint SEAM between the advancing floor (resolveWindow, this module's orchestration) and the not-yet-due
@@ -512,9 +512,9 @@ test('SEAM (future-dated): a not-yet-due item is withheld then mailed once; a la
   // matters and that this design exists to protect. Its publishedAt is THREE DAYS BEFORE the first compile, and
   // it does not enter the artifact until week 3, so a publishedAt window of any sane width would have floored it
   // out on the day it first became visible. It mails because it was not in week 2's pool.
-  const immediate = { type: 'product', slug: 'immediate', title: 'Immediate', url: '/products/immediate/', author: 'ann', publishedAt: TUE(0) - DAY, visibility: 'public' };
-  const future = { type: 'product', slug: 'future', title: 'Future', url: '/products/future/', author: 'ann', publishedAt: TUE(0) + 100 * DAY, visibility: 'public' };
-  const latecomer = { type: 'product', slug: 'latecomer', title: 'Held for review', url: '/products/latecomer/', author: 'bob', publishedAt: TUE(0) - 3 * DAY, visibility: 'public' };
+  const immediate = { type: 'project', slug: 'immediate', title: 'Immediate', url: '/projects/immediate/', author: 'ann', publishedAt: TUE(0) - DAY, visibility: 'public' };
+  const future = { type: 'project', slug: 'future', title: 'Future', url: '/projects/future/', author: 'ann', publishedAt: TUE(0) + 100 * DAY, visibility: 'public' };
+  const latecomer = { type: 'project', slug: 'latecomer', title: 'Held for review', url: '/projects/latecomer/', author: 'bob', publishedAt: TUE(0) - 3 * DAY, visibility: 'public' };
   const mailedIn = new Map(); // url -> [week index]
   for (let wk = 0; wk < 22; wk++) {
     const activity = { entries: wk >= 3 ? [immediate, future, latecomer] : [immediate, future] };
@@ -527,19 +527,19 @@ test('SEAM (future-dated): a not-yet-due item is withheld then mailed once; a la
     const r = await compileWeeklyIssue({ SIGNUP_KV: kv, NEWS_KV: {} }, d);
     // eslint-disable-next-line no-await-in-loop
     const issue = await getIssue(kv, r.issueId);
-    for (const p of issue.sections.product ?? []) {
+    for (const p of issue.sections.project ?? []) {
       if (!mailedIn.has(p.url)) mailedIn.set(p.url, []);
       mailedIn.get(p.url).push(wk);
     }
   }
-  assert.deepEqual(mailedIn.get('/products/immediate/'), [0], 'the newest item mails at the first issue (harness is not dropping everything)');
+  assert.deepEqual(mailedIn.get('/projects/immediate/'), [0], 'the newest item mails at the first issue (harness is not dropping everything)');
   // The load-bearing control. It arrives in week 3 carrying a date from before week 0, which is exactly the
   // shape of a contribution held for review. A weekly window measured on publishedAt gives it [] here.
-  assert.deepEqual(mailedIn.get('/products/latecomer/'), [3],
+  assert.deepEqual(mailedIn.get('/projects/latecomer/'), [3],
     'an item that becomes VISIBLE in week 3 mails in week 3, however old its publishedAt is');
   // The future item is WITHHELD every issue until it comes due, then mails exactly once. Under PR 324's clamp it
   // re-mailed at 0, 4, 8, 12 (every historyDepth+1); unbounded, the same. Both fail this, so it is discriminating.
-  assert.deepEqual(mailedIn.get('/products/future/'), [15],
+  assert.deepEqual(mailedIn.get('/projects/future/'), [15],
     'the future-dated item is withheld until due, then mails exactly once, and does NOT re-mail on a historyDepth cycle');
 });
 

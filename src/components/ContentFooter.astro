@@ -1,5 +1,5 @@
 ---
-// SOW-050: the unified closing block shared by every content detail page (articles / products / prompts) so the
+// SOW-050: the unified closing block shared by every content detail page (articles / projects / prompts) so the
 // discussion + author region reads the same everywhere: the member-aware Community Invite, then the "Written by"
 // AuthorBox, then the digest capture, then the Comments thread, closing with the social-follow block (same centered reading width on all three — the prompt page drops its old
 // `wide`). Post-only extras (OpenHistory / RelatedPosts / ContributionCredits) stay on the article page, after
@@ -14,7 +14,7 @@ import { hasAuthorNote } from '../lib/comments';
 import type { ShareType } from '../lib/share';
 
 interface Props {
-  type: ShareType; // 'post' | 'product' | 'prompt'
+  type: ShareType; // 'post' | 'project' | 'prompt'
   slug: string;
   author: string;
   publishedAt?: Date;
@@ -34,7 +34,7 @@ const skipAuthorBox = hideAuthor || hasAuthorNote(await getCollection('comment')
 <CommunityInvite author={author} via={viaTag} />
 {!skipAuthorBox && <AuthorBox author={author} publishedAt={publishedAt} />}
 {/* sow-166 / sow-202: the digest capture. Mounted HERE rather than on each of the three page templates,
-    because this component is already the one shared closing block for articles, products and prompts, so
+    because this component is already the one shared closing block for articles, projects and prompts, so
     one mount covers all three and cannot drift between them.
     ORDER (owner request, 2026-08-28): the digest now sits ABOVE the discussion, in the slot the
     social-follow block used to hold, and it wears that block's card chrome so the two read as one family.

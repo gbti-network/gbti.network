@@ -7,7 +7,7 @@ import { isPublic } from '../lib/content';
 import { formatDate } from '../lib/authors';
 
 // Static info/legal pages from the `page` collection (house/pages/*.md).
-// getStaticPaths only emits these slugs, so this does not collide with /blog, /products, etc.
+// getStaticPaths only emits these slugs, so this does not collide with /blog, /projects, etc.
 export async function getStaticPaths() {
   const pages = (await getCollection('page')).filter(isPublic);
   return pages.map((page) => ({ params: { slug: page.data.slug }, props: { page } }));

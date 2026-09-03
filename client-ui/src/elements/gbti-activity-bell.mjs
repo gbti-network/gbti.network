@@ -131,7 +131,7 @@ class GbtiActivityBell extends GbtiElement {
   async _approvals() {
     const q = (await this.client.syndicationQueue()) || {};
     const pending = Array.isArray(q.pending) ? q.pending : [];
-    const TYPE = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
+    const TYPE = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
     return pending.map((it) => {
       const flagged = Array.isArray(it.flags) && it.flags.length;
       const type = TYPE[it.source] || 'Item';

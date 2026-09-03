@@ -14,7 +14,7 @@ export function phaseLabel(membership, { couponUntil = null, now = Date.now() } 
       return {
         phase: 'coupon',
         title: 'Your free membership period is active',
-        body: `Your coupon covers full membership through ${end}: your profile, posts, products, and prompts publish under your name. No card is on file and nothing bills automatically.`,
+        body: `Your coupon covers full membership through ${end}: your profile, posts, projects, and prompts publish under your name. No card is on file and nothing bills automatically.`,
         upgrade: false,
         until: until.toISOString(),
       };
@@ -22,7 +22,7 @@ export function phaseLabel(membership, { couponUntil = null, now = Date.now() } 
   }
   switch (membership) {
     case 'paid':
-      return { phase: 'paid', title: 'You are a paid member', body: 'Your profile, posts, products, and prompts publish under your name. Welcome to the co-op.', upgrade: false };
+      return { phase: 'paid', title: 'You are a paid member', body: 'Your profile, posts, projects, and prompts publish under your name. Welcome to the co-op.', upgrade: false };
     case 'trialing':
       return { phase: 'trial', title: 'You are in your 90-day trial', body: 'Explore the community and stage drafts on your own fork now. Upgrade to a paid membership any time to publish under your name.', upgrade: true };
     default:

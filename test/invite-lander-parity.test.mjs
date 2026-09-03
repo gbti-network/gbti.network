@@ -50,7 +50,7 @@ function landers() {
  *
  * A page may legitimately call tierDisplay more than once (the label in the hero and the price in the claim
  * card, say). What matters is that every call names the SAME tier: a page resolving two different tiers is
- * describing two different products, which is the drift this whole file exists to catch. So the rule is
+ * describing two different projects, which is the drift this whole file exists to catch. So the rule is
  * agreement, not call count. An earlier version of this asserted a single call and failed on a correct page,
  * which is its own kind of bad guard: one that cries about the shape of the code rather than the truth of
  * the claim teaches people to loosen it.

@@ -1,5 +1,5 @@
 // SOW-143: pure helpers for the in-extension member profile detail view. No DOM, unit-tested. The element
-// (gbti-member-view.mjs) fetches the three public per-type index JSONs (/blog,products,prompts-index.json) and
+// (gbti-member-view.mjs) fetches the three public per-type index JSONs (/blog,projects,prompts-index.json) and
 // filters each to the member's own content with these helpers, then hands the result to <gbti-card-list>.
 
 const lc = (s) => String(s || '').toLowerCase();
@@ -8,7 +8,7 @@ const lc = (s) => String(s || '').toLowerCase();
 // the reader/card `type`; `json` is the public index endpoint; `label` heads the section.
 export const MEMBER_SECTIONS = Object.freeze([
   { type: 'post', json: 'blog-index.json', label: 'Articles' },
-  { type: 'product', json: 'products-index.json', label: 'Products' },
+  { type: 'project', json: 'projects-index.json', label: 'Projects' },
   { type: 'prompt', json: 'prompts-index.json', label: 'Prompts' },
 ]);
 

@@ -25,7 +25,7 @@ import { parseContentFile, serializeContentFile } from '../client/src/content-op
 import { createGitHubClient } from '../clients/github.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TYPES = ['posts', 'products', 'prompts']; // member-authorable categorized types (shares/comments/profiles are NOT categorized)
+const TYPES = ['posts', 'projects', 'products', 'prompts']; // member-authorable categorized types (shares/comments/profiles are NOT categorized)
 const HOUSE_ONLY_TYPES = ['applets']; // SOW-022: applets are categorized (productShape) but house-only, never member-authored
 const TAXONOMY_REL = 'house/taxonomy.yml';
 const KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/; // a taxonomy key segment (matches the pure core + validate-content)

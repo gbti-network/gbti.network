@@ -194,7 +194,7 @@ function writeRecord(rec) {
 
 // --- run ---
 if (TYPE !== 'posts') {
-  console.error(`Only 'posts' implemented so far (got '${TYPE}'). Products/pages/profiles next.`);
+  console.error(`Only 'posts' implemented so far (got '${TYPE}'). Projects/pages/profiles next.`);
   process.exit(1);
 }
 

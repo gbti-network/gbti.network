@@ -8,7 +8,7 @@ const ms = (iso) => Date.parse(iso);
 
 const FOLLOWS = [{ username: 'naresh' }, { username: 'Hudson' }, { username: 'ali' }];
 const ENTRIES = [
-  { author: 'naresh', type: 'product', title: 'Radle 2.2', url: '/products/radle/', publishedAt: '2026-08-20T10:00:00Z' },
+  { author: 'naresh', type: 'project', title: 'Radle 2.2', url: '/projects/radle/', publishedAt: '2026-08-20T10:00:00Z' },
   { author: 'hudson', type: 'article', title: 'The Shai-Hulud Worm', url: '/articles/shai-hulud/', publishedAt: '2026-08-22T12:00:00Z' },
   { author: 'ali', type: 'share', title: 'LinkedIn headshot', url: '/shares/ali/1/', publishedAt: '2026-08-19T08:00:00Z' },
   { author: 'stranger', type: 'article', title: 'Not followed', url: '/articles/x/', publishedAt: '2026-08-25T00:00:00Z' },
@@ -86,7 +86,7 @@ test('row carries actor, target and a site-relative url', () => {
   const row = r.rows[0];
   assert.equal(row.actor, 'naresh');
   assert.equal(row.target, 'Radle 2.2');
-  assert.equal(row.url, '/products/radle/');
+  assert.equal(row.url, '/projects/radle/');
 });
 
 test('unreadLabel caps at 9+', () => {

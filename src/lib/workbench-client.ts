@@ -32,11 +32,11 @@ import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceComm
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
-const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', product: 'products-index.json', prompt: 'prompts-index.json' };
-const TYPE_LABEL: Record<string, string> = { post: 'article', product: 'product', prompt: 'prompt', profile: 'profile' };
-// members/<user>/<posts|products|prompts>/<slug>/index.md -> { type, slug }. Mirrors the folder->type mapping.
-const FOLDER_TYPE: Record<string, string> = { posts: 'post', products: 'product', prompts: 'prompt' };
-const PATH_RE = /^members\/[^/]+\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
+const TYPE_LABEL: Record<string, string> = { post: 'article', project: 'project', prompt: 'prompt', profile: 'profile' };
+// members/<user>/<posts|projects|products|prompts>/<slug>/index.md -> { type, slug }. Mirrors the folder->type mapping.
+const FOLDER_TYPE: Record<string, string> = { posts: 'post', projects: 'project', products: 'project', prompts: 'prompt' };
+const PATH_RE = /^members\/[^/]+\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 
 /** A GbtiClientError-shaped error (code + message) so the editor's failHint reads it exactly like the other hosts. */
 class WorkbenchClientError extends Error {
@@ -372,7 +372,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       pendingImages.delete(ref.name);
       for (const it of itemTokens) stagedForCleanup.push({ name: ref.name, item: it });
     }
-    // Move cleanup: delete the old index.md + old .enc, and move the from-the-author intro (product/prompt), all
+    // Move cleanup: delete the old index.md + old .enc, and move the from-the-author intro (project/prompt), all
     // in the same PR. Fail closed if the original vanished from main (never a half-move).
     if (moved) {
       const onMain = (await readOwnFile(origin!.oldPath)) != null;

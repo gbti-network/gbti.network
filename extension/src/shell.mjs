@@ -24,7 +24,7 @@ export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 export const SVG = {
   prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>', // inkwell + quill (Articles)
-  product: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m4 8.5 8 4.5 8-4.5M12 13v7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  project: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m4 8.5 8 4.5 8-4.5M12 13v7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   coin: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.5c-.6-.8-1.6-1.2-2.7-1.2-1.5 0-2.6.8-2.6 2s1 1.7 2.6 1.9c1.6.2 2.7.7 2.7 2s-1.1 2-2.7 2c-1.2 0-2.2-.5-2.8-1.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   activity: '<path d="M3 12h4l2.5-7 5 14 2.5-7H21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -64,7 +64,7 @@ const RAIL_FEED = [
   { key: 'activity', href: 'newtab.html#type=all', ico: 'activity', nm: 'Activity', sub: 'The latest across the co-op' },
   // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
   { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, limited trial' },
-  // sow-204 item 4a: NETWORK, the member-publications river (posts, products and prompts; no shares, no news).
+  // sow-204 item 4a: NETWORK, the member-publications river (posts, projects and prompts; no shares, no news).
   // It is the one entry the extension was missing against the website's feed set, and it is what makes a rail
   // item mean the same thing on both hosts. Its membership is NETWORK_KINDS in client-ui/src/feed-route.mjs,
   // which must keep agreeing with matchesNarrow('network') in src/lib/home-feed.mjs.
@@ -74,17 +74,17 @@ const RAIL_FEED = [
   // presented the same seven destinations as two unrelated groups. One heading, the website's order.
   // Activity IS the all-types river (bare newtab.html), so it stands in for the website's "All".
   { key: 'articles', href: 'newtab.html#type=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
-  { key: 'products', href: 'newtab.html#type=product', ico: 'product', nm: 'Products', sub: 'Plugins and tools' },
+  { key: 'projects', href: 'newtab.html#type=project', ico: 'project', nm: 'Projects', sub: 'Plugins and tools' },
   { key: 'prompts', href: 'newtab.html#type=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },
   { key: 'shares', href: 'newtab.html#type=share', ico: 'share', nm: 'Shares', sub: 'The co-op stream' }, // SOW-069: a share glyph, not a coin (Shares are not monetary)
   { div: true },
   // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
   { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'WorkBench', sub: 'Your content + tools', children: [
     // SOW-101: quick deep-links into the member's OWN content-management tabs (distinct from the Member Activity
-    // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/products/prompts/shares
+    // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/projects/prompts/shares
     // feed items. Shares has no workspace tab yet (SOW-093), so it points at the co-op stream like the feed item.
     { key: 'wb-post', href: 'workspace.html#tab=post', ico: 'article', nm: 'Articles' },
-    { key: 'wb-product', href: 'workspace.html#tab=product', ico: 'product', nm: 'Products' },
+    { key: 'wb-product', href: 'workspace.html#tab=project', ico: 'project', nm: 'Projects' },
     { key: 'wb-prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts' },
     { key: 'wb-shares', href: 'newtab.html#type=share', ico: 'share', nm: 'Shares' },
     { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests' },
@@ -101,7 +101,7 @@ const RAIL_WORKBENCH = [
   { group: 'My Content' },
   { key: 'post', href: 'workspace.html#tab=post', ico: 'article', nm: 'Articles', sub: 'Your posts' },
   { key: 'prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Your prompts' },
-  { key: 'product', href: 'workspace.html#tab=product', ico: 'product', nm: 'Products', sub: 'Your products' },
+  { key: 'project', href: 'workspace.html#tab=project', ico: 'project', nm: 'Projects', sub: 'Your projects' },
   { group: 'Activity' },
   { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted' },
   { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved', sub: 'Favorites + collections' },
@@ -435,7 +435,7 @@ function openComposeModal() {
 }
 // sow-204: the "+" opens the SHARE COMPOSER directly, and the SOW-064 create popup is gone from the extension.
 //
-// The owner's Option A ruling keeps the share composer and moves article, prompt and product authoring to the
+// The owner's Option A ruling keeps the share composer and moves article, prompt and project authoring to the
 // website. That left the popup offering four formats of which one still worked, and a chooser with one card is
 // worse than no chooser. The popup and its Recent-drafts machinery are removed rather than trimmed, because
 // fetchCreateContent was the extension's last caller of /api/drafts, which this same change removes from
@@ -552,7 +552,7 @@ async function maybeShowExpiryPopup(status) {
       <div class="expiry-count">${count}</div>
       <h2>${headline}</h2>
       ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ''}
-      <p class="expiry-note">Becoming a paying member keeps your profile, articles, products, and prompts
+      <p class="expiry-note">Becoming a paying member keeps your profile, articles, projects, and prompts
         published, your Discord access open, and your revenue share active. Nothing bills automatically;
         if you do nothing, your work simply unpublishes at the end and comes back whenever you join.</p>
       <a class="expiry-cta" href="https://gbti.network/membership/" target="_blank" rel="noopener">Become a paying member</a>

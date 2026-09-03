@@ -4,25 +4,30 @@
 // legacy `#tab=<X>`) narrows to one type and lights the matching Browse rail item.
 
 // sow-204 item 4a: 'network' joins the set so the extension rail carries the SAME feed vocabulary as the
-// website (All, News, Network, Articles, Products, Prompts, Shares). Network is the member-PUBLICATIONS
-// aggregate: posts, products and prompts, with no shares and no news, matching matchesNarrow('network') in
+// website (All, News, Network, Articles, Projects, Prompts, Shares). Network is the member-PUBLICATIONS
+// aggregate: posts, projects and prompts, with no shares and no news, matching matchesNarrow('network') in
 // src/lib/home-feed.mjs. It is the one entry the extension was missing.
-export const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news', 'network']);
+import { canonicalType } from './content-types.mjs';
+
+export const TYPE_FILTERS = new Set(['all', 'post', 'project', 'prompt', 'share', 'news', 'network']);
 
 // sow-204: the item types a NETWORK view admits. Named once here because the website's matchesNarrow and this
 // set must agree; if they drift, the same rail item shows different things on the two hosts, which is the exact
 // outcome adopting the website's set was meant to prevent.
-export const NETWORK_KINDS = Object.freeze(['post', 'product', 'prompt']);
+export const NETWORK_KINDS = Object.freeze(['post', 'project', 'prompt']);
 
 // TYPE -> the rail key to highlight. 'all' maps to 'activity' (Activity IS the All river; there is no separate
 // Browse "All" item). Anything unknown falls back to 'activity' so the rail never ends up with nothing lit.
-const RAIL_KEY = { all: 'activity', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares', news: 'news', network: 'network' };
+const RAIL_KEY = { all: 'activity', post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts', share: 'shares', news: 'news', network: 'network' };
 
 /** Parse a location.hash (with or without the leading '#') into a known TYPE filter, or null when none.
  *  Accepts both the rail's `type=<X>` shortcut and the activity bell's legacy `tab=<X>` deep-link shape. */
 export function parseTypeFromHash(hash) {
   const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec(String(hash || ''));
-  return m && TYPE_FILTERS.has(m[1]) ? m[1] : null;
+  // sow-196: a #type=product / tab=product deep link, emitted for months and now bookmarked and
+  // syndicated, must still resolve. Unresolved it falls through to a default view with no explanation.
+  const ty = m ? canonicalType(m[1]) : null;
+  return ty && TYPE_FILTERS.has(ty) ? ty : null;
 }
 
 /** The active TYPE for a given hash: the parsed type, or 'all' (the river) when the hash carries none. */
@@ -41,7 +46,7 @@ export function railKeyForType(type) {
  *   - `all`  (Activity): member content + Shares, NO news. The quick river (capped).
  *   - `news` (News): news BLENDED with member content + Shares, newest-first (member activity is injected).
  *   - `share`: Shares only (loads Shares, then narrows).
- *   - `post|product|prompt`: that one content type only (no Shares, no news).
+ *   - `post|project|prompt`: that one content type only (no Shares, no news).
  * `narrow` is false for the two BLENDED views (`all`, `news`) and true for the single-type directories.
  * @returns {{ wantNews: boolean, wantShares: boolean, narrow: boolean }}
  */

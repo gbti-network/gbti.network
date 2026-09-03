@@ -12,7 +12,7 @@ const product = (over = {}) => ({
 });
 
 test('an approved published public product with an https feed joins the pool, prefixed and credited', () => {
-  const out = mergeMemberSources(HOUSE, [{ product: 'radle' }], [product()]);
+  const out = mergeMemberSources(HOUSE, [{ project: 'radle' }], [product()]);
   assert.equal(out.length, 2);
   const m = out[1];
   assert.equal(m.id, 'member-radle');
@@ -24,20 +24,20 @@ test('an approved published public product with an https feed joins the pool, pr
 
 test('everything fails closed: no approval, missing product, unpublished, members-only, no feed, http feed', () => {
   assert.equal(mergeMemberSources(HOUSE, [], [product()]).length, 1); // declared but never approved
-  assert.equal(mergeMemberSources(HOUSE, [{ product: 'gone' }], [product()]).length, 1);
-  assert.equal(mergeMemberSources(HOUSE, [{ product: 'radle' }], [product({ status: 'draft' })]).length, 1);
-  assert.equal(mergeMemberSources(HOUSE, [{ product: 'radle' }], [product({ visibility: 'members' })]).length, 1);
-  assert.equal(mergeMemberSources(HOUSE, [{ product: 'radle' }], [product({ newsFeed: undefined })]).length, 1);
-  assert.equal(mergeMemberSources(HOUSE, [{ product: 'radle' }], [product({ newsFeed: 'http://insecure/feed' })]).length, 1);
+  assert.equal(mergeMemberSources(HOUSE, [{ project: 'gone' }], [product()]).length, 1);
+  assert.equal(mergeMemberSources(HOUSE, [{ project: 'radle' }], [product({ status: 'draft' })]).length, 1);
+  assert.equal(mergeMemberSources(HOUSE, [{ project: 'radle' }], [product({ visibility: 'members' })]).length, 1);
+  assert.equal(mergeMemberSources(HOUSE, [{ project: 'radle' }], [product({ newsFeed: undefined })]).length, 1);
+  assert.equal(mergeMemberSources(HOUSE, [{ project: 'radle' }], [product({ newsFeed: 'http://insecure/feed' })]).length, 1);
   assert.equal(mergeMemberSources(HOUSE, [{}], [product()]).length, 1); // malformed row
 });
 
 test('house ids always win a collision and the inputs are not mutated', () => {
   const clash = [{ id: 'member-radle', name: 'House', url: 'https://x/feed', description: '', enabled: true }];
-  const out = mergeMemberSources(clash, [{ product: 'radle' }], [product()]);
+  const out = mergeMemberSources(clash, [{ project: 'radle' }], [product()]);
   assert.equal(out.length, 1);
   assert.equal(out[0].name, 'House');
   const house = [...HOUSE];
-  mergeMemberSources(house, [{ product: 'radle' }], [product()]);
+  mergeMemberSources(house, [{ project: 'radle' }], [product()]);
   assert.deepEqual(house, HOUSE);
 });

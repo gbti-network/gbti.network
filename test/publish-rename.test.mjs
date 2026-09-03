@@ -275,7 +275,7 @@ test('POST rename parity: full move, /articles/ base, and NO intro machinery', a
   assert.ok(!repo.deletes.some((d) => d.includes('/comments/')), 'no comment deletes for a post');
 });
 
-const PROD_OLD = 'members/alice/products/old-name/index.md';
+const PROD_OLD = 'members/alice/projects/old-name/index.md';
 const PROD_FM = '---\ntype: product\ntitle: X\nslug: old-name\nauthor: alice\nstatus: published\nvisibility: public\npublishedAt: 2026-07-02T00:00:00.000Z\nshortDescription: about it\nicon: ./images/icon.png\nfeaturedImage: ./images/feat.png\npricing: paid\npricingUrl: https://example.com/buy\ncategories:\n  - devops\n---\n\nOld body.\n';
 const PROD_INPUT = {
   title: 'X', slug: 'old-name', shortDescription: 'about it', icon: './images/icon.png',
@@ -283,15 +283,15 @@ const PROD_INPUT = {
   categories: ['devops'], visibility: 'public', publishedAt: '2026-07-07T09:00:00.000Z', updatedAt: '2026-07-07T09:00:00.000Z',
 };
 
-test('PRODUCT rename parity: full move, /products/ base, intro moves, pricing round-trips', async () => {
+test('PRODUCT rename parity: full move, /projects/ base, intro moves, pricing round-trips', async () => {
   const repo = fakeRepo();
   repo.getFileSha = async (r, p, ref) => (ref === 'main' ? (p === PROD_OLD ? 'old-sha' : null) : 'blob');
   const intro = '---\ntype: comment\nid: intro-old-name\nauthor: alice\ntargetType: product\ntargetSlug: old-name\nstatus: published\nvisibility: public\nauthorNote: true\ncreatedAt: 2026-07-02\n---\n\nHi.\n';
   const ctx = ctxFor({ repo, files: { [PROD_OLD]: PROD_FM, 'members/alice/comments/intro-old-name.md': intro } });
-  const res = await publish(ctx, { type: 'product', input: { ...PROD_INPUT, slug: 'new-name' }, body: 'B.', path: PROD_OLD });
+  const res = await publish(ctx, { type: 'project', input: { ...PROD_INPUT, slug: 'new-name' }, body: 'B.', path: PROD_OLD });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/products/new-name/index.md').content).frontmatter;
-  assert.deepEqual(fm.redirectFrom, ['/products/old-name/']); // the PRODUCT url base
+  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/projects/new-name/index.md').content).frontmatter;
+  assert.deepEqual(fm.redirectFrom, ['/projects/old-name/']); // the PRODUCT url base
   assert.equal(fm.pricing, 'paid');
   assert.equal(fm.pricingUrl, 'https://example.com/buy'); // commerce fields survive the move
   const movedIntro = repo.puts.find((f) => f.path === 'members/alice/comments/intro-new-name.md');
@@ -303,7 +303,7 @@ test('PRODUCT rename parity: full move, /products/ base, intro moves, pricing ro
 test('saveDraft rename staging parity for post + product (old path, old-slug branch)', async () => {
   for (const [type, oldPath, fm, input] of [
     ['post', POST_OLD, POST_FM, POST_INPUT],
-    ['product', PROD_OLD, PROD_FM, PROD_INPUT],
+    ['project', PROD_OLD, PROD_FM, PROD_INPUT],
   ]) {
     const repo = fakeRepo();
     const res = await saveDraft(ctxFor({ repo, files: { [oldPath]: fm } }), { type, input: { ...input, slug: 'renamed-x' }, body: 'B.', path: oldPath });

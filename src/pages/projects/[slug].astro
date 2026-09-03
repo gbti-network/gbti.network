@@ -1,0 +1,373 @@
+---
+// sow-172: the project detail page, rebuilt on the "Doc Shell" layout (design direction 1b).
+//
+// The page exists to earn an install click, so the install call to action is never more than a glance away:
+// a banner hero, an install bar that pins under the site header and follows the reader down, a persistent
+// left rail (contents / specs / links / favorited by), and one 660px reading column. The site header and
+// footer are untouched; the install bar is a page element that stacks below the header's own sticky.
+//
+// This is a restyle and a reorder, not a rewrite of behaviour. Every contract the rest of the system relies
+// on is preserved verbatim: the data-gbti-region hooks the client edits in place, EditHooks / TouchSignal,
+// the SOW-016 gating modes via hasPublicPage / isStub / LockedBody, the SOW-014 inert members-only links,
+// and the SOW-050 shared ContentMeta / ContentActions / ContentFooter cluster.
+//
+// The layout CSS lives in src/styles/gbti-v3.css (.pd-*), not here, because the WorkBench draft preview
+// renders the same structure and must not drift from it.
+import { getCollection, render } from 'astro:content';
+import { Image } from 'astro:assets';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Prose from '../../components/blog/Prose.astro';
+import VideoEmbed from '../../components/VideoEmbed.astro';
+import ContentMeta from '../../components/ContentMeta.astro';
+import ContentActions from '../../components/ContentActions.astro';
+import ContentFooter from '../../components/ContentFooter.astro';
+import DeployStatusNotice from '../../components/DeployStatusNotice.astro';
+import EditHooks from '../../components/EditHooks.astro';
+import TouchSignal from '../../components/TouchSignal.astro';
+import { refCodeForAuthor } from '../../lib/referral';
+import { defaultFeatureImage } from '../../lib/feature-image';
+import LockedBody from '../../components/LockedBody.astro';
+import { hasPublicPage, isStub, contentRepoPath } from '../../lib/content';
+import CategoryCrumbs from '../../components/CategoryCrumbs.astro'; // sow-174: linked hero crumbs
+import { favoriteCount } from '../../lib/favorites';
+import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
+import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
+import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
+import {
+  normalizeGallery,
+  hasCaptions,
+  resolveGalleryStyle,
+  buildToc,
+  repoUrl as findRepo,
+  resolvePrimaryCta,
+  railLinks,
+  linkLabel,
+  isLockedLink,
+  resolveHero,
+  parseGithubRepo,
+  iconForUrl,
+  formatRelease,
+} from '../../lib/project-page.mjs';
+
+export async function getStaticPaths() {
+  const projects = (await getCollection('project')).filter(hasPublicPage);
+  return projects.map((project) => ({ params: { slug: project.data.slug }, props: { project } }));
+}
+
+const { project } = Astro.props;
+const d = project.data;
+const { Content, headings } = await render(project);
+const productUrl = new URL(`/projects/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
+
+const stub = isStub(project);
+const links = d.links ?? [];
+const repoUrl = findRepo(links);
+const primary = resolvePrimaryCta(links, d.pricingUrl);
+const asideLinks = railLinks(links, primary, d.pricingUrl, d.pricing);
+
+// sow-174: the hero is an uploaded banner image, an author-chosen color preset, or the fallback chain (the
+// required 16:10 spotlight cover, then the existing default gradient) — resolveHero() picks exactly one.
+const hero = resolveHero(d.banner, d.bannerPreset, d.featuredImage);
+const markImage = d.iconLarge ?? d.icon;
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const favs = favoriteCount('project', d.slug, aliasSlugsOf(d));
+
+// sow-175: the hero's Edit affordance. The href is public build-time data (same path EditHooks already
+// exposes); only VISIBILITY is a runtime decision, toggled client-side from the member signal once resolved,
+// so an anonymous or non-owning visitor never sees the button flash before script runs.
+const editPath = contentRepoPath('project', d.author, d.slug);
+const editHref = editPath ? `/workbench/#tab=project&edit=${encodeURIComponent(editPath)}` : null;
+
+const shots = stub ? [] : normalizeGallery(d.gallery);
+const galleryStyle = resolveGalleryStyle(d.galleryStyle, shots.length);
+const captioned = hasCaptions(shots);
+const toc = buildToc(headings, { hasBody: !stub, hasGallery: shots.length > 0, hasDiscussion: true });
+
+// sow-175: the latest GitHub release, for a project whose repository link is a public GitHub repo. Build
+// time only (this is a static site with no per-visitor server), unauthenticated (60 req/hour is comfortable
+// at today's project count; see project-page.mjs for why). Fails closed on every edge — a private repo, no
+// releases yet, a rate limit, a network error, or a non-GitHub repository link all just omit the row rather
+// than fail the build.
+let release: { tag: string; url: string; publishedAt: string } | null = null;
+const ghRepo = repoUrl ? parseGithubRepo(repoUrl) : null;
+if (ghRepo) {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${ghRepo.owner}/${ghRepo.repo}/releases/latest`);
+    if (res.ok) release = formatRelease(await res.json());
+  } catch { /* no release row; not a build failure */ }
+}
+const releaseAge = release
+  ? new Date(release.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  : null;
+
+// The rail's spec block. Every row is conditional: a project that declares none of this shows no block at
+// all rather than a column of empty labels.
+const specs = [
+  ...(d.version ? [['Version', d.version]] : []),
+  ...(d.requires ? [['Requires', d.requires]] : []),
+  ...(d.platforms?.length ? [['Works with', d.platforms.join(', ')]] : []),
+  ...(d.updatedAt ? [['Updated', d.updatedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })]] : []),
+  ...(d.publishedAt ? [['Published', d.publishedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })]] : []),
+] as [string, string][];
+
+// The end-of-body panel repeats the same offer for a reader who scrolled the whole page.
+const ctaSub = [d.pricing ? cap(d.pricing) : null, d.requires].filter(Boolean).join(' · ');
+const lockedHint = (l: { encrypted?: boolean }) =>
+  l.encrypted
+    ? 'Encrypted member content. Open in the GBTI client to unlock.'
+    : 'Members only. Open in the GBTI client to unlock.';
+---
+<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')}>
+  <DeployStatusNotice type="project" slug={d.slug} updatedAt={d.updatedAt} />
+  <div class="pd-shell">
+    <!-- Hero: the banner, scrimmed, with the project mark and the one-line pitch sitting on it. -->
+    <section class="pd-hero" data-preset={hero.preset}>
+      {hero.image && <Image src={hero.image} alt="" widths={[900, 1600]} sizes="100vw" class="pd-hero-img" />}
+      <div class="pd-hero-scrim"></div>
+      {editHref && (
+        <a href={editHref} target="_blank" rel="noopener" class="pd-hero-edit" data-pd-hero-edit data-pd-owner={d.author} hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          Edit
+        </a>
+      )}
+      <div class="pd-wrap pd-hero-in">
+        <Image src={markImage} alt={`${d.title} icon`} width={124} height={124} class="pd-mark" />
+        <div class="pd-hero-txt">
+          <CategoryCrumbs categories={d.categories} class="pd-eyebrow" />
+          <h1 data-gbti-region="title" class="pd-title">{d.title}</h1>
+          <p class="pd-pitch">{d.shortDescription}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install bar: in the flow directly under the hero, pinned to the top of the reading area on scroll. -->
+    <div class="pd-bar">
+      <div class="pd-wrap pd-bar-in">
+        <div class="pd-bar-id">
+          <Image src={d.icon} alt="" width={44} height={44} class="pd-bar-mark" />
+          <span class="pd-bar-name">{d.title}</span>
+        </div>
+        {d.version && <span class="pd-bar-spec">v{d.version}</span>}
+        {d.pricing && <span class="pd-bar-spec on">{cap(d.pricing)}</span>}
+        {favs > 0 && (
+          <span class="pd-bar-fav" title={`${favs} member${favs === 1 ? '' : 's'} favorited this`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-heart" /></svg>{favs}
+          </span>
+        )}
+        <div class="pd-bar-actions">
+          {repoUrl && (
+            <a href={repoUrl} rel="noopener" class="btn btn-ghost pd-bar-gh">
+              {iconForUrl(repoUrl) && <svg viewBox="0 0 24 24" aria-hidden="true"><use href={`#${iconForUrl(repoUrl)}`} /></svg>}
+              View on GitHub
+            </a>
+          )}
+          {primary && (isLockedLink(primary) ? (
+            <span class="btn btn-primary pd-locked-btn" data-tooltip={lockedHint(primary)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-lock" /></svg>
+              {linkLabel(primary)}
+            </span>
+          ) : (
+            <a href={primary.url} rel="noopener" class="btn btn-primary">
+              {iconForUrl(primary.url) && <svg viewBox="0 0 24 24" aria-hidden="true"><use href={`#${iconForUrl(primary.url)}`} /></svg>}
+              {linkLabel(primary)}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div class="pd-wrap">
+      <div class="pd-grid" data-side={d.sidebarPosition === 'right' ? 'right' : 'left'}>
+        <aside class="pd-rail">
+          {toc.length > 0 && (
+            <nav class="pd-toc" aria-label="Contents" data-pd-toc>
+              <span class="pd-rail-lab">Contents</span>
+              {toc.map((t, i) => <a href={`#${t.id}`} data-pd-toc-link={t.id} class:list={[i === 0 && 'on']}>{t.label}</a>)}
+            </nav>
+          )}
+
+          {(specs.length > 0 || release) && (
+            <div class="pd-block">
+              <dl class="pd-specs">
+                {specs.map(([k, v]) => (
+                  <div class="pd-spec"><dt>{k}</dt><dd>{v}</dd></div>
+                ))}
+                {release && (
+                  <div class="pd-spec">
+                    <dt>Latest release</dt>
+                    <dd><a href={release.url} rel="noopener" class="pd-release-link">{release.tag}<span class="pd-release-age"> · {releaseAge}</span></a></dd>
+                  </div>
+                )}
+              </dl>
+              {d.tags?.length > 0 && (
+                <div class="pd-tags">
+                  {d.tags.map((tag: string) => <a class="pd-tag" href={`/feeds/?tag=${encodeURIComponent(tag)}`}>{tag}</a>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {asideLinks.length > 0 && (
+            <div class="pd-block pd-rail-links">
+              <span class="pd-rail-lab">Links</span>
+              {asideLinks.map((l) => (
+                isLockedLink(l) ? (
+                  <span class="pd-rail-link locked" data-tooltip={lockedHint(l)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-lock" /></svg>{linkLabel(l)}
+                  </span>
+                ) : (
+                  <a class="pd-rail-link" href={l.url} rel="noopener">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-link" /></svg>{linkLabel(l)}
+                  </a>
+                )
+              ))}
+            </div>
+          )}
+
+          <div class="pd-block">
+            <FavoritedBy type="project" slug={d.slug} aliases={aliasSlugsOf(d)} />
+          </div>
+
+          <div class="pd-block">
+            <DigestSubscribe variant="rail" heading="The weekly digest" />
+          </div>
+        </aside>
+
+        <div class="pd-col">
+          <div class="pd-byline">
+            <ContentMeta author={d.author} publishedAt={d.publishedAt} updatedAt={d.updatedAt} />
+            <ContentActions type="project" slug={d.slug} title={d.title} url={productUrl} author={d.author} categories={d.categories} count={favs} />
+          </div>
+
+          {!stub && d.video && (
+            <div class="pvideo">
+              <VideoEmbed video={d.video} title={`${d.title} demo`} />
+            </div>
+          )}
+
+          <article id="pd-overview" data-gbti-region="body">
+            {stub ? (
+              /* Mode B: a public stub page. The teaser says plainly what is behind the wall; LockedBody keeps
+                 owning the decrypt path, so a member's client still fills this in place. */
+              <div class="pd-teaser">
+                <span class="pd-gate-lab">Members only</span>
+                <h2 class="pd-gate-title">This write-up lives inside the network</h2>
+                <p class="pd-gate-sub">{d.shortDescription}</p>
+                <div class="pd-skel" aria-hidden="true"><i></i><i></i><i></i></div>
+                <LockedBody encPath={d.encryptedBody} kind="body" readerPath={project.id} readerType="project" />
+              </div>
+            ) : (
+              <>
+                <Prose>
+                  <Content />
+                </Prose>
+                {d.encryptedBody && (
+                  /* Mode C: the public body, then the withheld tail. Always last in the article region,
+                     never interleaved between public sections. */
+                  <div class="pd-locked-tail">
+                    <span class="pd-gate-lab">Members-only section</span>
+                    <LockedBody encPath={d.encryptedBody} kind="section" readerPath={project.id} readerType="project" />
+                  </div>
+                )}
+              </>
+            )}
+          </article>
+
+          {(primary || repoUrl) && (
+            <div class="pd-cta">
+              <div class="pd-cta-txt">
+                <div class="pd-cta-title">Ready to install?</div>
+                {ctaSub && <p class="pd-cta-sub">{ctaSub}</p>}
+              </div>
+              <div class="pd-cta-btns">
+                {primary && !isLockedLink(primary) && (
+                  <a href={primary.url} rel="noopener" class="btn btn-primary">
+                    {iconForUrl(primary.url) && <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href={`#${iconForUrl(primary.url)}`} /></svg>}
+                    {linkLabel(primary)}
+                  </a>
+                )}
+                {repoUrl && (
+                  <a href={repoUrl} rel="noopener" class="btn btn-ghost">
+                    {iconForUrl(repoUrl) && <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href={`#${iconForUrl(repoUrl)}`} /></svg>}
+                    View on GitHub
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {shots.length > 0 && (
+            <div id="pd-screenshots" class="pd-gallery pd-anchor">
+              <div class="pd-gal-head">
+                <span class="pd-rail-lab">Screenshots</span>
+              </div>
+              <h2 class="pd-gal-title">See {d.title} in action</h2>
+
+              {galleryStyle === 'grid' ? (
+                <div class="pd-shots">
+                  {shots.map((s, i) => (
+                    <figure class="pd-shot">
+                      <a href={s.src.src} target="_blank" rel="noopener" aria-label={`Open screenshot ${i + 1} of ${d.title}`}
+                         data-lightbox data-lightbox-group="pd-gallery" data-cap={s.caption || ''}>
+                        <Image src={s.src} widths={[420, 840]} sizes="(max-width:900px) 100vw, 320px" alt={s.caption || `${d.title} screenshot ${i + 1}`} />
+                      </a>
+                      {captioned && <figcaption>{s.caption}</figcaption>}
+                    </figure>
+                  ))}
+                </div>
+              ) : (
+                <div class="pd-carousel" data-pd-carousel data-captions={JSON.stringify(shots.map((s) => s.caption))}>
+                  <div class="pd-stage">
+                    <div class="pd-frames" data-pd-frames>
+                      {shots.map((s, i) => (
+                        <div class="pd-frame" data-lightbox data-lightbox-group="pd-gallery" data-full={s.src.src} data-cap={s.caption || ''} role="button" tabindex="0" aria-label={`Enlarge ${s.caption || `${d.title} screenshot ${i + 1}`}`}>
+                          <Image src={s.src} widths={[660, 1320]} sizes="(max-width:900px) 100vw, 660px" alt={s.caption || `${d.title} screenshot ${i + 1}`} />
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" class="pd-arrow prev" data-pd-prev aria-label="Previous screenshot" hidden>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </button>
+                    <button type="button" class="pd-arrow next" data-pd-next aria-label="Next screenshot" hidden>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </button>
+                  </div>
+                  <div class="pd-cap-row">
+                    <span class="pd-count" data-pd-count>{String(1).padStart(2, '0')} / {String(shots.length).padStart(2, '0')}</span>
+                    {captioned && <p class="pd-cap" data-pd-cap>{shots[0].caption}</p>}
+                  </div>
+                  <div class="pd-strip" data-pd-strip>
+                    {shots.map((s, i) => (
+                      <button type="button" class="pd-thumb" data-pd-go={i} aria-current={i === 0 ? 'true' : 'false'} aria-label={`Screenshot ${i + 1}`}>
+                        <Image src={s.src} widths={[120, 240]} sizes="90px" alt="" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <ContentFooter type="project" slug={d.slug} author={d.author} publishedAt={d.publishedAt} aliases={aliasSlugsOf(d)} />
+        </div>
+      </div>
+    </div>
+  </div>
+  <EditHooks type="project" owner={d.author} slug={d.slug} />
+  <TouchSignal type="project" ownerId={refCodeForAuthor(d.author)} slug={d.slug} />
+</BaseLayout>
+
+<script>
+  // The contents scroll-spy and the carousel controls. Shared with the WorkBench draft preview, which
+  // renders this same structure at runtime (src/lib/pd-enhance.mjs).
+  import { initToc, initCarousel } from '../../lib/pd-enhance.mjs';
+  initToc();
+  initCarousel();
+
+  // sow-175/183: the hero Edit button. The href is already baked in server-side; only visibility is decided
+  // here, from the site-wide member signal BaseLayout already hydrates. Presentation only, matching every
+  // other use of this signal: the SOW-005 gate / the Worker's authorizeSuperadmin are the real boundary if a
+  // non-owner ever reached the editor directly. Shared with every other content-detail page's Edit pill.
+  import { wireEditAffordance } from '../../lib/content';
+  wireEditAffordance('[data-pd-hero-edit]', 'data-pd-owner');
+</script>

@@ -51,7 +51,7 @@ function routeSet(relPath) {
 // for its whole set; a route that needs its own reason does not belong in a bucket, it belongs in a new one.
 const WEBSITE_ONLY = {
   WEBSITE_AUTHORING: {
-    reason: 'sow-204 (owner Option A, 2026-08-28): the extension stops being an AUTHORING host. Articles, prompts and products are written on gbti.network; the extension keeps reading, curating and the Share composer. The matching UI left in the same change: the four authoring tabs are flagged `authoring` in gbti-workspace, their Overview tiles are filtered by visibleTiles, the shell "+" opens the Share composer directly, and the activity bell no longer fetches a review lane. Removing a route while a caller survives is the failure to watch for here.',
+    reason: 'sow-204 (owner Option A, 2026-08-28): the extension stops being an AUTHORING host. Articles, prompts and projects are written on gbti.network; the extension keeps reading, curating and the Share composer. The matching UI left in the same change: the four authoring tabs are flagged `authoring` in gbti-workspace, their Overview tiles are filtered by visibleTiles, the shell "+" opens the Share composer directly, and the activity bell no longer fetches a review lane. Removing a route while a caller survives is the failure to watch for here.',
     routes: [
       '/api/publish', '/api/validate', '/api/form-fields', '/api/image',
       '/api/content/status', '/api/content/rename',

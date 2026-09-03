@@ -5,7 +5,7 @@
 // SOW-005 gate enforce the merge. Node-free + pure so node --test covers them.
 
 export const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-const TYPE_DIR = { post: 'posts', product: 'products', prompt: 'prompts' };
+const TYPE_DIR = { post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' };
 const SAFE = /^[A-Za-z0-9_-]+$/; // a username / slug / share-id segment; rejects '/', '..', etc.
 
 /**

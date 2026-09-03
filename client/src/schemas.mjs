@@ -48,7 +48,7 @@ const contributors = z
   )
   .default([]);
 
-// SOW-014: typed, visibility-tagged links for products + prompts. Mirrors src/content.config.ts.
+// SOW-014: typed, visibility-tagged links for projects + prompts. Mirrors src/content.config.ts.
 const contentLinks = z
   .array(
     z.object({
@@ -128,7 +128,7 @@ export const postSchema = z.object({
 });
 
 export const productSchema = z.object({
-  type: z.literal('product').default('product'),
+  type: z.literal('project').default('project'),
   title: z.string(),
   slug: z.string().regex(/^[a-z0-9-]+$/),
   author: z.string(),
@@ -148,14 +148,14 @@ export const productSchema = z.object({
   pricingUrl: z.string().url().optional(),
   icon: z.string(), // REQUIRED, 1:1. The SMALL icon: the directory card renders it at 64 (shown 56).
   // Optional 1:1 LARGE icon for the detail page's 96px slot, which a 128px source cannot serve crisply at
-  // 2x. Optional on purpose: every existing product predates it, and their 128x128 sources cannot be
+  // 2x. Optional on purpose: every existing project predates it, and their 128x128 sources cannot be
   // upscaled into a genuine large asset. The render falls back to `icon`.
   iconLarge: z.string().optional(),
   banner: z.string().optional(),
   // sow-174: mirrors src/content.config.ts. Mutually exclusive with `banner` in the editor.
   bannerPreset: z.enum(BANNER_PRESET_KEYS).optional(),
   featuredImage: z.string(), // REQUIRED, mirrors src/content.config.ts (the 16:10 spotlight cover). Was optional
-  // here: a product published without it passed the client but broke the Astro build (SOW-025, same drift class).
+  // here: a project published without it passed the client but broke the Astro build (SOW-025, same drift class).
   // sow-172/174: a gallery entry is EITHER a bare path OR { src, caption }. Mirrors src/content.config.ts.
   // The union matters beyond validation: zod STRIPS unknown keys, so without it a caption would silently
   // vanish the next time this schema validated a save.
@@ -163,7 +163,7 @@ export const productSchema = z.object({
   galleryStyle: z.enum(['grid', 'carousel']).optional(), // sow-172: unset resolves by shot count
   video: z.string().optional(),
   links: contentLinks,
-  // Mirrors src/content.config.ts. Which side the Contents rail renders on for this product's detail page.
+  // Mirrors src/content.config.ts. Which side the Contents rail renders on for this project's detail page.
   sidebarPosition: z.enum(['left', 'right']).default('right'),
   publishedAt: z.coerce.date().optional(),
   redirectFrom: z.array(z.string()).default([]),
@@ -254,7 +254,7 @@ export const commentSchema = z.object({
   type: z.literal('comment').default('comment'),
   id: z.string().min(1),
   author: z.string(),
-  targetType: z.enum(['post', 'product', 'prompt', 'share', 'news']), // SOW-032: 'share'; SOW-046 D: 'news' discussion
+  targetType: z.enum(['post', 'project', 'prompt', 'share', 'news']), // SOW-032: 'share'; SOW-046 D: 'news' discussion
   targetSlug: z.string(), // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
   status: STATUS.default('published'),
   visibility: VISIBILITY.default('members'), // SOW-044: members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
@@ -268,13 +268,13 @@ export const commentSchema = z.object({
 /** Schemas keyed by content type. */
 export const SCHEMAS = Object.freeze({
   post: postSchema,
-  product: productSchema,
+  project: productSchema,
   profile: profileSchema,
   prompt: promptSchema,
 });
 
 /** The content types a member can author through the client. */
-export const AUTHORABLE_TYPES = Object.freeze(['post', 'product', 'prompt', 'profile']);
+export const AUTHORABLE_TYPES = Object.freeze(['post', 'project', 'prompt', 'profile']);
 
 /**
  * Fields the client must NEVER let a member set (the merge automation / gate own them). author is also
@@ -282,7 +282,7 @@ export const AUTHORABLE_TYPES = Object.freeze(['post', 'product', 'prompt', 'pro
  */
 export const SYSTEM_MANAGED = Object.freeze({
   post: ['contributors'],
-  product: ['contributors'],
+  project: ['contributors'],
   prompt: ['contributors'],
   profile: ['tier', 'joinedAt'],
 });

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Migrate product screenshots + a featured-spotlight cover + the demo video into the products, driven by
+// Migrate project screenshots + a featured-spotlight cover + the demo video into the projects, driven by
 // per-product manifests produced upstream (.data/legacy/_manifests/<slug>.json). Idempotent.
 //   node scripts/migrate-product-media.mjs            # dry run (reports the plan)
 //   node scripts/migrate-product-media.mjs --write    # generate images + write frontmatter
 //
-// For each product the manifest carries: { featuredSource, gallery:[{file,caption}], video }. Sources are
-// filenames inside .data/legacy/products/products_<slug>/images/. We:
+// For each project the manifest carries: { featuredSource, gallery:[{file,caption}], video }. Sources are
+// filenames inside .data/legacy/projects/products_<slug>/images/. We:
 //   - gallery: optimize each screenshot to webp, <= 1600px long edge, under 1 MB -> images/<slug>-shot-N.webp
 //   - featured: letterbox the best source onto a 1280x800 brand-ink canvas -> images/<slug>-featured.webp
 //     (option B: the whole source stays visible, the spotlight has no empty bars)
@@ -18,8 +18,8 @@ import sharp from 'sharp';
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const WRITE = process.argv.includes('--write');
 const MANIFEST_DIR = path.join(ROOT, '.data/legacy/_manifests');
-const legacyImages = (slug) => path.join(ROOT, '.data/legacy/products/products_' + slug, 'images');
-const productDir = (slug) => path.join(ROOT, 'house/products', slug);
+const legacyImages = (slug) => path.join(ROOT, '.data/legacy/projects/products_' + slug, 'images');
+const productDir = (slug) => path.join(ROOT, 'house/projects', slug);
 
 const FEATURED_W = 1280;
 const FEATURED_H = 800;
@@ -144,5 +144,5 @@ for (const slug of slugs) {
   fs.writeFileSync(md, '---\n' + fm.join('\n') + '\n---\n' + m[2]);
 }
 
-console.log((WRITE ? 'WROTE' : 'DRY RUN') + ' product media for ' + rows.length + ' product(s).');
+console.log((WRITE ? 'WROTE' : 'DRY RUN') + ' project media for ' + rows.length + ' project(s).');
 console.table(rows);

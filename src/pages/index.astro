@@ -1,7 +1,7 @@
 ---
 // SOW-136: the feed homepage, built from the "GBTI Homepage.html" Claude Design handoff. A magazine
 // feed over real content: New & Popular (ranked by favorites + comments), The Feed (articles,
-// products, prompts, and PUBLIC member shares, newest first, revealed by the shared ladder pager),
+// projects, prompts, and PUBLIC member shares, newest first, revealed by the shared ladder pager),
 // and a sidebar (join card, the Shop Talk live card, members worth following, trending tags that
 // drill into /feeds/?tag=). The item builders + the feed list are shared with the sow-131 /feeds/
 // views (src/lib/feed-items.ts + src/components/feeds/FeedList.astro). The previous marketing
@@ -11,7 +11,7 @@ import Avatar from '../components/Avatar.astro';
 import FavoriteButton from '../components/FavoriteButton.astro';
 import FeedList from '../components/feeds/FeedList.astro';
 import ArticleTeaser from '../components/blog/ArticleTeaser.astro';
-import ProductCard from '../components/products/ProductCard.astro';
+import ProjectCard from '../components/projects/ProjectCard.astro';
 import HomePromptCard from '../components/home/HomePromptCard.astro';
 import PricingAccordion from '../components/home/PricingAccordion.astro';
 import ExtensionBanner from '../components/home/ExtensionBanner.astro';
@@ -64,17 +64,17 @@ const feedTabs: { key: string; label: string; href: string; count: number | null
   { key: 'all', label: 'Everything', href: '/feeds/', count: counts.all },
   { key: 'news', label: 'News', href: '/feeds/news/', count: null },
   { key: 'articles', label: 'Articles', href: '/feeds/articles/', count: counts.articles },
-  { key: 'products', label: 'Products', href: '/feeds/products/', count: counts.products },
+  { key: 'projects', label: 'Projects', href: '/feeds/projects/', count: counts.projects },
   { key: 'prompts', label: 'Prompts & Skills', href: '/feeds/prompts/', count: counts.prompts },
   { key: 'shares', label: 'Shares', href: '/feeds/shares/', count: counts.shares },
 ];
 
 // sow-192 Phase B: the per-type section blocks (Everything tab only). Fed from the real content collections
-// through the SAME cards the directory pages use (ArticleTeaser / ProductCard / PromptCard), isListed +
-// newest-first. Sizes: Articles 6, Products 4, Prompts & Skills 3. "Runs on" logos + product license are
+// through the SAME cards the directory pages use (ArticleTeaser / ProjectCard / PromptCard), isListed +
+// newest-first. Sizes: Articles 6, Projects 4, Prompts & Skills 3. "Runs on" logos + project license are
 // deferred (sow-192 Q5/Q6); the cards render the fields that exist today.
 const listedPosts = (await getCollection('post')).filter(isListed).sort(byNewest);
-const listedProducts = (await getCollection('product')).filter(isListed).sort(byNewest);
+const listedProducts = (await getCollection('project')).filter(isListed).sort(byNewest);
 const listedPrompts = (await getCollection('prompt')).filter(isListed).sort(byNewest);
 const homeArticles = listedPosts.slice(0, 6);
 const homeProducts = listedProducts.slice(0, 4);
@@ -99,14 +99,14 @@ const personalizeData = {
 // a monthly bar chart). commitsByDate() reads the whole repo history at build (fail-closed to empty on a
 // shallow clone); commitsHeatGrid maps it to real day cells, weeks as columns, from the first commit through
 // this week (capped at a rolling year), with per-cell counts so accuracy is verifiable. The counters below stay
-// honest, non-windowed totals: commits / articles / products / prompts / members. The deploy build checks out
+// honest, non-windowed totals: commits / articles / projects / prompts / members. The deploy build checks out
 // at fetch-depth: 0, so production has the full history (a shallow/git-less build renders an empty band).
 const heatGrid = commitsHeatGrid(commitsByDate(), 53, Date.now());
 const memberCount = profiles.length;
 const actStats = [
   { n: commitCount(), l: 'commits' },
   { n: counts.articles, l: 'articles' },
-  { n: counts.products, l: 'products' },
+  { n: counts.projects, l: 'projects' },
   { n: counts.prompts, l: 'prompts' },
   { n: memberCount, l: memberCount === 1 ? 'member' : 'members' },
 ];
@@ -134,7 +134,7 @@ const SHOPTALK = {
 };
 
 ---
-<BaseLayout preconnectMedia title="Building Together. Linking Lives." description="A community for developers and creators, building the open internet together. Publish your articles, products, and prompts in the open, build alongside peers, and join the conversation in Discord. Free to read; become a member to comment and publish.">
+<BaseLayout preconnectMedia title="Building Together. Linking Lives." description="A community for developers and creators, building the open internet together. Publish your articles, projects, and prompts in the open, build alongside peers, and join the conversation in Discord. Free to read; become a member to comment and publish.">
 
 <div class="wrap feedwrap">
 
@@ -211,7 +211,7 @@ const SHOPTALK = {
         <p class="side-sub" style="margin-top:6px">Publish and manage your work.</p>
         <div class="wb-links">
           <a href="/workbench/#tab=post"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-pencil"/></svg>New article</a>
-          <a href="/workbench/#tab=product"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-box"/></svg>New product</a>
+          <a href="/workbench/#tab=project"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-box"/></svg>New project</a>
           <a href="/workbench/#tab=prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-terminal"/></svg>New prompt</a>
           <a href="/workbench/#tab=prs"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-merge"/></svg>My pull requests</a>
           <a href="/workbench/#tab=saved"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-heart"/></svg>Saved</a>
@@ -288,7 +288,7 @@ const SHOPTALK = {
         <div class="ttl"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-spark"/></svg> Join the co-op</div>
         <p class="side-sub" style="margin-top:8px">Publish your work, build with peers, and earn from what you make.</p>
         <ul class="join-list">
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-pencil"/></svg> Publish articles, products &amp; prompts</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-pencil"/></svg> Publish articles, projects &amp; prompts</li>
           <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> Private Discord &amp; weekly build calls</li>
           <li><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg> Earn up to {FIRST_TOUCH_PCT} from members your work brings in</li>
         </ul>
@@ -331,14 +331,14 @@ const SHOPTALK = {
   )}
 
   {homeProducts.length > 0 && (
-  <section class="band home-sec" aria-label="Products">
+  <section class="band home-sec" aria-label="Projects">
     <div class="wrap">
       <div class="sec-head">
-        <div><h2 class="h2">Products</h2><p class="home-sec-sub">{counts.products} released · built by members</p></div>
-        <a href="/products/" class="link">All products <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+        <div><h2 class="h2">Projects</h2><p class="home-sec-sub">{counts.projects} released · built by members</p></div>
+        <a href="/projects/" class="link">All projects <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
       </div>
       <div class="works-grid">
-        {homeProducts.map((p) => <ProductCard product={p} home />)}
+        {homeProducts.map((p) => <ProjectCard project={p} home />)}
       </div>
     </div>
   </section>
@@ -472,7 +472,7 @@ const SHOPTALK = {
 
 <script>
   // sow-192 (homepage v2): the tabbed feed. Everything shows the full blended feed (member content plus
-  // public shares, seeded inline as before); the Articles / Products / Prompts / Shares tabs FILTER the
+  // public shares, seeded inline as before); the Articles / Projects / Prompts / Shares tabs FILTER the
   // already-rendered rows in-page by data-kind, reusing the /feeds/ flatten-ladder pattern. The News tab
   // is a real link to /feeds/news/ (news is runtime worker data, not part of the static feed), so it
   // navigates rather than filtering; every tab keeps its /feeds/<narrow>/ href for no-JS and SEO. The
@@ -482,9 +482,9 @@ const SHOPTALK = {
     if (!view) return;
     const list = view.querySelector<HTMLElement>('[data-feedlist]');
     const tabs = Array.from(view.querySelectorAll<HTMLElement>('[data-hometab]'));
-    // The tab key is a plural narrow (articles/products/prompts/shares); a feed row's data-kind is the
+    // The tab key is a plural narrow (articles/projects/prompts/shares); a feed row's data-kind is the
     // singular item kind (article/product/prompt/share). Map the active narrow to the kind it selects.
-    const NARROW_KIND: Record<string, string> = { articles: 'article', products: 'product', prompts: 'prompt', shares: 'share' };
+    const NARROW_KIND: Record<string, string> = { articles: 'article', projects: 'project', products: 'project', prompts: 'prompt', shares: 'share' };
     let active = 'all';
 
     const sections = document.querySelector<HTMLElement>('[data-home-sections]');

@@ -30,7 +30,7 @@ export function editorStatus({ staged = false, status = '', publishedAt = '' } =
 // icon + featuredImage + banner; prompt has one image.
 const MEDIA_FIELDS = {
   post: { keys: ['coverImage'], one: 'cover', many: 'covers' },
-  product: { keys: ['icon', 'featuredImage', 'banner'], one: 'image', many: 'images' },
+  project: { keys: ['icon', 'featuredImage', 'banner'], one: 'image', many: 'images' },
   prompt: { keys: ['image'], one: 'image', many: 'images' },
 };
 

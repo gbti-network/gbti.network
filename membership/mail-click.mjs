@@ -35,7 +35,7 @@
  * tampered link.
  */
 export const SECTION_FEED = Object.freeze({
-  article: '/feeds/articles/', product: '/feeds/products/', prompt: '/feeds/prompts/',
+  article: '/feeds/articles/', project: '/feeds/projects/', product: '/feeds/projects/', prompt: '/feeds/prompts/',
   share: '/feeds/shares/', news: '/feeds/news/',
 });
 

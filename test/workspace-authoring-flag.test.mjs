@@ -12,7 +12,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'post', label: 'Articles', authoring: true },
   { id: 'prompt', label: 'Prompts', authoring: true },
-  { id: 'product', label: 'Products', authoring: true },
+  { id: 'project', label: 'Projects', authoring: true },
   { id: 'prs', label: 'Pull requests' },
   { id: 'inbox', label: 'Inbox', authoring: true },
   { id: 'saved', label: 'Saved' },
@@ -40,7 +40,7 @@ test('sow-204: with authoring OFF, Saved and Following SURVIVE and the authoring
   // The load-bearing assertion of this whole SOW increment.
   assert.ok(vis.includes('saved'), 'Saved must survive: favorites and collections live nowhere else');
   assert.ok(vis.includes('subs'), 'Following must survive: follows live nowhere else');
-  for (const gone of ['post', 'prompt', 'product', 'inbox']) {
+  for (const gone of ['post', 'prompt', 'project', 'inbox']) {
     assert.ok(!vis.includes(gone), `${gone} is authoring and must be hidden`);
   }
   // Control: the filter must actually remove something, or this test passes on a no-op implementation.
@@ -84,7 +84,7 @@ test('sow-204: the component TABS actually carry the flags this fixture assumes'
   assert.equal(entries.length, 9, `parsed ${entries.length} tabs, expected 9`);
 
   const flagged = entries.filter((e) => e.authoring).map((e) => e.id).sort();
-  assert.deepEqual(flagged, ['inbox', 'post', 'product', 'prompt'],
+  assert.deepEqual(flagged, ['inbox', 'post', 'project', 'prompt'],
     'exactly the four Option A authoring tabs are flagged');
 
   for (const id of ['saved', 'subs']) {
@@ -118,7 +118,7 @@ test('gbti-workspace: _authoring() survives a DOM-free instance and defaults to 
 // sow-204 increment 2 item 1: the Overview TILES.
 //
 // Hiding a tab without hiding its tile is worse than doing nothing: the hub keeps advertising Articles,
-// Prompts and Products, and clicking one lands on a tab resolveTab has already redirected away from. The hub
+// Prompts and Projects, and clicking one lands on a tab resolveTab has already redirected away from. The hub
 // itself is deliberately NOT flagged authoring, because it also carries Pull requests, Saved, Following,
 // Earnings, Settings, Admin tools and the PR attention list, every one of which survives Option A. Removing
 // the hub to fix a copy problem would remove working navigation.
@@ -127,7 +127,7 @@ test('gbti-workspace: _authoring() survives a DOM-free instance and defaults to 
 const TILE_FIXTURE = [
   { nm: 'Articles', href: '#tab=post' },
   { nm: 'Prompts', href: '#tab=prompt' },
-  { nm: 'Products', href: '#tab=product' },
+  { nm: 'Projects', href: '#tab=project' },
   { nm: 'Pull requests', href: '#tab=prs' },
   { nm: 'Saved', href: '#tab=saved' },
   { nm: 'Settings', href: 'account.html' },
@@ -135,7 +135,7 @@ const TILE_FIXTURE = [
 ];
 const TAB_FIXTURE = [
   { id: 'overview' }, { id: 'post', authoring: true }, { id: 'prompt', authoring: true },
-  { id: 'product', authoring: true }, { id: 'prs' }, { id: 'inbox', authoring: true }, { id: 'saved' },
+  { id: 'project', authoring: true }, { id: 'prs' }, { id: 'inbox', authoring: true }, { id: 'saved' },
 ];
 
 test('sow-204: with authoring OFF the authoring tiles go, and everything else survives in order', () => {

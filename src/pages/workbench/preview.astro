@@ -1,12 +1,12 @@
 ---
 // sow-169 phase 4 (owner-directed, 2026-08-01): preview a staged draft as the page it will become.
-// sow-172: rebuilt onto the "Doc Shell" product layout, so the preview keeps matching the published page.
+// sow-172: rebuilt onto the "Doc Shell" project layout, so the preview keeps matching the published page.
 //
-// The site is `output: static` with no adapter, so nothing can server-render a product page on demand; a
+// The site is `output: static` with no adapter, so nothing can server-render a project page on demand; a
 // build-identical preview would mean publishing and waiting out the deploy, which is exactly what Preview
 // exists to avoid. So this follows the news/item.astro pattern: a REAL Astro page carrying the real
 // BaseLayout, header, footer, V3 tokens, fonts and Prose CSS, which fetches the draft at runtime and injects
-// it into the same structure src/pages/products/[slug].astro builds. Everything a viewer can see is the real
+// it into the same structure src/pages/projects/[slug].astro builds. Everything a viewer can see is the real
 // page; only the content arrives at runtime.
 //
 // The layout classes (.pd-*) and the two behaviours (contents scroll-spy, carousel) are both SHARED with the
@@ -111,7 +111,7 @@ const labelOf = CATEGORY_LABELS;
   </div>
 
   <style>
-    /* The preview bar stacks directly under the site header, and the product page's own sticky stack
+    /* The preview bar stacks directly under the site header, and the project page's own sticky stack
        (.pd-bar, then the rail) starts below it. --pd-off is the hook the layout exposes for exactly this. */
     .pv-bar { position: sticky; top: var(--head-h); z-index: 41; background: var(--ink); border-bottom: 1.5px solid var(--ink-3); }
     [data-preview-root] { --pv-bar: 47px; --pd-off: calc(var(--head-h) + var(--pv-bar)); }
@@ -173,7 +173,7 @@ const labelOf = CATEGORY_LABELS;
     import {
       normalizeGallery, hasCaptions, resolveGalleryStyle, buildToc,
       repoUrl as findRepo, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHeroForType, iconForUrl,
-    } from '../../lib/product-page.mjs';
+    } from '../../lib/project-page.mjs';
     import { applyPreviewShell, shellHasToc } from '../../lib/preview-shells.mjs';
 
     (async () => {
@@ -182,7 +182,7 @@ const labelOf = CATEGORY_LABELS;
       const base = (root as HTMLElement).dataset.signupBase || '';
       const q = new URLSearchParams(location.search);
       const slug = q.get('slug') || '';
-      const type = q.get('type') || 'product';
+      const type = q.get('type') || 'project';
       const $ = (s: string) => root.querySelector(s) as HTMLElement | null;
       const note = $('[data-pv-note]');
       const say = (m: string) => { if (note) note.textContent = m; };
@@ -313,7 +313,7 @@ const labelOf = CATEGORY_LABELS;
       };
       // sow-174: the hero resolves the same way the published page does. sow-210: PER TYPE, because the three
       // authorable types keep their covers in different fields. This previously called resolveHero directly
-      // with the product fields, so a post or a prompt matched none of them, fell through to the 'ink'
+      // with the project fields, so a post or a prompt matched none of them, fell through to the 'ink'
       // preset, and the preview never showed an article cover at all.
       const hero = resolveHeroForType(type, fm);
       const heroSection = document.querySelector('.pd-hero');
@@ -325,14 +325,14 @@ const labelOf = CATEGORY_LABELS;
       if (grid) grid.setAttribute('data-side', fm.sidebarPosition === 'right' ? 'right' : 'left');
       setImg('[data-pv-hero]', hero.image, hero.alt || fm.title || '');
 
-      // The category breadcrumb, resolved once: the product eyebrow below and the article lead both want it.
+      // The category breadcrumb, resolved once: the project eyebrow below and the article lead both want it.
       let labels: Record<string, string> = {};
       try { labels = JSON.parse((root as HTMLElement).dataset.labels || '{}'); } catch { labels = {}; }
       const cats = Array.isArray(fm.categories) ? fm.categories : [];
       const catPath = cats.map((c: string) => labels[c] || c).join(' › ');
 
-      // Reshape the product Doc Shell into the page this type actually publishes as. Articles and prompts
-      // each have their own document on the site, and rendering both through the product shell made the
+      // Reshape the project Doc Shell into the page this type actually publishes as. Articles and prompts
+      // each have their own document on the site, and rendering both through the project shell made the
       // preview lie about the page. See src/lib/preview-shells.mjs for what each branch does and why.
       applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath });
       setImg('[data-pv-mark]', fm.iconLarge || fm.icon);

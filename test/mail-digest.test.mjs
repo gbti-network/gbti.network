@@ -22,12 +22,12 @@ test('issueKey builds the KV key and rejects a blank id', () => {
 test('composeIssue groups public items by kind, newest-first, capped per section', () => {
   const items = [
     pub('article', 'a-old', 100), pub('article', 'a-new', 300), pub('article', 'a-mid', 200),
-    pub('product', 'p1', 50), pub('prompt', 'q1', 10), pub('share', 's1', 5),
+    pub('project', 'p1', 50), pub('prompt', 'q1', 10), pub('share', 's1', 5),
   ];
   const issue = composeIssue({ issueId: 'i', items, news: [], now: at(999) }, { perSection: 2 });
   assert.equal(issue.generatedAt, 999);
   assert.deepEqual(issue.sections.article.map((x) => x.title), ['a-new', 'a-mid']); // newest first, capped at 2
-  assert.equal(issue.sections.product.length, 1);
+  assert.equal(issue.sections.project.length, 1);
   assert.equal(issue.counts.article, 2);
   assert.equal(issue.isEmpty, false);
   assert.ok(SECTION_KINDS.every((k) => Array.isArray(issue.sections[k])));
@@ -40,7 +40,7 @@ test('composeIssue groups public items by kind, newest-first, capped per section
 // merely late. It also sorts dead last in `buildActivityIndex`, which caps at 40 per type, so once a type has
 // more than 40 items an undated one is cut from the public index entirely while its page stays live.
 //
-// Live consequences, both reported by the owner: the Ryker product (11 products, under the cap) sat in the
+// Live consequences, both reported by the owner: the Ryker product (11 projects, under the cap) sat in the
 // index with date 0 and could never be mailed; three published articles (50 posts, over the cap) were absent
 // from the index, the extension feed and the digest altogether.
 //
@@ -49,12 +49,12 @@ test('composeIssue groups public items by kind, newest-first, capped per section
 // rule load-bearing. If someone ever relaxes the validator, this is the explanation of what it costs.
 test('an item with no date is excluded by any floor (why publishedAt is required at authoring time)', () => {
   const floor = 1_000;
-  const items = [pub('product', 'dated', floor + 500), { ...pub('product', 'undated', 0), date: 0 }];
+  const items = [pub('project', 'dated', floor + 500), { ...pub('project', 'undated', 0), date: 0 }];
   const issue = composeIssue({ issueId: 'i', items, news: [], now: at(floor + 900) }, { perSection: 5, since: floor });
-  assert.deepEqual(issue.sections.product.map((x) => x.title), ['dated']);
+  assert.deepEqual(issue.sections.project.map((x) => x.title), ['dated']);
   // And it is not the floor alone: no floor a live compile can pick is at or below 0.
   const noFloor = composeIssue({ issueId: 'i', items, news: [], now: at(floor + 900) }, { perSection: 5 });
-  assert.ok(noFloor.sections.product.some((x) => x.title === 'undated'), 'with NO floor it would have been included, so the floor is what drops it');
+  assert.ok(noFloor.sections.project.some((x) => x.title === 'undated'), 'with NO floor it would have been included, so the floor is what drops it');
 });
 
 test('LEAK GUARD: a members item is excluded and no body/ciphertext can appear in a compiled issue', () => {
@@ -126,7 +126,7 @@ test('an unknown kind does not crash and does not land in a section', () => {
   const items = [{ kind: 'video', title: 'v', url: 'https://v', author: 'a', date: 1, visibility: 'public' }, pub('article', 'a', 2)];
   const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) });
   assert.equal(issue.counts.article, 1);
-  assert.equal(issue.counts.product + issue.counts.prompt + issue.counts.share, 0);
+  assert.equal(issue.counts.project + issue.counts.prompt + issue.counts.share, 0);
 });
 
 // ---- sow-166 content contract (owner ruling 2026-08-21): always send, every section present, note the gaps.
@@ -142,13 +142,13 @@ test('layout carries EVERY section every week, filled ones first, in canonical o
 
   // filled first, then the empty ones. News TRAILS the filled group (owner ruling 2026-08-23): it used to lead
   // it, which put curated third-party links above everything the members wrote.
-  assert.deepEqual(issue.layout.map((s) => s.key), ['prompt', 'share', 'news', 'article', 'product']);
+  assert.deepEqual(issue.layout.map((s) => s.key), ['prompt', 'share', 'news', 'article', 'project']);
   assert.deepEqual(issue.layout.filter((s) => !s.empty).map((s) => s.key), ['prompt', 'share', 'news']);
 });
 
 test('the relative order inside each group is stable, so a section does not move week to week', () => {
   const rank = (key) => SECTION_ORDER.indexOf(key);
-  for (const items of [[], [pub('article', 'a', 1)], [pub('share', 's', 1), pub('product', 'p', 2)]]) {
+  for (const items of [[], [pub('article', 'a', 1)], [pub('share', 's', 1), pub('project', 'p', 2)]]) {
     const layout = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }).layout;
     const filled = layout.filter((s) => !s.empty).map((s) => rank(s.key));
     const empty = layout.filter((s) => s.empty).map((s) => rank(s.key));
@@ -164,7 +164,7 @@ test('an empty section carries its note and a filled one carries none', () => {
   assert.equal(bySection.article.empty, false);
   assert.equal(bySection.article.note, null, 'a section with items must not carry an empty note');
 
-  for (const key of ['news', 'product', 'prompt', 'share']) {
+  for (const key of ['news', 'project', 'prompt', 'share']) {
     assert.equal(bySection[key].empty, true);
     assert.equal(bySection[key].note, EMPTY_SECTION_NOTES[key]);
     assert.ok(bySection[key].note.length > 0, `${key} note is blank`);
@@ -181,7 +181,7 @@ test('every section in the order has a label and a note defined, so none can ren
     assert.ok(!/[\u2013\u2014]/.test(note), `${key} note contains an em or en dash`);
   }
   // four of these can appear together on a thin week; identical phrasing reads as filler
-  const memberNotes = ['article', 'product', 'prompt', 'share'].map((k) => EMPTY_SECTION_NOTES[k]);
+  const memberNotes = ['article', 'project', 'prompt', 'share'].map((k) => EMPTY_SECTION_NOTES[k]);
   assert.equal(new Set(memberNotes).size, memberNotes.length, 'empty-section notes must not repeat');
 });
 
@@ -279,7 +279,7 @@ test('WINDOW: `since` keeps what is new and drops what is old, both proven in on
   const items = [
     pub('article', 'published-after-the-last-issue', 2_000),
     pub('article', 'published-before-the-last-issue', 500),
-    pub('product', 'old-product', 400),
+    pub('project', 'old-product', 400),
     pub('share', 'brand-new-share', 3_000),
   ];
   // `now` sits AFTER every fixture date on purpose: an item reaches the artifact only once it is published, so
@@ -288,9 +288,9 @@ test('WINDOW: `since` keeps what is new and drops what is old, both proven in on
 
   assert.deepEqual(issue.sections.article.map((x) => x.title), ['published-after-the-last-issue'], 'the new one survives');
   assert.deepEqual(issue.sections.share.map((x) => x.title), ['brand-new-share']);
-  assert.deepEqual(issue.sections.product, [], 'the old one is dropped');
+  assert.deepEqual(issue.sections.project, [], 'the old one is dropped');
   assert.equal(issue.counts.article, 1);
-  assert.equal(issue.counts.product, 0);
+  assert.equal(issue.counts.project, 0);
 });
 
 test('WINDOW: the boundary is inclusive, so an item never falls between two issues', () => {
@@ -564,7 +564,7 @@ function runWeeklyCompiles(items, { weeks, historyDepth, t0, perSection = 5 }) {
     // does not have. The harness has to model resolveWindow, not something adjacent to it.
     const since = issues.length > historyDepth ? inWindow[0].generatedAt : t0 - WEEK;
     const issue = composeIssue({ issueId: `w${n}`, items, news: [], now: at(now) }, { perSection, since, exclude });
-    const mailed = issue.sections.product;
+    const mailed = issue.sections.project;
     for (const it of mailed) tally[it.title] = (tally[it.title] ?? 0) + 1;
     issues.push({ generatedAt: now, urls: mailed.map((it) => it.url) });
   }
@@ -580,8 +580,8 @@ test('FUTURE DATES: a not-yet-due item is withheld, then mailed exactly ONCE whe
   const DAY = 86_400_000;
   const T0 = Date.parse('2026-09-01T00:00:00Z');
   const items = [
-    pub('product', 'normal', T0 - DAY),
-    pub('product', 'due-in-100-days', T0 + 100 * DAY),
+    pub('project', 'normal', T0 - DAY),
+    pub('project', 'due-in-100-days', T0 + 100 * DAY),
   ];
 
   // Stopping BEFORE the due date: withheld entirely, and the ordinary item beside it still mails once, so a
@@ -599,10 +599,10 @@ test('FUTURE DATES: a not-yet-due item is withheld, then mailed exactly ONCE whe
 
 test('FUTURE DATES: an ordinary catalogue still mails each item exactly once across many compiles', () => {
   // The seam regression for the floor-versus-history coupling, kept here because the due-date filter sits in
-  // the same projection and could re-open it. Six below-cap products, the shape that re-mailed at issue 28.
+  // the same projection and could re-open it. Six below-cap projects, the shape that re-mailed at issue 28.
   const DAY = 86_400_000;
   const T0 = Date.parse('2026-09-01T00:00:00Z');
-  const items = Array.from({ length: 6 }, (_, i) => pub('product', `p${i + 1}`, T0 - (i + 1) * DAY));
+  const items = Array.from({ length: 6 }, (_, i) => pub('project', `p${i + 1}`, T0 - (i + 1) * DAY));
   const tally = runWeeklyCompiles(items, { weeks: 20, historyDepth: 3, t0: T0, perSection: 2 });
   assert.deepEqual(Object.keys(tally).sort(), ['p1', 'p2', 'p3', 'p4', 'p5', 'p6']);
   for (const [title, n] of Object.entries(tally)) assert.equal(n, 1, `${title} mailed ${n} times, expected once`);
@@ -619,11 +619,11 @@ test('FUTURE DATES: an ordinary catalogue still mails each item exactly once acr
 test('SECURITY CONTROL: an item with a BODY and no frontmatter blurb renders a BARE row, never a body excerpt', () => {
   const items = [
     pub('article', 'no-excerpt', 100, { body: 'THE ARTICLE BODY TEXT', encryptedBody: 'x.enc' }), // no blurb
-    pub('product', 'has-blurb', 90, { blurb: 'A real frontmatter blurb.', body: 'PRODUCT BODY TEXT' }),
+    pub('project', 'has-blurb', 90, { blurb: 'A real frontmatter blurb.', body: 'PRODUCT BODY TEXT' }),
   ];
   const issue = composeIssue({ issueId: 'i', items, news: [], now: at(999) });
   const bare = issue.sections.article[0];
-  const withBlurb = issue.sections.product[0];
+  const withBlurb = issue.sections.project[0];
 
   assert.equal(bare.blurb, null, 'a missing frontmatter blurb must stay missing');
   assert.equal(withBlurb.blurb, 'A real frontmatter blurb.', 'a real blurb still arrives, or this proves nothing');
@@ -663,7 +663,7 @@ test('the news projection carries sourceName, blurb and thumb, and stays an allo
 
 // OWNER RULING 2026-08-23, read back off the real constant rather than restated as a comment.
 test('SECTION ORDER: News is LAST and the member types run in the design order', () => {
-  assert.deepEqual(SECTION_ORDER, ['article', 'prompt', 'product', 'share', 'news']);
+  assert.deepEqual(SECTION_ORDER, ['article', 'prompt', 'project', 'share', 'news']);
   assert.equal(SECTION_ORDER[SECTION_ORDER.length - 1], 'news', 'news goes last');
 });
 
@@ -678,7 +678,7 @@ test('layout puts News last among FILLED sections, not merely last in the consta
 
 test('SECTION_LABELS stay the plain nouns: "Latest" is a heading prefix, not the label', () => {
   // The label also names the "See all in the Articles feed" link and the collapsed empty line ("Nothing new
-  // in Articles, Products"). Baking the prefix in here would corrupt both, so it is applied in the renderer.
+  // in Articles, Projects"). Baking the prefix in here would corrupt both, so it is applied in the renderer.
   for (const [key, label] of Object.entries(SECTION_LABELS)) {
     assert.ok(!/^Latest\b/.test(label), `SECTION_LABELS.${key} must not carry the prefix`);
   }
@@ -707,12 +707,12 @@ test('the per-type default banner is dropped, so an item with no image of its ow
 
 test('the banner rule matches the PATH, so a query string or host cannot smuggle one through', () => {
   const items = [
-    pub('product', 'q', 300, { thumb: '/brand/feature/feature-product.png?v=2' }),
-    pub('product', 'nested', 200, { thumb: '/members/alice/brand/feature/feature-product.png' }),
-    pub('product', 'lookalike', 100, { thumb: '/brand/feature/feature-product-custom.png' }),
+    pub('project', 'q', 300, { thumb: '/brand/feature/feature-project.png?v=2' }),
+    pub('project', 'nested', 200, { thumb: '/members/alice/brand/feature/feature-project.png' }),
+    pub('project', 'lookalike', 100, { thumb: '/brand/feature/feature-product-custom.png' }),
   ];
   const issue = composeIssue({ issueId: 'i', items, news: [], now: at(999) }, { perSection: 5 });
-  const thumbOf = (t) => issue.sections.product.find((x) => x.title === t).thumb;
+  const thumbOf = (t) => issue.sections.project.find((x) => x.title === t).thumb;
   assert.equal(thumbOf('q'), null, 'a cache-busting query does not make a banner unique');
   assert.equal(thumbOf('nested'), null, 'the segment is matched anywhere in the path, not only at the root');
   // A member could name a real image something banner-shaped. The rule is anchored to the exact

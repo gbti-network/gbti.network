@@ -135,9 +135,9 @@ test('the committed house/membership-tiers.yml is well-formed and carries all th
 // The registry assertions below were run against the UNCHANGED yml first and failed there on the live string.
 
 test('benefitProse: labels join with semicolons and the last takes "and"', () => {
-  const tier = { benefits: [{ label: 'Publish articles, products, and prompts' }, { label: 'Reshare your work' }, { label: 'Your creator profile' }] };
+  const tier = { benefits: [{ label: 'Publish articles, projects, and prompts' }, { label: 'Reshare your work' }, { label: 'Your creator profile' }] };
   // Semicolons, not commas: the first label carries its own commas, so a comma-joined list reads as one run.
-  assert.equal(benefitProse(tier), 'publish articles, products, and prompts; reshare your work; and your creator profile');
+  assert.equal(benefitProse(tier), 'publish articles, projects, and prompts; reshare your work; and your creator profile');
 });
 
 test('benefitProse: the leading character lowers, except on a proper noun or an acronym', () => {

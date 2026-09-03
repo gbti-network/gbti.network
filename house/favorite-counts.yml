@@ -13,9 +13,9 @@
 # same two-tier freshness model as comments). Empty pre-launch.
 generatedAt: '2026-08-27T18:18:35.584Z'
 counts:
-  product:radle: 1
-  product:ryker: 1
-  product:terminal-session-profiles: 2
+  project:radle: 1
+  project:ryker: 1
+  project:terminal-session-profiles: 2
   prompt:generic-anti-trope-writing-prompt: 1
   prompt:grok-skill-for-claude-code: 1
   prompt:responsive-design-audit-with-playwright: 1

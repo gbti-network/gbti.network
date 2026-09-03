@@ -3,7 +3,7 @@
 // text is sanitized so a crafted title cannot fire a mass mention from the brand account, and each channel's
 // character cap is enforced. No IO; fully unit-tested.
 
-const TYPE_LABEL = { post: 'article', product: 'product', prompt: 'prompt', share: 'link' };
+const TYPE_LABEL = { post: 'article', project: 'project', prompt: 'prompt', share: 'link' };
 
 /** The link host without www (for a lead line when there is no title). */
 export function hostOf(u) {
@@ -254,7 +254,7 @@ export function renderTemplate(template, item = {}, { limit = 2000, previewMenti
       .join('\n'),
     // {author-note-block}: the whole labelled, quoted "From the author:" paragraph set (for long-form channels
     // like LinkedIn), or EMPTY when the item has no from-the-author note (a note-less post shows no dangling
-    // label). Real newlines; sanitized. Products/prompts always carry a note; posts may not.
+    // label). Real newlines; sanitized. Projects/prompts always carry a note; posts may not.
     authornoteblock: String(item.authorNote || '').trim()
       ? `\n\nFrom the author:\n\n"${sanitizeMentions(String(item.authorNote).trim())}"`
       : '',
@@ -372,7 +372,7 @@ export function renderBodyTemplate(template, item = {}, rawBody = '') {
 // website fallback (`src/lib/feature-image.ts` TYPE_TO_FEATURE): an item with no custom cover falls back to its
 // type's branded 1200x630 feature card, served at gbti.network/brand/feature/, so every crosspost reads as GBTI
 // in the dev.to / Hashnode feed. Keep this map in sync with feature-image.ts (mjs cannot import the TS module).
-const FEATURE_COVER_KEY = { post: 'article', product: 'product', prompt: 'prompt', share: 'share' };
+const FEATURE_COVER_KEY = { post: 'article', project: 'project', prompt: 'prompt', share: 'share' };
 export function defaultSyndicationCover(source) {
   const key = FEATURE_COVER_KEY[source] || 'article';
   return `https://gbti.network/brand/feature/feature-${key}.png`;

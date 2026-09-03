@@ -23,7 +23,7 @@ function touchSeed() {
   return JSON.stringify({
     items: [
       { owner: 'alice', type: 'post', slug: 'a', firstAt: conv - 60 * day, lastAt: conv - 60 * day },
-      { owner: 'bob', type: 'product', slug: 'b', firstAt: conv - 2 * day, lastAt: conv - 2 * day },
+      { owner: 'bob', type: 'project', slug: 'b', firstAt: conv - 2 * day, lastAt: conv - 2 * day },
     ],
     invite: null, updatedAt: conv - 60 * day,
   });
@@ -39,7 +39,7 @@ test('freezeAndPersist writes conv:<id> with the frozen attribution (github_ids 
   assert.equal(rec.v, 1); assert.equal(rec.member, '7');
   assert.equal(rec.firstOwner, 'alice'); assert.equal(rec.lastOwner, 'bob');
   assert.deepEqual(rec.firstItem, { owner: 'alice', type: 'post', slug: 'a' });
-  assert.deepEqual(rec.lastItem, { owner: 'bob', type: 'product', slug: 'b' });
+  assert.deepEqual(rec.lastItem, { owner: 'bob', type: 'project', slug: 'b' });
   assert.equal(rec.inviter, 'carol');           // from referred_by
   assert.equal(rec.conversionAt, conv);          // paid_at, NOT now()
   assert.equal(rec.windowMs, ATTRIBUTION_WINDOW_MS);
@@ -112,7 +112,7 @@ test('readSnapshot + eraseSnapshot round-trip', async () => {
 test('scrubCounterpart nulls the erased member everywhere they are a counterpart', () => {
   const rec = {
     v: 1, member: '7', firstOwner: 'X', lastOwner: 'bob', firstItem: { owner: 'X', type: 'post', slug: 'a' },
-    lastItem: { owner: 'bob', type: 'product', slug: 'b' }, inviter: 'X', points: [{ member: 'X', points: 1 }, { member: 'dana', points: 1 }],
+    lastItem: { owner: 'bob', type: 'project', slug: 'b' }, inviter: 'X', points: [{ member: 'X', points: 1 }, { member: 'dana', points: 1 }],
   };
   const out = scrubCounterpart(rec, 'X');
   assert.equal(out.firstOwner, null); assert.equal(out.inviter, null); assert.equal(out.firstItem.owner, null);

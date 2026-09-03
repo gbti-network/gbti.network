@@ -61,10 +61,10 @@ function firstShare() {
   return null;
 }
 const pages = [
-  '/', '/articles/', '/products/', '/prompts/', '/members/', '/membership/', '/login/', '/account/', '/workbench/', '/admin/', '/news/', '/browse/', '/revenue-model/', '/feeds/',
+  '/', '/articles/', '/projects/', '/prompts/', '/members/', '/membership/', '/login/', '/account/', '/workbench/', '/admin/', '/news/', '/browse/', '/revenue-model/', '/feeds/',
   '/utilities/', '/utilities/email-signature-generator/', '/tools/email-signature-generator/', '/utilities/js-animate-hue/',
   '/embed/', // SOW-092 relay: its own tighter policy (removed + reset in one _headers block), not the global one
-  firstSlug('articles'), firstSlug('products'), firstSlug('prompts'), firstSlug('members'),
+  firstSlug('articles'), firstSlug('projects'), firstSlug('prompts'), firstSlug('members'),
   firstArticleWithEmbed(), firstShare(),
   '/this-page-does-not-exist/', // the 404
 ].filter(Boolean);

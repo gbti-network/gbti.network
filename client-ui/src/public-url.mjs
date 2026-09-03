@@ -1,5 +1,5 @@
 // One source of truth for the live public URL of a member content item.
-// post -> /articles/<slug>/, product -> /products/<slug>/, prompt -> /prompts/<slug>/.
+// post -> /articles/<slug>/, project -> /projects/<slug>/, prompt -> /prompts/<slug>/.
 // SOW-062 P6 introduced this scheme in the editor's "View Public Entry"; SOW-265 shares it with the
 // My Content table (<gbti-content-list>) so a row can open its live page directly, and so the two
 // surfaces cannot diverge. Node-free and pure so it is unit-testable and host-portable.
@@ -7,7 +7,7 @@
 export const SITE_ORIGIN = 'https://gbti.network';
 
 // The public route base per content type. Types absent here (e.g. profile) have no such page.
-export const TYPE_BASE = { post: 'articles', product: 'products', prompt: 'prompts' };
+export const TYPE_BASE = { post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' };
 
 // Derive the slug from a nested item path (members/<u>/<sub>/<slug>/index.md) when the frontmatter
 // carries no explicit slug. Returns '' for anything that is not a nested index file.

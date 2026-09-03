@@ -1,9 +1,9 @@
 ---
 // sow-158 in-app browse/reader track: the extension-optional content browser on gbti.network. A signed-in member
-// (free/trial/paid) browses the co-op in one place — All / Articles / Products / Prompts / Shares / News with a
+// (free/trial/paid) browses the co-op in one place — All / Articles / Projects / Prompts / Shares / News with a
 // category drill-down — and opens any item in an inline reader that decrypts member-only bodies via the httpOnly-
 // cookie session, NO extension and NO GitHub token in the page. This mirrors the extension's <gbti-browse>; the
-// public directories (/articles, /products, /prompts, /feeds) stay the anonymous read view. noindex: per-member.
+// public directories (/articles, /projects, /prompts, /feeds) stay the anonymous read view. noindex: per-member.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 <BaseLayout title="Browse" description="Browse the GBTI Network co-op." noindex={true}>
@@ -11,7 +11,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <div class="wrap browse-wrap">
       <div class="browse-head">
         <h1 class="h1">Browse</h1>
-        <p class="lead">The whole co-op in one place. Read articles, products, prompts, Shares, and the news feed, and open any item inline without leaving the page.</p>
+        <p class="lead">The whole co-op in one place. Read articles, projects, prompts, Shares, and the news feed, and open any item inline without leaving the page.</p>
       </div>
 
       {/* Signed-OUT prompt (also the pre-hydration state; static SSG has no request-time cookie). */}
