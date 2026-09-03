@@ -23,6 +23,7 @@ import { readHooks, canEditInPlace } from '../client-ui/src/inline.mjs';
 const read = (rel) => fs.readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 const CLIENT = read('../src/lib/workbench-client.ts');
 const HOOKS = read('../src/components/EditHooks.astro');
+const LOCKED = read('../src/components/LockedBody.astro');
 
 /** The identity literal the website client's status() promises, parsed from the source. */
 function websiteIdentityKeys() {
@@ -59,4 +60,24 @@ test('the upgrade is gated on a real WEB session, not merely on a member signal'
   // And nothing is imported for a visitor: the dynamic imports must sit behind the guard, never at top level.
   const topLevelElementImport = /^\s*import\s+['"][^'"]*gbti-edit-panel\.mjs['"]/m.test(HOOKS);
   assert.equal(topLevelElementImport, false, 'the element must be imported lazily, not on every page load');
+});
+
+test('LockedBody upgrades the decrypt element ITSELF, not via whichever sibling happens to be present', () => {
+  // The coupling this closes: <gbti-locked-content> was imported in exactly ONE file, Comments.astro, while
+  // LockedBody renders it in eleven places. Decryption worked only because every page that can render a
+  // LockedBody also renders ContentFooter, which renders Comments. Nothing stated the dependency and no test
+  // held it, so making Comments conditional for any reason would have stopped member-only bodies unlocking
+  // on the website SILENTLY: the reader keeps seeing the padlock and a paid perk fails with no error.
+  assert.match(LOCKED, /<gbti-locked-content/, 'LockedBody no longer renders the element');
+  assert.match(LOCKED, /elements\/gbti-locked-content\.mjs/,
+    'LockedBody renders the element but does not import it: decryption is back to depending on Comments.astro');
+  assert.match(LOCKED, /gbti_csrf/, 'the upgrade must require a real web session, since the Worker authorizes the decrypt');
+  // And it must stay lazy: a visitor with no session should fetch none of it.
+  assert.equal(/^\s*import\s+['"][^'"]*gbti-locked-content\.mjs['"]/m.test(LOCKED), false,
+    'the element must be imported lazily inside the guard, not at top level');
+});
+
+test('the gated-content notice no longer tells a member to go to a client to unlock', () => {
+  assert.ok(!LOCKED.includes('open it in the GBTI client to unlock'),
+    'the website decrypts member content itself (workbench-client posts to /membership/decrypt)');
 });

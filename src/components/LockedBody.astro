@@ -27,7 +27,7 @@ const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : 'cont
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#ico-lock" /></svg>
       <div>
         <p class="locked-title">{heading}</p>
-        <p class="locked-sub for-visitor">This {noun} is for members. <a href="/membership/">Become a member</a>, then open it in the GBTI client to unlock.</p>
+        <p class="locked-sub for-visitor">This {noun} is for members. <a href="/membership/">Become a member</a> and it unlocks here, or <button type="button" class="locked-signin" data-signin>sign in</button> if you already are.</p>
         <p class="locked-sub for-paid">
           You are signed in. Unlocking this {noun} now.
           {readerHash && <button type="button" class="open-ext" data-gbti-open-reader data-hash={readerHash}>Open in the extension</button>}
@@ -49,6 +49,7 @@ const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : 'cont
   .locked-title { font-family: var(--f-display); font-weight: 700; }
   .locked-sub { font-size: 14px; color: var(--fg-soft); margin-top: 2px; }
   .locked-sub a { color: var(--green-700); font-weight: 600; }
+  .locked-signin { font: inherit; color: var(--green-700); font-weight: 600; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
   /* SOW-112 QA: the paid-member alternative swaps in via the SOW-030 identity classes on <html>. */
   .locked-sub.for-paid { display: none; }
   :global(html.is-gbti-paid) .locked-sub.for-paid { display: block; }
@@ -58,6 +59,40 @@ const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : 'cont
 </style>
 
 <script>
+  // sow-271 Phase 5: UPGRADE THE ELEMENT FROM HERE.
+  //
+  // <gbti-locked-content> was imported in exactly ONE place, src/components/blog/Comments.astro, while
+  // LockedBody renders it in ELEVEN (article, project and prompt bodies AND sections). Decryption worked
+  // only because every page that can render a LockedBody also happens to render ContentFooter, which renders
+  // Comments. Nothing stated that dependency and no test held it.
+  //
+  // What it would have cost: make Comments conditional for any reason (an item with no thread, a layout that
+  // drops the footer) and member-only bodies stop unlocking on the website, silently. The reader just keeps
+  // seeing the padlock, and a paid perk fails with no error anywhere. Importing it here makes the component
+  // self-sufficient; the Comments import stays, and define() is a no-op when already registered.
+  import { onMemberSignal, currentIdentity, readMemberSignal } from '../lib/member-signal';
+
+  function lbCookie(name: string): string | null {
+    const m = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+
+  let lbUpgraded = false;
+  async function upgradeLocked(signal: any) {
+    if (lbUpgraded) return;
+    if (!signal || !signal.login) return;                        // signed out: the notice is the whole story
+    if (!document.querySelector('gbti-locked-content')) return;   // no gated content here: import nothing
+    if (!lbCookie('gbti_csrf')) return;                           // no web session: the Worker cannot authorize
+    lbUpgraded = true;
+    const signupBase = document.documentElement.dataset.signupBase || '';
+    const { createWorkbenchClient } = await import('../lib/workbench-client');
+    const { setClient } = await import('../../client-ui/src/base.mjs');
+    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+    await import('../../client-ui/src/elements/gbti-locked-content.mjs');
+  }
+  upgradeLocked(currentIdentity(readMemberSignal()));
+  onMemberSignal(upgradeLocked);
+
   // SOW-112 QA: relay the reader deep link to the extension (SOW-036 gbti:open; the content script forwards
   // it to the background, which opens the new-tab reader with the hash). Delegated once (Astro dedupes this script).
   // The content script ACKS a handled relay; without an ack (an older loaded extension that does not know

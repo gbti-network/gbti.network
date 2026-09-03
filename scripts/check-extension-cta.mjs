@@ -46,6 +46,7 @@ export const CTA_MARKERS = [
 export const MUST_NOT_CLAIM = [
   ['an "Extension required" capability notice', 'Extension required'],
   ['copy telling the reader to comment from the extension', 'comments from the GBTI client or browser extension'],
+  ['copy telling the reader to open gated content in a client to unlock it', 'open it in the GBTI client to unlock'],
 ];
 
 // Pages that legitimately describe the extension at length. The claim ban does not apply to them: the install
