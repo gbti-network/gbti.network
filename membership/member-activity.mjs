@@ -9,9 +9,14 @@
 //
 // Shape (one KV value per member, key `activity:<github_id>`):
 //   { favorites: [{ type, slug, addedAt }],
-//     upvotes: [{ type, slug, addedAt }],            // SOW-057: a member's per-target upvotes (deletable here)
 //     collections: [{ id, name, createdAt, items: [{ type, slug, addedAt }] }],
 //     updatedAt }
+//
+// sow-313 removed `upvotes` from this shape. normalizeActivity rebuilds from emptyActivity(), so a stored
+// record that still carries the array loses it on the next write. That is deliberate: it is personal data
+// nothing reads any more, and letting it evaporate on contact is the right direction. The per-TARGET voter
+// sets under `upvotes:share:*` are a separate key that no write here touches; they are purged separately, and
+// eraseShareVotes stays until that purge is confirmed.
 
 // SOW-050 P3: a Share is a first-class basket type alongside post/product/prompt. Its slug is the composite
 // "<author>/<id>" (the same targetSlug the comment system uses), so it legitimately carries one slash; every
@@ -24,7 +29,6 @@ export const CONTENT_TYPES = new Set(['post', 'project', 'prompt', 'share']);
 // line, so without canonicalType() below a member's saved shelf silently empties of projects and nothing
 // anywhere reports a fault. Applied on READ (stored values) and on WRITE (a stale client's command).
 export const MAX_FAVORITES = 2000;
-export const MAX_UPVOTES = 2000;
 export const MAX_COLLECTIONS = 100;
 export const MAX_ITEMS_PER_COLLECTION = 1000;
 export const MAX_NAME_LEN = 80;
@@ -36,10 +40,10 @@ const slugOk = (type, slug) => (type === 'share' ? SHARE_SLUG_RE : SLUG_RE).test
 export class ActivityError extends Error {}
 
 export function emptyActivity() {
-  return { favorites: [], upvotes: [], collections: [], updatedAt: null };
+  return { favorites: [], collections: [], updatedAt: null };
 }
 
-/** Coerce a stored favorites/upvotes-shaped array into deduped, valid { type, slug, addedAt } entries. */
+/** Coerce a stored favorites-shaped array into deduped, valid { type, slug, addedAt } entries. */
 function normalizeTargetList(raw) {
   const out = [];
   if (!Array.isArray(raw)) return out;
@@ -64,7 +68,6 @@ export function normalizeActivity(raw) {
   const a = emptyActivity();
   if (!raw || typeof raw !== 'object') return a;
   a.favorites = normalizeTargetList(raw.favorites);
-  a.upvotes = normalizeTargetList(raw.upvotes);
   if (Array.isArray(raw.collections)) {
     const seenIds = new Set();
     for (const c of raw.collections) {
@@ -113,24 +116,6 @@ export function applyFavorite(activity, { type: rawType, slug, on }, { now = Dat
   return a;
 }
 
-/** SOW-057: toggle a member's per-target upvote on/off (the per-member record; the per-target voter set + the
- *  syndication threshold live in membership/share-votes.mjs). Mirrors applyFavorite. */
-export function applyUpvote(activity, { type: rawType, slug, on }, { now = Date.now } = {}) {
-  const type = canonicalType(rawType); // sow-196: a stale client may still send the old type name
-  if (!isTarget(type, slug)) throw new ActivityError('invalid upvote target');
-  const a = normalizeActivity(activity);
-  const k = targetKey({ type, slug });
-  const exists = a.upvotes.some((u) => targetKey(u) === k);
-  if (on && !exists) {
-    if (a.upvotes.length >= MAX_UPVOTES) throw new ActivityError('upvote limit reached');
-    a.upvotes.push({ type, slug, addedAt: now() });
-  } else if (!on && exists) {
-    a.upvotes = a.upvotes.filter((u) => targetKey(u) !== k);
-  }
-  a.updatedAt = now();
-  return a;
-}
-
 /** Create a named collection; returns { activity, id }. */
 export function createCollection(activity, { name }, { now = Date.now, genId } = {}) {
   if (typeof genId !== 'function') throw new ActivityError('genId is required');
@@ -171,7 +156,6 @@ export function filterActivity(activity, types) {
   if (!Array.isArray(types) || types.length === 0) return a;
   const allow = new Set(types.map(canonicalType)); // sow-196: an old chip value still selects its items
   a.favorites = a.favorites.filter((f) => allow.has(f.type));
-  a.upvotes = a.upvotes.filter((u) => allow.has(u.type));
   a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
   return a;
 }

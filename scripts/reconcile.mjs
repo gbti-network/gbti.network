@@ -36,7 +36,6 @@ import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-sour
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
 import { syncEnrollments } from './lib/enroll-members.mjs'; // SOW-157: hosted-member index enrollment
-import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { syncFollowerIndex } from './lib/follower-index.mjs'; // SOW-186 phase 3: build/heal followers:<github_id> from the forward graph
 import { main as promotePopular } from './promote-popular.mjs'; // SOW-126: the engagement-triggered popular promoter
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL, isStuckAutomergeBot } from './lib/pr-conflict.mjs';
@@ -763,7 +762,7 @@ async function main() {
   }
 
   // SOW-058: mirror house/syndication-config.yml -> KV key synd:config so the Worker drain reads the live channel
-  // switches, require_approval, the hold, and the upvote threshold WITHOUT a redeploy (the overrides-mirror pattern).
+  // switches, require_approval and the hold WITHOUT a redeploy (the overrides-mirror pattern).
   // Without this sync the drain falls back to the safe default (disabled), so syndication can never be enabled.
   let rawSyndication = {};
   try { rawSyndication = yaml.load(fs.readFileSync(path.join(ROOT, 'house', 'syndication-config.yml'), 'utf8')) || {}; }
@@ -909,23 +908,6 @@ async function main() {
     }
   }
 
-  // SOW-057: sync the member-identity-free share upvote counts (house/upvote-counts.yml) from KV, same model.
-  if (dryRun) {
-    console.log('reconcile: DRY RUN would sync share upvote counts from KV -> house/upvote-counts.yml (requires CF creds + a GitHub PR).');
-  } else {
-    try {
-      const r = await syncUpvoteCounts({ env, github, now, readCurrentCounts: () => readUpvoteCountsFromDisk(ROOT) });
-      console.log(
-        r.synced
-          ? `reconcile: synced share upvote counts (PR #${r.prNumber}, ${r.total} target(s)).`
-          : `reconcile: upvote-counts sync SKIPPED (${r.reason}).`,
-      );
-    } catch (e) {
-      console.error('reconcile: upvote-counts sync FAILED:', e?.message ?? e);
-      process.exitCode = 1;
-    }
-  }
-
   // SOW-186 phase 3: reconverge the reverse follower index (followers:<github_id>) from the forward follow graph
   // (follows:<github_id>) in KV. This is the SOLE writer of the reverse index (the follow hot path only writes
   // the forward store); a full recompute with stale-key deletion, so unfollows, renames, erasures, and the
@@ -948,7 +930,7 @@ async function main() {
   }
 
   // SOW-126: the engagement-triggered `popular` promoter. Reads the live content-open KV sets + the on-disk
-  // favorite/upvote counts, and enqueues any content item whose engagement crossed the threshold to its
+  // favorite counts, and enqueues any content item whose engagement crossed the threshold to its
   // `popular` channels (trigger:'popular'), watermarked so it promotes once. Disabled by default (content
   // engagement off), so this is a clean no-op until the owner turns it on in the admin Channels workspace.
   try {

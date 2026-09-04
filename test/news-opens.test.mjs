@@ -1,4 +1,5 @@
-// SOW-111: the per-item news detail-open record (the share-votes clone). Pure; injected now; no network.
+// SOW-111: the per-item news detail-open record (cloned from the SOW-057 share-votes core, which sow-313
+// deleted along with upvoting). Pure; injected now; no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

@@ -1,12 +1,11 @@
 // SOW-136 / sow-131: the shared normalized feed item + its builders, extracted from the homepage so
 // the /feeds/ views render the exact same rows. One `FeedItem` per content entry or public share;
-// `targetType` keys favorites/upvotes/comments, `kind` labels the card.
+// `targetType` keys favorites/comments, `kind` labels the card.
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 import { isPublic, isListed, isStub, catalogHref } from './content';
 import { buildAvatarIndex, type AvatarIndex } from './avatars';
 import { favoriteCount } from './favorites';
-import { upvoteCount } from './upvotes';
 import { commentThreadCount } from './comments';
 import { resolveThumb } from './index-thumb';
 import { imageFieldOf } from './content-index.mjs';
@@ -16,7 +15,7 @@ import { feedTime, isPublicShare, readMinutes, decodeEntities } from './home-fee
 export type FeedItem = {
   kind: 'article' | 'project' | 'prompt' | 'share';
   targetType: 'post' | 'project' | 'prompt' | 'share';
-  slug: string; // the favorites/upvotes/comments key: content slug, or "<author>/<id>" for a share
+  slug: string; // the favorites/comments key: content slug, or "<author>/<id>" for a share
   title: string;
   href: string | null;
   external: boolean;
@@ -25,7 +24,6 @@ export type FeedItem = {
   excerpt?: string;
   stub: boolean;
   favorites: number;
-  upvotes: number;
   comments: number;
   tags: string[];
   categories: string[]; // sow-174: the full category PATH, so any breadcrumb depth can filter
@@ -52,7 +50,6 @@ async function contentItem(entry: any, kind: 'article' | 'project' | 'prompt', c
     excerpt: d.excerpt ?? d.shortDescription,
     stub: isStub(entry),
     favorites: favoriteCount(tt, d.slug),
-    upvotes: 0,
     comments: commentThreadCount(comments, tt, d.slug, d.author),
     tags: d.tags ?? [],
     categories: d.categories ?? [],
@@ -78,10 +75,9 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     date: feedTime(d),
     excerpt: d.title && d.shortDescription ? decodeEntities(d.shortDescription) : undefined,
     stub: false,
-    // owner QA 2026-07-22: the site presents LIKES (the favorites store) on shares, same as every other
-    // kind; the SOW-057 upvote store stays extension-side (its syndication threshold engine).
+    // owner QA 2026-07-22: the site presents LIKES (the favorites store) on shares, same as every other kind.
+    // sow-313 removed the parallel upvote count that used to sit beside it.
     favorites: favoriteCount('share', slug),
-    upvotes: upvoteCount(slug),
     comments: commentThreadCount(comments, 'share', slug, d.author),
     tags: d.tags ?? [],
     // sow-174: shares are uncategorized today, so they simply never match a ?cat= drilldown.

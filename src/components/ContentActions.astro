@@ -78,7 +78,7 @@ const railSize = variant === 'rail' ? 'rail' : 'md';
 <style is:global>
   /* sow-183 QA fix: [data-theme="dark"] is only ever set on <html>, which never carries this component's
      Astro scope id -- a scoped selector here would compile to an unmatchable compound and never fire (the
-     same is:global idiom FavoriteButton.astro/CollectionButton.astro/UpvoteButton.astro already use). */
+     same is:global idiom FavoriteButton.astro and CollectionButton.astro already use). */
   .content-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .act-div { width: 1px; height: 22px; background: var(--line-2); flex: none; }
   /* sow-179: the sticky rail stacks everything in one narrow column; the divider follows, becoming horizontal. */

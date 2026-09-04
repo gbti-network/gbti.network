@@ -12,7 +12,7 @@
 // and the miss self-heals once members-index carries the mapping. It NEVER guesses.
 //
 // This is a KV -> KV sync (private follower github_ids stay in the deletable edge store per the storage boundary;
-// unlike the favorite/upvote counts, nothing reaches git). It mirrors scripts/lib/favorite-counts.mjs for the
+// unlike the favorite counts, nothing reaches git). It mirrors scripts/lib/favorite-counts.mjs for the
 // Cloudflare KV REST access (CF creds -> a real sync; no creds -> a reported no-op, never a throw), and the pure
 // projection is unit-tested with plain objects (no network, no secrets).
 

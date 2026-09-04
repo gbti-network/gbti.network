@@ -15,7 +15,6 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
-import './gbti-upvote.mjs'; // SOW-057: the share upvote control
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
 import './gbti-collection.mjs';
 import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
@@ -551,12 +550,8 @@ class GbtiReader extends GbtiElement {
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
     const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
 
-    // SOW-057: an upvote control on a Share (extension-only), hidden for the share's own author (whose vote never counts).
-    const shareUpvote = (it.type === 'share' && slug && this._author && !this._author.isSelf)
-      ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>`
-      : '';
 
-    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
+    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
     if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); }
   }
 

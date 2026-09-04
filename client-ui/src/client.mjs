@@ -110,12 +110,6 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
       const favs = (r && r.activity && r.activity.favorites) || [];
       return { favorited: favs.some((f) => f.type === targetType && f.slug === targetSlug) };
     },
-    // SOW-057: upvote a share (effective-paid; two distinct non-author upvotes enqueue it for syndication). The
-    // count is the live per-target distinct count returned by the Worker.
-    toggleUpvote: async ({ targetType = 'share', targetSlug, on }) => {
-      const r = await request('POST', '/api/upvote', { type: targetType, slug: targetSlug, on });
-      return { upvoted: !!r?.upvoted, count: r?.upvoteCount };
-    },
     // SOW-057: a link's OpenGraph preview ({ image, title, description }), fetched server-side (SSRF-guarded).
     ogPreview: ({ url }) => request('POST', '/api/og-preview', { url }),
     // SOW-024: member activity (favorites + collections) in the deletable edge store.

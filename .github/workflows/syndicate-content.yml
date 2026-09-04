@@ -5,7 +5,8 @@ name: Enqueue content for syndication
 # the tracker; the signup Worker's cron drain then posts the approved item to every enabled channel (Discord + the
 # social adapters). Driven off the MERGE DIFF (files ADDED in the push) + idempotent on the queue dedupeKey, so the
 # backlog is never re-enqueued. Metadata only (url + title + blurb + image); a members-only / Mode A body is never
-# read. Shares are NOT enqueued here (they enqueue via the SOW-057 upvote threshold). Re-run via workflow_dispatch.
+# read. Shares ARE enqueued here too, at publish time, since SOW-087 retired the upvote threshold that used to
+# be their separate trigger (sow-313 removed the last of that machinery). Re-run via workflow_dispatch.
 
 on:
   push:

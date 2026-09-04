@@ -3,8 +3,8 @@
 // Given the content files ADDED in a push to main, it builds a syndication queue item per publishable
 // post/product/prompt/SHARE and ENQUEUES it via the Cloudflare KV REST API. NOTHING posts here: each item is
 // `pending` and waits for a superadmin to APPROVE it in the tracker, after which the Worker drain posts it to
-// every enabled channel. SOW-087: shares now enqueue HERE at publish time (the SOW-057 upvote trigger is
-// retired); each item carries its `category` (a share's flat topic key, or the content's top-level taxonomy
+// every enabled channel. SOW-087: shares now enqueue HERE at publish time (the SOW-057 upvote trigger was
+// retired then, and sow-313 removed upvoting itself); each item carries its `category` (a share's flat topic key, or the content's top-level taxonomy
 // key) for the category-channel Discord post, the author's profile displayName (`authorName`, for the no-ping
 // template), and its moderation `flags` (house/moderation-flags.yml over title + blurb; a flagged item always
 // waits for superadmin approval). Metadata only (url + title + blurb + image); a members-only / Mode A body is

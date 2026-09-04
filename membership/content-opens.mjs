@@ -39,7 +39,7 @@ export function normalizeContentOpens(raw) {
 }
 
 /** Record one member's open. PURE. Re-opening is a no-op beyond the updatedAt stamp (the set dedupes). The item
- *  author is NOT excluded (an accepted, bounded self-open inflation; see the promoter header), unlike upvotes. */
+ *  author is NOT excluded (an accepted, bounded self-open inflation; see the promoter header). */
 export function applyOpen(record, { openerId }, { now = Date.now } = {}) {
   const opener = id(openerId);
   if (!opener) throw new ContentOpenError('openerId is required');

@@ -19,7 +19,6 @@ import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
 import './gbti-favorite.mjs'; // SOW-050 P3: Shares are first-class — favorite + collect them like every other type
 import './gbti-collection.mjs';
-import './gbti-upvote.mjs'; // SOW-057: upvote a share (two votes enqueue syndication)
 import './gbti-mod-actions.mjs'; // SOW-071: the shared per-item moderation control (replaces the bespoke Hide button)
 import { rememberPending, dropPublished, pendingStubView } from '../share-pending-stub.mjs'; // sow-224: the "in the publishing queue" stub
 
@@ -153,7 +152,7 @@ class GbtiSharesFeed extends GbtiElement {
     if (!this.client) { if (!quiet) this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client to read Shares.</p>`); return; }
     if (!quiet) this.set(this.css(CSS) + `<p class="muted">Loading the co-op stream…</p>`);
     let membership = 'unknown';
-    try { const st = await this.client.status(); membership = st?.membership ?? 'unknown'; this._role = st?.role ?? 'member'; this._me = String(st?.identity?.username || st?.identity?.login || '').toLowerCase(); } catch { membership = 'unknown'; this._role = 'member'; this._me = ''; }
+    try { const st = await this.client.status(); membership = st?.membership ?? 'unknown'; this._role = st?.role ?? 'member'; } catch { membership = 'unknown'; this._role = 'member'; }
     this._locked = LOCKED.has(membership);
     if (this._locked) return quiet ? undefined : this._splash();
     // A host whose listShares returns a `nextBefore` cursor (the website cookie adapter) enables the "Load older"
@@ -253,12 +252,10 @@ class GbtiSharesFeed extends GbtiElement {
       ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
       : (heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '');
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
-    // SOW-050 P3 + SOW-057: the Favorite + Collection cluster, plus an Upvote (hidden for the share's own author,
-    // whose vote never counts). A Share keys on its composite "<author>/<id>" slug.
-    const isAuthor = !!this._me && this._me === String(share.author || '').toLowerCase();
-    const upvote = (slug && !isAuthor) ? `<gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote>` : '';
+    // SOW-050 P3: the Favorite + Collection cluster. A Share keys on its composite "<author>/<id>" slug.
+    // sow-313 removed the Upvote that used to lead this row, along with the isAuthor test that hid it from the
+    // share's own author. Favorite and Collection carry no such rule: an author may save their own work.
     const actions = slug ? `<div class="actions">
-      ${upvote}
       <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-favorite>
       <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-collection>
     </div>` : '';

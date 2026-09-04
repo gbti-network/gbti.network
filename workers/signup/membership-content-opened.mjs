@@ -60,7 +60,7 @@ export async function membershipContentOpened(request, env, {
   // Record the open (distinct-member set; a re-open is a no-op beyond the timestamp). The item author is NOT
   // excluded (the beacon does not know the author's github_id cheaply, and the reconcile promoter counts the raw
   // distinct openers): an author self-open counts toward their own item, an accepted bounded inflation on a
-  // small network (see scripts/promote-popular.mjs header). Upvotes, by contrast, already exclude the author.
+  // small network (see scripts/promote-popular.mjs header).
   const key = contentOpensKey(type, slug);
   const record = applyOpen(normalizeContentOpens(await kv.get(key, 'json')), { openerId: auth.githubId }, { now });
   await kv.put(key, JSON.stringify(record));

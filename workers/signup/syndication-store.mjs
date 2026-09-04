@@ -4,7 +4,7 @@
 //   synd:item:<id>         one queue item (JSON). A ~30-day TTL is applied once the item goes terminal.
 //   synd:pending           { ids: [...] }  a small index of not-yet-terminal item ids, so the drain lists O(1).
 //   synd:dedupe:<key>      points a dedupeKey -> the active item id, for idempotent enqueue (no double-post).
-//   synd:config            the secret-free config mirror (enabled, hold_minutes, upvote_threshold, channels).
+//   synd:config            the secret-free config mirror (enabled, hold_minutes, channels).
 //
 // Pure over an injected kv + now, so it is unit-tested with a fake KV (no network, no secrets).
 

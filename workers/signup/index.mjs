@@ -67,7 +67,6 @@ import { membershipDiscordChannels } from './membership-discord-channels.mjs'; /
 import { handleActivity } from './membership-activity.mjs';
 import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
 import { freezeAndPersist } from './conversion-snapshot-store.mjs'; // SOW-059 P1c-B: freeze the attribution at conversion
-import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
 import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
 import { handleSocialQueueGet, handleSocialQueueAction } from './social-queue-admin.mjs'; // SOW-121
@@ -1078,16 +1077,6 @@ export default {
         if (method === 'GET' || method === 'POST') {
           const r = await handleActivity(request, env);
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
-        }
-      }
-
-      // SOW-057: a paid member upvotes a share. Effective-paid gated (ban-aware, fail-closed); two distinct
-      // non-author upvotes enqueue the share for SOW-058 syndication. Per-token body, never cached.
-      if (pathname === '/membership/upvote') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'POST') {
-          const r = await handleUpvote(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
 

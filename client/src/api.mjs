@@ -36,7 +36,6 @@ import {
   mutateMemberActivity,
   getFollows,
   setFollow,
-  upvoteContent,
   ogPreview,
   getDiscordInvite,
   getNews,
@@ -163,7 +162,6 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/earnings') return run(() => getMemberEarnings(ctx)); // SOW-083 P2: the member's own earnings ledger
   if (method === 'GET' && pathname === '/api/follows') return run(() => getFollows(ctx)); // SOW-023
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023
-  if (method === 'POST' && pathname === '/api/upvote') return run(() => upvoteContent(ctx, body ?? {})); // SOW-057
   if (method === 'POST' && pathname === '/api/og-preview') return run(() => ogPreview(ctx, body ?? {})); // SOW-057
   if (method === 'GET' && pathname === '/api/discord-invite') return run(() => getDiscordInvite(ctx)); // on-demand Discord invite
   if (method === 'GET' && pathname === '/api/news') return run(() => getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || undefined })); // SOW-043 members-only news

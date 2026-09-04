@@ -16,7 +16,6 @@
 import yaml from 'js-yaml';
 import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
-import { scrubVoter } from '../../membership/share-votes.mjs';
 import { INVITE_KEY_PREFIX } from '../../membership/invites.mjs'; // sow-231 Phase 2
 import { scrubOpener } from '../../membership/news-opens.mjs'; // SOW-111: per-item news detail-open sets
 import { scrubOpener as scrubContentOpener } from '../../membership/content-opens.mjs'; // SOW-126: per-item content-open sets
@@ -293,12 +292,44 @@ export async function putKvValue({ key, value, env = process.env, fetchImpl = gl
 }
 
 /**
- * SOW-057 GDPR: scrub the member's github_id from every per-target share-vote set (`upvotes:share:*`). These sets
- * are keyed by TARGET (not by member), so the per-member activity: delete does not reach them. Removing the id
- * (and clearing it as the cached author when it matches) is the erasure for the behavioral upvote data. The
- * syndication queue items (synd:item:*) reference the author by public username + auto-expire via TTL, so they
- * are not scrubbed here. Reported no-op without CF creds.
+ * sow-313: upvoting is RETIRED, and this step OUTLIVES it on purpose. The feature is gone from every surface,
+ * but the `upvotes:share:*` sets it wrote are still sitting in KV holding real member github_ids, so this is
+ * what a right-to-erasure request reaches them through. It comes out only after the owner-run purge is
+ * confirmed, never before: removing it first would strand person-keyed records that nothing could then delete.
+ *
+ * `scrubVoter` used to live in membership/share-votes.mjs and was INLINED here when that module went. Keeping
+ * the whole voting module alive for one erasure helper would have left the machinery sitting there looking
+ * usable.
+ *
+ * SOW-057 GDPR (the original note, still accurate): these sets are keyed by TARGET, not by member, so the
+ * per-member `activity:` delete does not reach them. Removing the id, and clearing it as the cached author when
+ * it matches, is the erasure for the behavioral upvote data. The syndication queue items (synd:item:*)
+ * reference the author by public username and auto-expire via TTL, so they are not scrubbed here. Reported
+ * no-op without CF creds.
  */
+function scrubVoter(record, githubId, { now = Date.now } = {}) {
+  const id = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
+  const target = id(githubId);
+  // The stored shape, coerced defensively: a hand-edited or partially-written value must not crash an erasure.
+  const raw = record && typeof record === 'object' ? record : {};
+  const seen = new Set();
+  const voters = [];
+  if (Array.isArray(raw.voters)) for (const v of raw.voters) { const t = id(v); if (t && !seen.has(t)) { seen.add(t); voters.push(t); } }
+  const r = {
+    voters,
+    author: id(raw.author) || null,
+    enqueuedAt: Number.isFinite(Number(raw.enqueuedAt)) && raw.enqueuedAt != null ? Number(raw.enqueuedAt) : null,
+    updatedAt: Number.isFinite(Number(raw.updatedAt)) && raw.updatedAt != null ? Number(raw.updatedAt) : null,
+  };
+  const before = r.voters.length;
+  r.voters = r.voters.filter((v) => v !== target);
+  const authorWas = r.author;
+  if (r.author === target) r.author = null; // also drop the cached author id if it is the erased member
+  const changed = r.voters.length !== before || authorWas !== r.author;
+  if (changed) r.updatedAt = Number(now());
+  return { record: r, changed };
+}
+
 export async function eraseShareVotes({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
   const listed = await listKvByPrefix({ prefix: 'upvotes:share:', env, fetchImpl });

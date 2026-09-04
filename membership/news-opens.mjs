@@ -1,6 +1,7 @@
 // SOW-111: the PER-ITEM news detail-open record. Answers "how many DISTINCT members opened this news item's
 // detailed view" so the Worker can auto-share it to its category Discord channel at the configured threshold.
-// Clones the SOW-057 share-votes pattern: a pure core over a single item's opener set, with the Worker doing
+// Clones the SOW-057 share-votes pattern (that module was deleted with upvoting in sow-313; this is now the
+// only surviving copy of the shape): a pure core over a single item's opener set, with the Worker doing
 // the KV read-modify-write around it under the key `news-opens:<guid>`.
 //
 // Idempotency is by the `postedAt` WATERMARK, not the live count: once this record has triggered an auto-post

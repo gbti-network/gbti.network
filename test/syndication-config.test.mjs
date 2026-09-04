@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
-  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor, newsEngagement,
+  isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor, newsEngagement,
   AUTO_TYPES, AUTO_CHANNELS, AUTO_MODES, channelCapability, autoModeFor, isAutoOn, autoChannelsForType, channelHoldMs, explicitChannelHoldMs, defaultAutoMode,
   contentEngagement, popularChannelsForType, CONTENT_ENGAGEMENT_SIGNALS, deliverChannelsForType,
 } from '../membership/syndication-config.mjs';
@@ -13,7 +13,6 @@ test('a missing/empty config fails closed to the safe defaults', () => {
   const c = syndicationConfigFromParsed({});
   assert.equal(c.enabled, false);
   assert.equal(c.hold_minutes, 60);
-  assert.equal(c.upvote_threshold, 2);
   for (const name of CHANNELS) assert.equal(c.channels[name], false);
   assert.equal(isSyndicationEnabled(c), false);
 });
@@ -30,9 +29,6 @@ test('hold_minutes coerces to a non-negative integer; threshold never drops belo
   assert.equal(syndicationConfigFromParsed({ hold_minutes: -5 }).hold_minutes, 0);
   assert.equal(syndicationConfigFromParsed({ hold_minutes: 90.9 }).hold_minutes, 90);
   assert.equal(syndicationConfigFromParsed({ hold_minutes: 'nope' }).hold_minutes, 60); // fallback
-  assert.equal(upvoteThreshold(syndicationConfigFromParsed({ upvote_threshold: 0 })), 2); // 0 is invalid -> default
-  assert.equal(upvoteThreshold(syndicationConfigFromParsed({ upvote_threshold: 5 })), 5);
-  assert.equal(upvoteThreshold(syndicationConfigFromParsed({ upvote_threshold: '3' })), 3);
 });
 
 test('SOW-131: isChannelEnabled + enabledChannelNames are MATRIX-DERIVED (any cell not off), not the channels flag', () => {
@@ -52,14 +48,14 @@ test('SOW-131: isChannelEnabled + enabledChannelNames are MATRIX-DERIVED (any ce
 });
 
 test('toSyndicationMirror returns the secret-free shape for KV', () => {
-  const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
+  const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, channels: { discord: true } });
   assert.deepEqual(m, {
-    enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
+    enabled: true, require_approval: true, hold_minutes: 60, classify: 'ai',
     // SOW-088: the mirror carries ONLY configured templates (readers re-normalize, so code defaults track deploys).
     templates: {},
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     // SOW-126: the content-engagement (`popular` engine) settings, mirrored like news_engagement.
-    content_engagement: { enabled: false, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, upvotes: false, comments: false } },
+    content_engagement: { enabled: false, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, comments: false } },
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, bluesky: false, reddit: false, devto: false, dailydev: false }, // sow-159: mastodon retired; sow-217: hashnode retired (both out of CHANNELS)
     channel_templates: {},
@@ -72,7 +68,7 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     channel_hold_minutes: {}, // SOW-125: no per-channel overrides -> the global hold applies
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['auto_matrix', 'channel_hold_minutes', 'channel_templates', 'channel_templates_stub', 'channels', 'classify', 'content_engagement', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['auto_matrix', 'channel_hold_minutes', 'channel_templates', 'channel_templates_stub', 'channels', 'classify', 'content_engagement', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
@@ -87,7 +83,7 @@ test('SOW-126: contentEngagement normalizes fail-closed (disabled, opens-on, tie
   assert.equal(d.enabled, false);
   assert.equal(d.threshold, 3);
   assert.equal(d.tier, 'signed-in');
-  assert.deepEqual(d.signals, { opens: true, favorites: false, upvotes: false, comments: false });
+  assert.deepEqual(d.signals, { opens: true, favorites: false, comments: false });
   // an admin config is honored + unknown signals dropped, bad tier -> default, threshold >= 1.
   const c = contentEngagement(syndicationConfigFromParsed({ content_engagement: { enabled: true, threshold: 5, tier: 'paid', signals: { favorites: true, bogus: true }, } }));
   assert.equal(c.enabled, true);

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { selectPromotions, engagementKey, main } from '../scripts/promote-popular.mjs';
 import { syndicationConfigFromParsed, contentEngagement } from '../membership/syndication-config-core.mjs';
 
-const CE = (over = {}) => ({ enabled: true, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, upvotes: false, comments: false }, ...over });
+const CE = (over = {}) => ({ enabled: true, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, comments: false }, ...over });
 const CFG = (matrix) => syndicationConfigFromParsed({ enabled: true, channels: { discord: true, bluesky: true }, auto_matrix: matrix });
 
 test('engagementKey: content uses the bare slug, a share uses <author>/<id>', () => {
@@ -36,16 +36,16 @@ test('selectPromotions: no popular cell, a watermarked item, or a disabled confi
   assert.equal(selectPromotions({ items, opens: { 'post:p': 5 }, ce: CE({ enabled: false }), cfg }).length, 0);
 });
 
-test('selectPromotions: the signal gate + max-across-signals + upvotes-are-share-only', () => {
+test('selectPromotions: the signal gate + max-across-signals', () => {
   const cfg = CFG({ share: { bluesky: 'popular' }, post: { bluesky: 'popular' } });
   const share = { type: 'share', slug: 'x', author: 'a', targetSlug: 'members/a/shares/x', input: {} };
   const post = { type: 'post', slug: 'p', author: 'a', targetSlug: 'members/a/posts/p', input: {} };
   // opens OFF, favorites ON: the post's favorites drive it; opens are ignored.
   const favOnly = selectPromotions({ items: [post], opens: { 'post:p': 99 }, favorites: { 'post:p': 3 }, ce: CE({ signals: { opens: false, favorites: true } }), cfg });
   assert.equal(favOnly.length, 1);
-  // upvotes ON: only the SHARE counts upvotes; a post ignores the upvotes map.
-  const up = selectPromotions({ items: [share, post], upvotes: { 'share:a/x': 4, 'post:p': 9 }, ce: CE({ signals: { opens: false, upvotes: true } }), cfg });
-  assert.deepEqual(up.map((s) => s.item.type), ['share']);
+  // sow-313 removed the third signal, which was the only SHARE-specific one (upvotes counted for a share and
+  // were ignored for a post). What is left applies uniformly across types, so there is no per-type branch to
+  // assert here any more.
   // max across enabled signals: neither alone hits 3, but the max does when both are enabled and one reaches it.
   const maxed = selectPromotions({ items: [share], opens: { 'share:a/x': 1 }, favorites: { 'share:a/x': 3 }, ce: CE({ signals: { opens: true, favorites: true } }), cfg });
   assert.equal(maxed.length, 1);

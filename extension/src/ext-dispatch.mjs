@@ -8,7 +8,7 @@
 
 import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft, readDraft, publishShare, listShares, listShareComments, readContent,
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
-  upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
+  ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
   socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
@@ -158,8 +158,6 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await getMemberEarnings(ctx));
       case '/api/follows': // SOW-023: the follow graph (subscriptions) in the deletable edge store, via the Worker (paid-only)
         return ok(method === 'POST' ? await setFollow(ctx, body) : await getFollows(ctx));
-      case '/api/upvote': // SOW-057: upvote a share (effective-paid, via the Worker; two votes enqueue syndication)
-        return ok(await upvoteContent(ctx, body ?? {}));
       case '/api/og-preview': // SOW-057: server-side OpenGraph preview for the share composer (SSRF-guarded in the Worker)
         return ok(await ogPreview(ctx, body ?? {}));
       case '/api/discord-invite': // on-demand Discord guild invite, minted + cached by the Worker

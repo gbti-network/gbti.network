@@ -306,7 +306,7 @@ class GbtiChannelMapManager extends GbtiElement {
       this._tiers = engagement?.tiers || ['paid', 'paid-trial', 'signed-in'];
       this._contentEng = contentEng?.settings || null; // SOW-126: the `popular`-engine tunables
       this._contentTiers = contentEng?.tiers || ['paid', 'paid-trial', 'signed-in'];
-      this._contentSignals = contentEng?.signals || ['opens', 'favorites', 'upvotes', 'comments'];
+      this._contentSignals = contentEng?.signals || ['opens', 'favorites', 'comments'];
       this._pipeline = pipeline?.settings || null;
       // Working copies (dirty state survives re-renders; a save/reload resets them).
       // Fields show the EFFECTIVE template (channel override -> shared map, which already folds in the
@@ -533,9 +533,9 @@ class GbtiChannelMapManager extends GbtiElement {
     if (!e) return '';
     const tierLabel = { paid: 'Paid members only', 'paid-trial': 'Trial + paid', 'signed-in': 'Any signed-in member' };
     const tierOpts = (this._contentTiers || []).map((t) => `<option value="${esc(t)}"${e.tier === t ? ' selected' : ''}>${esc(tierLabel[t] || t)}</option>`).join('');
-    const signalLabel = { opens: 'Opens', favorites: 'Favorites', upvotes: 'Upvotes', comments: 'Comments' };
+    const signalLabel = { opens: 'Opens', favorites: 'Favorites', comments: 'Comments' };
     const signals = e.signals || {};
-    const sigChips = (this._contentSignals || ['opens', 'favorites', 'upvotes', 'comments']).map((s) =>
+    const sigChips = (this._contentSignals || ['opens', 'favorites', 'comments']).map((s) =>
       `<span class="chan${signals[s] ? ' on' : ''}" data-ceng-signal="${esc(s)}" role="checkbox" aria-checked="${signals[s] ? 'true' : 'false'}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(signalLabel[s] || s)}</span>`).join('');
     return `<section class="card" id="sec-content-autoshare" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg></span>

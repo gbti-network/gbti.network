@@ -86,7 +86,7 @@ test('setContentEngagement patches only changed fields, validates hard, and is i
   const set = setContentEngagement(doc, { enabled: true, threshold: 5, tier: 'paid', signals: { favorites: true } }, ctx);
   assert.equal(set.changed, true);
   // only the supplied signal changed; the fail-closed defaults (opens on, the rest off) fill the rest
-  assert.deepEqual(set.next.syndication.content_engagement, { enabled: true, threshold: 5, tier: 'paid', signals: { opens: true, favorites: true, upvotes: false, comments: false } });
+  assert.deepEqual(set.next.syndication.content_engagement, { enabled: true, threshold: 5, tier: 'paid', signals: { opens: true, favorites: true, comments: false } });
   assert.equal(set.next.syndication.templates.share, 'x'); // the rest of the config survives
   assert.equal(set.audit.action, 'content-engagement.set');
   // idempotent against the normalized current state

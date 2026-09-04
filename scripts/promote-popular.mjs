@@ -8,14 +8,13 @@
 // Signals (each admin-toggleable in content_engagement.signals):
 //   opens     distinct members who opened the expanded reader view -> the content-opens:<type>:<slug> KV sets
 //   favorites distinct favoriters -> house/favorite-counts.yml (post/product/prompt only; SOW-024 identity-free)
-//   upvotes   distinct non-author upvoters of a share -> house/upvote-counts.yml (SOW-057)
 //   comments  DEFERRED (a build-time distinct-commenter join; behind the config flag, not wired in this pass)
 //
 // Rule: an item is popular when the MAX distinct-member count across the enabled signals reaches the threshold
 // (i.e. ANY enabled signal alone can trigger it). This avoids over-counting a member who did two actions, and
 // matches "N members opened it" OR "N members favorited it". Fail-closed: disabled config, no enabled signal, no
-// popular cell, or any error -> no promotion. Author self-engagement note: upvotes already exclude the author;
-// opens/favorites may include the author's own action (a minor, bounded inflation on a small network).
+// popular cell, or any error -> no promotion. Author self-engagement note: opens/favorites may include the
+// author's own action (a minor, bounded inflation on a small network).
 //
 // Requires (for --apply): CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN (KV read of opens + the watermark +
 // the enqueue). A reported no-op without them (local dry-runs, tests).
@@ -33,14 +32,13 @@ import { enqueueViaKvRest } from './lib/syndication-rest.mjs';
 import { listKvByPrefix, putKvValue } from './lib/erase-member.mjs';
 import { distinctOpenerCount, normalizeContentOpens } from '../membership/content-opens.mjs';
 import { readCountsFromDisk as readFavoriteCountsFromDisk } from './lib/favorite-counts.mjs';
-import { readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const POPULAR_PROMOTED_KEY = (targetSlug) => `popular-promoted:${targetSlug}`;
 
 /** The DISTINCT-member engagement KEY for an item under each signal: `<type>:<bareSlug>` (bareSlug is the slug
  *  for content, the composite `<author>/<id>` for a share). This matches the content-opens KV key, the share
- *  upvote-counts key (`share:<author>/<id>`), and the favorite-counts key (`<type>:<slug>`). */
+ *  and the favorite-counts key (`<type>:<slug>`). */
 export function engagementKey(item) {
   const bare = item.type === 'share' ? `${item.author}/${item.slug}` : item.slug;
   return `${item.type}:${bare}`;
@@ -51,13 +49,12 @@ export function engagementKey(item) {
  * the items to promote now: those with a `popular` channel, a max enabled-signal count at/above the threshold,
  * and not yet promoted. Each result carries the engagement + the popular channels. No IO.
  */
-export function selectPromotions({ items = [], opens = {}, favorites = {}, upvotes = {}, ce, cfg, promoted = new Set() } = {}) {
+export function selectPromotions({ items = [], opens = {}, favorites = {}, ce, cfg, promoted = new Set() } = {}) {
   const out = [];
   if (!ce?.enabled) return out;
   const threshold = Number.isFinite(Number(ce.threshold)) ? Math.max(1, Math.floor(Number(ce.threshold))) : 3;
   const useOpens = !!ce.signals?.opens;
   const useFav = !!ce.signals?.favorites;
-  const useUp = !!ce.signals?.upvotes;
   for (const it of items) {
     if (!it || !it.targetSlug) continue;
     const channels = popularChannelsForType(cfg, it.type);
@@ -67,7 +64,6 @@ export function selectPromotions({ items = [], opens = {}, favorites = {}, upvot
     let best = 0;
     if (useOpens) best = Math.max(best, Number(opens[key]) || 0);
     if (useFav) best = Math.max(best, Number(favorites[key]) || 0);
-    if (useUp && it.type === 'share') best = Math.max(best, Number(upvotes[key]) || 0);
     if (best >= threshold) out.push({ item: it, engagement: best, channels });
   }
   return out;
@@ -132,7 +128,6 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
 
   // Gather the count sources for the enabled signals.
   const favorites = ce.signals.favorites ? (deps.favorites ?? readFavoriteCountsFromDisk(root)) : {};
-  const upvotes = ce.signals.upvotes ? (deps.upvotes ?? readUpvoteCountsFromDisk(root)) : {};
   let opens = deps.opens ?? {};
   let kvAvailable = deps.opens !== undefined;
   if (ce.signals.opens && deps.opens === undefined) {
@@ -147,7 +142,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
     if (wm.available) for (const { key } of wm.entries) promoted.add(key.slice('popular-promoted:'.length));
   }
 
-  const selections = selectPromotions({ items, opens, favorites, upvotes, ce, cfg, promoted });
+  const selections = selectPromotions({ items, opens, favorites, ce, cfg, promoted });
   console.log(`promote-popular: ${items.length} published item(s), ${selections.length} newly popular (threshold ${ce.threshold}, signals ${Object.entries(ce.signals).filter(([, v]) => v).map(([k]) => k).join('+') || 'none'})${apply ? '' : ' (dry-run)'}`);
   if (!selections.length) return { promoted: 0, items: items.length };
   if (!apply) {

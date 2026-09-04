@@ -12,7 +12,7 @@ const fakeKv = (seed = {}) => {
   const m = new Map(Object.entries(seed));
   return { store: m, get: async (k, t) => (m.has(k) ? (t === 'json' ? JSON.parse(m.get(k)) : m.get(k)) : null), put: async (k, v) => { m.set(k, v); } };
 };
-const CONFIG = (ce = {}) => JSON.stringify({ enabled: true, content_engagement: { enabled: true, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, upvotes: false, comments: false }, ...ce } });
+const CONFIG = (ce = {}) => JSON.stringify({ enabled: true, content_engagement: { enabled: true, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, comments: false }, ...ce } });
 
 test('content-opens core: distinct openers, re-open no-op, scrub', () => {
   let r = applyOpen(null, { openerId: '1' }, { now: () => 10 });

@@ -9,8 +9,6 @@
 //                      auto-syndicated by accident.
 //   hold_minutes       the deliberate delay before a queued item goes out (default 60). The superadmin can
 //                      cancel during this window. Coerced to a non-negative integer.
-//   upvote_threshold   SOW-057: distinct non-author members required to enqueue a share (default 2). Coerced
-//                      to an integer >= 1; a smaller/invalid value falls back to the default (never below 1).
 //   channels           DEPRECATED (SOW-131): the legacy per-channel master switches. No longer a delivery gate:
 //                      channel enablement is now MATRIX-DERIVED (a channel is on iff the auto-share matrix routes
 //                      any content type to it). Kept in the schema/mirror for backward compatibility, but unread
@@ -129,12 +127,12 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // (opening the expanded reader view, favoriting, upvoting, commenting) + the threshold + the counting tier are
 // all admin-editable (the owner may retune what qualifies). Fail-closed: disabled until the owner turns it on.
 // Tiers reuse NEWS_ENGAGEMENT_TIERS (banned always excluded; the author never counts toward their own item).
-export const CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(['opens', 'favorites', 'upvotes', 'comments']);
+export const CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(['opens', 'favorites', 'comments']);
 export const DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
   enabled: false,
   threshold: 3, // distinct engaged members before a `popular` item promotes (tunable; the network is small)
   tier: 'signed-in', // whose engagement counts (any non-banned signed-in member by default)
-  signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false }), // opens = the owner's chosen counter
+  signals: Object.freeze({ opens: true, favorites: false, comments: false }), // opens = the owner's chosen counter
 });
 
 // SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved <@id> mention, falling
@@ -273,7 +271,6 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
   require_approval: true, // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
   hold_minutes: 60,
-  upvote_threshold: 2,
   classify: 'ai', // SOW-087: the share category suggestion mode
   templates: DEFAULT_TEMPLATES, // SOW-087: per-type Discord templates (missing/empty type = its default)
   channel_templates: Object.freeze({}), // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
@@ -474,7 +471,6 @@ export function syndicationConfigFromParsed(parsed) {
     enabled: asBool(raw.enabled, d.enabled),
     require_approval: asBool(raw.require_approval, d.require_approval),
     hold_minutes: asHoldMinutes(raw.hold_minutes, d.hold_minutes),
-    upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
     classify: asClassifyMode(raw.classify, d.classify),
     templates: normalizeTemplates(raw.templates),
     channel_templates: normalizeChannelTemplates(raw.channel_templates),
@@ -503,11 +499,6 @@ export function requiresApproval(cfg) {
 /** The hold window in milliseconds (hold_minutes * 60000). */
 export function holdMs(cfg) {
   return asHoldMinutes(cfg?.hold_minutes, DEFAULT_SYNDICATION_CONFIG.hold_minutes) * 60_000;
-}
-
-/** The SOW-057 distinct-non-author-voter threshold. */
-export function upvoteThreshold(cfg) {
-  return asThreshold(cfg?.upvote_threshold, DEFAULT_SYNDICATION_CONFIG.upvote_threshold);
 }
 
 /** SOW-087: the share category suggestion mode (`ai` | `keyword` | `off`). Invalid/missing = `ai`. */
@@ -681,5 +672,5 @@ export function toSyndicationMirror(cfg) {
     for (const ch of MATRIX_CHANNELS) { const m = typeof row[ch] === 'string' ? row[ch].trim().toLowerCase() : ''; if (AUTO_MODES.includes(m)) outRow[ch] = m; }
     if (Object.keys(outRow).length) configuredMatrix[t] = outRow;
   }
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, content_engagement: { ...c.content_engagement, signals: { ...c.content_engagement.signals } }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, content_engagement: { ...c.content_engagement, signals: { ...c.content_engagement.signals } }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
 }

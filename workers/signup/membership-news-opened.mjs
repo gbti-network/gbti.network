@@ -1,6 +1,7 @@
 // SOW-111: POST /membership/news-opened { guid, source? } — the news detail-open engagement beacon. Records
 // the member's github_id in a per-guid distinct-opener set (news-opens:<guid>, membership/news-opens.mjs, the
-// share-votes pattern) and, when the set reaches the configured open_threshold, AUTO-POSTS the item to its
+// share-votes pattern, whose original module went with upvoting in sow-313) and, when the set reaches the
+// configured open_threshold, AUTO-POSTS the item to its
 // category-mapped Discord channel via the shared postNewsItemOnce core (one post per guid ever, across the
 // curator, comment, and open triggers; stamped by:'auto:open').
 //

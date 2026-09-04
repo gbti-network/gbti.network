@@ -65,7 +65,6 @@ export {
   mutateMemberActivity,
   getFollows,
   setFollow,
-  upvoteContent,
   ogPreview,
   getSyndicationQueue,
   cancelSyndication,

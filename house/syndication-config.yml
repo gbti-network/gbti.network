@@ -26,7 +26,6 @@ syndication:
   enabled: true
   require_approval: false
   hold_minutes: 60
-  upvote_threshold: 2
   classify: ai
   templates:
     share: 'Shared on the GBTI Network: "{title}" {shareurl}'

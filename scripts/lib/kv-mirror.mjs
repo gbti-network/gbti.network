@@ -282,7 +282,7 @@ export async function writeOverrideToKvRest({ env = process.env, section, github
 
 /**
  * SOW-058: PUT the secret-free syndication config mirror (toSyndicationMirror: { enabled, require_approval,
- * hold_minutes, upvote_threshold, channels }) to KV key synd:config, so the Worker drain reads the live
+ * hold_minutes, channels }) to KV key synd:config, so the Worker drain reads the live
  * house/syndication-config.yml WITHOUT a redeploy. `raw` is the parsed YAML; toSyndicationMirror normalizes it.
  * Same REST + creds-gated no-op pattern as the overrides mirror; throws only on a real API error.
  */

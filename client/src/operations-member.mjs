@@ -1,4 +1,4 @@
-// Operations, the MEMBER's own surface (SOW-006): activity, earnings, follows, upvotes, link previews,
+// Operations, the MEMBER's own surface (SOW-006): activity, earnings, follows, link previews,
 // syndication and social queues, the news module, Discord linking, and onboarding status. Read/write against
 // the Worker rather than the repo, so nothing here opens a PR.
 //
@@ -7,7 +7,6 @@
 import { getActivity as workerGetActivity, setFavorite as workerSetFavorite, createCollection as workerCreateCollection, renameCollection as workerRenameCollection, deleteCollection as workerDeleteCollection, setCollectionItem as workerSetCollectionItem, ActivityClientError } from './member-activity-client.mjs';
 import { getEarnings as workerGetEarnings } from './member-earnings-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
-import { upvote as workerUpvote, UpvoteClientError } from './member-upvote-client.mjs';
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
 import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, workerContentOpened, NewsClientError } from './news-client.mjs';
@@ -108,21 +107,6 @@ export async function setFollow(ctx, { username, on = true, notify } = {}) {
     return r?.following ?? [];
   } catch (err) {
     throw mapFollowsError(err);
-  }
-}
-
-
-/** SOW-057: toggle the caller's upvote on a share (effective-paid; the Worker enqueues syndication at the
- *  threshold). Returns { upvoted, upvoteCount, enqueued }. */
-export async function upvoteContent(ctx, { type = 'share', slug, on = true } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.('githubToken');
-  try {
-    const r = await workerUpvote({ type, slug, on, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    return { upvoted: !!r?.upvoted, upvoteCount: r?.upvoteCount, enqueued: !!r?.enqueued };
-  } catch (err) {
-    if (err instanceof UpvoteClientError) throw new OperationError('upvote-failed', err.message);
-    throw err;
   }
 }
 
