@@ -1,0 +1,89 @@
+name: Deploy signup Worker
+
+# THE GAP THIS CLOSES. deploy.yml has auto-deployed the SITE on every push to main since 2026-07-04, but it
+# only ever ran `pages deploy dist`. The signup Worker had no automation at all: it went live only when
+# somebody ran `npm run deploy:worker` from a machine holding Cloudflare credentials.
+#
+# So the Worker drifts behind main silently, and nothing reports it. Measured 2026-09-04: the live Worker
+# 404'd `/membership/admin/creator-applications`, a route merged the day before, while five further Worker-side
+# commits sat on main unshipped. A green board and a deployed site say nothing about the Worker.
+#
+# NOT AUTOMATIC, DELIBERATELY, at least for now. The site is static output and a bad deploy is a rebuild away;
+# this Worker is the membership and mail boundary, and it runs the crons. Adding a button that anyone with
+# write access can press is the smaller change, and it is enough to stop the drift. Turning it into an
+# on-push deploy is a separate decision with a separate blast radius.
+#
+# --env production IS LOAD-BEARING AND IS NOT A STYLE CHOICE. wrangler.toml's bare top level binds the
+# PRODUCTION KV namespaces, so a plain `wrangler deploy` creates a SECOND Worker, `gbti-signup`, running all
+# four crons against live data on the same schedule as production. That has happened, and the config carries a
+# warning about it. The verify step below asserts the flag is present rather than trusting this comment.
+#
+# Worker SECRETS are not touched. They live in Cloudflare and persist across deploys, so a deploy ships code
+# and nothing else. Nothing here can read or print one.
+
+on:
+  workflow_dispatch: {}
+
+# Read-only against this repository: the deploy writes to Cloudflare, never back to git.
+permissions:
+  contents: read
+
+concurrency:
+  # Never two Worker uploads at once, and never cancel one mid-flight.
+  group: signup-worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      # The unit suite before the upload, not after. This Worker gates membership and sends mail, so a red
+      # suite must stop the deploy rather than be discovered in the logs of one that already went out.
+      - name: Unit tests
+        run: node --test --test-concurrency=4 'test/**/*.test.mjs'
+
+      # Guard the flag rather than trusting the comment above. A deploy without --env production is the
+      # documented way to create a second Worker running live crons.
+      - name: Verify the deploy targets the production environment
+        run: |
+          CMD=$(node -p "require('./package.json').scripts['deploy:worker']")
+          echo "$CMD"
+          case "$CMD" in
+            *"--env production"*) echo "targets [env.production]" ;;
+            *) echo "::error::deploy:worker does not pass --env production. A bare deploy creates a SECOND Worker running the crons against live data."; exit 1 ;;
+          esac
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: d42b12e969229c5187ad0f7289536487
+          workingDirectory: workers/signup
+          command: deploy --env production
+
+      # Prove it by BEHAVIOUR, not by the deploy step's exit code. 401 means the route exists and refused an
+      # unauthenticated caller, which is the healthy answer; 404 would mean the upload did not take. A 401 and a
+      # 404 cannot be read the wrong way round, unlike a timestamp comparison.
+      - name: Health check
+        run: |
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' https://signup.gbti.network/membership/status)
+          echo "signup.gbti.network/membership/status -> $CODE (401 = healthy)"
+          [ "$CODE" = "401" ] || { echo "::error::expected 401 from the deployed Worker, got $CODE"; exit 1; }
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Signup Worker deploy"
+            echo
+            echo "Commit: \`${{ github.sha }}\`"
+            echo
+            echo "The Worker does NOT deploy on push. If Worker code changed on main, it is not live until this"
+            echo "workflow runs."
+          } >> "$GITHUB_STEP_SUMMARY"
