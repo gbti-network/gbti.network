@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   membershipAdminAuthor,
   membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool,
-  membershipAdminNewsEngagement, membershipAdminContentEngagement, membershipAdminSyndicationSettings,
+  membershipAdminNewsEngagement, membershipAdminSyndicationSettings,
 } from '../workers/signup/membership-admin-author.mjs';
 import { membershipDiscordChannels } from '../workers/signup/membership-discord-channels.mjs';
 
@@ -114,13 +114,6 @@ test('news-engagement-set with an out-of-range threshold is a 400 from the core,
   assert.equal(record.length, 0);
 });
 
-test('content-engagement-set (superadmin) writes syndication-config.yml', async () => {
-  const record = [];
-  const r = await run({ action: 'content-engagement-set', enabled: true, threshold: 5 }, { fetchImpl: ghFetch(record) });
-  assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.match(putContent(record), /content_engagement/);
-});
-
 test('syndication-settings-set (superadmin) toggles a channel and writes the file', async () => {
   const record = [];
   const r = await run({ action: 'syndication-settings-set', enabled: true, channels: { discord: true } }, { fetchImpl: ghFetch(record) });
@@ -199,9 +192,6 @@ test('the syndication pool reads return their documented shapes', async () => {
   const news = await membershipAdminNewsEngagement(poolReq, readEnv, readDeps({ authorize: staffSuper }));
   assert.equal(news.status, 200);
   assert.ok(news.body.settings && Array.isArray(news.body.tiers));
-  const ceng = await membershipAdminContentEngagement(poolReq, readEnv, readDeps({ authorize: staffSuper }));
-  assert.equal(ceng.status, 200);
-  assert.ok(Array.isArray(ceng.body.signals));
   const synd = await membershipAdminSyndicationSettings(poolReq, readEnv, readDeps({ authorize: staffSuper }));
   assert.equal(synd.status, 200);
   assert.ok(synd.body.settings && Array.isArray(synd.body.channelNames) && synd.body.settings.autoMatrix);

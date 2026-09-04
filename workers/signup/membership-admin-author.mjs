@@ -40,8 +40,8 @@ import { rankForPath, maxRankForPaths } from '../../membership/path-rank.mjs'; /
 // helpers. All three files (moderation-flags.yml, syndication-config.yml) are superadmin-pinned in CODEOWNERS +
 // SUPERADMIN_HOUSE_FILES, so every write row below is superadmin and the drift guard agrees with rankForPath.
 import { addFlagTerm, removeFlagTerm } from '../../membership/moderation-flags-edits.mjs'; // sow-161 B
-import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setContentEngagement as setContentEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES } from '../../membership/syndication-template-edits.mjs'; // sow-161 B
-import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, contentEngagement, CONTENT_ENGAGEMENT_SIGNALS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // sow-161 B: the channel-map pool reads
+import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES } from '../../membership/syndication-template-edits.mjs'; // sow-161 B
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // sow-161 B: the channel-map pool reads
 import yaml from 'js-yaml'; // already in the Worker bundle (content-ops)
 
 const GH = 'https://api.github.com';
@@ -159,7 +159,7 @@ function siteToggleInput(p) {
 }
 
 // sow-161 B (channel-map manager, superadmin). Every input below is a THIN shape check: the pure cores
-// (addFlagTerm / setTemplate / setNewsEngagement / setContentEngagement / setSyndicationSettings) validate every
+// (addFlagTerm / setTemplate / setNewsEngagement / setSyndicationSettings) validate every
 // value exhaustively and throw ModerationFlagEditError / TemplateEditError, which the config branch catches as a
 // clean 400. So these only reject a value the core would ACCEPT-BUT-MISREAD (a missing required key, a non-array
 // batch), and otherwise pass the payload through unchanged, preserving undefined-vs-explicit (the cores leave an
@@ -176,9 +176,6 @@ function newsEngagementInput(p) {
   // Every field is optional; the core distinguishes undefined (leave alone) from an explicit value and validates
   // types + ranges. An all-undefined edit is a legitimate no-op (the core returns changed:false).
   return { ok: true, args: { enabled: p?.enabled, openThreshold: p?.openThreshold, tier: p?.tier, commentAutopost: p?.commentAutopost } };
-}
-function contentEngagementInput(p) {
-  return { ok: true, args: { enabled: p?.enabled, threshold: p?.threshold, tier: p?.tier, signals: p?.signals } };
 }
 function syndicationSettingsInput(p) {
   return { ok: true, args: { enabled: p?.enabled, requireApproval: p?.requireApproval, holdMinutes: p?.holdMinutes, channels: p?.channels, autoMatrix: p?.autoMatrix, channelHoldMinutes: p?.channelHoldMinutes } };
@@ -213,7 +210,7 @@ const CONFIG_ACTIONS = new Set([
   'site-setting-set',
   // sow-161 B (channel-map manager, superadmin): moderation flag terms + the syndication config surfaces.
   'flag-term-add', 'flag-term-remove',
-  'syndication-templates-set', 'news-engagement-set', 'content-engagement-set', 'syndication-settings-set',
+  'syndication-templates-set', 'news-engagement-set', 'syndication-settings-set',
 ]);
 const CONFIG_OP = {
   'quote-add': { path: 'house/quotes.yml', rank: ROLE_RANK.admin, fn: addQuote, input: quoteInput, slug: (a) => idSlug(a.text) },
@@ -243,7 +240,6 @@ const CONFIG_OP = {
   'flag-term-remove': { path: 'house/moderation-flags.yml', rank: ROLE_RANK.superadmin, fn: removeFlagTerm, input: flagTermInput, slug: (a) => idSlug(`${a.list}-${a.term}`) },
   'syndication-templates-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setTemplatesBatch, input: templatesBatchInput, slug: () => 'syndication-templates' },
   'news-engagement-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setNewsEngagementEdit, input: newsEngagementInput, slug: () => 'news-engagement' },
-  'content-engagement-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setContentEngagementEdit, input: contentEngagementInput, slug: () => 'content-engagement' },
   'syndication-settings-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setSyndicationSettingsEdit, input: syndicationSettingsInput, slug: () => 'syndication-settings' },
 };
 // sow-161 A: MULTI-FILE ops. Unlike a single-file CONFIG_OP (one {path, rank} pair), these can touch several
@@ -775,7 +771,7 @@ export async function membershipAdminCouponPool(request, env, deps = {}) {
 // mounts superadmin-only, every write on this surface is superadmin, and moderation-flags is a moderation
 // blocklist + the syndication config is operational, so read audience must not exceed write audience. Each
 // mirrors the exact body shape client/src/admin-ops.mjs returns to the extension host (getContentChannelPool /
-// getModerationFlagPool / getSyndicationTemplatePool / getNewsEngagementSettings / getContentEngagementSettings /
+// getModerationFlagPool / getSyndicationTemplatePool / getNewsEngagementSettings /
 // getSyndicationSettings), so the shared <gbti-channel-map-manager> renders identically on either host. Read-only
 // + fail-closed; a GET carries no CSRF. Helper collapses the shared authorize + install-token + load boilerplate.
 async function loadForSuperadminRead(request, env, deps, path) {
@@ -816,12 +812,6 @@ export async function membershipAdminNewsEngagement(request, env, deps = {}) {
   const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
   if (r.fail) return r.fail;
   return { status: 200, body: { settings: { ...newsEngagement(syndicationConfigFromParsed(r.parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] } };
-}
-
-export async function membershipAdminContentEngagement(request, env, deps = {}) {
-  const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
-  if (r.fail) return r.fail;
-  return { status: 200, body: { settings: { ...contentEngagement(syndicationConfigFromParsed(r.parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS], signals: [...CONTENT_ENGAGEMENT_SIGNALS] } };
 }
 
 export async function membershipAdminSyndicationSettings(request, env, deps = {}) {

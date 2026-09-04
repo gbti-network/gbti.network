@@ -9,14 +9,14 @@
 import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft, readDraft, publishShare, listShares, listShareComments, readContent,
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
-  publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
+  publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
   socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
   listCreatorApplicationsOp, decideCreatorApplicationOp } from '../../client/src/operations.mjs'; // sow-293
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
-import { setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates, getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings, getCouponPool, getSiteSettings, setSiteToggle } from '../../client/src/admin-ops.mjs'; // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
+import { setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates, getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings, getCouponPool, getSiteSettings, setSiteToggle } from '../../client/src/admin-ops.mjs'; // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
@@ -24,7 +24,7 @@ import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../..
 // gate + CODEOWNERS stay the real boundary (an extension can no more merge a forbidden PR than the npm host can).
 // sow-213 Phase 2b: these five are served by the Worker (see the '/api/admin' case), not by ADMIN_ACTIONS.
 const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
-const ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-batch': applyCategoryBatch, 'tag-edit': applyTagEdit, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'syndication-templates-set': setSyndicationTemplates, 'news-engagement-set': setNewsEngagementSettings, 'content-engagement-set': setContentEngagementSettings, 'syndication-settings-set': setSyndicationSettings, 'site-setting-set': setSiteToggle };
+const ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-batch': applyCategoryBatch, 'tag-edit': applyTagEdit, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'syndication-templates-set': setSyndicationTemplates, 'news-engagement-set': setNewsEngagementSettings, 'syndication-settings-set': setSyndicationSettings, 'site-setting-set': setSiteToggle };
 
 const CODE_STATUS = Object.freeze({
   'no-identity': 409,
@@ -111,7 +111,6 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     if (pathname === '/api/coupon-pool') return ok(await getCouponPool(ctx)); // SOW-119 QA: was npm-host-only, so the extension Coupons card showed "No coupons yet"
     if (pathname === '/api/site-settings') return ok(await getSiteSettings(ctx)); // sow-271: site-wide presentation toggles (public git data; the WRITE stays gated below via /api/admin)
     if (pathname === '/api/news-engagement') return ok(await getNewsEngagementSettings(ctx));
-    if (pathname === '/api/content-engagement') return ok(await getContentEngagementSettings(ctx)); // SOW-126
     if (pathname === '/api/syndication-settings') return ok(await getSyndicationSettings(ctx)); // SOW-088
 
     const username = id?.username;
@@ -180,8 +179,6 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await reflectNewsDiscussion(ctx, body ?? {}));
       case '/api/news-opened': // SOW-111: the news detail-open engagement beacon (was imported but unrouted here)
         return ok(await recordNewsOpen(ctx, body ?? {}));
-      case '/api/content-opened': // SOW-126: the member-content detail-open engagement beacon (the `popular` engine tally)
-        return ok(await recordContentOpen(ctx, body ?? {}));
       case '/api/billing': // SOW-040: the Stripe customer-portal deep-link (no card/PCI in the client)
         return ok(getBilling(ctx));
       case '/api/referral': // SOW-040/007: the member's referral link (keyed on the immutable github_id)

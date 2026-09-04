@@ -8595,7 +8595,7 @@ ${String(body ?? "")}`;
   var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
   var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
   var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-  var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
+  var AUTO_MODES = Object.freeze(["off", "on", "on-manual"]);
   function defaultAutoMode(type) {
     return type === "share" ? "off" : "on";
   }
@@ -8610,16 +8610,6 @@ ${String(body ?? "")}`;
     // whose engagement counts (owner-toggleable in the admin Channels tab)
     comment_autopost: true
     // one comment posts immediately (deliberate engagement)
-  });
-  var CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(["opens", "favorites", "comments"]);
-  var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
-    enabled: false,
-    threshold: 3,
-    // distinct engaged members before a `popular` item promotes (tunable; the network is small)
-    tier: "signed-in",
-    // whose engagement counts (any non-banned signed-in member by default)
-    signals: Object.freeze({ opens: true, favorites: false, comments: false })
-    // opens = the owner's chosen counter
   });
   var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
@@ -8713,15 +8703,13 @@ ${String(body ?? "")}`;
     // SOW-088 Proposal A: per-channel stub overrides
     news_engagement: DEFAULT_NEWS_ENGAGEMENT,
     // SOW-111: engagement-triggered news auto-share
-    content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
-    // SOW-126: engagement-triggered content auto-share (the `popular` engine)
     channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
     // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
     // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
     // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
     // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
     manual_assist_channels: Object.freeze([]),
-    // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+    // SOW-125: per-type-per-channel auto-share modes (off | on | on-manual). Layers on `channels` (a channel must
     // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
     auto_matrix: buildDefaultAutoMatrix(),
     // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
@@ -8937,7 +8925,7 @@ ${String(body ?? "")}`;
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
   var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
-  var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
+  var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
@@ -8971,7 +8959,6 @@ ${String(body ?? "")}`;
     { id: "pipeline", nm: "Pipeline", ic: "c-pipe", build: "pipeline" },
     { id: "templates", nm: "Templates", ic: "c-tmpl", build: "templates" },
     { id: "news", nm: "News auto-share", ic: "c-share", build: "news" },
-    { id: "content", nm: "Content auto-share", ic: "c-share", build: "content" },
     { id: "words", nm: "Word lists", ic: "c-shield", build: "words" }
   ];
   var SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
@@ -9020,13 +9007,12 @@ ${String(body ?? "")}`;
         return;
       }
       try {
-        const [channels, flags, templates, engagement, pipeline, contentEng] = await Promise.all([
+        const [channels, flags, templates, engagement, pipeline] = await Promise.all([
           this.client.contentChannelPool(),
           this.client.moderationFlagPool(),
           this.client.syndicationTemplatePool(),
           this.client.newsEngagementSettings ? this.client.newsEngagementSettings() : null,
-          this.client.syndicationSettings ? this.client.syndicationSettings().catch(() => null) : null,
-          this.client.contentEngagementSettings ? this.client.contentEngagementSettings().catch(() => null) : null
+          this.client.syndicationSettings ? this.client.syndicationSettings().catch(() => null) : null
         ]);
         this._mapCount = (channels?.channels || []).length;
         this._lists = flags?.lists || {};
@@ -9036,9 +9022,6 @@ ${String(body ?? "")}`;
         this._channelTemplatesStub = templates?.channelTemplatesStub || {};
         this._engagement = engagement?.settings || null;
         this._tiers = engagement?.tiers || ["paid", "paid-trial", "signed-in"];
-        this._contentEng = contentEng?.settings || null;
-        this._contentTiers = contentEng?.tiers || ["paid", "paid-trial", "signed-in"];
-        this._contentSignals = contentEng?.signals || ["opens", "favorites", "comments"];
         this._pipeline = pipeline?.settings || null;
         this._work = {};
         this._base = {};
@@ -9058,7 +9041,6 @@ ${String(body ?? "")}`;
         this._tmplDirty = /* @__PURE__ */ new Set();
         this._pipeDirty = false;
         this._engDirty = false;
-        this._contentEngDirty = false;
         this._curCh = this._curCh && this._work[`pub:${this._curCh}`] ? this._curCh : "discord";
         this._termTab = this._termTab || Object.keys(this._lists)[0] || "political";
         this._activeTab = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : this._readSubTab();
@@ -9217,44 +9199,6 @@ ${String(body ?? "")}`;
         <button class="btn btn-primary" type="button" data-save-eng disabled><svg viewBox="0 0 24 24"><use href="#c-check"/></svg> Save changes</button></div>
     </section>`;
     }
-    // SOW-126: the content engagement auto-share card (the `popular` matrix engine). Mirrors _autoshareCard: an
-    // Enable select, a distinct-member threshold, the counting tier, and the row of engagement signals that count.
-    _contentEngagementCard() {
-      const e = this._contentEng;
-      if (!e) return "";
-      const tierLabel2 = { paid: "Paid members only", "paid-trial": "Trial + paid", "signed-in": "Any signed-in member" };
-      const tierOpts = (this._contentTiers || []).map((t) => `<option value="${esc(t)}"${e.tier === t ? " selected" : ""}>${esc(tierLabel2[t] || t)}</option>`).join("");
-      const signalLabel = { opens: "Opens", favorites: "Favorites", comments: "Comments" };
-      const signals = e.signals || {};
-      const sigChips = (this._contentSignals || ["opens", "favorites", "comments"]).map((s) => `<span class="chan${signals[s] ? " on" : ""}" data-ceng-signal="${esc(s)}" role="checkbox" aria-checked="${signals[s] ? "true" : "false"}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(signalLabel[s] || s)}</span>`).join("");
-      return `<section class="card" id="sec-content-autoshare" data-sec>
-      <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg></span>
-        <div><h2>Content engagement auto-share</h2><p>Promotes a member content item to auto-share on its Popular channels once enough members engage.</p></div>
-        <span class="sp"></span>${this._pill(false)}</div>
-      <div class="card-b">
-        <div class="fgrid">
-          <div class="field"><label>Auto-share</label>
-            <select class="ctrl" data-ceng-enabled>
-              <option value="true"${e.enabled ? " selected" : ""}>On</option>
-              <option value="false"${e.enabled ? "" : " selected"}>Off</option>
-            </select>
-            <span class="hint">Master switch for the Popular promotion engine. Applies after the next reconcile mirror sync.</span></div>
-          <div class="field"><label>Member threshold</label>
-            <div class="sfxwrap"><input class="ctrl" type="number" min="1" max="1000" value="${esc(String(e.threshold))}" data-ceng-threshold /><span class="sfx">members</span></div>
-            <span class="hint">Distinct members who must engage. Banned accounts never count.</span></div>
-          <div class="field"><label>Counts which members</label>
-            <select class="ctrl" data-ceng-tier>${tierOpts}</select>
-            <span class="hint">Membership tier that qualifies toward the threshold.</span></div>
-        </div>
-        <div class="field" style="margin-top:18px"><label>Signals that count</label>
-          <div class="chgroup">${sigChips}</div>
-          <span class="hint">When enough distinct members engage with a member content item, the reconcile promotes it to auto-share on its Popular channels. Opens counts a member opening the expanded reader view.</span></div>
-      </div>
-      <div class="cardfoot"><span class="fmsg" data-fmsg></span>
-        <button class="btn btn-ghost" type="button" data-discard="ceng">Discard</button>
-        <button class="btn btn-primary" type="button" data-save-ceng disabled><svg viewBox="0 0 24 24"><use href="#c-check"/></svg> Save changes</button></div>
-    </section>`;
-    }
     _wordlistsCard() {
       const names = Object.keys(this._lists || {});
       if (!names.length) return "";
@@ -9297,7 +9241,6 @@ ${String(body ?? "")}`;
         pipeline: () => this._pipelineCard(),
         templates: () => this._templatesCard(),
         news: () => this._autoshareCard(),
-        content: () => this._contentEngagementCard(),
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
@@ -9318,7 +9261,7 @@ ${String(body ?? "")}`;
         pill.className = `pill${on ? " dirty" : ""}`;
         pill.innerHTML = `<span class="dot"></span>${on ? "Unsaved changes" : "Saved"}`;
       }
-      const save = sec.querySelector("[data-save-pipe],[data-save-tmpl],[data-save-eng],[data-save-ceng]");
+      const save = sec.querySelector("[data-save-pipe],[data-save-tmpl],[data-save-eng]");
       if (save) save.disabled = !on;
       const m = sec.querySelector("[data-fmsg]");
       if (m && on) m.textContent = "";
@@ -9428,35 +9371,6 @@ ${String(body ?? "")}`;
           }
         );
       });
-      ["[data-ceng-enabled]", "[data-ceng-threshold]", "[data-ceng-tier]"].forEach((sel) => {
-        const el = this.$(sel);
-        if (el) {
-          el.addEventListener("change", () => {
-            this._contentEngDirty = true;
-            this._markDirty("sec-content-autoshare");
-          });
-          el.addEventListener("input", () => {
-            this._contentEngDirty = true;
-            this._markDirty("sec-content-autoshare");
-          });
-        }
-      });
-      this.$$("[data-ceng-signal]").forEach((ch) => {
-        const flip = () => {
-          ch.classList.toggle("on");
-          ch.setAttribute("aria-checked", ch.classList.contains("on") ? "true" : "false");
-          this._contentEngDirty = true;
-          this._markDirty("sec-content-autoshare");
-        };
-        ch.addEventListener("click", flip);
-        ch.addEventListener("keydown", (e) => {
-          if (e.key === " " || e.key === "Enter") {
-            e.preventDefault();
-            flip();
-          }
-        });
-      });
-      this.on("[data-save-ceng]", "click", () => this._saveContentEngagement());
       this.$$("[data-discard]").forEach((b) => b.addEventListener("click", () => {
         this._loaded = false;
         this._msg = "";
@@ -9537,33 +9451,6 @@ ${String(body ?? "")}`;
             this._pipeline.holdMinutes = holdMinutes;
             this._pipeline.autoMatrix = autoMatrix;
             this._pipeline.channelHoldMinutes = { ...channelHoldMinutes };
-          }
-        }
-      );
-    }
-    // SOW-126: read the content-engagement card back and save it (mirrors the news _save-eng handler).
-    _saveContentEngagement() {
-      const enabled = this.$("[data-ceng-enabled]")?.value === "true";
-      const threshold = Number(this.$("[data-ceng-threshold]")?.value || 0);
-      const tier = this.$("[data-ceng-tier]")?.value || "signed-in";
-      const signals = {};
-      this.$$("[data-ceng-signal]").forEach((ch) => {
-        signals[ch.dataset.cengSignal] = ch.classList.contains("on");
-      });
-      if (!Number.isInteger(threshold) || threshold < 1) {
-        this._msg = "The member threshold must be a whole number of 1 or more.";
-        this.render();
-        return;
-      }
-      this._saveOptimistic(
-        () => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }),
-        () => {
-          this._contentEngDirty = false;
-          if (this._contentEng) {
-            this._contentEng.enabled = enabled;
-            this._contentEng.threshold = threshold;
-            this._contentEng.tier = tier;
-            this._contentEng.signals = { ...signals };
           }
         }
       );
@@ -19532,12 +19419,6 @@ From the author:
       this._fm = null;
       this.render();
       this._resolve();
-      try {
-        const slug = targetSlugFor(item || {});
-        if (slug && TYPE_LABEL6[item?.type] && this.client?.contentOpened) Promise.resolve(this.client.contentOpened(item.type, slug)).catch(() => {
-        });
-      } catch {
-      }
     }
     async _resolve() {
       const it = this._item || {};
@@ -20407,8 +20288,6 @@ From the author:
       // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
       newsOpened: (guid, source) => request("POST", "/api/news-opened", { guid, ...source ? { source } : {} }),
       // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
-      contentOpened: (type, slug) => request("POST", "/api/content-opened", { type, slug }),
-      // SOW-126: the content detail-open engagement beacon -> { ok, counted, openers }
       setContentStatus: ({ path, status: status2 }) => request("POST", "/api/content/status", { path, status: status2 }),
       // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
       renameContent: ({ path, newSlug }) => request("POST", "/api/content/rename", { path, newSlug }),
@@ -20533,10 +20412,6 @@ From the author:
       // SOW-111: { settings, tiers }
       setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),
       // SOW-111
-      contentEngagementSettings: () => request("GET", "/api/content-engagement"),
-      // SOW-126: { settings, tiers, signals }
-      setContentEngagementSettings: ({ enabled, threshold, tier, signals }) => request("POST", "/api/admin", { action: "content-engagement-set", enabled, threshold, tier, signals }),
-      // SOW-126
       syndicationSettings: () => request("GET", "/api/syndication-settings"),
       // SOW-088: { settings, channelNames }
       setSyndicationSettings: (p) => request("POST", "/api/admin", { action: "syndication-settings-set", ...p }),

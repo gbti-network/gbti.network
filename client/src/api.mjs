@@ -44,7 +44,7 @@ import {
   getPrefs,
   setPrefs,
   publishNews,
-  reflectNewsDiscussion, recordNewsOpen, recordContentOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels,
+  reflectNewsDiscussion, recordNewsOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -71,7 +71,7 @@ import {
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
-  getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings,
+  getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings,
   getCouponPool, getSiteSettings, // sow-291 Phase 2: addCoupon/updateCoupon retired (coupon writes -> the Worker via WORKER_CONFIG_ACTIONS)
 } from './admin-ops.mjs';
 
@@ -101,7 +101,6 @@ const ADMIN_ACTIONS = {
   'syndication-template-set': setSyndicationTemplate, // SOW-087: the per-type Discord template
   'syndication-templates-set': setSyndicationTemplates, // SOW-088: the admin card batch (one PR per Save)
   'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
-  'content-engagement-set': setContentEngagementSettings, // SOW-126: the content auto-share (`popular` engine) settings
   'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
   // sow-291 Phase 2: coupon-add / coupon-update are in WORKER_CONFIG_ACTIONS above (served by the Worker).
 };
@@ -172,7 +171,6 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/news-publish') return run(() => publishNews(ctx, body ?? {})); // SOW-046 C: curator -> Discord
   if (method === 'POST' && pathname === '/api/news-discussed') return run(() => reflectNewsDiscussion(ctx, body ?? {})); // SOW-046 D: reflect discussion onto Discord
   if (method === 'POST' && pathname === '/api/news-opened') return run(() => recordNewsOpen(ctx, body ?? {})); // SOW-111: the detail-open beacon
-  if (method === 'POST' && pathname === '/api/content-opened') return run(() => recordContentOpen(ctx, body ?? {})); // SOW-126: the content detail-open beacon
   if (method === 'POST' && pathname === '/api/content/status') return run(() => setOwnContentStatus(ctx, body ?? {})); // SOW-106: member self-unpublish/republish
   if (method === 'POST' && pathname === '/api/content/rename') return run(() => renameContent(ctx, body ?? {})); // SOW-112: the true permalink rename
   if (method === 'POST' && pathname === '/api/comment/delete') return run(() => deleteComment(ctx, body ?? {})); // SOW-112 QA: a member deletes their own comment
@@ -206,7 +204,6 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/moderation-flag-pool') return run(() => getModerationFlagPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/syndication-template-pool') return run(() => getSyndicationTemplatePool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/news-engagement') return run(() => getNewsEngagementSettings(ctx)); // SOW-111
-  if (method === 'GET' && pathname === '/api/content-engagement') return run(() => getContentEngagementSettings(ctx)); // SOW-126
   if (method === 'GET' && pathname === '/api/syndication-settings') return run(() => getSyndicationSettings(ctx)); // SOW-088
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
   if (method === 'GET' && pathname === '/api/syndication') return run(() => getSyndicationQueue(ctx)); // SOW-058: superadmin syndication tracker

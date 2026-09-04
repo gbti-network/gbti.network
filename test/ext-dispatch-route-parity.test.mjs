@@ -137,7 +137,7 @@ const PRE_AUTH = new Set([
   // SOW-079/087: the admin MANAGER reads are public git-native data (house/*.yml), so they load tokenless.
   '/api/taxonomy', '/api/news-source-pool', '/api/quote-pool',
   '/api/content-channel-pool', '/api/moderation-flag-pool', '/api/syndication-template-pool',
-  '/api/coupon-pool', '/api/news-engagement', '/api/content-engagement', '/api/syndication-settings',
+  '/api/coupon-pool', '/api/news-engagement', '/api/syndication-settings',
   '/api/site-settings', // sow-271: the site-wide presentation toggles (public git-native read)
 ]);
 

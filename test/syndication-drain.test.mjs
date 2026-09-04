@@ -316,59 +316,25 @@ test('SOW-125: a manual-assist task write failure does not falsely mark the item
   assert.equal(item.status, 'failed');
 });
 
-// SOW-126: the `popular` drain seam. A trigger:'popular' item (the engagement engine promoted it) delivers to
-// its `popular` channels; a plain publish never reaches a `popular` channel.
-test('SOW-126: a trigger:popular item posts to its popular channel; a plain item does not', async () => {
-  const cfgJson = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true, bluesky: true }, auto_matrix: { share: { discord: 'off', bluesky: 'popular' } } } });
-  // A PLAIN share (trigger publish): bluesky is `popular` (not on) -> never posts; discord off -> never posts.
-  const kv1 = fakeKV({ [SYND_CONFIG_KEY]: cfgJson });
-  const r1 = await enqueue({ SIGNUP_KV: kv1 }, { source: 'share', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public', trigger: 'publish' }, { kv: kv1, now: at(0) });
-  const d1 = [], b1 = [];
-  await drainSyndication(bskyEnv(), { kv: kv1, now: at(AFTER_HOLD), adapters: twoChannelAdapters(d1, b1) });
-  assert.equal(b1.length, 0, 'a plain publish never reaches a popular channel');
-  assert.equal((await getItem(kv1, r1.id)).perChannel.bluesky.reason, 'auto-off');
-  // A PROMOTED share (trigger:'popular'): bluesky (popular) DELIVERS; discord (off) still does not.
-  const kv2 = fakeKV({ [SYND_CONFIG_KEY]: cfgJson });
-  const r2 = await enqueue({ SIGNUP_KV: kv2 }, { source: 'share', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public', trigger: 'popular' }, { kv: kv2, now: at(0) });
-  const d2 = [], b2 = [];
-  const out = await drainSyndication(bskyEnv(), { kv: kv2, now: at(AFTER_HOLD), adapters: twoChannelAdapters(d2, b2) });
-  assert.equal(out.drained, 1);
-  assert.equal(b2.length, 1, 'the promoted item posts to its popular channel');
-  assert.equal(d2.length, 0, 'a channel that is off is still never posted');
-  const item2 = await getItem(kv2, r2.id);
-  assert.equal(item2.perChannel.bluesky.status, 'sent');
-  assert.equal(item2.perChannel.discord.reason, 'auto-off');
-  assert.equal(item2.status, 'sent');
-});
+// sow-313 retired the SOW-126 `popular` drain seam along with the engine that produced those items. Two tests
+// covered the split (a popular item delivered only to `popular` cells, keyed separately from the publish item).
+// What replaces them is the guard that matters now: a stray `trigger:'popular'` must behave as an ORDINARY
+// item rather than falling into a dead branch or a private namespace, because nothing produces one any more and
+// nobody would notice if it silently vanished.
+test('sow-313: a stray trigger:popular item is treated as an ordinary item, not a special case', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    channels: { discord: true, bluesky: true }, auto_matrix: { post: { discord: 'on', bluesky: 'off' } } } }) });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'popular' }, { kv, now: at(0) });
+  const d = [], b = [];
+  await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(d, b) });
+  assert.equal(d.length, 1, 'it delivers by the ordinary matrix now, rather than looking for a `popular` cell that can no longer exist');
+  assert.equal(b.length, 0, 'an off cell is still off');
+  assert.equal((await getItem(kv, r.id)).status, 'sent');
 
-// SOW-126 review MUST-FIX: for a type with BOTH an `on` and a `popular` channel, the publish item and the
-// popular promotion are DISTINCT queue items (trigger-scoped dedupe), and each delivers EXCLUSIVELY to its own
-// channels: publish -> the `on` channel only; popular -> the `popular` channel only (never resurrecting `on`).
-test('SOW-126: on+popular type -> publish hits only on, popular promotion hits only popular (not swallowed, not leaked)', async () => {
-  const cfgJson = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true, bluesky: true }, auto_matrix: { post: { discord: 'on', bluesky: 'popular' } } } });
-  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfgJson });
-  // 1) Publish the post (trigger 'publish'): delivers to discord (on), never bluesky (popular).
-  const rp = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'publish' }, { kv, now: at(0) });
-  const dP = [], bP = [];
-  await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(dP, bP) });
-  assert.equal(dP.length, 1, 'publish posts to the on channel');
-  assert.equal(bP.length, 0, 'publish never posts to the popular channel');
-  assert.equal((await getItem(kv, rp.id)).status, 'sent');
-  // 2) The SAME post becomes popular -> the promoter enqueues trigger:'popular'. It must NOT be swallowed by the
-  //    still-active publish item's dedupe (distinct key), and must deliver ONLY to bluesky (popular), not discord.
-  const rr = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'popular' }, { kv, now: at(AFTER_HOLD) });
-  assert.equal(rr.enqueued, true, 'the popular promotion is a distinct item, not a duplicate of the publish item');
-  assert.notEqual(rr.id, rp.id);
-  const dR = [], bR = [];
-  await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD * 2), adapters: twoChannelAdapters(dR, bR) });
-  assert.equal(bR.length, 1, 'the popular promotion posts to the popular channel');
-  assert.equal(dR.length, 0, 'the popular promotion never re-posts to the on channel');
-  const promoted = await getItem(kv, rr.id);
-  assert.equal(promoted.perChannel.bluesky.status, 'sent');
-  assert.equal(promoted.perChannel.discord.reason, 'auto-off');
-  assert.equal(promoted.status, 'sent');
+  // And it shares the base dedupe key rather than a `popular:` namespace of its own, so a re-enqueue of the
+  // same content collapses onto it the way any other retry does.
+  const again = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'publish' }, { kv, now: at(AFTER_HOLD) });
+  assert.equal(again.enqueued, false, 'the trigger no longer splits the dedupe namespace');
 });
 
 test('On-Manual: an AUTO-capability channel set on-manual queues a task, never posts, and settles', async () => {

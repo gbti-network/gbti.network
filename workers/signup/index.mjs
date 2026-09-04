@@ -85,7 +85,6 @@ import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (
 import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
 import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SOW-046 D: reflect news discussion onto Discord
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
-import { membershipContentOpened } from './membership-content-opened.mjs'; // SOW-126: the content-open engagement beacon
 import { membershipDeployStatus } from './membership-deploy-status.mjs'; // sow-185: public "still deploying" status check
 import { handleDiscordInvite } from './discord-invite.mjs';
 import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from './github-app.mjs';
@@ -93,7 +92,7 @@ import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner
 import { listSharesFeed } from './membership-shares.mjs'; // sow-158 Part 3: tier-gated community Shares feed
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
-import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy, membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool, membershipAdminNewsEngagement, membershipAdminContentEngagement, membershipAdminSyndicationSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool; sow-161 B: the channel-map manager pool reads (superadmin)
+import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy, membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool, membershipAdminNewsEngagement, membershipAdminSyndicationSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool; sow-161 B: the channel-map manager pool reads (superadmin)
 import { handleUnsubscribe } from './membership-unsubscribe.mjs'; // SOW-166: one-click digest unsubscribe (RFC 8058)
 import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: the digest click counter
 import { handleMailOpen } from './mail-open-route.mjs'; // the digest open counter (1x1 pixel)
@@ -1388,19 +1387,6 @@ export default {
         }
       }
 
-      // SOW-126: the member-content detail-open engagement beacon (tallies distinct openers per item; the
-      // reconcile promotes a `popular` item past the threshold). Mirrors the news beacon, minus the auto-post.
-      if (pathname === '/membership/content-opened') {
-        // sow-158: cookie-enabled so the website /browse reader fires the open beacon over the session cookie
-        // (credentialed reflected-origin CORS + allowCookie). The extension keeps its bearer path (also allowed).
-        const cors = corsHeaders(request, env, { credentials: true, methods: 'POST, OPTIONS' });
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-        if (method === 'POST') {
-          const r = await membershipContentOpened(request, env, { allowCookie: true });
-          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-
       // SOW-026: open the publish PR for a paid member. The member's fork-scoped App token cannot open a PR into
       // the canonical repo, so the Worker opens it with GBTI's own canonical-repo App installation token. The
       // App private key never leaves the Worker; the member token only authorizes + identifies them (head must
@@ -1504,7 +1490,6 @@ export default {
           '/membership/admin/moderation-flag-pool': membershipAdminModerationFlagPool,
           '/membership/admin/syndication-template-pool': membershipAdminSyndicationTemplatePool,
           '/membership/admin/news-engagement': membershipAdminNewsEngagement,
-          '/membership/admin/content-engagement': membershipAdminContentEngagement,
           '/membership/admin/syndication-settings': membershipAdminSyndicationSettings,
         };
         const poolFn = CHANNEL_MAP_POOLS[pathname];

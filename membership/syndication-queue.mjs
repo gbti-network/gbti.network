@@ -53,14 +53,14 @@ const normFlags = (v) => {
   return out;
 };
 
-/** The idempotency key for an item: one logical thing being syndicated maps to exactly one key. SOW-126: a
- *  `popular`-promoted item keys SEPARATELY from the same content's publish-time item (`popular:` prefix), so an
- *  engagement promotion is never collapsed onto a still-active publish item and lost (the two are distinct
- *  syndications: publish -> the `on` channels, popular -> the `popular` channels). Every other trigger shares
- *  the base key so a republish/retried enqueue still dedupes. */
-export function dedupeKey({ source, targetSlug, trigger } = {}) {
-  const base = `${str(source)}:${str(targetSlug)}`;
-  return str(trigger) === 'popular' ? `popular:${base}` : base;
+/** The idempotency key for an item: one logical thing being syndicated maps to exactly one key. Every trigger
+ *  shares the base key, so a republish or a retried enqueue still dedupes.
+ *
+ *  sow-313 removed the SOW-126 carve-out that gave a `popular`-promoted item its own `popular:` namespace. That
+ *  existed so an engagement promotion was not collapsed onto a still-active publish item, and it went with the
+ *  engine that produced those items. */
+export function dedupeKey({ source, targetSlug } = {}) {
+  return `${str(source)}:${str(targetSlug)}`;
 }
 
 /**

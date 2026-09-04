@@ -19276,16 +19276,6 @@ async function workerNewsOpened({ token, signupBase, fetch: fetch2 = globalThis.
   if (!res.ok) throw new NewsClientError("could not record the open (" + res.status + ")");
   return res.json();
 }
-async function workerContentOpened({ token, signupBase, fetch: fetch2 = globalThis.fetch, type, slug } = {}) {
-  if (!token || !signupBase) throw new NewsClientError("not signed in");
-  const t = String(type || "").trim();
-  const s = String(slug || "").trim();
-  if (!t || !s) throw new NewsClientError("a content type + slug is required");
-  const res = await fetch2(`${base2(signupBase)}/membership/content-opened`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ type: t, slug: s }) });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError("not signed in");
-  if (!res.ok) throw new NewsClientError("could not record the open (" + res.status + ")");
-  return res.json();
-}
 
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
@@ -19875,16 +19865,6 @@ async function recordNewsOpen(ctx, { guid: guid3, source } = {}) {
   const token = ctx.store?.get?.("githubToken");
   try {
     return await workerNewsOpened({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid: guid3, source });
-  } catch (err) {
-    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in first.");
-    throw new OperationError("news-failed", err?.message || "could not record the open");
-  }
-}
-async function recordContentOpen(ctx, { type, slug } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  try {
-    return await workerContentOpened({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, type, slug });
   } catch (err) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in first.");
     throw new OperationError("news-failed", err?.message || "could not record the open");
@@ -21004,7 +20984,7 @@ function channelCapability(name) {
 var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
 var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
 var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
+var AUTO_MODES = Object.freeze(["off", "on", "on-manual"]);
 function defaultAutoMode(type) {
   return type === "share" ? "off" : "on";
 }
@@ -21019,16 +20999,6 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   // whose engagement counts (owner-toggleable in the admin Channels tab)
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
-});
-var CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(["opens", "favorites", "comments"]);
-var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
-  enabled: false,
-  threshold: 3,
-  // distinct engaged members before a `popular` item promotes (tunable; the network is small)
-  tier: "signed-in",
-  // whose engagement counts (any non-banned signed-in member by default)
-  signals: Object.freeze({ opens: true, favorites: false, comments: false })
-  // opens = the owner's chosen counter
 });
 var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
@@ -21122,15 +21092,13 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
-  content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
-  // SOW-126: engagement-triggered content auto-share (the `popular` engine)
   channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
   // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
   manual_assist_channels: Object.freeze([]),
-  // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+  // SOW-125: per-type-per-channel auto-share modes (off | on | on-manual). Layers on `channels` (a channel must
   // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
   auto_matrix: buildDefaultAutoMatrix(),
   // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
@@ -21180,20 +21148,6 @@ function normalizeNewsEngagement(raw) {
     open_threshold: asThreshold(src.open_threshold, d.open_threshold),
     tier,
     comment_autopost: asBool(src.comment_autopost, d.comment_autopost)
-  });
-}
-function normalizeContentEngagement(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const d = DEFAULT_CONTENT_ENGAGEMENT;
-  const tier = typeof src.tier === "string" && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase()) ? src.tier.trim().toLowerCase() : d.tier;
-  const rawSignals = src.signals && typeof src.signals === "object" && !Array.isArray(src.signals) ? src.signals : {};
-  const signals = {};
-  for (const s of CONTENT_ENGAGEMENT_SIGNALS) signals[s] = asBool(rawSignals[s], d.signals[s]);
-  return Object.freeze({
-    enabled: asBool(src.enabled, d.enabled),
-    threshold: asThreshold(src.threshold, d.threshold),
-    tier,
-    signals: Object.freeze(signals)
   });
 }
 function normalizeTemplates(raw) {
@@ -21288,8 +21242,6 @@ function syndicationConfigFromParsed(parsed) {
     stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
-    content_engagement: normalizeContentEngagement(raw.content_engagement),
-    // SOW-126
     channels: normalizeChannels(raw.channels),
     manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels),
     // SOW-121
@@ -21301,9 +21253,6 @@ function syndicationConfigFromParsed(parsed) {
 }
 function newsEngagement(cfg) {
   return normalizeNewsEngagement(cfg?.news_engagement);
-}
-function contentEngagement(cfg) {
-  return normalizeContentEngagement(cfg?.content_engagement);
 }
 
 // membership/syndication-template-edits.mjs
@@ -21367,54 +21316,6 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
     open_threshold: next.open_threshold,
     tier: next.tier,
     comment_autopost: next.comment_autopost
-  };
-  return { next: d, changed: true, audit: audit2({ ...next }) };
-}
-function setContentEngagement(doc, { enabled, threshold, tier, signals } = {}, ctx = {}) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
-  const cur = contentEngagement({ content_engagement: d.syndication.content_engagement });
-  const next = { ...cur, signals: { ...cur.signals } };
-  if (enabled !== void 0) {
-    if (typeof enabled !== "boolean") throw new TemplateEditError("enabled must be true or false");
-    next.enabled = enabled;
-  }
-  if (threshold !== void 0) {
-    const n = Number(threshold);
-    if (!Number.isInteger(n) || n < 1 || n > 1e3) throw new TemplateEditError("threshold must be an integer from 1 to 1000");
-    next.threshold = n;
-  }
-  if (tier !== void 0) {
-    const t = String(tier || "").trim().toLowerCase();
-    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(", ")}`);
-    next.tier = t;
-  }
-  if (signals !== void 0) {
-    if (!signals || typeof signals !== "object" || Array.isArray(signals)) throw new TemplateEditError("signals must be an object of { signal: boolean }");
-    for (const [name, on] of Object.entries(signals)) {
-      if (!CONTENT_ENGAGEMENT_SIGNALS.includes(name)) throw new TemplateEditError(`unknown signal "${name}"`);
-      if (typeof on !== "boolean") throw new TemplateEditError(`signal "${name}" must be true or false`);
-      next.signals[name] = on;
-    }
-  }
-  const audit2 = (detail) => {
-    const a = ctx?.actor || null;
-    return {
-      at: isoOf7(ctx?.now),
-      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-      action: "content-engagement.set",
-      target: { file: "house/syndication-config.yml" },
-      detail
-    };
-  };
-  const sameSignals = CONTENT_ENGAGEMENT_SIGNALS.every((s) => next.signals[s] === cur.signals[s]);
-  const same = next.enabled === cur.enabled && next.threshold === cur.threshold && next.tier === cur.tier && sameSignals;
-  if (same) return { next: d, changed: false, audit: audit2({ ...next, noop: true }) };
-  d.syndication.content_engagement = {
-    enabled: next.enabled,
-    threshold: next.threshold,
-    tier: next.tier,
-    signals: { ...next.signals }
   };
   return { next: d, changed: true, audit: audit2({ ...next }) };
 }
@@ -22176,23 +22077,10 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
     errType: TemplateEditError
   });
 }
-async function getContentEngagementSettings(ctx) {
-  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
-  return { settings: { ...contentEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS], signals: [...CONTENT_ENGAGEMENT_SIGNALS] };
-}
-async function setContentEngagementSettings(ctx, { enabled, threshold, tier, signals } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setContentEngagement(parsed, { enabled, threshold, tier, signals }, actionCtx(ctx)), {
-    branch: "gbti/content-engagement-set",
-    message: "Set content engagement auto-share settings",
-    title: "Set content engagement auto-share settings",
-    noopMsg: "content engagement settings unchanged",
-    errType: TemplateEditError
-  });
-}
 
 // extension/src/ext-dispatch.mjs
 var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
-var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
+var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -22262,7 +22150,6 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/coupon-pool") return ok(await getCouponPool2(ctx));
     if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
-    if (pathname === "/api/content-engagement") return ok(await getContentEngagementSettings(ctx));
     if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");
@@ -22334,8 +22221,6 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await reflectNewsDiscussion(ctx, body ?? {}));
       case "/api/news-opened":
         return ok(await recordNewsOpen(ctx, body ?? {}));
-      case "/api/content-opened":
-        return ok(await recordContentOpen(ctx, body ?? {}));
       case "/api/billing":
         return ok(getBilling(ctx));
       case "/api/referral":

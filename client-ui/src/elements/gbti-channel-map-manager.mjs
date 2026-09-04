@@ -220,7 +220,7 @@ const TILE_CHANNELS = [
 // and the per-channel delay inputs.
 const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
 const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn' };
-const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual', popular: 'Popular' };
+const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual' }; // sow-313 dropped `popular` with its engine
 const TMPL_TYPES = [
   { key: 'share', nm: 'Share', df: 'reshare line' },
   { key: 'post', nm: 'Post', df: 'article' },
@@ -242,7 +242,6 @@ const SYND_TABS = [
   { id: 'pipeline', nm: 'Pipeline', ic: 'c-pipe', build: 'pipeline' },
   { id: 'templates', nm: 'Templates', ic: 'c-tmpl', build: 'templates' },
   { id: 'news', nm: 'News auto-share', ic: 'c-share', build: 'news' },
-  { id: 'content', nm: 'Content auto-share', ic: 'c-share', build: 'content' },
   { id: 'words', nm: 'Word lists', ic: 'c-shield', build: 'words' },
 ];
 const SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
@@ -288,13 +287,12 @@ class GbtiChannelMapManager extends GbtiElement {
   async load() {
     if (!this.client) { this.render(); return; }
     try {
-      const [channels, flags, templates, engagement, pipeline, contentEng] = await Promise.all([
+      const [channels, flags, templates, engagement, pipeline] = await Promise.all([
         this.client.contentChannelPool(),
         this.client.moderationFlagPool(),
         this.client.syndicationTemplatePool(),
         this.client.newsEngagementSettings ? this.client.newsEngagementSettings() : null,
         this.client.syndicationSettings ? this.client.syndicationSettings().catch(() => null) : null,
-        this.client.contentEngagementSettings ? this.client.contentEngagementSettings().catch(() => null) : null,
       ]);
       this._mapCount = (channels?.channels || []).length;
       this._lists = flags?.lists || {};
@@ -304,9 +302,6 @@ class GbtiChannelMapManager extends GbtiElement {
       this._channelTemplatesStub = templates?.channelTemplatesStub || {};
       this._engagement = engagement?.settings || null;
       this._tiers = engagement?.tiers || ['paid', 'paid-trial', 'signed-in'];
-      this._contentEng = contentEng?.settings || null; // SOW-126: the `popular`-engine tunables
-      this._contentTiers = contentEng?.tiers || ['paid', 'paid-trial', 'signed-in'];
-      this._contentSignals = contentEng?.signals || ['opens', 'favorites', 'comments'];
       this._pipeline = pipeline?.settings || null;
       // Working copies (dirty state survives re-renders; a save/reload resets them).
       // Fields show the EFFECTIVE template (channel override -> shared map, which already folds in the
@@ -332,7 +327,6 @@ class GbtiChannelMapManager extends GbtiElement {
       this._tmplDirty = new Set();
       this._pipeDirty = false;
       this._engDirty = false;
-      this._contentEngDirty = false;
       // SOW-132: preserve the editing state across a (re)load. NOTE: _work is keyed `pub:<ch>` so the validity
       // check must use that key (the old `this._work[this._curCh]` was always undefined -> reset to discord).
       this._curCh = this._curCh && this._work[`pub:${this._curCh}`] ? this._curCh : 'discord';
@@ -526,46 +520,6 @@ class GbtiChannelMapManager extends GbtiElement {
     </section>`;
   }
 
-  // SOW-126: the content engagement auto-share card (the `popular` matrix engine). Mirrors _autoshareCard: an
-  // Enable select, a distinct-member threshold, the counting tier, and the row of engagement signals that count.
-  _contentEngagementCard() {
-    const e = this._contentEng;
-    if (!e) return '';
-    const tierLabel = { paid: 'Paid members only', 'paid-trial': 'Trial + paid', 'signed-in': 'Any signed-in member' };
-    const tierOpts = (this._contentTiers || []).map((t) => `<option value="${esc(t)}"${e.tier === t ? ' selected' : ''}>${esc(tierLabel[t] || t)}</option>`).join('');
-    const signalLabel = { opens: 'Opens', favorites: 'Favorites', comments: 'Comments' };
-    const signals = e.signals || {};
-    const sigChips = (this._contentSignals || ['opens', 'favorites', 'comments']).map((s) =>
-      `<span class="chan${signals[s] ? ' on' : ''}" data-ceng-signal="${esc(s)}" role="checkbox" aria-checked="${signals[s] ? 'true' : 'false'}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(signalLabel[s] || s)}</span>`).join('');
-    return `<section class="card" id="sec-content-autoshare" data-sec>
-      <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg></span>
-        <div><h2>Content engagement auto-share</h2><p>Promotes a member content item to auto-share on its Popular channels once enough members engage.</p></div>
-        <span class="sp"></span>${this._pill(false)}</div>
-      <div class="card-b">
-        <div class="fgrid">
-          <div class="field"><label>Auto-share</label>
-            <select class="ctrl" data-ceng-enabled>
-              <option value="true"${e.enabled ? ' selected' : ''}>On</option>
-              <option value="false"${e.enabled ? '' : ' selected'}>Off</option>
-            </select>
-            <span class="hint">Master switch for the Popular promotion engine. Applies after the next reconcile mirror sync.</span></div>
-          <div class="field"><label>Member threshold</label>
-            <div class="sfxwrap"><input class="ctrl" type="number" min="1" max="1000" value="${esc(String(e.threshold))}" data-ceng-threshold /><span class="sfx">members</span></div>
-            <span class="hint">Distinct members who must engage. Banned accounts never count.</span></div>
-          <div class="field"><label>Counts which members</label>
-            <select class="ctrl" data-ceng-tier>${tierOpts}</select>
-            <span class="hint">Membership tier that qualifies toward the threshold.</span></div>
-        </div>
-        <div class="field" style="margin-top:18px"><label>Signals that count</label>
-          <div class="chgroup">${sigChips}</div>
-          <span class="hint">When enough distinct members engage with a member content item, the reconcile promotes it to auto-share on its Popular channels. Opens counts a member opening the expanded reader view.</span></div>
-      </div>
-      <div class="cardfoot"><span class="fmsg" data-fmsg></span>
-        <button class="btn btn-ghost" type="button" data-discard="ceng">Discard</button>
-        <button class="btn btn-primary" type="button" data-save-ceng disabled><svg viewBox="0 0 24 24"><use href="#c-check"/></svg> Save changes</button></div>
-    </section>`;
-  }
-
   _wordlistsCard() {
     const names = Object.keys(this._lists || {});
     if (!names.length) return '';
@@ -603,7 +557,7 @@ class GbtiChannelMapManager extends GbtiElement {
     const tabs = SYND_TABS.map((t) => `<a data-tab="${t.id}" role="tab"${t.id === active ? ' class="on" aria-selected="true"' : ' aria-selected="false"'}><svg viewBox="0 0 24 24"><use href="#${t.ic}"/></svg>${esc(t.nm)}</a>`).join('');
     const builders = {
       activity: () => this._activityCard(), pipeline: () => this._pipelineCard(), templates: () => this._templatesCard(),
-      news: () => this._autoshareCard(), content: () => this._contentEngagementCard(), words: () => this._wordlistsCard(),
+      news: () => this._autoshareCard(), words: () => this._wordlistsCard(),
     };
     const section = (builders[active] || builders.activity)();
     this.set(this.css(CSS) + ICONS + `<div class="${this._busy ? 'busy' : ''}">
@@ -622,7 +576,7 @@ class GbtiChannelMapManager extends GbtiElement {
     if (!sec) return;
     const pill = sec.querySelector('[data-pillbox]');
     if (pill) { pill.className = `pill${on ? ' dirty' : ''}`; pill.innerHTML = `<span class="dot"></span>${on ? 'Unsaved changes' : 'Saved'}`; }
-    const save = sec.querySelector('[data-save-pipe],[data-save-tmpl],[data-save-eng],[data-save-ceng]');
+    const save = sec.querySelector('[data-save-pipe],[data-save-tmpl],[data-save-eng]');
     if (save) save.disabled = !on;
     const m = sec.querySelector('[data-fmsg]');
     if (m && on) m.textContent = '';
@@ -707,18 +661,6 @@ class GbtiChannelMapManager extends GbtiElement {
       );
     });
 
-    // SOW-126: Content auto-share. The Enable/threshold/tier controls + the signal chips arm the card.
-    ['[data-ceng-enabled]', '[data-ceng-threshold]', '[data-ceng-tier]'].forEach((sel) => {
-      const el = this.$(sel);
-      if (el) { el.addEventListener('change', () => { this._contentEngDirty = true; this._markDirty('sec-content-autoshare'); }); el.addEventListener('input', () => { this._contentEngDirty = true; this._markDirty('sec-content-autoshare'); }); }
-    });
-    this.$$('[data-ceng-signal]').forEach((ch) => {
-      const flip = () => { ch.classList.toggle('on'); ch.setAttribute('aria-checked', ch.classList.contains('on') ? 'true' : 'false'); this._contentEngDirty = true; this._markDirty('sec-content-autoshare'); };
-      ch.addEventListener('click', flip);
-      ch.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } });
-    });
-    this.on('[data-save-ceng]', 'click', () => this._saveContentEngagement());
-
     // Discard = reload the committed values.
     this.$$('[data-discard]').forEach((b) => b.addEventListener('click', () => { this._loaded = false; this._msg = ''; this.render(); }));
 
@@ -766,7 +708,7 @@ class GbtiChannelMapManager extends GbtiElement {
     if (!Number.isFinite(holdMinutes) || holdMinutes < 0) holdMinutes = 60;
     if (ready === 'now') holdMinutes = 0;
     // SOW-125: the auto-share matrix, sent as the full { type: { channel: mode } } over EVERY matrix channel
-    // (X/LinkedIn included; their selects offer off | on-manual | popular, never On-Automatic, and the edit
+    // (X/LinkedIn included; their selects offer off | on-manual, never On-Automatic, and the edit
     // layer rejects `on` for them). The edit layer writes only cells that differ from the effective value.
     // Per-channel delays: an empty input sends '' to clear the override.
     const autoMatrix = {};
@@ -793,20 +735,6 @@ class GbtiChannelMapManager extends GbtiElement {
           this._pipeline.channelHoldMinutes = { ...channelHoldMinutes };
         }
       },
-    );
-  }
-
-  // SOW-126: read the content-engagement card back and save it (mirrors the news _save-eng handler).
-  _saveContentEngagement() {
-    const enabled = this.$('[data-ceng-enabled]')?.value === 'true';
-    const threshold = Number(this.$('[data-ceng-threshold]')?.value || 0);
-    const tier = this.$('[data-ceng-tier]')?.value || 'signed-in';
-    const signals = {};
-    this.$$('[data-ceng-signal]').forEach((ch) => { signals[ch.dataset.cengSignal] = ch.classList.contains('on'); });
-    if (!Number.isInteger(threshold) || threshold < 1) { this._msg = 'The member threshold must be a whole number of 1 or more.'; this.render(); return; }
-    this._saveOptimistic(
-      () => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }),
-      () => { this._contentEngDirty = false; if (this._contentEng) { this._contentEng.enabled = enabled; this._contentEng.threshold = threshold; this._contentEng.tier = tier; this._contentEng.signals = { ...signals }; } },
     );
   }
 

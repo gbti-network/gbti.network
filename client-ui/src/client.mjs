@@ -84,7 +84,6 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
     newsDiscussed: (guid) => request('POST', '/api/news-discussed', { guid }), // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
     newsOpened: (guid, source) => request('POST', '/api/news-opened', { guid, ...(source ? { source } : {}) }), // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
-    contentOpened: (type, slug) => request('POST', '/api/content-opened', { type, slug }), // SOW-126: the content detail-open engagement beacon -> { ok, counted, openers }
     setContentStatus: ({ path, status }) => request('POST', '/api/content/status', { path, status }), // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
     renameContent: ({ path, newSlug }) => request('POST', '/api/content/rename', { path, newSlug }), // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
     deleteComment: ({ id }) => request('POST', '/api/comment/delete', { id }), // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
@@ -164,8 +163,6 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setSyndicationTemplates: ({ edits }) => request('POST', '/api/admin', { action: 'syndication-templates-set', edits }), // SOW-088: the batch save (one PR)
     newsEngagementSettings: () => request('GET', '/api/news-engagement'), // SOW-111: { settings, tiers }
     setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request('POST', '/api/admin', { action: 'news-engagement-set', enabled, openThreshold, tier, commentAutopost }), // SOW-111
-    contentEngagementSettings: () => request('GET', '/api/content-engagement'), // SOW-126: { settings, tiers, signals }
-    setContentEngagementSettings: ({ enabled, threshold, tier, signals }) => request('POST', '/api/admin', { action: 'content-engagement-set', enabled, threshold, tier, signals }), // SOW-126
     syndicationSettings: () => request('GET', '/api/syndication-settings'), // SOW-088: { settings, channelNames }
     setSyndicationSettings: (p) => request('POST', '/api/admin', { action: 'syndication-settings-set', ...p }), // SOW-088
     addQuote: ({ text, author }) => request('POST', '/api/admin', { action: 'quote-add', text, author }), // SOW-063 P3

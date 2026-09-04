@@ -80,7 +80,6 @@ export {
   publishNews,
   reflectNewsDiscussion,
   recordNewsOpen,
-  recordContentOpen,
   getDiscordInvite,
   getDiscordLinkUrl,
   discordUnlink,

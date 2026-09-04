@@ -18,7 +18,6 @@ import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
 import { INVITE_KEY_PREFIX } from '../../membership/invites.mjs'; // sow-231 Phase 2
 import { scrubOpener } from '../../membership/news-opens.mjs'; // SOW-111: per-item news detail-open sets
-import { scrubOpener as scrubContentOpener } from '../../membership/content-opens.mjs'; // SOW-126: per-item content-open sets
 import { scrubCounterpart } from '../../workers/signup/conversion-snapshot-store.mjs'; // SOW-059 P1c
 import { couponGrantKey } from '../../workers/signup/coupons.mjs'; // SOW-119 / sow-212: the one-per-member lock
 import { redemptionKey, redemptionCountKey } from '../../membership/coupons.mjs'; // SOW-119 key builders
@@ -366,10 +365,37 @@ export async function eraseNewsOpens({ githubId, env = process.env, fetchImpl = 
 }
 
 /**
- * SOW-126 GDPR: scrub the member's github_id from every per-item content detail-open set (`content-opens:*`).
- * Keyed by content item (not by member), so the per-member activity: delete does not reach them. Mirrors
- * eraseNewsOpens. Reported no-op without CF creds.
+ * sow-313: the SOW-126 `popular` engine is RETIRED and this step OUTLIVES it, for the same reason
+ * eraseShareVotes above does. The engine, its beacon and its store are gone, but the `content-opens:*` sets
+ * they wrote still hold real member github_ids in KV until the owner-run purge, and this is what a
+ * right-to-erasure request reaches them through. It comes out after the purge is confirmed, never before.
+ *
+ * `scrubContentOpener` used to be `scrubOpener` in membership/content-opens.mjs and was INLINED here when that
+ * module went, so the erasure does not keep a retired engine's core alive just to reach one helper.
+ *
+ * SOW-126 GDPR (the original note, still accurate): these sets are keyed by content item, not by member, so
+ * the per-member `activity:` delete does not reach them. Mirrors eraseNewsOpens. Reported no-op without CF
+ * creds.
  */
+function scrubContentOpener(record, githubId, { now = Date.now } = {}) {
+  const id = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
+  const target = id(githubId);
+  // Coerced defensively: one malformed KV value must not be able to stop an erasure.
+  const raw = record && typeof record === 'object' ? record : {};
+  const seen = new Set();
+  const openers = [];
+  if (Array.isArray(raw.openers)) for (const v of raw.openers) { const t = id(v); if (t && !seen.has(t)) { seen.add(t); openers.push(t); } }
+  const r = {
+    openers,
+    updatedAt: Number.isFinite(Number(raw.updatedAt)) && raw.updatedAt != null ? Number(raw.updatedAt) : null,
+  };
+  const before = r.openers.length;
+  r.openers = r.openers.filter((v) => v !== target);
+  const changed = r.openers.length !== before;
+  if (changed) r.updatedAt = Number(now());
+  return { record: r, changed };
+}
+
 export async function eraseContentOpens({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
   const listed = await listKvByPrefix({ prefix: 'content-opens:', env, fetchImpl });

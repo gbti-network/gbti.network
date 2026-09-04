@@ -9,7 +9,7 @@ import { getEarnings as workerGetEarnings } from './member-earnings-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, workerContentOpened, NewsClientError } from './news-client.mjs';
+import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
 import { probeReadiness } from './github-app-probe.mjs';
 import { nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName, deviceVerificationUrl, forkUrl, appInstallUrl, manageInstallsUrl } from './onboarding.mjs';
 import { SIGNUP_BASE, GITHUB_APP_SLUG, UPSTREAM_REPO, authModeFor } from './signup-base.mjs';
@@ -276,19 +276,6 @@ export async function recordNewsOpen(ctx, { guid, source } = {}) {
   }
 }
 
-
-// SOW-126: best-effort record of a member-content detail-open (the engagement beacon). Fire-and-forget from the
-// reader; the Worker answers { counted:false } for out-of-tier or a disabled config, so only auth/transport
-// errors reach here and the reader swallows them (an open must never surface an error).
-export async function recordContentOpen(ctx, { type, slug } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.('githubToken');
-  try { return await workerContentOpened({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, type, slug }); }
-  catch (err) {
-    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in first.');
-    throw new OperationError('news-failed', err?.message || 'could not record the open');
-  }
-}
 
 
 export async function getDiscordInvite(ctx) {

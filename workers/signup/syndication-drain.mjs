@@ -32,30 +32,28 @@ export async function drainSyndication(env, {
   // SOW-087: the category -> channel map feeds the discord-category adapter (null = category posts no-op).
   const channelMap = await readContentChannels(kv);
   const { ready, skipped } = resolveAdapterRun({ cfg, env, adapters, fetchImpl, channelMap });
-  // The channels this ITEM hands to the Social Queue: a normal trigger delivers every `on-manual` cell
-  // (any capability; the owner's per-channel moderation gate); a `popular` promotion delivers its `popular`
-  // cells on manual-capability channels only (an auto-capability popular cell posts via its adapter).
-  const manualTaskOn = (item, ch) => (item?.trigger === 'popular'
-    ? autoModeFor(cfg, item.source, ch) === 'popular' && channelCapability(ch) === 'manual'
-    : autoModeFor(cfg, item.source, ch) === 'on-manual');
-  // The channels the manual loop VISITS for this item: every manual-capability channel (so an off/popular
-  // cell still records its terminal skip, exactly as before) plus any auto-capability channel routed
+  // The channels this ITEM hands to the Social Queue: every `on-manual` cell (any capability; the owner's
+  // per-channel moderation gate).
+  //
+  // sow-313 removed the `popular` branch that used to sit here. Nothing can enqueue a `trigger:'popular'`
+  // item any more: the SOW-126 promoter was the only producer and it is gone, and `popular` is out of
+  // AUTO_MODES, so the test this branch made could never come back true again either. It could not have a
+  // backlog to drain, because content_engagement was never enabled (the live config carried no such block at
+  // all), so no promotion was ever enqueued.
+  const manualTaskOn = (item, ch) => autoModeFor(cfg, item.source, ch) === 'on-manual';
+  // The channels the manual loop VISITS for this item: every manual-capability channel (so an off cell still
+  // records its terminal skip, exactly as before) plus any auto-capability channel routed
   // `on-manual` for this item's type.
   const manualCandidates = (item) => MATRIX_CHANNELS.filter((ch) => channelCapability(ch) === 'manual'
     || autoModeFor(cfg, item.source, ch) === 'on-manual');
 
   let sent = 0;
   let failed = 0;
-  // SOW-125: a `ready` adapter is auto-`on` for THIS item's type. A `ready` channel set to off/popular for the
-  // type is recorded as a terminal skip (never posts). A per-channel hold that has not elapsed leaves the channel
-  // HOLDING for a later tick. The `channelHoldMs` is read from the LIVE config, so a mid-flight hold change applies.
-  // SOW-126: the trigger decides which cells deliver, EXCLUSIVELY. A `popular`-promoted item delivers ONLY to
-  // its `popular` channels (never the `on` ones), so a promotion can never re-post to or resurrect an `on`
-  // channel; a plain publish delivers ONLY to its `on` channels (never a `popular` one). This keeps the two
-  // syndications of one piece of content strictly separate.
-  const onFor = (item, name) => (item?.trigger === 'popular'
-    ? autoModeFor(cfg, item.source, name) === 'popular'
-    : isAutoOn(cfg, item.source, name));
+  // SOW-125: a `ready` adapter is auto-`on` for THIS item's type. A `ready` channel set to off for the type is
+  // recorded as a terminal skip (never posts). A per-channel hold that has not elapsed leaves the channel
+  // HOLDING for a later tick. The `channelHoldMs` is read from the LIVE config, so a mid-flight hold change
+  // applies. sow-313: the SOW-126 trigger split is gone with its engine (see manualTaskOn above).
+  const onFor = (item, name) => isAutoOn(cfg, item.source, name);
   // SOW-125: the per-channel hold is mode-aware. In the APPROVAL model an approved item posts "now" (an explicit
   // override still staggers from approval, but a no-override channel is 0 -> the next tick); in auto-hold mode the
   // delay is the override or the global hold. `channelDue` uses the approvedAt baseline, so these compose.

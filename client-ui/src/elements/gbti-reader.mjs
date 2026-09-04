@@ -248,12 +248,6 @@ class GbtiReader extends GbtiElement {
    *  post/product/prompt they come from readItem(path). */
   open(item) {
     this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this.render(); this._resolve();
-    // SOW-126: the content detail-open engagement beacon (best-effort, fire-and-forget; the Worker no-ops when
-    // the tier/config does not count, and swallows auth/transport errors so an open never surfaces an error).
-    try {
-      const slug = targetSlugFor(item || {});
-      if (slug && TYPE_LABEL[item?.type] && this.client?.contentOpened) Promise.resolve(this.client.contentOpened(item.type, slug)).catch(() => {});
-    } catch { /* never let the beacon break the reader */ }
   }
 
   async _resolve() {

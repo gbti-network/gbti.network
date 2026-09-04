@@ -535,13 +535,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     moderationFlagPool() { return workerGet('/membership/admin/moderation-flag-pool'); }, // { lists }
     syndicationTemplatePool() { return workerGet('/membership/admin/syndication-template-pool'); }, // { templates, channelTemplates, ..., types, channels }
     newsEngagementSettings() { return workerGet('/membership/admin/news-engagement'); }, // { settings, tiers }
-    contentEngagementSettings() { return workerGet('/membership/admin/content-engagement'); }, // { settings, tiers, signals }
     syndicationSettings() { return workerGet('/membership/admin/syndication-settings'); }, // { settings, channelNames, autoTypes, ... }
     async addModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async removeModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setSyndicationTemplates(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-templates-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setNewsEngagement(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setContentEngagementSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'content-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setSyndicationSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-settings-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
   } : {};
 
@@ -807,7 +805,6 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     newsDiscussed({ guid, source }: any = {}) { return workerPost('/membership/news-discussed', { guid, ...(source ? { source } : {}) }); },
     // SOW-126 engagement beacon, positional (type, slug) to match the extension client. Best-effort: the reader
     // wraps it in a .catch, and the Worker 200-no-ops off-tier, so a signed-out/off-tier open never surfaces.
-    contentOpened(type: string, slug: string) { return workerPost('/membership/content-opened', { type, slug }); },
     // Curator "Add to Discord" stays extension-only for now (news-publish is bearer/curator-gated). status() keeps
     // canCurate false on the web, so <gbti-news> never renders the button; this typed refusal is a defensive stop.
     publishNews() { throw err('curator-extension-only', 'Publishing news to Discord is available in the browser extension for now.'); },

@@ -26,7 +26,7 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // its category in house/content-channels.yml (the featured per-type `discord` post is unchanged). A first-class
 // channel so it gets its own on/off switch and its own per-channel idempotency in the queue.
 // sow-159: Mastodon is RETIRED (the fediverse turn-away, 2026-07-28). Removing it from CHANNELS is the
-// master disconnect: MATRIX_CHANNELS, AUTO_CHANNELS, enabledChannelNames, and every auto/deliver/popular
+// master disconnect: MATRIX_CHANNELS, AUTO_CHANNELS, enabledChannelNames, and every auto/deliver
 // routing helper derive from this list, so the drain can never route a Mastodon post again. All the
 // Mastodon infra (the adapter, CHANNEL_CAPABILITY.mastodon below, the stubs, secret keys, and the
 // {member-mastodon-handle} format plumbing) is LEFT on disk inert; re-enabling is re-adding 'mastodon' here.
@@ -101,9 +101,13 @@ export const MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapab
 // The per-cell auto-share mode. `off` = never; `on` = On-Automatic (auto-enqueue at publish; the adapter
 // posts after the hold); `on-manual` = On-Manual (enqueue at publish, but deliver as a superadmin Social
 // Queue task for review instead of an adapter post; the ONLY deliverable mode for a `manual`-capability
-// channel, and available on ANY channel the owner wants moderated); `popular` = enqueue only when the
-// member-activity tracker deems it popular (the engine promotes with trigger:'popular').
-export const AUTO_MODES = Object.freeze(['off', 'on', 'on-manual', 'popular']);
+// channel, and available on ANY channel the owner wants moderated).
+//
+// sow-313 removed a fourth mode, `popular`, along with the SOW-126 engine that was the only thing that could
+// act on it. It is out of the enum rather than left selectable-but-inert, because an inert mode is a TRAP: a
+// superadmin sets a cell to it and that content then never syndicates, with nothing anywhere saying why. A
+// stored `popular` now coerces to the type default. The live config carried no such cell.
+export const AUTO_MODES = Object.freeze(['off', 'on', 'on-manual']);
 /** The fail-closed default cell for a type: shares OFF (the owner ask), every other type ON (today's behavior). */
 export function defaultAutoMode(type) { return type === 'share' ? 'off' : 'on'; }
 
@@ -120,19 +124,6 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   open_threshold: 2, // distinct members opening the detail view before the item auto-posts
   tier: 'paid', // whose engagement counts (owner-toggleable in the admin Channels tab)
   comment_autopost: true, // one comment posts immediately (deliberate engagement)
-});
-
-// SOW-126: the ENGINE behind the SOW-125 `popular` matrix state. When enough DISTINCT members engage with a
-// member content item, the reconcile promotes it to auto-share on its `popular` channels. Which signals count
-// (opening the expanded reader view, favoriting, upvoting, commenting) + the threshold + the counting tier are
-// all admin-editable (the owner may retune what qualifies). Fail-closed: disabled until the owner turns it on.
-// Tiers reuse NEWS_ENGAGEMENT_TIERS (banned always excluded; the author never counts toward their own item).
-export const CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(['opens', 'favorites', 'comments']);
-export const DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
-  enabled: false,
-  threshold: 3, // distinct engaged members before a `popular` item promotes (tunable; the network is small)
-  tier: 'signed-in', // whose engagement counts (any non-banned signed-in member by default)
-  signals: Object.freeze({ opens: true, favorites: false, comments: false }), // opens = the owner's chosen counter
 });
 
 // SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved <@id> mention, falling
@@ -277,14 +268,13 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   stub_templates: Object.freeze({}), // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
   channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
-  content_engagement: DEFAULT_CONTENT_ENGAGEMENT, // SOW-126: engagement-triggered content auto-share (the `popular` engine)
   channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
   // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
   manual_assist_channels: Object.freeze([]),
-  // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+  // SOW-125: per-type-per-channel auto-share modes (off | on | on-manual). Layers on `channels` (a channel must
   // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
   auto_matrix: buildDefaultAutoMatrix(),
   // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
@@ -341,24 +331,6 @@ function normalizeNewsEngagement(raw) {
     open_threshold: asThreshold(src.open_threshold, d.open_threshold),
     tier,
     comment_autopost: asBool(src.comment_autopost, d.comment_autopost),
-  });
-}
-
-// SOW-126: normalize the content engagement block; every field fail-closed. `signals` is the set of interactions
-// that count (each a bool). `threshold` is the distinct-engaged-member count (>= 1). `tier` reuses the news tiers.
-function normalizeContentEngagement(raw) {
-  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const d = DEFAULT_CONTENT_ENGAGEMENT;
-  const tier = typeof src.tier === 'string' && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase())
-    ? src.tier.trim().toLowerCase() : d.tier;
-  const rawSignals = src.signals && typeof src.signals === 'object' && !Array.isArray(src.signals) ? src.signals : {};
-  const signals = {};
-  for (const s of CONTENT_ENGAGEMENT_SIGNALS) signals[s] = asBool(rawSignals[s], d.signals[s]);
-  return Object.freeze({
-    enabled: asBool(src.enabled, d.enabled),
-    threshold: asThreshold(src.threshold, d.threshold),
-    tier,
-    signals: Object.freeze(signals),
   });
 }
 
@@ -477,7 +449,6 @@ export function syndicationConfigFromParsed(parsed) {
     stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
-    content_engagement: normalizeContentEngagement(raw.content_engagement), // SOW-126
     channels: normalizeChannels(raw.channels),
     manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels), // SOW-121
     auto_matrix: normalizeAutoMatrix(raw.auto_matrix), // SOW-125
@@ -511,11 +482,6 @@ export function newsEngagement(cfg) {
   return normalizeNewsEngagement(cfg?.news_engagement);
 }
 
-/** SOW-126: the normalized content engagement settings ({ enabled, threshold, tier, signals{...} }). */
-export function contentEngagement(cfg) {
-  return normalizeContentEngagement(cfg?.content_engagement);
-}
-
 /** SOW-087 (+ SOW-088): the configured template for a source type, or null (= the built-in message).
  *  With a channel, the chain is channel override -> the shared map -> the built-in default. With
  *  { stub: true } (a members-only item) the STUB chain runs first: channel stub override -> shared stub
@@ -543,7 +509,7 @@ export function templateFor(cfg, source, channel, { stub = false, channelOnly = 
 }
 
 /** SOW-131: MATRIX-DERIVED channel enablement. A channel is "enabled" iff the auto-share matrix routes ANY content
- *  type to it (any cell not `off`, i.e. `on` or `popular`). The legacy per-channel `channels` master switch is no
+ *  type to it (any cell not `off`). The legacy per-channel `channels` master switch is no
  *  longer a gate (the matrix is the single source of truth); its secret presence is still checked at drain time. */
 export function isChannelEnabled(cfg, name) {
   return MATRIX_CHANNELS.includes(name) && AUTO_TYPES.some((t) => autoModeFor(cfg, t, name) !== 'off');
@@ -578,7 +544,7 @@ export function manualQueueChannelsForType(cfg, type) {
   return MATRIX_CHANNELS.filter((ch) => isManualMode(cfg, type, ch));
 }
 
-/** SOW-125: the auto-share mode (`off` | `on` | `on-manual` | `popular`) for a (type, channel). Falls back
+/** SOW-125: the auto-share mode (`off` | `on` | `on-manual`) for a (type, channel). Falls back
  *  to the type default (shares off, the rest on) for a known type + MATRIX channel; `off` for anything
  *  unknown. The capability coercion applies HERE too (not only in normalize), so a raw un-normalized config
  *  can never report `on` for a `manual`-capability channel. */
@@ -590,7 +556,7 @@ export function autoModeFor(cfg, type, channel) {
   return m === 'on' && channelCapability(channel) === 'manual' ? 'on-manual' : m;
 }
 
-/** SOW-125: is this (type, channel) set to deliver at publish time (`on`)? `popular` and `off` are not. For an
+/** SOW-125: is this (type, channel) set to deliver at publish time (`on`)? `off` is not. For an
  *  auto channel this drives an adapter post; for a manual channel it drives a Social Queue task. */
 export function isAutoOn(cfg, type, channel) {
   return autoModeFor(cfg, type, channel) === 'on';
@@ -611,13 +577,6 @@ export function deliverChannelsForType(cfg, type) {
     const m = autoModeFor(cfg, type, ch);
     return (m === 'on' && channelCapability(ch) === 'auto') || m === 'on-manual';
   });
-}
-
-/** SOW-126: the channels a type would deliver to WHEN PROMOTED as popular — matrix cell `popular` (any
- *  capability; the drain routes by capability: adapter post vs Social Queue task). The engagement engine
- *  enqueues a promoted item with `trigger:'popular'` to exactly this set; a plain publish never hits it. */
-export function popularChannelsForType(cfg, type) {
-  return MATRIX_CHANNELS.filter((ch) => autoModeFor(cfg, type, ch) === 'popular');
 }
 
 /** SOW-125: the hold window in ms for a specific channel — the per-channel override if set, else the global. */
@@ -672,5 +631,5 @@ export function toSyndicationMirror(cfg) {
     for (const ch of MATRIX_CHANNELS) { const m = typeof row[ch] === 'string' ? row[ch].trim().toLowerCase() : ''; if (AUTO_MODES.includes(m)) outRow[ch] = m; }
     if (Object.keys(outRow).length) configuredMatrix[t] = outRow;
   }
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, content_engagement: { ...c.content_engagement, signals: { ...c.content_engagement.signals } }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
 }
