@@ -2260,6 +2260,22 @@ ${String(body ?? "")}`;
     };
   }
 
+  // client-ui/src/one-click-public-core.mjs
+  var ONE_CLICK_STATES = Object.freeze(["hidden", "available", "already-public"]);
+  function oneClickPublicView({ isSuperadmin = false, visibility = null, itemPath = null } = {}) {
+    if (isSuperadmin !== true) return "hidden";
+    if (typeof itemPath !== "string" || !itemPath.trim()) return "hidden";
+    if (visibility === "public") return "already-public";
+    return "available";
+  }
+  function makePublicPatch() {
+    return { visibility: "public" };
+  }
+  function makePublicPrompt(title) {
+    const name = typeof title === "string" && title.trim() ? `"${title.trim()}"` : "this item";
+    return `Make ${name} public? This opens a pull request changing its visibility, and it goes live on the next deploy.`;
+  }
+
   // client-ui/src/editor-core.mjs
   function fmtDate(value) {
     if (!value) return "";
@@ -3296,7 +3312,15 @@ ${String(body ?? "")}`;
         const known = real.some((o) => o.value === ownerSelValue);
         this._ownerSelInitial = known ? ownerSelValue : "";
         const options = (known ? "" : opt("", "Keep the current author", true)) + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join("");
-        return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
+        const ocp = oneClickPublicView({
+          isSuperadmin: true,
+          // reached only when authorMembers resolved, i.e. the caller is a superadmin
+          visibility: this.presetStr(this.preset?.input?.visibility),
+          itemPath: this.itemPath
+        });
+        const ocpHtml = ocp === "available" ? `<div class="fld"><button id="makepublic" class="btn2" type="button">${GLOBE} Make this public</button>
+             <div class="urlprev">Superadmin only. Opens a pull request setting visibility to public; it reaches the live site in about 2 to 3 minutes.</div></div>` : ocp === "already-public" ? `<div class="fld"><div class="urlprev">This item is already public.</div></div>` : "";
+        return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div>${ocpHtml}</div></details>`;
       })() : "";
       const showStats = isPub && slug && ["post", "project", "prompt"].includes(this.type);
       const railFootHtml = showStats ? `
@@ -3670,6 +3694,7 @@ ${String(body ?? "")}`;
       this.on("#draft", "click", () => this.doDraft());
       this.on("#preview", "click", () => this.doPreview());
       this.on("#publish", "click", () => this.doPublish());
+      this.on("#makepublic", "click", () => this._makePublic());
       this._dirty = false;
       if (!this._dirtyRootWired) {
         this._dirtyRootWired = true;
@@ -4544,6 +4569,28 @@ ${String(body ?? "")}`;
       if (this._dirty) return;
       this._dirty = true;
       this.$("#publish")?.removeAttribute("hidden");
+    }
+    /**
+     * sow-293: flip this item to public and publish, in one confirmed action.
+     *
+     * Sets the SAME hidden field the visibility switch writes, then delegates to doPublish. Nothing here knows
+     * how to commit anything, which is the point: the rules about what a publish does live in one place.
+     */
+    async _makePublic() {
+      const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
+      if (typeof confirm === "function" && !confirm(makePublicPrompt(title))) return;
+      const patch = makePublicPatch();
+      const hidden = this.$('input[data-key="visibility"]');
+      if (hidden) hidden.value = patch.visibility;
+      const sw = this.$("[data-visswitch]");
+      if (sw) {
+        sw.dataset.active = patch.visibility;
+        sw.querySelectorAll(".vs-opt").forEach((o) => o.classList.toggle("on", o.dataset.vis === patch.visibility));
+      }
+      const stub = this.$("[data-stubwrap]");
+      if (stub) stub.hidden = patch.visibility !== "members";
+      this._markDirty();
+      await this.doPublish();
     }
     async doPublish() {
       const restore = this._btnBusy("#publish", "Publishing…");

@@ -6,6 +6,7 @@
 
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { oneClickPublicView, makePublicPatch, makePublicPrompt } from '../one-click-public-core.mjs'; // sow-293
 import { editorStatus, mediaSummary } from '../editor-core.mjs'; // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import { gatherInput } from '../form.mjs';
 import { resolveContentAsset } from '../assets.mjs'; // SOW-062 P3 + sow-165: resolve a cover/body image path to a loadable preview URL
@@ -378,7 +379,21 @@ class GbtiContentEditor extends GbtiElement {
       this._ownerSelInitial = known ? ownerSelValue : '';
       const options = (known ? '' : opt('', 'Keep the current author', true))
         + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join('');
-      return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
+      // sow-293: the one-click "make public" control lives in this SAME superadmin-gated section, because
+      // `authorMembers !== null` IS the superadmin signal (client.authorTargets only ever succeeds for one).
+      // Reusing that signal means there is no second, weaker role test to drift from this one.
+      const ocp = oneClickPublicView({
+        isSuperadmin: true, // reached only when authorMembers resolved, i.e. the caller is a superadmin
+        visibility: this.presetStr(this.preset?.input?.visibility),
+        itemPath: this.itemPath,
+      });
+      const ocpHtml = ocp === 'available'
+        ? `<div class="fld"><button id="makepublic" class="btn2" type="button">${GLOBE} Make this public</button>
+             <div class="urlprev">Superadmin only. Opens a pull request setting visibility to public; it reaches the live site in about 2 to 3 minutes.</div></div>`
+        : ocp === 'already-public'
+          ? `<div class="fld"><div class="urlprev">This item is already public.</div></div>`
+          : '';
+      return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div>${ocpHtml}</div></details>`;
     })() : '';
     // SOW-062 P6 rail-2: the stat tiles footer, shown for a published post/product/prompt (in the rail).
     const showStats = isPub && slug && ['post', 'project', 'prompt'].includes(this.type);
@@ -759,6 +774,11 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#draft', 'click', () => this.doDraft());
     this.on('#preview', 'click', () => this.doPreview());
     this.on('#publish', 'click', () => this.doPublish());
+    // sow-293: one-click public. It does NOT write by a separate path: it sets the visibility field and reuses
+    // doPublish, so the change goes through the same gather + validate + rename + PR flow every other publish
+    // does. A parallel write path here would be a second place for the content rules to be enforced, and the
+    // one that gets forgotten. The Worker re-verifies superadmin regardless; this control is the affordance.
+    this.on('#makepublic', 'click', () => this._makePublic());
     // SOW-062 P6: the Publish button shows ONLY when there is something to publish -- the item is unpublished (it was
     // rendered visible above) OR it has local edits since load. Reset the dirty flag for the freshly-loaded content,
     // then mark dirty on any edit. The root-level input/change listeners persist (this.root is stable); the element
@@ -1644,6 +1664,31 @@ class GbtiContentEditor extends GbtiElement {
     if (this._dirty) return;
     this._dirty = true;
     this.$('#publish')?.removeAttribute('hidden');
+  }
+
+  /**
+   * sow-293: flip this item to public and publish, in one confirmed action.
+   *
+   * Sets the SAME hidden field the visibility switch writes, then delegates to doPublish. Nothing here knows
+   * how to commit anything, which is the point: the rules about what a publish does live in one place.
+   */
+  async _makePublic() {
+    const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
+    // eslint-disable-next-line no-alert
+    if (typeof confirm === 'function' && !confirm(makePublicPrompt(title))) return;
+    const patch = makePublicPatch();
+    const hidden = this.$('input[data-key="visibility"]');
+    if (hidden) hidden.value = patch.visibility;
+    // Keep the visible switch in step, so the rail does not contradict what is about to be published.
+    const sw = this.$('[data-visswitch]');
+    if (sw) {
+      sw.dataset.active = patch.visibility;
+      sw.querySelectorAll('.vs-opt').forEach((o) => o.classList.toggle('on', o.dataset.vis === patch.visibility));
+    }
+    const stub = this.$('[data-stubwrap]');
+    if (stub) stub.hidden = patch.visibility !== 'members';
+    this._markDirty();
+    await this.doPublish();
   }
 
   async doPublish() {
