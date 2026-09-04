@@ -1,0 +1,122 @@
+name: Purge retired engagement data
+
+# sow-313. Clears the KV that upvoting and the SOW-126 popular promoter left behind:
+#
+#   upvotes:share:*        per-target voter sets, each holding member github_ids
+#   content-opens:*        per-item distinct-opener sets, same
+#   activity:<github_id>   the retired `upvotes` array inside each member's record
+#
+# THIS EXISTS SO THE OWNER DOES NOT HAVE TO BE AT A TERMINAL. The script is runnable locally, but it needs
+# CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN, and this repository already holds all three for the
+# reconcile. Filing it as an owner action that waits for them to be home was a mistake: the credential lives
+# here, so the run can too, from a phone.
+#
+# ONE-SHOT, not scheduled. Once the re-run reads zero, this workflow and the script it calls both come out
+# along with eraseShareVotes and eraseContentOpens. Leaving a standing button that deletes production data
+# would be worse than the data it was built to remove.
+#
+# SAFE BY DEFAULT AND BY CONSTRUCTION:
+#   - Dispatch with nothing typed and it is a DRY RUN. It counts and writes nothing.
+#   - Deleting requires TYPING `PURGE` into the confirm box. A checkbox is one stray tap from destroying
+#     data; a typed word is a decision. The step below compares it exactly and fails the job otherwise.
+#   - The script itself reports a no-op rather than throwing when the credentials are absent, so a
+#     misconfigured run cannot half-delete.
+#
+# HOW TO USE IT (Actions -> Purge retired engagement data -> Run workflow):
+#   1. Run it with confirm EMPTY. Read the summary: the per-prefix counts are the baseline.
+#   2. Run it again with confirm = PURGE. It deletes.
+#   3. Run it a THIRD time with confirm empty. Every count must read 0. That is the exit baseline, and it is
+#      derived from the store rather than a number written into a document that could go stale.
+#   4. Tell the agent it read zero. Only then do eraseShareVotes and eraseContentOpens come out of
+#      scripts/lib/erase-member.mjs. Removing them first would strand person-keyed records that no
+#      right-to-erasure request could then reach.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PURGE to DELETE. Leave empty for a dry run that counts and changes nothing.'
+        required: false
+        default: ''
+        type: string
+
+# Read-only: the purge writes to Cloudflare KV, never to this repository.
+permissions:
+  contents: read
+
+concurrency:
+  # sow-213 Step 3: every workflow that writes SIGNUP_KV shares this group so no two read-modify-writes
+  # overlap. This one rewrites activity:<github_id> records, so it belongs in it.
+  group: overrides-writers
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      # The confirm gate runs BEFORE the purge, as its own step, so a typo fails the job with a clear message
+      # instead of silently falling through to a dry run the operator then believes was an apply.
+      - name: Resolve the mode
+        id: mode
+        # The input arrives through `env`, NOT interpolated into the script body. `${{ inputs.confirm }}`
+        # written inline is textual substitution into the shell source before bash ever sees it, so a typed
+        # quote or `$(...)` executes. It is the standard Actions script-injection vector and it is worth
+        # avoiding even for an input only a collaborator can supply.
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          C="$CONFIRM"
+          if [ -z "$C" ]; then
+            echo "mode=dry" >> "$GITHUB_OUTPUT"
+            echo "DRY RUN: counting only. Nothing will be deleted."
+          elif [ "$C" = "PURGE" ]; then
+            echo "mode=apply" >> "$GITHUB_OUTPUT"
+            echo "APPLY: this run DELETES data."
+          else
+            echo "::error::confirm was \"$C\". Type exactly PURGE to delete, or leave it empty for a dry run."
+            exit 1
+          fi
+
+      - name: Purge
+        id: purge
+        run: |
+          if [ "${{ steps.mode.outputs.mode }}" = "apply" ]; then
+            node scripts/purge-retired-engagement.mjs --apply | tee /tmp/purge.log
+          else
+            node scripts/purge-retired-engagement.mjs | tee /tmp/purge.log
+          fi
+        env:
+          # CF_ACCOUNT_ID + CF_KV_NAMESPACE_ID are non-secret identifiers, inlined exactly as reconcile.yml
+          # does. CF_KV_NAMESPACE_ID must equal the Worker's SIGNUP_KV id. Only CF_API_TOKEN is a real
+          # secret, and it is already scoped to Workers KV Storage Edit on this one namespace.
+          CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+          CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+
+      # The whole point of running this from a phone is reading the result on one, so the counts go in the run
+      # SUMMARY rather than only into a log the operator has to scroll.
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Purge retired engagement data"
+            echo
+            echo "Mode: **${{ steps.mode.outputs.mode == 'apply' && 'APPLY (data deleted)' || 'DRY RUN (nothing changed)' }}**"
+            echo
+            echo '```'
+            cat /tmp/purge.log 2>/dev/null || echo '(the purge step did not run)'
+            echo '```'
+            echo
+            if [ "${{ steps.mode.outputs.mode }}" = "apply" ]; then
+              echo "**Next:** run this workflow once more with confirm EMPTY. Every count must read 0."
+            else
+              echo "**If every count reads 0**, the purge is complete: say so and the erasure steps come out."
+              echo "**Otherwise**, run it again with confirm = \`PURGE\` to delete what is listed above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
