@@ -1,0 +1,25 @@
+# How fast the newsletter goes out. Owner-editable: change a number here, push, and the next reconcile applies
+# it to the live Worker. NO REDEPLOY NEEDED. To apply it immediately instead of waiting for the daily run, use
+# the "Run reconcile" trigger.
+#
+# SUPERADMIN-owned via CODEOWNERS, like every other file under house/, so the merge gate enforces the tier and
+# not only whoever is asking.
+#
+# WHERE THE NUMBERS COME FROM. Resend actually sends the mail. Its FREE plan allows 100 a day and 3,000 a
+# month. The values below sit under that with room for retries. If you upgrade the Resend plan, raise these to
+# match it; nothing here can raise the plan's own limit, so setting a number above it just means Resend starts
+# refusing sends.
+#
+# SET daily_cap TO 0 TO PAUSE ALL SENDING. That is a real setting and it survives every check, so it is the
+# switch to reach for if something looks wrong with an issue that is already going out.
+#
+# An omitted or unreadable value falls back to the Worker's own env var, and then to a built-in floor. A value
+# is never allowed to mean "no limit": that used to be possible and it could have fired nearly 3,000 emails a
+# day at a 100-a-day plan. An absurd number is clamped rather than obeyed, because an extra zero is a bill.
+mail:
+  # Emails per day, across every issue. Resend free tier: 100.
+  daily_cap: 90
+  # Emails per calendar month. Resend free tier: 3,000.
+  monthly_cap: 2500
+  # Emails per run. The sender wakes every five minutes, so this paces each wake-up rather than the day.
+  per_tick_cap: 10

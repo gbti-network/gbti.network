@@ -15,12 +15,14 @@ import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mj
 // sow-213 Step 3: the shared pure mutation core, so the REST writer below (for reconcile + the erase-member CLI)
 // mutates overrides:mirror with the exact semantics of the Worker's binding writer.
 import { applyKvOverride, KV_SOURCE } from '../../membership/overrides-kv-core.mjs';
+import { buildMailSettingsMirror, MAIL_SETTINGS_KV_KEY } from '../../membership/mail-settings.mjs'; // sow-312: the send-rate caps
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
 export const CONTENT_CHANNELS_KV_KEY = 'synd:channels'; // SOW-087: house/content-channels.yml
 export const TOPICS_KV_KEY = TOPICS_MIRROR_KEY; // SOW-087: house/topics.yml (the share category suggester)
 export const COUPONS_KV_KEY = COUPONS_MIRROR_KEY; // SOW-119: house/coupons.yml (signup coupon validation)
+export const MAIL_SETTINGS_KEY = MAIL_SETTINGS_KV_KEY; // sow-312: house/mail-settings.yml (the send rate caps)
 
 /**
  * sow-213 Phase 2: KV-NATIVE ENTRIES SURVIVE THE SYNC.
@@ -319,6 +321,17 @@ export function buildContentChannelsMirror(raw, now = new Date()) {
 /** SOW-087: PUT house/content-channels.yml -> KV synd:channels, so the drain routes category posts live. */
 export async function mirrorContentChannelsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = CONTENT_CHANNELS_KV_KEY } = {}) {
   return putKvJson({ label: 'content channels', body: JSON.stringify(buildContentChannelsMirror(raw, now)), env, fetchImpl, key });
+}
+
+/**
+ * sow-312: PUT house/mail-settings.yml -> KV mail:config, so the mail drain reads the send caps LIVE.
+ *
+ * This is what makes the caps editable without redeploying the Worker, which is the whole point of the file.
+ * A cap the mirror does not carry falls back to the Worker's env var and then to its code floor, so a partial
+ * or absent mirror degrades one cap at a time rather than all three.
+ */
+export async function mirrorMailSettingsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = MAIL_SETTINGS_KV_KEY } = {}) {
+  return putKvJson({ label: 'mail settings', body: JSON.stringify(buildMailSettingsMirror(raw, now)), env, fetchImpl, key });
 }
 
 /** SOW-087: PUT house/topics.yml -> KV topics:vocab, so the Worker's share category suggester sees the live vocabulary. */

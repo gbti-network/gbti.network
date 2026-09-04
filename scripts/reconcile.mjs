@@ -31,7 +31,7 @@ import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorMailSettingsToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
 import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-source.mjs'; // sow-213 R4: KV overrides overlay for the plan + the git-present reality check behind reconcile's fail posture
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
@@ -799,6 +799,39 @@ async function main() {
     } catch (e) {
       console.error(`reconcile: house/${file} KV mirror FAILED:`, e?.message ?? e);
       process.exitCode = 1;
+    }
+  }
+
+  // sow-312: house/mail-settings.yml -> KV mail:config, the send-rate caps the mail drain reads LIVE. This is
+  // what lets the owner change how fast the newsletter goes out by editing one line and pushing, with no
+  // Worker redeploy.
+  //
+  // ITS OWN BLOCK, NOT THE LOOP ABOVE, for the same reason coupons has one. That loop treats an unreadable
+  // file as an EMPTY one, and an empty mirror here drops every cap, which sends the Worker back to its env
+  // var. If the owner had set daily_cap to 0 to PAUSE sending, a transient read failure would silently resume
+  // it. So: mirror only what actually parsed, and on a failure leave whatever is already in KV, which is the
+  // last setting a person deliberately chose.
+  {
+    let rawMail = null;
+    let mailReadError = null;
+    try { rawMail = yaml.load(fs.readFileSync(path.join(ROOT, 'house', 'mail-settings.yml'), 'utf8')); }
+    catch (e) { mailReadError = e; }
+    if (mailReadError) {
+      console.error('reconcile: house/mail-settings.yml UNREADABLE, leaving the live caps as they are:', mailReadError?.message ?? mailReadError);
+      process.exitCode = 1;
+    } else if (!rawMail || typeof rawMail !== 'object') {
+      console.error('reconcile: house/mail-settings.yml parsed to nothing, leaving the live caps as they are.');
+      process.exitCode = 1;
+    } else if (dryRun) {
+      console.log('reconcile: DRY RUN would mirror house/mail-settings.yml to KV (key mail:config).');
+    } else {
+      try {
+        const r = await mirrorMailSettingsToKv({ raw: rawMail, env });
+        console.log(r.written ? `reconcile: mirrored house/mail-settings.yml to KV (${r.bytes} bytes).` : `reconcile: mail-settings KV mirror SKIPPED (${r.reason}).`);
+      } catch (e) {
+        console.error('reconcile: mail-settings KV mirror FAILED:', e?.message ?? e);
+        process.exitCode = 1;
+      }
     }
   }
 

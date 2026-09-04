@@ -26,6 +26,7 @@ import {
   getIssue, getSend, putSend, readPendingIndex, removeFromPending, getSubscriber, putSubscriber,
   readBudget, bumpBudget, activeIssueIds,
 } from './mail-store.mjs';
+import { resolveMailCaps, MAIL_SETTINGS_KV_KEY } from '../../membership/mail-settings.mjs'; // sow-312: the live send-rate caps
 
 // A claim older than this is from a tick that died before terminalizing the record; reclaim it so one crash
 // cannot strand a recipient forever. Three `*/5` ticks.
@@ -42,6 +43,18 @@ const DEFAULT_DAILY_CAP = 90;
 const DEFAULT_MONTHLY_CAP = 2500;
 const DEFAULT_MAX_PER_TICK = 10;
 export const MAIL_CAP_DEFAULTS = Object.freeze({ daily: DEFAULT_DAILY_CAP, monthly: DEFAULT_MONTHLY_CAP, perTick: DEFAULT_MAX_PER_TICK });
+
+/**
+ * sow-312: read the live send-rate caps reconcile mirrors from house/mail-settings.yml.
+ *
+ * This is what makes the caps changeable without redeploying the Worker. A read failure or a missing key
+ * returns null, and the resolver then falls through to the env var and the floors above, so a KV blip cannot
+ * stop the send.
+ */
+async function readMailSettingsMirror(kv) {
+  if (!kv?.get) return null;
+  try { return await kv.get(MAIL_SETTINGS_KV_KEY, 'json'); } catch { return null; }
+}
 
 /** UTC day (YYYY-MM-DD) and month (YYYY-MM) strings from a ms timestamp. The Worker wiring MAY pass operator-
  *  timezone strings instead (so the daily window rolls at Central midnight); the counter only needs the compile
@@ -412,9 +425,14 @@ export async function drainMail(env, {
   kv = env?.SIGNUP_KV,
   now = Date.now,
   issueId = null,
-  perTickCap = numOrNull(env?.MAIL_MAX_PER_TICK) ?? DEFAULT_MAX_PER_TICK,
-  dailyCap = numOrNull(env?.MAIL_DAILY_CAP) ?? DEFAULT_DAILY_CAP,
-  monthlyCap = numOrNull(env?.MAIL_MONTHLY_CAP) ?? DEFAULT_MONTHLY_CAP,
+  // sow-312: LEFT UNDEFINED ON PURPOSE, and resolved in the body instead of here. A default expression cannot
+  // await, and these now consult the KV mirror first so the caps are changeable without a redeploy. An
+  // explicit argument still wins over everything, including an explicit 0, which is why the check below is
+  // `=== undefined` rather than a falsy test.
+  perTickCap,
+  dailyCap,
+  monthlyCap,
+  readSettings = readMailSettingsMirror, // injectable, so the resolution is unit-tested without KV
   dayStr = null,
   monthStr = null,
   maxAttempts = DEFAULT_MAX_ATTEMPTS,
@@ -427,16 +445,41 @@ export async function drainMail(env, {
   const ids = issueId ? [issueId] : await activeIssueIds(kv);
   if (!ids.length) return { drained: 0, reason: 'no active issue' };
 
+  // sow-312: resolve the three caps, mirror -> env -> floor, per cap. An explicit caller argument overrides
+  // all three sources; that is how the admin drain trigger and every existing test keep working unchanged.
+  // The try/catch is HERE, not only inside the default reader. It used to be only there, which meant the
+  // protection belonged to that one implementation rather than to this call: any other reader, including the
+  // one a test injects, could throw and take the whole send down. A config read must never be able to stop
+  // mail going out, so a failure resolves to null and the caps fall through to the env and the floors.
+  let mirror = null;
+  try { mirror = await readSettings(kv); } catch { mirror = null; }
+  const caps = resolveMailCaps({ mirror, env, defaults: MAIL_CAP_DEFAULTS });
+  const resolvedPerTick = perTickCap === undefined ? caps.perTick.value : perTickCap;
+  const resolvedDaily = dailyCap === undefined ? caps.daily.value : dailyCap;
+  const resolvedMonthly = monthlyCap === undefined ? caps.monthly.value : monthlyCap;
+
   // Log the three resolved bounds on ONE line whenever the gate is open and there is work, so an operator sees
   // them in RELATION: a magnitude/paste error (a 2500 daily sitting next to a 2500 monthly, or 9000 typed for
   // 90) is only obvious side by side, and it is the one error class no parse guard catches. Logged, never
   // clamped. Gated on an open send gate so the default closed gate (pre-launch) does not log every */5 tick
   // against a permanently pending issue.
   if (resolveSendGate(env).mode !== 'closed') {
-    console.log(JSON.stringify({ evt: 'mail-drain-bounds', perTickCap, dailyCap, monthlyCap, activeIssues: ids.length }));
+    // sow-312: the SOURCE of each cap is logged beside its value. An operator who edits house/mail-settings.yml
+    // needs to see whether the change actually landed, and "90 from the env" versus "90 from the mirror" is the
+    // only thing that answers it. An explicit caller argument reports as `arg`.
+    console.log(JSON.stringify({
+      evt: 'mail-drain-bounds',
+      perTickCap: resolvedPerTick, dailyCap: resolvedDaily, monthlyCap: resolvedMonthly,
+      capSource: {
+        perTick: perTickCap === undefined ? caps.perTick.source : 'arg',
+        daily: dailyCap === undefined ? caps.daily.source : 'arg',
+        monthly: monthlyCap === undefined ? caps.monthly.source : 'arg',
+      },
+      activeIssues: ids.length,
+    }));
   }
 
-  let tickCapLeft = Math.max(0, Number(perTickCap) || 0);
+  let tickCapLeft = Math.max(0, Number(resolvedPerTick) || 0);
   let sent = 0;
   let failed = 0;
   let suppressed = 0;
@@ -447,7 +490,7 @@ export async function drainMail(env, {
   for (const id of ids) {
     if (tickCapLeft <= 0) break;
     const r = await drainMailIssue(env, {
-      kv, issueId: id, now, cap: tickCapLeft, dailyCap, monthlyCap, dayStr, monthStr, maxAttempts,
+      kv, issueId: id, now, cap: tickCapLeft, dailyCap: resolvedDaily, monthlyCap: resolvedMonthly, dayStr, monthStr, maxAttempts,
       resolveAddress, renderIssue, sendEmail, from,
     });
     tickCapLeft -= r.sent;
