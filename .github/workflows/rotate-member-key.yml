@@ -38,11 +38,36 @@ jobs:
           node-version: '22'
       - run: npm ci
 
+      # sow-313 (found while hardening the purge workflow next door): VALIDATE THE INPUT BEFORE USING IT.
+      #
+      # `new_kid` is a free-text workflow_dispatch input and it was interpolated straight into six shell
+      # commands below, including `git commit -m` and `gh pr create --body`. `${{ inputs.x }}` written inline
+      # is textual substitution into the shell SOURCE before bash parses it, so a value carrying a quote or
+      # $(...) executes. This job holds MEMBER_CONTENT_KEY, MEMBER_CONTENT_KEY_NEW and GH_BOT_TOKEN, which is
+      # the highest-value secret set in the repository, so the blast radius is the whole encryption scheme
+      # even though dispatching needs write access.
+      #
+      # Two layers, and this is the first: an epoch id is a NUMBER (`MEMBER_CONTENT_KID = "1"` in
+      # wrangler.toml). Constraining it to digits removes the vector rather than escaping it. The steps below
+      # then take it through `env` as the second layer, so neither one is load-bearing alone.
+      - name: Validate the epoch id
+        env:
+          NEW_KID: ${{ inputs.new_kid }}
+        run: |
+          case "$NEW_KID" in
+            ''|*[!0-9]*)
+              echo "::error::new_kid must be digits only (the epoch id, e.g. 2). Got: $NEW_KID"
+              exit 1
+              ;;
+          esac
+          echo "epoch id $NEW_KID accepted"
+
       # Re-encrypt all .enc under the NEW key. Two-phase + atomic: if any asset fails to re-encrypt (a wrong
       # old key), nothing is written and the job fails. --no-print-key keeps the key out of the logs.
       - name: Re-encrypt member content to the new epoch
-        run: node scripts/rotate-member-key.mjs --new-kid "${{ inputs.new_kid }}" --apply --no-print-key
+        run: node scripts/rotate-member-key.mjs --new-kid "$NEW_KID" --apply --no-print-key
         env:
+          NEW_KID: ${{ inputs.new_kid }}
           MEMBER_CONTENT_KEY: ${{ secrets.MEMBER_CONTENT_KEY }}          # the CURRENT (old) epoch key
           MEMBER_CONTENT_KEY_NEW: ${{ secrets.MEMBER_CONTENT_KEY_NEW }}  # the NEW epoch key (pre-generated)
 
@@ -55,6 +80,8 @@ jobs:
       # irreversible key destruction. Fixed 2026-08-11 (SecurityMaster); see
       # .data/ops/encryption-ops/rotation-runbook.md.
       - name: Bump MEMBER_CONTENT_KID in wrangler.toml
+        env:
+          NEW_KID: ${{ inputs.new_kid }}
         run: |
           node -e '
             const fs = require("fs");
@@ -69,21 +96,22 @@ jobs:
             const n = (after.match(/^MEMBER_CONTENT_KID = /gm) || []).length;
             console.log("rotate: set MEMBER_CONTENT_KID to " + kid + " in " + n + " location(s)");
             fs.writeFileSync(p, after);
-          ' "${{ inputs.new_kid }}"
+          ' "$NEW_KID"
 
       # Open a PR for review (NOT auto-merge): a human verifies the rotation before the Worker secret is swapped.
       # gbtilabs is a superadmin, so the gate accepts this PR even though it touches Tier S wrangler.toml.
       - name: Open the rotation PR
         env:
           GH_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          NEW_KID: ${{ inputs.new_kid }}
         run: |
           set -e
-          BRANCH="rotate-member-key-${{ inputs.new_kid }}"
+          BRANCH="rotate-member-key-$NEW_KID"
           git config user.name "gbtilabs"
           git config user.email "gbtilabs@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add -A
-          git commit -m "SOW-016: rotate member-content to epoch ${{ inputs.new_kid }}"
+          git commit -m "SOW-016: rotate member-content to epoch $NEW_KID"
           git push -u origin "$BRANCH"
-          gh pr create --fill --title "Rotate member-content key to epoch ${{ inputs.new_kid }}" \
-            --body "Automated SOW-016 re-encryption to epoch ${{ inputs.new_kid }}. After merge + CDN propagation, set the Worker secret MEMBER_CONTENT_KEY to the new key and destroy the old one (remove it from MEMBER_CONTENT_KEYS after the overlap). See .data/ops/member-ops/runbook-client-install.md."
+          gh pr create --fill --title "Rotate member-content key to epoch $NEW_KID" \
+            --body "Automated SOW-016 re-encryption to epoch $NEW_KID. After merge + CDN propagation, set the Worker secret MEMBER_CONTENT_KEY to the new key and destroy the old one (remove it from MEMBER_CONTENT_KEYS after the overlap). See .data/ops/member-ops/runbook-client-install.md."
