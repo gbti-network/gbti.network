@@ -12,6 +12,13 @@
 //
 // The drift is invisible without a check: nothing fails when the plan falls behind, and the plan is read by
 // people rather than by code.
+//
+// A NEIGHBOURING CLAIM OF MINE WAS WRONG AND IS WITHDRAWN HERE, so nobody builds on it. Commit 569d0799 said
+// "a broken erasure step survives a dry run". It does not. runErasure returns at erase-member.mjs:992 when
+// `apply` is false and executes NO step, so a dry run was never going to catch a broken call; the probe that
+// produced that claim was measuring the plan path and being read as the run path. A real apply is properly
+// guarded: runStep records the throw as `outcome: 'error'` with its reason, and scripts/erase-member.mjs:89
+// prints it and sets a non-zero exit. Driven to confirm before withdrawing it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
