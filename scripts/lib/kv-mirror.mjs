@@ -16,6 +16,7 @@ import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mj
 // mutates overrides:mirror with the exact semantics of the Worker's binding writer.
 import { applyKvOverride, KV_SOURCE } from '../../membership/overrides-kv-core.mjs';
 import { buildMailSettingsMirror, MAIL_SETTINGS_KV_KEY } from '../../membership/mail-settings.mjs'; // sow-312: the send-rate caps
+import { buildDigestEntitlement, DIGEST_ENTITLED_KV_KEY } from '../../membership/digest-entitlement.mjs'; // sow-312: who gets the members edition
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
@@ -23,6 +24,7 @@ export const CONTENT_CHANNELS_KV_KEY = 'synd:channels'; // SOW-087: house/conten
 export const TOPICS_KV_KEY = TOPICS_MIRROR_KEY; // SOW-087: house/topics.yml (the share category suggester)
 export const COUPONS_KV_KEY = COUPONS_MIRROR_KEY; // SOW-119: house/coupons.yml (signup coupon validation)
 export const MAIL_SETTINGS_KEY = MAIL_SETTINGS_KV_KEY; // sow-312: house/mail-settings.yml (the send rate caps)
+export const DIGEST_ENTITLED_KEY = DIGEST_ENTITLED_KV_KEY; // sow-312: who receives the members edition
 
 /**
  * sow-213 Phase 2: KV-NATIVE ENTRIES SURVIVE THE SYNC.
@@ -332,6 +334,19 @@ export async function mirrorContentChannelsToKv({ raw, env = process.env, now = 
  */
 export async function mirrorMailSettingsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = MAIL_SETTINGS_KV_KEY } = {}) {
   return putKvJson({ label: 'mail settings', body: JSON.stringify(buildMailSettingsMirror(raw, now)), env, fetchImpl, key });
+}
+
+/**
+ * sow-312: PUT the entitled-member id list -> KV digest:entitled, so the weekly mail compile can route the
+ * members edition without asking Stripe once per subscriber.
+ *
+ * Unlike the mirrors around it this projects reconcile's IN-MEMORY member list rather than a house file,
+ * because the answer is derived from Stripe plus the overrides and has no git-native source. It carries
+ * github_ids and nothing else: no names, no addresses, no status, so it is the minimum that answers the one
+ * question the compile asks.
+ */
+export async function mirrorDigestEntitlementToKv({ members, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = DIGEST_ENTITLED_KV_KEY } = {}) {
+  return putKvJson({ label: 'digest entitlement', body: JSON.stringify(buildDigestEntitlement(members, now)), env, fetchImpl, key });
 }
 
 /** SOW-087: PUT house/topics.yml -> KV topics:vocab, so the Worker's share category suggester sees the live vocabulary. */

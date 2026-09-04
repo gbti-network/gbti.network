@@ -222,6 +222,68 @@ export function welcomeIssueId(nowMs) {
 }
 
 /**
+ * sow-312: the members edition's issue id, `members-YYYY-MM-DD`, the same date as that week's public issue.
+ *
+ * A SEPARATE FAMILY, NOT A SUFFIX, AND THAT IS THE WHOLE POINT OF THIS FUNCTION. The compile decides what to
+ * mail by looking back at what it already mailed, and it finds those past issues by matching the start of
+ * their id (`listPriorIssueIds` in workers/signup/mail-compile.mjs) and then comparing ids as plain strings.
+ * A `weekly-2026-09-08-members` id would therefore sort INTO the public family's history and count as one of
+ * its prior issues. Each edition would then treat the other's contents as already mailed, and both would
+ * start silently dropping items.
+ *
+ * `members-` sorts on its own and can never be mistaken for `weekly-`, exactly as `welcome-` cannot. Do not
+ * rename it to anything beginning with "weekly". A test pins that too.
+ */
+export function membersIssueId(nowMs) {
+  return `members-${utcDateStamp(nowMs, 'membersIssueId')}`;
+}
+
+/** Is this the id of a members edition? Pure, so a caller can ask without importing the compiler. */
+export function isMembersIssueId(issueId) {
+  return typeof issueId === 'string' && issueId.startsWith('members-');
+}
+
+/**
+ * sow-312: the shape one members-only share takes on its way into the digest.
+ *
+ * The public digest reads its shares from /shares-index.json, which by construction only ever contains public
+ * shares. The members edition reads them from the gated Worker reader instead (enumerateShares), which returns
+ * share SUMMARIES in a different shape. This maps one summary onto the same entry shape buildSharesIndex
+ * emits, so normalizeContentEntry handles both identically and there is no second normalizer to drift.
+ *
+ * `visibility` IS COPIED VERBATIM AND MUST NEVER BE HARDCODED. It is the field composeIssue's admitsItem guard
+ * reads, and that guard is the ONLY thing standing between a members share and a public inbox. Writing
+ * `visibility: 'members'` here would be just as wrong as `'public'`: a public share read through this path
+ * would then be wrongly withheld from the public issue. Copy what the share says it is.
+ *
+ * Returns null for a summary with no id or author, since the url cannot be formed without both.
+ */
+export function memberShareEntry(summary) {
+  const s = summary && typeof summary === 'object' ? summary : {};
+  const author = str(s.author).trim();
+  const id = str(s.id).trim();
+  if (!author || !id) return null;
+  const slug = `${author}/${id}`;
+  const title = str(s.title).trim();
+  const shortDescription = str(s.shortDescription).trim();
+  return {
+    type: 'share',
+    slug,
+    // The site-feed title resolution, matching buildSharesIndex: the title, else the one-line description,
+    // else a neutral default.
+    title: title || shortDescription || 'Shared a link',
+    author,
+    // Suppressed when the share has NO title, because the description is then already serving AS the title
+    // above and the row would print the same sentence twice. Public frontmatter only, never a body: a
+    // members share's body never reaches here at all (shareSummary returns '' for it).
+    description: title ? (shortDescription || null) : null,
+    url: `/shares/${slug}/`,
+    publishedAt: Date.parse(str(s.createdAt)) || null,
+    visibility: s.visibility,
+  };
+}
+
+/**
  * sow-166: has this subscriber already been sent their welcome issue?
  *
  * Null, absent, zero and any non-finite value all read as NOT welcomed, which is the fail-safe direction: the

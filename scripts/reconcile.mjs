@@ -31,7 +31,7 @@ import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorMailSettingsToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorMailSettingsToKv, mirrorDigestEntitlementToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
 import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-source.mjs'; // sow-213 R4: KV overrides overlay for the plan + the git-present reality check behind reconcile's fail posture
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
@@ -713,6 +713,26 @@ async function main() {
   // role id alone would stamp @Creator on every paid + grandfathered member in the live guild. So the role id
   // is committed but stays inert until the prices are wired into reconcile's env.
   const actions = planReconcile({ members, repoIndex: repoIndex.byUsername, now, creatorRoleEnabled: shouldSyncCreatorRole(env) });
+
+  // sow-312: publish WHO may receive the members edition of the weekly digest. `members` already carries every
+  // effective status this run resolved, so this is a projection of a list we are holding, not a second sweep.
+  //
+  // It sits here, right after the plan is built, rather than in the mirror block above, because that block
+  // runs before gatherMembers and this needs its result. The blob carries github_ids ONLY.
+  //
+  // A FAILURE HERE MUST NOT FAIL THE RUN. The compile treats a missing or old list as "nobody is entitled" and
+  // sends everybody the public issue, which is the safe direction, so a mirror blip costs one week of member
+  // share titles rather than breaking membership reconciliation. Logged, and the exit code is left alone.
+  if (dryRun) {
+    console.log('reconcile: DRY RUN would publish the digest entitlement list to KV (key digest:entitled).');
+  } else {
+    try {
+      const r = await mirrorDigestEntitlementToKv({ members, env, now });
+      console.log(r.written ? `reconcile: published the digest entitlement list (${r.bytes} bytes).` : `reconcile: digest entitlement SKIPPED (${r.reason}).`);
+    } catch (e) {
+      console.error('reconcile: digest entitlement publish FAILED (non-fatal; the digest falls back to public-only):', e?.message ?? e);
+    }
+  }
 
   console.log(`reconcile: ${members.length} membership customer(s), ${actions.length} action(s) planned.`);
   for (const action of actions) console.log('  ' + describe(action));

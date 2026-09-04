@@ -20,16 +20,29 @@
 
 import { getIssue, putIssue, enqueueIssue, getSubscriber } from './mail-store.mjs';
 import { composeIssue, shouldSend, WELCOME_NOTE } from '../../membership/mail-digest.mjs';
-import { normalizeContent, normalizeNews, weeklyIssueId, welcomeIssueId, weeklyEligible, isWelcomed } from '../../membership/mail-compile-core.mjs';
+import { normalizeContent, normalizeNews, weeklyIssueId, membersIssueId, memberShareEntry, welcomeIssueId, weeklyEligible, isWelcomed } from '../../membership/mail-compile-core.mjs';
 import { canReceive } from '../../membership/mail-subscriber.mjs';
 import { MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress.mjs';
 import { queryItems as kvQueryItems } from './news/src/store.mjs';
+import { enumerateShares } from './membership-shares.mjs'; // sow-312: the gated member-shares reader (sow-158 Part 3)
+import { entitledIdsFrom, subscriberIsEntitled, DIGEST_ENTITLED_KV_KEY } from '../../membership/digest-entitlement.mjs'; // sow-312: who gets the members edition
 import { loadSourceList } from './news/src/sources.mjs';
 import { normalizeNewsOpens, distinctOpenerCount } from '../../membership/news-opens.mjs';
 import { NEWS_OPENS_KEY } from './membership-news-opened.mjs';
 
 const SITE_URL_DEFAULT = 'https://gbti.network';
 const MAIL_ISSUE_PREFIX = 'mail:issue:';
+// sow-312: the two issue FAMILIES. Each keeps its own history of what it has already mailed, so neither can
+// count the other's issues as its own. See listPriorIssueIds for why sharing one would break both.
+const WEEKLY_FAMILY = 'weekly-';
+const MEMBERS_FAMILY = 'members-';
+
+/** sow-312: read the entitlement list reconcile publishes. A read failure surfaces as a throw the caller
+ *  turns into "everybody gets the public issue"; it must never be swallowed into an empty-looking success. */
+async function defaultReadEntitlement(kv) {
+  if (!kv?.get) return null;
+  return kv.get(DIGEST_ENTITLED_KV_KEY, 'json');
+}
 // The FIRST issue's bootstrap window (owner ruling 2026-08-22): 90 days, not 7. The newest member content at
 // launch was 18 days old, so a 7-day inaugural window composes to ZERO member items (QAmaster measured 7d = 0,
 // 30d = 2, 90d = 7 items), and an empty first issue is the worst first impression for a list nobody has
@@ -39,11 +52,17 @@ const BOOTSTRAP_MS = 90 * 24 * 3600 * 1000;
 const MEMBER_SECTION_KEYS = ['article', 'project', 'prompt', 'share'];
 
 /**
- * The prior frozen issue ids, canonical `weekly-YYYY-MM-DD` shape only, strictly before currentIssueId. Enumerates
- * the mail:issue: prefix (one key per week, so a decade of issues fits inside a single KV list page). The shape
- * filter means a hand-seeded or backfilled issue with a foreign id can never be counted as a prior issue.
+ * The prior frozen issue ids in ONE family, strictly before currentIssueId. Enumerates the mail:issue: prefix
+ * (one key per week, so a decade of issues fits inside a single KV list page). The shape filter means a
+ * hand-seeded or backfilled issue with a foreign id can never be counted as a prior issue.
+ *
+ * sow-312: `family` is the id prefix and it DEFAULTS to 'weekly-', so every existing caller is unchanged and
+ * the public edition's history is byte-identical. The members edition passes 'members-' and gets a history of
+ * its own. They must not share one: ids are compared as plain strings here and in resolveWindow, so a members
+ * id inside the public family would count as one of its prior issues, and each edition would then treat the
+ * other's contents as already mailed. Both would quietly start dropping items.
  */
-async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50 } = {}) {
+async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50, family = WEEKLY_FAMILY } = {}) {
   if (!kv?.list) return [];
   const ids = [];
   let cursor;
@@ -52,7 +71,7 @@ async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50 } = {}) {
     try { res = await kv.list({ prefix: MAIL_ISSUE_PREFIX, cursor }); } catch { break; }
     for (const k of res?.keys ?? []) {
       const id = k.name.slice(MAIL_ISSUE_PREFIX.length);
-      if (!id.startsWith('weekly-')) continue;              // only canonical ids sort chronologically
+      if (!id.startsWith(family)) continue;                 // one family only; ids sort chronologically inside it
       if (currentIssueId && id >= currentIssueId) continue; // strictly before self; ignores self + any future
       ids.push(id);
     }
@@ -109,13 +128,13 @@ async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50 } = {}) {
  * and there is no separate accumulator to drift: both the mailed set and the floor are read from the frozen
  * issues themselves.
  */
-export async function resolveWindow(kv, { nowMs, currentIssueId, bootstrapMs = BOOTSTRAP_MS, historyDepth = 26, pageBudget = 50 } = {}) {
-  const priorIds = await listPriorIssueIds(kv, { currentIssueId, pageBudget });
+export async function resolveWindow(kv, { nowMs, currentIssueId, bootstrapMs = BOOTSTRAP_MS, historyDepth = 26, pageBudget = 50, family = WEEKLY_FAMILY } = {}) {
+  const priorIds = await listPriorIssueIds(kv, { currentIssueId, pageBudget, family });
   if (priorIds.length === 0) {
     return { firstIssue: true, since: Number(nowMs) - bootstrapMs, exclude: null, seen: null, previousGeneratedAt: null };
   }
   const depth = Math.max(1, historyDepth);
-  const sorted = priorIds.slice().sort();          // chronological ascending (weekly- sorts as dates)
+  const sorted = priorIds.slice().sort();          // chronological ascending (a family prefix + date sorts as dates)
   const windowIds = sorted.slice(-depth);          // the newest `depth` prior issues (all of them, if fewer)
   const agedOut = sorted.length > depth;           // has any issue fallen OUT of the exclude window?
 
@@ -194,7 +213,7 @@ async function resolveEpoch(kv, oldestId, { nowMs, bootstrapMs }) {
  * entries (activity-index uses `type` post/product/prompt + visibility; shares-index uses type:'share'); the
  * pure normalizer maps them and composeIssue's guard decides public-vs-member.
  */
-export async function gatherContentEntries(env, { fetchImpl = globalThis.fetch, siteUrl } = {}) {
+export async function gatherContentEntries(env, { fetchImpl = globalThis.fetch, siteUrl, audience = 'public', readMemberShares = enumerateShares } = {}) {
   const base = String(siteUrl || env?.SITE_URL || SITE_URL_DEFAULT).replace(/\/$/, '');
   const one = async (path) => {
     try {
@@ -206,8 +225,33 @@ export async function gatherContentEntries(env, { fetchImpl = globalThis.fetch, 
       return [];
     }
   };
-  const [activity, shares] = await Promise.all([one('/activity-index.json'), one('/shares-index.json')]);
-  return [...activity, ...shares];
+
+  // sow-312: where the SHARES come from depends on who the issue is for.
+  //
+  // /shares-index.json is public shares only, by construction: buildSharesIndex filters on isPublicShare, and
+  // the build guard fails if a members share's title or description reaches dist at all. So the members
+  // edition cannot get member shares from it and must read them through the gated Worker reader instead.
+  //
+  // ONE SOURCE OR THE OTHER, NEVER BOTH. enumerateShares returns public shares as well as members ones, so
+  // adding it alongside the artifact would double every public share. Taking it INSTEAD removes the need for
+  // any dedupe, which is one less thing to get wrong.
+  const wantsMembers = audience === 'members';
+  const shares = wantsMembers
+    ? await (async () => {
+      // FAIL SOFT, AND THE FALLBACK IS THE NARROW DIRECTION. If the reader throws (a GitHub blip, an expired
+      // installation token) the members edition falls back to the PUBLIC artifact rather than losing its
+      // shares section. That degrades the edition; it cannot widen it, which is the property that matters.
+      try {
+        const summaries = await readMemberShares(env, { fetchImpl });
+        return (Array.isArray(summaries) ? summaries : []).map(memberShareEntry).filter(Boolean);
+      } catch {
+        return one('/shares-index.json');
+      }
+    })()
+    : one('/shares-index.json');
+
+  const [activity, sharesResolved] = await Promise.all([one('/activity-index.json'), shares]);
+  return [...activity, ...sharesResolved];
 }
 
 /**
@@ -270,7 +314,11 @@ export async function gatherNewsEntries(env, {
  * is not disabled). Returns the recipient hashes. Paginates the KV list so a large base is fully walked; a bound
  * (default 200 pages) is a runaway backstop, and a truncated walk is logged by the caller, never silent.
  */
-export async function listRecipientHashes(kv, { pageBudget = 200, filter = null } = {}) {
+export async function listRecipientHashes(kv, { pageBudget = 200, filter = null, withRecord = false } = {}) {
+  // sow-312: `withRecord` is OPT IN and the default shape is unchanged, so the welcome sweep and every test
+  // keep getting a plain array of hashes. The weekly compile asks for the records because it has to split the
+  // base into the members and public editions, and re-reading every subscriber to do that would double the
+  // reads and, worse, could disagree with the list it just walked.
   if (!kv?.list) return { hashes: [], truncated: false, readErrors: 0 };
   const hashes = [];
   let cursor;
@@ -296,12 +344,84 @@ export async function listRecipientHashes(kv, { pageBudget = 200, filter = null 
       // sow-166: `filter` narrows the base WITHOUT a second walk. The welcome sweep asks for the unwelcomed,
       // the weekly asks for those welcomed in an earlier cycle. Duplicating this loop for each would also
       // duplicate the read-error and truncation handling above, which is the part that must not drift.
-      if (sub && canReceive(sub) && (!filter || filter(sub))) hashes.push(hash);
+      if (sub && canReceive(sub) && (!filter || filter(sub))) hashes.push(withRecord ? { hash, sub } : hash);
     }
     if (res?.list_complete || !res?.cursor) { truncated = false; break; }
     cursor = res.cursor;
   }
   return { hashes, truncated, readErrors };
+}
+
+/**
+ * sow-312: compose the MEMBERS edition for this week, or explain why there is not one.
+ *
+ * Returns { issue, entitledIds, memberItemCount } when there is an edition worth sending, or
+ * { skipReason } when there is not. It never throws: every failure is a skipReason, and a skip means
+ * everybody receives the public issue.
+ *
+ * THE ORDER OF THE CHECKS IS THE CHEAPEST-FIRST ORDER, not an accident. Reading the entitlement list is one
+ * KV get; composing the edition means enumerating shares over the network. So if nobody is entitled we never
+ * touch GitHub at all, which on a site with no paying members is every week.
+ */
+async function composeMembersEdition(env, {
+  kv, nowMs, now, fetchImpl, siteUrl, displayName, perSection, maxNews, historyDepth,
+  publicIssue, readEntitlement, readMemberShares,
+} = {}) {
+  let entitledIds;
+  try {
+    entitledIds = entitledIdsFrom(await readEntitlement(kv));
+  } catch {
+    // A read failure is indistinguishable from an empty list ON PURPOSE. Both mean nobody gets the members
+    // edition, and a caller that could tell them apart would be building a reason to proceed without the list.
+    return { skipReason: 'entitlement list unreadable' };
+  }
+  if (!entitledIds.size) return { skipReason: 'no entitled members' };
+
+  const membersId = membersIssueId(nowMs);
+  const existing = await getIssue(kv, membersId);
+  if (existing) {
+    // Idempotent re-run: reuse the frozen edition rather than recomposing, exactly as the public path does.
+    return { issue: existing, entitledIds, memberItemCount: countMemberItems(existing, publicIssue) };
+  }
+
+  const [contentEntries, newsEntries, regime] = await Promise.all([
+    gatherContentEntries(env, { fetchImpl, siteUrl, audience: 'members', readMemberShares }),
+    gatherNewsEntries(env, { kv }),
+    // ITS OWN FAMILY. Sharing the public family's history would make each edition count the other's contents
+    // as already mailed, and both would start silently dropping items. See listPriorIssueIds.
+    resolveWindow(kv, { nowMs, currentIssueId: membersId, historyDepth, family: MEMBERS_FAMILY }),
+  ]);
+
+  const issue = composeIssue(
+    { issueId: membersId, items: normalizeContent(contentEntries, { displayName }), news: normalizeNews(newsEntries), now },
+    { perSection, maxNews, since: regime.since, exclude: regime.exclude, seen: regime.seen, firstIssue: regime.firstIssue, audience: 'members' },
+  );
+
+  // OWNER RULING 2026-09-04: a week with no member-only item falls back to the public issue. There is nothing
+  // for the edition to add, so sending a near-identical second mail would only puzzle the reader.
+  //
+  // Counted against the PUBLIC issue's urls rather than by re-reading visibility, because by this point every
+  // item has been through publicItem and no longer carries one. What makes an edition worth sending is that
+  // it contains something the public issue does not, which is the question directly.
+  const memberItemCount = countMemberItems(issue, publicIssue);
+  if (memberItemCount === 0) return { skipReason: 'no member-only items this week' };
+
+  return { issue, entitledIds, memberItemCount };
+}
+
+/** How many urls the members edition carries that the public issue does not. */
+function countMemberItems(membersIssue, publicIssue) {
+  const urlsOf = (iss) => {
+    const out = new Set();
+    for (const section of Object.values(iss?.sections ?? {})) {
+      for (const it of Array.isArray(section) ? section : []) if (it?.url) out.add(String(it.url));
+    }
+    return out;
+  };
+  const pub = urlsOf(publicIssue);
+  let n = 0;
+  for (const url of urlsOf(membersIssue)) if (!pub.has(url)) n++;
+  return n;
 }
 
 /**
@@ -322,6 +442,9 @@ export async function compileWeeklyIssue(env, {
   // The weekly cron never passes one and keeps the date-derived id. A rehearsal passes a `test-` id, which
   // listPriorIssueIds cannot count, so rehearsing a send does not consume the real inaugural back catalogue.
   issueId: issueIdOverride = null,
+  // sow-312: both injectable so the two-edition split is unit-tested with fakes and no network.
+  readEntitlement = defaultReadEntitlement,
+  readMemberShares = enumerateShares,
 } = {}) {
   if (!kv) return { ok: false, reason: 'no kv' };
   const nowMs = Number(now());
@@ -367,16 +490,61 @@ export async function compileWeeklyIssue(env, {
     || (await resolveWindow(kv, { nowMs, currentIssueId: issueId, historyDepth }));
   const { hashes, truncated, readErrors } = await listRecipientHashes(kv, {
     filter: (sub) => weeklyEligible(sub, filterRegime?.previousGeneratedAt, filterRegime?.since),
+    // sow-312: the record itself is needed for the members/public split below, not just the hash.
+    withRecord: true,
   });
-  const enq = await enqueueIssue(kv, issue, hashes, { now });
+
+  // sow-312: THE MEMBERS EDITION.
+  //
+  // Composed as a SECOND issue in its own family, then the recipient base is partitioned so each subscriber
+  // lands in exactly one issue's pending set. That is what keeps the send count at one email per person: two
+  // editions cost two compositions, never two sends.
+  //
+  // Every failure below sends everybody the public issue. There is no path where an ambiguity produces the
+  // members edition, which is the only direction that matters: a member missing one week of share titles is
+  // recoverable and a member share in the wrong inbox is not.
+  const members = await composeMembersEdition(env, {
+    kv, nowMs, now, fetchImpl, siteUrl, displayName, perSection, maxNews, historyDepth,
+    publicIssue: issue, readEntitlement, readMemberShares,
+  });
+
+  let publicHashes = hashes.map((h) => h.hash);
+  let membersResult = null;
+  if (members?.issue) {
+    const entitled = members.entitledIds;
+    const forMembers = [];
+    const forPublic = [];
+    for (const { hash, sub } of hashes) (subscriberIsEntitled(sub, entitled) ? forMembers : forPublic).push(hash);
+    if (forMembers.length) {
+      await putIssue(kv, members.issue);
+      const menq = await enqueueIssue(kv, members.issue, forMembers, { now });
+      publicHashes = forPublic;
+      membersResult = {
+        issueId: members.issue.issueId,
+        recipients: forMembers.length,
+        enqueued: menq?.enqueued ?? 0,
+        pending: menq?.pending ?? 0,
+        counts: members.issue?.counts ?? null,
+        memberItems: members.memberItemCount,
+      };
+    }
+    // No entitled subscriber this week means the members edition has nobody to go to, so it is never frozen
+    // and never enqueued. Composing it anyway cost one pass over a list we already had.
+  }
+
+  const enq = await enqueueIssue(kv, issue, publicHashes, { now });
 
   return {
     ok: true,
     issueId,
     composed,
-    recipients: hashes.length,
+    recipients: publicHashes.length,
     enqueued: enq?.enqueued ?? 0,
     pending: enq?.pending ?? 0,
+    // sow-312: null when everybody got the public issue, which is the case on a week with no member shares,
+    // with no entitled subscribers, or whenever the entitlement list could not be read.
+    membersEdition: membersResult,
+    membersSkipped: membersResult ? null : (members?.skipReason ?? 'no entitled subscribers'),
     // A truncated page walk OR any unreadable subscriber record leaves the base silently short; fold both so the
     // cron surfaces one honest "under-sent" signal, and keep the raw read-error count for the log.
     recipientsTruncated: truncated || readErrors > 0, // the caller MUST surface this: a short base under-sends silently otherwise
