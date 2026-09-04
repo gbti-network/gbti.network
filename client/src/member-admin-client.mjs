@@ -151,6 +151,28 @@ export async function inviteAdminRequest({ token, signupBase, method = 'GET', bo
   return data;
 }
 
+/**
+ * sow-293: creator applications, over the bearer token (the extension and npm hosts). The website uses the
+ * cookie session against the same routes; the Worker accepts both (`allowCookie`).
+ *
+ * One function for both verbs, matching inviteAdminRequest above and for the same reason: they share a URL,
+ * a gate and an error shape, and splitting them means two copies of the same six lines drifting apart.
+ *
+ * The Worker gates BOTH at authorizeSuperadmin, because approving grants the Content Creator tier.
+ */
+export async function creatorApplicationAdminRequest({ token, signupBase, method = 'GET', body = null, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/admin/creator-applications', {
+    method,
+    headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `creator application request failed (${res.status})`);
+  return data;
+}
+
 /** SOW-058: the superadmin syndication queue (admin-gated read) -> { pending, sent, cancelled, failed }. */
 export async function getSyndicationQueue({ token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError('not signed in');

@@ -11,7 +11,8 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
-  socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp } from '../../client/src/operations.mjs';
+  socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
+  listCreatorApplicationsOp, decideCreatorApplicationOp } from '../../client/src/operations.mjs'; // sow-293
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
@@ -217,6 +218,12 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         if (method === 'POST') return ok(await createInviteOp(ctx, body ?? {}));
         if (method === 'PATCH') return ok(await updateInviteOp(ctx, body ?? {}));
         return ok(await listInvitesOp(ctx));
+      }
+      // sow-293: the creator application review lane. Same one-route, verb-from-the-request shape as the
+      // invites above, and for the same reason: it keeps this host in step with the npm host and the Worker.
+      case '/api/creator-applications': {
+        if (method === 'POST') return ok(await decideCreatorApplicationOp(ctx, body ?? {}));
+        return ok(await listCreatorApplicationsOp(ctx));
       }
       case '/api/coupon-refresh': // SOW-119 QA: live-oracle recheck before the expiry popup nags (clears a stale grant date)
         return ok(await refreshCouponUntil(ctx));

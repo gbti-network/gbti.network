@@ -82,6 +82,7 @@
         <button class="admin-tab" type="button" data-tab="news">News sources</button>
         <button class="admin-tab" type="button" data-tab="quotes">Quotes</button>
         <button class="admin-tab" type="button" data-tab="coupons">Coupons</button>
+        <button class="admin-tab" type="button" data-tab="applications">Creator applications</button>
         <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
       </div>
@@ -119,6 +120,13 @@
           <!-- SOW-119: the coupon registry (git-native config) + KV usage + the shareable invite links. -->
           <div class="admin-card-h"><h2>Coupons</h2><p>Free-time signup codes: create and edit coupons, track redemptions, and manage the invite links. Config edits open an auto-merged house PR.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-coupon-manager></gbti-coupon-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="applications">
+          <!-- sow-293: the creator application review lane. Unlike the managers above it opens NO pull request:
+               an application is per-person KV state, so the decision writes straight to the Worker, which gates
+               at authorizeSuperadmin because approving grants the Content Creator tier. -->
+          <div class="admin-card-h"><h2>Creator applications</h2><p>People applying for the Content Creator plan. Approving grants it immediately; there is no payment step.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-applications-manager></gbti-applications-manager></div></div>
         </section>
         <section class="admin-card" data-panel="site-settings">
           <!-- sow-271: the site-wide presentation toggles. SUPERADMIN: the Worker route carries ROLE_RANK.superadmin

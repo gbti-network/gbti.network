@@ -785,6 +785,13 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     inviteCreate(args: any = {}) { return workerPost('/membership/admin/invites', args); }, // { campaign, note?, expiresAt? }
     inviteUpdate(args: any = {}) { return workerPatch('/membership/admin/invites', args); }, // { code, action: 'revoke'|'note', note? }
 
+    // sow-293: CREATOR APPLICATIONS. Same disposition as the invites above and for the same reason: an
+    // application is prose a person wrote about themselves, keyed by github_id, so it is KV state per the
+    // storage boundary and opens no PR. The Worker gates both at authorizeSuperadmin, because approving
+    // grants a real tier.
+    creatorApplications() { return workerGet('/membership/admin/creator-applications'); }, // { ok, applications }
+    decideCreatorApplication(args: any = {}) { return workerPost('/membership/admin/creator-applications', args); }, // { githubId, decision, note? }
+
     // ----- SOW-043/046: interactive News over the cookie session (free-tier perk; authorizeSignedIn) -----
     getNews({ category, since, limit }: any = {}) {
       const qs = new URLSearchParams();

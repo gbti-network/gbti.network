@@ -152,6 +152,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     // so it takes effect at once. The host forwards these to /membership/admin/invites.
     inviteList: () => request('GET', '/api/invites'),
     inviteCreate: ({ campaign, note, expiresAt }) => request('POST', '/api/invites', { campaign, note, expiresAt }),
+    // sow-293: the creator application review lane (superadmin at the Worker).
+    creatorApplications: () => request('GET', '/api/creator-applications'),
+    decideCreatorApplication: ({ githubId, decision, note }) => request('POST', '/api/creator-applications', { githubId, decision, note }),
     inviteUpdate: ({ code, action, note }) => request('PATCH', '/api/invites', { code, action, note }),
     quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
     siteSettings: () => request('GET', '/api/site-settings'), // sow-271: the site-wide presentation toggles { settings, toggles } for the manager

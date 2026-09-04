@@ -95,6 +95,8 @@ export {
   listDiscordChannels,
   getCouponUsageOp,
   listInvitesOp,
+  listCreatorApplicationsOp,
+  decideCreatorApplicationOp,
   createInviteOp,
   updateInviteOp,
   refreshCouponUntil,
