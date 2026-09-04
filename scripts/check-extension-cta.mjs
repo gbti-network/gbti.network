@@ -66,6 +66,27 @@ function htmlFiles(dir, out = []) {
 }
 
 /**
+ * The same walk, for built SCRIPT bundles. sow-271 Phase 5: the claim ban read HTML only, and a false
+ * extension claim on a CLIENT-RENDERED page is not in the HTML at all. /news/item/ is exactly that page: its
+ * empty discussion state said members comment "from the GBTI extension" while the page had no composer, and
+ * the guard could not see it, because that sentence lives in a bundle under dist/_astro/.
+ *
+ * Scoped to the CLAIM ban, not to CTA_MARKERS. The CTA markers are class names and element ids that the toggle
+ * genuinely controls in markup; a marker string appearing in a bundle would be a different fact and would make
+ * the ON-position "renders on NO page" test mean something else.
+ */
+function scriptFiles(dir, out = []) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) scriptFiles(p, out);
+    else if (e.name.endsWith('.js')) out.push(p);
+  }
+  return out;
+}
+
+/**
  * Check the built HTML against the setting. Pure over { root, distDir, ctaEnabled } so a test can drive both
  * positions without a real build. Returns { errors, notes, checked }.
  */
@@ -116,9 +137,10 @@ export function checkExtensionCta({ distDir, ctaEnabled }) {
     }
   }
 
-  // The surfaces the toggle must never touch, checked in BOTH positions.
+  // The surfaces the toggle must never touch, checked in BOTH positions, across markup AND bundles.
+  const claimFiles = [...files, ...scriptFiles(distDir)];
   for (const [label, marker] of MUST_NOT_CLAIM) {
-    const offenders = files
+    const offenders = claimFiles
       .filter((f) => !CLAIM_EXEMPT_PATHS.some((ex) => f.includes(ex.replace(/\//g, path.sep))))
       .filter((f) => fs.readFileSync(f, 'utf8').includes(marker));
     if (offenders.length) {

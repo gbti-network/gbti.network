@@ -102,3 +102,53 @@ test('the guard walks nested directories, not just the dist root', () => {
   assert.equal(errors.length, 1);
   assert.match(errors[0], /deep\/nested\/page/);
 });
+
+// sow-271 Phase 5: the claim ban reads BUNDLES as well as markup.
+//
+// The gap it closes was found by walking into it. /news/item/ is client-rendered, so its empty discussion state
+// ("Members comment from the GBTI extension, where news threads live") never appears in any .html file: it is a
+// string inside dist/_astro/item.astro_*.js. The guard walked .html only, so a false extension claim on any
+// client-rendered page was invisible to it, and the guard reported a cheerful pass over 207 pages while the
+// claim shipped.
+//
+// The widening is deliberately scoped to MUST_NOT_CLAIM. CTA_MARKERS are class names and element ids the toggle
+// controls in markup; finding one in a bundle is a different fact, and folding it in would quietly change what
+// the setting-ON "renders on NO page" branch asserts.
+test('a false extension claim inside a BUNDLE fails, not only one in markup', () => {
+  for (const ctaEnabled of [false, true]) {
+    for (const [label, marker] of MUST_NOT_CLAIM) {
+      const files = {
+        'index.html': '<nav></nav>',                          // markup is clean: only the bundle carries it
+        '_astro/page.CAFEBABE.js': `const s=${JSON.stringify(marker)};`,
+        ...(ctaEnabled ? Object.fromEntries(CTA_MARKERS.map(([, m], i) => [`c${i}.html`, `<div>${m}</div>`])) : {}),
+      };
+      const { errors } = checkExtensionCta({ distDir: mkDist(files), ctaEnabled });
+      assert.ok(errors.some((e) => e.includes(label)),
+        `a bundle carrying "${label}" must fail with the setting ${ctaEnabled ? 'ON' : 'OFF'}`);
+    }
+  }
+});
+
+test('a clean bundle beside clean markup still PASSES, so the widening did not just break the build', () => {
+  // The other half. A guard that fires on everything is as useless as one that fires on nothing, and this is
+  // the case that proves the new walk discriminates rather than merely finding .js files alarming.
+  const { errors } = checkExtensionCta({
+    distDir: mkDist({ 'index.html': '<nav></nav>', '_astro/page.CAFEBABE.js': 'const s="write a comment";' }),
+    ctaEnabled: false,
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('an exempt PAGE does not exempt the bundles, because a bundle is not a page', () => {
+  // CLAIM_EXEMPT_PATHS matches on the file path, so /extension/ exempts dist/extension/index.html. A shared
+  // bundle under _astro/ is loaded by every page including the exempt ones, so it can never take their
+  // exemption: pinning this stops a future reader "fixing" the exemption to swallow bundles wholesale.
+  const [label, marker] = MUST_NOT_CLAIM[0];
+  const { errors } = checkExtensionCta({
+    distDir: mkDist({ 'extension/index.html': `<div>${marker}</div>`, '_astro/x.js': `const s=${JSON.stringify(marker)};` }),
+    ctaEnabled: false,
+  });
+  assert.equal(errors.length, 1, 'the exempt page must stay exempt and the bundle must still fail');
+  assert.ok(errors[0].includes(label));
+  assert.match(errors[0], /_astro/, 'the failure must name the bundle, not the exempt page');
+});

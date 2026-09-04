@@ -56,7 +56,7 @@ test('EditHooks actually imports the element, so the panel can exist on the webs
 test('the upgrade is gated on a real WEB session, not merely on a member signal', () => {
   // An extension-only signal carries no cookie session, so it cannot authenticate the publish call. Upgrading
   // on the signal alone would hand a member an Edit button whose save fails at the Worker.
-  assert.match(HOOKS, /gbti_csrf/, 'the upgrade must require the web session cookie');
+  assert.match(HOOKS, /readCookie\('gbti_csrf'\)/, 'the upgrade must require the web session cookie');
   // And nothing is imported for a visitor: the dynamic imports must sit behind the guard, never at top level.
   const topLevelElementImport = /^\s*import\s+['"][^'"]*gbti-edit-panel\.mjs['"]/m.test(HOOKS);
   assert.equal(topLevelElementImport, false, 'the element must be imported lazily, not on every page load');
@@ -71,7 +71,7 @@ test('LockedBody upgrades the decrypt element ITSELF, not via whichever sibling 
   assert.match(LOCKED, /<gbti-locked-content/, 'LockedBody no longer renders the element');
   assert.match(LOCKED, /elements\/gbti-locked-content\.mjs/,
     'LockedBody renders the element but does not import it: decryption is back to depending on Comments.astro');
-  assert.match(LOCKED, /gbti_csrf/, 'the upgrade must require a real web session, since the Worker authorizes the decrypt');
+  assert.match(LOCKED, /lbCookie\('gbti_csrf'\)/, 'the upgrade must require a real web session, since the Worker authorizes the decrypt');
   // And it must stay lazy: a visitor with no session should fetch none of it.
   assert.equal(/^\s*import\s+['"][^'"]*gbti-locked-content\.mjs['"]/m.test(LOCKED), false,
     'the element must be imported lazily inside the guard, not at top level');
@@ -115,4 +115,64 @@ test('add_product keeps its NAME (agents call it) while creating a project', () 
   const end = MCP.indexOf("\n  },", from);           // the close of this tool object, not a guessed width
   assert.ok(end > from, 'could not find the end of the add_product tool object');
   assert.match(MCP.slice(from, end), /type: 'project'/, 'add_product must create a project, whatever it is called');
+});
+
+// sow-271 Phase 5: the NEWS discussion composer. Same dead-element family as the two cases above, and it had
+// gone unnoticed longest: /news/item/ already RENDERED the discussion (it reads /comments-index.json and shows
+// public bodies plus locked member rows) and had no way to add to it. The page's own empty state said members
+// comment "from the GBTI extension", which was true only because nothing here had ever been connected.
+//
+// Nothing needed building. `news` has been in COMMENT_TARGET_TYPES since SOW-046, workbench-client.postComment
+// accepts it, and the Worker gates it server-side. It was a mount.
+const NEWS = read('../src/pages/news/item.astro');
+
+test('the news page mounts a composer AND defines it, so a member can answer the discussion it renders', () => {
+  // The element is created in script rather than baked by CommentBox.astro because the page is client-rendered:
+  // the target slug comes from ?g=<guid> at runtime, so there is no build-time slug to bake.
+  assert.match(NEWS, /createElement\('gbti-comment-box'\)/, 'the news page renders a discussion with no composer');
+  assert.match(NEWS, /'data-gbti-target-type', 'news'/, 'the composer must target the news thread');
+  assert.match(NEWS, /'data-gbti-target-slug', slug/, 'the composer must carry the item slug, or it posts nowhere');
+  // Mounting without defining is the whole failure this suite exists for.
+  assert.match(NEWS, /elements\/gbti-comment-box\.mjs/, 'the news page mounts the element but never imports it');
+});
+
+test('the news composer upgrade is session-gated and lazy, like every other website upgrade', () => {
+  // The CALL, not the bare string: an earlier version of this line matched the explanatory comment sitting
+  // above the guard, so deleting the guard outright left the test green. Mutation testing caught it.
+  assert.match(NEWS, /readCookie\('gbti_csrf'\)/, 'the upgrade must require a real web session, not merely a member signal');
+  assert.equal(/^\s*import\s+['"][^'"]*gbti-comment-box\.mjs['"]/m.test(NEWS), false,
+    'the element must be imported lazily inside the guard: a visitor should fetch none of it');
+});
+
+test('the mount is attempted from BOTH sides of the race, and the fetch side runs after the append', () => {
+  // The composer does not exist when the script runs; it arrives with the news fetch. And onMemberSignal does
+  // NOT replay, so a member whose status came from the sessionStorage cache is fanned out synchronously in the
+  // header's script, BEFORE this page's listener registers. Only the post-fetch call catches that member, and
+  // only if it runs once the composer is actually in the document.
+  // Anchored to the start of a line, so a COMMENTED-OUT registration does not satisfy it. This is the third
+  // assertion in this file that matched prose rather than code (the two csrf guards were the others), which is
+  // the whole argument for mutation-testing a source-reading guard rather than eyeballing it.
+  assert.match(NEWS, /^\s*onMemberSignal\(mountNewsComposer\);/m, 'the signal side of the race is not wired');
+  const append = NEWS.indexOf('target.append(disc)');
+  assert.ok(append > 0, 'the discussion append was not found: this check is broken, not the subject');
+  // EXACTLY ONE call site, and it is after the append. The first version of this asserted only that a call
+  // existed somewhere after the append, which an ADDED too-early call survives untouched: the later one is
+  // still there and still found. Counting is what makes the ordering claim real.
+  const calls = [...NEWS.matchAll(/upgradeComposer\(\);/g)].map((m) => m.index);
+  assert.equal(calls.length, 1, `upgradeComposer is called ${calls.length} times; a call before the append finds no composer`);
+  assert.ok(calls[0] > append, 'upgradeComposer must run AFTER the section is in the document, or it finds nothing');
+
+  // And the guard order inside the mount matters: the "is it on the page yet" check must come BEFORE the flag
+  // is latched, or the first (too-early) attempt permanently disables the second.
+  const fn = /async function mountNewsComposer\(signal: any\) \{([\s\S]*?)\n    \}/.exec(NEWS);
+  assert.ok(fn, 'mountNewsComposer was not found: this check is broken, not the subject');
+  const q = fn[1].indexOf("querySelector('gbti-comment-box')");
+  const latch = fn[1].indexOf('composerMounted = true');
+  assert.ok(q > 0 && latch > 0, 'the presence guard or the latch is missing');
+  assert.ok(q < latch, 'the presence check must precede the latch, or an early attempt locks out the real one');
+});
+
+test('the empty state no longer sends a reader to the extension to do what this page now does', () => {
+  assert.ok(!NEWS.includes('Members comment from the GBTI extension'),
+    'the page mounts a composer now, so the copy telling readers to use the extension is false');
 });

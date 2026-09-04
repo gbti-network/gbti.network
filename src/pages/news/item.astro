@@ -70,6 +70,35 @@ import { SIGNUP_BASE } from '../../lib/membership';
   <script>
     import { newsTargetSlug } from '../../lib/home-feed.mjs';
     import { SITE_NAME } from '../../lib/brand';
+    import { onMemberSignal, currentIdentity, readMemberSignal } from '../../lib/member-signal';
+
+    // sow-271 Phase 5: upgrade the news comment composer for a signed-in WEBSITE member. Same shape as
+    // Comments.astro and EditHooks.astro, with one difference that matters: this page renders its discussion
+    // from a fetch, so the element does not exist when the script runs. The member signal and the fetch race,
+    // so BOTH sides call this, and whichever arrives second is the one that does the work.
+    let composerMounted = false;
+    async function mountNewsComposer(signal: any) {
+      if (composerMounted || !signal || !signal.login) return;   // signed out, or not resolved yet
+      // Only for a real cookie session. An extension-only member has a display signal but no gbti_csrf, so a
+      // website client would have nothing to authenticate with; their extension upgrades the same element.
+      if (!readCookie('gbti_csrf')) return;
+      if (!document.querySelector('gbti-comment-box')) return;   // the fetch has not rendered it yet
+      composerMounted = true;
+      const signupBase = document.documentElement.dataset.signupBase || '';
+      const { createWorkbenchClient } = await import('../../lib/workbench-client');
+      const { setClient } = await import('../../../client-ui/src/base.mjs');
+      setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+      await import('../../../client-ui/src/elements/gbti-comment-box.mjs');
+    }
+    function upgradeComposer() { mountNewsComposer(currentIdentity(readMemberSignal())); }
+    function readCookie(name: string): string | null {
+      for (const part of document.cookie.split(';')) {
+        const eq = part.indexOf('=');
+        if (eq >= 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim() || null;
+      }
+      return null;
+    }
+    onMemberSignal(mountNewsComposer); // the hydrated cookie member, whenever it lands
 
     const view = document.querySelector<HTMLElement>('[data-news-item]');
     const target = document.querySelector<HTMLElement>('[data-news-target]');
@@ -198,7 +227,10 @@ import { SIGNUP_BASE } from '../../lib/membership';
         disc.append(el('h2', 'h3', rows.length + (rows.length === 1 ? ' Comment' : ' Comments')));
         if (!rows.length) {
           const box = el('div', 'card news-disc-empty');
-          box.append(el('p', 'body-sm muted', 'No member discussion yet. Members comment from the GBTI extension, where news threads live.'));
+          // sow-271 Phase 5: this used to say members comment "from the GBTI extension", which was true only
+          // because nothing had connected the composer here. The composer is mounted below now, so the
+          // sentence would be false the moment it rendered.
+          box.append(el('p', 'body-sm muted', 'No member discussion yet. Be the first to comment.'));
           const join = el('a', 'link', 'Become a member');
           join.setAttribute('href', '/membership/');
           box.append(join);
@@ -225,7 +257,27 @@ import { SIGNUP_BASE } from '../../lib/membership';
           }
           disc.append(ul);
         }
+
+        // sow-271 Phase 5: the comment COMPOSER, which this page never mounted. Everything it needs already
+        // existed: postComment is on the website client and 'news' is already a valid comment target
+        // (COMMENT_TARGET_TYPES). It was a mount, not a build.
+        //
+        // Inert by construction: <gbti-comment-box> is an unknown element until something imports its
+        // definition, and only a signed-in member reaches that import below. A signed-out reader gets the
+        // same nothing they got before.
+        const composer = document.createElement('gbti-comment-box');
+        composer.setAttribute('data-gbti-target-type', 'news');
+        composer.setAttribute('data-gbti-target-slug', slug);
+        disc.append(composer);
+
         target.append(disc);
+        // AFTER the append, and this call is the load-bearing one. onMemberSignal does NOT replay: it registers
+        // a listener, and hydrateMemberSignal fans out to whoever is registered at that moment. On a
+        // sessionStorage cache hit that fan-out runs SYNCHRONOUSLY inside the header's script, which executes
+        // before this one, so the listener below can miss it entirely. What survives is the stamped
+        // dataset.gbtiMember attribute, which readMemberSignal picks up here. Called before the append, the
+        // querySelector guard would find no composer and there would be no third chance.
+        upgradeComposer();
       }).catch(() => missing());
 
       // The source FOLLOW button: extension present + signed in -> relay into the extension's news tab
