@@ -749,6 +749,21 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'coupon-redemptions', auto: true, tool: 'erase-member.mjs --apply', action: `Delete every redemption:<CODE>:${githubId} record (the id is in the key name) and decrement each shared redemptions:<CODE> counter.` },
     { step: 'draft-images', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete every ${DRAFT_IMAGES_PREFIX(githubId)}* key (staged image bytes for unpublished drafts).` },
     { step: 'activity', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the edge-store keys ${ACTIVITY_KEY(githubId)} (favorites + collections) and ${FOLLOWS_KEY(githubId)} (the follow graph).` },
+    // sow-313 follow-up: FOUR STEPS RAN AND THE PLAN NEVER LISTED THEM. `runErasure` called eraseFollows,
+    // erasePrefs, eraseDrafts and minimizeRedeemedInvites while planErasure declared none of them, so the plan
+    // under-reported what an erasure does for as long as those steps existed.
+    //
+    // The AUDIT record was never wrong: buildAuditRecord is fed the steps `runStep` accumulated, not the plan.
+    // What was short is the PLAN, which is what a person reads BEFORE running it and what stands as the
+    // written procedure. An erasure deleting somebody's follows, prefs and drafts while the documented
+    // procedure mentions none of them is a gap in the description, not in the deletion.
+    //
+    // Found by diffing the two lists while removing a different pair of steps. A guard now holds them in
+    // lockstep, because the same drift is otherwise invisible: nothing fails when the plan falls behind.
+    { step: 'follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-023: hard-delete the OUTBOUND follow graph (follows:${githubId}). Inbound follows self-heal, since the feed drops a followed username with no published profile.` },
+    { step: 'prefs', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-046: hard-delete the member's prefs (prefs:${githubId}: category interests + followed news channels).` },
+    { step: 'drafts', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-157: hard-delete the hosted draft store (drafts:${githubId}), which may contain unpublished text.` },
+    { step: 'redeemed-invites', auto: true, tool: 'erase-member.mjs --apply', action: `Minimize every invite this member redeemed (invite:*): null redeemedBy + redeemedByLogin, KEEP redeemedAt (a date with nobody attached identifies nobody). The superadmin administration note is deliberately left alone; redacting an admin's own outreach text is the owner's call, not a cleanup step's.` },
     { step: 'notifications', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete ${NOTIFICATIONS_KEY(githubId)} (SOW-150/186: the member's inbound notifications -- mentions + followed-author publishes).` },
     { step: 'reverse-follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-186: delete ${FOLLOWERS_KEY(githubId)} (the inbound follower index) and scrub github_id ${githubId} from every followers:* set (a prefix scan, resolution-free). Follower github_ids survive in their own forward follows: lists; reconcile's full recompute is the periodic backstop.` },
     { step: 'lookup-cache', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the lookup-cache key ${LOOKUP_KEY(githubId)} (github_id -> Stripe customer_id).` },
