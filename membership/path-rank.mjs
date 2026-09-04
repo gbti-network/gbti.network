@@ -29,6 +29,10 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   'house/moderation-flags.yml',
   'house/site-settings.yml',
   'house/syndication-config.yml',
+  // sow-312: the newsletter send-rate caps. It decides how much mail reaches other people's inboxes, and
+  // daily_cap: 0 is the switch that stops sending altogether, so it belongs at the same tier as the files
+  // above rather than inheriting /house/'s admin rank.
+  'house/mail-settings.yml',
 ]);
 
 /** A path is canonical iff it is a clean forward-slash relative path (mirrors classify-pr.isCleanPath). */
