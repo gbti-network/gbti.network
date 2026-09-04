@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  deleteKvKey, eraseActivity, eraseFollows, eraseLookupCache, eraseShareVotes, eraseNewsOpens, planErasure, runErasure,
+  deleteKvKey, eraseActivity, eraseFollows, eraseLookupCache, eraseNewsOpens, planErasure, runErasure,
   eraseDiscordRoles, eraseContent, eraseStripeCustomer, ACTIVITY_KEY, FOLLOWS_KEY, LOOKUP_KEY, MEMBERS_INDEX_PATH,
   eraseCouponGrant, eraseCouponRedemptions, COUPON_GRANT_KEY, minimizeCouponGrant, eraseCouponLock,
   minimizeRedeemedInvites, eraseNotifications, NOTIFICATIONS_KEY, eraseReverseFollows,
@@ -488,81 +488,6 @@ test('runErasure skips the Stripe step unless --delete-stripe (deleteStripe) is 
   const withFlag = await runErasure({ githubId: '9', apply: true, env: CF, fetchImpl, clients, deleteStripe: true });
   assert.equal(withFlag.steps.find((s) => s.step === 'stripe').outcome, 'deleted');
   assert.equal(stripeDeleted, true);
-});
-
-test('SOW-057: eraseShareVotes scrubs the github_id from every per-target voter set', async () => {
-  const puts = [];
-  const fetchImpl = async (url, init) => {
-    if (url.includes('/keys')) {
-      return { ok: true, json: async () => ({ result: [{ name: 'upvotes:share:alice/x' }, { name: 'upvotes:share:bob/y' }], result_info: { cursor: '' } }) };
-    }
-    if ((init?.method || 'GET') === 'GET' && url.includes('/values/')) {
-      const key = decodeURIComponent(url.split('/values/')[1]);
-      const store = {
-        'upvotes:share:alice/x': { voters: ['9', 'v2'], author: null, enqueuedAt: null },
-        'upvotes:share:bob/y': { voters: ['v3'], author: null, enqueuedAt: 5 }, // does not include 9 -> unchanged
-      };
-      return { ok: true, json: async () => store[key] };
-    }
-    if (init?.method === 'PUT') { puts.push({ url, body: JSON.parse(init.body) }); return { ok: true }; }
-    return { ok: true };
-  };
-  const r = await eraseShareVotes({ githubId: '9', env: CF, fetchImpl });
-  assert.equal(r.scrubbed, 1); // only alice/x contained '9'
-  assert.equal(puts.length, 1);
-  assert.ok(!puts[0].body.voters.includes('9'), 'the erased id is removed from the voter set');
-  assert.deepEqual(puts[0].body.voters, ['v2']);
-});
-
-// sow-313: upvoting is retired, but eraseShareVotes SURVIVES it (the upvotes:share:* sets are still in KV
-// holding real github_ids until the owner-run purge). Its scrubVoter helper was inlined here when
-// membership/share-votes.mjs was deleted, and share-votes.test.mjs went with it, so two branches that helper
-// owned lost their direct coverage. They are re-covered HERE, through the public boundary, which is the better
-// place: this is the path that actually runs during an erasure.
-test('sow-313: the erased member is also cleared as the CACHED AUTHOR of a vote set', async () => {
-  // The author id is cached on the record, so a member who authored a share leaves their github_id there even
-  // after their vote is gone. Scrubbing only the voters array would leave that copy behind, and it is the same
-  // identifier: a right-to-erasure request that removes one and not the other has not erased anything.
-  const puts = [];
-  const fetchImpl = async (url, init) => {
-    if (url.includes('/keys')) return { ok: true, json: async () => ({ result: [{ name: 'upvotes:share:nine/x' }], result_info: { cursor: '' } }) };
-    if ((init?.method || 'GET') === 'GET' && url.includes('/values/')) {
-      return { ok: true, json: async () => ({ voters: ['v2'], author: '9', enqueuedAt: null }) }; // 9 is the AUTHOR, not a voter
-    }
-    if (init?.method === 'PUT') { puts.push(JSON.parse(init.body)); return { ok: true }; }
-    return { ok: true };
-  };
-  const r = await eraseShareVotes({ githubId: '9', env: CF, fetchImpl });
-  assert.equal(r.scrubbed, 1, 'an author-only match must still count as a change, or the write never happens');
-  assert.equal(puts.length, 1);
-  assert.equal(puts[0].author, null, 'the cached author id must be cleared when it is the erased member');
-  assert.deepEqual(puts[0].voters, ['v2'], 'the other voters are untouched');
-});
-
-test('sow-313: a MALFORMED stored vote set is coerced rather than crashing the erasure', async () => {
-  // An erasure must not be stoppable by one bad KV value. A hand-edited or partially-written record has to
-  // coerce to the canonical shape, and the erased id must still come out of it.
-  const puts = [];
-  const fetchImpl = async (url, init) => {
-    if (url.includes('/keys')) return { ok: true, json: async () => ({ result: [{ name: 'upvotes:share:junk/x' }], result_info: { cursor: '' } }) };
-    if ((init?.method || 'GET') === 'GET' && url.includes('/values/')) {
-      // voters carries a duplicate, a padded string, a number and a null; enqueuedAt is not a number.
-      return { ok: true, json: async () => ({ voters: [' 9 ', '9', 7, null, 'v2'], author: 12, enqueuedAt: 'soon' }) };
-    }
-    if (init?.method === 'PUT') { puts.push(JSON.parse(init.body)); return { ok: true }; }
-    return { ok: true };
-  };
-  const r = await eraseShareVotes({ githubId: '9', env: CF, fetchImpl });
-  assert.equal(r.scrubbed, 1);
-  assert.ok(!puts[0].voters.includes('9'), 'the erased id must be gone even when it was stored padded');
-  assert.deepEqual(puts[0].voters, ['7', 'v2'], 'ids coerce to trimmed strings, duplicates and nulls drop');
-  assert.equal(puts[0].author, '12', 'a numeric author id coerces to a string rather than being dropped');
-  assert.equal(puts[0].enqueuedAt, null, 'a non-numeric watermark coerces to null instead of propagating');
-});
-
-test('eraseShareVotes is a reported no-op without CF credentials', async () => {
-  const r = await eraseShareVotes({ githubId: '9', env: {}, fetchImpl: () => { throw new Error('no fetch'); } });
-  assert.equal(r.skipped, true);
 });
 
 test('planErasure marks the auto-driven steps auto and keeps the irreversible ones manual', () => {

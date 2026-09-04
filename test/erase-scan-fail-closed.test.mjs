@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  listKvByPrefix, eraseShareVotes, eraseNewsOpens, eraseContentOpens,
+  listKvByPrefix, eraseNewsOpens,
   scrubConversionSnapshots, minimizeRedeemedInvites, eraseReverseFollows, runErasure,
   readKvValueStrict, kvRestShim, findMemberSubscriberHashes, eraseCouponRedemptions, minimizeCouponGrant, putKvValue,
 } from '../scripts/lib/erase-member.mjs';
@@ -78,9 +78,7 @@ test('missing CF creds report the no-op with the full shape, so a caller destruc
 // --- the six erasure callers: a record they could not read must not be reported as a clean run ---
 
 const CALLERS = [
-  ['eraseShareVotes', eraseShareVotes, 'upvotes:share:'],
   ['eraseNewsOpens', eraseNewsOpens, 'news-opens:'],
-  ['eraseContentOpens', eraseContentOpens, 'content-opens:'],
   ['scrubConversionSnapshots', scrubConversionSnapshots, 'conv:'],
   ['minimizeRedeemedInvites', minimizeRedeemedInvites, 'invite:'],
   ['eraseReverseFollows', eraseReverseFollows, 'followers:'],
@@ -106,11 +104,11 @@ for (const [name, fn, prefix] of CALLERS) {
 
 test('an unparsed value alone does not flag incomplete: it was read, it is simply not this step\'s shape', async () => {
   const { fetchImpl } = mkFetch({
-    keys: ['upvotes:share:a', 'upvotes:share:b'],
-    values: { 'upvotes:share:a': {} },
-    unparsed: new Set(['upvotes:share:b']),
+    keys: ['news-opens:a', 'news-opens:b'],
+    values: { 'news-opens:a': {} },
+    unparsed: new Set(['news-opens:b']),
   });
-  const r = await eraseShareVotes({ githubId: '9', env: CF, fetchImpl });
+  const r = await eraseNewsOpens({ githubId: '9', env: CF, fetchImpl });
   assert.ok(!r.incomplete, 'schema drift is not a blind spot; failing closed on it would make the guard noise');
 });
 
@@ -365,9 +363,7 @@ test('DRIFT: every erasure writer is reachable only behind a creds guard, whiche
   // rather than either mechanism, so a ninth writer that invents a third way still has to satisfy it.
   const writers = [
     ['eraseReverseFollows', eraseReverseFollows],
-    ['eraseShareVotes', eraseShareVotes],
     ['eraseNewsOpens', eraseNewsOpens],
-    ['eraseContentOpens', eraseContentOpens],
     ['scrubConversionSnapshots', scrubConversionSnapshots],
     ['minimizeRedeemedInvites', minimizeRedeemedInvites],
     ['eraseCouponRedemptions', eraseCouponRedemptions],

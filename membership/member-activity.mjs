@@ -14,9 +14,11 @@
 //
 // sow-313 removed `upvotes` from this shape. normalizeActivity rebuilds from emptyActivity(), so a stored
 // record that still carries the array loses it on the next write. That is deliberate: it is personal data
-// nothing reads any more, and letting it evaporate on contact is the right direction. The per-TARGET voter
-// sets under `upvotes:share:*` are a separate key that no write here touches; they are purged separately, and
-// eraseShareVotes stays until that purge is confirmed.
+// nothing reads any more, and letting it evaporate on contact is the right direction.
+//
+// The KV that outlived the feature is GONE as of 2026-09-04: the per-target voter sets and the per-item
+// content-open sets were purged, the re-run read zero across all three prefixes, and the two erasure steps
+// that existed only to keep that data reachable came out with it. There is nothing left here to erase.
 
 // SOW-050 P3: a Share is a first-class basket type alongside post/product/prompt. Its slug is the composite
 // "<author>/<id>" (the same targetSlug the comment system uses), so it legitimately carries one slash; every

@@ -99,7 +99,7 @@ export async function eraseNotifications({ githubId, env = process.env, fetchImp
  *     forward follows: lists (the source of truth), so deleting this derived index loses nothing recoverable.
  *   - AS A FOLLOWER: scrub the member's github_id from every followers:<G> set they appear in (the "id follows
  *     G" reflection). This also stops a followed author's next publish from re-creating a notifications:<id> for
- *     the erased member. Resolution-FREE prefix scan over followers:* (mirrors eraseShareVotes) -- the reworked
+ *     the erased member. Resolution-FREE prefix scan over followers:* (mirrors the news-opens step) -- the reworked
  *     index is keyed by github_id, and erasure holds only the member's own id, not the followed members' ids,
  *     so a scan is how it finds them WITHOUT the username->github_id resolution the rework deliberately removed.
  *
@@ -291,63 +291,9 @@ export async function putKvValue({ key, value, env = process.env, fetchImpl = gl
 }
 
 /**
- * sow-313: upvoting is RETIRED, and this step OUTLIVES it on purpose. The feature is gone from every surface,
- * but the `upvotes:share:*` sets it wrote are still sitting in KV holding real member github_ids, so this is
- * what a right-to-erasure request reaches them through. It comes out only after the owner-run purge is
- * confirmed, never before: removing it first would strand person-keyed records that nothing could then delete.
- *
- * `scrubVoter` used to live in membership/share-votes.mjs and was INLINED here when that module went. Keeping
- * the whole voting module alive for one erasure helper would have left the machinery sitting there looking
- * usable.
- *
- * SOW-057 GDPR (the original note, still accurate): these sets are keyed by TARGET, not by member, so the
- * per-member `activity:` delete does not reach them. Removing the id, and clearing it as the cached author when
- * it matches, is the erasure for the behavioral upvote data. The syndication queue items (synd:item:*)
- * reference the author by public username and auto-expire via TTL, so they are not scrubbed here. Reported
- * no-op without CF creds.
- */
-function scrubVoter(record, githubId, { now = Date.now } = {}) {
-  const id = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
-  const target = id(githubId);
-  // The stored shape, coerced defensively: a hand-edited or partially-written value must not crash an erasure.
-  const raw = record && typeof record === 'object' ? record : {};
-  const seen = new Set();
-  const voters = [];
-  if (Array.isArray(raw.voters)) for (const v of raw.voters) { const t = id(v); if (t && !seen.has(t)) { seen.add(t); voters.push(t); } }
-  const r = {
-    voters,
-    author: id(raw.author) || null,
-    enqueuedAt: Number.isFinite(Number(raw.enqueuedAt)) && raw.enqueuedAt != null ? Number(raw.enqueuedAt) : null,
-    updatedAt: Number.isFinite(Number(raw.updatedAt)) && raw.updatedAt != null ? Number(raw.updatedAt) : null,
-  };
-  const before = r.voters.length;
-  r.voters = r.voters.filter((v) => v !== target);
-  const authorWas = r.author;
-  if (r.author === target) r.author = null; // also drop the cached author id if it is the erased member
-  const changed = r.voters.length !== before || authorWas !== r.author;
-  if (changed) r.updatedAt = Number(now());
-  return { record: r, changed };
-}
-
-export async function eraseShareVotes({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  if (!githubId) throw new Error('a github_id is required');
-  const listed = await listKvByPrefix({ prefix: 'upvotes:share:', env, fetchImpl });
-  if (!listed.available) return { skipped: true, reason: listed.reason };
-  let scrubbed = 0;
-  for (const { key, value } of listed.entries) {
-    const { record, changed } = scrubVoter(value, String(githubId));
-    if (changed) {
-      await putKvValue({ key, value: JSON.stringify(record), env, fetchImpl });
-      scrubbed++;
-    }
-  }
-  return { scrubbed, ...(incompleteScan(listed, 'upvotes:share:') || {}) };
-}
-
-/**
  * SOW-111 GDPR: scrub the member's github_id from every per-item news detail-open set (`news-opens:*`). These
  * sets are keyed by news guid (not by member), so the per-member activity: delete does not reach them.
- * Mirrors eraseShareVotes (list -> scrub -> write back). Reported no-op without CF creds.
+ * Mirrors the news-opens step (list -> scrub -> write back). Reported no-op without CF creds.
  */
 export async function eraseNewsOpens({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
@@ -362,53 +308,6 @@ export async function eraseNewsOpens({ githubId, env = process.env, fetchImpl = 
     }
   }
   return { scrubbed, ...(incompleteScan(listed, 'news-opens:') || {}) };
-}
-
-/**
- * sow-313: the SOW-126 `popular` engine is RETIRED and this step OUTLIVES it, for the same reason
- * eraseShareVotes above does. The engine, its beacon and its store are gone, but the `content-opens:*` sets
- * they wrote still hold real member github_ids in KV until the owner-run purge, and this is what a
- * right-to-erasure request reaches them through. It comes out after the purge is confirmed, never before.
- *
- * `scrubContentOpener` used to be `scrubOpener` in membership/content-opens.mjs and was INLINED here when that
- * module went, so the erasure does not keep a retired engine's core alive just to reach one helper.
- *
- * SOW-126 GDPR (the original note, still accurate): these sets are keyed by content item, not by member, so
- * the per-member `activity:` delete does not reach them. Mirrors eraseNewsOpens. Reported no-op without CF
- * creds.
- */
-function scrubContentOpener(record, githubId, { now = Date.now } = {}) {
-  const id = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
-  const target = id(githubId);
-  // Coerced defensively: one malformed KV value must not be able to stop an erasure.
-  const raw = record && typeof record === 'object' ? record : {};
-  const seen = new Set();
-  const openers = [];
-  if (Array.isArray(raw.openers)) for (const v of raw.openers) { const t = id(v); if (t && !seen.has(t)) { seen.add(t); openers.push(t); } }
-  const r = {
-    openers,
-    updatedAt: Number.isFinite(Number(raw.updatedAt)) && raw.updatedAt != null ? Number(raw.updatedAt) : null,
-  };
-  const before = r.openers.length;
-  r.openers = r.openers.filter((v) => v !== target);
-  const changed = r.openers.length !== before;
-  if (changed) r.updatedAt = Number(now());
-  return { record: r, changed };
-}
-
-export async function eraseContentOpens({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  if (!githubId) throw new Error('a github_id is required');
-  const listed = await listKvByPrefix({ prefix: 'content-opens:', env, fetchImpl });
-  if (!listed.available) return { skipped: true, reason: listed.reason };
-  let scrubbed = 0;
-  for (const { key, value } of listed.entries) {
-    const { record, changed } = scrubContentOpener(value, String(githubId));
-    if (changed) {
-      await putKvValue({ key, value: JSON.stringify(record), env, fetchImpl });
-      scrubbed++;
-    }
-  }
-  return { scrubbed, ...(incompleteScan(listed, 'content-opens:') || {}) };
 }
 
 /** GET one raw KV value via the REST API (used for the shared coupon counter). Missing creds = null. */
@@ -602,7 +501,7 @@ export async function eraseConversionSnapshot({ githubId, env = process.env, fet
  * SOW-059 GDPR: scrub the member's github_id from every OTHER member's frozen snapshot where they appear as a
  * COUNTERPART (first/last-touch owner, an item owner, the inviter, or a collaboration recipient). The per-member
  * conv:<id> delete does not reach those. Nulling the id makes that share fall to retained at payout (money-safe).
- * Reported no-op without CF creds. Mirrors eraseShareVotes (list -> scrub -> write back).
+ * Reported no-op without CF creds. Mirrors the news-opens step (list -> scrub -> write back).
  */
 export async function scrubConversionSnapshots({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
@@ -853,7 +752,6 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'notifications', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete ${NOTIFICATIONS_KEY(githubId)} (SOW-150/186: the member's inbound notifications -- mentions + followed-author publishes).` },
     { step: 'reverse-follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-186: delete ${FOLLOWERS_KEY(githubId)} (the inbound follower index) and scrub github_id ${githubId} from every followers:* set (a prefix scan, resolution-free). Follower github_ids survive in their own forward follows: lists; reconcile's full recompute is the periodic backstop.` },
     { step: 'lookup-cache', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the lookup-cache key ${LOOKUP_KEY(githubId)} (github_id -> Stripe customer_id).` },
-    { step: 'share-votes', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every per-target share-vote set (upvotes:share:*); syndication queue items auto-expire via TTL.` },
     { step: 'news-opens', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every per-item news detail-open set (news-opens:*, SOW-111).` },
     { step: 'conv-snapshot', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the member's frozen conversion snapshot ${CONV_SNAPSHOT_KEY(githubId)} (SOW-059).` },
     { step: 'conv-counterpart', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every OTHER member's frozen snapshot (conv:*) where they are a first/last-touch owner, inviter, or collaborator.` },
@@ -1096,9 +994,7 @@ export async function runErasure({
   await runStep('drafts', () => eraseDrafts({ githubId, env, fetchImpl })); // SOW-157: hosted draft staging
   await runStep('draft-images', () => eraseDraftImages({ githubId, env, fetchImpl })); // the staged image bytes beside those drafts
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
-  await runStep('share-votes', () => eraseShareVotes({ githubId, env, fetchImpl })); // SOW-057: per-target voter sets
   await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets
-  await runStep('content-opens', () => eraseContentOpens({ githubId, env, fetchImpl })); // SOW-126: per-item content-open sets
   await runStep('coupon-grant', () => minimizeCouponGrant({ githubId, env, fetchImpl })); // SOW-119: minimize, never delete (owner ruling)
   await runStep('coupon-redemptions', () => eraseCouponRedemptions({ githubId, env, fetchImpl })); // SOW-119: id-in-key records + counter
   await runStep('redeemed-invites', () => minimizeRedeemedInvites({ githubId, env, fetchImpl })); // sow-231: person-keyed by redeemedBy, so it needs a sweep
