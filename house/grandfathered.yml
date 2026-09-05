@@ -1,0 +1,5 @@
+grandfathered:
+  - github_id: '900000035'
+    reason: SOW-035 E2E sentinel (auto-removed)
+    until: null
+    at: '2026-09-02T14:38:50.016Z'
