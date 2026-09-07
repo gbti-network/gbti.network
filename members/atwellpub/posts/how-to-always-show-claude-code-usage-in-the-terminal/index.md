@@ -16,19 +16,27 @@ I only recently learned that you can modify Claude Code's terminal behavior dire
 
 The feature is called the [status line](https://code.claude.com/docs/en/statusline), and it is a supported part of Claude Code rather than a hack. You point a `statusLine` setting at any shell script. Claude Code hands that script the session data as JSON on stdin on every render, and prints whatever the script prints in the bar at the bottom of the terminal.
 
-That matters because of what is in the JSON. The payload carries `rate_limits`, with your five hour and seven day windows, each as a used percentage and a reset time. So a script drop-in can put your model usage in the CLI permanently, visible while you work, instead of something you stop and ask for. Once it is in the bar you stop running `/usage` to find out where you stand.
+The payload carries `rate_limits`, with your five hour and seven day windows, each as a used percentage and a reset time. So a script drop-in can put your model usage in the CLI permanently, visible while you work, instead of something you stop and ask for. Once it is in the bar you stop running `/usage` to find out where you stand.
 
 Stefano Ginella ([GitHub](https://github.com/stefanoginella), [Codeable](https://www.codeable.io/developers/stefano-ginella/?ref=MzT91)) wrote [a single-file status line](https://gist.github.com/stefanoginella/ffe56f293baf6241abe74c3883082755) that does exactly this, and it is the one I installed:
 
 ![The Claude Code status line rendering the model, effort level, context use, the five hour and seven day rate limit windows, and a daily budget figure](./images/claude-code-status-line.webp)
 
-Left to right on the first line: the model and its effort level, how full the context window is, the share of the five hour rate limit spent and how long until it resets, the same for the seven day limit, and a daily pace figure that says whether today's rate reaches the weekly reset. The second line carries the session id, the project path, and the git branch.
+Reading the first line from left to right:
 
-Two things about the data are worth knowing before you install anything. The `rate_limits` object is only present for Claude.ai Pro and Max subscribers, and only after the session's first API response, so a good script has to handle it being absent rather than print an error. And none of it costs an API call, because Claude Code is already handing the numbers to your script.
+- The model and its effort level
+- How full the context window is
+- The share of the five hour rate limit spent, and how long until it resets
+- The same pair for the seven day limit
+- A daily pace figure, which says whether today's rate reaches the weekly reset
 
-## Installing it
+The second line carries the session id, the project path, and the git branch.
 
-Save the file as `~/.claude/statusline/statusline.mjs`, then add a `statusLine` block to `~/.claude/settings.json`:
+Right now the `rate_limits` object is only present for Claude.ai Pro and Max subscribers, and only after the session's first API response. Before that first response arrives, and on any other plan, the field is simply not there. A script that reads it without checking will print an error into the bar instead of your usage, so it has to look first. None of this costs an API call either, because Claude Code is already handing the numbers to your script.
+
+## How to install manually
+
+Save [Stefano's script](https://gist.github.com/stefanoginella/ffe56f293baf6241abe74c3883082755) as `~/.claude/statusline/statusline.mjs`, then add a `statusLine` block to `~/.claude/settings.json`:
 
 ```json
 {
@@ -42,18 +50,6 @@ Save the file as `~/.claude/statusline/statusline.mjs`, then add a `statusLine` 
 Use your own absolute path. Putting it in `~/.claude/settings.json` applies it everywhere; putting the same block in a project's `.claude/settings.json` tries it on one repo first.
 
 If you run Claude Code inside VS Code, the status bar renders in terminal mode only. It does not appear in the sidebar chat.
-
-Claude Code also ships a `/statusline` command that writes a script and updates your settings for you from a plain description, which is the fastest way to get any status line at all. The prompt below is for installing this specific one.
-
-## What it leaves on disk
-
-Three small state files under `~/.claude/statusline/`, all of them recoverable by deletion:
-
-- `.usage-cache.json`, the last rate limit values it saw, reused to bridge the gap before the first API response of a session
-- `.daily-state.json`, a snapshot taken at local midnight that the daily pace figure is measured against
-- `.effort-state.json`, the transcript offset and last known effort level
-
-Deleting any of them costs you one render of accuracy and nothing else.
 
 ## Install it globally with one prompt
 
