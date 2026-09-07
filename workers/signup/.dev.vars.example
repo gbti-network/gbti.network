@@ -77,3 +77,25 @@ NEWS_CHANNELS='{"channels":[{"category":"ai","channelId":"REPLACE_WITH_DISCORD_C
 # GITHUB_APP_ID="123456"
 # GITHUB_APP_INSTALLATION_ID="98765432"
 # GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...PEM (PKCS8 or RSA)...\n-----END RSA PRIVATE KEY-----"
+
+# sow-314: the Shop Talk calendar credential. The Worker adds paid and trial members to the owner's recurring
+# Saturday event as guests, which is what lets them into the Google Meet without knocking.
+#
+# NAMED `GOOGLE_CALENDAR_*` RATHER THAN `GOOGLE_*` ON PURPOSE. There will be a SECOND Google client for member
+# sign-in (a member choosing a different address), and the whole security point of splitting them is that the
+# sign-in client must never be able to reach this calendar. Two clients sharing a `GOOGLE_` prefix would be one
+# careless edit away from being confused for each other, so the future one is `GOOGLE_SIGNIN_OAUTH_*`.
+#
+# Minted from the "GBTI Shop Talk calendar (server)" OAuth client in the `gbti-labs-website` project, with the
+# refresh token produced through the OAuth Playground exactly as the Chrome Web Store credential was
+# (.data/ops/extension-ops/chrome-web-store.md, PATH A). Scope, and only this one:
+#   https://www.googleapis.com/auth/calendar.events
+# That is read and write on EVENTS only. It cannot read the calendar list, change calendar settings, or reach
+# any other Google data.
+#
+# THE REFRESH TOKEN DOES NOT EXPIRE ONLY BECAUSE THE CONSENT SCREEN IS "IN PRODUCTION". A project left in
+# "Testing" expires refresh tokens after SEVEN DAYS, and the enrollment sweep would then fail silently about a
+# week after shipping. Verified in production on 2026-09-07; re-check it before blaming the code.
+# GOOGLE_CALENDAR_CLIENT_ID="000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+# GOOGLE_CALENDAR_CLIENT_SECRET="GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx"
+# GOOGLE_CALENDAR_REFRESH_TOKEN="1//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
