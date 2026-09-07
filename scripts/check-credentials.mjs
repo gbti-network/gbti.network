@@ -303,6 +303,39 @@ export async function runProbes({ env = process.env, fetch = globalThis.fetch, s
     };
   }));
 
+  // 2026-09-07: THE DEPLOY TOKEN, and the widest blast radius on this list.
+  //
+  // It was widened that day from Pages-only to Pages:Edit + Workers Scripts:Edit + Workers Routes:Edit, so it
+  // now rewrites the membership Worker as well as the website, and it was given its first expiry (2027-10-01)
+  // in the same pass. Before that it had carried NO expiry since 2026-06-22.
+  //
+  // THE REASON IT IS HERE IS THE OMISSION, NOT THE TOKEN. It was probed by nothing at all, so it did not even
+  // reach the state the two KV tokens were fixed out of: they at least reported liveness. This one was absent
+  // from the list entirely, and an absent probe and a passing probe are indistinguishable in a green run. The
+  // expiry set on the dashboard would have been read by no machine for thirteen months and then lapsed.
+  //
+  // WHAT A LAPSE COSTS, and it is why this is not bookkeeping: deploy.yml auto-deploys the SITE on every push
+  // to main, and deploy-worker.yml deploys the signup Worker. One token authenticates both, so an expiry takes
+  // out the whole delivery path at once, with the site frozen at its last build and the Worker frozen at its
+  // last version. Neither failure announces itself as a credential problem.
+  //
+  // `mustExpire` is deliberate rather than inherited. Cloudflare's Workers Scripts permission is ACCOUNT-level
+  // with no per-script selector, exactly like the KV permission above, so this token cannot be confined by
+  // scope and time is the only compensating control left. Do not silence a future alarm by dropping it; read
+  // the expiry from the token DETAIL endpoint if `/user/tokens/verify` ever stops returning `expires_on`.
+  if (env.CLOUDFLARE_API_TOKEN) out.push(await probe('CLOUDFLARE_API_TOKEN (Cloudflare, site + Worker deploy)', async () => {
+    const res = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } });
+    let body = null; try { body = await res.json(); } catch { /* */ }
+    return {
+      ok: res.ok && body?.result?.status === 'active',
+      status: res.status,
+      detail: body?.result?.status,
+      notBefore: body?.result?.not_before || null,
+      expiresAt: body?.result?.expires_on || null,
+      mustExpire: true,
+    };
+  }));
+
   // sow-279: THE COUPON ALARM, PROVEN END TO END RATHER THAN ASSUMED.
   //
   // The owner ruling of 2026-08-11 replaced a redemption cap with manual moderation on three uncapped,

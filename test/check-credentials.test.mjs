@@ -172,6 +172,43 @@ test('runProbes: a KV WRITE token with NO expiry is reported as a PROBLEM, not a
   assert.equal(problems[0].kind, 'no-expiry');
 });
 
+// 2026-09-07: the DEPLOY token, and the third instance of the same omission. `CLOUDFLARE_API_TOKEN` was
+// widened that day from Pages-only to Pages + Workers Scripts + Workers Routes, so it can now rewrite the
+// membership Worker as well as the website, and it was given its first TTL (2027-10-01) at the same time.
+// It was probed by NOTHING before this, so the new date was written on the dashboard and read by no machine,
+// which is precisely the half-a-control state the two tokens above were fixed out of. Its blast radius is
+// wider than either: a lapse takes the site auto-deploy and the Worker deploy down together.
+// These three tests fail against the probe list as it stood before this date, where the first one fails on
+// `the probe runs when the secret is present` because no such probe existed at all.
+test('runProbes: the DEPLOY token is probed at all, declares mustExpire, and reports its expiry', async () => {
+  const fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: { status: 'active', expires_on: '2027-10-01T00:00:00Z' } }) });
+  const results = await runProbes({ env: { CLOUDFLARE_API_TOKEN: 'tok' }, fetch });
+  const r = results.find((x) => x.name.startsWith('CLOUDFLARE_API_TOKEN'));
+  assert.ok(r, 'the probe runs when the secret is present');
+  assert.equal(r.ok, true);
+  assert.equal(r.mustExpire, true, 'without this the deploy token can go unexpiring behind a green monitor');
+  assert.equal(r.expiresAt, '2027-10-01T00:00:00Z');
+  assert.equal(evaluate(results, { now: new Date('2026-09-07T00:00:00Z') }).healthy, true);
+});
+
+test('runProbes: a DEPLOY token with NO expiry is reported as a PROBLEM, not as healthy', async () => {
+  // The exact state this token was in from 2026-06-22 until 2026-09-07: live, valid, unexpiring.
+  const fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: { status: 'active' } }) });
+  const results = await runProbes({ env: { CLOUDFLARE_API_TOKEN: 'tok' }, fetch });
+  const { problems, healthy } = evaluate(results);
+  assert.equal(healthy, false, 'an unexpiring token that can rewrite the Worker AND the site must not pass');
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].kind, 'no-expiry');
+});
+
+test('runProbes: a REVOKED deploy token fails rather than reporting healthy', async () => {
+  const fetch = async () => ({ ok: true, status: 200, json: async () => ({ result: { status: 'disabled' } }) });
+  const results = await runProbes({ env: { CLOUDFLARE_API_TOKEN: 'tok' }, fetch });
+  const r = results.find((x) => x.name.startsWith('CLOUDFLARE_API_TOKEN'));
+  assert.equal(r.ok, false, 'status must be checked, not just the HTTP code');
+  assert.equal(evaluate(results).healthy, false);
+});
+
 test('runProbes: a KV read token with NO expiry is reported as a PROBLEM, not as healthy', async () => {
   // The exact doubt this probe exists to settle: live and valid, but carrying no TTL, so the control that
   // justified accepting an account-wide token does not exist. Liveness alone would call this green.
