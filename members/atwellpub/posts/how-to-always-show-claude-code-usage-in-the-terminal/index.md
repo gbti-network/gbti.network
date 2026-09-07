@@ -87,6 +87,12 @@ Install Stefano Ginella's Claude Code status line for me, globally.
 
 The verification step is the part worth keeping. A status line that fails silently just leaves the bar empty, and it is not obvious whether the script is broken or the setting never took.
 
+## What it looks like once it is running
+
+Here is the same status line in a live session, sitting under the prompt in the VS Code terminal panel. The model and its effort level, the context window, both rate limit windows and the daily pace figure stay on screen while the work happens.
+
+![Claude Code running in the VS Code terminal panel, with the status line at the bottom reading the model, context use, the five hour and seven day rate limit windows, and the daily pace figure](./images/status-line-in-vs-code.webp)
+
 ## Credits
 
 Credit to Stefano Ginella for the script, and for writing it to run entirely offline. You can find his work on [GitHub](https://github.com/stefanoginella), and he takes on client work through [Codeable](https://www.codeable.io/developers/stefano-ginella/?ref=MzT91).
