@@ -512,3 +512,16 @@ export function trialBanner(membership, authoring) {
       ctaHref: 'https://gbti.network/workbench/',
     };
 }
+
+/**
+ * sow-168: where a horizontally scrolling tab strip should scroll so the active tab is fully in view. Returns
+ * the new scrollLeft, or null when nothing needs to move (the strip does not scroll, or the tab is already
+ * visible). Pure, so the three cases are unit tests rather than a phone.
+ */
+export function tabScrollLeft({ scrollLeft = 0, clientWidth = 0, scrollWidth = 0, left = 0, width = 0 } = {}) {
+  if (!(scrollWidth > clientWidth) || !(width > 0)) return null;
+  const right = left + width;
+  if (left < scrollLeft) return Math.max(0, left);
+  if (right > scrollLeft + clientWidth) return Math.max(0, right - clientWidth);
+  return null;
+}

@@ -3238,6 +3238,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ctaHref: "https://gbti.network/workbench/"
     };
   }
+  function tabScrollLeft({ scrollLeft = 0, clientWidth = 0, scrollWidth = 0, left = 0, width = 0 } = {}) {
+    if (!(scrollWidth > clientWidth) || !(width > 0)) return null;
+    const right = left + width;
+    if (left < scrollLeft) return Math.max(0, left);
+    if (right > scrollLeft + clientWidth) return Math.max(0, right - clientWidth);
+    return null;
+  }
 
   // client-ui/src/topic-picker-core.mjs
   function topicsFromJson(data) {
@@ -18220,7 +18227,7 @@ ${String(body ?? "")}`;
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
   var CSS37 = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:2px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
@@ -18287,6 +18294,27 @@ ${String(body ?? "")}`;
   .ov-att { list-style:none; margin:0; padding:0; }
   .ov-att li { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
   .ov-att li:first-child { border-top:0; }
+  /* sow-168: the phone layout. Below 560px of inline size (the website hands this element about 350px at a
+     390px viewport) a one-line row starves the title: the owner's screenshot read "R.." nine times while the
+     pills and both buttons kept their full width. So the row reflows to two lines, title and meta first, then
+     the pills and buttons, every control still visible and Unpublish still its own deliberate press. The
+     title may wrap to a second line before it clips. The tab strip becomes one row that scrolls sideways
+     instead of wrapping to three ragged lines (render() brings the active tab into view), and the list
+     controls stack their two groups. A container query rather than a media query, so the same rules hold in
+     a narrow website column and never fire in a wide extension tab. */
+  @container (max-width: 560px) {
+    .tabs { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:thin; -webkit-overflow-scrolling:touch; }
+    .tab { flex:none; }
+    .row { flex-wrap:wrap; row-gap:8px; }
+    .row .t { flex:1 1 60%; }
+    .row .t b { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.3; }
+    .row .right { flex:1 1 100%; justify-content:flex-start; flex-wrap:wrap; }
+    .row .gl ~ .right { padding-left:44px; } /* under the title, not under the glyph */
+    .row .btn { padding:5px 10px; font-size:12.5px; }
+    .lc-bar { gap:8px; }
+    .lc-scopes { width:100%; margin-right:0; }
+    .lc-sort { margin-left:auto; }
+  }
 `;
   var GbtiWorkspace = class extends GbtiElement {
     connectedCallback() {
@@ -18724,6 +18752,17 @@ ${String(body ?? "")}`;
       }
     }
     // ----- rendering -----
+    // sow-168: on a phone the tab strip scrolls sideways, so a deep-linked or persisted tab past the right edge
+    // (Earnings, say) would otherwise read as "no tab selected". Moves the STRIP only, never the page: render()
+    // also fires on data arrival while the member may be scrolled down the list, and scrollIntoView would yank
+    // the page back to the strip.
+    _revealTab() {
+      const strip = this.$(".tabs");
+      const on = this.$(".tab.on");
+      if (!strip || !on) return;
+      const left = tabScrollLeft({ scrollLeft: strip.scrollLeft, clientWidth: strip.clientWidth, scrollWidth: strip.scrollWidth, left: on.offsetLeft, width: on.offsetWidth });
+      if (left != null) strip.scrollLeft = left;
+    }
     render() {
       this._clearPolls();
       if (this._restore && this.client) {
@@ -18781,6 +18820,7 @@ ${String(body ?? "")}`;
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
       this.set(this.css(CSS37) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._msg = null;

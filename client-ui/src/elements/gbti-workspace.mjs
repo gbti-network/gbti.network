@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -46,7 +46,7 @@ const isExtensionHost = () => typeof chrome !== 'undefined' && Boolean(chrome.ru
 const MEMBERSHIP_LABEL = { paid: 'Paid member', trial: 'Trial', trialing: 'Trial', expired: 'Expired', cancelled: 'Cancelled', none: 'Not a member', banned: 'Suspended', unknown: 'Not signed in' };
 
 const CSS = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:2px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
@@ -113,6 +113,27 @@ const CSS = `
   .ov-att { list-style:none; margin:0; padding:0; }
   .ov-att li { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
   .ov-att li:first-child { border-top:0; }
+  /* sow-168: the phone layout. Below 560px of inline size (the website hands this element about 350px at a
+     390px viewport) a one-line row starves the title: the owner's screenshot read "R.." nine times while the
+     pills and both buttons kept their full width. So the row reflows to two lines, title and meta first, then
+     the pills and buttons, every control still visible and Unpublish still its own deliberate press. The
+     title may wrap to a second line before it clips. The tab strip becomes one row that scrolls sideways
+     instead of wrapping to three ragged lines (render() brings the active tab into view), and the list
+     controls stack their two groups. A container query rather than a media query, so the same rules hold in
+     a narrow website column and never fire in a wide extension tab. */
+  @container (max-width: 560px) {
+    .tabs { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:thin; -webkit-overflow-scrolling:touch; }
+    .tab { flex:none; }
+    .row { flex-wrap:wrap; row-gap:8px; }
+    .row .t { flex:1 1 60%; }
+    .row .t b { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.3; }
+    .row .right { flex:1 1 100%; justify-content:flex-start; flex-wrap:wrap; }
+    .row .gl ~ .right { padding-left:44px; } /* under the title, not under the glyph */
+    .row .btn { padding:5px 10px; font-size:12.5px; }
+    .lc-bar { gap:8px; }
+    .lc-scopes { width:100%; margin-right:0; }
+    .lc-sort { margin-left:auto; }
+  }
 `;
 
 class GbtiWorkspace extends GbtiElement {
@@ -545,6 +566,18 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   // ----- rendering -----
+  // sow-168: on a phone the tab strip scrolls sideways, so a deep-linked or persisted tab past the right edge
+  // (Earnings, say) would otherwise read as "no tab selected". Moves the STRIP only, never the page: render()
+  // also fires on data arrival while the member may be scrolled down the list, and scrollIntoView would yank
+  // the page back to the strip.
+  _revealTab() {
+    const strip = this.$('.tabs');
+    const on = this.$('.tab.on');
+    if (!strip || !on) return;
+    const left = tabScrollLeft({ scrollLeft: strip.scrollLeft, clientWidth: strip.clientWidth, scrollWidth: strip.scrollWidth, left: on.offsetLeft, width: on.offsetWidth });
+    if (left != null) strip.scrollLeft = left;
+  }
+
   render() {
     this._clearPolls(); // SOW-072 P3: a re-render replaces the rows (and fires on a client/sign-out change) -> stop the
     // poll; the PR tab re-arms it via _ensureTab -> _loadPrStatuses, and a sign-out leaves it stopped.
@@ -610,6 +643,7 @@ class GbtiWorkspace extends GbtiElement {
       return `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
     }).join('');
     this.set(this.css(CSS) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+    this._revealTab();
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this._draftMsg = null; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(this._tab); })); // SOW-085: a direct tab click resets the page + filter (was a gap)
     this._wireBody();
   }
