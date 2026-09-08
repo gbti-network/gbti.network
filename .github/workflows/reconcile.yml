@@ -95,6 +95,20 @@ jobs:
           CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
           CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          # sow-314: the Shop Talk guest list. Reconcile adds paid and trial members to the owner's recurring
+          # Saturday event and takes lapsed ones off, beside the Discord role sync above and on the same
+          # pattern: this script holds the service credential and calls the service directly.
+          #
+          # UNSET IS A LOUD SKIP, NOT A QUIET ZERO. enactShoptalk returns ok:false with a reason when these are
+          # absent and reconcile prints it, because a sweep reporting "0 changes" is indistinguishable from a
+          # healthy quiet run, and members silently not being added to the call is the failure this feature
+          # exists to prevent.
+          #
+          # CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID and CF_API_TOKEN above are ALSO required by this step: the
+          # opt-out markers and the record of which addresses the sweep placed both live in KV.
+          GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}
+          GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
+          GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
       # sow-291: the manifest-vs-registry drift guard, relocated here from the unit suite. It asserts the
       # committed code-free house/campaigns.yml still matches the projection of the LIVE coupons:config, which
       # needs CF creds to read the KV registry. It cannot live in tests.yml, which runs on pull_request and so
