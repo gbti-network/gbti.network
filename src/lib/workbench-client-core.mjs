@@ -394,6 +394,22 @@ export function coerceCommentInput({ id, targetType, targetSlug, createdAt, upda
 }
 
 /** Derive `favorited` for a target from the activity store's favorites list (matches the client contract). Pure. */
+/**
+ * sow-316: the wire shape of the two activity writes that carry an item. The Worker's activity route
+ * (workers/signup/membership-activity.mjs -> membership/member-activity.mjs) reads the item as `type` and
+ * `slug`; the elements and this client name it `targetType` and `targetSlug`. The website client used to send
+ * the element's names straight through, the Worker answered 400 "invalid favorite target", and every website
+ * favorite and collection tick reverted while creating a collection (which carries no item) worked. That
+ * shipped unnoticed because nothing tied this client's payload to the Worker's reader; the contract test does.
+ * Pure, so the test can feed the result to the Worker core directly.
+ */
+export function activityFavoritePayload({ targetType, targetSlug, on }) {
+  return { action: 'favorite', type: targetType, slug: targetSlug, on: !!on };
+}
+export function activityCollectionItemPayload({ id, targetType, targetSlug, on = true }) {
+  return { action: 'collection.item', id, type: targetType, slug: targetSlug, on: !!on };
+}
+
 export function favoritedFrom(activity, targetType, targetSlug) {
   const favs = (activity && activity.favorites) || [];
   return favs.some((f) => f.type === targetType && f.slug === targetSlug);

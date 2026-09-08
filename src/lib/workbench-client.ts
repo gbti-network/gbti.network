@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
 
@@ -823,11 +823,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // ----- SOW-024: favorites + collections (Saved), all over the cookie-ready KV /membership/activity -----
     async getActivity() { const r = await workerGet('/membership/activity'); return r?.activity ?? { favorites: [], collections: [] }; },
     async toggleFavorite({ targetType, targetSlug, on }: any) {
-      const r = await workerPost('/membership/activity', { action: 'favorite', targetType, targetSlug, on });
+      const r = await workerPost('/membership/activity', activityFavoritePayload({ targetType, targetSlug, on })); // sow-316: the Worker reads type/slug
       return { favorited: favoritedFrom(r?.activity, targetType, targetSlug) };
     },
     async createCollection({ name }: any) { const r = await workerPost('/membership/activity', { action: 'collection.create', name }); return { id: r.id, activity: r.activity }; },
-    addToCollection({ id, targetType, targetSlug, on = true }: any) { return workerPost('/membership/activity', { action: 'collection.item', id, targetType, targetSlug, on }); },
+    addToCollection({ id, targetType, targetSlug, on = true }: any) { return workerPost('/membership/activity', activityCollectionItemPayload({ id, targetType, targetSlug, on })); }, // sow-316
     renameCollection({ id, name }: any) { return workerPost('/membership/activity', { action: 'collection.rename', id, name }); },
     deleteCollection({ id }: any) { return workerPost('/membership/activity', { action: 'collection.delete', id }); },
 
