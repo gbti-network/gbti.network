@@ -187,17 +187,12 @@ const catsOf = (it: FeedItem) => catsAttr(it.categories);
     if (wired) return;
     wired = true;
     const mine = String(signal.login).toLowerCase();
-    const signupBase = document.documentElement.dataset.signupBase || '';
-    const { createWorkbenchClient } = await import('../../lib/workbench-client');
-    const client = createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null });
-    const { setClient } = await import('../../../client-ui/src/base.mjs');
-    setClient(client);
-    // Upgrade the inert favorite + collection pills (they read no per-item state on connect, so upgrading
-    // every row is cheap; the follow list is fetched once in wireFollows).
-    await Promise.all([
-      import('../../../client-ui/src/elements/gbti-favorite.mjs'),
-      import('../../../client-ui/src/elements/gbti-collection.mjs'),
-    ]);
+    // sow-316: the favorite + collection pills are upgraded site-wide by BaseLayout (src/lib/save-controls.ts);
+    // this only wires the follow pills, from the SAME page client, so the page holds one client and one
+    // activity read rather than one per surface.
+    const { websiteClient } = await import('../../lib/save-controls');
+    const client = await websiteClient(signal);
+    if (!client) { wired = false; return; }
     wireFollows(client, mine);
   }
 

@@ -149,9 +149,15 @@ const ogImageSize = knownImageSize(ogImage || DEFAULT_OG_IMAGE);
         document_idle), so readMemberSignal() is usually null on first paint; onMemberSignal() then catches the
         gbti:identity event and applies the classes. Keep this a parse-time module script (not async/defer). */}
     <script>
-      import { readMemberSignal, onMemberSignal, applyMemberSignalClasses, hydrateMemberSignal } from '../lib/member-signal';
+      import { readMemberSignal, onMemberSignal, applyMemberSignalClasses, hydrateMemberSignal, currentIdentity } from '../lib/member-signal';
+      import { upgradeSaveControls } from '../lib/save-controls'; // sow-316: hearts + collections for a website session, site-wide
       applyMemberSignalClasses(readMemberSignal());
       onMemberSignal(applyMemberSignalClasses);
+      // sow-316: upgrade every save control on the page for a signed-in WEBSITE member, from here rather than per
+      // surface, so a page that renders a heart cannot forget the wiring (five surfaces had). No-op without a
+      // session, without controls, or under the extension, which upgrades them itself.
+      upgradeSaveControls(currentIdentity(readMemberSignal()));
+      onMemberSignal(upgradeSaveControls);
       // sow-158 Phase 2: hydrate the signed-in state from the httpOnly gbti_session cookie (fetches the public
       // /membership/status with credentials; the token never reaches the page). The cookie session WINS over the
       // extension signal; the cheap gate skips the network when there is no gbti_csrf cookie (anonymous pageload).
