@@ -3,6 +3,8 @@
 //   GET  /membership/prefs                          -> { ok, prefs: { categories, followedChannels } }
 //   POST /membership/prefs { categories }           -> replace category interests
 //   POST /membership/prefs { followChannel:{id,on} } -> follow/unfollow a news source id
+//   POST /membership/prefs { followTag:{tag,on} }     -> sow-307: follow/unfollow a tag (cap 50, refused past it)
+//   POST /membership/prefs { followedTags:[...] }     -> sow-307: replace the followed tags (the one-time browser push)
 //
 // SOW-060: prefs (category interests + followed news channels) personalize the FREE-tier news feed; the gate is
 // SIGNED-IN, non-banned (NOT effective-paid). SOW-078: prefs records NO usage analytics (unlike news/follows, which

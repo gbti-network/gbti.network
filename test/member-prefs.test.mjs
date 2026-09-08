@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { normalizePrefs, applyPrefs, PrefsError } from '../membership/member-prefs.mjs';
 
 test('normalizePrefs: always returns arrays, deduped (case-insensitive), tolerant of junk', () => {
-  assert.deepEqual(normalizePrefs(null), { categories: [], followedChannels: [], publicFavorites: false });
+  assert.deepEqual(normalizePrefs(null), { categories: [], followedChannels: [], followedTags: [], publicFavorites: false });
   const p = normalizePrefs({ categories: ['AI', 'ai', 'devops', ''], followedChannels: ['bleeping-computer', 'Bleeping-Computer', 123] });
   assert.deepEqual(p.categories, ['AI', 'devops']); // 'ai' deduped against 'AI'
   assert.deepEqual(p.followedChannels, ['bleeping-computer']); // dup folded, non-string dropped
@@ -62,7 +62,7 @@ test('applyPrefs: the categories cap is 200 (raised for the topic picker Select 
 
 // SOW-186 phase 1: the global notification-defaults matrix (falls back to the system default when absent).
 test('notify: absent by default, so the record shape is unchanged for a member who never set it', () => {
-  assert.deepEqual(normalizePrefs(null), { categories: [], followedChannels: [], publicFavorites: false });
+  assert.deepEqual(normalizePrefs(null), { categories: [], followedChannels: [], followedTags: [], publicFavorites: false });
   assert.ok(!('notify' in normalizePrefs({ categories: ['ai'] })), 'no notify key unless set');
 });
 

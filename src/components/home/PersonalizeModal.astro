@@ -60,6 +60,9 @@
 
 <script>
   // The Personalize modal controller. Runs only after the signed-in Personalize button opens the dialog.
+  import { onMemberSignal, readMemberSignal, currentIdentity } from '../../lib/member-signal'; // sow-307
+  import { mergeTagsOnFirstSync, toggleTagLocally } from '../../lib/followed-tags-core.mjs'; // sow-307
+  import { cookieValue } from '../../lib/save-controls-core.mjs'; // sow-307: the same "can this session write" test
   (() => {
     const dialog = document.querySelector<HTMLDialogElement>('[data-personalize]');
     if (!dialog) return;
@@ -92,6 +95,7 @@
         scope: algo.scope,
         rules: { sharesInline: algo.sharesInline, hideRead: algo.hideRead },
         followedAuthors: [...followedMembers],
+        followedTags: [...followedTags], // sow-307: the feed's tag boost read this and nothing ever sent it
       } }));
     }
 
@@ -145,6 +149,11 @@
         followedMembers = new Set(followingList.map((f: any) => String(f?.username ?? f).toLowerCase()).filter(Boolean));
         followedCategories = new Set((Array.isArray(prefs?.categories) ? prefs.categories : []).map((x: any) => String(x)));
         followedChannels = new Set((Array.isArray(prefs?.followedChannels) ? prefs.followedChannels : []).map((x: any) => String(x)));
+        // sow-307: followed tags live in the account. The account wins; an empty account adopts this browser's
+        // list once and pushes it up, so the next device sees it. Mirrored to local storage for the signed-out path.
+        const mergedTags = mergeTagsOnFirstSync(followedTags, prefs?.followedTags);
+        followedTags = mergedTags.tags; writeJson(LS_TAGS, followedTags);
+        if (mergedTags.push) c.setPrefs({ followedTags: mergedTags.push }).catch(() => { /* the nightly-free write retries on the next open */ });
         newsSources = Array.isArray(sources?.sources) ? sources.sources : (Array.isArray(sources?.items) ? sources.items : (Array.isArray(sources) ? sources : []));
       } catch { /* a failed load leaves the follow tabs empty; Algo + Tags still work */ }
       if (loading) loading.hidden = true;
@@ -179,9 +188,15 @@
           else if (kind === 'c') { on ? followedCategories.add(val) : followedCategories.delete(val); await c.setPrefs({ categories: [...followedCategories] }); }
           else if (kind === 's') { on ? followedChannels.add(val) : followedChannels.delete(val); await c.setPrefs({ followChannel: { id: val, on } }); }
           else if (kind === 't') {
-            const low = val.toLowerCase();
-            followedTags = on ? [...new Set([...followedTags, low])] : followedTags.filter((x) => x.toLowerCase() !== low);
-            writeJson(LS_TAGS, followedTags);
+            // sow-307: the same shape and cap the account enforces (membership/member-prefs.mjs). At the cap the
+            // button reads the limit and nothing is dropped; signed in, the toggle is written to the account.
+            const next = toggleTagLocally(followedTags, val, on);
+            if (next === null) {
+              follow.classList.toggle('on', false); follow.setAttribute('aria-pressed', 'false'); follow.textContent = 'Limit (50)';
+            } else {
+              followedTags = next; writeJson(LS_TAGS, followedTags);
+              if (signedInHere()) await c.setPrefs({ followTag: { tag: val, on } });
+            }
           }
         } catch { /* optimistic; a failed server write still updates the local view */ }
         const c = dialog.querySelector(`[data-pz-count="${kind === 'm' ? 'members' : kind === 'c' ? 'categories' : kind === 's' ? 'news' : 'tags'}"]`);
@@ -191,6 +206,7 @@
       }
       if (t.closest('[data-pz-reset]')) {
         algo = { ...DEFAULT_ALGO }; followedTags = []; writeJson(LS_ALGO, algo); writeJson(LS_TAGS, followedTags);
+        if (signedInHere()) ensureClient().then((c) => c.setPrefs({ followedTags: [] })).catch(() => { /* optimistic */ }); // sow-307
         syncAlgoInputs(); renderLists(); emit(); return;
       }
     });
@@ -215,5 +231,27 @@
     // On page load, apply whatever the member already chose (client-local settings), so the feed reflects it
     // before the modal is even opened. The follow-graph part fills in after the first open's load().
     emit();
+    // sow-307: a signed-in member's followed tags are in the account, so a fresh device would otherwise show an
+    // unpersonalized feed until the panel is opened. One read per page load, through the page's shared website
+    // client, then the feed is told again. Signed out (or no CSRF cookie) stays browser-only.
+    function signedInHere() { return !!cookieValue(document.cookie, 'gbti_csrf') && document.documentElement.classList.contains('is-gbti-member'); }
+    let tagsSynced = false;
+    async function syncAccountTags(s: any) {
+      if (tagsSynced || !s || !s.login || !cookieValue(document.cookie, 'gbti_csrf')) return;
+      tagsSynced = true;
+      try {
+        const { websiteClient } = await import('../../lib/save-controls');
+        const c = await websiteClient(s);
+        if (!c) { tagsSynced = false; return; }
+        const prefs = await c.getPrefs();
+        const merged = mergeTagsOnFirstSync(followedTags, prefs?.followedTags);
+        followedTags = merged.tags; writeJson(LS_TAGS, followedTags);
+        if (merged.push) await c.setPrefs({ followedTags: merged.push });
+        renderLists();
+        emit();
+      } catch { tagsSynced = false; /* the next signal retries; the browser list stands meanwhile */ }
+    }
+    syncAccountTags(currentIdentity(readMemberSignal()));
+    onMemberSignal(syncAccountTags);
   })();
 </script>

@@ -9,6 +9,28 @@ export class PrefsError extends Error {}
 
 const MAX_CATEGORIES = 200; // raised from 40 for the topic picker's Select all (the vocabulary is 85 topics today)
 const MAX_CHANNELS = 300;
+// sow-307: followed TAGS. Tags are free-form on content, so the stored set is bounded three ways: a shape (a
+// lowercase slug, 1 to 40 characters), a dedupe, and a CAP of 50 (owner decision 2026-09-08). Past the cap a
+// toggle is REFUSED with a message naming the limit rather than silently dropping one, so the panel can say so.
+export const MAX_TAGS = 50;
+const TAG = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/** One tag as stored: trimmed, lowercased, a leading '#' dropped; null when it is not a tag at all. */
+export function normalizeTag(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().replace(/^#+/, '').toLowerCase();
+  return TAG.test(t) ? t : null;
+}
+/** A followed-tags list as stored: each normalized, deduped, capped at MAX_TAGS. */
+export function cleanTags(v, max = MAX_TAGS) {
+  const out = [];
+  for (const x of Array.isArray(v) ? v : []) {
+    const t = normalizeTag(x);
+    if (!t || out.includes(t)) continue;
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
 // A category label or a news source id (both config-defined in the news worker): a bounded token set so a stored
 // pref can never smuggle anything unexpected into a query or the UI.
 const TOKEN = /^[a-z0-9][a-z0-9 ._/+-]{0,60}$/i;
@@ -37,6 +59,7 @@ export function normalizePrefs(stored) {
   const out = {
     categories: cleanList(p.categories, MAX_CATEGORIES),
     followedChannels: cleanList(p.followedChannels, MAX_CHANNELS),
+    followedTags: cleanTags(p.followedTags), // sow-307
     publicFavorites: p.publicFavorites === true,
   };
   // SOW-186: the member's GLOBAL notification defaults, the (content-type x channel) matrix that applies to
@@ -51,6 +74,8 @@ export function normalizePrefs(stored) {
  * Apply a prefs patch and return the new normalized prefs. Patch shapes:
  *  - { categories: string[] }                 replace the category interests
  *  - { followChannel: { id, on } }            follow (on!==false) / unfollow a news source id
+ *  - { followedTags: string[] }               sow-307: replace the followed tags (the one-time browser -> account push)
+ *  - { followTag: { tag, on } }               sow-307: follow / unfollow one tag; refused past MAX_TAGS
  *  - { publicFavorites: boolean }             SOW-114: opt in/out of the public "Favorited by" list
  *  - { notify: { [type]: { api?, email? } } } SOW-186: set the global notification defaults matrix
  *                                             (null or {} clears it, falling back to the system default)
@@ -72,6 +97,23 @@ export function applyPrefs(stored, patch = {}) {
   if (patch.publicFavorites !== undefined) {
     if (typeof patch.publicFavorites !== 'boolean') throw new PrefsError('publicFavorites must be a boolean');
     next.publicFavorites = patch.publicFavorites;
+  }
+  if (patch.followedTags !== undefined) {
+    if (!Array.isArray(patch.followedTags)) throw new PrefsError('followedTags must be an array');
+    if (patch.followedTags.length > MAX_TAGS) throw new PrefsError(`too many followed tags (the limit is ${MAX_TAGS})`);
+    next.followedTags = cleanTags(patch.followedTags);
+  }
+  if (patch.followTag) {
+    const tag = normalizeTag(patch.followTag.tag);
+    if (!tag) throw new PrefsError('a valid tag is required (letters, digits and hyphens, up to 40 characters)');
+    const on = patch.followTag.on !== false;
+    const has = next.followedTags.includes(tag);
+    if (on && !has) {
+      if (next.followedTags.length >= MAX_TAGS) throw new PrefsError(`too many followed tags (the limit is ${MAX_TAGS})`);
+      next.followedTags.push(tag);
+    } else if (!on && has) {
+      next.followedTags = next.followedTags.filter((t) => t !== tag);
+    }
   }
   if (patch.followChannel) {
     const id = String(patch.followChannel.id ?? '').trim();
