@@ -176,6 +176,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
 
 <script>
   import { catKey, rowMatchesCat } from '../../lib/feed-filter.mjs';
+  import { newsFeatureImage, GENERIC_FEATURE_IMAGE } from '../../../client-ui/src/news-feature-image.mjs'; // sow-149: one branded banner per news category
   // Per-view chrome: visibility chips, the ?tag= and ?cat= drilldowns, and the persisted density toggle. While a
   // filter is active the ladder flattens (chunks all visible via .feed-flat CSS, pagers hidden); when
   // the filter clears, the chunk/pager hidden attributes are untouched, so the ladder state restores.
@@ -323,14 +324,21 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
             // Some feed images arrive entity-encoded (&#038;) which breaks their query strings; and a
             // dead external image degrades to the branded banner instead of a broken tile.
             const imgUrl = it.image ? String(it.image).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&') : '';
-            img.src = imgUrl || '/brand/feature/feature-category.png';
+            img.src = imgUrl || newsFeatureImage(it.category); // sow-149: the category's own banner, centered so the card crop keeps it
             img.alt = '';
             img.loading = 'lazy';
             img.decoding = 'async';
-            img.addEventListener('error', () => {
-              img.src = '/brand/feature/feature-category.png';
+            // sow-149: a dead external image falls to the category banner, and a category banner that is itself
+            // missing (a category added to the worker before the generator ran) falls to the generic one; the
+            // generic banner is the floor, so the handler stops there rather than looping.
+            const onError = () => {
+              const cat = newsFeatureImage(it.category);
+              const cur = img.getAttribute('src');
+              if (cur === GENERIC_FEATURE_IMAGE) { img.removeEventListener('error', onError); return; }
+              img.src = cur === cat ? GENERIC_FEATURE_IMAGE : cat;
               cover.classList.add('feed-cover-fb');
-            }, { once: true });
+            };
+            img.addEventListener('error', onError);
             cover.append(img);
             art.append(cover);
             chunk.append(art);

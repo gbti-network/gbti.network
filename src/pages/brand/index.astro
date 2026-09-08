@@ -27,10 +27,15 @@ const platforms = [
   { key: 'youtube', name: 'YouTube', dim: '2560 x 1440', aligns: ['center'] },
 ];
 // The per-type default feature images (the fallback share/cover image when no custom image is set).
+import { CATEGORIES } from '../../../workers/signup/news/config/categories.mjs';
+import { newsCategorySlug } from '../../../client-ui/src/news-feature-image.mjs';
 const features: [string, string][] = [
   ['article', 'Article'], ['project', 'Project'], ['prompt', 'Prompt'], ['share', 'Member share'],
   ['profile', 'Member profile'], ['tag', 'Tag archive'], ['category', 'Category archive'], ['search', 'Search result'],
 ];
+// sow-149: one banner per NEWS category (the stand-in cover for a news item with no image of its own), generated
+// by scripts/generate-news-feature-images.mjs from the news worker's category list.
+const newsFeatures = CATEGORIES.map((c) => [newsCategorySlug(c.name), c.name]);
 ---
 
 <BaseLayout
@@ -150,6 +155,20 @@ const features: [string, string][] = [
         {features.map(([key, label]) => (
           <figure class="featcard">
             <img src={`/brand/feature/feature-${key}.png`} alt={`Default ${label} feature image`} loading="lazy" width={1200} height={630} />
+            <figcaption>{label}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+
+    <!-- NEWS CATEGORY BANNERS (sow-149) -->
+    <section class="b-sec">
+      <div class="b-sect-t"><h2>News category banners</h2><span class="n">1200 x 630 · per news category</span></div>
+      <p class="b-note" style="margin:0 0 20px">The stand-in cover for a news item that arrives without an image of its own, one per category the news worker sorts into. Same ground and lockup as the family above, with the category icon and label set in the center so a feed card's crop keeps them. Generated from the category list by <span class="mono">scripts/generate-news-feature-images.mjs</span>; sources under <span class="mono">.product/brand/feature/news/</span>.</p>
+      <div class="feat-grid">
+        {newsFeatures.map(([slug, label]) => (
+          <figure class="featcard">
+            <img src={`/brand/feature/news/${slug}.png`} alt={`${label} news banner`} loading="lazy" width={1200} height={630} />
             <figcaption>{label}</figcaption>
           </figure>
         ))}
