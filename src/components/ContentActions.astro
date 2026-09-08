@@ -44,6 +44,52 @@ const railSize = variant === 'rail' ? 'rail' : 'md';
   // dataset.gbtiExtension. A CAPTURE-phase listener wins over SigninModal's bubble-phase [data-signin]
   // handler, so with the extension present a Favorite/Save click deep-links into the in-extension reader
   // (newtab.html#tab=<type>&read=<path>&do=favorite|collect) instead of opening the modal.
+  //
+  // sow-316: A WEBSITE SESSION CAN SAVE AND HEART TOO. Until this landed, the two controls on a content
+  // page worked through the extension and through nothing else: with no extension installed, every click
+  // fell to the sign-in modal REGARDLESS of whether the visitor was signed in on the website. The site would
+  // greet a member by name in the header and then ask them to sign in when they pressed the heart. Reported
+  // by a new member on 2026-09-08 within an hour of joining.
+  //
+  // The upgrade below is the SAME recipe feeds/FeedList.astro has used since 2026-08-27, where the identical
+  // controls already work for a website session. Favourites were built (SOW-013) before website login
+  // existed (sow-158) and this file was never revisited when it shipped. Three states, all of which must
+  // hold: signed out keeps the modal; signed in with no extension upgrades here; signed in WITH the
+  // extension keeps the deep-link path above, which the `installed()` guard on the click handler preserves.
+  import { onMemberSignal } from '../lib/member-signal';
+
+  function readCookie(name: string): string | null {
+    for (const part of document.cookie.split(';')) {
+      const eq = part.indexOf('=');
+      if (eq >= 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim() || null;
+    }
+    return null;
+  }
+
+  let websiteWired = false;
+  async function upgradeForWebsiteSession(signal: any) {
+    // An extension session already owns these controls (the capture-phase handler below). Do not stack a
+    // second upgrade on top of it; the member would get two competing behaviours on one click.
+    if (document.documentElement.dataset.gbtiExtension) return;
+    // Both the login AND the CSRF cookie: a stale signal with no cookie cannot write, and would upgrade the
+    // control into something that fails on every press. Same guard as FeedList and Comments.
+    if (!signal || !signal.login || !readCookie('gbti_csrf')) return;
+    if (websiteWired) return;
+    websiteWired = true;
+    const signupBase = document.documentElement.dataset.signupBase || '';
+    const { createWorkbenchClient } = await import('../lib/workbench-client');
+    const client = createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null });
+    const { setClient } = await import('../../client-ui/src/base.mjs');
+    setClient(client);
+    // Upgrading replaces each inert [data-signin] pill with the working element, so the modal handler has
+    // nothing left to catch. Cheap: neither element reads per-item state on connect.
+    await Promise.all([
+      import('../../client-ui/src/elements/gbti-favorite.mjs'),
+      import('../../client-ui/src/elements/gbti-collection.mjs'),
+    ]);
+  }
+  onMemberSignal(upgradeForWebsiteSession);
+
   (() => {
     const region = document.querySelector('[data-gbti-region="actions"]') as HTMLElement | null;
     if (!region) return;
