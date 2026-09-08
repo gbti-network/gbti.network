@@ -56,6 +56,7 @@ function relTime(d?: Date): string {
   return `${Math.round(days / 365)} years ago`;
 }
 const desc = (p: any) => p.data.shortDescription ?? '';
+import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: search in the hero
 ---
 <BaseLayout title="Projects" description="Every project in the directory is created and maintained by GBTI Network members.">
   <!-- ============ HERO ============ -->
@@ -64,12 +65,14 @@ const desc = (p: any) => p.data.shortDescription ?? '';
       <p class="eyebrow">From the Network</p>
       <h1 class="h1 mt12">Projects</h1>
       <p class="lead">Every project in the directory is created and maintained by GBTI Network members.</p>
+      {/* sow-177: the directory's one search field, in the hero; the directory below is told not to render its own. */}
+      <DirectorySearch id="project-search" placeholder="Search projects" label="Search projects" attr="data-search" />
     </div>
   </section>
 
   <!-- ============ DIRECTORY ============ -->
   <section class="browse-band">
-    <ProjectDirectory projects={projects} />
+    <ProjectDirectory projects={projects} heroSearch={true} />
   </section>
 
   <!-- ============ RECENTLY CREATED ============ -->

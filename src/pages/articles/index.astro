@@ -4,6 +4,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import ArticleTeaser from '../../components/blog/ArticleTeaser.astro';
 import { isListed, byNewest } from '../../lib/content';
 
+import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: search in the hero
 const posts = (await getCollection('post')).filter(isListed).sort(byNewest);
 const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(Boolean))].sort();
 ---
@@ -14,6 +15,7 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
         <p class="eyebrow">From the Network</p>
         <h1 class="h1 mt12">Latest Articles from the Network</h1>
         <p class="lead">Writing from the GBTI Network: tutorials, essays, and field notes from across the membership.</p>
+        <DirectorySearch id="article-search" placeholder="Search articles" label="Search articles" />
       </div>
 
       <div class="filter-row" style="justify-content:center" role="tablist" aria-label="Filter by category">
@@ -24,6 +26,7 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
       <div id="post-grid" class="works-grid blog-grid">
         {posts.map((post) => <ArticleTeaser post={post} />)}
       </div>
+      <p id="post-empty" class="body muted" style="text-align:center;padding:28px 0" hidden>No articles match that search.</p>
     </div>
   </section>
 
@@ -38,19 +41,33 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
   <script>
     const pills = document.querySelectorAll<HTMLButtonElement>('.cat-pill');
     const cards = document.querySelectorAll<HTMLElement>('#post-grid .archive-card');
-    function applyFilter(cat: string) {
+    // sow-177: the hero search composes with the category chips. A card's searchable text is read once from
+    // the card itself (title, excerpt, author), so no data attribute has to be kept in step with the teaser.
+    const searchEl = document.getElementById('article-search') as HTMLInputElement | null;
+    const emptyEl = document.getElementById('post-empty');
+    const text = new Map<HTMLElement, string>();
+    cards.forEach((card) => text.set(card, (card.textContent || '').replace(/\s+/g, ' ').toLowerCase()));
+    let cat = 'all';
+    let query = '';
+    function applyFilter(nextCat: string) {
+      cat = nextCat;
       pills.forEach((p) => {
         const on = p.dataset.cat === cat;
         p.classList.toggle('on', on);
         p.setAttribute('aria-selected', String(on));
       });
+      let shown = 0;
       cards.forEach((card) => {
-        card.style.display = cat === 'all' || card.dataset.category === cat ? '' : 'none';
+        const show = (cat === 'all' || card.dataset.category === cat) && (!query || (text.get(card) || '').includes(query));
+        card.style.display = show ? '' : 'none';
+        if (show) shown++;
       });
+      if (emptyEl) emptyEl.hidden = shown > 0;
     }
     pills.forEach((pill) => {
       pill.addEventListener('click', () => applyFilter(pill.dataset.cat || 'all'));
     });
+    searchEl?.addEventListener('input', () => { query = searchEl.value.trim().toLowerCase(); applyFilter(cat); });
     // Deep link: /articles/?cat=<key> (from an article's category link) preselects that pill on load.
     const params = new URLSearchParams(location.search);
     const catParam = params.get('cat');

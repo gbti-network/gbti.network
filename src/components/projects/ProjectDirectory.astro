@@ -16,8 +16,9 @@ interface Props {
   projects: any[];
   limit?: number;
   pageSize?: number; // when set, the compact list paginates client-side (page 2+ loads the rest)
+  heroSearch?: boolean; // sow-177: the page renders the search field in its hero (a [data-search] outside this root), so the toolbar omits its own
 }
-const { projects: allProducts, limit, pageSize } = Astro.props;
+const { projects: allProducts, limit, pageSize, heroSearch = false } = Astro.props;
 const projects = typeof limit === 'number' ? allProducts.slice(0, limit) : allProducts;
 
 // Author profiles, so attribution shows the real avatar and links only when a profile page exists.
@@ -59,7 +60,7 @@ const desc = (p: any) => p.data.shortDescription ?? '';
 
 <div class="wrap browse" data-page-size={pageSize ?? ''}>
   <div class="toolbar">
-    <div class="tsearch"><svg viewBox="0 0 24 24"><use href="#g-search"/></svg><input data-search type="text" placeholder="Search projects" aria-label="Search projects" /></div>
+    {!heroSearch && <div class="tsearch"><svg viewBox="0 0 24 24"><use href="#g-search"/></svg><input data-search type="text" placeholder="Search projects" aria-label="Search projects" /></div>}
     <div class="tfilters">
       {filters.map((f, i) => (
         <button class:list={['tfilter', i === 0 && 'on']} data-filter={f.key}><svg viewBox="0 0 24 24" aria-hidden="true"><use href={`#${f.g}`}/></svg>{f.label}</button>
@@ -231,7 +232,8 @@ const desc = (p: any) => p.data.shortDescription ?? '';
     if (!items) return;
     const plist = items;
     const btns = Array.from(scope.querySelectorAll<HTMLButtonElement>('[data-filter]'));
-    const search = scope.querySelector<HTMLInputElement>('[data-search]')!;
+    // sow-177: the field may live in the page hero, outside this root; the toolbar's own field wins when present.
+    const search = scope.querySelector<HTMLInputElement>('[data-search]') || document.querySelector<HTMLInputElement>('[data-search]');
     const count = scope.querySelector('[data-count]') as HTMLElement;
     const cards = Array.from(items.querySelectorAll<HTMLElement>('[data-cat]'));
     const pageSize = parseInt(scope.getAttribute('data-page-size') || '', 10) || 0; // 0 => no pagination

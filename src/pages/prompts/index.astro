@@ -5,6 +5,7 @@ import PromptCard from '../../components/prompts/PromptCard.astro';
 import { isListed } from '../../lib/content';
 import { topLevelCategories, categoryLabel } from '../../lib/taxonomy';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
+import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: the one search field, in the hero
 import SubscribeButton from '../../components/SubscribeButton.astro';
 
 const prompts = (await getCollection('prompt')).filter(isListed).sort((a, b) => a.data.title.localeCompare(b.data.title));
@@ -46,18 +47,15 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
         </div>
       </div>
 
+      {/* sow-177: the one search field, under whichever hero is showing (the author hero replaces the default one),
+          so it is never duplicated and never disappears when the directory is filtered to a member. Same id, so the
+          filter script and the ?tag= deep link that writes into it are untouched. */}
+      {prompts.length > 0 && <DirectorySearch id="prompt-search" placeholder="Search prompts" label="Search prompts" />}
+
       {prompts.length > 0 ? (
         <>
         <div class="prompts-layout">
           <aside class="prompts-sidebar" aria-label="Filter prompts">
-            <div class="ps-group ps-group--search">
-              <label class="ps-label" for="prompt-search">Search</label>
-              <div class="ps-search-wrap">
-                <svg class="ps-search-ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-search"/></svg>
-                <input id="prompt-search" type="search" class="ps-search" placeholder="Search prompts" autocomplete="off" />
-              </div>
-            </div>
-
             <div class="ps-group">
               <p class="ps-label">Categories</p>
               <ul class="ps-list" aria-label="Filter by category (select any number)">
@@ -182,10 +180,6 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
     .prompts-sidebar { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 26px; min-width: 0; }
     .ps-group { display: flex; flex-direction: column; gap: 10px; }
     .ps-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); margin: 0; }
-    .ps-search-wrap { position: relative; display: flex; align-items: center; }
-    .ps-search-ico { position: absolute; left: 12px; color: var(--fg-mute); pointer-events: none; }
-    .ps-search { width: 100%; min-width: 0; padding: 10px 12px 10px 36px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); font-size: 14px; }
-    .ps-search:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
     .ps-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
     .ps-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; background: none; border: 0; cursor: pointer; padding: 8px 12px; border-radius: var(--r-sm); font-size: 14px; font-weight: 600; color: var(--fg-soft); transition: background .15s ease, color .15s ease; }
     .ps-item:hover { background: var(--tint); color: var(--fg); }
@@ -270,7 +264,6 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
       .prompts-layout { grid-template-columns: 1fr; gap: 20px; }
       /* Sidebar reflows: full-width search on its own row, then Categories + Tools as two columns. */
       .prompts-sidebar { position: static; display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px 24px; }
-      .prompts-sidebar .ps-group--search { flex-basis: 100%; }
       /* min-width:0 lets the two facet columns shrink with the viewport instead of forcing a width
          wider than the padded content area (which caused horizontal overflow on small phones). */
       .prompts-sidebar .ps-group { flex: 1 1 calc(50% - 12px); min-width: 0; }

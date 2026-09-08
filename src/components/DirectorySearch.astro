@@ -1,0 +1,26 @@
+---
+// sow-177: the one search field of a directory page, promoted into the hero. The member directory set the
+// treatment (a centered field under the lead, 440px wide, pill corners, mono); this renders the same look with
+// the magnifier inside, so prompts, articles and projects read alike. It is markup only: each page's own script
+// wires the input by its id or data attribute, exactly as it wired the field it replaces.
+interface Props {
+  id: string;
+  placeholder: string;
+  label: string; // the accessible name; there is no visible label, the hero's heading carries the context
+  attr?: string; // an optional data attribute the page's script selects on (e.g. "data-search")
+}
+const { id, placeholder, label, attr } = Astro.props;
+const extra = attr ? { [attr]: '' } : {};
+---
+<div class="dir-search">
+  <svg class="dir-search-ico" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-search"/></svg>
+  <input id={id} type="search" class="dir-search-in mono" placeholder={placeholder} aria-label={label} autocomplete="off" {...extra} />
+</div>
+
+<style>
+  .dir-search { position: relative; width: 100%; max-width: 440px; margin: 24px auto 0; }
+  .dir-search-ico { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--fg-mute); pointer-events: none; }
+  .dir-search-in { width: 100%; border: 1.5px solid var(--line-2); background: var(--paper); color: var(--fg); border-radius: var(--r-pill); padding: 12px 20px 12px 44px; font-size: 14px; outline: none; }
+  .dir-search-in:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
+  .dir-search-in::placeholder { color: var(--fg-mute); }
+</style>
