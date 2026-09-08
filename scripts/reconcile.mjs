@@ -1001,17 +1001,12 @@ async function main() {
     console.error('reconcile: conflict sweep failed (non-fatal):', e?.message ?? e);
   }
 
-  if (dryRun) {
-    console.log('reconcile: DRY RUN (no changes). Re-run with --apply to enact.');
-    return;
-  }
-
-  // sow-198: enactPlan isolates each action and never throws for an action-level failure, so the summary
-  // ALWAYS prints and the log always records what the run attempted. The outer catch covers only a genuine
-  // programming error. A failure still turns the run red via exitCode; what it no longer does is take the
-  // rest of the plan and the summary down with it.
-  // sow-314: the Shop Talk guest list. Runs on its own credential and its own failure path, so a calendar
-  // problem never takes the rest of the reconcile down with it.
+  // sow-314: the Shop Talk guest list, beside the Discord role sync.
+  //
+  // DELIBERATELY ABOVE THE DRY-RUN RETURN. It was first placed below it, which made the sweep unreachable in
+  // dry-run mode: `npm run reconcile` printed no Shop Talk line at all and exited 0, so the preview the whole
+  // "always dry-run first" rule depends on silently did not exist. The unit tests could not catch it because
+  // they call enactShoptalk directly and never run main(). `apply: !dryRun` is what keeps it read-only here.
   try {
     const shop = await enactShoptalk(members, { env, apply: !dryRun });
     console.log('reconcile: ' + (shop.ok ? shop.summary : shop.reason));
@@ -1021,6 +1016,15 @@ async function main() {
     process.exitCode = 1;
   }
 
+  if (dryRun) {
+    console.log('reconcile: DRY RUN (no changes). Re-run with --apply to enact.');
+    return;
+  }
+
+  // sow-198: enactPlan isolates each action and never throws for an action-level failure, so the summary
+  // ALWAYS prints and the log always records what the run attempted. The outer catch covers only a genuine
+  // programming error. A failure still turns the run red via exitCode; what it no longer does is take the
+  // rest of the plan and the summary down with it.
   let counts = {};
   let failures = [];
   try {
