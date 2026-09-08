@@ -6,6 +6,7 @@
 // collection" input. Writes go through client.addToCollection() / client.createCollection() -> the signup
 // Worker's /membership/activity. The GitHub token never reaches the page (the host holds it).
 import { GbtiElement, define } from '../base.mjs';
+import { primeActivity, noteActivity, collectionsHolding, collectionPill } from '../activity-state.mjs'; // sow-316: the pill reads its state on load
 
 const folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 
@@ -38,8 +39,19 @@ const CSS = `
 class GbtiCollection extends GbtiElement {
   render() {
     const open = this._open ? this._renderPop() : '';
-    const label = !this.client ? 'Sign in to save to a collection' : 'Save to a collection';
-    this.set(this.css(CSS) + `<button class="pill ${this._inAny() ? 'on' : ''}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>Save</span></button>${open}`);
+    // sow-316: prime from the member's activity once a client is present (one shared read per page), so a pill
+    // whose item is already in a collection says so on load instead of "Save".
+    if (this.client && !this._primed) {
+      this._primed = true;
+      primeActivity(this.client).then((a) => {
+        if (!this.isConnected || this._open || this._busy) return; // an open popover already loaded fresher data
+        this._collections = a.collections;
+        this.render();
+      }).catch(() => { this._primed = false; });
+    }
+    const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
+    const label = !this.client ? 'Sign in to save to a collection' : pill.label;
+    this.set(this.css(CSS) + `<button class="pill ${this._inAny() ? 'on' : ''}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
     this.on('.pill', 'click', (e) => { e.stopPropagation(); this._toggleOpen(); });
     if (this._open) this._wirePop();
   }
@@ -80,6 +92,7 @@ class GbtiCollection extends GbtiElement {
   async _load() {
     try {
       const a = await this.client.getActivity();
+      noteActivity(this.client, a); // sow-316: the freshest snapshot for every other control on the page
       this._collections = a?.collections || [];
     } catch (err) {
       if (err?.code === 'not-authenticated' || err?.code === 'membership-required') { window.location.href = '/membership/'; return; }
@@ -114,6 +127,7 @@ class GbtiCollection extends GbtiElement {
     try {
       const res = await this.client.addToCollection({ id, targetType: t.type, targetSlug: t.slug, on });
       this._collections = res?.activity?.collections || this._collections;
+      if (res?.activity) noteActivity(this.client, res.activity); // sow-316
     } catch (err) {
       if (err?.code === 'not-authenticated' || err?.code === 'membership-required') { window.location.href = '/membership/'; return; }
     }
@@ -128,9 +142,11 @@ class GbtiCollection extends GbtiElement {
     try {
       const made = await this.client.createCollection({ name: nm });
       this._collections = made?.activity?.collections || this._collections;
+      if (made?.activity) noteActivity(this.client, made.activity); // sow-316
       if (made?.id) {
         const res = await this.client.addToCollection({ id: made.id, targetType: t.type, targetSlug: t.slug, on: true });
         this._collections = res?.activity?.collections || this._collections;
+      if (res?.activity) noteActivity(this.client, res.activity); // sow-316
       }
     } catch (err) {
       if (err?.code === 'not-authenticated' || err?.code === 'membership-required') { window.location.href = '/membership/'; return; }

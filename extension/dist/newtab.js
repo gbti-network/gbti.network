@@ -16211,6 +16211,51 @@ ${String(body ?? "")}`;
   };
   define("gbti-locked-content", GbtiLockedContent);
 
+  // client-ui/src/activity-state.mjs
+  var CACHE = /* @__PURE__ */ new WeakMap();
+  var EMPTY = () => ({ favorites: [], collections: [] });
+  function primeActivity(client) {
+    if (!client || typeof client.getActivity !== "function") return Promise.resolve(EMPTY());
+    const hit = CACHE.get(client);
+    if (hit) return hit.promise;
+    const entry = { promise: null, activity: null };
+    entry.promise = Promise.resolve().then(() => client.getActivity()).then((a) => {
+      entry.activity = normalize(a);
+      return entry.activity;
+    }).catch((err) => {
+      CACHE.delete(client);
+      throw err;
+    });
+    CACHE.set(client, entry);
+    return entry.promise;
+  }
+  function noteActivity(client, activity) {
+    if (!client || !activity) return;
+    const a = normalize(activity);
+    CACHE.set(client, { promise: Promise.resolve(a), activity: a });
+  }
+  function invalidateActivity(client) {
+    if (client) CACHE.delete(client);
+  }
+  function normalize(a) {
+    return {
+      favorites: Array.isArray(a?.favorites) ? a.favorites : [],
+      collections: Array.isArray(a?.collections) ? a.collections : []
+    };
+  }
+  var same = (it, t) => it && it.type === t.type && it.slug === t.slug;
+  function isFavorited(activity, target) {
+    return !!target?.type && !!target?.slug && (activity?.favorites || []).some((f) => same(f, target));
+  }
+  function collectionsHolding(activity, target) {
+    if (!target?.type || !target?.slug) return 0;
+    return (activity?.collections || []).filter((c) => (c?.items || []).some((it) => same(it, target))).length;
+  }
+  function collectionPill(n) {
+    if (!(n > 0)) return { text: "Save", label: "Save to a collection" };
+    return { text: `Saved (${n})`, label: `Saved in ${n} collection${n === 1 ? "" : "s"}` };
+  }
+
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
   var CSS26 = `
@@ -16235,6 +16280,16 @@ ${String(body ?? "")}`;
         this._count = Number.isFinite(n) && n > 0 ? n : 0;
       }
       if (this._faved === void 0) this._faved = false;
+      if (this.client && !this._primed) {
+        this._primed = true;
+        primeActivity(this.client).then((a) => {
+          if (this._touched || !this.isConnected) return;
+          this._faved = isFavorited(a, { type: targetType, slug: targetSlug });
+          this.render();
+        }).catch(() => {
+          this._primed = false;
+        });
+      }
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
@@ -16252,11 +16307,13 @@ ${String(body ?? "")}`;
     }
     async _toggle(targetType, targetSlug) {
       const next = !this._faved;
+      this._touched = true;
       this._faved = next;
       this._count = Math.max(0, this._count + (next ? 1 : -1));
       this.render();
       try {
         const res = await this.client.toggleFavorite({ targetType, targetSlug, on: next });
+        invalidateActivity(this.client);
         if (res && typeof res.favorited === "boolean" && res.favorited !== next) {
           this._count = Math.max(0, this._count - (next ? 1 : -1));
           this._faved = res.favorited;
@@ -16302,8 +16359,19 @@ ${String(body ?? "")}`;
   var GbtiCollection = class extends GbtiElement {
     render() {
       const open = this._open ? this._renderPop() : "";
-      const label = !this.client ? "Sign in to save to a collection" : "Save to a collection";
-      this.set(this.css(CSS27) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>Save</span></button>${open}`);
+      if (this.client && !this._primed) {
+        this._primed = true;
+        primeActivity(this.client).then((a) => {
+          if (!this.isConnected || this._open || this._busy) return;
+          this._collections = a.collections;
+          this.render();
+        }).catch(() => {
+          this._primed = false;
+        });
+      }
+      const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
+      const label = !this.client ? "Sign in to save to a collection" : pill.label;
+      this.set(this.css(CSS27) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -16347,6 +16415,7 @@ ${String(body ?? "")}`;
     async _load() {
       try {
         const a = await this.client.getActivity();
+        noteActivity(this.client, a);
         this._collections = a?.collections || [];
       } catch (err) {
         if (err?.code === "not-authenticated" || err?.code === "membership-required") {
@@ -16384,6 +16453,7 @@ ${String(body ?? "")}`;
       try {
         const res = await this.client.addToCollection({ id, targetType: t.type, targetSlug: t.slug, on });
         this._collections = res?.activity?.collections || this._collections;
+        if (res?.activity) noteActivity(this.client, res.activity);
       } catch (err) {
         if (err?.code === "not-authenticated" || err?.code === "membership-required") {
           window.location.href = "/membership/";
@@ -16402,9 +16472,11 @@ ${String(body ?? "")}`;
       try {
         const made = await this.client.createCollection({ name: nm });
         this._collections = made?.activity?.collections || this._collections;
+        if (made?.activity) noteActivity(this.client, made.activity);
         if (made?.id) {
           const res = await this.client.addToCollection({ id: made.id, targetType: t.type, targetSlug: t.slug, on: true });
           this._collections = res?.activity?.collections || this._collections;
+          if (res?.activity) noteActivity(this.client, res.activity);
         }
       } catch (err) {
         if (err?.code === "not-authenticated" || err?.code === "membership-required") {

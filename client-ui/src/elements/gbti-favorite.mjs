@@ -7,6 +7,7 @@
 // aggregate in house/favorite-counts.yml) refreshes on the next reconcile + batched build (the same two-tier
 // model as comments). The GitHub token never reaches the page (the host holds it).
 import { GbtiElement, define } from '../base.mjs';
+import { primeActivity, invalidateActivity, isFavorited } from '../activity-state.mjs'; // sow-316: the heart reads its state on load
 
 // Heart inlined: a Shadow-DOM <use href="#ico-heart"> cannot cross the shadow boundary to the page sprite.
 const heart = (filled) =>
@@ -35,6 +36,16 @@ class GbtiFavorite extends GbtiElement {
       this._count = Number.isFinite(n) && n > 0 ? n : 0;
     }
     if (this._faved === undefined) this._faved = false;
+    // sow-316: read the member's existing favorite once a client is present (render runs again when the host
+    // injects it), so a favorite the server holds is lit on load. One shared read per page (activity-state).
+    if (this.client && !this._primed) {
+      this._primed = true;
+      primeActivity(this.client).then((a) => {
+        if (this._touched || !this.isConnected) return; // a click since the read wins over the snapshot
+        this._faved = isFavorited(a, { type: targetType, slug: targetSlug });
+        this.render();
+      }).catch(() => { this._primed = false; }); // a failed read leaves the control usable and retries on the next render
+    }
     const c = Math.max(0, this._count);
     const label = !this.client ? 'Sign in to favorite' : this._faved ? 'Remove favorite' : 'Add favorite';
     const full = `${label}${c > 0 ? `, ${c} so far` : ''}`;
@@ -52,12 +63,14 @@ class GbtiFavorite extends GbtiElement {
 
   async _toggle(targetType, targetSlug) {
     const next = !this._faved;
+    this._touched = true; // sow-316: from here the member's click, not the load-time snapshot, is the truth
     // Optimistic flip + count delta.
     this._faved = next;
     this._count = Math.max(0, this._count + (next ? 1 : -1));
     this.render();
     try {
       const res = await this.client.toggleFavorite({ targetType, targetSlug, on: next });
+      invalidateActivity(this.client); // sow-316: the answer carries no activity, so the next control to prime re-reads
       if (res && typeof res.favorited === 'boolean' && res.favorited !== next) {
         // Server disagreed (e.g. already favorited): undo the optimistic delta and adopt the server truth.
         this._count = Math.max(0, this._count - (next ? 1 : -1));
