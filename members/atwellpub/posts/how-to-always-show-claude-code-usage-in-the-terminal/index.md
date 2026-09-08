@@ -9,7 +9,7 @@ publishedAt: 2026-09-07
 excerpt: "Claude Code lets you replace the bar at the bottom of the terminal with a script of your own. Drop one in and your usage limits are on screen permanently, so you stop running /usage to check."
 categories: ["ai", "agents"]
 tags: ["claude-code", "status-line", "rate-limits", "developer-tools"]
-coverImage: "./images/cover.webp"
+coverImage: "./images/status-line-cover.webp"
 ---
 
 I only recently learned that you can modify Claude Code's terminal behavior directly, by dropping in a script of your own.
