@@ -30,6 +30,7 @@ import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
 import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
+import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
 const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
@@ -646,7 +647,14 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       // KV draft (that KV copy is the newer editable staging state). Fail-soft: a repo-drafts error must not
       // blank the Drafts list, so a KV-only member still sees their KV drafts if the route is unavailable.
       let repoItems: any[] = [];
-      try { const rr = await workerGet('/membership/repo-drafts'); repoItems = Array.isArray(rr?.items) ? rr.items : []; } catch { repoItems = []; }
+      // sow-315: the same envelope carries the content commit. Pin the image URLs to it, because a `@main`
+      // jsDelivr URL is cached seven days in the viewer's browser and a replaced image would keep showing
+      // the old picture. A missing or partial sha resets to `main` inside setContentRef, never half-pins.
+      try {
+        const rr: any = await workerGet('/membership/repo-drafts');
+        repoItems = Array.isArray(rr?.items) ? rr.items : [];
+        setContentRef(rr?.sha);
+      } catch { repoItems = []; }
       drafts = mergeRepoDrafts(drafts, repoItems);
       if (type) drafts = drafts.filter((d: any) => d.type === type);
       return { drafts };

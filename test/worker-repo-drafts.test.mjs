@@ -83,3 +83,19 @@ test('review fix: a login reused onto a departed member folder does NOT match (i
   // bob's REAL id still sees bob's draft.
   assert.deepEqual((await listRepoDrafts(GET('Bearer g'), ENV(), deps('20', 'bob'))).body.items.map((i) => i.slug), ['p']);
 });
+
+// sow-315: the content commit has to survive the Worker hop, or the browser cannot pin its image URLs and
+// a replaced draft image keeps showing the old picture for seven days.
+test('the content sha is forwarded on the envelope, and a missing one does not break the response', async () => {
+  const SHA = 'a3190e581c09127494dafe5baf41cf14b2ab1a1e';
+  const withSha = await listRepoDrafts(GET('Bearer g'), ENV(freshMirror(), { ...INDEX, sha: SHA }), deps('10', 'alice'));
+  assert.equal(withSha.status, 200);
+  assert.equal(withSha.body.sha, SHA);
+
+  // An index written before this field existed, or by a local run with no commit, must still answer 200
+  // with its items. Null means "no pin", which is the old `@main` behaviour, not an error.
+  const without = await listRepoDrafts(GET('Bearer g'), ENV(), deps('10', 'alice'));
+  assert.equal(without.status, 200);
+  assert.equal(without.body.sha, null);
+  assert.equal(without.body.items.length, 1, 'the listing itself is unaffected');
+});

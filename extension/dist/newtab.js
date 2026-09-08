@@ -2710,6 +2710,63 @@
     return USERNAME_RE.test(u) ? u : null;
   }
 
+  // client-ui/src/assets.mjs
+  var SITE = "https://gbti.network";
+  var CONTENT_REPO = "gbti-network/gbti.network";
+  var FULL_SHA = /^[0-9a-f]{40}$/;
+  var DEFAULT_REF = "main";
+  function pinnedRef(sha) {
+    const s = String(sha ?? "").trim().toLowerCase();
+    return FULL_SHA.test(s) ? s : DEFAULT_REF;
+  }
+  var currentRef = DEFAULT_REF;
+  function setContentRef(sha) {
+    currentRef = pinnedRef(sha);
+  }
+  function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
+    return `https://cdn.jsdelivr.net/gh/${repo}@${pinnedRef(ref)}`;
+  }
+  function attachCdnFallback(root, repo = CONTENT_REPO) {
+    if (!root || typeof root.addEventListener !== "function") return () => {
+    };
+    const pinned = new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@[0-9a-f]{40}/`);
+    const onError = (ev) => {
+      const el = ev.target;
+      if (!el || el.tagName !== "IMG" || el.dataset?.cdnRetried) return;
+      const src = String(el.getAttribute("src") || "");
+      if (!pinned.test(src)) return;
+      el.dataset.cdnRetried = "1";
+      el.setAttribute("src", src.replace(/@[0-9a-f]{40}\//, `@${DEFAULT_REF}/`));
+    };
+    root.addEventListener("error", onError, true);
+    return () => root.removeEventListener("error", onError, true);
+  }
+  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO, ref = currentRef) {
+    const md = String(markdown ?? "");
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (!folder2) return md;
+    const base = cdnBase(repo, ref);
+    return md.replace(
+      /(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
+      (_m, pre, _dot, rest) => `${pre}${base}/${folder2}/${rest}`
+    );
+  }
+  function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site = SITE, ref = currentRef) {
+    if (!value) return "";
+    const s = String(value);
+    if (/^https?:\/\//.test(s) || /^\/\//.test(s) || /^\/_astro\//.test(s)) return resolveAsset(s, site) || s;
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (folder2) return `${cdnBase(repo, ref)}/${folder2}/${s.replace(/^\.?\/+/, "")}`;
+    if (/^\.{1,2}\//.test(s)) return "";
+    return resolveAsset(s, site) || "";
+  }
+  function resolveAsset(thumb, site = SITE) {
+    if (!thumb || typeof thumb !== "string") return null;
+    if (/^https?:\/\//.test(thumb)) return thumb;
+    if (/^\/\//.test(thumb)) return `https:${thumb}`;
+    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
+  }
+
   // client-ui/src/tokens.mjs
   var TOKENS = `
 :host {
@@ -2861,10 +2918,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     connectedCallback() {
       SUBSCRIBERS.add(this._onClient);
+      if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
       this.render?.();
     }
     disconnectedCallback() {
       SUBSCRIBERS.delete(this._onClient);
+      this._detachCdnFallback?.();
+      this._detachCdnFallback = null;
     }
     get client() {
       return getClient();
@@ -3560,7 +3620,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-share-composer.mjs
-  var SITE = "https://gbti.network";
+  var SITE2 = "https://gbti.network";
   var IC = {
     bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10.5H12z"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5m0 2a3 3 0 0 1 3 3v3H9V7a3 3 0 0 1 3-3"/></svg>',
@@ -3987,7 +4047,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _loadTopics() {
       if (!this._topics) {
         try {
-          const r = await fetch(`${SITE}/topics.json`, { cache: "no-cache" });
+          const r = await fetch(`${SITE2}/topics.json`, { cache: "no-cache" });
           this._topics = topicsFromJson(await r.json());
         } catch {
           this._topics = [];
@@ -4208,7 +4268,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
-  var SITE2 = "https://gbti.network";
+  var SITE3 = "https://gbti.network";
   var POLL_MS = 12e4;
   var SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
@@ -4367,7 +4427,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           // no reliable timestamp in both host modes; the number is a recency proxy for display sort
           title: p.title || `PR #${p.number}`,
           sub: lc12.needsAttention ? "Declined — open to see why" : "Accepted",
-          href: lc12.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE2
+          href: lc12.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
         };
       });
     }
@@ -4375,7 +4435,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const f = await this.client.getFollows() || {};
       const set = new Set((f.following || []).map((x) => String(x?.username || "").toLowerCase()).filter(Boolean));
       if (!set.size) return [];
-      const res = await fetch(`${SITE2}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE3}/activity-index.json`, { cache: "no-cache" });
       const data = res.ok ? await res.json() : {};
       const entries = Array.isArray(data?.entries) ? data.entries : [];
       return entries.filter((e) => set.has(String(e.author).toLowerCase())).map((e) => ({
@@ -4383,7 +4443,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ts: toMs(e.publishedAt),
         title: e.title || "New activity",
         sub: `@${e.author}`,
-        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE2}${e.url || ""}`
+        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE3}${e.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -5717,7 +5777,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-topic-picker.mjs
-  var SITE3 = "https://gbti.network";
+  var SITE4 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var CSS5 = `
@@ -5749,7 +5809,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _load() {
       try {
-        const r = await fetch(`${SITE3}/topics.json`, { cache: "no-cache" });
+        const r = await fetch(`${SITE4}/topics.json`, { cache: "no-cache" });
         this._topics = topicsFromJson(await r.json());
       } catch {
         this._topics = [];
@@ -5869,7 +5929,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-welcome.mjs
-  var SITE4 = "https://gbti.network";
+  var SITE5 = "https://gbti.network";
   var PAGE_SIZE2 = 12;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var CHAN_FOLLOWED_KEY = "gbti-welcome-chan-followed";
@@ -6218,7 +6278,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       try {
-        const res = await fetch(`${SITE4}/members-index.json`, { cache: "no-cache" });
+        const res = await fetch(`${SITE5}/members-index.json`, { cache: "no-cache" });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         this._members = excludeSelf(shuffle(Array.isArray(data?.members) ? data.members : []), this._own);
@@ -6338,7 +6398,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE4}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
       </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
       this.on("[data-copy]", "click", () => {
@@ -6691,7 +6751,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // extension/src/shell.mjs
-  var SITE5 = "https://gbti.network";
+  var SITE6 = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -6784,7 +6844,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { div: true },
     // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
     // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-    { key: "profile", href: `${SITE5}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
+    { key: "profile", href: `${SITE6}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
     // SOW-129, repointed sow-204
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
@@ -6819,7 +6879,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
-        <a class="mi" role="menuitem" href="${SITE5}/workbench/" target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE6}/workbench/" target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -6851,7 +6911,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return self + kids;
     }).join("");
     const top = nav === "feed" ? feedControlsHtml() : "";
-    return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE5}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+    return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE6}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
   function setRailActive(key) {
     document.querySelectorAll(".nt-rail .nav-i").forEach((a) => a.classList.toggle("on", a.dataset.key === key));
@@ -7758,34 +7818,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ik = null;
       }
     };
-  }
-
-  // client-ui/src/assets.mjs
-  var SITE6 = "https://gbti.network";
-  var CONTENT_REPO = "gbti-network/gbti.network";
-  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO) {
-    const md = String(markdown ?? "");
-    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
-    if (!folder2) return md;
-    return md.replace(
-      /(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
-      (_m, pre, _dot, rest) => `${pre}https://cdn.jsdelivr.net/gh/${repo}@main/${folder2}/${rest}`
-    );
-  }
-  function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site = SITE6) {
-    if (!value) return "";
-    const s = String(value);
-    if (/^https?:\/\//.test(s) || /^\/\//.test(s) || /^\/_astro\//.test(s)) return resolveAsset(s, site) || s;
-    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
-    if (folder2) return `https://cdn.jsdelivr.net/gh/${repo}@main/${folder2}/${s.replace(/^\.?\/+/, "")}`;
-    if (/^\.{1,2}\//.test(s)) return "";
-    return resolveAsset(s, site) || "";
-  }
-  function resolveAsset(thumb, site = SITE6) {
-    if (!thumb || typeof thumb !== "string") return null;
-    if (/^https?:\/\//.test(thumb)) return thumb;
-    if (/^\/\//.test(thumb)) return `https:${thumb}`;
-    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
 
   // client-ui/src/media-picker.mjs
@@ -18471,7 +18503,9 @@ ${String(body ?? "")}`;
     async _loadDrafts(id) {
       if (this._drafts) return;
       try {
-        this._drafts = (await this.client?.listDrafts?.())?.drafts ?? [];
+        const res = await this.client?.listDrafts?.();
+        setContentRef(res?.contentRef);
+        this._drafts = res?.drafts ?? [];
       } catch {
         this._drafts = [];
       }

@@ -19353,14 +19353,16 @@ async function forkContentMatchesLive(ctx2, path4, forkText) {
 }
 async function foldRepoDrafts(ctx2, drafts, type) {
   let items = [];
+  let contentRef = null;
   try {
     const token = ctx2.store?.get?.("githubToken");
     const r = await workerListRepoDrafts({ token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
     items = Array.isArray(r?.items) ? r.items : [];
+    contentRef = typeof r?.sha === "string" ? r.sha : null;
   } catch {
     items = [];
   }
-  return mergeRepoDrafts(drafts, items, { type });
+  return { drafts: mergeRepoDrafts(drafts, items, { type }), contentRef };
 }
 async function listDrafts(ctx2, { type } = {}) {
   const id = requireIdentity(ctx2);
@@ -19402,7 +19404,7 @@ async function listDrafts(ctx2, { type } = {}) {
         // sow-194: the store discriminator, so a repo draft never collides with a KV draft
       });
     }
-    return { drafts: await foldRepoDrafts(ctx2, drafts2, type) };
+    return foldRepoDrafts(ctx2, drafts2, type);
   }
   const repo = requireRepo(ctx2);
   const fork = await repo.ensureFork();
@@ -19473,7 +19475,7 @@ async function listDrafts(ctx2, { type } = {}) {
       // sow-194: the store discriminator, so a repo draft never collides with a fork draft
     });
   }
-  return { drafts: await foldRepoDrafts(ctx2, drafts, type) };
+  return foldRepoDrafts(ctx2, drafts, type);
 }
 async function readDraft(ctx2, { type, slug, store, path: repoPath } = {}) {
   const id = requireIdentity(ctx2);

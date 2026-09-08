@@ -111,12 +111,29 @@ export function buildRepoDraftsIndex(root) {
   return out;
 }
 
+// sow-315: the CONTENT COMMIT this index was built from, so the review surfaces can pin their jsDelivr
+// image URLs to it instead of to the `main` branch. A branch URL is cached twelve hours at the CDN edge and
+// SEVEN DAYS in the viewer's browser, so replacing an image at the same path shows the old picture for a
+// week and no purge API can reach it. A full 40-hex commit URL is immutable instead.
+//
+// Stored as null unless it is a full 40-hex sha. A SHORT sha resolves as a BRANCH at jsDelivr and keeps the
+// mutable policy, so writing one would look like a pin and fix nothing.
+//
+// GITHUB_SHA needs no workflow wiring: it is a default Actions variable, as scripts/deploy-status.mjs
+// already relies on without deploy.yml setting it. Locally it is absent, which yields null and the old
+// `main` behaviour.
+const FULL_SHA = /^[0-9a-f]{40}$/;
+export function contentSha(env = process.env) {
+  const s = String(env?.GITHUB_SHA ?? '').trim().toLowerCase();
+  return FULL_SHA.test(s) ? s : null;
+}
+
 /**
- * PUT the built index to KV `repo-drafts:index` as { generatedAt, items }. Creds-gated no-op (reported, not a
- * throw) when CF_* is absent, exactly like the overrides mirror. Throws only on a real API error.
+ * PUT the built index to KV `repo-drafts:index` as { generatedAt, sha, items }. Creds-gated no-op (reported,
+ * not a throw) when CF_* is absent, exactly like the overrides mirror. Throws only on a real API error.
  */
 export async function mirrorRepoDraftsToKv({ root, env = process.env, fetchImpl = globalThis.fetch, now = new Date(), key = REPO_DRAFTS_KV_KEY } = {}) {
   const items = buildRepoDraftsIndex(root);
-  const body = JSON.stringify({ generatedAt: now.toISOString(), items });
+  const body = JSON.stringify({ generatedAt: now.toISOString(), sha: contentSha(env), items });
   return putKvJson({ label: 'repo drafts index', body, env, fetchImpl, key });
 }

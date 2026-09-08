@@ -66,5 +66,9 @@ export async function listRepoDrafts(request, env, { fetchImpl = globalThis.fetc
       status: 'draft',
       store: 'repo',
     }));
-  return { status: 200, body: { ok: true, items, generatedAt: index?.generatedAt ?? null } };
+  // sow-315: `sha` is the content commit this index was built from. The review surfaces pin their jsDelivr
+  // image URLs to it, because a `@main` URL is cached for seven days in the viewer's browser and a replaced
+  // image would keep showing the old picture. Envelope, not per item: the item map above is a whitelist and
+  // this describes the whole index. Null when the indexer had no commit, which keeps the old behaviour.
+  return { status: 200, body: { ok: true, items, generatedAt: index?.generatedAt ?? null, sha: index?.sha ?? null } };
 }

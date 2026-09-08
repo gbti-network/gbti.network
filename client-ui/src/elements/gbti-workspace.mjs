@@ -8,6 +8,7 @@
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
 import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
+import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'project']); // SOW-073: types whose publish invalidates a tab
@@ -418,7 +419,12 @@ class GbtiWorkspace extends GbtiElement {
   async _loadDrafts(id) {
     if (this._drafts) return; // already loaded this session
     try {
-      this._drafts = (await this.client?.listDrafts?.())?.drafts ?? [];
+      // sow-315: this one call is where both non-website hosts learn the content commit, so the pin is set
+      // here rather than in either transport (the extension's adapter and the npm client's fetch client are
+      // separate implementations of the same contract and share no request path).
+      const res = await this.client?.listDrafts?.();
+      setContentRef(res?.contentRef);
+      this._drafts = res?.drafts ?? [];
     } catch {
       this._drafts = [];
     }

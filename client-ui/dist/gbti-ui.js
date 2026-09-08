@@ -35,6 +35,63 @@ var GbtiUI = (() => {
     toPublishPayload: () => toPublishPayload
   });
 
+  // client-ui/src/assets.mjs
+  var SITE = "https://gbti.network";
+  var CONTENT_REPO = "gbti-network/gbti.network";
+  var FULL_SHA = /^[0-9a-f]{40}$/;
+  var DEFAULT_REF = "main";
+  function pinnedRef(sha) {
+    const s = String(sha ?? "").trim().toLowerCase();
+    return FULL_SHA.test(s) ? s : DEFAULT_REF;
+  }
+  var currentRef = DEFAULT_REF;
+  function setContentRef(sha) {
+    currentRef = pinnedRef(sha);
+  }
+  function cdnBase(repo = CONTENT_REPO, ref = currentRef) {
+    return `https://cdn.jsdelivr.net/gh/${repo}@${pinnedRef(ref)}`;
+  }
+  function attachCdnFallback(root, repo = CONTENT_REPO) {
+    if (!root || typeof root.addEventListener !== "function") return () => {
+    };
+    const pinned = new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@[0-9a-f]{40}/`);
+    const onError = (ev) => {
+      const el = ev.target;
+      if (!el || el.tagName !== "IMG" || el.dataset?.cdnRetried) return;
+      const src = String(el.getAttribute("src") || "");
+      if (!pinned.test(src)) return;
+      el.dataset.cdnRetried = "1";
+      el.setAttribute("src", src.replace(/@[0-9a-f]{40}\//, `@${DEFAULT_REF}/`));
+    };
+    root.addEventListener("error", onError, true);
+    return () => root.removeEventListener("error", onError, true);
+  }
+  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO, ref = currentRef) {
+    const md = String(markdown ?? "");
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (!folder2) return md;
+    const base = cdnBase(repo, ref);
+    return md.replace(
+      /(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
+      (_m, pre, _dot, rest) => `${pre}${base}/${folder2}/${rest}`
+    );
+  }
+  function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site = SITE, ref = currentRef) {
+    if (!value) return "";
+    const s = String(value);
+    if (/^https?:\/\//.test(s) || /^\/\//.test(s) || /^\/_astro\//.test(s)) return resolveAsset(s, site) || s;
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (folder2) return `${cdnBase(repo, ref)}/${folder2}/${s.replace(/^\.?\/+/, "")}`;
+    if (/^\.{1,2}\//.test(s)) return "";
+    return resolveAsset(s, site) || "";
+  }
+  function resolveAsset(thumb, site = SITE) {
+    if (!thumb || typeof thumb !== "string") return null;
+    if (/^https?:\/\//.test(thumb)) return thumb;
+    if (/^\/\//.test(thumb)) return `https:${thumb}`;
+    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
+  }
+
   // client-ui/src/tokens.mjs
   var TOKENS = `
 :host {
@@ -186,10 +243,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     connectedCallback() {
       SUBSCRIBERS.add(this._onClient);
+      if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
       this.render?.();
     }
     disconnectedCallback() {
       SUBSCRIBERS.delete(this._onClient);
+      this._detachCdnFallback?.();
+      this._detachCdnFallback = null;
     }
     get client() {
       return getClient();
@@ -966,34 +1026,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ik = null;
       }
     };
-  }
-
-  // client-ui/src/assets.mjs
-  var SITE = "https://gbti.network";
-  var CONTENT_REPO = "gbti-network/gbti.network";
-  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO) {
-    const md = String(markdown ?? "");
-    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
-    if (!folder2) return md;
-    return md.replace(
-      /(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
-      (_m, pre, _dot, rest) => `${pre}https://cdn.jsdelivr.net/gh/${repo}@main/${folder2}/${rest}`
-    );
-  }
-  function resolveContentAsset(value, itemPath, repo = CONTENT_REPO, site = SITE) {
-    if (!value) return "";
-    const s = String(value);
-    if (/^https?:\/\//.test(s) || /^\/\//.test(s) || /^\/_astro\//.test(s)) return resolveAsset(s, site) || s;
-    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
-    if (folder2) return `https://cdn.jsdelivr.net/gh/${repo}@main/${folder2}/${s.replace(/^\.?\/+/, "")}`;
-    if (/^\.{1,2}\//.test(s)) return "";
-    return resolveAsset(s, site) || "";
-  }
-  function resolveAsset(thumb, site = SITE) {
-    if (!thumb || typeof thumb !== "string") return null;
-    if (/^https?:\/\//.test(thumb)) return thumb;
-    if (/^\/\//.test(thumb)) return `https:${thumb}`;
-    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
 
   // client-ui/src/media-picker.mjs
@@ -16489,7 +16521,9 @@ ${String(body ?? "")}`;
     async _loadDrafts(id) {
       if (this._drafts) return;
       try {
-        this._drafts = (await this.client?.listDrafts?.())?.drafts ?? [];
+        const res = await this.client?.listDrafts?.();
+        setContentRef(res?.contentRef);
+        this._drafts = res?.drafts ?? [];
       } catch {
         this._drafts = [];
       }

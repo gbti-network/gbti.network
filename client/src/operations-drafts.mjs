@@ -143,12 +143,18 @@ export async function forkContentMatchesLive(ctx, path, forkText) {
  */
 export async function foldRepoDrafts(ctx, drafts, type) {
   let items = [];
+  // sow-315: the same envelope carries the CONTENT COMMIT the index was built from. It rides back to the UI
+  // so the editors can pin their jsDelivr image URLs to a commit instead of to `main`, whose URLs the
+  // viewer's browser caches for seven days (a replaced image would keep showing the old picture). Null when
+  // unavailable, which leaves the old `main` behaviour rather than half-pinning.
+  let contentRef = null;
   try {
     const token = ctx.store?.get?.('githubToken');
     const r = await workerListRepoDrafts({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
     items = Array.isArray(r?.items) ? r.items : [];
+    contentRef = typeof r?.sha === 'string' ? r.sha : null;
   } catch { items = []; }
-  return mergeRepoDrafts(drafts, items, { type });
+  return { drafts: mergeRepoDrafts(drafts, items, { type }), contentRef };
 }
 
 
@@ -181,7 +187,7 @@ export async function listDrafts(ctx, { type } = {}) {
         store: 'kv', // sow-194: the store discriminator, so a repo draft never collides with a KV draft
       });
     }
-    return { drafts: await foldRepoDrafts(ctx, drafts, type) };
+    return foldRepoDrafts(ctx, drafts, type); // sow-315: { drafts, contentRef }
   }
   const repo = requireRepo(ctx);
   const fork = await repo.ensureFork();
@@ -241,7 +247,7 @@ export async function listDrafts(ctx, { type } = {}) {
       store: 'fork', // sow-194: the store discriminator, so a repo draft never collides with a fork draft
     });
   }
-  return { drafts: await foldRepoDrafts(ctx, drafts, type) };
+  return foldRepoDrafts(ctx, drafts, type); // sow-315: { drafts, contentRef }
 }
 
 

@@ -4,6 +4,7 @@
 // once before mounting. Guarded so importing this in a non-DOM env (node tests) does not crash: the pure
 // helpers live in client.mjs / form.mjs / inline.mjs, which is what node tests import.
 
+import { attachCdnFallback } from './assets.mjs'; // sow-315: retry a pinned image against `main`
 import { TOKENS, BASE_CSS } from './tokens.mjs';
 
 const HAS_DOM = typeof HTMLElement !== 'undefined';
@@ -51,10 +52,20 @@ export class GbtiElement extends Base {
 
   connectedCallback() {
     SUBSCRIBERS.add(this._onClient);
+    // sow-315: retry a PINNED jsDelivr image against `main` if it 404s. Installed on the BASE, so every
+    // component that renders content images is covered by one listener rather than three opt-ins that a
+    // future component would silently miss. It only fires on an error, so it costs nothing normally.
+    //
+    // The window it covers is the common one: the authoring loop is commit, then open the review surface,
+    // and until the index job finishes the pinned ref is the PREVIOUS content commit, where a just-added
+    // image does not exist. Without this a pin turns a stale image into a broken one.
+    if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
     this.render?.();
   }
   disconnectedCallback() {
     SUBSCRIBERS.delete(this._onClient);
+    this._detachCdnFallback?.();
+    this._detachCdnFallback = null;
   }
 
   get client() {

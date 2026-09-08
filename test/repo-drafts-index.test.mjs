@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildRepoDraftsIndex, mirrorRepoDraftsToKv, REPO_DRAFTS_KV_KEY } from '../scripts/lib/repo-drafts-index.mjs';
+import { buildRepoDraftsIndex, mirrorRepoDraftsToKv, contentSha, REPO_DRAFTS_KV_KEY } from '../scripts/lib/repo-drafts-index.mjs';
 
 function writeItem(root, rel, frontmatter, body = 'hello') {
   const abs = path.join(root, rel);
@@ -83,4 +83,44 @@ test('mirrorRepoDraftsToKv: creds-gated no-op (no throw) without CF_*; a real PU
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// sow-315: the envelope carries the CONTENT COMMIT so the review surfaces can pin their jsDelivr image URLs
+// to it. A `@main` URL is cached for seven days in the viewer's browser, so a replaced image keeps showing
+// the old picture and no purge reaches it. Envelope, not per item: the item-shape deepEqual above pins
+// exactly seven keys, and the sha describes the whole index rather than any one draft.
+test('contentSha: only a full 40-hex GITHUB_SHA is recorded', () => {
+  const SHA = 'a3190e581c09127494dafe5baf41cf14b2ab1a1e';
+  assert.equal(contentSha({ GITHUB_SHA: SHA }), SHA);
+  assert.equal(contentSha({ GITHUB_SHA: SHA.toUpperCase() }), SHA, 'normalized, not rejected');
+  // A SHORT sha resolves as a BRANCH at jsDelivr and keeps the mutable seven-day cache, so recording one
+  // would look like a pin and fix nothing. Null instead, which keeps the honest `main` behaviour.
+  assert.equal(contentSha({ GITHUB_SHA: 'a3190e5' }), null);
+  assert.equal(contentSha({ GITHUB_SHA: '' }), null);
+  assert.equal(contentSha({}), null, 'absent locally, where there is no Actions runner');
+  assert.equal(contentSha(undefined), null);
+});
+
+test('mirrorRepoDraftsToKv: the PUT body carries the content sha beside generatedAt', async () => {
+  const root = fixtureRepo();
+  const SHA = 'a3190e581c09127494dafe5baf41cf14b2ab1a1e';
+  try {
+    let sent = null;
+    const fetchImpl = async (url, opts) => { sent = { url, opts }; return { ok: true, status: 200, text: async () => '' }; };
+    await mirrorRepoDraftsToKv({
+      root, fetchImpl, now: new Date('2026-08-07T00:00:00.000Z'),
+      env: { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't', GITHUB_SHA: SHA },
+    });
+    const body = JSON.parse(sent.opts.body);
+    assert.equal(body.sha, SHA);
+    assert.equal(body.generatedAt, '2026-08-07T00:00:00.000Z', 'the existing envelope field is untouched');
+    assert.ok(Array.isArray(body.items) && body.items.length > 0);
+
+    // No commit available (a local run) must not write a half-pin.
+    await mirrorRepoDraftsToKv({
+      root, fetchImpl, now: new Date('2026-08-07T00:00:00.000Z'),
+      env: { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't' },
+    });
+    assert.equal(JSON.parse(sent.opts.body).sha, null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

@@ -189,7 +189,21 @@ const labelOf = CATEGORY_LABELS;
       const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) =>
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
-      const CDN = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main';
+      // sow-315: the ref logic is SHARED with client-ui/src/assets.mjs rather than re-derived here. This page
+      // already hand-duplicates resolveContentAsset below and the two copies have drifted; a second private
+      // copy of the branch-versus-commit rule is the one thing that must not drift, because a short sha
+      // silently keeps the mutable cache and nothing downstream would notice.
+      const { cdnBase, setContentRef, attachCdnFallback } = await import('../../../client-ui/src/assets.mjs');
+
+      // sow-315: the CDN base is resolved LATE, because it depends on a content commit this page has not
+      // fetched yet. `main` is the honest default and is exactly the pre-sow-315 behaviour.
+      //
+      // Why it matters: jsDelivr caches a BRANCH url for twelve hours at the edge and SEVEN DAYS in the
+      // viewer's browser, so replacing an image at the same path leaves a reviewer looking at the old
+      // picture for a week and no purge API can reach a browser cache. A full 40-hex COMMIT url is
+      // immutable, so a new commit is simply a new url. pinnedRef refuses a short sha, which jsDelivr would
+      // resolve as a branch and silently keep the mutable policy.
+      let CDN = cdnBase();
       // An image the author has uploaded but not yet published is not on main, so jsDelivr 404s it and the
       // preview shows a broken image. Its bytes are in the Worker's staged store; this map is filled from
       // there once the draft is loaded (see loadStagedImages below) and consulted FIRST.
@@ -208,6 +222,23 @@ const labelOf = CATEGORY_LABELS;
       if (!slug) { say('No draft named. Open Preview from the editor.'); return; }
       const store = q.get('store') || '';
       const repoPath = q.get('path') || '';
+
+      // sow-315: the content commit the CI draft index was built from. Awaited before any render, because
+      // every image below resolves through `asset()` and a late ref would paint the branch url first.
+      // Fail-soft in both directions: an error, a missing field or a short sha all leave `main` in place.
+      //
+      // Then install the fallback for the one window that a pin makes WORSE rather than better. The
+      // authoring loop is commit, then open the preview; until the index job finishes (about a minute) this
+      // ref is the PREVIOUS content commit, where a just-added image does not exist. Without the retry a
+      // pin would turn a stale image into a broken one.
+      let contentSha: string | null = null;
+      try {
+        const rr = await fetch(`${base}/membership/repo-drafts`, { credentials: 'include' });
+        if (rr.ok) contentSha = (await rr.json())?.sha ?? null;
+      } catch { /* no pin; `main` still renders, just cacheably */ }
+      setContentRef(contentSha);
+      CDN = cdnBase();
+      attachCdnFallback(document);
       // sow-194: read the non-HttpOnly gbti_csrf cookie for the double-submit header on the decrypt POST (mirrors
       // workbench-client.ts readCsrf); the httpOnly session rides on `credentials: 'include'`.
       const readCsrf = () => {
@@ -243,7 +274,9 @@ const labelOf = CATEGORY_LABELS;
         // is .enc ciphertext or a stub, and the plaintext only ever comes back through the PAID-gated
         // /membership/decrypt below.
         try {
-          const res = await fetch(`${base}/membership/file?path=${encodeURIComponent(repoPath)}&ref=main`, { credentials: 'include' });
+          // sow-315: the same commit the images are pinned to, so the text and its pictures cannot disagree.
+          // Falls back to `main` when there is no pin, which is the original behaviour.
+          const res = await fetch(`${base}/membership/file?path=${encodeURIComponent(repoPath)}&ref=${encodeURIComponent(contentSha || 'main')}`, { credentials: 'include' });
           if (res.status === 401 || res.status === 403) { say('Sign in to preview this draft.'); return; }
           const data = res.ok ? await res.json() : null;
           const text = data?.text;
@@ -258,7 +291,7 @@ const labelOf = CATEGORY_LABELS;
               // members gate renders -- fail closed. Both hops guard on res.ok before trusting the payload, exactly
               // as workbench-client.ts decryptEnc (via workerPost's parseJson) does.
               try {
-                const encRes = await fetch(`${base}/membership/file?path=${encodeURIComponent(enc)}&ref=main`, { credentials: 'include' });
+                const encRes = await fetch(`${base}/membership/file?path=${encodeURIComponent(enc)}&ref=${encodeURIComponent(contentSha || 'main')}`, { credentials: 'include' });
                 const envelopeText = encRes.ok ? (await encRes.json())?.text : null;
                 if (typeof envelopeText === 'string' && envelopeText) {
                   const csrf = readCsrf();
@@ -588,7 +621,7 @@ const labelOf = CATEGORY_LABELS;
             const { introPathFor } = await import('../../lib/author-note.mjs');
             const notePath = introPathFor(repoPath, slug);
             if (notePath) {
-              const res = await fetch(`${base}/membership/file?path=${encodeURIComponent(notePath)}&ref=main`, { credentials: 'include' });
+              const res = await fetch(`${base}/membership/file?path=${encodeURIComponent(notePath)}&ref=${encodeURIComponent(contentSha || 'main')}`, { credentials: 'include' });
               const text = res.ok ? (await res.json())?.text : null;
               if (typeof text === 'string' && text) {
                 const { parseContentFile } = await import('../../../client/src/content-ops.mjs');
