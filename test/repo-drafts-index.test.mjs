@@ -97,8 +97,21 @@ test('contentSha: only a full 40-hex GITHUB_SHA is recorded', () => {
   // would look like a pin and fix nothing. Null instead, which keeps the honest `main` behaviour.
   assert.equal(contentSha({ GITHUB_SHA: 'a3190e5' }), null);
   assert.equal(contentSha({ GITHUB_SHA: '' }), null);
-  assert.equal(contentSha({}), null, 'absent locally, where there is no Actions runner');
-  assert.equal(contentSha(undefined), null);
+  assert.equal(contentSha({}), null, 'an environment with no commit yields no pin');
+
+  // The default argument is process.env, which is how CI supplies the commit. Assert that by SETTING the
+  // variable rather than by reading whatever the ambient environment happens to hold. An earlier version of
+  // this test asserted `contentSha() === null`, which is true on a laptop and false inside Actions, where
+  // GITHUB_SHA is always set. It passed locally and reddened CI on the first run of this change.
+  const prev = process.env.GITHUB_SHA;
+  try {
+    process.env.GITHUB_SHA = SHA;
+    assert.equal(contentSha(), SHA, 'the default env is process.env');
+    delete process.env.GITHUB_SHA;
+    assert.equal(contentSha(), null, 'and no commit in the environment means no pin');
+  } finally {
+    if (prev === undefined) delete process.env.GITHUB_SHA; else process.env.GITHUB_SHA = prev;
+  }
 });
 
 test('mirrorRepoDraftsToKv: the PUT body carries the content sha beside generatedAt', async () => {
