@@ -26,6 +26,7 @@ import { createStripeClient } from '../clients/stripe.mjs';
 import { createGitHubClient } from '../clients/github.mjs';
 import { createDiscordClient } from '../clients/discord.mjs';
 import { createGoogleCalendarClient } from '../clients/google-calendar.mjs';           // sow-314
+import { stripeModeNote } from '../membership/stripe-mode.mjs';                       // sow-314 follow-up
 import { runShoptalkSweep, describeSweep } from './lib/shoptalk-sweep.mjs';            // sow-314
 import { readPlaced, writePlaced, readOptedOut } from './lib/shoptalk-state.mjs';      // sow-314
 import { createResendClient } from '../clients/resend.mjs';
@@ -737,7 +738,7 @@ async function main() {
     }
   }
 
-  console.log(`reconcile: ${members.length} membership customer(s), ${actions.length} action(s) planned.`);
+  console.log(`reconcile: ${members.length} membership customer(s), ${actions.length} action(s) planned.${stripeModeNote(env.STRIPE_SECRET_KEY)}`);
   for (const action of actions) console.log('  ' + describe(action));
 
   // FAIL CLOSED: a banned member whose folder could not be resolved cannot be deplatformed by this run.
