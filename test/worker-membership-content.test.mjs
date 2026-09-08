@@ -284,7 +284,7 @@ test('authorizeSignedIn: a free (none) member is admitted; no token -> 401; a st
   assert.equal((await authorizeSignedIn(POST('news', 'Bearer g'), ENV({}, null), deps('9', () => null))).status, 403);
 });
 
-// sow-185: authorizeCreator gates the WRITE routes (encrypt / open-pull / hosted-author) to Content Creator.
+// sow-185: authorizeCreator gates the WRITE routes (encrypt / open-pull / hosted-author) to the Curator tier.
 // The tier resolves override-aware from resolveEffective; INERT until the owner maps the $5 price (with no
 // price env every paid sub is creator via the legacy single-price mode).
 const PRICE_ENV = { STRIPE_PRICE_MEMBER_MONTHLY: 'price_m', STRIPE_PRICE_CREATOR_MONTHLY: 'price_c' };
@@ -317,14 +317,14 @@ test('authorizeCreator: with the legacy price mapped, a legacy paid member is no
   assert.equal(r.status, 403);
 });
 
-test('authorizeCreator: a $5 Network Member (member price) is DENIED with a Content Creator message', async () => {
+test('authorizeCreator: a $5 Network Member (member price) is DENIED with a Curator message', async () => {
   const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV), deps('1', () => paidAt('price_m')));
   assert.equal(r.ok, false);
   assert.equal(r.status, 403);
-  assert.match(r.body.message, /Content Creator/);
+  assert.match(r.body.message, /requires Curator status, which is granted by application/);
 });
 
-test('authorizeCreator: a Content Creator (creator price) is admitted', async () => {
+test('authorizeCreator: a Curator (creator price) is admitted', async () => {
   const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV), deps('1', () => paidAt('price_c')));
   assert.equal(r.ok, true);
   assert.equal(r.tier, 'creator');
@@ -337,7 +337,7 @@ test('authorizeCreator: a TIERLESS grandfather now resolves to member and is DEN
   const denied = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, tierless), deps('3', () => null));
   assert.equal(denied.ok, false);
   assert.equal(denied.status, 403);
-  assert.match(denied.body.message, /Content Creator/);
+  assert.match(denied.body.message, /requires Curator status, which is granted by application/);
   // the escape hatch: an explicit tier:creator grandfather still resolves creator and is admitted (override wins)
   const creator = freshMirror({ grandfathered: { grandfathered: [{ github_id: '3', tier: 'creator' }] } });
   const ok = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, creator), deps('3', () => null));
@@ -350,7 +350,7 @@ test('authorizeCreator: a grandfathered member pinned to tier:member is DENIED (
   const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV(PRICE_ENV, mirror), deps('3', () => null));
   assert.equal(r.ok, false);
   assert.equal(r.status, 403);
-  assert.match(r.body.message, /Content Creator/);
+  assert.match(r.body.message, /requires Curator status, which is granted by application/);
 });
 
 // sow-142: the coupon fast-path must honor the campaign tier, not assume creator. A member-tier campaign
@@ -363,7 +363,7 @@ test('authorizeCreator: a MEMBER-tier coupon redeemer is DENIED creator (sow-142
   const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV({ ...PRICE_ENV, SIGNUP_KV: kv }), deps('7', () => null));
   assert.equal(r.ok, false, 'a member-tier coupon must not confer creator on the write gate');
   assert.equal(r.status, 403);
-  assert.match(r.body.message, /Content Creator/, 'denied for TIER (creator-gated), not a fail-closed mirror error');
+  assert.match(r.body.message, /requires Curator status/, 'denied for TIER (creator-gated), not a fail-closed mirror error');
 });
 test('authorizeCreator: a legacy TIERLESS coupon redeemer is DENIED the creator gate (ruling 2026-08-24)', async () => {
   // This test asserted the opposite until the owner ruled that "coupons ... should only offer membership
@@ -379,7 +379,7 @@ test('authorizeCreator: a legacy TIERLESS coupon redeemer is DENIED the creator 
   const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV({ ...PRICE_ENV, SIGNUP_KV: kv }), deps('7', () => null));
   assert.equal(r.ok, false, 'a tierless coupon confers member, which does not meet the creator gate');
   assert.equal(r.status, 403);
-  assert.match(r.body.message, /Content Creator/, 'denied for TIER, not fail-closed on a mirror error');
+  assert.match(r.body.message, /requires Curator status/, 'denied for TIER, not fail-closed on a mirror error');
 });
 
 test('authorizeCreator: a non-paid caller gets the paid-required message; a banned caller is not permitted', async () => {
@@ -395,5 +395,5 @@ test('authorizeCreator: a non-paid caller gets the paid-required message; a bann
 test('encrypt: a $5 Network Member cannot write member content (creator-gated, 403)', async () => {
   const r = await membershipEncrypt(POST('encrypt', 'Bearer g', { plaintext: 'x', assetId: 'post:z:body' }), ENV(PRICE_ENV), deps('1', () => paidAt('price_m')));
   assert.equal(r.status, 403);
-  assert.match(r.body.message, /Content Creator/);
+  assert.match(r.body.message, /requires Curator status, which is granted by application/);
 });

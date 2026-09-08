@@ -43,7 +43,7 @@ test('sow-158: folds staff into effectiveStatus + returns the role (a superadmin
   const mirror = {
     generatedAt: new Date(now.getTime() - 60_000).toISOString(),
     bans: { bans: [] },
-    roles: { superadmins: [{ github_id: '5' }], admins: [], moderators: [], curators: [] },
+    roles: { superadmins: [{ github_id: '5' }], admins: [], moderators: [], newsEditors: [] },
     grandfathered: { grandfathered: [] },
   };
   const env = { STRIPE_SECRET_KEY: 'rk_test', SIGNUP_KV: { get: async () => mirror } };
@@ -63,7 +63,7 @@ test('SOW-046 C: canCurate is true for a roles.yml curator (read from the fresh 
   const now = new Date('2026-06-18T00:00:00Z');
   const mirror = {
     generatedAt: new Date(now.getTime() - 60_000).toISOString(),
-    roles: { superadmins: [], admins: [], moderators: [], curators: [{ github_id: '7' }] },
+    roles: { superadmins: [], admins: [], moderators: [], newsEditors: [{ github_id: '7' }] },
   };
   const env = { STRIPE_SECRET_KEY: 'rk_test', SIGNUP_KV: { get: async () => mirror } };
   // a curator
@@ -121,7 +121,7 @@ const NOW = new Date('2026-08-08T00:00:00Z');
 const freshMirror = (o = {}) => ({
   generatedAt: new Date(NOW.getTime() - 60_000).toISOString(),
   bans: { bans: o.bans ?? [] },
-  roles: { superadmins: o.superadmins ?? [], admins: [], moderators: [], curators: [] },
+  roles: { superadmins: o.superadmins ?? [], admins: [], moderators: [], newsEditors: [] },
   grandfathered: { grandfathered: o.grandfathered ?? [] },
 });
 const subWithPrice = (priceId) => ({ id: 'cus_t', metadata: { github_id: '1' }, subscriptions: { data: [{ status: 'active', created: 1, items: { data: [{ price: { id: priceId } }] } }] } });

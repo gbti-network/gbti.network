@@ -20,6 +20,7 @@
 // Inert in public (no injected client). Host-agnostic: the website admin page and the extension admin page
 // both mount it, and each supplies its own transport.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { TIER, tierLabel } from '../../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
 const CSS = `
   :host { display:block; }
@@ -80,7 +81,7 @@ class GbtiApplicationsManager extends GbtiElement {
     this.set(this.css(CSS) + `
       <div class="head">
         <h3>Creator applications</h3>
-        <span class="hint">${pending} awaiting a decision. Approving grants the Content Creator plan immediately; there is no payment step.</span>
+        <span class="hint">${pending} awaiting a decision. Approving grants the ${tierLabel(TIER.creator)} plan immediately; there is no payment step.</span>
       </div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       ${rows || `<p class="muted">No applications yet. They arrive from <b>/creator-application/</b> and also email you.</p>`}
@@ -102,7 +103,7 @@ class GbtiApplicationsManager extends GbtiElement {
     const acts = state === 'pending' && !corrupt
       ? `<div class="acts">
            <input class="note" data-note="${esc(a.githubId)}" type="text" placeholder="Reason (optional, saved with the decision)" />
-           <button data-decide="approved" data-id="${esc(a.githubId)}" type="button">Approve and grant Content Creator</button>
+           <button data-decide="approved" data-id="${esc(a.githubId)}" type="button">Approve and grant ${tierLabel(TIER.creator)}</button>
            <button data-decide="declined" data-id="${esc(a.githubId)}" type="button">Decline</button>
          </div>`
       : corrupt
@@ -124,7 +125,7 @@ class GbtiApplicationsManager extends GbtiElement {
     // A decline is confirmed too. It is not destructive, but it tells a person no, and a misclick that reads
     // as an accident is worse than one extra dialog.
     const ask = decision === 'approved'
-      ? `Approve ${who} and grant the Content Creator plan? This takes effect immediately.`
+      ? `Approve ${who} and grant the ${tierLabel(TIER.creator)} plan? This takes effect immediately.`
       : `Decline ${who}? They can revise their answer and apply again.`;
     // eslint-disable-next-line no-alert
     if (typeof confirm === 'function' && !confirm(ask)) return;
@@ -136,7 +137,7 @@ class GbtiApplicationsManager extends GbtiElement {
     try {
       await this.client.decideCreatorApplication({ githubId: String(githubId), decision, note });
       this._msg = decision === 'approved'
-        ? `${who} is now a Content Creator.`
+        ? `${who} is now a ${tierLabel(TIER.creator)}.`
         : `${who} was declined.`;
     } catch (err) {
       this._msg = err?.message || 'The decision could not be recorded.';

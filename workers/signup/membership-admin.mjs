@@ -11,7 +11,7 @@
 
 import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-161: cookie-session identity for the website admin surface
-import { rolesFromParsed, roleOf, isAdminRole, curatorsFromParsed, isCurator, canCurateNews, bansFromParsed, isBanned } from '../../membership/overrides-core.mjs';
+import { rolesFromParsed, roleOf, isAdminRole, newsEditorsFromParsed, isNewsEditor, canEditNews, bansFromParsed, isBanned } from '../../membership/overrides-core.mjs';
 import { deriveMembershipFromCustomer } from '../../membership/derive-status.mjs'; // sow-229: both axes (status + tier) from one customer
 import { buildEnvPriceTierMap } from '../../membership/tier-gate.mjs'; // sow-229: env price -> tier map for the live Stripe tier
 import { TIER } from '../../membership/tiers.mjs';
@@ -28,7 +28,7 @@ const fail = (status, error, message) => ({ ok: false, status, body: { error, me
  * Returns { ok:true, githubId, role } or { ok:false, status, body }.
  */
 // Verify the token -> github_id and read the fresh overrides mirror, returning the caller's role + curator flag.
-// Shared, fail-closed prefix for authorizeAdmin + authorizeCurator. Returns { ok, githubId, role, isCurator, mirror }.
+// Shared, fail-closed prefix for authorizeAdmin + authorizeNewsEditor. Returns { ok, githubId, role, isNewsEditor, mirror }.
 async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, verifyCookie, now = new Date(), allowCookie = false } = {}) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
@@ -74,7 +74,7 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
   if (isBanned(githubId, bansFromParsed(mirror.bans))) return fail(403, 'forbidden', 'this account is not permitted');
 
   const role = roleOf(githubId, rolesFromParsed(mirror.roles));
-  return { ok: true, githubId, role, isCurator: isCurator(githubId, curatorsFromParsed(mirror.roles)), mirror };
+  return { ok: true, githubId, role, isNewsEditor: isNewsEditor(githubId, newsEditorsFromParsed(mirror.roles)), mirror };
 }
 
 /**
@@ -122,13 +122,13 @@ export async function authorizeStaff(request, env, deps = {}) {
 /**
  * SOW-046 C: authorize a NEWS CURATOR (admin/superadmin OR an explicit `curators:` listing) for the news->Discord
  * publish. Same fail-closed mirror gate; a plain member with no curator grant is denied. Returns
- * { ok:true, githubId, role, isCurator } or { ok:false, status, body }.
+ * { ok:true, githubId, role, isNewsEditor } or { ok:false, status, body }.
  */
-export async function authorizeCurator(request, env, deps = {}) {
+export async function authorizeNewsEditor(request, env, deps = {}) {
   const r = await resolveCaller(request, env, deps);
   if (!r.ok) return r;
-  if (!canCurateNews(r.role, r.isCurator)) return fail(403, 'forbidden', 'news curator access is required');
-  return { ok: true, githubId: r.githubId, role: r.role, isCurator: r.isCurator };
+  if (!canEditNews(r.role, r.isNewsEditor)) return fail(403, 'forbidden', 'news curator access is required');
+  return { ok: true, githubId: r.githubId, role: r.role, isNewsEditor: r.isNewsEditor };
 }
 
 // sow-229: list coupon redemptions from the Worker KV BINDING. This is deliberately NOT the REST-based

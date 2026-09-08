@@ -16,7 +16,7 @@
 import { ROLE } from './overrides-core.mjs';
 // sow-185 phase 3a: the tier axis. tiers.mjs has ZERO imports (node-free), so it is safe in this bundled module.
 // The caller (pr-gate) resolves the author's + owner's effective tier; decide() only ranks it with meetsTier.
-import { TIER, meetsTier } from './tiers.mjs';
+import { TIER, meetsTier, tierLabel } from './tiers.mjs';
 // sow-298: the SINGLE source of per-path role rank, mirroring CODEOWNERS. isTierS used to re-derive the tier
 // and got it WRONG for the superadmin-pinned house files, calling them Tier A. That made the PR gate and
 // CODEOWNERS share one blind spot, so the "even a bug at the endpoint cannot merge beyond the caller's real
@@ -374,9 +374,9 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
       return fail('rejected-not-paid', `contributions publish your credit on the live site, which requires paid membership (status: ${status ?? 'none'})`);
     }
     // sow-185: the contribution's content type sets a tier BOTH parties must hold. A post/product/prompt can
-    // only be authored by, and land in, a Content Creator's folder; a comment needs only Network Member.
+    // only be authored by, and land in, a Curator's folder; a comment needs only Network Member.
     const required = requiredTierFor(contentTypesTouched(paths, c.otherOwners[0]));
-    const need = required === TIER.creator ? 'Content Creator' : 'Network Member';
+    const need = tierLabel(required); // sow-316: the public tier name comes from one place
     if (!meetsTier(tier, required)) {
       return fail('rejected-not-creator', `contributing this content requires the ${need} tier or higher (your tier: ${tier ?? 'none'})`);
     }
@@ -403,7 +403,7 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
   if (status === 'paid') {
     const required = requiredTierFor(contentTypesTouched(paths, ownedFolder), { ownFolder: true }); // sow-293
     if (!meetsTier(tier, required)) {
-      const need = required === TIER.creator ? 'Content Creator' : 'Network Member';
+      const need = tierLabel(required); // sow-316: the public tier name comes from one place
       return fail('rejected-not-creator', `publishing this content requires the ${need} tier or higher (your tier: ${tier ?? 'none'})`);
     }
     return pass('paid', c.ownFolderOnly, 'paid member own-folder content');

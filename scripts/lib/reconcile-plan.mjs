@@ -41,7 +41,7 @@ export { discordRoleTarget, PUBLISHED_STATUSES, TRIAL_STATUSES };
 // is provisioned (an unset id is a no-op in enactDiscord).
 export const CREATOR_DISCORD_ROLE = 'creator';
 
-/** True when an effective TIER should hold the stackable @Creator badge (Content Creator only). */
+/** True when an effective TIER should hold the stackable @Creator badge (the Curator tier only). */
 export function discordCreatorTarget(tier) {
   return tier === TIER.creator;
 }

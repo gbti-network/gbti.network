@@ -31,7 +31,7 @@ import { applyOverridesSource } from './lib/overrides-source.mjs';
 import { ownedFolderFor, decide, contributionTarget } from '../membership/classify-pr.mjs';
 import { parseHostedRef, parseAdminHostedRef } from '../membership/hosted-author.mjs'; // SOW-156 hosted content + sow-161 hosted-admin canonical-head identity
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price -> tier + override-aware tier
-import { TIER, isTier } from '../membership/tiers.mjs';
+import { TIER, isTier, tierLabel } from '../membership/tiers.mjs';
 
 import { createStripeClient } from '../clients/stripe.mjs';
 import { createGitHubClient } from '../clients/github.mjs';
@@ -57,11 +57,13 @@ export const CLOSE_NUDGE = Object.freeze({
     'cannot merge during your trial. Nothing is lost: your draft stays on your own fork. Upgrade to a ' +
     'paid membership at https://gbti.network, then your client will publish your staged drafts. See ' +
     'CONTRIBUTING.md for how trial authoring works.',
+  // sow-316: the tier name is bound, and the tier is apply-only (sow-293), so the nudge points at the application
+  // rather than telling the member to "upgrade" to a product nobody can buy.
   'rejected-not-creator':
-    'Thanks for your work. Publishing articles, projects and prompts on gbti.network is a Content Creator ' +
-    'feature, so this pull request cannot merge on the Network Member plan. Nothing is lost: your draft ' +
-    'stays where you staged it. Upgrade to Content Creator at https://gbti.network, then your client will ' +
-    'publish your staged drafts. See CONTRIBUTING.md for how content authoring works.',
+    `Thanks for your work. Publishing articles, projects and prompts on gbti.network is a ${tierLabel(TIER.creator)} ` +
+    `capability, so this pull request cannot merge on the ${tierLabel(TIER.member)} plan. Nothing is lost: your draft ` +
+    `stays where you staged it. Apply for ${tierLabel(TIER.creator)} status at https://gbti.network/creator-application/, ` +
+    'then your client will publish your staged drafts once it is granted. See CONTRIBUTING.md for how content authoring works.',
 });
 
 /**

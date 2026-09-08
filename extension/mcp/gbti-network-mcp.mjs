@@ -17548,12 +17548,12 @@ function rolesFromText(text) {
     return /* @__PURE__ */ new Map();
   }
 }
-function curatorsFromText(text) {
+function newsEditorsFromText(text) {
   const set2 = /* @__PURE__ */ new Set();
   if (!text) return set2;
   try {
     const parsed = index_vite_proxy_tmp_default.load(text);
-    for (const e of parsed?.curators ?? []) {
+    for (const e of parsed?.newsEditors ?? []) {
       const id = String(e?.github_id ?? e);
       if (id && id !== "REPLACE_AT_M0") set2.add(id);
     }
@@ -17561,7 +17561,7 @@ function curatorsFromText(text) {
   }
   return set2;
 }
-var canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator === true;
+var canEditNews = (role, isNewsEditor) => rank(role) >= RANK.admin || isNewsEditor === true;
 
 // src/lib/content-index.mjs
 var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
@@ -18491,7 +18491,7 @@ function buildContext(store) {
       const id = store.get("identity");
       if (!id?.githubId) return false;
       const text = reader.readFile("house/roles.yml");
-      return canCurateNews(roleOf(id.githubId, rolesFromText(text)), curatorsFromText(text).has(String(id.githubId)));
+      return canEditNews(roleOf(id.githubId, rolesFromText(text)), newsEditorsFromText(text).has(String(id.githubId)));
     },
     /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
     membership() {
@@ -19851,7 +19851,7 @@ var TIER = Object.freeze({
 var TIER_LABEL = Object.freeze({
   [TIER.none]: "",
   [TIER.member]: "Network Member",
-  [TIER.creator]: "Content Creator"
+  [TIER.creator]: "Curator"
 });
 var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 

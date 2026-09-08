@@ -5,21 +5,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  curatorsFromParsed, isCurator, canCurateNews as coreCanCurate,
+  newsEditorsFromParsed, isNewsEditor, canEditNews as coreCanCurate,
   effectiveStatus, rolesFromParsed, bansFromParsed, grandfathersFromParsed,
 } from '../membership/overrides-core.mjs';
-import { curatorsFromText, canCurateNews as clientCanCurate, ROLE } from '../client/src/roles.mjs';
+import { newsEditorsFromText, canEditNews as clientCanCurate, ROLE } from '../client/src/roles.mjs';
 
-test('curatorsFromParsed: builds a Set of curator ids and skips the M0 placeholder', () => {
-  const set = curatorsFromParsed({ curators: [{ github_id: '5' }, { github_id: 'REPLACE_AT_M0' }, '6'] });
-  assert.equal(isCurator('5', set), true);
-  assert.equal(isCurator('6', set), true);
-  assert.equal(isCurator('REPLACE_AT_M0', set), false);
-  assert.equal(isCurator('9', set), false);
-  assert.equal(curatorsFromParsed({}).size, 0);
+test('newsEditorsFromParsed: builds a Set of curator ids and skips the M0 placeholder', () => {
+  const set = newsEditorsFromParsed({ newsEditors: [{ github_id: '5' }, { github_id: 'REPLACE_AT_M0' }, '6'] });
+  assert.equal(isNewsEditor('5', set), true);
+  assert.equal(isNewsEditor('6', set), true);
+  assert.equal(isNewsEditor('REPLACE_AT_M0', set), false);
+  assert.equal(isNewsEditor('9', set), false);
+  assert.equal(newsEditorsFromParsed({}).size, 0);
 });
 
-test('canCurateNews (core): admin + superadmin inherit; an explicit curator passes; nobody else', () => {
+test('canEditNews (core): admin + superadmin inherit; an explicit curator passes; nobody else', () => {
   assert.equal(coreCanCurate(ROLE.admin, false), true);
   assert.equal(coreCanCurate(ROLE.superadmin, false), true);
   assert.equal(coreCanCurate(ROLE.moderator, false), false);
@@ -28,14 +28,14 @@ test('canCurateNews (core): admin + superadmin inherit; an explicit curator pass
 });
 
 test('the client mirror matches the Worker core', () => {
-  const set = curatorsFromText('curators:\n  - github_id: "5"\n');
+  const set = newsEditorsFromText('newsEditors:\n  - github_id: "5"\n');
   assert.equal(set.has('5'), true);
   assert.equal(clientCanCurate(ROLE.member, set.has('5')), true);
   assert.equal(clientCanCurate(ROLE.member, set.has('9')), false);
   assert.equal(clientCanCurate(ROLE.admin, false), true);
   // unparseable -> nobody is a curator
-  assert.equal(curatorsFromText('!!!: [').size, 0);
-  assert.equal(curatorsFromText('').size, 0);
+  assert.equal(newsEditorsFromText('!!!: [').size, 0);
+  assert.equal(newsEditorsFromText('').size, 0);
 });
 
 test('the curator grant does NOT touch effectiveStatus (it is not a membership tier)', () => {

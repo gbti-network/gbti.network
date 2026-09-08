@@ -75,7 +75,7 @@ tiers:
     revenue: Earn 10% for life on the paid revenue of members you invite.
 
   - key: creator
-    label: Content Creator
+    label: Curator
     tagline: Publish, get discovered, and share in the revenue.
     priceMonthly: 15
     priceAnnual: 150
@@ -87,4 +87,4 @@ tiers:
       - Post to the member Shares stream
       - Your creator profile and unified portfolio
       - Reshare and syndicate your work
-    revenue: Content Creators participate in the greater [revenue program](/revenue-model/).
+    revenue: Curators participate in the greater [revenue program](/revenue-model/).

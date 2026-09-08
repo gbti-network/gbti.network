@@ -46,7 +46,7 @@ import { tierDisplay } from '../../lib/tiers';
 // The fallbacks match house/membership-tiers.yml today ($150 annual). They exist so a yml read failure
 // degrades to the truth rather than to zero, and they are NOT the source of truth: the yml is.
 const curatorTier = tierDisplay('creator');
-const TIER_LABEL = curatorTier?.label ?? 'Content Creator';
+const TIER_LABEL = curatorTier?.label ?? 'Curator'; // sow-316: the rename landed (sow-226 step 1)
 const TIER_PRICE_LABEL = `$${curatorTier?.priceAnnual ?? 150}`;
 
 
@@ -92,7 +92,7 @@ const year = new Date().getFullYear();
 
 <BaseLayout
   title="Your first year on us"
-  description="A private invitation: a full year at the Content Creator tier, first year free with your coupon."
+  description={`A private invitation: a full year at the ${TIER_LABEL} tier, first year free with your coupon.`}
   noindex
   bare
 >

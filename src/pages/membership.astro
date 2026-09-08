@@ -24,7 +24,7 @@ const faqs = [
     a: 'No. Create a free account with GitHub to browse the network, follow creators and topics, save items, and use the personalized feed and the new-tab extension. You add a card only when you upgrade to a paid plan.',
   },
   {
-    q: 'What is the difference between a Network Member and a Content Creator?',
+    q: `What is the difference between a Network Member and a ${tierDisplay('creator')?.label ?? 'Curator'}?`,
     a: `A ${memberTier.label} joins the conversation: ${benefitProse(memberTier)}. A ${creatorTier.label} does all of that and more: ${benefitProse(creatorTier)}. See the plans above for pricing, and the revenue answer below for how earning works on each.`,
   },
   {
@@ -45,7 +45,7 @@ const faqs = [
   },
 ];
 ---
-<BaseLayout title="Membership" description="Join the GBTI Network. Reading is free; Network Member and Content Creator plans add comments, community, publishing, and revenue share.">
+<BaseLayout title="Membership" description={`Join the GBTI Network. Reading is free; Network Member and ${tierDisplay('creator')?.label ?? 'Curator'} plans add comments, community, publishing, and revenue share.`}>
   <!-- ============ HERO = THE PLANS ============ -->
   <section class="band tint" id="join">
     <div class="wrap">

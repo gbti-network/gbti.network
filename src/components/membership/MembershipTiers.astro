@@ -22,7 +22,7 @@
 // member on Stripe. A signed-out visitor creates a free account first (/login/), then returns pre-selected.
 // The member signal (paidTier) is UNTRUSTED presentation only; the Worker and the gate are authoritative.
 // Fail closed: an unknown tier resolves DOWN, never up.
-import { TIER_DISPLAY } from '../../lib/tiers';
+import { TIER_DISPLAY, tierDisplay } from '../../lib/tiers';
 import { SIGNUP_BASE } from '../../lib/membership';
 import { tierCta } from '../../lib/tier-cta.mjs'; // sow-293: one CTA decision, shared by the render and the hydrate
 
@@ -59,7 +59,7 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
     <Heading id="mtiers-h" class:list={[headingLevel === 'h1' ? 'h1' : 'h2']}>Choose how you take part</Heading>
     <p class="lead mtiers-sub">
       Reading is free for everyone. <strong>Members</strong> participate in the Discord, Community Events, and
-      Members Only Content. <strong>Content Creators</strong> help curate network content and participate
+      Members Only Content. <strong>{tierDisplay('creator')?.label ?? 'Curator'}s</strong> help curate network content and participate
       directly in revenue sharing opportunities.<span class="mtiers-star" aria-hidden="true">*</span>
     </p>
     <p class="mtiers-note">
@@ -106,7 +106,7 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
         <div class="mt-cta-wrap">
           {/* sow-293: the SAME decision the client rewiring uses (src/lib/tier-cta.mjs), so the rendered
               button and the hydrated one cannot disagree. At build time nobody is signed in, which is the
-              signed-out branch. Content Creator resolves to the application page, never a checkout. */}
+              signed-out branch. The Curator tier resolves to the application page, never a checkout. */}
           <a
             href={serverCta(t).href ?? '/login/'}
             class:list={['btn', serverCta(t).primary ? 'btn-primary' : 'btn-ghost', 'mt-cta']}
@@ -208,7 +208,9 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
         // that worth doing is "Content Creator must never reach checkout" (it is apply-only, and there is no
         // price to check out against), and a rule living only inside a component script is one no test can
         // reach. This loop now just renders whatever tierCta returns.
-        const plan = tierCta({ key, label, signedIn, myTier });
+        // sow-316: the viewer's own tier name is read off the card that carries it, so the wording follows the registry.
+        const myTierLabel = root.querySelector<HTMLElement>(`.mt-card[data-tier="${myTier}"] .mt-label`)?.textContent?.trim() || '';
+        const plan = tierCta({ key, label, signedIn, myTier, myTierLabel });
         setCta(cta, plan.text, plan.checkout ? () => startCheckout(key) : plan.href, plan.disabled, plan.primary);
       }
     }

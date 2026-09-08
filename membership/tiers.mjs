@@ -28,7 +28,7 @@ export const TIER = Object.freeze({
 export const TIER_LABEL = Object.freeze({
   [TIER.none]: '',
   [TIER.member]: 'Network Member',
-  [TIER.creator]: 'Content Creator',
+  [TIER.creator]: 'Curator',
 });
 
 /** The display label for a tier key. Fail soft: an unrecognized value (or `none`) yields ''. */

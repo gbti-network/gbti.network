@@ -2047,6 +2047,25 @@ ${String(body ?? "")}`;
     return Object.prototype.hasOwnProperty.call(LEGACY_TYPE_ALIASES, t) ? LEGACY_TYPE_ALIASES[t] : t;
   }
 
+  // membership/tiers.mjs
+  var TIER = Object.freeze({
+    none: "none",
+    // not paid, or paid for something we cannot identify (see tierForPrice)
+    member: "member",
+    // Network Member: $5 monthly / $50 annual
+    creator: "creator"
+    // Content Creator: $15 monthly / $150 annual
+  });
+  var TIER_LABEL = Object.freeze({
+    [TIER.none]: "",
+    [TIER.member]: "Network Member",
+    [TIER.creator]: "Curator"
+  });
+  function tierLabel(tier) {
+    return TIER_LABEL[tier] ?? "";
+  }
+  var RANK = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
+
   // client-ui/src/workspace-core.mjs
   var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
@@ -2275,6 +2294,22 @@ ${String(body ?? "")}`;
       const m = /^#tab=([a-z]+)$/.exec(String(t?.href ?? ""));
       return !m || shown.has(m[1]);
     });
+  }
+  function curatorBanner(membership, paidTier, authoring) {
+    if (membership !== "paid") return null;
+    if (paidTier === "creator") return null;
+    const headline = `Publishing needs ${tierLabel(TIER.creator)} status`;
+    return authoring ? {
+      headline,
+      body: `You can author and stage drafts here now. Publishing articles, projects and prompts to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
+      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
+      ctaHref: "https://gbti.network/creator-application/"
+    } : {
+      headline,
+      body: `Publishing to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
+      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
+      ctaHref: "https://gbti.network/creator-application/"
+    };
   }
   function trialBanner(membership, authoring) {
     if (membership !== "trialing") return null;
@@ -2636,7 +2671,7 @@ ${String(body ?? "")}`;
   define("gbti-comment-box", GbtiCommentBox);
 
   // client-ui/src/mod-actions-core.mjs
-  var RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var TYPE_DIR = { post: "posts", project: "projects", product: "projects", prompt: "prompts" };
   var SAFE = /^[A-Za-z0-9_-]+$/;
   function modPathFor({ type, author, slug, id } = {}) {
@@ -2647,9 +2682,9 @@ ${String(body ?? "")}`;
     return `members/${author}/${dir}/${slug}/index.md`;
   }
   function visibleActions(role) {
-    const r = RANK[role] ?? 0;
-    if (r < RANK.moderator) return [];
-    return r >= RANK.admin ? ["hide", "unhide", "remove"] : ["hide", "unhide"];
+    const r = RANK2[role] ?? 0;
+    if (r < RANK2.moderator) return [];
+    return r >= RANK2.admin ? ["hide", "unhide", "remove"] : ["hide", "unhide"];
   }
 
   // client-ui/src/elements/gbti-discussion.mjs
@@ -2804,8 +2839,8 @@ ${String(body ?? "")}`;
       const EYE2 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
       const TRASH2 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
       const CHEV3 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-      const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
-      const canRemove = (RANK[this._role] ?? 0) >= RANK.admin;
+      const canMod = (RANK2[this._role] ?? 0) >= RANK2.moderator;
+      const canRemove = (RANK2[this._role] ?? 0) >= RANK2.admin;
       const hideNotes = this.hasAttribute("data-gbti-hide-author-notes");
       const visible = hideNotes ? rows.filter(({ c }) => !c.authorNote) : rows;
       const ordered = [...visible.filter(({ c }) => c.authorNote), ...visible.filter(({ c }) => !c.authorNote)];
@@ -5831,7 +5866,7 @@ ${String(body ?? "")}`;
   define("gbti-mod-actions", GbtiModActions);
 
   // client-ui/src/elements/gbti-admin.mjs
-  var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var RANK3 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
   var CSS8 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -5876,8 +5911,8 @@ ${String(body ?? "")}`;
         role = (await this.client.status())?.role ?? "member";
       } catch {
       }
-      const rank = RANK2[role] ?? 0;
-      if (rank < RANK2.moderator) {
+      const rank = RANK3[role] ?? 0;
+      if (rank < RANK3.moderator) {
         this.set(this.css(CSS8) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
         return;
       }
@@ -5897,12 +5932,12 @@ ${String(body ?? "")}`;
            </div>
          </div>
 
-         ${rank >= RANK2.admin && capOn("membership") ? `<div class="grp">
+         ${rank >= RANK3.admin && capOn("membership") ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: Network Member reads, Content Creator can also publish. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: ${tierLabel(TIER.member)} reads, ${tierLabel(TIER.creator)} can also publish. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
-           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: Network Member</option><option value="creator">Grant tier: Content Creator</option></select>
+           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: ${tierLabel(TIER.member)}</option><option value="creator">Grant tier: ${tierLabel(TIER.creator)}</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>
@@ -5911,7 +5946,7 @@ ${String(body ?? "")}`;
            </div>
          </div>` : ""}
 
-         ${rank >= RANK2.superadmin && capOn("roles") ? `<div class="grp">
+         ${rank >= RANK3.superadmin && capOn("roles") ? `<div class="grp">
            <h4>Role assignment</h4>
            <p class="desc">Set a member's role. Superadmin owns roles.yml and the root of trust, so assign it carefully.</p>
            <div class="role-row">
@@ -5939,13 +5974,13 @@ ${String(body ?? "")}`;
       this.on("#deplatform", "click", run("deplatform", cpath));
       this.on("#republish", "click", run("republish", cpath));
       this.on("#remove", "click", run("remove", cpath));
-      if (rank >= RANK2.admin && capOn("membership")) {
+      if (rank >= RANK3.admin && capOn("membership")) {
         this.on("#ban", "click", run("ban", gid));
         this.on("#unban", "click", run("unban", () => ({ githubId: this.$("#gid").value.trim() })));
         this.on("#grandfather", "click", run("grandfather", () => ({ ...gid(), tier: this.$("#gtier").value })));
         this.on("#ungrandfather", "click", run("ungrandfather", () => ({ githubId: this.$("#gid").value.trim() })));
       }
-      if (rank >= RANK2.superadmin && capOn("roles")) {
+      if (rank >= RANK3.superadmin && capOn("roles")) {
         this.on("#setrole", "click", run("role", () => ({ githubId: this.$("#rid").value.trim(), role: this.$("#role").value })));
       }
     }
@@ -6022,25 +6057,6 @@ ${String(body ?? "")}`;
       collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) }))
     };
   }
-
-  // membership/tiers.mjs
-  var TIER = Object.freeze({
-    none: "none",
-    // not paid, or paid for something we cannot identify (see tierForPrice)
-    member: "member",
-    // Network Member: $5 monthly / $50 annual
-    creator: "creator"
-    // Content Creator: $15 monthly / $150 annual
-  });
-  var TIER_LABEL = Object.freeze({
-    [TIER.none]: "",
-    [TIER.member]: "Network Member",
-    [TIER.creator]: "Content Creator"
-  });
-  function tierLabel(tier) {
-    return TIER_LABEL[tier] ?? "";
-  }
-  var RANK3 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE3 = "https://gbti.network";
@@ -8235,7 +8251,7 @@ ${String(body ?? "")}`;
       this.set(this.css(CSS16) + `
       <div class="head">
         <h3>Creator applications</h3>
-        <span class="hint">${pending} awaiting a decision. Approving grants the Content Creator plan immediately; there is no payment step.</span>
+        <span class="hint">${pending} awaiting a decision. Approving grants the ${tierLabel(TIER.creator)} plan immediately; there is no payment step.</span>
       </div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${rows || `<p class="muted">No applications yet. They arrive from <b>/creator-application/</b> and also email you.</p>`}
@@ -8249,7 +8265,7 @@ ${String(body ?? "")}`;
       const decided = a.decidedAt ? `<div class="fld"><div class="lb">Decision</div><div class="val">${esc(state)} by ${esc(a.decidedByLogin || a.decidedBy || "a superadmin")} on ${esc(String(a.decidedAt).slice(0, 10))}${a.decisionNote ? ` — ${esc(a.decisionNote)}` : ""}</div></div>` : "";
       const acts = state === "pending" && !corrupt ? `<div class="acts">
            <input class="note" data-note="${esc(a.githubId)}" type="text" placeholder="Reason (optional, saved with the decision)" />
-           <button data-decide="approved" data-id="${esc(a.githubId)}" type="button">Approve and grant Content Creator</button>
+           <button data-decide="approved" data-id="${esc(a.githubId)}" type="button">Approve and grant ${tierLabel(TIER.creator)}</button>
            <button data-decide="declined" data-id="${esc(a.githubId)}" type="button">Decline</button>
          </div>` : corrupt ? `<div class="acts"><button type="button" disabled>Cannot be decided: this record is malformed</button></div>` : "";
       return `<div class="app${corrupt ? " corrupt" : ""}">
@@ -8264,13 +8280,13 @@ ${String(body ?? "")}`;
     async _decide(githubId, decision) {
       const app = (this._apps || []).find((a) => String(a.githubId) === String(githubId));
       const who = app?.login || `github_id ${githubId}`;
-      const ask = decision === "approved" ? `Approve ${who} and grant the Content Creator plan? This takes effect immediately.` : `Decline ${who}? They can revise their answer and apply again.`;
+      const ask = decision === "approved" ? `Approve ${who} and grant the ${tierLabel(TIER.creator)} plan? This takes effect immediately.` : `Decline ${who}? They can revise their answer and apply again.`;
       if (typeof confirm === "function" && !confirm(ask)) return;
       const safeId = String(githubId).replace(/[^0-9]/g, "");
       const note = safeId ? this.$(`[data-note="${safeId}"]`)?.value?.trim() || "" : "";
       try {
         await this.client.decideCreatorApplication({ githubId: String(githubId), decision, note });
-        this._msg = decision === "approved" ? `${who} is now a Content Creator.` : `${who} was declined.`;
+        this._msg = decision === "approved" ? `${who} is now a ${tierLabel(TIER.creator)}.` : `${who} was declined.`;
       } catch (err) {
         this._msg = err?.message || "The decision could not be recorded.";
       }
@@ -10824,8 +10840,8 @@ ${String(body ?? "")}`;
             </button>
           </div>
           <p class="sub" data-public-nudge hidden>
-            Sharing publicly is part of Content Creator membership.
-            <a href="https://gbti.network/creator-application/">Apply to become a Content Creator</a>.
+            Sharing publicly is part of ${tierLabel(TIER.creator)} membership.
+            <a href="https://gbti.network/creator-application/">Apply to become a ${tierLabel(TIER.creator)}</a>.
           </p>
         </section>
 
@@ -10930,7 +10946,7 @@ ${String(body ?? "")}`;
       }
     }
     /**
-     * sow-293: Content Creator unlocks the PUBLIC audience. A Network Member gets the composer and posts
+     * sow-293: the Curator tier unlocks the PUBLIC audience. A Network Member gets the composer and posts
      * members-only, with the upgrade nudge explaining why the second chip is unavailable.
      *
      * This is an AFFORDANCE, not the boundary. The Worker reads the share's own `visibility` out of the files
@@ -16282,6 +16298,8 @@ ${String(body ?? "")}`;
       this._overview = {
         membership: status2?.membership || "unknown",
         role: status2?.role || "member",
+        paidTier: status2?.paidTier || "none",
+        // sow-316: the Curator banner reads this; absent -> 'none' -> banner shows, the safe direction
         counts: { post: items(post).length, prompt: items(prompt2).length, project: items(project).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
         attention,
         _trusted: trusted
@@ -16835,7 +16853,7 @@ ${String(body ?? "")}`;
       ];
       const tileHtml = visibleTiles(tiles, TABS, this._authoring()).map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
       const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
-      const tb = trialBanner(ov.membership, this._authoring());
+      const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring());
       const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div><a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
       const att = ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`;
       return `<div class="ov">

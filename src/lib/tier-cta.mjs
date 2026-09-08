@@ -23,11 +23,12 @@ export const CREATOR_APPLICATION_PATH = '/creator-application/';
  * @param label     the card's display label, for the button text.
  * @param signedIn  whether a website session resolved.
  * @param myTier    the viewer's resolved paid tier, or 'none'/null when unresolved.
+ * @param myTierLabel the public name of the viewer's tier, for "Included in <name>"; '' falls back to "your plan".
  * @returns `{ text, href, checkout, disabled, primary }`.
  *          `checkout` true means "hand off to Stripe for this tier"; `href` is a plain link. They are
  *          mutually exclusive, and `checkout` is NEVER true for creator.
  */
-export function tierCta({ key, label = key, signedIn = false, myTier = 'none' } = {}) {
+export function tierCta({ key, label = key, signedIn = false, myTier = 'none', myTierLabel = '' } = {}) {
   const rank = TIER_RANK[key] ?? 99;
   const myRank = TIER_RANK[myTier] ?? 0;
 
@@ -41,7 +42,7 @@ export function tierCta({ key, label = key, signedIn = false, myTier = 'none' } 
   }
   if (signedIn && myRank > rank) {
     return {
-      text: `Included in ${myTier === 'creator' ? 'Content Creator' : 'your plan'}`,
+      text: `Included in ${myTierLabel || 'your plan'}`, // sow-316: the VIEWER's tier name, passed in; no literal here
       href: null, checkout: false, disabled: true, primary: false,
     };
   }

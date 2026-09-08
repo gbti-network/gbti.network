@@ -10,6 +10,7 @@
 //                       real authority and will reject a genuinely non-paid post)
 // The host holds the GitHub token; this element only calls the injected client.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { TIER, tierLabel } from '../../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
 import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
@@ -314,8 +315,8 @@ class GbtiShareComposer extends GbtiElement {
             </button>
           </div>
           <p class="sub" data-public-nudge hidden>
-            Sharing publicly is part of Content Creator membership.
-            <a href="https://gbti.network/creator-application/">Apply to become a Content Creator</a>.
+            Sharing publicly is part of ${tierLabel(TIER.creator)} membership.
+            <a href="https://gbti.network/creator-application/">Apply to become a ${tierLabel(TIER.creator)}</a>.
           </p>
         </section>
 
@@ -408,7 +409,7 @@ class GbtiShareComposer extends GbtiElement {
   }
 
   /**
-   * sow-293: Content Creator unlocks the PUBLIC audience. A Network Member gets the composer and posts
+   * sow-293: the Curator tier unlocks the PUBLIC audience. A Network Member gets the composer and posts
    * members-only, with the upgrade nudge explaining why the second chip is unavailable.
    *
    * This is an AFFORDANCE, not the boundary. The Worker reads the share's own `visibility` out of the files

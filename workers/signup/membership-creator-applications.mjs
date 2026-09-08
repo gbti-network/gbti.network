@@ -18,7 +18,7 @@
 import { authorizeMemberCheap } from './membership-content.mjs';
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { writeOverrideToKv } from './membership-override-kv.mjs';
-import { TIER } from '../../membership/tiers.mjs';
+import { TIER, tierLabel } from '../../membership/tiers.mjs'; // sow-316: tierLabel binds the public tier name
 import {
   APPLICATION_STATE,
   APPLICATION_KEY_PREFIX,
@@ -77,7 +77,7 @@ export async function creatorApplicationSubmit(request, env, { authorize = autho
 
   const existing = await readApplication(kv, auth.githubId);
   if (!canSubmit(existing)) {
-    return bad(409, 'already_approved', 'your application was already approved; you hold the Content Creator plan');
+    return bad(409, 'already_approved', `your application was already approved; you hold the ${tierLabel(TIER.creator)} plan`);
   }
 
   const record = newApplication({
@@ -183,13 +183,13 @@ export async function creatorApplicationDecide(request, env, { authorize = autho
     try {
       wrote = await write({ section: 'grandfathered', githubId, entry, remove: false });
     } catch (err) {
-      return bad(503, 'grant_failed', `the Content Creator grant could not be written: ${err?.message ?? err}`);
+      return bad(503, 'grant_failed', `the ${tierLabel(TIER.creator)} grant could not be written: ${err?.message ?? err}`);
     }
     // `written: false` is NOT always an error here (the writer reports "already in that state" for a grant that
     // exists), but a refusal to write IS, and the two must not be conflated: reporting success on a refused
     // grant would mark the application approved with no tier behind it.
     if (!wrote?.written && !/already/i.test(String(wrote?.reason ?? ''))) {
-      return bad(503, 'grant_failed', `the Content Creator grant could not be written: ${wrote?.reason ?? 'unknown reason'}`);
+      return bad(503, 'grant_failed', `the ${tierLabel(TIER.creator)} grant could not be written: ${wrote?.reason ?? 'unknown reason'}`);
     }
   }
 
@@ -207,7 +207,7 @@ export async function creatorApplicationDecide(request, env, { authorize = autho
     // happened: a caller told "failed" would reasonably retry, and the retry is safe, but they should know the
     // access is already live.
     return bad(503, 'unavailable', decision === APPLICATION_STATE.approved
-      ? 'the Content Creator grant was written but the application record was not updated; the member has access, retry to record it'
+      ? `the ${tierLabel(TIER.creator)} grant was written but the application record was not updated; the member has access, retry to record it`
       : 'the application record could not be updated; please try again');
   }
   return { status: 200, body: { ok: true, application: { ...decided, state: applicationState(decided) } } };

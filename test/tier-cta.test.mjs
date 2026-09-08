@@ -58,9 +58,15 @@ test('the Network Member card keeps its checkout, so this change did not disable
 
   const holder = tierCta({ key: 'member', label: 'Network Member', signedIn: true, myTier: 'member' });
   assert.equal(holder.disabled, true);
-  const above = tierCta({ key: 'member', label: 'Network Member', signedIn: true, myTier: 'creator' });
+  // sow-316: the wording names the VIEWER's tier from the label the caller passes (the registry's), never a
+  // literal here, so the rename to Curator reached this line without an edit to it. With no label it falls
+  // back to "your plan" rather than inventing a name.
+  const above = tierCta({ key: 'member', label: 'Network Member', signedIn: true, myTier: 'creator', myTierLabel: 'Curator' });
   assert.equal(above.disabled, true);
-  assert.match(above.text, /Included in Content Creator/);
+  assert.match(above.text, /Included in Curator/);
+  assert.doesNotMatch(above.text, /Network Member/, 'the card label is not the viewer\'s tier');
+  const unnamed = tierCta({ key: 'member', label: 'Network Member', signedIn: true, myTier: 'creator' });
+  assert.equal(unnamed.text, 'Included in your plan');
 });
 
 test('the free card is a static account link at every state, and never checks out', () => {

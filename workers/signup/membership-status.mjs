@@ -11,7 +11,7 @@ import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 1b: bearer-or-cookie identity
 import { deriveMembership } from '../../membership/derive-status.mjs'; // sow-185: { status, tier } (status == old deriveStatus)
 import { createStripeClient } from '../../clients/stripe.mjs';
-import { rolesFromParsed, roleOf, curatorsFromParsed, isCurator, canCurateNews, grandfathersFromParsed, effectiveStatus as effectiveStatusOf } from '../../membership/overrides-core.mjs';
+import { rolesFromParsed, roleOf, newsEditorsFromParsed, isNewsEditor, canEditNews, grandfathersFromParsed, effectiveStatus as effectiveStatusOf } from '../../membership/overrides-core.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
 import { recordUsage } from './analytics.mjs'; // SOW-061: usage analytics seam
 import { readCouponGrant } from './coupons.mjs'; // SOW-119: the coupon fast-path grant
@@ -41,7 +41,7 @@ async function readFreshMirror(env, now = new Date()) {
 function computeCanCurate(mirror, githubId) {
   if (!mirror || mirror.roles == null || typeof mirror.roles !== 'object' || Array.isArray(mirror.roles)) return false;
   const role = roleOf(githubId, rolesFromParsed(mirror.roles));
-  return canCurateNews(role, isCurator(githubId, curatorsFromParsed(mirror.roles)));
+  return canEditNews(role, isNewsEditor(githubId, newsEditorsFromParsed(mirror.roles)));
 }
 
 export async function membershipStatus(request, env, { fetchImpl = globalThis.fetch, makeStripe = createStripeClient, fetchUser = githubFetchUser, verifyCookie, now = new Date() } = {}) {

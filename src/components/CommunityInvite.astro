@@ -46,7 +46,7 @@ const tierRows = [
     lead: `everything in ${memberName}, plus `,
     prose: benefitProse(creator),
     // Creator revenue is a registry markdown link; render it as a real link to the revenue model page.
-    revenue: 'Content Creators share in the',
+    revenue: `${tierDisplay('creator')?.label ?? 'Curator'}s share in the`,
     revenueHref: '/revenue-model/',
   },
 ].filter(Boolean) as {

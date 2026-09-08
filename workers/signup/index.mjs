@@ -449,6 +449,23 @@ async function handleGithubCallback(request, env, ctx) {
   if (signup.couponRedeemed) {
     const alert = sendCouponRedemptionAlert(env, signup.couponRedeemed);
     if (ctx?.waitUntil) ctx.waitUntil(alert); else await alert;
+
+    // sow-316 Phase 4: THE MEMBER'S DISCORD ROLE ARRIVES NOW, NOT AT THE NEXT NIGHTLY SWEEP. Measured on
+    // 2026-09-08: a member who redeemed a coupon at signup sat in Discord wearing the LOCKED role, the one
+    // reserved for lapsed and banned accounts, for the better part of a day, because the role sync only ran
+    // on the nightly schedule. The sync itself was correct; nothing had asked it to run. Redemption is the
+    // moment of most goodwill and the role turned up a day late.
+    //
+    // Same nudge checkout fires after a payment: a targeted reconcile for this one github_id. Targeted mode
+    // folds pending coupon grants BEFORE it gathers the member, so the grant written above is visible to the
+    // run it triggers. Fail-soft, exactly like the alert: kickRegate never throws and returns false when the
+    // token is unset, and the nightly run heals any missed nudge, so a failed dispatch can never block the
+    // member's redirect. Fired through waitUntil so it never delays them either.
+    const nudge = import('./checkout.mjs').then(({ kickRegate }) => kickRegate(
+      { githubId, dispatchToken: env.REGATE_DISPATCH_TOKEN, contentRepo: env.GITHUB_CONTENT_REPO },
+      globalThis.fetch,
+    )).catch(() => false);
+    if (ctx?.waitUntil) ctx.waitUntil(nudge); else await nudge;
   }
 
   const session = await signSession({ githubId, githubLogin }, env.SESSION_SECRET);

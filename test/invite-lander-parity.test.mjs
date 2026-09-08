@@ -54,6 +54,11 @@ function landers() {
  * agreement, not call count. An earlier version of this asserted a single call and failed on a correct page,
  * which is its own kind of bad guard: one that cries about the shape of the code rather than the truth of
  * the claim teaches people to loosen it.
+ *
+ * sow-316: only tierDisplay() counts, because it carries the label AND the price, which is what "describing a
+ * product" means. tierLabel() carries a name alone, so a member lander may say in an FAQ that publishing is the
+ * Curator tier (naming the other product to say "not this one") without this guard reading it as a second
+ * product on the page. The name still comes from the registry, never a literal.
  */
 function boundTier(src) {
   const calls = [...src.matchAll(/tierDisplay\(\s*'([a-z]+)'\s*\)/g)].map((m) => m[1]);

@@ -51,16 +51,16 @@ export const canManageRoles = (role) => rank(role) >= RANK.superadmin;   // assi
 // SOW-046 C: the news-CURATOR capability (publish a news item to Discord). Orthogonal to the rank: a `curators:`
 // list in roles.yml grants it to a plain member; admin + superadmin inherit it. UX gating only (the Worker
 // re-checks server-side from the KV mirror; the gate + CODEOWNERS stay the real boundary).
-export function curatorsFromText(text) {
+export function newsEditorsFromText(text) {
   const set = new Set();
   if (!text) return set;
   try {
     const parsed = yaml.load(text);
-    for (const e of parsed?.curators ?? []) {
+    for (const e of parsed?.newsEditors ?? []) {
       const id = String(e?.github_id ?? e);
       if (id && id !== 'REPLACE_AT_M0') set.add(id);
     }
   } catch { /* unparseable -> nobody is a curator */ }
   return set;
 }
-export const canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator === true;
+export const canEditNews = (role, isNewsEditor) => rank(role) >= RANK.admin || isNewsEditor === true;

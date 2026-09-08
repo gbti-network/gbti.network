@@ -14,7 +14,7 @@ import { parseTierDisplay } from '../../membership/tiers-display.mjs';
 export { benefitProse } from '../../membership/tiers-display.mjs';
 
 // Re-export the AXIS (bind, do NOT rebuild): TIER identity, ranking, and the fail-closed membership test.
-export { TIER, tierRank, meetsTier, isTier } from '../../membership/tiers.mjs';
+export { TIER, tierRank, meetsTier, isTier, tierLabel } from '../../membership/tiers.mjs';
 
 export interface TierDisplay {
   key: string;

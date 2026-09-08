@@ -15,7 +15,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   listCreatorApplicationsOp, decideCreatorApplicationOp } from '../../client/src/operations.mjs'; // sow-293
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
-import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
+import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
 import { setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates, getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings, getCouponPool, getSiteSettings, setSiteToggle } from '../../client/src/admin-ops.mjs'; // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
@@ -51,7 +51,7 @@ async function computeRoleAndCurate(ctx) {
   if (!id?.githubId) return { role: 'member', canCurate: false };
   const text = await ctx.reader.readFile('house/roles.yml');
   const role = roleOf(id.githubId, rolesFromText(text));
-  return { role, canCurate: canCurateNews(role, curatorsFromText(text).has(String(id.githubId))) };
+  return { role, canCurate: canEditNews(role, newsEditorsFromText(text).has(String(id.githubId))) };
 }
 
 function requireRepo(ctx) {

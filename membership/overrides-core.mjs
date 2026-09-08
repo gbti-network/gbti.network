@@ -27,19 +27,19 @@ const idOf = (entry) => String(entry?.github_id ?? entry);
 // news->Discord publish, not a membership tier), so it lives in its own `curators:` list in roles.yml and never
 // touches effectiveStatus/roleOf. A caller may curate if they are admin/superadmin (inherited) OR listed as a
 // curator. roles.yml is superadmin-CODEOWNED, so only a superadmin can grant it; the gate stays the real boundary.
-export function curatorsFromParsed(parsed) {
+export function newsEditorsFromParsed(parsed) {
   const out = new Set();
-  for (const e of parsed?.curators ?? []) {
+  for (const e of parsed?.newsEditors ?? []) {
     const id = idOf(e);
     if (id && id !== 'REPLACE_AT_M0') out.add(id);
   }
   return out;
 }
-export function isCurator(githubId, curators) {
+export function isNewsEditor(githubId, curators) {
   return curators instanceof Set && curators.has(String(githubId));
 }
 /** Whether a caller may publish news to Discord: admin/superadmin (inherited) OR an explicit curator. */
-export function canCurateNews(role, isCuratorFlag) {
+export function canEditNews(role, isCuratorFlag) {
   return isAdminRole(role) || isCuratorFlag === true;
 }
 

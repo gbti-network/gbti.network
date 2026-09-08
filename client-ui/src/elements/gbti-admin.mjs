@@ -6,6 +6,7 @@
 // card is the container). render() reads the role fresh each time, so it self-heals the client-ready race.
 
 import { GbtiElement, define, esc } from '../base.mjs';
+import { TIER, tierLabel } from '../../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
 const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
 
@@ -81,10 +82,10 @@ class GbtiAdmin extends GbtiElement {
 
          ${rank >= RANK.admin && capOn('membership') ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: Network Member reads, Content Creator can also publish. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: ${tierLabel(TIER.member)} reads, ${tierLabel(TIER.creator)} can also publish. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
-           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: Network Member</option><option value="creator">Grant tier: Content Creator</option></select>
+           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: ${tierLabel(TIER.member)}</option><option value="creator">Grant tier: ${tierLabel(TIER.creator)}</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>

@@ -1,10 +1,10 @@
-// SOW-046 C: the curator-gated news -> Discord publish Worker endpoint + the authorizeCurator gate.
+// SOW-046 C: the curator-gated news -> Discord publish Worker endpoint + the authorizeNewsEditor gate.
 // The Discord bot token lives only in the Worker; the capability is re-checked server-side from the KV overrides
 // mirror (admin/superadmin OR an explicit roles.yml curators: listing); the post is deduped on the news guid; an
 // unmapped category fails closed (records nothing, posts nothing). Pure over injected deps; no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { authorizeCurator } from '../workers/signup/membership-admin.mjs';
+import { authorizeNewsEditor } from '../workers/signup/membership-admin.mjs';
 import { membershipNewsPublish, NEWS_POSTED_KEY } from '../workers/signup/membership-news-publish.mjs';
 
 const now = new Date('2026-06-18T00:00:00Z');
@@ -15,7 +15,7 @@ const req = (token, body) => ({
 // generatedAt just before `now` so the freshness check (age in [0, 48h]) passes.
 const freshMirror = (overrides = {}) => ({
   generatedAt: new Date(now.getTime() - 60_000).toISOString(),
-  roles: { superadmins: [{ github_id: '1' }], admins: [{ github_id: '2' }], moderators: [{ github_id: '3' }], curators: [{ github_id: '5' }] },
+  roles: { superadmins: [{ github_id: '1' }], admins: [{ github_id: '2' }], moderators: [{ github_id: '3' }], newsEditors: [{ github_id: '5' }] },
   bans: { bans: [] }, grandfathered: { grandfathered: [] },
   ...overrides,
 });
@@ -25,29 +25,29 @@ const fetchUser = async (token) => {
   return { githubId: map[token], login: token };
 };
 
-// ---- authorizeCurator ----
+// ---- authorizeNewsEditor ----
 
-test('authorizeCurator: admin/superadmin inherit it; an explicit curator passes; a plain member + moderator are forbidden', async () => {
+test('authorizeNewsEditor: admin/superadmin inherit it; an explicit curator passes; a plain member + moderator are forbidden', async () => {
   const env = { SIGNUP_KV: { get: async () => freshMirror() } };
-  assert.equal((await authorizeCurator(req('sa'), env, { fetchUser, now })).ok, true);
-  assert.equal((await authorizeCurator(req('admin'), env, { fetchUser, now })).ok, true);
-  assert.equal((await authorizeCurator(req('curator'), env, { fetchUser, now })).ok, true);
-  assert.equal((await authorizeCurator(req('mod'), env, { fetchUser, now })).status, 403);
-  assert.equal((await authorizeCurator(req('member'), env, { fetchUser, now })).status, 403);
+  assert.equal((await authorizeNewsEditor(req('sa'), env, { fetchUser, now })).ok, true);
+  assert.equal((await authorizeNewsEditor(req('admin'), env, { fetchUser, now })).ok, true);
+  assert.equal((await authorizeNewsEditor(req('curator'), env, { fetchUser, now })).ok, true);
+  assert.equal((await authorizeNewsEditor(req('mod'), env, { fetchUser, now })).status, 403);
+  assert.equal((await authorizeNewsEditor(req('member'), env, { fetchUser, now })).status, 403);
 });
 
-test('authorizeCurator: no token -> 401; a stale/missing/malformed mirror fails closed (403)', async () => {
-  assert.equal((await authorizeCurator(req(null), { SIGNUP_KV: { get: async () => freshMirror() } }, { fetchUser, now })).status, 401);
+test('authorizeNewsEditor: no token -> 401; a stale/missing/malformed mirror fails closed (403)', async () => {
+  assert.equal((await authorizeNewsEditor(req(null), { SIGNUP_KV: { get: async () => freshMirror() } }, { fetchUser, now })).status, 401);
   const stale = freshMirror({ generatedAt: new Date('2020-01-01').toISOString() });
-  assert.equal((await authorizeCurator(req('curator'), { SIGNUP_KV: { get: async () => stale } }, { fetchUser, now })).status, 403);
-  assert.equal((await authorizeCurator(req('curator'), { SIGNUP_KV: { get: async () => null } }, { fetchUser, now })).status, 403);
+  assert.equal((await authorizeNewsEditor(req('curator'), { SIGNUP_KV: { get: async () => stale } }, { fetchUser, now })).status, 403);
+  assert.equal((await authorizeNewsEditor(req('curator'), { SIGNUP_KV: { get: async () => null } }, { fetchUser, now })).status, 403);
   const bad = freshMirror({ roles: [] }); // a bare array must not silently drop the gate
-  assert.equal((await authorizeCurator(req('curator'), { SIGNUP_KV: { get: async () => bad } }, { fetchUser, now })).status, 403);
+  assert.equal((await authorizeNewsEditor(req('curator'), { SIGNUP_KV: { get: async () => bad } }, { fetchUser, now })).status, 403);
 });
 
 // ---- membershipNewsPublish ----
 
-const okAuth = async () => ({ ok: true, githubId: '5', role: 'member', isCurator: true });
+const okAuth = async () => ({ ok: true, githubId: '5', role: 'member', isNewsEditor: true });
 const denyAuth = async () => ({ ok: false, status: 403, body: { error: 'forbidden', message: 'news curator access is required' } });
 const fakeKv = () => {
   const m = new Map();

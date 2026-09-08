@@ -13,6 +13,7 @@
 // layer, because this text reaches an HTML email and the applicant is an untrusted author.
 
 import { opsEmail } from './mail-ops.mjs';
+import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
 /**
  * Render the notice for one application.
@@ -43,7 +44,7 @@ export function creatorApplicationNotice(record, { selfTest = false } = {}) {
   const lines = [
     selfTest
       ? 'THIS IS NOT AN APPLICATION. It is the scheduled self-test of the creator-application alarm, and the'
-      : 'Someone applied for the Content Creator plan.',
+      : `Someone applied for the ${tierLabel(TIER.creator)} plan.`,
     selfTest ? 'values below are synthetic. No application was stored and no tier was granted.' : null,
     '',
     `Applicant: ${login} (github_id ${githubId})`,
@@ -63,12 +64,12 @@ export function creatorApplicationNotice(record, { selfTest = false } = {}) {
       : 'Approve or decline this in the applications lane of the superadmin dashboard. Approving grants the',
     selfTest
       ? 'work. Its ABSENCE is the signal, not its arrival, so a silent week is worth checking.'
-      : 'Content Creator tier immediately; there is no payment step.',
+      : `${tierLabel(TIER.creator)} tier immediately; there is no payment step.`,
   ].filter((line) => line !== null);
 
   const { html } = opsEmail({
     title: selfTest ? 'Creator application alarm self-test' : 'Creator application',
-    lead: selfTest ? '' : 'Someone applied for the Content Creator plan.',
+    lead: selfTest ? '' : `Someone applied for the ${tierLabel(TIER.creator)} plan.`,
     sections: [
       ...(selfTest
         ? [{
@@ -91,7 +92,7 @@ export function creatorApplicationNotice(record, { selfTest = false } = {}) {
         ? 'Receiving this means the alarm can still reach you: the key, the sender domain and the address all '
           + 'work. Its ABSENCE is the signal, not its arrival, so a silent week is worth checking.'
         : 'Approve or decline this in the applications lane of the superadmin dashboard. Approving grants the '
-          + 'Content Creator tier immediately; there is no payment step.' },
+          + `${tierLabel(TIER.creator)} tier immediately; there is no payment step.` },
     ],
     footer: selfTest
       ? 'Sent by the weekly credential-health check, not by an application.'

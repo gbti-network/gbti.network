@@ -22,7 +22,7 @@ import {
   TURNSTILE_SITE_KEY,
   SIGNUP_BASE,
 } from '../../lib/membership';
-import { tierDisplay } from '../../lib/tiers';
+import { tierDisplay, tierLabel, TIER } from '../../lib/tiers'; // sow-316: tierLabel NAMES a tier; tierDisplay binds this page's product
 
 // THIS INVITE CONFERS `member`, NOT `creator`. Corrected 2026-08-24 under the owner's ruling that the
 // coupons "should only offer membership rather than creator".
@@ -75,11 +75,11 @@ const faqs = [
   ['What happens when the free year ends?', `Nothing happens on its own. ${TIER_LABEL} is ${TIER_PRICE_LABEL} per ${BILLING_PERIOD} if you decide to continue, and you will not be charged unless you choose to.`],
   ['How do I claim it?', 'Sign in with GitHub from this page. Your coupon is already applied, so there is nothing to enter or remember.'],
   ['Can I pass this on to someone else?', 'It is meant for you, but the link works for whoever opens it first, so treat it as personal rather than forwardable.'],
-  ['What is the GBTI Network?', 'A professional publishing network for developers. Members read and discuss the work published across it and take part in a private community. Publishing your own articles, projects and prompts is the Content Creator tier.'],
+  [`What is the GBTI Network?', 'A professional publishing network for developers. Members read and discuss the work published across it and take part in a private community. Publishing your own articles, projects and prompts is the ${tierLabel(TIER.creator)} tier.`],
   // ASKED AND ANSWERED PLAINLY, because the audience makes it the obvious question. Codeable experts are
   // working professionals, and the page they were sent used to promise publishing. Saying nothing about it
   // now would read as an omission rather than an answer.
-  ['Can I publish my own work with this invite?', `Not on this invite. Publishing articles, projects and prompts is the Content Creator tier, and this covers a year at ${TIER_LABEL}: reading members-only work, commenting anywhere on the network, and full Discord access. You can move up whenever you want to publish.`],
+  ['Can I publish my own work with this invite?', `Not on this invite. Publishing articles, projects and prompts is the ${tierLabel(TIER.creator)} tier, and this covers a year at ${TIER_LABEL}: reading members-only work, commenting anywhere on the network, and full Discord access. You can move up whenever you want to publish.`],
   ['Is all content public or private?', 'Both. Some work is published openly, and some is network-only. For network-only work, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
   ['Are comments on public-facing content also public?', 'By default, they are not, and can only be read inside the extension by other members. There is, however, the option to make a comment fully public.'],
   ['What does GBTI stand for?', 'God Bless The Internet; a phrase that expresses appreciation and goodwill toward the continued growth and enrichment of the internet.'],
@@ -168,7 +168,7 @@ const year = new Date().getFullYear();
          reason the benefit array was deleted, that a hand-written section is where the tier claim escapes
          review.
          UPDATED 2026-08-26: shop talk is no longer a TIER benefit at all. The owner ruled it out of the
-         Content Creator list (sow-201, 2026-08-18) because it is positioning rather than software, and
+         Curator tier's list (sow-201, 2026-08-18) because it is positioning rather than software, and
          sow-185 section 7 requires a named owner and a cadence before such a thing appears in pricing copy.
          The only copy that still describes it is src/components/JoinOffers.astro, and that component is
          UNMOUNTED (zero imports, renders on no page), so in practice shop talk is currently advertised

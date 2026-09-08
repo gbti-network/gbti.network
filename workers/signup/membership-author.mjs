@@ -14,7 +14,7 @@
 
 import { githubFetchUser } from './oauth.mjs';
 import { authorizeCreator, authorizePaid } from './membership-content.mjs'; // sow-301: paid gates the route, creator gates PUBLISHING
-import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-301
+import { TIER, meetsTier, tierLabel } from '../../membership/tiers.mjs'; // sow-301
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
@@ -194,7 +194,7 @@ export async function membershipAuthor(request, env, deps = {}) {
 
   // sow-183: a SUPERADMIN caller may target a file set outside their own folder (house/, or another
   // member's folder) for content authorship reassignment. Independently re-resolved (own fail-closed gate,
-  // the same shape as authorizeAdmin/authorizeStaff/authorizeCurator) rather than trusted from the request
+  // the same shape as authorizeAdmin/authorizeStaff/authorizeNewsEditor) rather than trusted from the request
   // body -- a non-superadmin (or a failed re-check) gets allowAnyFolder=false and validateHostedRequest
   // falls back to the existing own-folder-only rule.
   const superadmin = await authorizeSuper(request, env, deps);
@@ -216,8 +216,8 @@ export async function membershipAuthor(request, env, deps = {}) {
     if (!meetsTier(paid.tier, TIER.creator)) {
       const publicShare = String(payload?.itemId ?? '').startsWith('share-');
       return { status: 403, body: { error: 'forbidden', message: publicShare
-        ? 'sharing publicly on gbti.network requires the Content Creator plan; post it to members only, or upgrade at https://gbti.network'
-        : 'publishing on gbti.network requires the Content Creator plan; upgrade at https://gbti.network' } };
+        ? `sharing publicly on gbti.network requires ${tierLabel(TIER.creator)} status; post it to members only, or apply at https://gbti.network/creator-application/`
+        : `publishing on gbti.network requires ${tierLabel(TIER.creator)} status, which is granted by application: https://gbti.network/creator-application/` } };
     }
   }
 
@@ -232,7 +232,7 @@ export async function membershipAuthor(request, env, deps = {}) {
   if (isShareSet(payload?.files, folder) && !meetsTier(paid.tier, TIER.creator)) {
     const slow = await limiter({ kv, id: githubId, limit: 1, windowSeconds: SHARE_SLOW_MODE_SECONDS, prefix: 'rl:share:' });
     if (!slow.allowed) {
-      return { status: 429, body: { error: 'slow_mode', message: 'you can post one share every six hours; Content Creators are not limited' } };
+      return { status: 429, body: { error: 'slow_mode', message: `you can post one share every six hours; ${tierLabel(TIER.creator)}s are not limited` } };
     }
   }
 

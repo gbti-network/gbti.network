@@ -26,7 +26,7 @@ admins: []
 moderators: []
 
 # SOW-046: news CURATORS. A capability grant ORTHOGONAL to the member<moderator<admin<superadmin ladder above:
-# a curator may publish a members-only news item to its mapped Discord channel (the "Add to Discord" action),
+# a news editor may publish a members-only news item to its mapped Discord channel (the "Add to Discord" action),
 # nothing else. admin + superadmin inherit it. This list grants it to a plain member without elevating their rank
 # (it never affects effective status / content gating). Superadmin-owned like the rest of this file.
-curators: []
+newsEditors: []  # sow-316: was `curators:`. Renamed so Curator means only the paid tier (sow-226 Q4). Nobody held it; the mirror read null.

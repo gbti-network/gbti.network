@@ -5,7 +5,7 @@
 import { createReader, createStager } from './repo-fs.mjs';
 import { createGithubReader } from './github-reader.mjs'; // sow-193: the clone-free reader, shared with the extension
 import { createRepoClient } from './github-repo.mjs';
-import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from './roles.mjs';
+import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from './roles.mjs';
 import { resolveMembership } from './membership.mjs';
 import { SIGNUP_BASE, authModeFor } from './signup-base.mjs';
 import { createDevlog } from '../../membership/devlog-core.mjs';
@@ -64,7 +64,7 @@ export function buildContext(store) {
       const id = store.get('identity');
       if (!id?.githubId) return false;
       const text = reader.readFile('house/roles.yml');
-      return canCurateNews(roleOf(id.githubId, rolesFromText(text)), curatorsFromText(text).has(String(id.githubId)));
+      return canEditNews(roleOf(id.githubId, rolesFromText(text)), newsEditorsFromText(text).has(String(id.githubId)));
     },
     /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
     membership() {

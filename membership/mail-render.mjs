@@ -45,6 +45,7 @@
 // It sets NO email headers: List-Unsubscribe and the multipart assembly are the sendEmail wrapper's job.
 
 import { SECTION_FEED, clickSlot, clickPath, taggedTarget } from './mail-click.mjs';
+import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -383,7 +384,7 @@ function membershipCtaHtml(p, links) {
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:18px">`
-    + `Membership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the Content Creator plan. `
+    + `Membership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the ${tierLabel(TIER.creator)} plan. `
     + `<a href="${href}" style="color:${p.footerLink};text-decoration:underline">Compare plans</a>`
     + `</div>`
     + `</td></tr></table>`
@@ -579,7 +580,7 @@ export function renderIssue(issue, ctx = {}) {
   const emptyText = empties.length ? `\n\n${emptyPhrase(empties, firstIssue)}` : '';
   // The text-side CTA mirrors the html: one modest line, after all editorial, only when the html renders it.
   const ctaText = showCta
-    ? `\n\nMembership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the Content Creator plan. Compare plans: ${trackUrl('/membership/', links, 'membership-cta')}`
+    ? `\n\nMembership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the ${tierLabel(TIER.creator)} plan. Compare plans: ${trackUrl('/membership/', links, 'membership-cta')}`
     : '';
 
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n`

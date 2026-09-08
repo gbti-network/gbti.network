@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -232,6 +232,7 @@ class GbtiWorkspace extends GbtiElement {
     this._overview = {
       membership: status?.membership || 'unknown',
       role: status?.role || 'member',
+      paidTier: status?.paidTier || 'none', // sow-316: the Curator banner reads this; absent -> 'none' -> banner shows, the safe direction
       counts: { post: items(post).length, prompt: items(prompt).length, project: items(project).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
       attention,
       _trusted: trusted,
@@ -820,7 +821,8 @@ class GbtiWorkspace extends GbtiElement {
     const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
     // SOW-075: a trial member can author + stage drafts on their own fork but cannot publish; the Overview gave no
     // explanation. This banner makes the fork-only / paid-to-publish reality clear where the trial member spends time.
-    const tb = trialBanner(ov.membership, this._authoring()); // sow-204: the copy decision lives in workspace-core
+    // sow-316: a paid-but-not-Curator member gets the same banner slot as a trial member. One or the other, never both.
+    const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring()); // the copy decisions live in workspace-core
     const trialHtml = !tb ? ''
       : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div>`
         + `<a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;

@@ -396,7 +396,7 @@ test('sow-301: the SAME member is still DENIED publishing', () => {
   // The other direction. Without it, the test above would pass just as happily if the gate were removed.
   return membershipAuthor(req(goodBody), env, { ...deps([]), authorize: memberOk }).then((r) => {
     assert.equal(r.status, 403, 'a member-tier caller was allowed to PUBLISH');
-    assert.match(String(r.body?.message ?? ''), /Content Creator/);
+    assert.match(String(r.body?.message ?? ''), /Curator/);
   });
 });
 

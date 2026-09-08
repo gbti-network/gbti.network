@@ -6,6 +6,7 @@
 // pool, the manual invite lane, and the platform retained share) are single-sourced from lib/membership so
 // this explainer never drifts from the model. The donut/stack-bar geometry stays literal in the markup.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { tierDisplay } from '../lib/tiers'; // sow-316
 import {
   FIRST_TOUCH_PCT,
   LAST_TOUCH_PCT,
@@ -520,7 +521,7 @@ import {
       <div class="wrap">
         <p class="eyebrow">Publish, and share in what it earns</p>
         <h2 class="h1 mt12" style="color:#fff">Your work keeps paying after you ship it.</h2>
-        <p class="lead mt16" style="color:var(--on-dark-soft);margin-left:auto;margin-right:auto">Create a free account, no card required. Publish as a Content Creator to become eligible for the split.</p>
+        <p class="lead mt16" style="color:var(--on-dark-soft);margin-left:auto;margin-right:auto">Create a free account, no card required. Publish as a {tierDisplay('creator')?.label ?? 'Curator'} to become eligible for the split.</p>
         <div class="rm-cta-btns">
           <a href="/membership/" class="btn btn-primary btn-lg">See membership <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
           <a href="/projects/" class="btn btn-ghost btn-lg">Browse member work</a>

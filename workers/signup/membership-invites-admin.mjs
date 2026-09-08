@@ -37,7 +37,7 @@ const bad = (status, error, message) => ({ status, body: { ok: false, error, mes
 
 /**
  * The issuing admin's login, for a list that reads "issued by atwellpub" rather than "issued by 2002207".
- * authorizeAdmin returns { ok, githubId, role, isCurator, mirror } and NO login, so it is resolved here
+ * authorizeAdmin returns { ok, githubId, role, isNewsEditor, mirror } and NO login, so it is resolved here
  * from the roles section of the same overrides mirror the authorization already read. Best effort: a miss
  * leaves null, because failing an issuance over a display name would be absurd.
  */

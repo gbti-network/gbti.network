@@ -10,6 +10,7 @@
 // reads the hash on connect to open directly on that management tab. Returns a valid tab id, or null when the hash
 // carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
 import { canonicalType } from './content-types.mjs';
+import { TIER, tierLabel } from '../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
 const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs)
 export function parseWorkspaceTab(hash) {
@@ -464,6 +465,36 @@ export function visibleTiles(tiles, tabs, authoring) {
  * @param {boolean} authoring whether this host authors (see authoringEnabled)
  * @returns {{headline: string, body: string, ctaLabel: string, ctaHref: string}|null} null = render nothing
  */
+/**
+ * sow-316 Phase 2: a PAID member below the Curator tier is told, on the Overview and before they write, that
+ * publishing needs Curator status and where to apply. Same shape and placement as trialBanner.
+ *
+ * WHY THIS EXISTS. The WorkBench lock only catches lapsed accounts, so a basic paid member walks straight in,
+ * writes, and is refused at the Worker with a message that until 2026-09-08 said "upgrade" although the tier
+ * is granted by APPLICATION (sow-293), not purchase. Nothing told them before the refusal. A new member hit
+ * exactly this in his first hour and reported it as "it asks me to log in again".
+ *
+ * Only for `paid` + a tier below curator. A trial member gets trialBanner instead; a curator gets nothing.
+ */
+export function curatorBanner(membership, paidTier, authoring) {
+  if (membership !== 'paid') return null;
+  if (paidTier === 'creator') return null; // the internal tier key; the public name is Curator (sow-226)
+  const headline = `Publishing needs ${tierLabel(TIER.creator)} status`;
+  return authoring
+    ? {
+      headline,
+      body: `You can author and stage drafts here now. Publishing articles, projects and prompts to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
+      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
+      ctaHref: 'https://gbti.network/creator-application/',
+    }
+    : {
+      headline,
+      body: `Publishing to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
+      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
+      ctaHref: 'https://gbti.network/creator-application/',
+    };
+}
+
 export function trialBanner(membership, authoring) {
   if (membership !== 'trialing') return null;
   const headline = 'You are on the free trial';

@@ -15,7 +15,7 @@
 // membership-news-opened.mjs) share the exact same canonical resolution, routing, and guid dedupe. Engagement
 // callers stamp `by: 'auto:comment' | 'auto:open'` (no member id on the record = no new erasure surface).
 
-import { authorizeCurator } from './membership-admin.mjs';
+import { authorizeNewsEditor } from './membership-admin.mjs';
 import { findNewsItemByGuid } from './membership-news.mjs';
 import { channelForCategory } from '../../membership/news-channels.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
@@ -82,7 +82,7 @@ export async function postNewsItemOnce(env, { guid, source, by } = {}, {
 }
 
 /** POST /membership/news-publish { guid, source? } -> resolves the canonical item + posts to its mapped channel once. */
-export async function membershipNewsPublish(request, env, { authorize = authorizeCurator, findItem = findNewsItemByGuid, fetch = globalThis.fetch, kv = env?.SIGNUP_KV, discord = null, now = () => new Date().toISOString() } = {}) {
+export async function membershipNewsPublish(request, env, { authorize = authorizeNewsEditor, findItem = findNewsItemByGuid, fetch = globalThis.fetch, kv = env?.SIGNUP_KV, discord = null, now = () => new Date().toISOString() } = {}) {
   const auth = await authorize(request, env);
   if (!auth.ok) return { status: auth.status, body: auth.body };
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the dedupe store is not configured' } };

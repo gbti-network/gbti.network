@@ -18050,12 +18050,12 @@ function rolesFromText(text) {
 var canModerate = (role) => rank(role) >= RANK.moderator;
 var canBanGrandfather = (role) => rank(role) >= RANK.admin;
 var canManageRoles = (role) => rank(role) >= RANK.superadmin;
-function curatorsFromText(text) {
+function newsEditorsFromText(text) {
   const set2 = /* @__PURE__ */ new Set();
   if (!text) return set2;
   try {
     const parsed = index_vite_proxy_tmp_default.load(text);
-    for (const e of parsed?.curators ?? []) {
+    for (const e of parsed?.newsEditors ?? []) {
       const id = String(e?.github_id ?? e);
       if (id && id !== "REPLACE_AT_M0") set2.add(id);
     }
@@ -18063,7 +18063,7 @@ function curatorsFromText(text) {
   }
   return set2;
 }
-var canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator === true;
+var canEditNews = (role, isNewsEditor) => rank(role) >= RANK.admin || isNewsEditor === true;
 
 // client/src/membership.mjs
 var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
@@ -19965,7 +19965,7 @@ var TIER = Object.freeze({
 var TIER_LABEL = Object.freeze({
   [TIER.none]: "",
   [TIER.member]: "Network Member",
-  [TIER.creator]: "Content Creator"
+  [TIER.creator]: "Curator"
 });
 var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 var isTier = (t) => Object.prototype.hasOwnProperty.call(RANK2, t);
@@ -22103,7 +22103,7 @@ async function computeRoleAndCurate(ctx) {
   if (!id?.githubId) return { role: "member", canCurate: false };
   const text = await ctx.reader.readFile("house/roles.yml");
   const role = roleOf(id.githubId, rolesFromText(text));
-  return { role, canCurate: canCurateNews(role, curatorsFromText(text).has(String(id.githubId))) };
+  return { role, canCurate: canEditNews(role, newsEditorsFromText(text).has(String(id.githubId))) };
 }
 function requireRepo3(ctx) {
   const repo = ctx.getRepoClient?.();
