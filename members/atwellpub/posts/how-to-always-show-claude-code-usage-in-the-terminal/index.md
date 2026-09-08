@@ -15,11 +15,11 @@ tags:
   - status-line
   - rate-limits
   - developer-tools
-layout: editorial
+layout: journal
 coverImage: ./images/status-line-cover.webp
 featured: false
 publishedAt: '2026-09-07'
-updatedAt: '2026-09-08T00:54:24.947Z'
+updatedAt: '2026-09-08T01:00:33.008Z'
 type: post
 author: atwellpub
 ---
