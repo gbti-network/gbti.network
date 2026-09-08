@@ -81,6 +81,19 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
             fail-closed direction is the rendered default: an unresolved tier shows nothing rather than briefly
             offering a control the server would refuse. render() reveals it only on paidTier === 'creator'. */}
         <div class="hub-cols">
+          {/* sow-314: the Saturday Shop Talk seat. Enrollment is automatic (every paid and trial member is a guest on the
+              event at their GitHub email); this card shows the member which address the seat is under, lets them step
+              off or rejoin, and is the only place the seat is visible. Hidden until the Worker has answered, so a
+              signed-out or unresolved state shows nothing rather than a wrong sentence. */}
+          <div class="hub-card" data-shoptalk-card hidden>
+            <h2 class="hub-h" data-shoptalk-headline>Saturday Shop Talk</h2>
+            <p class="hub-sub" data-shoptalk-body></p>
+            <p class="hub-sub" data-shoptalk-note hidden></p>
+            <div class="acct-actions">
+              <button type="button" class="btn btn-ghost" data-shoptalk-action hidden></button>
+              <a class="btn btn-ghost" data-shoptalk-href hidden></a>
+            </div>
+          </div>
           <div class="hub-card" data-share-card hidden>
             <h2 class="hub-h">Share with the community</h2>
             <p class="hub-sub">Post a note or a link to the members stream. Members-only is the default; switch to public to share it on the site feed.</p>
@@ -128,6 +141,7 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
 
   <script>
     import { onMemberSignal, currentIdentity, readMemberSignal, signOutWeb } from '../lib/member-signal';
+    import { shoptalkCardState, shoptalkAfterAction } from '../lib/shoptalk-card-core.mjs'; // sow-314
 
     const out = document.querySelector('[data-account-signedout]');
     const inn = document.querySelector('[data-account-signedin]') as HTMLElement | null;
@@ -173,6 +187,49 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
       const showStream = s.membership === 'paid' || s.membership === 'trialing';
       if (streamCard) streamCard.hidden = !showStream;
       mountHub(s, isCreator, showStream);
+      mountShoptalk(s);
+    }
+
+    // sow-314: the Shop Talk card. One read per page load through the page's shared website client; the copy for
+    // every state is the pure helper, so the card is unit-tested rather than screenshotted. A leave or rejoin
+    // re-renders from the Worker's answer, never from the optimistic assumption that it worked.
+    const stCard = document.querySelector('[data-shoptalk-card]') as HTMLElement | null;
+    let stLoaded = false;
+    function paintShoptalk(res: any) {
+      if (!stCard) return;
+      const st = shoptalkCardState(res);
+      const h = stCard.querySelector('[data-shoptalk-headline]'); if (h) h.textContent = st.headline;
+      const b = stCard.querySelector('[data-shoptalk-body]'); if (b) b.textContent = st.body;
+      const btn = stCard.querySelector('[data-shoptalk-action]') as HTMLButtonElement | null;
+      if (btn) { btn.hidden = !st.action; btn.textContent = st.actionLabel || ''; btn.dataset.action = st.action || ''; btn.disabled = false; }
+      const a = stCard.querySelector('[data-shoptalk-href]') as HTMLAnchorElement | null;
+      if (a) { a.hidden = !st.href; if (st.href) { a.href = st.href; a.textContent = st.hrefLabel || ''; } }
+      stCard.hidden = false;
+    }
+    async function mountShoptalk(s: any) {
+      if (stLoaded || !stCard) return;
+      stLoaded = true;
+      try {
+        const { websiteClient } = await import('../lib/save-controls');
+        const c = await websiteClient(s);
+        if (!c) { stLoaded = false; return; }
+        paintShoptalk(await c.getShoptalk());
+        stCard.querySelector('[data-shoptalk-action]')?.addEventListener('click', async (e) => {
+          const btn = e.currentTarget as HTMLButtonElement;
+          const action = btn.dataset.action as 'leave' | 'rejoin';
+          if (!action) return;
+          btn.disabled = true;
+          const note = stCard.querySelector('[data-shoptalk-note]') as HTMLElement | null;
+          try {
+            const res = await c.setShoptalk(action);
+            if (note) { note.textContent = shoptalkAfterAction(res, action).note; note.hidden = false; }
+            paintShoptalk(await c.getShoptalk());
+          } catch (err: any) {
+            if (note) { note.textContent = err?.message || 'That did not go through. Try again in a moment.'; note.hidden = false; }
+            btn.disabled = false;
+          }
+        });
+      } catch { stLoaded = false; /* the card stays hidden; nothing on this page depends on it */ }
     }
 
     // sow-218: mount only what this member can actually use. Latest Activity is the server-rendered FeedView and

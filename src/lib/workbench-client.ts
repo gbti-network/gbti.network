@@ -851,6 +851,10 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // Fixed HERE rather than in the picker, because the picker is shared with the extension where the
     // transport already unwraps; "fixing" the reader would have double-unwrapped that host.
     async getPrefs() { const r: any = await workerGet('/membership/prefs'); return r?.prefs ?? r; },
+    // sow-314: the Saturday Shop Talk seat. GET answers { eligible, enrolled, address, optedOut, nextCall };
+    // POST { action: 'leave' | 'rejoin' } records the choice and, when the calendar is reachable, applies it at once.
+    async getShoptalk() { return workerGet('/membership/shoptalk'); },
+    async setShoptalk(action: 'leave' | 'rejoin') { return workerPost('/membership/shoptalk', { action }); },
     async setPrefs(patch: any) { const r: any = await workerPost('/membership/prefs', patch); return r?.prefs ?? r; },
 
     // ----- sow-207: the welcome flow's Discord step, over the cookie session -----

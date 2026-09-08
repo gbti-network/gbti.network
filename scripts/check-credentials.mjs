@@ -444,6 +444,28 @@ export async function runProbes({ env = process.env, fetch = globalThis.fetch, s
     // same outcome for the owner, which is nobody being told a code was redeemed.
     return { ok: res?.sent === true, status: null, detail: res?.sent ? `sent to ${alarmTo}` : `${res?.reason || 'not sent'}${res?.message ? `: ${res.message}` : ''}` };
   }));
+  // sow-314: the Google Calendar refresh token behind Shop Talk enrollment. Google issues no expiry for a token
+  // minted against a consent screen that is In production, so this cannot be a mustExpire probe; what it CAN
+  // catch, weekly, is the one failure that matters: the consent screen flipping back to Testing makes every
+  // refresh token expire after seven days, and the nightly sweep would then fail looking exactly like a code fault.
+  if (env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET && env.GOOGLE_CALENDAR_REFRESH_TOKEN) {
+    out.push(await probe('GOOGLE_CALENDAR_REFRESH_TOKEN (Google Calendar, Shop Talk enrollment)', async () => {
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: env.GOOGLE_CALENDAR_CLIENT_ID, client_secret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+          refresh_token: env.GOOGLE_CALENDAR_REFRESH_TOKEN, grant_type: 'refresh_token',
+        }).toString(),
+      });
+      let body = null; try { body = await res.json(); } catch { /* not json */ }
+      const ok = !!res.ok && !!body?.access_token;
+      const why = body?.error === 'invalid_grant'
+        ? 'invalid_grant: the refresh token is revoked or expired. A refresh token expires after 7 days while the OAuth consent screen is in Testing; set it to In production, then mint a new token (secrets-ops). Until then the nightly Shop Talk sweep adds and removes nobody.'
+        : (body?.error ? `${body.error}${body.error_description ? `: ${body.error_description}` : ''}` : (ok ? null : 'no access token in the reply'));
+      return { ok, status: res.status, detail: ok ? null : why };
+    }));
+  }
   // sow-292: the two freshness probes. The KV read token is the right credential (it can read the namespace and
   // nothing else); CF_API_TOKEN is the fallback for a job that carries only that one.
   const kvToken = env.CF_KV_READ_TOKEN || env.CF_API_TOKEN;

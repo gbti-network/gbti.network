@@ -28,6 +28,10 @@ import { mailHash, MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress
 import { normalizeSubscriber } from '../../membership/mail-subscriber.mjs'; // SOW-166: the record shape the scan matches on
 import { eraseSubscriberMail } from '../../workers/signup/mail-store.mjs'; // SOW-166: the one shared mail eraser
 import { FOLLOWERS_KEY, normalizeFollowers, applyFollower } from '../../membership/member-followers.mjs'; // SOW-186 phase 3
+import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, OPTOUT_PREFIX as SHOPTALK_OPTOUT_PREFIX } from './shoptalk-state.mjs'; // sow-314
+import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-series.mjs'; // sow-314
+import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
+import { SHOPTALK_QUERY as SHOPTALK_SERIES_QUERY } from './shoptalk-sweep.mjs'; // sow-314: one definition of the search, shared with the sweep
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
@@ -77,6 +81,47 @@ export async function eraseFollows({ githubId, env = process.env, fetchImpl = gl
 }
 
 /** Hard-delete a member's prefs (SOW-046: category interests + followed news channels) from the deletable store. */
+/**
+ * sow-314 right-to-erasure: take the member OFF the Saturday Shop Talk event. This is the one erasure step that
+ * reaches a system this project does not own (the owner's Google Calendar guest list), so it is the step that
+ * makes the feature lawful to run at all: enrollment put an address there, erasure must take it away.
+ *
+ * Three things, in this order: (1) delete the opt-out marker shoptalk:optout:<id>; (2) find every address the
+ * placed record attributes to this github_id; (3) if any, remove them from the series' guest list (Google mails
+ * the un-invite), then drop them from shoptalk:placed so the sweep never re-adds or "removes" them again.
+ *
+ * FAILS CLOSED without calendar credentials when there is something to remove: the placed record is left
+ * exactly as it is, so the next reconcile with credentials can still see the seat, and the audit shows an
+ * ERROR rather than a silent "skipped" over an address that is still on the event.
+ */
+export async function eraseShoptalk({ githubId, env = process.env, fetchImpl = globalThis.fetch, calendar = null } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const id = String(githubId);
+  const opt = await deleteKvKey({ key: `${SHOPTALK_OPTOUT_PREFIX}${id}`, env, fetchImpl });
+  const placedRead = await readShoptalkPlaced({ env, fetchImpl });
+  if (!placedRead.ok) return { ok: false, reason: `shoptalk: ${placedRead.reason}`, optOutDeleted: opt?.ok === true };
+  const mine = [...placedRead.placed.entries()].filter(([, who]) => who === id).map(([address]) => address);
+  if (!mine.length) return { ok: true, skipped: true, reason: 'not on the Shop Talk placed record', matched: 0, optOutDeleted: opt?.ok === true };
+  const cal = calendar ?? (
+    env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET && env.GOOGLE_CALENDAR_REFRESH_TOKEN
+      ? createGoogleCalendarClient({
+        clientId: env.GOOGLE_CALENDAR_CLIENT_ID, clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+        refreshToken: env.GOOGLE_CALENDAR_REFRESH_TOKEN, calendarId: env.GOOGLE_CALENDAR_ID || 'primary', fetch: fetchImpl,
+      })
+      : null
+  );
+  if (!cal) return { ok: false, reason: `shoptalk: GOOGLE_CALENDAR_* not set, so ${mine.length} address(es) stay on the event; the placed record was left untouched for the next run that has credentials`, matched: mine.length };
+  const series = seriesFromInstances(await cal.nextOccurrences(SHOPTALK_SERIES_QUERY));
+  if (isSeriesProblem(series)) return { ok: false, reason: `shoptalk: ${series.problem}; ${mine.length} address(es) stay on the event`, matched: mine.length };
+  const guests = (await cal.listAttendees(series.seriesId)) || [];
+  const next = guests.filter((g) => !mine.includes(g));
+  if (next.length !== guests.length) await cal.setAttendees(series.seriesId, next, { sendUpdates: 'all' });
+  for (const address of mine) placedRead.placed.delete(address);
+  const wrote = await writeShoptalkPlaced(placedRead.placed, { env, fetchImpl });
+  if (wrote && wrote.ok === false) return { ok: false, reason: 'shoptalk: the address left the event but the placed record could not be rewritten; the next sweep will report it', matched: mine.length, removedFromEvent: next.length !== guests.length };
+  return { ok: true, matched: mine.length, removedFromEvent: next.length !== guests.length, optOutDeleted: opt?.ok === true };
+}
+
 export async function erasePrefs({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
   return deleteKvKey({ key: PREFS_KEY(String(githubId)), env, fetchImpl });
@@ -762,6 +807,7 @@ export function planErasure({ githubId, username } = {}) {
     // lockstep, because the same drift is otherwise invisible: nothing fails when the plan falls behind.
     { step: 'follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-023: hard-delete the OUTBOUND follow graph (follows:${githubId}). Inbound follows self-heal, since the feed drops a followed username with no published profile.` },
     { step: 'prefs', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-046: hard-delete the member's prefs (prefs:${githubId}: category interests + followed news channels).` },
+    { step: 'shoptalk', auto: true, tool: 'erase-member.mjs --apply', action: `sow-314: remove the member's address from the Saturday Shop Talk event (a Google Calendar guest list this project does not own; Google mails the un-invite), drop it from shoptalk:placed, and delete shoptalk:optout:${githubId}. Fails closed without calendar credentials.` },
     { step: 'drafts', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-157: hard-delete the hosted draft store (drafts:${githubId}), which may contain unpublished text.` },
     { step: 'redeemed-invites', auto: true, tool: 'erase-member.mjs --apply', action: `Minimize every invite this member redeemed (invite:*): null redeemedBy + redeemedByLogin, KEEP redeemedAt (a date with nobody attached identifies nobody). The superadmin administration note is deliberately left alone; redacting an admin's own outreach text is the owner's call, not a cleanup step's.` },
     { step: 'notifications', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete ${NOTIFICATIONS_KEY(githubId)} (SOW-150/186: the member's inbound notifications -- mentions + followed-author publishes).` },
@@ -1006,6 +1052,7 @@ export async function runErasure({
   await runStep('follows', () => eraseFollows({ githubId, env, fetchImpl }));
   await runStep('notifications', () => eraseNotifications({ githubId, env, fetchImpl })); // SOW-150/186: inbound notification store
   await runStep('prefs', () => erasePrefs({ githubId, env, fetchImpl })); // SOW-046: categories + followed news channels
+  await runStep('shoptalk', () => eraseShoptalk({ githubId, env, fetchImpl, calendar: clients.calendar ?? null })); // sow-314: the guest list we do not own
   await runStep('drafts', () => eraseDrafts({ githubId, env, fetchImpl })); // SOW-157: hosted draft staging
   await runStep('draft-images', () => eraseDraftImages({ githubId, env, fetchImpl })); // the staged image bytes beside those drafts
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));

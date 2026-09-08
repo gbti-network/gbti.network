@@ -598,3 +598,37 @@ test('freshness: the two blobs and their gates are the ones the Worker enforces'
   assert.deepEqual(FRESHNESS.map((f) => f.key), ['overrides:mirror', 'coupons:config']);
   for (const f of FRESHNESS) { assert.equal(f.gateHours, 48); assert.equal(f.warnHours, 12); assert.ok(f.writer.includes('.yml')); }
 });
+
+// ---------------------------------------------------------------------------------------------------
+// sow-314: the Google Calendar refresh token behind Shop Talk enrollment, probed by a real token exchange.
+// ---------------------------------------------------------------------------------------------------
+const GOOGLE_ENV = { GOOGLE_CALENDAR_CLIENT_ID: 'cid', GOOGLE_CALENDAR_CLIENT_SECRET: 'csec', GOOGLE_CALENDAR_REFRESH_TOKEN: 'rt' };
+
+test('google calendar: a refresh token that still exchanges is healthy', async () => {
+  let posted = null;
+  const fetch = async (url, init) => { posted = { url, body: init.body }; return { ok: true, status: 200, json: async () => ({ access_token: 'at', expires_in: 3599 }) }; };
+  const results = await runProbes({ env: GOOGLE_ENV, fetch });
+  assert.equal(results.length, 1);
+  assert.equal(results[0].ok, true);
+  assert.match(posted.url, /oauth2\.googleapis\.com\/token/);
+  assert.match(posted.body, /grant_type=refresh_token/);
+  assert.equal(evaluate(results, { warnDays: 30, now: new Date('2026-09-08T12:00:00Z') }).healthy, true);
+});
+
+test('google calendar: invalid_grant is a failure that names the consent-screen cause and the consequence', async () => {
+  const fetch = async () => ({ ok: false, status: 400, json: async () => ({ error: 'invalid_grant', error_description: 'Token has been expired or revoked.' }) });
+  const results = await runProbes({ env: GOOGLE_ENV, fetch });
+  assert.equal(results[0].ok, false);
+  assert.match(results[0].detail, /consent screen is in Testing/);
+  assert.match(results[0].detail, /Shop Talk sweep adds and removes nobody/);
+  const { problems } = evaluate(results, { warnDays: 30, now: new Date('2026-09-08T12:00:00Z') });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].message, /GOOGLE_CALENDAR_REFRESH_TOKEN/);
+});
+
+test('google calendar: a 200 with no access token is still a failure; absent credentials mean no probe', async () => {
+  const results = await runProbes({ env: GOOGLE_ENV, fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) });
+  assert.equal(results[0].ok, false);
+  assert.match(results[0].detail, /no access token/);
+  assert.equal((await runProbes({ env: { GOOGLE_CALENDAR_CLIENT_ID: 'cid' }, fetch: async () => { throw new Error('must not be called'); } })).length, 0);
+});
