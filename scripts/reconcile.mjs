@@ -25,6 +25,9 @@ import yaml from 'js-yaml';
 import { createStripeClient } from '../clients/stripe.mjs';
 import { createGitHubClient } from '../clients/github.mjs';
 import { createDiscordClient } from '../clients/discord.mjs';
+import { createGoogleCalendarClient } from '../clients/google-calendar.mjs';           // sow-314
+import { runShoptalkSweep, describeSweep } from './lib/shoptalk-sweep.mjs';            // sow-314
+import { readPlaced, writePlaced, readOptedOut } from './lib/shoptalk-state.mjs';      // sow-314
 import { createResendClient } from '../clients/resend.mjs';
 import { deriveStatusFromCustomer, deriveMembershipFromCustomer, STATUS } from '../membership/derive-status.mjs';
 import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '../membership/overrides.mjs';
@@ -1007,6 +1010,17 @@ async function main() {
   // ALWAYS prints and the log always records what the run attempted. The outer catch covers only a genuine
   // programming error. A failure still turns the run red via exitCode; what it no longer does is take the
   // rest of the plan and the summary down with it.
+  // sow-314: the Shop Talk guest list. Runs on its own credential and its own failure path, so a calendar
+  // problem never takes the rest of the reconcile down with it.
+  try {
+    const shop = await enactShoptalk(members, { env, apply: !dryRun });
+    console.log('reconcile: ' + (shop.ok ? shop.summary : shop.reason));
+    if (!shop.ok && !shop.skipped) process.exitCode = 1;
+  } catch (e) {
+    console.error('reconcile: Shop Talk enrollment FAILED:', e?.message ?? e);
+    process.exitCode = 1;
+  }
+
   let counts = {};
   let failures = [];
   try {
@@ -1020,6 +1034,48 @@ async function main() {
     console.error(`reconcile: ${failures.length} action(s) failed; the rest of the plan was still enacted.`);
     process.exitCode = 1;
   }
+}
+
+/**
+ * sow-314: add paid and trial members to the Shop Talk guest list, and take lapsed ones off.
+ *
+ * Sits beside the Discord role sync and works the same way: reconcile holds the service credential and calls
+ * the service. Exported and fully injected so the whole decision surface is testable without a network.
+ *
+ * EVERY REFUSAL PATH RETURNS ok:false WITH A REASON AND CHANGES NOTHING. That is the point of the function.
+ * An unconfigured credential, an unreadable opt-out list and a missing series are three different problems
+ * with three different fixes, and none of them may be reported as a quiet successful run of zero changes,
+ * because a sweep that enrolls nobody while looking healthy is the failure this whole feature is built to
+ * avoid.
+ */
+export async function enactShoptalk(members, { env = process.env, fetchImpl = globalThis.fetch, apply = false, calendar = null } = {}) {
+  const cal = calendar ?? (
+    env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET && env.GOOGLE_CALENDAR_REFRESH_TOKEN
+      ? createGoogleCalendarClient({
+        clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
+        clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+        refreshToken: env.GOOGLE_CALENDAR_REFRESH_TOKEN,
+        calendarId: env.GOOGLE_CALENDAR_ID || 'primary',
+        fetch: fetchImpl,
+      })
+      : null
+  );
+  if (!cal) return { ok: false, skipped: true, reason: 'GOOGLE_CALENDAR_* not set; Shop Talk enrollment skipped' };
+
+  const placedRead = await readPlaced({ env, fetchImpl });
+  if (!placedRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${placedRead.reason}` };
+  const optRead = await readOptedOut({ env, fetchImpl });
+  if (!optRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${optRead.reason}` };
+
+  const result = await runShoptalkSweep({
+    members, cal, placed: placedRead.placed, optedOut: optRead.optedOut, apply,
+  });
+  if (!result.ok) return { ok: false, reason: result.message };
+
+  // Written ONLY after a successful apply. Writing it on a dry run, or after a failed one, would record
+  // ownership of addresses that were never placed.
+  if (result.applied && result.placed) await writePlaced(result.placed, { env, fetchImpl });
+  return { ok: true, ...result, summary: describeSweep(result) };
 }
 
 // Only run the CLI when invoked directly (so the test can import the helpers without side effects).

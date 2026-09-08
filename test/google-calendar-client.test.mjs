@@ -197,3 +197,29 @@ test('address comparison matches Google: case-insensitive, and a blank never mat
   assert.equal(normalizeAddress('  X@Y.COM '), 'x@y.com');
   assert.equal(normalizeAddress(42), '');
 });
+
+test('nextOccurrences asks Google to EXPAND the series rather than parsing rules', () => {
+  // singleEvents + orderBy=startTime + timeMin is what makes the answer authoritative. Losing any of them
+  // silently returns unexpanded masters or past events, and the caller cannot tell.
+  const f = fakeFetch([
+    ['oauth2.googleapis.com/token', ok(TOKEN_OK)],
+    ['/events', ok(JSON.stringify({ items: [{ id: 'i1', recurringEventId: 's1' }] }))],
+  ]);
+  const clock = () => new Date('2026-09-07T00:00:00.000Z');
+  return client(f).nextOccurrences('Shop TALK', { now: clock }).then((items) => {
+    const url = f.calls.find((c) => c.url.includes('/events')).url;
+    assert.match(url, /singleEvents=true/, 'without expansion we get series masters, not occurrences');
+    assert.match(url, /orderBy=startTime/, 'without this "next" is not the next');
+    assert.match(url, /timeMin=2026-09-07T00%3A00%3A00.000Z/, 'without timeMin the first result is the oldest');
+    assert.match(url, /q=Shop\+TALK/);
+    assert.deepEqual(items, [{ id: 'i1', recurringEventId: 's1' }]);
+  });
+});
+
+test('nextOccurrences returns [] rather than undefined when Google sends no items', async () => {
+  const f = fakeFetch([
+    ['oauth2.googleapis.com/token', ok(TOKEN_OK)],
+    ['/events', ok('{}')],
+  ]);
+  assert.deepEqual(await client(f).nextOccurrences('x'), []);
+});

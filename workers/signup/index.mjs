@@ -82,6 +82,25 @@ import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the m
 import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1: optimistic comment echoes (instant-feel)
 import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
+import { handleShoptalk } from './membership-shoptalk.mjs'; // sow-314: the Shop Talk call guest list
+import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
+
+/**
+ * sow-314: the Shop Talk calendar client, or null when the credential is not provisioned.
+ *
+ * Returning NULL rather than throwing is deliberate. The route degrades to reporting eligibility and opt-out
+ * state with `enrolled: null` (unknown), which is honest, instead of 500ing a member who only wanted to know
+ * whether they are on the call. It also means shipping this route before the Worker secrets are set is safe.
+ */
+function shoptalkCalendar(env) {
+  if (!env?.GOOGLE_CALENDAR_CLIENT_ID || !env?.GOOGLE_CALENDAR_CLIENT_SECRET || !env?.GOOGLE_CALENDAR_REFRESH_TOKEN) return null;
+  return createGoogleCalendarClient({
+    clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
+    clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+    refreshToken: env.GOOGLE_CALENDAR_REFRESH_TOKEN,
+    calendarId: env.GOOGLE_CALENDAR_ID || 'primary',
+  });
+}
 import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
 import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SOW-046 D: reflect news discussion onto Discord
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
@@ -1344,6 +1363,18 @@ export default {
 
       // SOW-046: member prefs (category interests + followed news channels) in the deletable edge store.
       // Effective-paid, per-member, private, ERASABLE. Per-token body, so never cached and varied on the bearer.
+      // sow-314: the Shop Talk Saturday call. Enrollment is AUTOMATIC via the reconcile sweep; this route is
+      // how a member SEES where they stand and opts out. Signed-in and non-banned rather than paid-only, so a
+      // free or lapsed member gets a real answer and the reason instead of a 403 that reads as breakage.
+      if (pathname === '/membership/shoptalk') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET' || method === 'POST') {
+          const r = await handleShoptalk(request, env, { stripe: createStripeClient({ apiKey: env.STRIPE_SECRET_KEY }), calendar: shoptalkCalendar(env) });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
       if (pathname === '/membership/prefs') {
         const cors = corsHeaders(request, env, { credentials: true }); // sow-158 Phase 1b: credentialed cookie route (POST -> CSRF gate in resolveIdentity)
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });

@@ -139,6 +139,27 @@ export function createGoogleCalendarClient({
       return Array.isArray(out?.items) ? out.items : [];
     },
 
+    /**
+     * The next occurrences of a titled event, EXPANDED BY GOOGLE (singleEvents), soonest first.
+     *
+     * Expansion is the point. We do not parse RRULE, UNTIL or EXDATE ourselves, because the owner's series is
+     * split into many chained segments and deciding which one is live from the rules is exactly the sort of
+     * arithmetic that is wrong silently. Google already knows; each returned instance carries the
+     * `recurringEventId` of the segment that owns it.
+     */
+    async nextOccurrences(q, { now = () => new Date(), maxResults = 5 } = {}) {
+      const out = await req('GET', `/calendars/${encodeURIComponent(calendarId)}/events`, {
+        query: {
+          q,
+          timeMin: now().toISOString(),
+          maxResults: String(maxResults),
+          singleEvents: 'true',
+          orderBy: 'startTime',
+        },
+      });
+      return Array.isArray(out?.items) ? out.items : [];
+    },
+
     /** Read the event. Returns null on 404 so a wrong or deleted id is a decision the caller makes rather
      *  than an exception it has to classify. */
     getEvent(eventId) {
