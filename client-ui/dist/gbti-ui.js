@@ -1162,7 +1162,7 @@ ${String(body ?? "")}`;
   /* --blk-gutter reserves the column the hover toolbar lives in. Measured, not guessed: the toolbar measures 134px
      (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
      40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
-  :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; }
+  :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; container-type:inline-size; }
   .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
@@ -1285,6 +1285,18 @@ ${String(body ?? "")}`;
   .tbl-ctl .tadd { display:inline-flex; align-items:center; gap:5px; font:inherit; font-size:12.5px; font-weight:600; border:1px solid var(--s-line); border-radius:7px; background:var(--s-surface); color:var(--s-fg); padding:5px 11px; cursor:pointer; }
   .tbl-ctl .tadd svg { width:13px; height:13px; }
   .tbl-ctl .tadd:hover { border-color:var(--s-green); color:var(--s-green); }
+  /* sow-169, found at phone width on 2026-09-08: the gutter is a HOVER affordance and a phone has neither hover nor
+     the room. At 241px of document it left every block 99px wide, so a paragraph wrapped one word per line and a
+     table showed one column. Below 560px of the editor's own width there is no gutter and no paragraph
+     right-padding; a block's toolbar flows in at the TOP of the block while the block is focused (a tap focuses
+     it) instead of floating beside it, pushing the text down rather than covering it. Wide layouts keep the
+     measured 142px column. */
+  @container (max-width: 560px) {
+    .doc-blocks { padding-right:0; }
+    .ce-p { padding-right:0; }
+    .blk-tools { position:static; display:none; width:max-content; margin:0 0 6px auto; opacity:1; }
+    .blk:focus-within > .blk-tools { display:flex; }
+  }
 `;
   var GbtiDocEditor = class extends GbtiElement {
     // sow-165: the owning editor sets this so a repo-relative body image resolves against the item's folder.
@@ -3516,6 +3528,9 @@ ${String(body ?? "")}`;
         .doc-slug .slug-meta.staged .pubdot { background:var(--s-amber, #d9a13c); }
         .doc-slug .slug-meta.staged { color:var(--s-amber, #d9a13c); font-weight:600; }
         .docsec { margin-top:38px; padding-top:30px; border-top:1.5px solid var(--s-line); }
+        /* sow-169 (2026-09-08): on a phone the document's 46px side padding cost a quarter of the column. Placed
+           AFTER the base .doc and .doc-title rules: a container query adds no specificity, so source order decides. */
+        @container (max-width:560px) { .doc { padding:24px 16px 34px; } .doc-title { font-size:28px; } }
         .docsec#secMain { margin-top:14px; padding-top:0; border-top:none; }
         .docsec-h { font-family:var(--font-mono,monospace); font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--s-fg-mute); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
         .docsec-h svg { width:15px; height:15px; }

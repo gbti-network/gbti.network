@@ -481,6 +481,9 @@ class GbtiContentEditor extends GbtiElement {
         .doc-slug .slug-meta.staged .pubdot { background:var(--s-amber, #d9a13c); }
         .doc-slug .slug-meta.staged { color:var(--s-amber, #d9a13c); font-weight:600; }
         .docsec { margin-top:38px; padding-top:30px; border-top:1.5px solid var(--s-line); }
+        /* sow-169 (2026-09-08): on a phone the document's 46px side padding cost a quarter of the column. Placed
+           AFTER the base .doc and .doc-title rules: a container query adds no specificity, so source order decides. */
+        @container (max-width:560px) { .doc { padding:24px 16px 34px; } .doc-title { font-size:28px; } }
         .docsec#secMain { margin-top:14px; padding-top:0; border-top:none; }
         .docsec-h { font-family:var(--font-mono,monospace); font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--s-fg-mute); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
         .docsec-h svg { width:15px; height:15px; }
