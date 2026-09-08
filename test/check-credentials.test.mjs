@@ -509,3 +509,92 @@ test('the script SENDS the html body, not only the text one', () => {
   assert.match(sent.html, /GH_BOT_TOKEN/, 'the alert should name the credential that failed');
   assert.ok(typeof sent.text === 'string' && sent.text.length > 0, 'the plain-text fallback must still be sent');
 });
+
+// ---------------------------------------------------------------------------------------------------
+// sow-292: the two KV blobs behind a 48-hour fail-closed gate get a WARNING at 12 hours. The fixture is stale
+// on purpose (49h) so the alert fires because nothing WROTE recently, never because a fixture parsed; the
+// 11-hour case proves the same code path can come out green. Absent and unreadable are problems too.
+// ---------------------------------------------------------------------------------------------------
+import { FRESHNESS, freshnessProbe, hoursSince } from '../scripts/check-credentials.mjs';
+
+const KV_ENV = { CF_ACCOUNT_ID: 'acct', CF_KV_NAMESPACE_ID: 'ns', CF_KV_READ_TOKEN: 'kv_read_x' };
+const T0 = new Date('2026-09-08T12:00:00Z');
+const stampedHoursAgo = (h) => new Date(T0.getTime() - h * 3600000).toISOString();
+const kvFetch = (bodies) => async (url) => {
+  if (url.includes('/user/tokens/verify')) return { ok: true, status: 200, json: async () => ({ result: { status: 'active', expires_on: '2027-08-31T23:59:59Z' } }) };
+  const key = decodeURIComponent(url.split('/values/')[1] || '');
+  const b = bodies[key];
+  if (b === undefined) return { ok: false, status: 404, text: async () => 'not found' };
+  if (b === 'boom') return { ok: false, status: 500, text: async () => 'server error' };
+  return { ok: true, status: 200, text: async () => JSON.stringify(b) };
+};
+
+test('hoursSince: hours from an ISO stamp, null when unparseable', () => {
+  assert.equal(hoursSince(stampedHoursAgo(49), T0), 49);
+  assert.equal(hoursSince('nope', T0), null);
+  assert.equal(hoursSince(null, T0), null);
+});
+
+test('freshness: a blob written 49 hours ago is STALE, and the alert names the blob, its writer and the consequence', async () => {
+  const fetch = kvFetch({ 'overrides:mirror': { generatedAt: stampedHoursAgo(49) }, 'coupons:config': { generatedAt: stampedHoursAgo(1) } });
+  const results = await runProbes({ env: KV_ENV, fetch });
+  assert.equal(results.filter((r) => r.freshness).length, 2, 'both freshness probes ran (the token-verify probe rides along and is healthy)');
+  const { problems, healthy } = evaluate(results, { warnDays: 30, now: T0 });
+  assert.equal(healthy, false);
+  assert.equal(problems.length, 1, 'the fresh coupons blob is not a problem');
+  const p = problems[0];
+  assert.equal(p.kind, 'stale');
+  assert.match(p.message, /overrides:mirror is STALE/);
+  assert.match(p.message, /49\.0 hours ago/);
+  assert.match(p.message, /sync-overrides-mirror\.yml/, 'names the workflow that should have written it');
+  assert.match(p.message, /paid oracle/, 'names the consequence');
+  assert.match(p.message, /warning at 12h, refusal at 48h/);
+});
+
+test('freshness: 11 hours old is healthy (the same path can come out green)', async () => {
+  const fetch = kvFetch({ 'overrides:mirror': { generatedAt: stampedHoursAgo(11) }, 'coupons:config': { generatedAt: stampedHoursAgo(11.9) } });
+  const { problems, healthy } = evaluate(await runProbes({ env: KV_ENV, fetch }), { warnDays: 30, now: T0 });
+  assert.equal(healthy, true, JSON.stringify(problems));
+});
+
+test('freshness: exactly at the threshold warns (two missed six-hour writes is the definition)', async () => {
+  const fetch = kvFetch({ 'overrides:mirror': { generatedAt: stampedHoursAgo(12) }, 'coupons:config': { generatedAt: stampedHoursAgo(0) } });
+  const { problems } = evaluate(await runProbes({ env: KV_ENV, fetch }), { warnDays: 30, now: T0 });
+  assert.deepEqual(problems.map((p) => p.kind), ['stale']);
+});
+
+test('freshness: a blob that was NEVER written, or cannot be read, is a problem that names it (fail closed in the monitor)', async () => {
+  const fetch = kvFetch({ 'coupons:config': 'boom' }); // overrides:mirror absent (404), coupons unreadable (500)
+  const results = (await runProbes({ env: KV_ENV, fetch })).filter((r) => r.freshness);
+  assert.deepEqual(results.map((r) => r.ok), [false, false]);
+  const { problems, healthy } = evaluate(results, { warnDays: 30, now: T0 });
+  assert.equal(healthy, false);
+  assert.equal(problems.length, 2);
+  assert.match(problems[0].message, /overrides:mirror has NEVER been written/);
+  assert.match(problems[1].message, /could not READ coupons:config/);
+  assert.match(problems[1].message, /every coupon code is refused/);
+});
+
+test('freshness: a blob with no readable generatedAt is a problem, not a pass', async () => {
+  const fetch = kvFetch({ 'overrides:mirror': { roles: {} }, 'coupons:config': { generatedAt: 'yesterday-ish' } });
+  const { problems } = evaluate(await runProbes({ env: KV_ENV, fetch }), { warnDays: 30, now: T0 });
+  assert.equal(problems.length, 2);
+  assert.match(problems[0].message, /no readable generatedAt/);
+});
+
+test('freshness: the probes run only when the job holds a KV token AND both identifiers', async () => {
+  const fetch = kvFetch({});
+  const fresh = async (env) => (await runProbes({ env, fetch })).filter((r) => r.freshness).length;
+  assert.equal(await fresh({ CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n' }), 0, 'no token, no probe');
+  assert.equal(await fresh({ CF_KV_READ_TOKEN: 'x', CF_KV_NAMESPACE_ID: 'n' }), 0, 'no account id, no probe');
+  const viaApiToken = await runProbes({ env: { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 'write_x' }, fetch: async (url, init) => {
+    if (url.includes('/user/tokens/verify')) return { ok: true, status: 200, json: async () => ({ result: { status: 'active', expires_on: '2027-08-31T23:59:59Z' } }) };
+    return kvFetch({})(url);
+  } });
+  assert.equal(viaApiToken.filter((r) => r.freshness).length, 2, 'CF_API_TOKEN is the fallback credential');
+});
+
+test('freshness: the two blobs and their gates are the ones the Worker enforces', () => {
+  assert.deepEqual(FRESHNESS.map((f) => f.key), ['overrides:mirror', 'coupons:config']);
+  for (const f of FRESHNESS) { assert.equal(f.gateHours, 48); assert.equal(f.warnHours, 12); assert.ok(f.writer.includes('.yml')); }
+});

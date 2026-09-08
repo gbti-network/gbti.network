@@ -22,6 +22,58 @@ import { dirname, join } from 'node:path';
 import { createResendClient } from '../clients/resend.mjs';
 import { opsEmail } from '../membership/mail-ops.mjs';
 import { sendCouponRedemptionAlert } from '../workers/signup/coupon-alert.mjs';
+import { readKvValueStrict } from './lib/erase-member.mjs'; // sow-292: the strict KV reader (404 is "absent", not "empty")
+
+/**
+ * sow-292: the two KV blobs read behind a hard 48-hour freshness gate. Both FAIL CLOSED past it, which is correct
+ * and untouched (owner decision 2026-09-08: the gate stays). What was missing is any warning BEFORE the gate:
+ * both are written only by scheduled workflows, a cron can stop (60 days of repository inactivity, a billing
+ * lapse, a broken trigger), and the first sign was going to be a paying member or a coupon being refused two
+ * days later, with the whole unit suite green. WARN at 12 hours: the mirror writer runs every six, so twelve is
+ * two consecutive misses, and it leaves 36 hours before anything is denied. The alert names the blob, its age,
+ * the workflow that should have written it and the consequence, so nobody starts debugging encryption.
+ */
+export const FRESHNESS = Object.freeze([
+  {
+    key: 'overrides:mirror',
+    name: 'overrides:mirror (KV freshness, the paid oracle and every access gate)',
+    writer: 'sync-overrides-mirror.yml (every 6 hours) and the reconcile.yml mirror step (daily)',
+    warnHours: 12,
+    gateHours: 48,
+    consequence: 'the access decision, the paid oracle, the admin gate, repo drafts and member decrypt ALL fail closed for every member',
+  },
+  {
+    key: 'coupons:config',
+    name: 'coupons:config (KV freshness, every coupon code)',
+    writer: 'the reconcile.yml mirror step (daily, 07:17 UTC)',
+    warnHours: 12,
+    gateHours: 48,
+    consequence: 'every coupon code is refused at redemption',
+  },
+]);
+
+/** Hours between an ISO timestamp and now; null when unparseable. */
+export function hoursSince(iso, now = new Date()) {
+  const t = Date.parse(String(iso || ''));
+  if (!Number.isFinite(t)) return null;
+  return (now.getTime() - t) / 3600000;
+}
+
+/**
+ * Read one blob's `generatedAt` from KV. A result is { ok, status, detail?, freshness }. `ok` is TRUE only when
+ * the blob was read AND carries a parseable generatedAt; absent (404), unreadable, or unstamped are all `ok:false`
+ * with a detail that names the blob and its consequence, because "could not look" must never read as "fresh".
+ */
+export async function freshnessProbe(f, { env = process.env, fetch = globalThis.fetch } = {}) {
+  const r = await readKvValueStrict({ key: f.key, env, fetchImpl: fetch });
+  const freshness = { ...f, generatedAt: null };
+  if (!r.ok) return { ok: false, status: r.status, detail: `could not READ ${f.key} from KV (${r.reason || `HTTP ${r.status}`}); if it is stale, ${f.consequence}`, freshness };
+  if (r.value === null) return { ok: false, status: 404, detail: `${f.key} has NEVER been written to KV; ${f.consequence} until ${f.writer} writes it`, freshness };
+  let generatedAt = null;
+  try { generatedAt = JSON.parse(r.value)?.generatedAt ?? null; } catch { /* unparseable body */ }
+  if (!generatedAt || hoursSince(generatedAt) === null) return { ok: false, status: r.status, detail: `${f.key} carries no readable generatedAt, so its age cannot be known; if it is stale, ${f.consequence}`, freshness };
+  return { ok: true, status: r.status, freshness: { ...f, generatedAt } };
+}
 
 const REPO = process.env.GITHUB_CONTENT_REPO || 'gbti-network/gbti.network';
 const WARN_DAYS = Number(process.env.CRED_WARN_DAYS || 30);
@@ -68,6 +120,17 @@ export function daysUntil(when, now = new Date()) {
 export function evaluate(results, { warnDays = 30, now = new Date() } = {}) {
   const problems = [];
   for (const r of results) {
+    if (r.ok && r.freshness) {
+      // sow-292: a freshness probe has no expiry; its one question is "how long since the writer last wrote".
+      const f = r.freshness;
+      const age = hoursSince(f.generatedAt, now);
+      if (age === null) { problems.push({ name: r.name, kind: 'failed', message: `${f.key} reports a generatedAt that cannot be parsed (${JSON.stringify(f.generatedAt)}); if it is stale, ${f.consequence}.` }); continue; }
+      if (age >= f.warnHours) {
+        const left = Math.max(0, f.gateHours - age);
+        problems.push({ name: r.name, kind: 'stale', message: `${f.key} is STALE: last written ${f.generatedAt}, ${age.toFixed(1)} hours ago (warning at ${f.warnHours}h, refusal at ${f.gateHours}h). Its writer is ${f.writer}, so that workflow has missed at least two runs; check its recent runs in Actions first. In ${left.toFixed(1)} hours ${f.consequence}.` });
+      }
+      continue;
+    }
     if (!r.ok) {
       problems.push({ name: r.name, kind: 'failed', message: `${r.name} FAILED its live check (status ${r.status ?? 'n/a'}${r.detail ? `, ${r.detail}` : ''}). The credential is invalid, revoked, or expired.` });
       continue;
@@ -364,6 +427,12 @@ export async function runProbes({ env = process.env, fetch = globalThis.fetch, s
     // same outcome for the owner, which is nobody being told a code was redeemed.
     return { ok: res?.sent === true, status: null, detail: res?.sent ? `sent to ${alarmTo}` : `${res?.reason || 'not sent'}${res?.message ? `: ${res.message}` : ''}` };
   }));
+  // sow-292: the two freshness probes. The KV read token is the right credential (it can read the namespace and
+  // nothing else); CF_API_TOKEN is the fallback for a job that carries only that one.
+  const kvToken = env.CF_KV_READ_TOKEN || env.CF_API_TOKEN;
+  if (kvToken && env.CF_ACCOUNT_ID && env.CF_KV_NAMESPACE_ID) {
+    for (const f of FRESHNESS) out.push(await probe(f.name, () => freshnessProbe(f, { env: { ...env, CF_API_TOKEN: kvToken }, fetch })));
+  }
   return out;
 }
 
@@ -393,7 +462,7 @@ async function main() {
   if (!results.length) { console.error('No credential secrets present in env; nothing to check.'); process.exit(0); }
   const { problems, healthy } = evaluate(results, { warnDays: WARN_DAYS, now: new Date() });
 
-  for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.expiresAt ? `  (expires ${r.expiresAt})` : ''}`);
+  for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.expiresAt ? `  (expires ${r.expiresAt})` : ''}${r.ok && r.freshness ? `  (written ${r.freshness.generatedAt}, ${(hoursSince(r.freshness.generatedAt) ?? 0).toFixed(1)}h ago)` : ''}${!r.ok && r.detail ? `  ${r.detail}` : ''}`);
   if (healthy) { console.log(`\nAll ${results.length} credentials healthy (none failing, none within ${WARN_DAYS} days of expiry).`); process.exit(0); }
 
   console.error(`\n${problems.length} problem(s):`);
