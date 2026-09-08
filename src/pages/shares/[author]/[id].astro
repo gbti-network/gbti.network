@@ -12,6 +12,7 @@ import CollectionButton from '../../../components/CollectionButton.astro';
 import SubscribeButton from '../../../components/SubscribeButton.astro';
 import Comments from '../../../components/blog/Comments.astro';
 import VideoEmbed from '../../../components/VideoEmbed.astro';
+import DigestSubscribe from '../../../components/mail/DigestSubscribe.astro'; // sow-166/sow-202: the weekly-digest sidebar CTA
 import { embedUrl } from '../../../../client/src/video-embed.mjs';
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, formatDate, authorAvatar } from '../../../lib/authors';
@@ -130,6 +131,13 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
           {d.url && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-ghost nsc-follow">Visit</a>}
         </div>
       )}
+
+      {/* sow-202: the weekly-digest capture, matching the article/project/prompt sidebars. Shown to
+          every state (the member-aware routing is the queued half of sow-202). variant="rail" is
+          chromeless, so the .card.side-card wrapper supplies the chrome like the other side cards. */}
+      <div class="card side-card">
+        <DigestSubscribe variant="rail" heading="The weekly digest" />
+      </div>
     </aside>
     </div>
   </div>
