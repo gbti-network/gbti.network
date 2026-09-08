@@ -28,9 +28,11 @@ Reading the first line from left to right:
 - How full the context window is
 - The share of the five hour rate limit spent, and how long until it resets
 - The same pair for the seven day limit
-- A daily pace figure, which says whether today's rate reaches the weekly reset
+- A daily pace figure, written as today's spend against today's share of the week
 
 The second line carries the session id, the project path, and the git branch.
+
+The daily figure is two numbers, both percentages of the seven day limit: what today has spent, and what today is allowed. The allowance is whatever is left of the week divided evenly across the days until the reset, so `D:10/24%` means today has taken 10 percent against an even share of 24 percent. It turns yellow at 85 percent of that share and red past it. Going over is not forgiven. Tomorrow's share is recalculated from what is left, so a heavy day makes every day after it smaller.
 
 Right now the `rate_limits` object is only present for Claude.ai Pro and Max subscribers, and only after the session's first API response. Before that first response arrives, and on any other plan, the field is simply not there. A script that reads it without checking will print an error into the bar instead of your usage, so it has to look first. None of this costs an API call either, because Claude Code is already handing the numbers to your script.
 
@@ -84,8 +86,6 @@ Install Stefano Ginella's Claude Code status line for me, globally.
 4. Tell me if the status line needs a restart to appear, and confirm you changed
    nothing else in my settings.
 ```
-
-The verification step is the part worth keeping. A status line that fails silently just leaves the bar empty, and it is not obvious whether the script is broken or the setting never took.
 
 ## What it looks like once it is running
 
