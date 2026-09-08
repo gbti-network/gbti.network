@@ -48,6 +48,9 @@ node_modules/
 .product/*
 !.product/brand/
 !.product/chrome-extension/
+# sow-149: the news-banner generator fetches its two Google Fonts files into this folder on first run;
+# they are OFL-licensed downloads, not sources, so they stay local (the SVG sources beside them are tracked).
+.product/brand/fonts/
 
 # Local Claude Code agent config (permissions, settings). Stays local, never in the repo.
 .claude/

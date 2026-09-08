@@ -11,8 +11,8 @@
 //
 //   node scripts/generate-news-feature-images.mjs
 //
-// Output: public/brand/feature/news/<slug>.png (committed) and the source SVG beside it under
-// .product/brand/feature/news/ (local only). Fonts: the brand faces (Baloo Da 2 for the label and the lockup,
+// Output: public/brand/feature/news/<slug>.png (committed) and the source SVG under .product/brand/feature/news/
+// (committed too, beside the family's other sources; .product/brand/ is the tracked exception). Fonts: the brand faces (Baloo Da 2 for the label and the lockup,
 // JetBrains Mono for the small caps) are not on a stock machine, so the script fetches the two OFL-licensed
 // files from Google Fonts into .product/brand/fonts/ the first time and hands them to librsvg through a
 // generated fonts.conf. sharp must be loaded AFTER that environment is set, hence the dynamic import.
