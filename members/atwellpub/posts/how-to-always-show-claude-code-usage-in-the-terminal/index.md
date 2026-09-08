@@ -19,18 +19,18 @@ layout: journal
 coverImage: ./images/status-line-cover.webp
 featured: false
 publishedAt: '2026-09-07'
-updatedAt: '2026-09-08T01:19:32.234Z'
+updatedAt: '2026-09-08T17:26:51.385Z'
 type: post
 author: atwellpub
 ---
 
-Recently I learned that you can modify Claude Code's terminal behavior directly, by dropping in a script of your own.
+I only recently learned that you can modify Claude Code's terminal behavior directly, by dropping in a script of your own.
 
-The feature is called the [status line](https://code.claude.com/docs/en/statusline), and it is a supported part of Claude Code rather than a hack. You point a `statusLine` setting at any shell script. Claude Code hands that script the session data as JSON on stdin on every render, and prints whatever the script prints in the bar at the bottom of the terminal.
+The feature is called the <a href="https://code.claude.com/docs/en/statusline" rel="noopener" target="_blank">status line</a>, and it is a supported part of Claude Code rather than a hack. You point a `statusLine` setting at any shell script. Claude Code hands that script the session data as JSON on stdin on every render, and prints whatever the script prints in the bar at the bottom of the terminal.
 
 The payload carries `rate_limits`, with your five hour and seven day windows, each as a used percentage and a reset time. So a script drop-in can put your model usage in the CLI permanently, visible while you work, instead of something you stop and ask for. Once it is in the bar you stop running `/usage` to find out where you stand.
 
-Stefano Ginella ([GitHub](https://github.com/stefanoginella), [Codeable](https://www.codeable.io/developers/stefano-ginella/?ref=MzT91)) wrote [a single-file status line](https://gist.github.com/stefanoginella/ffe56f293baf6241abe74c3883082755) that does exactly this, and it is the one I installed:
+Stefano Ginella (<a href="https://github.com/stefanoginella" rel="noopener" target="_blank">GitHub</a>, <a href="https://www.codeable.io/developers/stefano-ginella/?ref=MzT91" rel="noopener" target="_blank">Codeable</a>) wrote <a href="https://gist.github.com/stefanoginella/ffe56f293baf6241abe74c3883082755" rel="noopener" target="_blank">a single-file status line</a> that does exactly this, and it is the one I installed:
 
 ![The Claude Code status line rendering the model, effort level, context use, the five hour and seven day rate limit windows, and a daily budget figure](./images/claude-code-status-line.webp)
 
@@ -50,7 +50,7 @@ Right now the `rate_limits` object is only present for Claude.ai Pro and Max sub
 
 ## How to install manually
 
-Save [Stefano's script](https://gist.github.com/stefanoginella/ffe56f293baf6241abe74c3883082755) as `~/.claude/statusline/statusline.mjs`, then add a `statusLine` block to `~/.claude/settings.json`:
+Save <a href="https://gist.github.com/stefanoginella/ffe56f293baf6241abe74c3883082755" rel="noopener" target="_blank">Stefano's script</a> as `~/.claude/statusline/statusline.mjs`, then add a `statusLine` block to `~/.claude/settings.json`:
 
 ```json
 {
@@ -107,6 +107,6 @@ Here is the same status line in a live session, sitting under the prompt in the 
 
 ## Credits
 
-Credit to Stefano Ginella for the script, and for writing it to run entirely offline. You can find his work on [GitHub](https://github.com/stefanoginella), and he takes on client work through [Codeable](https://www.codeable.io/developers/stefano-ginella/?ref=MzT91).
+Credit to Stefano Ginella for the script, and for writing it to run entirely offline. You can find his work on <a href="https://github.com/stefanoginella" rel="noopener" target="_blank">GitHub</a>, and he takes on client work through <a href="https://www.codeable.io/developers/stefano-ginella/?ref=MzT91" rel="noopener" target="_blank">Codeable</a>.
 
 **Disclosure:** the Codeable links here are referral links. GBTI Network is a longstanding fan of the Codeable community for WordPress and React work.
