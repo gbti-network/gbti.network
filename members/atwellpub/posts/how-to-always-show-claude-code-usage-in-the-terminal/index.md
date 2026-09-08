@@ -19,12 +19,12 @@ layout: journal
 coverImage: ./images/status-line-cover.webp
 featured: false
 publishedAt: '2026-09-07'
-updatedAt: '2026-09-08T01:03:05.693Z'
+updatedAt: '2026-09-08T01:19:32.234Z'
 type: post
 author: atwellpub
 ---
 
-I only recently learned that you can modify Claude Code's terminal behavior directly, by dropping in a script of your own.
+Recently I learned that you can modify Claude Code's terminal behavior directly, by dropping in a script of your own.
 
 The feature is called the [status line](https://code.claude.com/docs/en/statusline), and it is a supported part of Claude Code rather than a hack. You point a `statusLine` setting at any shell script. Claude Code hands that script the session data as JSON on stdin on every render, and prints whatever the script prints in the bar at the bottom of the terminal.
 
@@ -44,7 +44,7 @@ Reading the first line from left to right:
 
 The second line carries the session id, the project path, and the git branch.
 
-The daily figure is two numbers, both percentages of the seven day limit: what today has spent, and what today is allowed. The allowance is whatever is left of the week divided evenly across the days until the reset, so `D:10/24%` means today has taken 10 percent against an even share of 24 percent. 
+The daily figure is two numbers, both percentages of the seven day limit: what today has spent, and what today is allowed. The allowance is whatever is left of the week divided evenly across the days until the reset, so `D:10/24%` means today has taken 10 percent against an even share of 24 percent. It turns yellow at 85 percent of that share and red past it. Going over is not forgiven. Tomorrow's share is recalculated from what is left, so a heavy day makes every day after it smaller.
 
 Right now the `rate_limits` object is only present for Claude.ai Pro and Max subscribers, and only after the session's first API response. Before that first response arrives, and on any other plan, the field is simply not there. A script that reads it without checking will print an error into the bar instead of your usage, so it has to look first. None of this costs an API call either, because Claude Code is already handing the numbers to your script.
 
