@@ -2,7 +2,7 @@
 id: intro-how-to-always-show-claude-code-usage-in-the-terminal
 targetType: post
 targetSlug: how-to-always-show-claude-code-usage-in-the-terminal
-createdAt: '2026-09-08T01:19:32.688Z'
+createdAt: '2026-09-08T17:26:51.750Z'
 status: published
 visibility: public
 authorNote: true
