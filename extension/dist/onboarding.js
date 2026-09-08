@@ -2381,6 +2381,14 @@ ${String(body ?? "")}`;
     return `${n} ${n === 1 ? spec.one : spec.many}`;
   }
 
+  // client-ui/src/editor-rail-sections.mjs
+  function splitRailSections(schema) {
+    const list = Array.isArray(schema) ? schema : [];
+    const media = list.find((s) => s && s.title === "Media") || null;
+    const rest = list.filter((s) => s !== media);
+    return { media, rest };
+  }
+
   // client-ui/src/form.mjs
   function coerceValue(kind, raw) {
     switch (kind) {
@@ -3335,7 +3343,7 @@ ${String(body ?? "")}`;
       const schemaKeys = new Set(schema.flatMap((s) => s.keys));
       const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
       const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== "publicStub" && f.key !== "bannerPreset");
-      const sectionsHtml = schema.map((sec) => {
+      const renderSection = (sec, { open = sec.open, cls = "" } = {}) => {
         let inner = sec.keys.map((key) => {
           const f = fieldByKey.get(key);
           let html = f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : "";
@@ -3345,8 +3353,11 @@ ${String(body ?? "")}`;
         if (!inner) return "";
         const hint = sec.title === "Media" ? mediaSummary(this.type, p) : "";
         const hintHtml = hint ? `<span class="rsec-sum">${esc(hint)}</span>` : "";
-        return `<details ${sec.open ? "open" : ""} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
-      }).join("");
+        return `<details ${open ? "open" : ""} class="rsec${cls ? " " + cls : ""}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
+      };
+      const { media: mediaSec, rest: railSecs } = splitRailSections(schema);
+      const sectionsHtml = railSecs.map((sec) => renderSection(sec)).join("");
+      const mediaHtml = mediaSec ? renderSection(mediaSec, { open: true, cls: "rsec-media" }) : "";
       const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
       const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
       const isPub = String(p.status || "").toLowerCase() === "published";
@@ -3417,6 +3428,9 @@ ${String(body ?? "")}`;
         .edhead { display:flex; align-items:center; gap:12px; padding:12px 2px; flex-wrap:wrap; position:sticky; top:0; z-index:20; background:var(--s-app); border-bottom:1.5px solid var(--s-line); }
         .etype { font-family:var(--font-mono,monospace); font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--s-green-fg); background:var(--s-tint); border:1.5px solid var(--s-tint-2); border-radius:999px; padding:5px 12px; }
         .edhead-sp { flex:1; }
+        .mcpid { font-family:var(--font-mono,monospace); font-size:11.5px; color:var(--s-fg-mute); background:var(--s-tint); border:1px solid var(--s-line); border-radius:6px; padding:6px 9px; cursor:pointer; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } /* sow-164: the MCP ID, visible before it is copied */
+        .mcpid:hover { color:var(--s-fg); border-color:var(--s-line-2); }
+        @container (max-width:760px) { .mcpid { display:none; } }
         .savechip { font-size:13px; color:var(--s-fg-mute); font-weight:500; display:inline-flex; align-items:center; gap:3px; }
         .savechip svg { width:14px; height:14px; }
         .savechip.ok { color:var(--s-green-fg); font-weight:600; }
@@ -3429,11 +3443,18 @@ ${String(body ?? "")}`;
         .ebtn svg { width:16px; height:16px; }
         .ebtn-primary { background:var(--s-green); border-color:var(--s-green); color:#fff; box-shadow:0 8px 20px rgba(31,158,95,.26); }
         .ebtn-primary:hover { filter:brightness(.96); border-color:var(--s-green); }
-        .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:34px; align-items:start; margin-top:18px; }
+        .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; grid-template-rows:auto 1fr; gap:34px; align-items:start; margin-top:18px; }
+        /* sow-164: the Media slot is its own grid child. Wide: the document spans both rows, Media takes the top of
+           the right column and the rail (Status first) sits under it, so the rail's sticky behaviour is untouched.
+           Stacked: everything is one column and the slot orders itself above the document. */
+        .doc { grid-row:1 / span 2; }
+        .media-slot { grid-column:2; grid-row:1; min-width:0; }
+        .media-slot .rsec-media { background:var(--s-surface); }
+        .rail { grid-column:2; grid-row:2; }
         /* sow-184's own mockup pins this at "under 1100px"; the WorkBench page shell (.wb-wrap max-width:1200px
            plus its 40px gutter) only ever hands this host ~1120px of inline-size, so a 1140px threshold matched
            unconditionally and the two-column rail could never appear on the real page at any viewport width. */
-        @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; } .edhead { position:static; } }
+        @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; grid-template-rows:none; } .doc, .media-slot, .rail { grid-column:auto; grid-row:auto; } .media-slot { order:-1; } .edhead { position:static; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
         .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.55, which put this at 1.86:1 */
@@ -3690,7 +3711,7 @@ ${String(body ?? "")}`;
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
            <span class="savechip" id="savechip"></span>
-           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's ID (its repo path) for the MCP server">${COPY} <span class="lbl">Copy ID</span></button>` : ""}
+           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's MCP ID: its repo path, which the get_content tool takes">${COPY} <span class="lbl">MCP ID</span></button><code class="mcpid" id="mcpid" title="The MCP ID. Click to copy.">${esc(this.itemPath)}</code>` : ""}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ""}
@@ -3723,6 +3744,7 @@ ${String(body ?? "")}`;
              <div id="out" class="muted"></div>
              <div hidden>${hiddenHtml}</div>
            </article>
+           ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ""}
            <aside class="rail">
              <section class="rcard rcard-status">
                <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status2.tone}"><span class="d"></span>${esc(status2.label)}</span></div>
@@ -3757,7 +3779,10 @@ ${String(body ?? "")}`;
           if (e.key === "Escape") this.$("#mdrefmodal")?.classList.remove("show");
         });
       }
-      if (this.itemPath) this.on("#copyid", "click", () => this.copyContentId());
+      if (this.itemPath) {
+        this.on("#copyid", "click", () => this.copyContentId());
+        this.on("#mcpid", "click", () => this.copyContentId());
+      }
       this._wirePermalinkField();
       this.on("#statdiscuss", "click", () => this.$("#secDiscussion")?.scrollIntoView({ behavior: "smooth", block: "start" }));
       this.on("#viewpub", "click", () => {
@@ -4586,7 +4611,7 @@ ${String(body ?? "")}`;
           }, 1200);
         }
       } catch {
-        this.out(`Content ID: <code>${esc(id)}</code> (copy it manually)`);
+        this.out(`MCP ID: <code>${esc(id)}</code> (copy it manually)`);
       }
     }
     // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, project -> /projects/,

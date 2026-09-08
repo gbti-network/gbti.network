@@ -7,7 +7,8 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { oneClickPublicView, makePublicPatch, makePublicPrompt } from '../one-click-public-core.mjs'; // sow-293
-import { editorStatus, mediaSummary } from '../editor-core.mjs'; // SOW-184: pure Status-card + Media-summary helpers (design 3a)
+import { editorStatus, mediaSummary } from '../editor-core.mjs';
+import { splitRailSections } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import { gatherInput } from '../form.mjs';
 import { resolveContentAsset } from '../assets.mjs'; // SOW-062 P3 + sow-165: resolve a cover/body image path to a loadable preview URL
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
@@ -314,7 +315,9 @@ class GbtiContentEditor extends GbtiElement {
     // sow-174: bannerPreset is excluded exactly like publicStub above -- it renders its own swatch row folded
     // into the banner field's own markup (see fieldHtml), never as an independent row.
     const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== 'publicStub' && f.key !== 'bannerPreset');
-    const sectionsHtml = schema.map((sec) => {
+    // sow-164: one renderer for every rail section; Media is pulled out of the stack into its own slot (top of
+    // the rail wide, above the document stacked) and is always open there, whatever the schema's default.
+    const renderSection = (sec, { open = sec.open, cls = '' } = {}) => {
       let inner = sec.keys.map((key) => {
         const f = fieldByKey.get(key);
         let html = f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : '';
@@ -327,8 +330,11 @@ class GbtiContentEditor extends GbtiElement {
       // it holds. Media only for now ("1 cover" / "2 images"); every other section carries no hint.
       const hint = sec.title === 'Media' ? mediaSummary(this.type, p) : '';
       const hintHtml = hint ? `<span class="rsec-sum">${esc(hint)}</span>` : '';
-      return `<details ${sec.open ? 'open' : ''} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
-    }).join('');
+      return `<details ${open ? 'open' : ''} class="rsec${cls ? ' ' + cls : ''}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
+    };
+    const { media: mediaSec, rest: railSecs } = splitRailSections(schema);
+    const sectionsHtml = railSecs.map((sec) => renderSection(sec)).join('');
+    const mediaHtml = mediaSec ? renderSection(mediaSec, { open: true, cls: 'rsec-media' }) : '';
     const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join('');
     const typePath = ({ post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' })[this.type] || this.type;
     const isPub = String(p.status || '').toLowerCase() === 'published';
@@ -422,6 +428,9 @@ class GbtiContentEditor extends GbtiElement {
         .edhead { display:flex; align-items:center; gap:12px; padding:12px 2px; flex-wrap:wrap; position:sticky; top:0; z-index:20; background:var(--s-app); border-bottom:1.5px solid var(--s-line); }
         .etype { font-family:var(--font-mono,monospace); font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--s-green-fg); background:var(--s-tint); border:1.5px solid var(--s-tint-2); border-radius:999px; padding:5px 12px; }
         .edhead-sp { flex:1; }
+        .mcpid { font-family:var(--font-mono,monospace); font-size:11.5px; color:var(--s-fg-mute); background:var(--s-tint); border:1px solid var(--s-line); border-radius:6px; padding:6px 9px; cursor:pointer; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } /* sow-164: the MCP ID, visible before it is copied */
+        .mcpid:hover { color:var(--s-fg); border-color:var(--s-line-2); }
+        @container (max-width:760px) { .mcpid { display:none; } }
         .savechip { font-size:13px; color:var(--s-fg-mute); font-weight:500; display:inline-flex; align-items:center; gap:3px; }
         .savechip svg { width:14px; height:14px; }
         .savechip.ok { color:var(--s-green-fg); font-weight:600; }
@@ -434,11 +443,18 @@ class GbtiContentEditor extends GbtiElement {
         .ebtn svg { width:16px; height:16px; }
         .ebtn-primary { background:var(--s-green); border-color:var(--s-green); color:#fff; box-shadow:0 8px 20px rgba(31,158,95,.26); }
         .ebtn-primary:hover { filter:brightness(.96); border-color:var(--s-green); }
-        .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:34px; align-items:start; margin-top:18px; }
+        .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; grid-template-rows:auto 1fr; gap:34px; align-items:start; margin-top:18px; }
+        /* sow-164: the Media slot is its own grid child. Wide: the document spans both rows, Media takes the top of
+           the right column and the rail (Status first) sits under it, so the rail's sticky behaviour is untouched.
+           Stacked: everything is one column and the slot orders itself above the document. */
+        .doc { grid-row:1 / span 2; }
+        .media-slot { grid-column:2; grid-row:1; min-width:0; }
+        .media-slot .rsec-media { background:var(--s-surface); }
+        .rail { grid-column:2; grid-row:2; }
         /* sow-184's own mockup pins this at "under 1100px"; the WorkBench page shell (.wb-wrap max-width:1200px
            plus its 40px gutter) only ever hands this host ~1120px of inline-size, so a 1140px threshold matched
            unconditionally and the two-column rail could never appear on the real page at any viewport width. */
-        @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; } .edhead { position:static; } }
+        @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; grid-template-rows:none; } .doc, .media-slot, .rail { grid-column:auto; grid-row:auto; } .media-slot { order:-1; } .edhead { position:static; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
         .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.55, which put this at 1.86:1 */
@@ -698,7 +714,7 @@ class GbtiContentEditor extends GbtiElement {
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
            <span class="savechip" id="savechip"></span>
-           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's ID (its repo path) for the MCP server">${COPY} <span class="lbl">Copy ID</span></button>` : ''}
+           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's MCP ID: its repo path, which the get_content tool takes">${COPY} <span class="lbl">MCP ID</span></button><code class="mcpid" id="mcpid" title="The MCP ID. Click to copy.">${esc(this.itemPath)}</code>` : ''}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ''}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ''}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ''}
@@ -735,6 +751,7 @@ class GbtiContentEditor extends GbtiElement {
              <div id="out" class="muted"></div>
              <div hidden>${hiddenHtml}</div>
            </article>
+           ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ''}
            <aside class="rail">
              <section class="rcard rcard-status">
                <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc(status.label)}</span></div>
@@ -766,7 +783,7 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#mdref', 'click', () => this.$('#mdrefmodal')?.classList.add('show'));
     this.$$('[data-mrclose]').forEach((el) => el.addEventListener('click', () => this.$('#mdrefmodal')?.classList.remove('show')));
     if (!this._escWired) { this._escWired = true; document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.$('#mdrefmodal')?.classList.remove('show'); }); }
-    if (this.itemPath) this.on('#copyid', 'click', () => this.copyContentId());
+    if (this.itemPath) { this.on('#copyid', 'click', () => this.copyContentId()); this.on('#mcpid', 'click', () => this.copyContentId()); } // sow-164: the readout copies too
     this._wirePermalinkField(); // SOW-112: the Details-rail permalink editor
     this.on('#statdiscuss', 'click', () => this.$('#secDiscussion')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     this.on('#viewpub', 'click', () => { const u = this.publicUrl(); if (u) window.open(u, '_blank', 'noopener'); });
@@ -1617,7 +1634,7 @@ class GbtiContentEditor extends GbtiElement {
       await navigator.clipboard.writeText(id);
       if (lbl) { const o = lbl.textContent; lbl.textContent = 'Copied'; setTimeout(() => { lbl.textContent = o; }, 1200); }
     } catch {
-      this.out(`Content ID: <code>${esc(id)}</code> (copy it manually)`);
+      this.out(`MCP ID: <code>${esc(id)}</code> (copy it manually)`);
     }
   }
 
