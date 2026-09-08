@@ -22,7 +22,24 @@ import { dirname, join } from 'node:path';
 import { createResendClient } from '../clients/resend.mjs';
 import { opsEmail } from '../membership/mail-ops.mjs';
 import { sendCouponRedemptionAlert } from '../workers/signup/coupon-alert.mjs';
-import { readKvValueStrict } from './lib/erase-member.mjs'; // sow-292: the strict KV reader (404 is "absent", not "empty")
+
+/**
+ * sow-292: read one KV value with the three outcomes kept apart: present, ABSENT (404), and UNREADABLE (any other
+ * failure). The same shape as scripts/lib/erase-member.mjs's strict reader, re-stated here rather than imported:
+ * that module pulls in js-yaml, which the credential-health job does not install (its first live run crashed on
+ * exactly that import before probing anything). This monitor stays dependency-free on purpose.
+ */
+export async function readKvStrict({ key, env = process.env, fetch = globalThis.fetch } = {}) {
+  const { CF_ACCOUNT_ID: accountId, CF_KV_NAMESPACE_ID: namespaceId, CF_API_TOKEN: apiToken } = env;
+  if (!accountId || !namespaceId || !apiToken) return { ok: false, value: null, status: null, reason: 'CF creds not set' };
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+  if (res && res.status === 404) return { ok: true, value: null, status: 404 };
+  if (!res || !res.ok) return { ok: false, value: null, status: res ? res.status : null };
+  const text = res.text ? await res.text().catch(() => null) : null;
+  if (text === null) return { ok: false, value: null, status: res.status ?? null };
+  return { ok: true, value: text, status: res.status ?? 200 };
+}
 
 /**
  * sow-292: the two KV blobs read behind a hard 48-hour freshness gate. Both FAIL CLOSED past it, which is correct
@@ -65,7 +82,7 @@ export function hoursSince(iso, now = new Date()) {
  * with a detail that names the blob and its consequence, because "could not look" must never read as "fresh".
  */
 export async function freshnessProbe(f, { env = process.env, fetch = globalThis.fetch } = {}) {
-  const r = await readKvValueStrict({ key: f.key, env, fetchImpl: fetch });
+  const r = await readKvStrict({ key: f.key, env, fetch });
   const freshness = { ...f, generatedAt: null };
   if (!r.ok) return { ok: false, status: r.status, detail: `could not READ ${f.key} from KV (${r.reason || `HTTP ${r.status}`}); if it is stale, ${f.consequence}`, freshness };
   if (r.value === null) return { ok: false, status: 404, detail: `${f.key} has NEVER been written to KV; ${f.consequence} until ${f.writer} writes it`, freshness };
