@@ -1,0 +1,50 @@
+name: Layout guards
+
+# sow-248: the rendering guards (check:overflow, check:csp) ran nowhere in CI. Both need a built site and a
+# Chromium, which the deploy's verify step deliberately does not carry, so a table that pushed a phone page
+# 200px sideways shipped and stayed for weeks with every commit green. This runs the overflow guard on a fresh
+# build once a week. It is NOT in the deploy path on purpose: a Playwright pass over the shape sample costs
+# minutes, and a layout regression is worth a weekly alert, not a blocked deploy.
+#
+# check:csp is deliberately not run here: whether that guard is green against a real build is sow-288's
+# question, and a first scheduled red from a guard that has never run would be noise on this one's signal.
+# Once sow-288 has measured it, add `npm run check:csp` as a second step.
+
+on:
+  schedule:
+    - cron: '13 5 * * 1'   # Mondays 05:13 UTC (off the hour)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  overflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The site build reads git history for the activity heat grid; a shallow clone renders it empty.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Full install (not --ignore-scripts): the astro build needs sharp's native binary for image optimization.
+      - run: npm ci
+      - name: Install the guard's Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build the site
+        run: npm run build
+        env:
+          GBTI_CF_ANALYTICS_TOKEN: ${{ vars.GBTI_CF_ANALYTICS_TOKEN }}
+      - name: Overflow guard (every content shape, three viewports)
+        run: npm run check:overflow
+      # sow-298: a SCHEDULED failure has nobody watching it (GitHub emails the automation account that last
+      # touched this file, and the per-commit board stays green). This step never fails the job: if: failure()
+      # and the script always exits zero.
+      - name: "Report failure to #github-events"
+        if: failure()
+        run: node scripts/notify-workflow-failure.mjs
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}

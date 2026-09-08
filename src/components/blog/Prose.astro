@@ -43,9 +43,21 @@
   .prose-gbti img { border-radius: 10px; margin: 1.5em auto; max-width: 100%; height: auto; }
   .prose-gbti figure { margin: 1.5em auto; text-align: center; }
   .prose-gbti figcaption { font-family: var(--f-mono); background: var(--tint); color: var(--fg-mute); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
-  .prose-gbti :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
+  .prose-gbti :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; overflow-wrap: anywhere; }
   .prose-gbti pre { background: var(--ink-2); color: var(--on-dark); padding: 1em; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; }
   .prose-gbti pre code { background: none; padding: 0; }
+  /* sow-248: a table is the one wide block that had no scroll container, so five of the 52 articles pushed a
+     phone page sideways by up to 213px (measured at 390px). The GitHub-markdown rule: the table keeps its own
+     layout at its natural width and scrolls INSIDE the column, which is the one nested-scroll shape that does not
+     trap a thumb (horizontal inside vertical). `width: max-content` is load-bearing: without it `display: block`
+     stretches the table to the column and the cells wrap instead of scrolling. */
+  .prose-gbti table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+  /* sow-248, measured after the table rule landed: the two named articles STILL overflowed (195px and 128px at
+     390px), and the offenders were bare URLs used as link text in footnotes and a blockquote, which have no
+     break opportunity. overflow-wrap inherits, so one rule on the container covers every paragraph, list item
+     and footnote; `anywhere` (not `break-word`) also shrinks the min-content width, so a grid or flex column
+     holding the prose cannot be stretched by an unbreakable run either. */
+  .prose-gbti { overflow-wrap: anywhere; }
   /* Code cards: the enhancer script wraps each pre in a .code-card with a header bar (language + a working
      Copy button), mirroring the extension reader's codecard so the two surfaces match. 7px house radius. */
   .prose-gbti .code-card { margin: 1.5em 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); }

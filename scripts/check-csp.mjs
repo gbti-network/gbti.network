@@ -18,6 +18,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { parseHeaders, cspForPath } from './check-headers.mjs';
+import { samplePages, coverageGaps, describeCoverage } from './lib/page-sample.mjs'; // sow-248: pages by content shape
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const DIST = path.join(ROOT, 'dist');
@@ -33,41 +34,26 @@ let chromium;
 try { ({ chromium } = await import('playwright')); }
 catch { skip('playwright is not installed'); }
 
-// Representative page list: standalone pages + the first slug per template, plus an article that carries an embed
-// (exercises frame-src) and a share detail (exercises img-src + onerror). Adapts as content changes.
-function firstSlug(seg) {
-  const dir = path.join(DIST, seg);
-  if (!fs.existsSync(dir)) return null;
-  for (const name of fs.readdirSync(dir).sort()) if (fs.existsSync(path.join(dir, name, 'index.html'))) return `/${seg}/${name}/`;
-  return null;
-}
-function firstArticleWithEmbed() {
-  const dir = path.join(DIST, 'articles');
-  if (!fs.existsSync(dir)) return null;
-  for (const name of fs.readdirSync(dir).sort()) {
-    const f = path.join(dir, name, 'index.html');
-    try { if (fs.readFileSync(f, 'utf8').includes('<iframe ')) return `/articles/${name}/`; } catch { /* next */ }
-  }
-  return null;
-}
-function firstShare() {
-  const dir = path.join(DIST, 'shares');
-  if (!fs.existsSync(dir)) return null;
-  for (const author of fs.readdirSync(dir).sort()) {
-    const adir = path.join(dir, author);
-    if (!fs.statSync(adir).isDirectory()) continue;
-    for (const id of fs.readdirSync(adir).sort()) if (fs.existsSync(path.join(adir, id, 'index.html'))) return `/shares/${author}/${id}/`;
-  }
-  return null;
-}
+// Page list: the standalone routes below, then the content pages chosen BY SHAPE (scripts/lib/page-sample.mjs),
+// which is what the three pickers this replaced were reaching for one shape at a time: the first page per
+// template, the first article with an embed (frame-src), the first share (img-src + onerror), and now also a
+// table, a code block, a carousel, a long inline code run and a wide image wherever they occur. sow-248: a CSP
+// regression on the 49 unrendered article pages passed this guard with the same reassuring count as a layout
+// one, which made the sampling flaw a security finding. A present shape with no sampled page FAILS below.
+const sample = samplePages(DIST);
 const pages = [
   '/', '/articles/', '/projects/', '/prompts/', '/members/', '/membership/', '/login/', '/account/', '/workbench/', '/admin/', '/news/', '/browse/', '/revenue-model/', '/feeds/',
   '/utilities/', '/utilities/email-signature-generator/', '/tools/email-signature-generator/', '/utilities/js-animate-hue/',
   '/embed/', // SOW-092 relay: its own tighter policy (removed + reset in one _headers block), not the global one
-  firstSlug('articles'), firstSlug('projects'), firstSlug('prompts'), firstSlug('members'),
-  firstArticleWithEmbed(), firstShare(),
+  ...sample.pages,
   '/this-page-does-not-exist/', // the 404
-].filter(Boolean);
+];
+const gaps = coverageGaps(sample.coverage);
+if (gaps.length) {
+  console.error('✗ CSP guard cannot claim coverage: a shape present on the site has no sampled page:');
+  for (const g of gaps) console.error(`  - ${g.template}: ${g.shape} (${g.present} page${g.present === 1 ? '' : 's'} carry it)`);
+  process.exit(1);
+}
 
 // Minimal static server for dist (clean-URL + directory-index), attaching the force-enforced CSP per path.
 const TYPES = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.avif': 'image/avif', '.gif': 'image/gif', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.json': 'application/json', '.xml': 'application/xml', '.txt': 'text/plain' };
@@ -138,4 +124,4 @@ if (violations.length) {
   for (const v of violations) console.error(`  - ${v.url}  [${v.directive}]  blocked: ${v.blockedURI}${v.source ? `  (${v.source}:${v.line})` : ''}`);
   process.exit(1);
 }
-console.log(`✓ CSP guard passed (force-enforced across ${checked} pages, no securitypolicyviolation)`);
+console.log(`✓ CSP guard passed: force-enforced across ${checked} pages, no securitypolicyviolation. ${describeCoverage(sample)}`);

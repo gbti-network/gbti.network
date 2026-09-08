@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { samplePages, coverageGaps, describeCoverage } from './lib/page-sample.mjs'; // sow-248: pages by content shape
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const DIST = path.join(ROOT, 'dist');
@@ -30,21 +31,26 @@ let chromium;
 try { ({ chromium } = await import('playwright')); }
 catch { skip('playwright is not installed'); }
 
-// Representative page list: the standalone pages + the first slug found under each content template, so the
-// guard adapts as content changes instead of hard-coding slugs.
-function firstSlug(seg) {
-  const dir = path.join(DIST, seg);
-  if (!fs.existsSync(dir)) return null;
-  for (const name of fs.readdirSync(dir).sort()) {
-    if (fs.existsSync(path.join(dir, name, 'index.html'))) return `/${seg}/${name}/`;
-  }
-  return null;
-}
+// Page list: the standalone pages, then the content pages chosen BY SHAPE (scripts/lib/page-sample.mjs): per
+// template the first page plus one page carrying each of a table, a code block, a carousel, an embed, a long
+// inline code run and a wide image. sow-248: the previous list rendered the alphabetically-first page per
+// template forever, so five articles with tables were never rendered and two overflowed a phone for weeks while
+// this guard printed "45 page/viewport checks". Coverage is now a result: a present shape that was not sampled
+// FAILS the guard below rather than being absent from a reassuring count.
+const sample = samplePages(DIST);
 const pages = [
   '/', '/articles/', '/projects/', '/prompts/', '/members/', '/membership/', '/revenue-model/', '/terms/', '/account/', '/utilities/',
-  firstSlug('articles'), firstSlug('projects'), firstSlug('prompts'), firstSlug('members'),
+  ...sample.pages,
   '/this-page-does-not-exist/', // the 404
-].filter(Boolean);
+];
+// OVERFLOW_PAGES="/articles/x/,/articles/y/" adds specific pages to one run, for measuring a named page.
+for (const extra of String(process.env.OVERFLOW_PAGES || '').split(',').map((s) => s.trim()).filter(Boolean)) if (!pages.includes(extra)) pages.push(extra);
+const gaps = coverageGaps(sample.coverage);
+if (gaps.length) {
+  console.error('✗ overflow guard cannot claim coverage: a shape present on the site has no sampled page:');
+  for (const g of gaps) console.error(`  - ${g.template}: ${g.shape} (${g.present} page${g.present === 1 ? '' : 's'} carry it)`);
+  process.exit(1);
+}
 
 // Minimal static server for dist (clean-URL + directory-index), free port.
 const TYPES = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.avif': 'image/avif', '.gif': 'image/gif', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.json': 'application/json', '.xml': 'application/xml', '.txt': 'text/plain' };
@@ -99,4 +105,4 @@ if (failures.length) {
   for (const f of failures) console.error('  - ' + f);
   process.exit(1);
 }
-console.log(`✓ overflow guard passed (${checked} page/viewport checks, no horizontal overflow)`);
+console.log(`✓ overflow guard passed: no horizontal overflow at ${VIEWPORTS.map(([, w]) => w).join('/')}px on ${pages.length} pages (${checked} renders). ${describeCoverage(sample)}`);
