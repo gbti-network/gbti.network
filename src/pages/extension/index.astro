@@ -20,22 +20,9 @@ const faqs = [
   { q: 'Can my AI agent publish for me?', a: 'Yes. The extension folder ships a GBTI MCP server, so an agent like Claude Code can draft, publish, and maintain your content through the same gated flow. Publishing still requires an active paid membership.' },
 ];
 
-// The recommended prompt a member pastes into Claude Code to wire it up to the GBTI MCP server. Built as a
-// line array (not a template literal) so the tool names and the <placeholder> read cleanly without escaping.
-const mcpPrompt = [
-  'Set up the GBTI Network MCP server in Claude Code so you can publish and maintain my GBTI content.',
-  '',
-  '1. Register it as an MCP server. If I have the GBTI Chrome extension installed, run the copy that ships in its folder:',
-  '     claude mcp add gbti-network -- node <path-to-the-unzipped-extension>/mcp/gbti-network-mcp.mjs',
-  '   Otherwise run it straight from npm:',
-  '     claude mcp add gbti-network -- npx gbti-network-mcp',
-  '',
-  '2. Sign me in: call the login tool, give me the GitHub device URL and code, and after I authorize, call login_confirm. Confirm with whoami.',
-  '',
-  '3. Show what I can work on with list_my_content, then use publish_content to publish or update a post, project, or prompt.',
-  '',
-  'Important: publishing is a members-only feature of GBTI. publish_content only works when my GitHub account is an active paid member. Without the right privileges the gate rejects the change, so do not attempt to bypass it.',
-].join('\n');
+// sow-225: the prompt is single-sourced in src/lib/mcp-guide.ts, shared with the WorkBench guide page, and no
+// longer offers the npm fallback (the package was never published; the server ships in the extension package).
+import { mcpPrompt } from '../../lib/mcp-guide';
 ---
 <BaseLayout
   title="Install the GBTI extension"

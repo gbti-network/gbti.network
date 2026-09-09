@@ -5,6 +5,7 @@
 // that publishes through the SOW-156/157 hosted-authoring path (the Worker commits with GBTI's App installation
 // token; the SOW-005 gate is the only merger). noindex: this is a private authoring app, not a content page.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225: the shared share bar + modal, creator-only
 ---
 <BaseLayout title="WorkBench" description="Author and publish your GBTI Network content." noindex={true}>
   <section class="band wb-band">
@@ -13,6 +14,33 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <h1 class="h1">WorkBench</h1>
         <p class="lead">Write, save, and publish your articles, prompts, and projects. Publishing opens a pull request that auto-merges, then the site rebuilds, so a change reaches the live edge in about 2 to 3 minutes.</p>
       </div>
+      {/* sow-225 (owner decisions 2026-09-09): the quick actions live in this page, the website shell, around the
+          shared component. New: three buttons, one tap each, via the SOW-064 #new= deep link the component already
+          routes. The share bar and the MCP tile are Curator-only (paidTier creator), hidden until the session says so,
+          the same presentational gate the account page uses; the Worker gates the real actions. */}
+      <div class="wb-quick" data-wb-quick hidden>
+        <div class="wb-new" data-wb-new>
+          <a class="btn btn-primary" href="/workbench/#new=post">New article</a>
+          <a class="btn btn-ghost" href="/workbench/#new=prompt">New prompt</a>
+          <a class="btn btn-ghost" href="/workbench/#new=project">New project</a>
+        </div>
+        <a class="wb-mcp" href="/workbench/mcp/" data-wb-mcp hidden>
+          <span class="wb-mcp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-bot"/></svg></span>
+          <span class="wb-mcp-t">MCP Server</span>
+          <span class="wb-mcp-s">Author from your AI agent</span>
+        </a>
+      </div>
+      <div class="home-share-bar wb-share" data-wb-share hidden>
+        <button type="button" class="hsb-open" data-share-open>
+          <img class="hsb-av" alt="" width="34" height="34" decoding="async" />
+          <span class="hsb-prompt"><i class="hsb-caret" aria-hidden="true"></i>Share something with the network&hellip;</span>
+          <span class="hsb-act hsb-share">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.82-4H15a3 3 0 0 0 .12.83l-6.1 3.55a3 3 0 1 0 0 4.24l6.1 3.55A3 3 0 1 0 18 16a3 3 0 0 0-1.77.58l-6.1-3.55a3 3 0 0 0 0-2.06l6.1-3.55A3 3 0 0 0 18 8Z" fill="currentColor"/></svg>
+            Share
+          </span>
+        </button>
+      </div>
+      <HomeShareModal />
       <div data-wb-loading class="wb-loading">Loading your WorkBench&hellip;</div>
       <div data-wb-error class="wb-loading" hidden>Cannot reach the server right now. Your session is still active. <button type="button" data-wb-retry class="wb-retry">Retry</button></div>
       <gbti-lock-gate><gbti-workspace></gbti-workspace></gbti-lock-gate>
@@ -60,12 +88,32 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const { resolveMemberSession } = await import('../lib/member-gate');
       const s = await resolveMemberSession({ base });
       if (s.state === 'in') {
+        renderQuick(s.payload); // sow-225: the quick actions, gated on the resolved session
         mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null);
       } else if (s.state === 'error') {
         document.querySelector('[data-wb-loading]')?.setAttribute('hidden', '');
         (document.querySelector('[data-wb-error]') as HTMLElement | null)?.removeAttribute('hidden');
       } else {
         location.replace(RETURN_TO); // definitive signed-out
+      }
+    }
+    // sow-225: reveal the New buttons for any signed-in member; the share bar and the MCP tile only for a Curator
+    // (paidTier === 'creator', compared to the exact string and defaulting to hidden, the account page's rule).
+    // The share composer element is imported only when the bar shows, after mount() has set the client.
+    function renderQuick(p: any) {
+      const quick = document.querySelector<HTMLElement>('[data-wb-quick]');
+      if (quick) quick.hidden = false;
+      const isCreator = p && p.paidTier === 'creator';
+      const mcp = document.querySelector<HTMLElement>('[data-wb-mcp]');
+      if (mcp) mcp.hidden = !isCreator;
+      const share = document.querySelector<HTMLElement>('[data-wb-share]');
+      if (share) share.hidden = !isCreator;
+      if (isCreator) {
+        document.querySelectorAll<HTMLImageElement>('.hsb-av').forEach((img) => {
+          img.src = 'https://github.com/' + encodeURIComponent(String(p.login)) + '.png?size=68';
+          img.alt = '@' + String(p.login);
+        });
+        import('../../client-ui/src/elements/gbti-share-composer.mjs').catch(() => {});
       }
     }
     document.querySelector('[data-wb-retry]')?.addEventListener('click', () => {
@@ -82,5 +130,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     .wb-head .lead { max-width: 720px; }
     .wb-loading { color: var(--fg-mute); padding: 24px 2px; font-size: 15px; }
     .wb-loading[hidden] { display: none; }
+    /* sow-225: the quick actions row above the container */
+    .wb-quick { display: flex; align-items: stretch; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+    .wb-quick[hidden], .wb-mcp[hidden], .wb-share[hidden] { display: none; }
+    .wb-new { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .wb-mcp { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; padding: 12px 16px; border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); color: var(--fg); text-decoration: none; min-width: 240px; }
+    .wb-mcp:hover { border-color: var(--green); }
+    .wb-mcp-ic { grid-row: 1 / span 2; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--green-tint); color: var(--green-700); }
+    .wb-mcp-ic svg { width: 22px; height: 22px; }
+    .wb-mcp-t { font-weight: 800; font-size: 15px; }
+    .wb-mcp-s { font-size: 12.5px; color: var(--fg-mute); }
+    .wb-share { margin-bottom: 18px; }
   </style>
 </BaseLayout>

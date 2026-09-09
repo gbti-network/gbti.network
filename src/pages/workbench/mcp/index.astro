@@ -1,0 +1,112 @@
+---
+// sow-225: the MCP Server guide, reached from the curator-only tile on the WorkBench. A Curator feature: the
+// steps show to a signed-in member whose paid tier is creator (presentational, like the account page's share
+// card); everyone else sees one line and the membership link. Every step was performed against the bundled
+// server before it was written (see src/lib/mcp-guide.ts). The numbered-step markup is the extension page's.
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { extensionZipUrl, EXTENSION } from '../../../lib/extension';
+import { MCP_FILE_IN_PACKAGE, claudeCodeAddCommand, agentConfigJson, mcpPrompt, mcpToolNames, mcpToolGroups } from '../../../lib/mcp-guide';
+const groups = mcpToolGroups(mcpToolNames());
+const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
+---
+<BaseLayout title="MCP Server" description="Set up the GBTI Network MCP server so your AI agent can author and publish your content." noindex={true}>
+  <section class="band">
+    <div class="wrap mcp-wrap">
+      <p class="eyebrow">WorkBench</p>
+      <h1 class="h1 mt12">MCP Server</h1>
+      <p class="lead">Let an AI agent such as Claude Code draft, validate and publish your GBTI content through the same review flow as the WorkBench. The server ships inside the extension package; nothing else to install beyond Node.</p>
+      <p class="mcp-back"><a class="link" href="/workbench/">Back to the WorkBench</a></p>
+
+      <div class="mcp-gate" data-mcp-gate>
+        <p class="body">The MCP server is a Curator feature. Sign in with a Curator membership to see the setup steps, or read what the tier includes on the <a class="link" href="/membership/">membership page</a>.</p>
+      </div>
+
+      <div class="steps mt40" data-mcp-steps hidden>
+        <div class="step">
+          <div class="step-rail"><span class="step-num">1</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Get the extension package</h3>
+            <p>Download the extension package (version {EXTENSION.version}) and unzip it somewhere you will keep. The MCP server is the one file at <span class="kbd">{MCP_FILE_IN_PACKAGE}</span> inside it. You do not need to load the extension into Chrome for the server to work; the folder is enough.</p>
+            <div class="step-shot"><a class="btn btn-primary" href={extensionZipUrl} download>Download the extension package</a></div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-rail"><span class="step-num">2</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Register it with your agent</h3>
+            <p>You need Node 20 or newer on the machine. Do this inside a project workspace of its own in VS Code or a similar editor, so the server and the agent's configuration stay with that project. For Claude Code, one line, with the path filled in:</p>
+            <pre class="codeblock"><code>{claudeCodeAddCommand}</code></pre>
+            <p>For an agent that reads a configuration file (Claude Desktop, Cursor and others), add this entry:</p>
+            <pre class="codeblock"><code>{agentConfigJson}</code></pre>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-rail"><span class="step-num">3</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Sign in through the agent</h3>
+            <p>Ask the agent to call the <span class="kbd">login</span> tool. It gives you a GitHub device URL and a code; open the URL, enter the code, and approve. Then the agent calls <span class="kbd">login_confirm</span>, and <span class="kbd">whoami</span> shows your account. Your token stays on your own machine, the same as the browser extension.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-rail"><span class="step-num">4</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Or paste this prompt and let the agent do the steps</h3>
+            <pre class="codeblock"><code>{mcpPrompt}</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="mcp-tools mt40" data-mcp-steps hidden>
+        <h2 class="h2">What the server can do</h2>
+        <p class="body-sm muted">{toolCount} tools, read from the server's own definitions when this page is built. Publishing goes through the same gate as the WorkBench: an active membership with the Curator role.</p>
+        <div class="mcp-groups">
+          {groups.map((g) => (
+            <div class="mcp-group">
+              <h3 class="mcp-group-t">{g.title}</h3>
+              <ul class="mcp-group-l">{g.tools.map((t) => <li><code>{t}</code></li>)}</ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Presentational gate, the account page's rule: shown only when the member signal says paidTier is creator; an
+    // absent or unknown tier hides it. The Worker gates the real actions (login and publish) regardless.
+    import { currentIdentity, readMemberSignal, onMemberSignal } from '../../../lib/member-signal';
+    function render(s: any) {
+      const isCreator = !!(s && s.login && s.paidTier === 'creator');
+      document.querySelectorAll<HTMLElement>('[data-mcp-steps]').forEach((el) => { el.hidden = !isCreator; });
+      const gate = document.querySelector<HTMLElement>('[data-mcp-gate]');
+      if (gate) gate.hidden = isCreator;
+    }
+    render(currentIdentity(readMemberSignal()));
+    onMemberSignal(render);
+  </script>
+
+  <style>
+    .mcp-wrap { max-width: 920px; }
+    .mcp-back { margin-top: 10px; }
+    .mcp-gate { margin-top: 28px; padding: 18px 20px; border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); }
+    .mcp-gate[hidden], [data-mcp-steps][hidden] { display: none; }
+    .steps { max-width: 920px; }
+    .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; position: relative; padding-bottom: 40px; }
+    .step:last-child { padding-bottom: 0; }
+    .step-rail { display: flex; flex-direction: column; align-items: center; }
+    .step-num { width: 46px; height: 46px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; background: var(--green-tint); color: var(--green-700); font-weight: 800; font-size: 18px; border: 1.5px solid var(--green); }
+    .step-line { flex: 1; width: 2px; background: var(--line); margin-top: 6px; }
+    .step:last-child .step-line { display: none; }
+    .step-body { padding-top: 6px; min-width: 0; }
+    .step-body h3 { font-size: 20px; margin: 0 0 8px; }
+    .step-shot { margin-top: 18px; }
+    .kbd { font-family: var(--f-mono); font-size: 13px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+    .codeblock { margin: 12px 0 0; padding: 14px 16px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--paper-2); font-family: var(--f-mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: auto; }
+    .mcp-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 18px; }
+    .mcp-group { border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; background: var(--paper); }
+    .mcp-group-t { font-size: 14px; margin: 0 0 8px; }
+    .mcp-group-l { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .mcp-group-l code { font-family: var(--f-mono); font-size: 12px; background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+    @media (max-width: 640px) { .step { grid-template-columns: 44px 1fr; gap: 14px; } .step-num { width: 36px; height: 36px; font-size: 15px; } }
+  </style>
+</BaseLayout>

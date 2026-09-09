@@ -135,6 +135,14 @@ export function packageExtension({ root = ROOT, write = true } = {}) {
   const missing = [...requiredFiles(manifest, htmlSources)].filter((f) => !present.has(f));
   if (missing.length) throw new Error(`extension not built (missing ${missing.join(', ')}); run node extension/build.mjs first`);
   const entries = files.map((f) => ({ name: f, data: fs.readFileSync(path.join(extDir, f)) }));
+  // sow-225 (owner decision 2026-09-09): the MCP server SHIPS WITH the extension package. It is a node bundle, not
+  // a browser file, so it stays out of loadableFiles (Chrome never loads it and the manifest never names it);
+  // it rides along under mcp/ so a member who unzips the package has the server, and the install guide can
+  // point at that one path. The site's MCP copy claimed this for a month before it was true.
+  const MCP_FILE = 'mcp/gbti-network-mcp.mjs';
+  const mcpPath = path.join(extDir, MCP_FILE);
+  if (!fs.existsSync(mcpPath)) throw new Error(`extension not built (missing ${MCP_FILE}); run node extension/build.mjs first`);
+  entries.push({ name: MCP_FILE, data: fs.readFileSync(mcpPath) });
 
   const buf = zip(entries);
   const zipName = 'gbti-network-extension.zip';
@@ -146,6 +154,7 @@ export function packageExtension({ root = ROOT, write = true } = {}) {
     zip: `/extension/${zipName}`,
     webStoreUrl: '',
     bytes: buf.length,
+    mcp: MCP_FILE, // sow-225: where the MCP server sits inside the zip
   };
   if (write) {
     const outDir = path.join(root, 'public/extension');

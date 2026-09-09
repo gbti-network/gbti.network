@@ -16,9 +16,11 @@ import { loadFeedItems } from '../lib/feed-items';
 // became `My Workbench` to match its destination, which has been called the WorkBench everywhere else since sow-158.
 const GRID = [
   { icon: 'grid', label: 'My Workbench', href: '/workbench/' },
-  { icon: 'pencil', label: 'New article', href: '/workbench/#tab=post' },
-  { icon: 'box', label: 'New product', href: '/workbench/#tab=project' },
-  { icon: 'terminal', label: 'New prompt', href: '/workbench/#tab=prompt' },
+  // sow-225: #new=<type> opens a BLANK editor of that type (the SOW-064 deep link); #tab= would only open the LIST,
+  // which is what these three did for a month. The three rows below stay #tab=, since there is no "new pull request".
+  { icon: 'pencil', label: 'New article', href: '/workbench/#new=post' },
+  { icon: 'box', label: 'New product', href: '/workbench/#new=project' },
+  { icon: 'terminal', label: 'New prompt', href: '/workbench/#new=prompt' },
   { icon: 'merge', label: 'My pull requests', href: '/workbench/#tab=prs' },
   { icon: 'heart', label: 'Saved', href: '/workbench/#tab=saved' },
   { icon: 'users', label: 'Following', href: '/workbench/#tab=subs' },
