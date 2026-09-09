@@ -27,12 +27,19 @@ const related = (await getCollection('post'))
   .map((x) => x.p);
 ---
 {related.length > 0 && (
-  <section class="mx-auto" style="max-width:1100px;margin-top:64px">
+  <section class="rel-posts" style="margin-top:64px">
     <div class="sec-head center">
       <h2 class="h2">Related posts</h2>
     </div>
-    <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+    {/* sow-188: as many columns as there are items, never wider than a three-up card. auto-fit gives the
+        count-aware track list; the cap (n cards of 340px plus the gaps, centred) stops one or two items
+        stretching into banners; the 240px floor lets the 660px Journal column hold two, so a third wraps. */}
+    <div class="rel-grid" style={`--n:${related.length}`}>
       {related.map((p) => <ArticleTeaser post={p} />)}
     </div>
   </section>
 )}
+
+<style>
+  .rel-grid { display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: calc(var(--n) * 340px + (var(--n) - 1) * 32px); margin: 0 auto; }
+</style>
