@@ -2079,7 +2079,7 @@ ${String(body ?? "")}`;
   var RANK = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "prs", "inbox", "saved", "subs", "earnings"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "share", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     const tab = m ? canonicalType(m[1]) : null;
@@ -2102,6 +2102,10 @@ ${String(body ?? "")}`;
       return null;
     }
     return EDIT_PATH_RE.test(path) ? path : null;
+  }
+  function parseWorkspaceEditShare(hash) {
+    const m = /(?:^|[#&])edit-share=([a-z0-9][a-z0-9-]*)(?:&|$)/.exec(String(hash || ""));
+    return m ? m[1] : null;
   }
   function parseWorkspaceDraft(hash) {
     const m = /(?:^|[#&])draft=(post|project|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
@@ -10742,6 +10746,49 @@ ${String(body ?? "")}`;
     if (!tier) return true;
     return tier === "creator";
   }
+  var SHARE_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+  function editInputFor({ share, fields = {}, now = null, status = null } = {}) {
+    const id = String(share?.id ?? "");
+    if (!SHARE_ID_RE.test(id)) return null;
+    const stamp = now || (/* @__PURE__ */ new Date()).toISOString();
+    const input = { id, createdAt: share.createdAt || stamp, updatedAt: stamp };
+    if (fields.removeUrl !== true && typeof share.url === "string" && share.url) input.url = share.url;
+    for (const k of ["title", "shortDescription", "category", "image"]) {
+      const v = fields[k];
+      if (typeof v === "string" && v.trim()) input[k] = v.trim();
+    }
+    if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
+    const vis = fields.visibility ?? share.visibility;
+    input.visibility = vis === "public" ? "public" : "members";
+    const st = status ?? share.status ?? "published";
+    input.status = st === "draft" ? "draft" : "published";
+    return input;
+  }
+  function encRemovalFor({ share, visibility, username = null } = {}) {
+    const enc = typeof share?.encryptedBody === "string" ? share.encryptedBody : "";
+    if (!enc || visibility !== "public") return null;
+    if (username && !enc.startsWith(`members/${username}/_enc/`)) return null;
+    return enc;
+  }
+  function audienceChangeNote(from, to) {
+    const f = from === "public" ? "public" : "members";
+    const t = to === "public" ? "public" : "members";
+    if (f === t) return "";
+    return t === "members" ? "Moving this share to members only: its public page goes away at the next deploy and the note is encrypted." : "Making this share public: anyone can read it and it can be indexed. Its discussion stays members only.";
+  }
+  function shareRowState(share) {
+    const st = String(share?.status ?? "published").toLowerCase();
+    if (st === "draft") return { label: "Removed", tone: "muted", published: false };
+    return { label: "Published", tone: "ok", published: true };
+  }
+  function sharePublicUrl(share, origin = "https://gbti.network") {
+    if (!share || shareRowState(share).published !== true) return "";
+    if (String(share.visibility ?? "members") !== "public") return "";
+    const author = share.author || authorFromPath(share.path);
+    const id = String(share.id ?? "");
+    if (!author || !SHARE_ID_RE.test(id)) return "";
+    return `${origin}/shares/${encodeURIComponent(author)}/${encodeURIComponent(id)}/`;
+  }
 
   // client-ui/src/elements/gbti-share-composer.mjs
   var SITE6 = "https://gbti.network";
@@ -10777,6 +10824,12 @@ ${String(body ?? "")}`;
     return { kind: "empty", message: "No preview available for this link.", retry: false };
   }
   var CSS24 = `
+  /* sow-304: edit-mode controls */
+  .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
+  .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
+  .unpub { font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: var(--fg-mute, #666); cursor: pointer; margin-right: auto; }
+  input[type=url][readonly] { opacity: .75; }
+
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .card { background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:14px; padding:16px; }
   h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -10934,6 +10987,7 @@ ${String(body ?? "")}`;
     // OG fetch + the field values persist across steps and the existing selectors in _fetchPreview / _loadTopics
     // / _post keep working unchanged. Only the layout + step chrome are new; the data paths are identical.
     _renderComposer() {
+      this._edit = null;
       this._step = 1;
       this._noteTab = "write";
       this._visibility = "members";
@@ -10947,7 +11001,9 @@ ${String(body ?? "")}`;
           <p class="sub">Paste a link and we will pull the title, description and image for you. You can also skip it and just write a note.</p>
           <div class="row">
             <input type="url" placeholder="https://… (optional link)" />
+            <button class="rmlink" type="button" data-remove-link hidden>Remove link</button>
           </div>
+          <p class="sub editnote" data-edit-note hidden></p>
           <p class="hint">Works with articles, videos, repos and project pages.</p>
         </section>
 
@@ -10991,6 +11047,7 @@ ${String(body ?? "")}`;
               <span class="ad">Anyone can read it, and it can be indexed.</span>
             </button>
           </div>
+          <p class="sub audnote" data-aud-note hidden></p>
           <p class="sub" data-public-nudge hidden>
             Sharing publicly is part of ${tierLabel(TIER.creator)} membership.
             <a href="https://gbti.network/creator-application/">Apply to become a ${tierLabel(TIER.creator)}</a>.
@@ -11003,6 +11060,7 @@ ${String(body ?? "")}`;
             <button class="back" type="button" data-back hidden>${IC.back} Back</button>
             <button class="next" type="button" data-next>${esc(NEXT_LABEL[1])} ${IC.fwd}</button>
             <button class="post" type="button" hidden>Post Share</button>
+            <button class="unpub" type="button" data-unpublish hidden>Remove from the network</button>
           </div>
         </div>
       </div>`);
@@ -11048,6 +11106,14 @@ ${String(body ?? "")}`;
         this._selectAudience(vis.dataset.vis);
         return;
       }
+      if (t.closest("[data-remove-link]")) {
+        this._removeLink();
+        return;
+      }
+      if (t.closest("[data-unpublish]")) {
+        this._post({ status: this._edit?.status === "draft" ? "published" : "draft" });
+        return;
+      }
     }
     // Advance from the current step. Leaving step 1 makes sure the link preview is fetched (idempotent + same-URL
     // guarded), so "Fetch details" reliably imports even if the debounce had not fired yet.
@@ -11077,7 +11143,7 @@ ${String(body ?? "")}`;
         if (post) post.hidden = true;
         if (next) {
           next.hidden = false;
-          next.innerHTML = `${esc(NEXT_LABEL[step])} ${IC.fwd}`;
+          next.innerHTML = `${esc(this._edit && step === 1 ? "Next" : NEXT_LABEL[step])} ${IC.fwd}`;
         }
       }
     }
@@ -11126,6 +11192,128 @@ ${String(body ?? "")}`;
         c.classList.toggle("on", on);
         c.setAttribute("aria-pressed", on ? "true" : "false");
       }
+      const note = this.$("[data-aud-note]");
+      if (note) {
+        const txt = this._edit ? audienceChangeNote(this._edit.visibility, this._visibility) : "";
+        note.textContent = txt;
+        note.hidden = !txt;
+      }
+    }
+    // ---- sow-304: edit mode. The composer IS the share editor: it re-publishes the same id through the same
+    // path a new share takes. What differs is the input (share-post-core.mjs editInputFor) and the chrome below.
+    /** Open the composer on an existing share (a summary from myShares). Resolves once the fields are filled. */
+    async editShare(item) {
+      if (!item || !item.id) return false;
+      if (!this.$(".card.wizard")) this._renderComposer();
+      if (!this.$(".card.wizard")) return false;
+      this._edit = { ...item };
+      let body = typeof item.body === "string" ? item.body : "";
+      let decryptNote = "";
+      if (!body && item.encryptedBody && typeof this.client?.decrypt === "function") {
+        try {
+          body = String((await this.client.decrypt({ encPath: item.encryptedBody }))?.text || "");
+        } catch {
+          decryptNote = "The note could not be read right now; saving keeps the fields above and an empty note.";
+        }
+      }
+      const set = (sel, v) => {
+        const el = this.$(sel);
+        if (el) el.value = v == null ? "" : String(v);
+      };
+      set("input[type=url]", item.url || "");
+      set("input.title", item.title || "");
+      set("input.desc", item.shortDescription || "");
+      set("textarea", body);
+      set("input.tags", Array.isArray(item.tags) ? item.tags.join(", ") : "");
+      const cat = this.$("select.cat");
+      if (cat) cat.value = item.category || "";
+      this._suggested = item.category || null;
+      this._image = item.image || null;
+      this._lastOgUrl = item.url || null;
+      const box = this.$("[data-og]");
+      if (box) {
+        box.hidden = !this._image;
+        box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : "";
+      }
+      this._selectAudience(item.visibility === "public" ? "public" : "members");
+      this._applyEditChrome(decryptNote);
+      this._setNoteTab("write");
+      this._go(1);
+      return true;
+    }
+    /** Leave edit mode and return to a clean composer. */
+    cancelEdit() {
+      if (!this._edit) return;
+      this.resetComposer();
+    }
+    /** A clean create form, whatever state the composer was in (the share modal calls this on every close). */
+    resetComposer() {
+      if (!this.$(".card.wizard")) return;
+      this._edit = null;
+      this._renderComposer();
+    }
+    _applyEditChrome(extraNote = "") {
+      const e = this._edit;
+      if (!e) return;
+      const url = this.$("input[type=url]");
+      if (url) {
+        url.readOnly = true;
+        url.setAttribute("aria-readonly", "true");
+      }
+      const rm = this.$("[data-remove-link]");
+      if (rm) rm.hidden = !(e.url && e.removeUrl !== true);
+      const note = this.$("[data-edit-note]");
+      if (note) {
+        note.textContent = (e.url ? "Editing your share. The link cannot be changed, only removed; everything else can. " : "Editing your share. ") + extraNote;
+        note.hidden = false;
+      }
+      const post = this.$(".post");
+      if (post) post.textContent = "Save changes";
+      const un = this.$("[data-unpublish]");
+      if (un) {
+        un.hidden = false;
+        un.textContent = e.status === "draft" ? "Publish again" : "Remove from the network";
+      }
+    }
+    _clearEditChrome() {
+      const url = this.$("input[type=url]");
+      if (url) {
+        url.readOnly = false;
+        url.removeAttribute("aria-readonly");
+      }
+      const rm = this.$("[data-remove-link]");
+      if (rm) rm.hidden = true;
+      const note = this.$("[data-edit-note]");
+      if (note) {
+        note.hidden = true;
+        note.textContent = "";
+      }
+      const post = this.$(".post");
+      if (post) post.textContent = "Post Share";
+      const un = this.$("[data-unpublish]");
+      if (un) un.hidden = true;
+      const an = this.$("[data-aud-note]");
+      if (an) {
+        an.hidden = true;
+        an.textContent = "";
+      }
+    }
+    _removeLink() {
+      if (!this._edit) return;
+      this._edit.removeUrl = true;
+      const url = this.$("input[type=url]");
+      if (url) url.value = "";
+      const rm = this.$("[data-remove-link]");
+      if (rm) rm.hidden = true;
+      const box = this.$("[data-og]");
+      if (box) {
+        box.hidden = true;
+        box.innerHTML = "";
+      }
+      this._image = null;
+      this._lastOgUrl = null;
+      const note = this.$("[data-edit-note]");
+      if (note) note.textContent = "The link is removed when you save; the share keeps its note and its discussion.";
     }
     // Render the note's markdown for the Preview tab using the shared, escape-first block helpers. Escape-first
     // means no author markdown can inject active HTML into the preview (member-markdown XSS stays closed).
@@ -11254,7 +11442,7 @@ ${String(body ?? "")}`;
         this._fetchPreview();
       });
     }
-    async _post() {
+    async _post({ status = null } = {}) {
       const card = this.$(".card");
       const title = (this.$("input.title")?.value || "").trim();
       const shortDescription = (this.$("input.desc")?.value || "").trim();
@@ -11264,7 +11452,7 @@ ${String(body ?? "")}`;
       const category = this.$("select.cat")?.value || "";
       const tags = normalizeTagInput(this.$("input.tags")?.value);
       const msg = this.$(".msg");
-      if (!body && !url && !title) {
+      if (!this._edit && !body && !url && !title) {
         this._say(msg, "Add a title, a note, or a link first.", "err");
         return;
       }
@@ -11276,6 +11464,22 @@ ${String(body ?? "")}`;
       }
       card?.classList.add("busy");
       try {
+        if (this._edit) {
+          const edited = this._edit;
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const input2 = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, visibility, removeUrl: edited.removeUrl === true } });
+          if (!input2) throw new Error("this share cannot be edited");
+          const removeEnc = encRemovalFor({ share: edited, visibility: input2.visibility, username: edited.author || null });
+          const res2 = await this.client.postShare({ input: input2, body, removeEnc });
+          const what = input2.status === "draft" ? "Removed from the network" : status === "published" ? "Published again" : "Saved";
+          const pr = res2?.prNumber ? ` (PR #${res2.prNumber})` : "";
+          this._say(msg, `${what}${pr}. It merges automatically and the change reaches the site in a few minutes.`, "ok");
+          const item2 = optimisticShareItem({ res: res2, input: { ...input2, image: this._image }, body, now: input2.createdAt });
+          this._edit = null;
+          this._clearEditChrome();
+          this.emit("gbti-share-posted", { ...res2, edited: true, status: input2.status, item: item2 });
+          return;
+        }
         const input = { visibility };
         if (title) input.title = title;
         if (shortDescription) input.shortDescription = shortDescription;
@@ -11315,7 +11519,7 @@ ${String(body ?? "")}`;
         card?.classList.remove("busy");
         if (btn) {
           btn.disabled = false;
-          btn.textContent = btnLabel;
+          btn.textContent = this._edit ? btnLabel : btnLabel === "Save changes" ? "Post Share" : btnLabel;
         }
       }
     }
@@ -15926,6 +16130,86 @@ ${String(body ?? "")}`;
   };
   define("gbti-welcome", GbtiWelcome);
 
+  // client-ui/src/elements/gbti-share-list.mjs
+  var GbtiShareList = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["edit-id"];
+    }
+    connectedCallback() {
+      this._items = null;
+      this._error = "";
+      super.connectedCallback?.();
+      this.reload();
+    }
+    /** Re-read the list (the page calls this after an edit lands). */
+    async reload() {
+      if (!this.client || typeof this.client.myShares !== "function") {
+        this._items = null;
+        this.render();
+        return;
+      }
+      try {
+        const r = await this.client.myShares();
+        this._items = Array.isArray(r?.items) ? r.items : [];
+        this._error = "";
+      } catch (err) {
+        this._items = [];
+        this._error = err?.message ? String(err.message) : "could not load your shares";
+      }
+      this.render();
+      if (!this.isConnected) return;
+      const consumed = this._consumePendingEdit();
+      this.emit("gbti-share-list-loaded", { count: Array.isArray(this._items) ? this._items.length : 0, consumed });
+    }
+    /** Emit the pending deep-link edit once. Returns the id it emitted, or null. */
+    _consumePendingEdit() {
+      const want = this.getAttribute("edit-id");
+      if (!want || !Array.isArray(this._items)) return null;
+      const it = this._items.find((s) => String(s.id) === want);
+      this.removeAttribute("edit-id");
+      if (!it) return null;
+      this.emit("gbti-edit-share", { ...it });
+      return want;
+    }
+    render() {
+      const items = this._items;
+      const body = items === null ? `<p class="muted">Loading your shares...</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.map((it, i) => this.rowHtml(it, i)).join("")}</ul>`;
+      this.set(this.css(`
+      .row { align-items: flex-start; gap: 10px; }
+      .sh-main { min-width: 0; flex: 1 1 auto; }
+      .sh-t { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sh-m { display: block; font-size: 12px; color: var(--fg-mute, #888); margin-top: 2px; }
+      .rowacts { display: inline-flex; gap: 6px; flex: none; }
+      .tag.muted { opacity: .7; }
+    `) + `<div class="panel">
+           <h2>My shares</h2>
+           ${body}
+         </div>`);
+      this.$$("button[data-i]").forEach((b) => b.addEventListener("click", () => {
+        const it = items?.[Number(b.dataset.i)];
+        if (it) this.emit("gbti-edit-share", { ...it });
+      }));
+      this.$$("button[data-view]").forEach((b) => b.addEventListener("click", () => {
+        const url = b.dataset.view;
+        if (url) window.open(url, "_blank", "noopener");
+      }));
+    }
+    rowHtml(it, i) {
+      const state = shareRowState(it);
+      const vis = String(it.visibility ?? "members") === "public" ? "public" : "members";
+      const url = sharePublicUrl(it);
+      const title = it.title || (it.shortDescription ? String(it.shortDescription) : "") || (it.body ? String(it.body).split("\n")[0] : "") || (it.url ? String(it.url) : "") || it.id;
+      const when = it.createdAt ? `<time datetime="${esc(it.createdAt)}" title="${esc(absTime(it.createdAt))}">${esc(relTime(it.createdAt))}</time>` : "";
+      const edited = it.updatedAt ? ` <span class="muted">(edited ${esc(relTime(it.updatedAt))})</span>` : "";
+      const view = url ? `<button class="ghost" data-view="${esc(url)}" title="Open the live public page in a new tab">View</button>` : "";
+      return `<li class="row">
+      <span class="sh-main"><span class="sh-t">${esc(title)}</span><span class="sh-m">${when}${edited} <span class="tag ${state.tone}">${esc(state.label)}</span> <span class="tag">${vis}</span></span></span>
+      <span class="rowacts">${view}<button class="ghost" data-i="${i}">Edit</button></span>
+    </li>`;
+    }
+  };
+  define("gbti-share-list", GbtiShareList);
+
   // client-ui/src/elements/gbti-saved.mjs
   var SITE9 = "https://gbti.network";
   var CSS32 = `
@@ -16269,6 +16553,8 @@ ${String(body ?? "")}`;
     { id: "post", label: "Articles", type: "post", authoring: true },
     { id: "prompt", label: "Prompts", type: "prompt", authoring: true },
     { id: "project", label: "Projects", type: "project", authoring: true },
+    { id: "share", label: "Shares", authoring: true },
+    // sow-304: the member's own shares, edited through the composer (no `type`: the tab is a self-loading list, not a content-type list)
     // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
     // type's list (a draft article under Articles), reached by the per-type Drafts filter.
     { id: "prs", label: "Pull requests" },
@@ -16401,6 +16687,7 @@ ${String(body ?? "")}`;
         const d = parseWorkspaceDraft(hash);
         return d ? { draft: d } : null;
       })();
+      this._editShareId = parseWorkspaceEditShare(hash);
       this._page = 0;
       this._sort = sortModeFor(typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
       this._statusFilter = "all";
@@ -16410,6 +16697,9 @@ ${String(body ?? "")}`;
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
+      this.shadowRoot?.addEventListener("gbti-share-list-loaded", () => {
+        this._editShareId = null;
+      });
       this._loadProfile();
       this._ensureTab(this._tab);
       if (this._tab !== "overview") this._ensureOverview();
@@ -16417,6 +16707,11 @@ ${String(body ?? "")}`;
       this._onHash = () => {
         const h = typeof location !== "undefined" ? location.hash : "";
         const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
+        this._editShareId = parseWorkspaceEditShare(h);
+        if (plan.action === "none" && this._editShareId && this._tab === "share" && !this._editing && !this._reviewing) {
+          this.render();
+          return;
+        }
         if (plan.action === "exit") {
           this._editing = null;
           this._reviewing = null;
@@ -16461,14 +16756,16 @@ ${String(body ?? "")}`;
         }
       }
       const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null);
-      const [post, prompt2, project, prs, activity, follows, status] = await Promise.all([
+      const [post, prompt2, project, prs, activity, follows, status, shares] = await Promise.all([
         num(this.client?.listContent?.({ type: "post" })),
         num(this.client?.listContent?.({ type: "prompt" })),
         num(this.client?.listContent?.({ type: "project" })),
         num(this.client?.listPRs?.()),
         num(this.client?.getActivity?.()),
         num(this.client?.getFollows?.()),
-        num(this.client?.status?.())
+        num(this.client?.status?.()),
+        this._authoring() ? num(this.client?.myShares?.()) : Promise.resolve(null)
+        // sow-304: the Shares tile count (website only)
       ]);
       const items = (r) => Array.isArray(r?.items) ? r.items : [];
       this._cache.post = items(post);
@@ -16485,7 +16782,7 @@ ${String(body ?? "")}`;
         role: status?.role || "member",
         paidTier: status?.paidTier || "none",
         // sow-316: the Curator banner reads this; absent -> 'none' -> banner shows, the safe direction
-        counts: { post: items(post).length, prompt: items(prompt2).length, project: items(project).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+        counts: { post: items(post).length, prompt: items(prompt2).length, project: items(project).length, share: items(shares).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
         attention,
         _trusted: trusted
       };
@@ -16920,6 +17217,7 @@ ${String(body ?? "")}`;
       if (this._tab === "overview") return this._overviewHtml();
       if (this._tab === "earnings") return this._renderEarnings();
       if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
+      if (this._tab === "share") return `<gbti-share-list${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
       if (this._tab === "prs") {
@@ -17041,6 +17339,8 @@ ${String(body ?? "")}`;
         { nm: "Articles", href: "#tab=post", n: c.post },
         { nm: "Prompts", href: "#tab=prompt", n: c.prompt },
         { nm: "Projects", href: "#tab=project", n: c.project },
+        { nm: "Shares", href: "#tab=share", n: c.share },
+        // sow-304
         { nm: "Pull requests", href: "#tab=prs", n: c.prs },
         { nm: "Saved", href: "#tab=saved", n: c.saved },
         { nm: "Following", href: "#tab=subs", n: c.subs },
@@ -20511,6 +20811,8 @@ From the author:
       // SOW-018: returns { id, path, visibility, encrypted }
       listShares: ({ limit } = {}) => request("GET", `/api/shares${qs({ limit })}`),
       // SOW-018: returns { items: [share summaries] }
+      myShares: () => request("GET", "/api/my-shares"),
+      // sow-304: the member's own shares (drafts included) for the WorkBench
       listShareComments: ({ targetSlug, limit } = {}) => request("GET", `/api/share-comments${qs({ targetSlug, limit })}`),
       // SOW-032: a Share's discussion -> { items: [comment summaries] }
       listComments: ({ targetType, targetSlug, limit, aliases } = {}) => request("GET", `/api/comments${qs({ targetType, targetSlug, limit, aliases: Array.isArray(aliases) && aliases.length ? aliases.join(",") : void 0 })}`),

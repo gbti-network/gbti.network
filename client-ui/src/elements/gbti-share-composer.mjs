@@ -13,7 +13,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { TIER, tierLabel } from '../../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
-import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
+import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
@@ -93,6 +93,12 @@ export function ogPreviewState({ og = null, error = null } = {}) {
 }
 
 const CSS = `
+  /* sow-304: edit-mode controls */
+  .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
+  .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
+  .unpub { font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: var(--fg-mute, #666); cursor: pointer; margin-right: auto; }
+  input[type=url][readonly] { opacity: .75; }
+
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .card { background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:14px; padding:16px; }
   h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -256,6 +262,7 @@ class GbtiShareComposer extends GbtiElement {
   // OG fetch + the field values persist across steps and the existing selectors in _fetchPreview / _loadTopics
   // / _post keep working unchanged. Only the layout + step chrome are new; the data paths are identical.
   _renderComposer() {
+    this._edit = null; // sow-304: a fresh render is always the create form
     this._step = 1;
     this._noteTab = 'write';
     this._visibility = 'members'; // shares stay members-only by default (unchanged project behavior)
@@ -270,7 +277,9 @@ class GbtiShareComposer extends GbtiElement {
           <p class="sub">Paste a link and we will pull the title, description and image for you. You can also skip it and just write a note.</p>
           <div class="row">
             <input type="url" placeholder="https://… (optional link)" />
+            <button class="rmlink" type="button" data-remove-link hidden>Remove link</button>
           </div>
+          <p class="sub editnote" data-edit-note hidden></p>
           <p class="hint">Works with articles, videos, repos and project pages.</p>
         </section>
 
@@ -314,6 +323,7 @@ class GbtiShareComposer extends GbtiElement {
               <span class="ad">Anyone can read it, and it can be indexed.</span>
             </button>
           </div>
+          <p class="sub audnote" data-aud-note hidden></p>
           <p class="sub" data-public-nudge hidden>
             Sharing publicly is part of ${tierLabel(TIER.creator)} membership.
             <a href="https://gbti.network/creator-application/">Apply to become a ${tierLabel(TIER.creator)}</a>.
@@ -326,6 +336,7 @@ class GbtiShareComposer extends GbtiElement {
             <button class="back" type="button" data-back hidden>${IC.back} Back</button>
             <button class="next" type="button" data-next>${esc(NEXT_LABEL[1])} ${IC.fwd}</button>
             <button class="post" type="button" hidden>Post Share</button>
+            <button class="unpub" type="button" data-unpublish hidden>Remove from the network</button>
           </div>
         </div>
       </div>`);
@@ -362,6 +373,10 @@ class GbtiShareComposer extends GbtiElement {
     if (nt) { this._setNoteTab(nt.dataset.noteTab); return; }
     const vis = t.closest('[data-vis]');
     if (vis) { this._selectAudience(vis.dataset.vis); return; }
+    // sow-304: edit-mode controls. The link is frozen after publish but may be removed; a share is taken down
+    // (or brought back) through the same publish path as a status flip, never a delete.
+    if (t.closest('[data-remove-link]')) { this._removeLink(); return; }
+    if (t.closest('[data-unpublish]')) { this._post({ status: this._edit?.status === 'draft' ? 'published' : 'draft' }); return; }
   }
 
   // Advance from the current step. Leaving step 1 makes sure the link preview is fetched (idempotent + same-URL
@@ -390,7 +405,8 @@ class GbtiShareComposer extends GbtiElement {
       if (post) post.hidden = false;
     } else {
       if (post) post.hidden = true;
-      if (next) { next.hidden = false; next.innerHTML = `${esc(NEXT_LABEL[step])} ${IC.fwd}`; }
+      // sow-304: in edit mode the link is frozen, so step 1's "Fetch details" would promise a fetch that never runs
+      if (next) { next.hidden = false; next.innerHTML = `${esc(this._edit && step === 1 ? 'Next' : NEXT_LABEL[step])} ${IC.fwd}`; }
     }
   }
 
@@ -442,6 +458,96 @@ class GbtiShareComposer extends GbtiElement {
       c.classList.toggle('on', on);
       c.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
+    // sow-304: say what an audience change does to a share that is already out (owner: either direction is allowed).
+    const note = this.$('[data-aud-note]');
+    if (note) {
+      const txt = this._edit ? audienceChangeNote(this._edit.visibility, this._visibility) : '';
+      note.textContent = txt; note.hidden = !txt;
+    }
+  }
+
+  // ---- sow-304: edit mode. The composer IS the share editor: it re-publishes the same id through the same
+  // path a new share takes. What differs is the input (share-post-core.mjs editInputFor) and the chrome below.
+
+  /** Open the composer on an existing share (a summary from myShares). Resolves once the fields are filled. */
+  async editShare(item) {
+    if (!item || !item.id) return false;
+    if (!this.$('.card.wizard')) this._renderComposer();
+    if (!this.$('.card.wizard')) return false; // locked / trial / no client: the view is not the composer
+    this._edit = { ...item };
+    let body = typeof item.body === 'string' ? item.body : '';
+    let decryptNote = '';
+    if (!body && item.encryptedBody && typeof this.client?.decrypt === 'function') {
+      try { body = String((await this.client.decrypt({ encPath: item.encryptedBody }))?.text || ''); }
+      catch { decryptNote = 'The note could not be read right now; saving keeps the fields above and an empty note.'; }
+    }
+    const set = (sel, v) => { const el = this.$(sel); if (el) el.value = v == null ? '' : String(v); };
+    set('input[type=url]', item.url || '');
+    set('input.title', item.title || '');
+    set('input.desc', item.shortDescription || '');
+    set('textarea', body);
+    set('input.tags', Array.isArray(item.tags) ? item.tags.join(', ') : '');
+    // The topics list loads asynchronously, so the option may not exist yet: set it now AND leave it as the
+    // suggestion _applySuggested applies once the options arrive (it never clobbers a non-empty pick).
+    const cat = this.$('select.cat'); if (cat) cat.value = item.category || '';
+    this._suggested = item.category || null;
+    this._image = item.image || null;
+    this._lastOgUrl = item.url || null; // never re-fetch the preview for a frozen link
+    const box = this.$('[data-og]');
+    if (box) { box.hidden = !this._image; box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : ''; }
+    this._selectAudience(item.visibility === 'public' ? 'public' : 'members');
+    this._applyEditChrome(decryptNote);
+    this._setNoteTab('write');
+    this._go(1);
+    return true;
+  }
+
+  /** Leave edit mode and return to a clean composer. */
+  cancelEdit() {
+    if (!this._edit) return;
+    this.resetComposer();
+  }
+
+  /** A clean create form, whatever state the composer was in (the share modal calls this on every close). */
+  resetComposer() {
+    if (!this.$('.card.wizard')) return; // locked / trial / no client: nothing to reset
+    this._edit = null;
+    this._renderComposer();
+  }
+
+  _applyEditChrome(extraNote = '') {
+    const e = this._edit; if (!e) return;
+    const url = this.$('input[type=url]');
+    if (url) { url.readOnly = true; url.setAttribute('aria-readonly', 'true'); }
+    const rm = this.$('[data-remove-link]'); if (rm) rm.hidden = !(e.url && e.removeUrl !== true);
+    const note = this.$('[data-edit-note]');
+    if (note) {
+      note.textContent = (e.url ? 'Editing your share. The link cannot be changed, only removed; everything else can. ' : 'Editing your share. ') + extraNote;
+      note.hidden = false;
+    }
+    const post = this.$('.post'); if (post) post.textContent = 'Save changes';
+    const un = this.$('[data-unpublish]');
+    if (un) { un.hidden = false; un.textContent = e.status === 'draft' ? 'Publish again' : 'Remove from the network'; }
+  }
+
+  _clearEditChrome() {
+    const url = this.$('input[type=url]'); if (url) { url.readOnly = false; url.removeAttribute('aria-readonly'); }
+    const rm = this.$('[data-remove-link]'); if (rm) rm.hidden = true;
+    const note = this.$('[data-edit-note]'); if (note) { note.hidden = true; note.textContent = ''; }
+    const post = this.$('.post'); if (post) post.textContent = 'Post Share';
+    const un = this.$('[data-unpublish]'); if (un) un.hidden = true;
+    const an = this.$('[data-aud-note]'); if (an) { an.hidden = true; an.textContent = ''; }
+  }
+
+  _removeLink() {
+    if (!this._edit) return;
+    this._edit.removeUrl = true;
+    const url = this.$('input[type=url]'); if (url) url.value = '';
+    const rm = this.$('[data-remove-link]'); if (rm) rm.hidden = true;
+    const box = this.$('[data-og]'); if (box) { box.hidden = true; box.innerHTML = ''; }
+    this._image = null;
+    this._lastOgUrl = null;
+    const note = this.$('[data-edit-note]'); if (note) note.textContent = 'The link is removed when you save; the share keeps its note and its discussion.';
   }
 
   // Render the note's markdown for the Preview tab using the shared, escape-first block helpers. Escape-first
@@ -562,7 +668,7 @@ class GbtiShareComposer extends GbtiElement {
     if (again) again.addEventListener('click', () => { this._lastOgUrl = null; this._fetchPreview(); });
   }
 
-  async _post() {
+  async _post({ status = null } = {}) {
     const card = this.$('.card');
     const title = (this.$('input.title')?.value || '').trim();
     const shortDescription = (this.$('input.desc')?.value || '').trim();
@@ -576,7 +682,7 @@ class GbtiShareComposer extends GbtiElement {
     // THROWS and the share fails to publish. Anything that reaches `input` has to arrive correct.
     const tags = normalizeTagInput(this.$('input.tags')?.value);
     const msg = this.$('.msg');
-    if (!body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
+    if (!this._edit && !body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
     // SOW-092: a real progressing state — disable the button and show a ring spinner for the several
     // seconds postShare spends on the fork commit + PR round-trip (the card dim alone read as stuck).
     const btn = this.$('button.post');
@@ -584,6 +690,25 @@ class GbtiShareComposer extends GbtiElement {
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spin" aria-hidden="true"></span>Posting...`; }
     card?.classList.add('busy');
     try {
+      if (this._edit) {
+        // sow-304: re-publish the SAME id. editInputFor decides what the edit carries (url frozen unless removed,
+        // createdAt kept, updatedAt stamped, no stale encryptedBody); encRemovalFor names the ciphertext to delete
+        // on a members-to-public flip. `status` flips the share off or back on through this same path.
+        const edited = this._edit;
+        const now = new Date().toISOString();
+        const input = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, visibility, removeUrl: edited.removeUrl === true } });
+        if (!input) throw new Error('this share cannot be edited');
+        const removeEnc = encRemovalFor({ share: edited, visibility: input.visibility, username: edited.author || null });
+        const res = await this.client.postShare({ input, body, removeEnc });
+        const what = input.status === 'draft' ? 'Removed from the network' : status === 'published' ? 'Published again' : 'Saved';
+        const pr = res?.prNumber ? ` (PR #${res.prNumber})` : '';
+        this._say(msg, `${what}${pr}. It merges automatically and the change reaches the site in a few minutes.`, 'ok');
+        const item = optimisticShareItem({ res, input: { ...input, image: this._image }, body, now: input.createdAt });
+        this._edit = null;
+        this._clearEditChrome();
+        this.emit('gbti-share-posted', { ...res, edited: true, status: input.status, item });
+        return;
+      }
       const input = { visibility };
       if (title) input.title = title;
       if (shortDescription) input.shortDescription = shortDescription;
@@ -616,7 +741,9 @@ class GbtiShareComposer extends GbtiElement {
       this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, 'err');
     } finally {
       card?.classList.remove('busy');
-      if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
+      // sow-304: after a successful edit the chrome is already reset to the create form, so the captured
+      // "Save changes" label must not be written back over it (the drive caught exactly that).
+      if (btn) { btn.disabled = false; btn.textContent = this._edit ? btnLabel : (btnLabel === 'Save changes' ? 'Post Share' : btnLabel); }
     }
   }
 

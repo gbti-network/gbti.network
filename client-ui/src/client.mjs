@@ -71,6 +71,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     publishDraft: (b) => request('POST', '/api/draft/publish', b), // { type, slug, store, path } -> { prNumber, prUrl } (paid-only; sow-194: store:'repo' is the status flip)
     postShare: (b) => request('POST', '/api/share', b), // SOW-018: returns { id, path, visibility, encrypted }
     listShares: ({ limit } = {}) => request('GET', `/api/shares${qs({ limit })}`), // SOW-018: returns { items: [share summaries] }
+    myShares: () => request('GET', '/api/my-shares'), // sow-304: the member's own shares (drafts included) for the WorkBench
     listShareComments: ({ targetSlug, limit } = {}) => request('GET', `/api/share-comments${qs({ targetSlug, limit })}`), // SOW-032: a Share's discussion -> { items: [comment summaries] }
     listComments: ({ targetType, targetSlug, limit, aliases } = {}) => request('GET', `/api/comments${qs({ targetType, targetSlug, limit, aliases: Array.isArray(aliases) && aliases.length ? aliases.join(',') : undefined })}`), // SOW-041 thread (+ SOW-112 rename aliases)
     discordInvite: () => request('GET', '/api/discord-invite'), // on-demand Discord invite -> { url, source }

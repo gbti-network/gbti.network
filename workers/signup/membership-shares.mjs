@@ -98,3 +98,60 @@ export async function listSharesFeed(request, env, deps = {}) {
   const nextBefore = page.length === limit ? String(page[page.length - 1]?.id || '') || null : null;
   return { status: 200, body: { ok: true, items: page, canSeeMembers, nextBefore } };
 }
+
+// ---- sow-304: the member's OWN shares, for the WorkBench Shares tab ------------------------------------------
+const MY_SHARES_MAX = 100;
+const SHARE_FILE_RE = /^([a-z0-9][a-z0-9-]*)\.(?:md|mdx)$/;
+
+/**
+ * Every share in ONE member's folder, newest first, drafts INCLUDED (an unpublished share must still show in the
+ * WorkBench so the member can edit or republish it). One Contents listing of members/<login>/shares/ (a member
+ * with no shares folder yet gets an empty list, not an error), then the newest MY_SHARES_MAX stubs are read.
+ * Members bodies stay pointer-only exactly as in the feed. Not cached: it is the caller's own folder and the
+ * list must reflect an edit as soon as its pull request merges.
+ */
+export async function listMemberShares(env, login, { fetchImpl = globalThis.fetch, kv = env?.SIGNUP_KV, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network', getToken = getInstallationToken } = {}) {
+  const who = String(login || '');
+  if (!/^[a-z0-9][a-z0-9-]*$/i.test(who)) return [];
+  const instToken = await getToken(env, { fetchImpl, kv });
+  const dir = `members/${who.toLowerCase()}/shares`;
+  const res = await fetchImpl(`${GH}/repos/${upstream}/contents/${dir}?ref=main`, { headers: GH_HEADERS(instToken) });
+  if (res && res.status === 404) return [];
+  if (!res || !res.ok) throw new Error(`contents ${res ? res.status : 'no response'}`);
+  const listing = await res.json().catch(() => null);
+  if (!Array.isArray(listing)) return [];
+  const files = listing
+    .filter((e) => e && e.type === 'file' && typeof e.name === 'string' && SHARE_FILE_RE.test(e.name))
+    .map((e) => ({ path: `${dir}/${e.name}`, id: e.name.match(SHARE_FILE_RE)[1] }))
+    .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    .slice(0, MY_SHARES_MAX);
+  const items = [];
+  for (const f of files) {
+    let r;
+    try { r = await fetchImpl(`${GH}/repos/${upstream}/contents/${f.path}?ref=main`, { headers: GH_HEADERS(instToken) }); } catch { continue; }
+    if (!r || !r.ok) continue;
+    const data = await r.json().catch(() => null);
+    if (!data || Array.isArray(data) || !data.content) continue;
+    let parsed;
+    try { parsed = parseContentFile(decodeContent(data.content)); } catch { continue; }
+    items.push(shareSummary(f.path, parsed.frontmatter, parsed.body));
+  }
+  items.sort(byShareNewest);
+  return items;
+}
+
+/**
+ * GET /membership/my-shares: the caller's own shares (see listMemberShares). Cookie-or-bearer via
+ * authorizeSignedIn; the login comes from the verified session, never from a query parameter, so the route can
+ * only ever list the caller's own folder.
+ */
+export async function listMyShares(request, env, deps = {}) {
+  const { authorize = authorizeSignedIn } = deps;
+  const auth = await authorize(request, env, { ...deps, allowCookie: true });
+  if (!auth.ok) return { status: auth.status, body: auth.body };
+  const login = String(auth.login || '');
+  if (!login) return { status: 401, body: { error: 'unauthorized', message: 'could not resolve the member login' } };
+  let items;
+  try { items = await listMemberShares(env, login, deps); } catch { return { status: 502, body: { error: 'shares_failed', message: 'could not load your shares right now' } }; }
+  return { status: 200, body: { ok: true, items } };
+}

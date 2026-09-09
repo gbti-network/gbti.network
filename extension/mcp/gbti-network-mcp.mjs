@@ -17445,6 +17445,13 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     status: fm.status ?? null,
     encryptedBody: typeof fm.encryptedBody === "string" ? fm.encryptedBody : null,
     createdAt,
+    // sow-304: the WorkBench list and the composer's edit mode need the category and the edit stamp. Both are
+    // null-safe additions; every existing reader ignores fields it does not know.
+    category: typeof fm.category === "string" && fm.category ? fm.category : null,
+    updatedAt: fm.updatedAt != null ? (() => {
+      const d = fm.updatedAt instanceof Date ? fm.updatedAt : new Date(fm.updatedAt);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    })() : null,
     body: isPublic ? String(body ?? "") : ""
     // members body is gated; never surfaced here
   };
@@ -17955,6 +17962,28 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
       }
       out.sort(byShareNewest);
       return out.slice(0, cap);
+    },
+    /**
+     * sow-304: every share in ONE member's folder, newest first, DRAFTS INCLUDED (an unpublished share must show in
+     * the WorkBench so it can be edited or republished). One folder listing plus a read per stub, capped. Members
+     * bodies stay pointer-only, like listShares.
+     */
+    async listMemberShares(username, limit = 100) {
+      const who = String(username || "").toLowerCase();
+      if (!owner || !repo || !/^[a-z0-9][a-z0-9-]*$/.test(who)) return [];
+      const t = await tree();
+      if (!t || !Array.isArray(t.tree)) return [];
+      const prefix = `members/${who}/shares/`;
+      const paths = t.tree.filter((e) => e && e.type === "blob" && typeof e.path === "string" && e.path.startsWith(prefix) && SHARE_PATH.test(e.path)).map((e) => e.path).sort((a, b) => basename(b).localeCompare(basename(a))).slice(0, Math.max(0, limit));
+      const out = [];
+      for (const rel of paths) {
+        const text = await readFile(rel);
+        if (text == null) continue;
+        const { frontmatter, body } = parseContentFile(text);
+        out.push(shareSummary(rel, frontmatter, body));
+      }
+      out.sort(byShareNewest);
+      return out;
     },
     /**
      * SOW-032: list PUBLISHED comments for a Share's discussion. ONE recursive Git Trees call enumerates every
@@ -19664,7 +19693,7 @@ async function decryptMemberAsset(ctx2, { encPath } = {}) {
 }
 
 // client/src/operations-social.mjs
-async function publishShare(ctx2, { input = {}, body = "", message, title, prBody } = {}) {
+async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, message, title, prBody } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   const membership = await membershipOf(ctx2);
@@ -19675,7 +19704,8 @@ async function publishShare(ctx2, { input = {}, body = "", message, title, prBod
   const id_ = input.id ?? shareId(createdAt, input.title);
   let built;
   try {
-    built = buildShareFile({ username: id.username, input: { ...input, id: id_, createdAt }, body });
+    const { encryptedBody: _stale, ...clean } = input;
+    built = buildShareFile({ username: id.username, input: { ...clean, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -19691,7 +19721,9 @@ async function publishShare(ctx2, { input = {}, body = "", message, title, prBod
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  const shareTitle = title ?? `New Share${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`;
+  const isEdit = !!input.id;
+  if (isEdit && typeof removeEnc === "string" && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
+  const shareTitle = title ?? `${isEdit ? "Update Share" : "New Share"}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`;
   const pr = isHostedCtx(ctx2) ? await hostedPublishFiles(ctx2, { branch: `gbti/share-${id_}`, files, title: shareTitle }) : await publishFiles({
     repo,
     branch: `gbti/share-${id_}`,
@@ -19701,7 +19733,7 @@ async function publishShare(ctx2, { input = {}, body = "", message, title, prBod
     title: shareTitle,
     body: prBody
   });
-  return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", encrypted: Boolean(plan?.encPath) };
+  return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
 async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody }) {

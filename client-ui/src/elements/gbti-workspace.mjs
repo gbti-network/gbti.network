@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -16,6 +16,7 @@ const SITE = 'https://gbti.network'; // SOW-173: the live site origin, prefixed 
 import { glyphFor } from '../cat-glyph.mjs'; // SOW-062: the SOW-049 type glyph, reused on the WorkBench list rows
 import './gbti-content-editor.mjs';
 import './gbti-contrib-inbox.mjs';
+import './gbti-share-list.mjs'; // sow-304: the Shares tab
 import './gbti-contrib-review.mjs';
 import './gbti-saved.mjs';
 import './gbti-subscriptions.mjs';
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'post', label: 'Articles', type: 'post', authoring: true },
   { id: 'prompt', label: 'Prompts', type: 'prompt', authoring: true },
   { id: 'project', label: 'Projects', type: 'project', authoring: true },
+  { id: 'share', label: 'Shares', authoring: true }, // sow-304: the member's own shares, edited through the composer (no `type`: the tab is a self-loading list, not a content-type list)
   // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
   // type's list (a draft article under Articles), reached by the per-type Drafts filter.
   { id: 'prs', label: 'Pull requests' },
@@ -174,6 +176,7 @@ class GbtiWorkspace extends GbtiElement {
       const d = parseWorkspaceDraft(hash);
       return d ? { draft: d } : null;
     })();
+    this._editShareId = parseWorkspaceEditShare(hash); // sow-304: `#tab=share&edit-share=<id>` opens that share in the composer
     this._page = 0; // SOW-062: the current content-list page (client-side paging; resets on tab switch)
     // SOW-085: the content-list controls. The SORT persists across sessions (one device-local pref); the STATUS
     // filter resets to All on each tab switch. `_viewList` is the merged+sorted+filtered list for the current
@@ -190,6 +193,8 @@ class GbtiWorkspace extends GbtiElement {
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
+    // sow-304: a live Shares list has looked for the deep-link id (found or not): stop re-issuing it.
+    this.shadowRoot?.addEventListener('gbti-share-list-loaded', () => { this._editShareId = null; });
     this._loadProfile();
     this._ensureTab(this._tab);
     // SOW-145: the Overview carries the caller's role + personal counts, which resolve the content SCOPE and gate
@@ -205,6 +210,11 @@ class GbtiWorkspace extends GbtiElement {
       // editor; a different plain tab switches. The editor encodes &edit= in the hash, so a rail click to #tab=<t>
       // is a real hashchange even for the current tab.
       const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
+      this._editShareId = parseWorkspaceEditShare(h); // sow-304: consumed by the Shares tab render
+      // sow-304: a deep link arriving on the Shares tab from the SAME document (the share page opened in this
+      // tab, or a bookmarked link pasted while here) is a plain hash change the planner reads as "none"; the
+      // list must still be re-mounted so it hands the id to the composer.
+      if (plan.action === 'none' && this._editShareId && this._tab === 'share' && !this._editing && !this._reviewing) { this.render(); return; }
       if (plan.action === 'exit') {
         this._editing = null; this._reviewing = null;
         this._tab = plan.tab; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(plan.tab);
@@ -239,7 +249,7 @@ class GbtiWorkspace extends GbtiElement {
       if (cached?.items?.[0]) { this._overview = cached.items[0]; if (this._tab === 'overview' && !this._editing) this.render(); }
     }
     const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null); // tolerate a missing client method (undefined)
-    const [post, prompt, project, prs, activity, follows, status] = await Promise.all([
+    const [post, prompt, project, prs, activity, follows, status, shares] = await Promise.all([
       num(this.client?.listContent?.({ type: 'post' })),
       num(this.client?.listContent?.({ type: 'prompt' })),
       num(this.client?.listContent?.({ type: 'project' })),
@@ -247,6 +257,7 @@ class GbtiWorkspace extends GbtiElement {
       num(this.client?.getActivity?.()),
       num(this.client?.getFollows?.()),
       num(this.client?.status?.()),
+      this._authoring() ? num(this.client?.myShares?.()) : Promise.resolve(null), // sow-304: the Shares tile count (website only)
     ]);
     const items = (r) => (Array.isArray(r?.items) ? r.items : []);
     this._cache.post = items(post); this._cache.prompt = items(prompt); this._cache.project = items(project);
@@ -266,7 +277,7 @@ class GbtiWorkspace extends GbtiElement {
       membership: status?.membership || 'unknown',
       role: status?.role || 'member',
       paidTier: status?.paidTier || 'none', // sow-316: the Curator banner reads this; absent -> 'none' -> banner shows, the safe direction
-      counts: { post: items(post).length, prompt: items(prompt).length, project: items(project).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+      counts: { post: items(post).length, prompt: items(prompt).length, project: items(project).length, share: items(shares).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
       attention,
       _trusted: trusted,
     };
@@ -684,6 +695,11 @@ class GbtiWorkspace extends GbtiElement {
     // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
     // independently (and is inert with no client), so the workspace just mounts the tag.
     if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
+    // sow-304: the member's own shares; a pending `edit-share=<id>` deep link rides as an attribute the list consumes once.
+    // The id is NOT cleared here: every render re-mounts the list, and the first instance is usually replaced
+    // (client arrival, the overview load) before its request returns. The list announces each completed load and
+    // the listener in connectedCallback drops the id then, so exactly one live list ever emits the edit.
+    if (this._tab === 'share') return `<gbti-share-list${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ''}></gbti-share-list>`;
     if (this._tab === 'saved') return `<gbti-saved></gbti-saved>`; // SOW-037
     if (this._tab === 'subs') return `<gbti-subscriptions></gbti-subscriptions>`; // SOW-037
     if (this._tab === 'prs') {
@@ -855,6 +871,7 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Articles', href: '#tab=post', n: c.post },
       { nm: 'Prompts', href: '#tab=prompt', n: c.prompt },
       { nm: 'Projects', href: '#tab=project', n: c.project },
+      { nm: 'Shares', href: '#tab=share', n: c.share }, // sow-304
       { nm: 'Pull requests', href: '#tab=prs', n: c.prs },
       { nm: 'Saved', href: '#tab=saved', n: c.saved },
       { nm: 'Following', href: '#tab=subs', n: c.subs },

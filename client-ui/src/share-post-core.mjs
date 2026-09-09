@@ -127,3 +127,83 @@ export function canSharePublicly({ membership, tier = null } = {}) {
   if (!tier) return true; // absent tier: see the fail-open note above
   return tier === 'creator';
 }
+
+// ---- sow-304: editing a published share ----------------------------------------------------------------------
+// The composer is the editor. An edit re-publishes the SAME id through the same path a new share takes (the hosted
+// author route and the npm publish op are both idempotent by item id), so what changes is only the INPUT it sends.
+// These helpers decide that input and are pure so the owner's rules are unit-tested rather than buried in DOM code.
+//
+// Owner decisions, 2026-09-09: the url is FROZEN after publish (it is the identity of what was shared; discussion,
+// upvotes and the Discord and Reddit posts all point at it) but the member may REMOVE it; title, description,
+// note, category, tags and image are editable; the audience may change in either direction; a share is never
+// deleted, only unpublished (status: draft) through the same path; an edit never re-syndicates (syndication fires
+// on the first publish transition only, which is already how the enqueue runner works).
+
+const SHARE_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * The frontmatter input an EDIT sends. `share` is the stored summary (id, createdAt, url, visibility, status,
+ * encryptedBody); `fields` is what the form holds now. Returns null without a usable id.
+ *
+ *  - `createdAt` is preserved (the id encodes it and the feeds sort on it), `updatedAt` is stamped with `now`.
+ *  - the url survives from the STORED share, never from the form; `fields.removeUrl === true` drops it.
+ *  - `encryptedBody` is never carried: the publish planner re-derives it from the audience and the note, so a
+ *    stale pointer can never ride along into a public share.
+ *  - `status` is the stored status unless the caller flips it (unpublish, or publish again).
+ */
+export function editInputFor({ share, fields = {}, now = null, status = null } = {}) {
+  const id = String(share?.id ?? '');
+  if (!SHARE_ID_RE.test(id)) return null;
+  const stamp = now || new Date().toISOString();
+  const input = { id, createdAt: share.createdAt || stamp, updatedAt: stamp };
+  if (fields.removeUrl !== true && typeof share.url === 'string' && share.url) input.url = share.url;
+  for (const k of ['title', 'shortDescription', 'category', 'image']) {
+    const v = fields[k];
+    if (typeof v === 'string' && v.trim()) input[k] = v.trim();
+  }
+  if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
+  const vis = fields.visibility ?? share.visibility;
+  input.visibility = vis === 'public' ? 'public' : 'members';
+  const st = status ?? share.status ?? 'published';
+  input.status = st === 'draft' ? 'draft' : 'published';
+  return input;
+}
+
+/**
+ * The ciphertext to DELETE alongside an edit, or null. A members share keeps its note in a sibling .enc; when the
+ * audience flips to public the note goes into the .md in the clear and the old .enc would otherwise sit orphaned
+ * beside it. Only a stored pointer under the member's own _enc/ folder is ever returned.
+ */
+export function encRemovalFor({ share, visibility, username = null } = {}) {
+  const enc = typeof share?.encryptedBody === 'string' ? share.encryptedBody : '';
+  if (!enc || visibility !== 'public') return null;
+  if (username && !enc.startsWith(`members/${username}/_enc/`)) return null;
+  return enc;
+}
+
+/** One line under the audience cards when an edit changes the audience; '' when it does not. */
+export function audienceChangeNote(from, to) {
+  const f = from === 'public' ? 'public' : 'members';
+  const t = to === 'public' ? 'public' : 'members';
+  if (f === t) return '';
+  return t === 'members'
+    ? 'Moving this share to members only: its public page goes away at the next deploy and the note is encrypted.'
+    : 'Making this share public: anyone can read it and it can be indexed. Its discussion stays members only.';
+}
+
+/** The state a share row shows in the WorkBench list. */
+export function shareRowState(share) {
+  const st = String(share?.status ?? 'published').toLowerCase();
+  if (st === 'draft') return { label: 'Removed', tone: 'muted', published: false };
+  return { label: 'Published', tone: 'ok', published: true };
+}
+
+/** The public page for a share, or '' when it has none (a members share, or an unpublished one). */
+export function sharePublicUrl(share, origin = 'https://gbti.network') {
+  if (!share || shareRowState(share).published !== true) return '';
+  if (String(share.visibility ?? 'members') !== 'public') return '';
+  const author = share.author || authorFromPath(share.path);
+  const id = String(share.id ?? '');
+  if (!author || !SHARE_ID_RE.test(id)) return '';
+  return `${origin}/shares/${encodeURIComponent(author)}/${encodeURIComponent(id)}/`;
+}

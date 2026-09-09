@@ -63,7 +63,10 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
             : <a href={authorHref(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={36} /></a>}
           {srcDomain && <a class="sss-member" href={authorHref(d.author)} aria-label={authorDisplay(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={20} /></a>}
         </span>
-        <span class="tmeta"><a class="who" href={authorHref(d.author)}>{authorDisplay(d.author)}</a><span class="dotsep"></span>{formatDate(d.createdAt)}</span>
+        <span class="tmeta"><a class="who" href={authorHref(d.author)}>{authorDisplay(d.author)}</a><span class="dotsep"></span>{formatDate(d.createdAt)}{d.updatedAt && <span class="share-edited"><span class="dotsep"></span>edited {formatDate(d.updatedAt)}</span>}</span>
+        {/* sow-304: the author's own Edit control. Hidden in the static page; the script below reveals it when the
+            signed-in member IS the author. It deep-links into the WorkBench, which opens the composer on this share. */}
+        <a class="share-edit-link" data-share-edit data-author={d.author} href={`/workbench/#tab=share&edit-share=${encodeURIComponent(d.id)}`} hidden>Edit</a>
         <span class="kind-tag kt-share">shared{srcDomain ? ` · ${srcDomain}` : ''}</span>
       </div>
 
@@ -143,7 +146,23 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
   </div>
 </BaseLayout>
 
+<script>
+  // sow-304: reveal the Edit link to the share's author only. Presentational: the WorkBench and the Worker
+  // enforce whose share it is; a mismatch here shows a link that leads to an empty list at worst.
+  import { currentIdentity, readMemberSignal, onMemberSignal } from '../../../lib/member-signal';
+  function reveal(s: any) {
+    const login = s && s.login ? String(s.login).toLowerCase() : '';
+    document.querySelectorAll<HTMLElement>('[data-share-edit]').forEach((a) => { a.hidden = !(login && login === String(a.dataset.author || '').toLowerCase()); });
+  }
+  reveal(currentIdentity(readMemberSignal()));
+  onMemberSignal(reveal);
+</script>
+
 <style>
+  /* sow-304 */
+  .share-edited { color: var(--fg-mute); }
+  .share-edit-link { margin-left: 10px; font-size: 13px; font-weight: 600; color: var(--green-700); text-decoration: none; border: 1px solid var(--line); border-radius: 8px; padding: 2px 9px; }
+  .share-edit-link[hidden] { display: none; }
   /* Scoped on purpose: the inline player sits where .share-hero would, with the same top gap, but its
      radius + background come from VideoEmbed itself. Kept off src/styles/gbti-v3.css so this page owns
      the one rule it needs. */

@@ -17,7 +17,7 @@ import {
   discardDraft,
   publishDraft,
   publishShare,
-  listShares,
+  listShares, myShares,
   listShareComments,
   listComments,
   readContent,
@@ -152,6 +152,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/draft/publish') return run(() => publishDraft(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/share') return run(() => publishShare(ctx, body ?? {})); // SOW-018
   if (method === 'GET' && pathname === '/api/shares') return run(() => listShares(ctx, { limit: Number(query.limit) || undefined })); // SOW-018 feed
+  if (method === 'GET' && pathname === '/api/my-shares') return run(() => myShares(ctx)); // sow-304: the member's own shares (WorkBench)
   if (method === 'GET' && pathname === '/api/share-comments') return run(() => listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-032 discussion
   if (method === 'GET' && pathname === '/api/comments') return run(() => listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || undefined, aliases: query.aliases ? String(query.aliases).split(',').filter(Boolean) : [] })); // SOW-041 discussion (+ SOW-112 rename aliases)
   if (method === 'POST' && pathname === '/api/comment') return run(() => publishComment(ctx, body ?? {})); // SOW-027

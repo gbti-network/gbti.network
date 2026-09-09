@@ -20,7 +20,7 @@ import { decryptMemberAsset } from './operations-drafts.mjs';
  * stub .md + a sibling .enc in ONE PR; a public Share is a single plain .md. Paid-only (SOW-011): a known
  * non-paid member is blocked BEFORE any PR opens. The id is a sortable timestamp-slug derived from createdAt.
  */
-export async function publishShare(ctx, { input = {}, body = '', message, title, prBody } = {}) {
+export async function publishShare(ctx, { input = {}, body = '', removeEnc = null, message, title, prBody } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await membershipOf(ctx);
@@ -34,7 +34,8 @@ export async function publishShare(ctx, { input = {}, body = '', message, title,
   const id_ = input.id ?? makeShareId(createdAt, input.title);
   let built;
   try {
-    built = buildShareFile({ username: id.username, input: { ...input, id: id_, createdAt }, body });
+    const { encryptedBody: _stale, ...clean } = input; // sow-304: never carried; planMemberFiles re-derives it
+    built = buildShareFile({ username: id.username, input: { ...clean, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
@@ -51,7 +52,11 @@ export async function publishShare(ctx, { input = {}, body = '', message, title,
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  const shareTitle = title ?? `New Share${built.frontmatter.title ? `: ${built.frontmatter.title}` : ''}`;
+  // sow-304: an EDIT (input.id names an existing share) that flips a members share public leaves its old
+  // ciphertext orphaned; the composer passes the stored pointer and it is deleted in the same PR. Own _enc/ only.
+  const isEdit = !!input.id;
+  if (isEdit && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
+  const shareTitle = title ?? `${isEdit ? 'Update Share' : 'New Share'}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ''}`;
   const pr = isHostedCtx(ctx)
     ? await hostedPublishFiles(ctx, { branch: `gbti/share-${id_}`, files, title: shareTitle }) // SOW-157: no fork
     : await publishFiles({
@@ -64,7 +69,7 @@ export async function publishShare(ctx, { input = {}, body = '', message, title,
       });
   // SOW-092: spread the PR handle (prNumber/prUrl/updated) like the comment op does, so the composer ack
   // can cite the real PR (it used to read an undefined prNumber). The explicit fields win on collision.
-  return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? 'members', encrypted: Boolean(plan?.encPath) };
+  return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? 'members', status: built.frontmatter.status ?? 'published', encrypted: Boolean(plan?.encPath), edited: isEdit };
 }
 
 

@@ -105,6 +105,26 @@ export function isShareSet(files, folder) {
   });
 }
 
+/**
+ * sow-304: is this share set an EDIT (every share .md in it already exists on main)? Exported for tests. Fail
+ * closed: no share files, a non-200 on any of them, or a thrown fetch all answer false, which sends the request
+ * through the slow mode as a new share. The .enc siblings are not consulted: an audience flip replaces or deletes
+ * them, so their presence says nothing about whether the share itself is new.
+ */
+export async function isShareEdit({ fetchImpl, instToken, upstream, files, folder }) {
+  const list = Array.isArray(files) ? files : [];
+  const prefix = `members/${folder}/shares/`;
+  const shareMds = list.filter((f) => typeof f?.path === 'string' && f.path.startsWith(prefix) && /\.(md|mdx)$/.test(f.path));
+  if (!shareMds.length) return false;
+  for (const f of shareMds) {
+    try {
+      const r = await fetchImpl(`${GH}/repos/${upstream}/contents/${f.path}?ref=main`, { headers: GH_HEADERS(instToken) });
+      if (!r || r.status !== 200) return false;
+    } catch { return false; }
+  }
+  return true;
+}
+
 /** sow-293: the per-member share slow mode. One share per six hours, members only, creators exempt. */
 export const SHARE_SLOW_MODE_SECONDS = 6 * 60 * 60;
 
@@ -112,11 +132,27 @@ export function isMembersOnlyShare(files, folder) {
   if (!Array.isArray(files) || files.length === 0) return false;
   if (typeof folder !== 'string' || !folder) return false;
   const prefix = `members/${folder}/shares/`;
+  // sow-304 (a sow-293 defect, found while building the edit path): the ciphertext of a members share does NOT sit
+  // under shares/. planMemberFiles writes it to members/<folder>/_enc/share-<id>-body.enc (encAssetFor), so the
+  // rule "every path under shares/" refused the exact file set the website sends for a members share and sent
+  // every paid Network Member to the creator gate with the PUBLIC-sharing message. Measured against the shipped
+  // repository: all three members-share ciphertexts on main live under _enc/. The sibling is admitted ONLY at
+  // that one shape, and only when the share id it names is a share .md in the same set, so nothing else under
+  // _enc/ can ride a members-share request past the creator gate.
+  const shareIds = new Set(files.map((f) => {
+    const path = typeof f === 'string' ? f : f?.path;
+    const m = typeof path === 'string' && path.startsWith(prefix) ? /^([a-z0-9][a-z0-9-]*)\.md$/.exec(path.slice(prefix.length)) : null;
+    return m ? m[1] : null;
+  }).filter(Boolean));
+  const encFor = new RegExp(`^members/${folder}/_enc/share-([a-z0-9][a-z0-9-]*)-body\\.enc$`);
   let sawMarkdown = false;
   const allInFolder = files.every((f) => {
     const path = typeof f === 'string' ? f : f?.path;
-    if (typeof path !== 'string' || !path.startsWith(prefix) || path.includes('..')) return false;
-    if (!path.endsWith('.md')) return true; // the .enc sibling carries no frontmatter to judge
+    if (typeof path !== 'string' || path.includes('..')) return false;
+    const enc = encFor.exec(path);
+    if (enc) return shareIds.has(enc[1]); // the ciphertext of a share in this very set
+    if (!path.startsWith(prefix)) return false;
+    if (!path.endsWith('.md')) return true; // any other sibling under shares/ carries no frontmatter to judge
     sawMarkdown = true;
     const content = typeof f === 'string' ? null : f?.content;
     if (typeof content !== 'string') return false; // unreadable is not a licence to assume members-only
@@ -230,9 +266,17 @@ export async function membershipAuthor(request, env, deps = {}) {
   // THROTTLED rather than waved through. That is the safe direction and it is asserted in the tests, because
   // the natural refactor (`if (isCreator) skip`) inverts it silently the moment the tier lookup degrades.
   if (isShareSet(payload?.files, folder) && !meetsTier(paid.tier, TIER.creator)) {
-    const slow = await limiter({ kv, id: githubId, limit: 1, windowSeconds: SHARE_SLOW_MODE_SECONDS, prefix: 'rl:share:' });
-    if (!slow.allowed) {
-      return { status: 429, body: { error: 'slow_mode', message: `you can post one share every six hours; ${tierLabel(TIER.creator)}s are not limited` } };
+    // sow-304: an EDIT of a share the member already published is not a new share, so it does not spend the
+    // one-per-six-hours allowance (a member fixing a typo a minute after posting must not be told to wait). An
+    // edit is defined by the FILE, not the request: every share .md in the set already exists on main. The check
+    // FAILS CLOSED: an unreadable or missing file, or a set that mixes a new share in, is throttled as new.
+    const { shareEditCheck = isShareEdit } = deps;
+    const editing = await shareEditCheck({ fetchImpl, instToken, upstream, files: payload?.files, folder });
+    if (!editing) {
+      const slow = await limiter({ kv, id: githubId, limit: 1, windowSeconds: SHARE_SLOW_MODE_SECONDS, prefix: 'rl:share:' });
+      if (!slow.allowed) {
+        return { status: 429, body: { error: 'slow_mode', message: `you can post one share every six hours; ${tierLabel(TIER.creator)}s are not limited` } };
+      }
     }
   }
 

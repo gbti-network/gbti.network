@@ -306,6 +306,10 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
     status: fm.status ?? null,
     encryptedBody: typeof fm.encryptedBody === 'string' ? fm.encryptedBody : null,
     createdAt,
+    // sow-304: the WorkBench list and the composer's edit mode need the category and the edit stamp. Both are
+    // null-safe additions; every existing reader ignores fields it does not know.
+    category: typeof fm.category === 'string' && fm.category ? fm.category : null,
+    updatedAt: fm.updatedAt != null ? (() => { const d = fm.updatedAt instanceof Date ? fm.updatedAt : new Date(fm.updatedAt); return Number.isNaN(d.getTime()) ? null : d.toISOString(); })() : null,
     body: isPublic ? String(body ?? '') : '', // members body is gated; never surfaced here
   };
 }

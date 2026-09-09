@@ -81,11 +81,13 @@ test('sow-204: the component TABS actually carry the flags this fixture assumes'
   const entries = [...block[1].matchAll(/\{\s*id:\s*'([a-z]+)'[^}]*\}/g)]
     .map((m) => ({ id: m[1], authoring: /authoring:\s*true/.test(m[0]) }));
   // Control: a regex that matched nothing would make every assertion below vacuous.
-  assert.equal(entries.length, 9, `parsed ${entries.length} tabs, expected 9`);
+  assert.equal(entries.length, 10, `parsed ${entries.length} tabs, expected 10`); // sow-304: + the Shares tab
 
   const flagged = entries.filter((e) => e.authoring).map((e) => e.id).sort();
-  assert.deepEqual(flagged, ['inbox', 'post', 'project', 'prompt'],
-    'exactly the four Option A authoring tabs are flagged');
+  // sow-304: the Shares tab (the member's own shares, edited through the composer) is authoring too: the
+  // extension keeps its Share composer but has no WorkBench list to edit from.
+  assert.deepEqual(flagged, ['inbox', 'post', 'project', 'prompt', 'share'],
+    'exactly the four Option A authoring tabs plus the sow-304 Shares tab are flagged');
 
   for (const id of ['saved', 'subs']) {
     const t = entries.find((e) => e.id === id);

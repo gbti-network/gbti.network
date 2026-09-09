@@ -204,6 +204,33 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
     },
 
     /**
+     * sow-304: every share in ONE member's folder, newest first, DRAFTS INCLUDED (an unpublished share must show in
+     * the WorkBench so it can be edited or republished). One folder listing plus a read per stub, capped. Members
+     * bodies stay pointer-only, like listShares.
+     */
+    async listMemberShares(username, limit = 100) {
+      const who = String(username || '').toLowerCase();
+      if (!owner || !repo || !/^[a-z0-9][a-z0-9-]*$/.test(who)) return [];
+      const t = await tree();
+      if (!t || !Array.isArray(t.tree)) return [];
+      const prefix = `members/${who}/shares/`;
+      const paths = t.tree
+        .filter((e) => e && e.type === 'blob' && typeof e.path === 'string' && e.path.startsWith(prefix) && SHARE_PATH.test(e.path))
+        .map((e) => e.path)
+        .sort((a, b) => basename(b).localeCompare(basename(a)))
+        .slice(0, Math.max(0, limit));
+      const out = [];
+      for (const rel of paths) {
+        const text = await readFile(rel);
+        if (text == null) continue;
+        const { frontmatter, body } = parseContentFile(text);
+        out.push(shareSummary(rel, frontmatter, body));
+      }
+      out.sort(byShareNewest);
+      return out;
+    },
+
+    /**
      * SOW-032: list PUBLISHED comments for a Share's discussion. ONE recursive Git Trees call enumerates every
      * members/<u>/comments/<id>.md + house/comments/<id>.md; we read the newest `limit` by filename (timestamp
      * stem -> newest first), keep published `targetType:'share'` comments whose targetSlug matches, and return

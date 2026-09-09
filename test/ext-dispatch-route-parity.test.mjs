@@ -58,6 +58,7 @@ const WEBSITE_ONLY = {
       '/api/drafts', '/api/draft/discard', '/api/draft/publish',
       '/api/contributions', '/api/contribution', '/api/contribution-review',
       '/api/item-stats', // sow-232: the editor's Live revisions tile; the editor is an authoring surface the extension no longer hosts
+      '/api/my-shares', // sow-304: the WorkBench Shares tab lists the member's own shares for editing; the extension has no such tab
     ],
   },
   WEBSITE_FILESYSTEM: {

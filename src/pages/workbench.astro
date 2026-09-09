@@ -113,9 +113,36 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
           img.src = 'https://github.com/' + encodeURIComponent(String(p.login)) + '.png?size=68';
           img.alt = '@' + String(p.login);
         });
-        import('../../client-ui/src/elements/gbti-share-composer.mjs').catch(() => {});
       }
+      // sow-304: every paid member can EDIT their shares (a members share needs no Curator tier), so the composer
+      // element is defined for any signed-in member, not only when the share bar shows.
+      import('../../client-ui/src/elements/gbti-share-composer.mjs').catch(() => {});
     }
+
+    // sow-304: the Shares tab's Edit (and the share page's deep link) open the share composer on that share, in
+    // the same modal the share bar uses. The composer is the editor: it re-publishes the same id. Closing the
+    // modal with X or Esc returns the composer to its create state; a saved edit reloads the list.
+    document.addEventListener('gbti-edit-share', async (e: Event) => {
+      const item = (e as CustomEvent).detail;
+      const dialog = document.querySelector<HTMLDialogElement>('[data-share-modal]');
+      const composer = dialog?.querySelector('gbti-share-composer') as any;
+      if (!item || !dialog || !composer) return;
+      await import('../../client-ui/src/elements/gbti-share-composer.mjs').catch(() => {});
+      if (typeof composer.editShare !== 'function') return;
+      const ok = await composer.editShare(item);
+      if (ok && !dialog.open) dialog.showModal();
+    });
+    document.querySelector<HTMLDialogElement>('[data-share-modal]')?.addEventListener('close', () => {
+      // every close leaves a clean create form behind: an abandoned edit, and the fields of a finished one
+      const composer = document.querySelector('[data-share-modal] gbti-share-composer') as any;
+      if (composer && typeof composer.resetComposer === 'function') composer.resetComposer();
+      else if (composer && typeof composer.cancelEdit === 'function') composer.cancelEdit();
+    });
+    document.addEventListener('gbti-share-posted', (e: Event) => {
+      if (!(e as CustomEvent).detail?.edited) return;
+      const list = document.querySelector('gbti-share-list') as any;
+      if (list && typeof list.reload === 'function') setTimeout(() => list.reload(), 1500);
+    });
     document.querySelector('[data-wb-retry]')?.addEventListener('click', () => {
       document.querySelector('[data-wb-error]')?.setAttribute('hidden', '');
       document.querySelector('[data-wb-loading]')?.removeAttribute('hidden');

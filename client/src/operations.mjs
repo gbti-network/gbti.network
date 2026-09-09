@@ -20,6 +20,7 @@ export {
   listContent,
   listMembersOnly,
   listShares,
+  myShares, // sow-304: the member's own shares
   listShareComments,
   AUTHOR_NOTE_TYPES,
   _resetCommentsIndexCache,

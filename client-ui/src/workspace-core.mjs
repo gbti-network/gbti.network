@@ -12,7 +12,7 @@
 import { canonicalType } from './content-types.mjs';
 import { TIER, tierLabel } from '../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
-const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs)
+const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'share', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs); sow-304: 'share' (the member's own shares)
 export function parseWorkspaceTab(hash) {
   const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
   // sow-196: #tab=product still resolves. The avatar menu and the extension have been emitting that link
@@ -43,6 +43,16 @@ export function parseWorkspaceEdit(hash) {
   let path;
   try { path = decodeURIComponent(m[1]); } catch { return null; }
   return EDIT_PATH_RE.test(path) ? path : null;
+}
+
+/**
+ * sow-304: parse `edit-share=<id>` from a hash into a validated share id, or null. The share page's author-only
+ * Edit link deep-links to `#tab=share&edit-share=<id>`; the workspace hands the id to <gbti-share-list>, which
+ * emits the edit once the row is loaded. A share id is a timestamp-slug, so the shape is a plain slug.
+ */
+export function parseWorkspaceEditShare(hash) {
+  const m = /(?:^|[#&])edit-share=([a-z0-9][a-z0-9-]*)(?:&|$)/.exec(String(hash || ''));
+  return m ? m[1] : null;
 }
 
 /** Parse `draft=<type>:<slug>` from a hash into { type, slug }, or null. */

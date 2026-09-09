@@ -44,6 +44,14 @@ export async function listMembersOnly(ctx) {
  * works over the sync npm reader and the async extension (GitHub) reader. requireIdentity only: the listed
  * metadata is public-repo stub data; the Worker gates the encrypted bodies.
  */
+/** sow-304: the signed-in member's own shares (drafts included) for the WorkBench Shares tab. */
+export async function myShares(ctx) {
+  const id = requireIdentity(ctx);
+  if (typeof ctx.reader?.listMemberShares !== 'function') return { items: [] };
+  const items = (await ctx.reader.listMemberShares(id.username)) ?? [];
+  return { items };
+}
+
 export async function listShares(ctx, { limit } = {}) {
   requireIdentity(ctx);
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
