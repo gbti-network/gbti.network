@@ -26,8 +26,9 @@ interface Props {
   ogImage?: string;
   /** Open Graph type, e.g. 'website' (default) or 'article' for posts. */
   ogType?: string;
-  /** When true, emit <meta name="robots" content="noindex"> (auth shells, stubs). */
-  noindex?: boolean;
+  /** When true, emit <meta name="robots" content="noindex"> (auth shells, stubs); a string is emitted as the
+   *  robots value itself (sow-189: an unindexed article sends "noindex, follow"). */
+  noindex?: boolean | string;
   /** When true, omit the site Header/Footer chrome (standalone landing pages that carry their own). */
   bare?: boolean;
   /** When true, warm the connection to the third-party host that serves share cover images. Set it only
@@ -104,7 +105,7 @@ const ogImageSize = knownImageSize(ogImage || DEFAULT_OG_IMAGE);
     </script>
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    {noindex && <meta name="robots" content="noindex" />}
+    {noindex && <meta name="robots" content={typeof noindex === 'string' ? noindex : 'noindex'} />}
     <link rel="canonical" href={canonical} />
 
     <meta property="og:site_name" content={siteName} />

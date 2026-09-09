@@ -22,9 +22,11 @@ export function modPathFor({ type, author, slug, id } = {}) {
   return `members/${author}/${dir}/${slug}/index.md`;
 }
 
-/** The moderation actions a role may SEE: none below moderator; Hide/Unhide at moderator+; +Remove at admin+. */
+/** The moderation actions a role may SEE: none below moderator; Hide/Unhide at moderator+; +Remove at admin+;
+ *  +the sow-189 content flags (stale / unstale / unindex / reindex) at superadmin only. */
 export function visibleActions(role) {
   const r = RANK[role] ?? 0;
   if (r < RANK.moderator) return [];
+  if (r >= RANK.superadmin) return ['hide', 'unhide', 'remove', 'stale', 'unstale', 'unindex', 'reindex'];
   return r >= RANK.admin ? ['hide', 'unhide', 'remove'] : ['hide', 'unhide'];
 }

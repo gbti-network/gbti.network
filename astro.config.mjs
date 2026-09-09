@@ -6,6 +6,9 @@ import mdx from '@astrojs/mdx';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { remarkContentBlocks } from './src/lib/remark-content-blocks.mjs';
+import fs from 'node:fs';
+import yaml from 'js-yaml';
+import { contentFlagsFromParsed, sitemapExcludes } from './membership/content-flags.mjs'; // sow-189: unindexed articles leave the sitemap
 import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety } from './src/lib/markdown-sanitize.mjs';
 
 // SOW-001: static site for gbti.network, deployed on Cloudflare Pages.
@@ -23,6 +26,8 @@ function rehypeDemoteBodyH1() {
     walk(tree);
   };
 }
+
+const UNINDEXED = (() => { try { return sitemapExcludes(contentFlagsFromParsed(yaml.load(fs.readFileSync('house/content-flags.yml', 'utf8')))); } catch { return new Set(); } })();
 
 export default defineConfig({
   site: 'https://gbti.network',
@@ -56,7 +61,9 @@ export default defineConfig({
     // landing carries a live free-year coupon in plain sight, so indexing it turns a private invitation into a
     // public giveaway. Both pages also set a noindex meta; this filter is the second half, and they are not
     // redundant (the meta asks a crawler, the sitemap stops advertising the URL in the first place).
-    sitemap({ filter: (page) => !/\/(account|welcome|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) }),
+    // sow-189: an unindexed article (house/content-flags.yml) emits noindex, follow AND leaves the sitemap; the
+    // two halves are not redundant (the meta asks a crawler, the sitemap stops advertising the URL).
+    sitemap({ filter: (page) => !/\/(account|welcome|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) }),
   ],
   image: {
     // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let

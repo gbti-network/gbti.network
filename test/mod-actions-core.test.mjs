@@ -23,6 +23,7 @@ test('visibleActions: none below moderator, Hide/Unhide at moderator+, +Remove a
   assert.deepEqual(visibleActions('member'), []);
   assert.deepEqual(visibleActions('moderator'), ['hide', 'unhide']);
   assert.deepEqual(visibleActions('admin'), ['hide', 'unhide', 'remove']);
-  assert.deepEqual(visibleActions('superadmin'), ['hide', 'unhide', 'remove']);
+  // sow-189: a superadmin also sees the four content flags (stale / unstale / unindex / reindex).
+  assert.deepEqual(visibleActions('superadmin'), ['hide', 'unhide', 'remove', 'stale', 'unstale', 'unindex', 'reindex']);
   assert.deepEqual(visibleActions(undefined), []); // unknown role -> none
 });

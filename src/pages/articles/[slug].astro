@@ -9,6 +9,7 @@ import ArticleCard from '../../components/blog/ArticleCard.astro';
 import ArticleEditorial from '../../components/blog/ArticleEditorial.astro';
 import ArticleJournal from '../../components/blog/ArticleJournal.astro';
 import RelatedPosts from '../../components/blog/RelatedPosts.astro';
+import { contentFlagsOf } from '../../lib/content-flags'; // sow-189
 import ContributionCredits from '../../components/blog/ContributionCredits.astro';
 import OpenHistory from '../../components/blog/OpenHistory.astro';
 import ContentFooter from '../../components/ContentFooter.astro';
@@ -55,8 +56,10 @@ const Layout = LAYOUTS[d.layout] ?? ArticleJournal;
 // ArticleJournal here but would stay false on a literal d.layout === 'journal' check), misrouting
 // FavoritedBy into the wrong slot on whatever layout actually rendered.
 const isJournal = Layout === ArticleJournal;
+// sow-189: an unindexed article asks search engines to forget it while the network still points at it.
+const unindexed = contentFlagsOf('post', d.slug).unindexed;
 ---
-<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src ?? defaultFeatureImage('post')} ogType="article">
+<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src ?? defaultFeatureImage('post')} ogType="article" noindex={unindexed ? 'noindex, follow' : false}>
   <DeployStatusNotice type="post" slug={d.slug} updatedAt={d.updatedAt} />
   <Layout d={d} isStub={stub} postId={post.id} postUrl={postUrl} stack={stack} toc={toc}>
     <Content slot="body" />

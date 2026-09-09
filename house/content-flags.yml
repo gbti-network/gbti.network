@@ -1,0 +1,14 @@
+# sow-189: superadmin content flags, keyed "<type>:<slug>" (post | project | prompt). Two independent flags:
+#
+#   stale:     the item leaves PUBLIC discovery (the article directory, the site feeds, the homepage, related
+#              posts) but keeps its page, its direct link and its place in the members' extension feed.
+#   unindexed: the page emits <meta name="robots" content="noindex, follow"> and leaves the sitemap, while
+#              staying fully in the site. Search engines are asked to forget it; the network still points at it.
+#
+# WHY A REGISTRY AND NOT FRONTMATTER: the PR gate is path-scoped and never reads a field, so a flag inside a
+# member's own post could be flipped back by that member and auto-merged. house/** is where a member cannot
+# write (Tier A, admin-owned by CODEOWNERS; a non-admin PR touching it hard-fails). Set from the extension
+# reader's moderation controls (superadmin only) or by hand; each entry carries who, when and why.
+#
+# Empty until something is marked. Validated by scripts/validate-content.mjs (key shape, and the item exists).
+flags: {}

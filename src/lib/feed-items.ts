@@ -3,7 +3,7 @@
 // `targetType` keys favorites/comments, `kind` labels the card.
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
-import { isPublic, isListed, isStub, catalogHref } from './content';
+import { isPublic, isListed, isDiscoverable, isStub, catalogHref } from './content'; // sow-189: isDiscoverable = listed and not stale
 import { buildAvatarIndex, type AvatarIndex } from './avatars';
 import { favoriteCount } from './favorites';
 import { commentThreadCount } from './comments';
@@ -101,10 +101,10 @@ export interface FeedData {
 /** Fetch + normalize everything the feed surfaces need. Build-time only. */
 export async function loadFeedItems(): Promise<FeedData> {
   const comments = await getCollection('comment');
-  const posts = (await getCollection('post')).filter(isListed);
+  const posts = (await getCollection('post')).filter(isDiscoverable);
   // SOW-022: applets list among projects; their cards link to the running tool via catalogHref.
-  const projects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isListed);
-  const prompts = (await getCollection('prompt')).filter(isListed);
+  const projects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isDiscoverable);
+  const prompts = (await getCollection('prompt')).filter(isDiscoverable);
   const allShares = await getCollection('share');
   const shares = allShares.filter((s) => isPublicShare(s.data));
   const membersShareCount = allShares.filter((s) => s.data.status === 'published' && !isPublicShare(s.data)).length;

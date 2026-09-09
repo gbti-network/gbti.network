@@ -2,6 +2,7 @@ import type { CollectionEntry } from 'astro:content';
 import { readMemberSignal, onMemberSignal, currentIdentity, type MemberSignal } from './member-signal';
 import { canEditItem } from './content-edit.mjs';
 import { contentItemPath } from './content-index.mjs';
+import { contentFlagsOf } from './content-flags'; // sow-189: the superadmin stale/unindexed registry
 
 type Gatable = { data: { status: 'draft' | 'published'; visibility: 'public' | 'members'; publicStub?: boolean } };
 
@@ -34,6 +35,29 @@ export function isStub(entry: Gatable): boolean {
  */
 export function isListed(entry: Gatable): boolean {
   return hasPublicPage(entry);
+}
+
+type Keyed = Gatable & { collection?: string; data: Gatable['data'] & { slug?: string } };
+const FLAG_TYPE: Record<string, 'post' | 'project' | 'prompt'> = { post: 'post', project: 'project', applet: 'project', prompt: 'prompt' };
+
+/**
+ * sow-189: NOT marked stale in house/content-flags.yml. A stale item keeps its page, its direct link and its
+ * place in the members' extension feed; it leaves public discovery only (owner decision 2026-09-08).
+ */
+export function notStale(entry: Keyed): boolean {
+  const type = FLAG_TYPE[String(entry.collection || '')];
+  const slug = entry.data?.slug;
+  if (!type || !slug) return true;
+  return !contentFlagsOf(type, slug).stale;
+}
+
+/**
+ * sow-189: appears in PUBLIC discovery: listed AND not stale. Use this in the article directory, the site
+ * feeds, the homepage and related posts; keep isListed for the member ecosystem (the extension's activity
+ * feed and in-app browse), which a stale item does not leave.
+ */
+export function isDiscoverable(entry: Keyed): boolean {
+  return isListed(entry) && notStale(entry);
 }
 
 /**

@@ -2,10 +2,10 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ArticleTeaser from '../../components/blog/ArticleTeaser.astro';
-import { isListed, byNewest } from '../../lib/content';
+import { isDiscoverable, byNewest } from '../../lib/content'; // sow-189: a stale article leaves the directory
 
 import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: search in the hero
-const posts = (await getCollection('post')).filter(isListed).sort(byNewest);
+const posts = (await getCollection('post')).filter(isDiscoverable).sort(byNewest);
 const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(Boolean))].sort();
 ---
 <BaseLayout title="News" description="Articles from the GBTI Network.">

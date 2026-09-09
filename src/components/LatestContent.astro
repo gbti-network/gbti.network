@@ -4,7 +4,7 @@
 // indexes, so a free-tool visitor is funneled into the community's content. Each section omits itself when
 // empty, and the whole block omits when there is nothing to show.
 import { getCollection } from 'astro:content';
-import { isListed, byNewest } from '../lib/content';
+import { isDiscoverable, byNewest } from '../lib/content'; // sow-189: stale items leave public discovery
 import ArticleTeaser from './blog/ArticleTeaser.astro';
 import ProjectCard from './projects/ProjectCard.astro';
 import PromptCard from './prompts/PromptCard.astro';
@@ -15,12 +15,12 @@ interface Props {
 }
 const { count = 3, featurePost } = Astro.props;
 
-const allPosts = (await getCollection('post')).filter(isListed).sort(byNewest);
+const allPosts = (await getCollection('post')).filter(isDiscoverable).sort(byNewest);
 // Pin the featured post to the front, then fill the rest with the newest (deduped).
 const pinned = featurePost ? allPosts.filter((p) => p.data.slug === featurePost) : [];
 const posts = [...pinned, ...allPosts.filter((p) => !pinned.includes(p))].slice(0, count);
-const projects = (await getCollection('project')).filter(isListed).sort(byNewest).slice(0, count);
-const prompts = (await getCollection('prompt')).filter(isListed).sort(byNewest).slice(0, count);
+const projects = (await getCollection('project')).filter(isDiscoverable).sort(byNewest).slice(0, count);
+const prompts = (await getCollection('prompt')).filter(isDiscoverable).sort(byNewest).slice(0, count);
 const any = posts.length + projects.length + prompts.length;
 ---
 {any > 0 && (

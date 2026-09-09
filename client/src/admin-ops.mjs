@@ -18,7 +18,8 @@ import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, Taxonom
 import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSourceEnabled as setSourceEnabledEdit, NewsSourceEditError } from '../../membership/news-source-edits.mjs'; // SOW-056 P2
 import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
-import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
+import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs';
+import { setContentFlag as setContentFlagEdit, flagKeyForPath, ContentFlagEditError } from '../../membership/content-flags.mjs'; // sow-189: stale / unindexed // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
 import { SIGNUP_BASE } from './signup-base.mjs'; // sow-291 Phase 2: the coupon pool read proxies the Worker (KV-native)
 import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'; // sow-291 Phase 2
@@ -142,6 +143,34 @@ export async function setMemberRole(ctx, { githubId, role, login } = {}) {
   const pr = await adminPublish(ctx, { repo, branch: `gbti/role-${id}`, files: [{ path: 'house/roles.yml', content: dumpYaml(result.next) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}`, body: prBody(`role: ${role}`, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
 }
+
+// ---- superadmin: stale / unindexed content flags (house/content-flags.yml, sow-189) ----
+// A flag is a statement ABOUT a member's content that the member must not be able to flip back, so it lives in
+// the house registry rather than the post's frontmatter (the gate is path-scoped and never reads a field). One
+// writer, four thin entries in the action tables. Superadmin only, as the owner asked.
+
+async function setContentFlagOp(ctx, { path: rel, reason } = {}, flag, on) {
+  requireRole(ctx, canManageRoles, 'superadmin');
+  const { repo } = requireRepo(ctx);
+  requireMemberContentPath(rel);
+  const key = flagKeyForPath(rel);
+  if (!key) throw new OperationError('bad-request', `not a flaggable content path: ${rel}`);
+  let result;
+  try {
+    result = setContentFlagEdit(await readYaml(ctx, 'house/content-flags.yml'), { key, flag, on, reason }, actionCtx(ctx));
+  } catch (err) {
+    if (err instanceof ContentFlagEditError) throw new OperationError('bad-request', err.message);
+    throw err;
+  }
+  const verb = on ? flag : 'un' + flag;
+  if (!result.changed) return noop(`already ${verb}: ${key}`, result.audit);
+  const pr = await adminPublish(ctx, { repo, branch: `gbti/content-flag-${key.replace(':', '-')}`, files: [{ path: 'house/content-flags.yml', content: dumpYaml(result.next) }], message: `Content flag: ${verb} ${key}`, title: `Content flag: ${verb} ${key}`, body: `Superadmin content flag (sow-189): ${verb} ${key}.${reason ? ' Reason: ' + String(reason).slice(0, 200) : ''}\n\nAudit: ${JSON.stringify(result.audit)}` });
+  return { ...pr, changed: true, audit: result.audit };
+}
+export const markStale = (ctx, args) => setContentFlagOp(ctx, args, 'stale', true);
+export const unmarkStale = (ctx, args) => setContentFlagOp(ctx, args, 'stale', false);
+export const markUnindexed = (ctx, args) => setContentFlagOp(ctx, args, 'unindexed', true);
+export const unmarkUnindexed = (ctx, args) => setContentFlagOp(ctx, args, 'unindexed', false);
 
 // ---- moderator: deplatform / remove any content ----
 

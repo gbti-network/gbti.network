@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
-import { isPublic } from '../../lib/content';
+import { isPublic, notStale } from '../../lib/content'; // sow-189: a stale article is never suggested
 import ArticleTeaser from './ArticleTeaser.astro';
 
 interface Props {
@@ -14,6 +14,7 @@ const cats = new Set(post.data.categories);
 const tags = new Set(post.data.tags);
 const related = (await getCollection('post'))
   .filter(isPublic)
+  .filter(notStale)
   .filter((p) => p.id !== post.id)
   .map((p) => {
     const score =

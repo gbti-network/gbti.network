@@ -558,6 +558,36 @@ function validateTopicMapConfig() {
 }
 validateTopicMapConfig();
 
+// sow-189: the superadmin content-flags registry (house/content-flags.yml). Every key must be <type>:<slug> and
+// name a content file that exists, so a typo cannot flag nothing silently; every value must carry at least one
+// of the two flags. The file may be absent or empty (nothing flagged).
+function validateContentFlags() {
+  const rel = 'house/content-flags.yml';
+  const file = path.join(ROOT, rel);
+  if (!has(file)) return;
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(file, 'utf8')); } catch { errors.push(`${rel}: not valid YAML`); return; }
+  const flags = parsed && typeof parsed === 'object' ? parsed.flags : null;
+  if (flags == null || (typeof flags === 'object' && !Array.isArray(flags) && Object.keys(flags).length === 0)) return;
+  if (typeof flags !== 'object' || Array.isArray(flags)) { errors.push(`${rel}: flags must be a map of "<type>:<slug>" entries`); return; }
+  const dirOf = { post: 'posts', project: 'projects', prompt: 'prompts' };
+  const exists = (type, slug) => {
+    const dir = dirOf[type];
+    if (has(path.join(ROOT, 'house', dir, slug, 'index.md'))) return true;
+    const members = path.join(ROOT, 'members');
+    if (!has(members)) return false;
+    return fs.readdirSync(members).some((u) => has(path.join(members, u, dir, slug, 'index.md')));
+  };
+  for (const [key, v] of Object.entries(flags)) {
+    const m = /^(post|project|prompt):([a-z0-9][a-z0-9-]*)$/.exec(key);
+    if (!m) { errors.push(`${rel}: key "${key}" is not <post|project|prompt>:<slug>`); continue; }
+    if (!v || typeof v !== 'object' || Array.isArray(v)) { errors.push(`${rel}: "${key}" must be a map with stale and/or unindexed`); continue; }
+    if (v.stale !== true && v.unindexed !== true) errors.push(`${rel}: "${key}" sets neither stale nor unindexed; remove the entry`);
+    if (!exists(m[1], m[2])) errors.push(`${rel}: "${key}" names no content file (members/*/${dirOf[m[1]]}/${m[2]}/index.md or house/${dirOf[m[1]]}/${m[2]}/index.md)`);
+  }
+}
+validateContentFlags();
+
 // sow-185: the membership tier data (house/membership-tiers.yml), the single source of truth for the homepage
 // pricing accordion + the tier gating. REQUIRED: the site build (src/lib/tiers.ts) reads it directly. A missing
 // tier, a purchasable tier with no price env var, or any malformed field fails CI. Pure validation lives in

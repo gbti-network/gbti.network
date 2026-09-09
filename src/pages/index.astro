@@ -23,7 +23,7 @@ import { authorItem } from '../lib/avatars';
 import { contentIcon } from '../lib/content-icons';
 import { topLevelCategories } from '../lib/taxonomy';
 import { getCollection } from 'astro:content';
-import { isListed, byNewest } from '../lib/content';
+import { isDiscoverable, byNewest } from '../lib/content'; // sow-189: stale items leave the homepage
 import { authorDisplay, authorHref } from '../lib/authors';
 import { loadFeedItems } from '../lib/feed-items';
 import { sortByNewest, rankNewAndPopular, aggregateTags, feedCounts, commitsHeatGrid } from '../lib/home-feed.mjs';
@@ -73,9 +73,9 @@ const feedTabs: { key: string; label: string; href: string; count: number | null
 // through the SAME cards the directory pages use (ArticleTeaser / ProjectCard / PromptCard), isListed +
 // newest-first. Sizes: Articles 6, Projects 4, Prompts & Skills 3. "Runs on" logos + project license are
 // deferred (sow-192 Q5/Q6); the cards render the fields that exist today.
-const listedPosts = (await getCollection('post')).filter(isListed).sort(byNewest);
-const listedProducts = (await getCollection('project')).filter(isListed).sort(byNewest);
-const listedPrompts = (await getCollection('prompt')).filter(isListed).sort(byNewest);
+const listedPosts = (await getCollection('post')).filter(isDiscoverable).sort(byNewest);
+const listedProducts = (await getCollection('project')).filter(isDiscoverable).sort(byNewest);
+const listedPrompts = (await getCollection('prompt')).filter(isDiscoverable).sort(byNewest);
 const homeArticles = listedPosts.slice(0, 6);
 const homeProducts = listedProducts.slice(0, 4);
 const homePrompts = listedPrompts.slice(0, 3);

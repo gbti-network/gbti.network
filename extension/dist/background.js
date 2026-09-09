@@ -20941,6 +20941,73 @@ function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
   return { next: d, changed: true, audit: auditEntry5(ctx, "flag-term.remove", name, { term: t }) };
 }
 
+// membership/content-flags.mjs
+var ContentFlagEditError = class extends Error {
+};
+var CONTENT_FLAGS = Object.freeze(["stale", "unindexed"]);
+var KEY_RE3 = /^(post|project|prompt):[a-z0-9][a-z0-9-]*$/;
+var TYPE_OF_DIR = { posts: "post", projects: "project", prompts: "prompt" };
+function isoOf7(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new ContentFlagEditError("invalid timestamp");
+  return d.toISOString();
+}
+function contentFlagsFromParsed(parsed) {
+  const out = {};
+  const src = parsed && typeof parsed === "object" && parsed.flags && typeof parsed.flags === "object" && !Array.isArray(parsed.flags) ? parsed.flags : {};
+  for (const [key, v] of Object.entries(src)) {
+    if (!KEY_RE3.test(key) || !v || typeof v !== "object") continue;
+    const e = {};
+    for (const f of CONTENT_FLAGS) if (v[f] === true) e[f] = true;
+    if (!Object.keys(e).length) continue;
+    if (v.at) e.at = String(v.at);
+    if (v.by) e.by = String(v.by);
+    if (v.reason) e.reason = String(v.reason);
+    out[key] = e;
+  }
+  return out;
+}
+var flagKey = (type, slug) => `${type}:${slug}`;
+function flagKeyForPath(path) {
+  const m = /^(?:members\/[A-Za-z0-9_-]+|house)\/(posts|projects|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/.exec(String(path || ""));
+  return m ? flagKey(TYPE_OF_DIR[m[1]], m[2]) : null;
+}
+function audit2(ctx, action, key, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf7(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { key },
+    detail: detail ?? null
+  };
+}
+function setContentFlag(parsed, { key, flag, on = true, reason } = {}, ctx = {}) {
+  const k = String(key || "");
+  if (!KEY_RE3.test(k)) throw new ContentFlagEditError("key must be <post|project|prompt>:<slug>");
+  if (!CONTENT_FLAGS.includes(flag)) throw new ContentFlagEditError(`flag must be one of ${CONTENT_FLAGS.join(", ")}`);
+  const flags = contentFlagsFromParsed(parsed);
+  const cur = flags[k] || {};
+  const already = cur[flag] === true;
+  const action = `content.${on ? flag : "un" + flag}`;
+  if (on === already) return { next: { flags }, changed: false, audit: audit2(ctx, action, k, { noop: true }) };
+  const next = { ...cur };
+  if (on) {
+    next[flag] = true;
+    next.at = isoOf7(ctx?.now);
+    if (ctx?.actor?.login) next.by = String(ctx.actor.login);
+    else if (ctx?.actor?.githubId != null) next.by = String(ctx.actor.githubId);
+    const r = String(reason || "").trim();
+    if (r) next.reason = r.slice(0, 200);
+  } else {
+    delete next[flag];
+  }
+  const out = { ...flags };
+  if (CONTENT_FLAGS.some((f) => next[f] === true)) out[k] = next;
+  else delete out[k];
+  return { next: { flags: out }, changed: true, audit: audit2(ctx, action, k, reason ? { reason: String(reason).slice(0, 200) } : null) };
+}
+
 // membership/syndication-config-core.mjs
 var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
 var TEMPLATE_CHANNELS = CHANNELS;
@@ -21261,7 +21328,7 @@ var TemplateEditError = class extends Error {
 var MAX_TEMPLATE = 500;
 var MAX_BODY_TEMPLATE = 4e3;
 var BODY_TYPES = /* @__PURE__ */ new Set(["devto-body", "hashnode-body"]);
-function isoOf7(now) {
+function isoOf8(now) {
   const d = now instanceof Date ? now : new Date(now ?? Date.now());
   if (Number.isNaN(d.getTime())) throw new TemplateEditError("invalid timestamp");
   return d.toISOString();
@@ -21269,7 +21336,7 @@ function isoOf7(now) {
 function auditEntry6(ctx, type, detail) {
   const a = ctx?.actor || null;
   return {
-    at: isoOf7(ctx?.now),
+    at: isoOf8(ctx?.now),
     actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
     action: "syndication-template.set",
     target: { type },
@@ -21299,10 +21366,10 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
     if (typeof commentAutopost !== "boolean") throw new TemplateEditError("commentAutopost must be true or false");
     next.comment_autopost = commentAutopost;
   }
-  const audit2 = (detail) => {
+  const audit3 = (detail) => {
     const a = ctx?.actor || null;
     return {
-      at: isoOf7(ctx?.now),
+      at: isoOf8(ctx?.now),
       actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
       action: "news-engagement.set",
       target: { file: "house/syndication-config.yml" },
@@ -21310,14 +21377,14 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
     };
   };
   const same = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
-  if (same) return { next: d, changed: false, audit: audit2({ ...next, noop: true }) };
+  if (same) return { next: d, changed: false, audit: audit3({ ...next, noop: true }) };
   d.syndication.news_engagement = {
     enabled: next.enabled,
     open_threshold: next.open_threshold,
     tier: next.tier,
     comment_autopost: next.comment_autopost
   };
-  return { next: d, changed: true, audit: audit2({ ...next }) };
+  return { next: d, changed: true, audit: audit3({ ...next }) };
 }
 function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
@@ -21460,7 +21527,7 @@ var SITE_TOGGLES = {
 };
 var TOGGLE_KEYS = Object.keys(SITE_TOGGLES);
 var normKey = (k) => String(k || "").trim().toLowerCase();
-function isoOf8(now) {
+function isoOf9(now) {
   const d = now instanceof Date ? now : new Date(now ?? Date.now());
   if (Number.isNaN(d.getTime())) throw new SiteSettingsEditError("invalid timestamp");
   return d.toISOString();
@@ -21468,7 +21535,7 @@ function isoOf8(now) {
 function auditEntry7(ctx, action, key, detail) {
   const a = ctx?.actor || null;
   return {
-    at: isoOf8(ctx?.now),
+    at: isoOf9(ctx?.now),
     actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
     action,
     target: { key },
@@ -21584,6 +21651,30 @@ async function setMemberRole(ctx, { githubId, role, login } = {}) {
   const pr = await adminPublish(ctx, { repo, branch: `gbti/role-${id}`, files: [{ path: "house/roles.yml", content: dumpYaml(result.next) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}`, body: prBody(`role: ${role}`, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
 }
+async function setContentFlagOp(ctx, { path: rel, reason } = {}, flag, on) {
+  requireRole(ctx, canManageRoles, "superadmin");
+  const { repo } = requireRepo2(ctx);
+  requireMemberContentPath(rel);
+  const key = flagKeyForPath(rel);
+  if (!key) throw new OperationError("bad-request", `not a flaggable content path: ${rel}`);
+  let result;
+  try {
+    result = setContentFlag(await readYaml(ctx, "house/content-flags.yml"), { key, flag, on, reason }, actionCtx(ctx));
+  } catch (err) {
+    if (err instanceof ContentFlagEditError) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  const verb = on ? flag : "un" + flag;
+  if (!result.changed) return noop(`already ${verb}: ${key}`, result.audit);
+  const pr = await adminPublish(ctx, { repo, branch: `gbti/content-flag-${key.replace(":", "-")}`, files: [{ path: "house/content-flags.yml", content: dumpYaml(result.next) }], message: `Content flag: ${verb} ${key}`, title: `Content flag: ${verb} ${key}`, body: `Superadmin content flag (sow-189): ${verb} ${key}.${reason ? " Reason: " + String(reason).slice(0, 200) : ""}
+
+Audit: ${JSON.stringify(result.audit)}` });
+  return { ...pr, changed: true, audit: result.audit };
+}
+var markStale = (ctx, args) => setContentFlagOp(ctx, args, "stale", true);
+var unmarkStale = (ctx, args) => setContentFlagOp(ctx, args, "stale", false);
+var markUnindexed = (ctx, args) => setContentFlagOp(ctx, args, "unindexed", true);
+var unmarkUnindexed = (ctx, args) => setContentFlagOp(ctx, args, "unindexed", false);
 async function deplatformContent(ctx, { path: rel } = {}) {
   requireRole(ctx, canModerate, "moderator");
   const { repo } = requireRepo2(ctx);
@@ -22080,7 +22171,7 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
 
 // extension/src/ext-dispatch.mjs
 var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
-var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
+var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,

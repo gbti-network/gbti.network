@@ -67,7 +67,7 @@ import { getSettings, updateSettings, getBilling, getReferral } from './settings
 import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import {
-  setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
+  setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, markStale, unmarkStale, markUnindexed, unmarkUnindexed, // sow-189 // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
@@ -92,6 +92,7 @@ const ADMIN_ACTIONS = {
   'category-batch': applyCategoryBatch, // SOW-100: N pending workspace edits -> ONE house PR
   'tag-edit': applyTagEdit, // SOW-100: rename/merge/retire a tag across the items carrying it
   republish: republishContent, // SOW-071: the inverse of deplatform (un-hide)
+  stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, // sow-189: superadmin content flags (house/content-flags.yml)
   'category-add': addContentCategory, // SOW-055: category manager (add a category/subcategory)
   'category-rename': renameContentCategoryLabel, // SOW-055: rename a category's display label
   'content-channel-set': setContentChannel, // SOW-087: map a category to a Discord channel

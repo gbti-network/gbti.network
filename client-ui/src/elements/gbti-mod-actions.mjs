@@ -7,13 +7,19 @@
 import { GbtiElement, define } from '../base.mjs';
 import { modPathFor, visibleActions } from '../mod-actions-core.mjs';
 
-const ACTION_LABEL = { hide: 'Hide', unhide: 'Unhide', remove: 'Remove' };
-const ACTION_API = { hide: 'deplatform', unhide: 'republish', remove: 'remove' };
-const ACTION_DONE = { hide: 'Hidden', unhide: 'Republished', remove: 'Removed' };
+// sow-189: the four content flags (superadmin only) ride the same control. A flag is a house registry entry,
+// not an edit to the member's file, so it cannot be flipped back from the member's own folder.
+const ACTION_LABEL = { hide: 'Hide', unhide: 'Unhide', remove: 'Remove', stale: 'Mark stale', unstale: 'Unmark stale', unindex: 'Unindex', reindex: 'Reindex' };
+const ACTION_API = { hide: 'deplatform', unhide: 'republish', remove: 'remove', stale: 'stale', unstale: 'unstale', unindex: 'unindex', reindex: 'reindex' };
+const ACTION_DONE = { hide: 'Hidden', unhide: 'Republished', remove: 'Removed', stale: 'Marked stale', unstale: 'Stale cleared', unindex: 'Unindexed', reindex: 'Reindexed' };
 const CONFIRM = {
   hide: 'Hide this item? It is set to draft and removed from public view (reversible).',
   unhide: 'Republish this item? It returns to public view.',
   remove: 'Remove this item? This deletes the file (recoverable only from git history).',
+  stale: 'Mark this item stale? It leaves the directory, the feeds, the homepage and related posts; its page, its link and the members feed stay (reversible).',
+  unstale: 'Clear the stale mark? The item returns to public discovery.',
+  unindex: 'Unindex this item? Its page asks search engines not to index it and it leaves the sitemap; the site still points at it (reversible).',
+  reindex: 'Reindex this item? Search engines are allowed to index it again.',
 };
 
 const CSS = `
