@@ -3789,8 +3789,8 @@ ${String(body ?? "")}`;
                <gbti-doc-editor id="body"></gbti-doc-editor>
              </section>${docSections}
              <div class="docmd-wrap" id="docmdwrap" hidden>
-               <div class="docmd-bar">${CODE} <span>Full document as markdown</span><span class="docmd-note">Read-only source view</span></div>
-               <textarea class="docmd" id="docmd" spellcheck="false" readonly></textarea>
+               <div class="docmd-bar">${CODE} <span>Body as markdown</span><span class="docmd-note">Edits here update the visual editor</span></div>
+               <textarea class="docmd" id="docmd" spellcheck="false" aria-label="Body as markdown"></textarea>
              </div>
              <div id="out" class="muted"></div>
              <div hidden>${hiddenHtml}</div>
@@ -3841,6 +3841,10 @@ ${String(body ?? "")}`;
         if (u) window.open(u, "_blank", "noopener");
       });
       this.$$("#docview [data-view]").forEach((b) => b.addEventListener("click", () => this.setDocView(b.dataset.view)));
+      this.on("#docmd", "input", () => {
+        clearTimeout(this._mdTimer);
+        this._mdTimer = setTimeout(() => this._applyMarkdownEdit(), 250);
+      });
       this.on("#draft", "click", () => this.doDraft());
       this.on("#preview", "click", () => this.doPreview());
       this.on("#publish", "click", () => this.doPublish());
@@ -4672,14 +4676,27 @@ ${String(body ?? "")}`;
       const slug = this.presetStr(p.slug) || (this.$('[data-header="slug"]')?.textContent || "").trim();
       return publicUrlFor({ type: this.type, slug, path: this.itemPath });
     }
-    // SOW-062 Phase 6: the Visual / Markdown doc-view toggle. Visual is the block editor; Markdown is a READ-ONLY
-    // projection of the whole body as source (the same #body.value the serializer produces), matching the hi-fi
-    // "full document as markdown" panel. It never edits the model, so there is no round-trip parse risk.
+    // SOW-062 Phase 6: the Visual / Markdown doc-view toggle. Visual is the block editor; Markdown is the body as
+    // source (the same #body.value the serializer produces). sow-199 made it EDITABLE: see the #docmd input
+    // wiring; opening the view projects the body in, and any pending edit is flushed before the view changes.
+    // sow-199: push the Markdown textarea into the block model. Idempotent for text that is already the body.
+    _applyMarkdownEdit() {
+      const ta = this.$("#docmd");
+      const body = this.$("#body");
+      if (!ta || !body) return;
+      if (ta.value === body.value) return;
+      body.value = ta.value;
+      this._markDirty();
+    }
     setDocView(mode) {
       const on = mode === "markdown";
       this.$(".doc")?.classList.toggle("md-view", on);
       const wrap = this.$("#docmdwrap");
       if (wrap) {
+        if (!on) {
+          clearTimeout(this._mdTimer);
+          this._applyMarkdownEdit();
+        }
         wrap.hidden = !on;
         if (on) {
           const ta = this.$("#docmd");

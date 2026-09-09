@@ -748,8 +748,8 @@ class GbtiContentEditor extends GbtiElement {
                <gbti-doc-editor id="body"></gbti-doc-editor>
              </section>${docSections}
              <div class="docmd-wrap" id="docmdwrap" hidden>
-               <div class="docmd-bar">${CODE} <span>Full document as markdown</span><span class="docmd-note">Read-only source view</span></div>
-               <textarea class="docmd" id="docmd" spellcheck="false" readonly></textarea>
+               <div class="docmd-bar">${CODE} <span>Body as markdown</span><span class="docmd-note">Edits here update the visual editor</span></div>
+               <textarea class="docmd" id="docmd" spellcheck="false" aria-label="Body as markdown"></textarea>
              </div>
              <div id="out" class="muted"></div>
              <div hidden>${hiddenHtml}</div>
@@ -791,6 +791,15 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#statdiscuss', 'click', () => this.$('#secDiscussion')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     this.on('#viewpub', 'click', () => { const u = this.publicUrl(); if (u) window.open(u, '_blank', 'noopener'); });
     this.$$('#docview [data-view]').forEach((b) => b.addEventListener('click', () => this.setDocView(b.dataset.view))); // SOW-062 P6: Visual/Markdown
+    // sow-199: the Markdown view EDITS the body. Typing writes back through the block editor's own value setter
+    // (the tested parseBlocks), debounced so a long document is not re-parsed per keystroke, and marks the
+    // document dirty. The view projects body -> textarea only when it OPENS (setDocView), never while typing,
+    // so the caret never jumps and a half-typed fence is not normalised under the cursor. Body only: the
+    // frontmatter is not in this surface, so the publishedAt guard is untouched by construction.
+    this.on('#docmd', 'input', () => {
+      clearTimeout(this._mdTimer);
+      this._mdTimer = setTimeout(() => this._applyMarkdownEdit(), 250);
+    });
     this.on('#draft', 'click', () => this.doDraft());
     this.on('#preview', 'click', () => this.doPreview());
     this.on('#publish', 'click', () => this.doPublish());
@@ -1652,14 +1661,25 @@ class GbtiContentEditor extends GbtiElement {
     return publicUrlFor({ type: this.type, slug, path: this.itemPath });
   }
 
-  // SOW-062 Phase 6: the Visual / Markdown doc-view toggle. Visual is the block editor; Markdown is a READ-ONLY
-  // projection of the whole body as source (the same #body.value the serializer produces), matching the hi-fi
-  // "full document as markdown" panel. It never edits the model, so there is no round-trip parse risk.
+  // SOW-062 Phase 6: the Visual / Markdown doc-view toggle. Visual is the block editor; Markdown is the body as
+  // source (the same #body.value the serializer produces). sow-199 made it EDITABLE: see the #docmd input
+  // wiring; opening the view projects the body in, and any pending edit is flushed before the view changes.
+  // sow-199: push the Markdown textarea into the block model. Idempotent for text that is already the body.
+  _applyMarkdownEdit() {
+    const ta = this.$('#docmd');
+    const body = this.$('#body');
+    if (!ta || !body) return;
+    if (ta.value === body.value) return;
+    body.value = ta.value;
+    this._markDirty();
+  }
+
   setDocView(mode) {
     const on = mode === 'markdown';
     this.$('.doc')?.classList.toggle('md-view', on);
     const wrap = this.$('#docmdwrap');
     if (wrap) {
+      if (!on) { clearTimeout(this._mdTimer); this._applyMarkdownEdit(); } // sow-199: a debounced edit must not be lost on the way back to Visual
       wrap.hidden = !on;
       if (on) { const ta = this.$('#docmd'); if (ta) ta.value = this.$('#body')?.value ?? ''; }
     }
