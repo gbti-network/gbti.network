@@ -102,6 +102,7 @@ export {
   governanceAdminOp, // sow-213 Phase 2b: governance goes to the Worker, which holds SIGNUP_KV and the moderation log
   listPRs,
   prStatus,
+  itemStats, // sow-232: the editor's Live revisions tile
   listIncomingContributions,
   getContributionReview,
   reviewContribution,

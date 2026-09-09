@@ -707,6 +707,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       return { prs: Array.isArray(r?.items) ? r.items : [] }; // the Worker returns { items }; the components read { prs }
     },
     prStatus({ number }: any) { return workerGet(`/membership/pr-status?number=${encodeURIComponent(number)}`); },
+    // sow-232: the editor's Live revisions tile; the Worker counts the commits on main that touched the item.
+    async itemStats({ path }: any) {
+      const r = await workerGet(`/membership/revisions?path=${encodeURIComponent(String(path || ''))}`);
+      return r && r.ok ? { revisions: r.revisions, capped: !!r.capped, lastAt: r.lastAt ?? null } : null;
+    },
 
     // ----- SOW-018 Shares: post (members-default, encrypted) + read the tier-gated community stream -----
     // Post a Share through the SAME hosted-authoring PR path as content. A members share (the composer's default

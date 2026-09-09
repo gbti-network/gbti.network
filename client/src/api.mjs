@@ -25,7 +25,7 @@ import {
   editComment,
   getComment,
   listPRs,
-  prStatus,
+  prStatus, itemStats,
   listIncomingContributions,
   getContributionReview,
   reviewContribution,
@@ -178,6 +178,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/onboarding-status') return run(() => getOnboardingStatus(ctx)); // SOW-026
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));
+  if (method === 'GET' && pathname === '/api/item-stats') return run(() => itemStats(ctx, { path: query.path })); // sow-232: the editor's Live revisions tile
   if (method === 'GET' && pathname === '/api/contributions') return run(() => listIncomingContributions(ctx)); // SOW-028: the owner's incoming-contribution review inbox
   if (method === 'GET' && pathname === '/api/contribution') return run(() => getContributionReview(ctx, { number: query.number })); // SOW-028: one contribution's diff + proposed body
   if (method === 'POST' && pathname === '/api/contribution-review') return run(() => reviewContribution(ctx, body ?? {})); // SOW-028: approve | request-changes | decline

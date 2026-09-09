@@ -228,6 +228,18 @@ export async function listPRs(ctx) {
 }
 
 
+// sow-232: the editor's Live revisions tile on the npm host: commits on main that touched the item's file.
+export async function itemStats(ctx, { path } = {}) {
+  requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const rel = String(path || '');
+  const clean = rel.length > 0 && !rel.startsWith('/') && rel.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+  if (!clean || !(rel.startsWith('members/') || /^house\/(posts|projects|prompts)\//.test(rel))) throw new OperationError('bad-request', 'a members/ or house content path is required');
+  const list = await repo.listCommits(rel, { ref: 'main', perPage: 100 });
+  const arr = Array.isArray(list) ? list : [];
+  return { revisions: arr.length, capped: arr.length >= 100, lastAt: arr[0]?.commit?.committer?.date || arr[0]?.commit?.author?.date || null };
+}
+
 export async function prStatus(ctx, { number } = {}) {
   requireIdentity(ctx);
   const repo = requireRepo(ctx);

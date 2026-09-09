@@ -106,7 +106,7 @@ import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SO
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
 import { membershipDeployStatus } from './membership-deploy-status.mjs'; // sow-185: public "still deploying" status check
 import { handleDiscordInvite } from './discord-invite.mjs';
-import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from './github-app.mjs';
+import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent, itemRevisions } from './github-app.mjs';
 import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner-scoped repo-draft listing
 import { listSharesFeed } from './membership-shares.mjs'; // sow-158 Part 3: tier-gated community Shares feed
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
@@ -1623,6 +1623,14 @@ export default {
         if (method === 'GET') {
           const r = await reviewFileContent(request, env);
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+      if (pathname === '/membership/revisions') {
+        const cors = corsHeaders(request, env, { credentials: true }); // sow-232: the editor's Live revisions tile (cookie or bearer)
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await itemRevisions(request, env);
+          return json(r.body, r.status, { ...cors, 'Cache-Control': r.status === 200 ? 'private, max-age=600' : 'no-store', Vary: 'Authorization, Cookie' });
         }
       }
       if (pathname === '/membership/repo-drafts') {

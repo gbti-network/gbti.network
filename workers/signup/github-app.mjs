@@ -377,3 +377,32 @@ export async function reviewFileContent(request, env, deps = {}) {
   } catch { text = null; }
   return { status: 200, body: { ok: true, text, base64 } };
 }
+
+/**
+ * sow-232: how many commits on the default branch touched one content item, and when the last one landed. Feeds
+ * the editor's "Live revisions" tile on the website. Same auth and the same content-path allow-list as
+ * reviewFileContent (a signed-in member, members/ or house content only, never a governance file), one GitHub
+ * commits call with the installation token, and a private ten-minute cache on the response so opening the same
+ * item twice does not spend two API calls on a token shared with publishing.
+ */
+export async function itemRevisions(request, env, deps = {}) {
+  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
+  const who = await authMemberLogin(request, env, { fetchImpl, fetchUser });
+  if (!who.ok) return { status: who.status, body: who.body };
+  const url = new URL(request.url);
+  const path = String(url.searchParams.get('path') || '');
+  const clean = path.length > 0 && !path.startsWith('/') && !path.includes('\\') && !path.includes('\0') &&
+    path.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+  const HOUSE_CONTENT = ['house/posts/', 'house/projects/', 'house/prompts/'];
+  const allowedPrefix = path.startsWith('members/') || HOUSE_CONTENT.some((p) => path.startsWith(p));
+  if (!clean || !allowedPrefix) return { status: 400, body: { error: 'bad_request', message: 'path must be a clean members/ or house content path' } };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const res = await fetchImpl(`${GH}/repos/${upstream}/commits?path=${encodeURIComponent(path)}&sha=main&per_page=100`, { headers: GH_HEADERS(instToken) });
+  if (!res || !res.ok) return { status: 502, body: { error: 'revisions_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
+  const list = await res.json().catch(() => null);
+  if (!Array.isArray(list)) return { status: 502, body: { error: 'revisions_failed', message: 'GitHub returned an unexpected shape' } };
+  const last = list[0]?.commit?.committer?.date || list[0]?.commit?.author?.date || null;
+  // per_page caps the count at 100; an item with more revisions than that reads as 100+, which the tile shows honestly.
+  return { status: 200, body: { ok: true, revisions: list.length, capped: list.length >= 100, lastAt: last } };
+}

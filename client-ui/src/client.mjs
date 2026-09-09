@@ -93,6 +93,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }
     listPRs: () => request('GET', '/api/prs'),
     prStatus: ({ number }) => request('GET', `/api/pr-status${qs({ number })}`),
+    itemStats: ({ path }) => request('GET', `/api/item-stats${qs({ path })}`), // sow-232: the editor's Live revisions tile
     listContributions: () => request('GET', '/api/contributions'), // SOW-028: incoming contributions to review -> { contributions: [...] }
     getContribution: ({ number }) => request('GET', `/api/contribution${qs({ number })}`), // SOW-028: one contribution's diff + proposed body
     reviewContribution: (b) => request('POST', '/api/contribution-review', b), // SOW-028: { number, decision: approve|request-changes|decline, message? }

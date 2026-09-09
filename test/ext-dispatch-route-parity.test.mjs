@@ -57,6 +57,7 @@ const WEBSITE_ONLY = {
       '/api/content/status', '/api/content/rename',
       '/api/drafts', '/api/draft/discard', '/api/draft/publish',
       '/api/contributions', '/api/contribution', '/api/contribution-review',
+      '/api/item-stats', // sow-232: the editor's Live revisions tile; the editor is an authoring surface the extension no longer hosts
     ],
   },
   WEBSITE_FILESYSTEM: {

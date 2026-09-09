@@ -9645,11 +9645,9 @@ ${String(body ?? "")}`;
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]) };
   var STAT_DEFS = [
-    { key: "revisions", label: "Live revisions" },
-    { key: "forkRevisions", label: "Draft revisions" },
-    { key: "contributions", label: "Contributions" },
-    { key: "referrals", label: "Referrals" },
-    { key: "discussions", label: "Discussions" }
+    { key: "discussions", label: "Discussions" },
+    { key: "revisions", label: "Live revisions", title: "Commits on the main branch that touched this item" },
+    { key: "contributions", label: "Contributions", title: "Members credited as contributors on this item" }
   ];
   var TYPE_LABEL = { post: "Article", project: "Project", prompt: "Prompt", profile: "Profile" };
   var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
@@ -9964,10 +9962,10 @@ ${String(body ?? "")}`;
                <div class="rcard-h"><span class="rcard-t">Activity</span></div>
                <div class="rcard-b">
                  <div class="rail-stats">${STAT_DEFS.map((s) => {
-        const inner = `<span class="rs-n" data-statn="${s.key}">${s.key === "discussions" ? "…" : "—"}</span><span class="rs-l">${esc(s.label)}</span>`;
+        const inner = `<span class="rs-n" data-statn="${s.key}">…</span><span class="rs-l"${s.title ? ` title="${esc(s.title)}"` : ""}>${esc(s.label)}</span>`;
         return s.key === "discussions" && discussionSection ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>` : `<div class="rstat">${inner}</div>`;
       }).join("")}</div>
-                 <p class="rail-foot-note">Live once published. Revisions, contributions, and referrals arrive with the stats backend.</p>
+                 <p class="rail-foot-note">Live once published.</p>
                </div>
              </section>` : "";
       this.set(
@@ -10384,11 +10382,24 @@ ${String(body ?? "")}`;
           const el = this.$(`[data-statn="${key}"]`);
           if (el && n != null) el.textContent = String(n);
         };
+        const failStat = (key, why) => {
+          const el = this.$(`[data-statn="${key}"]`);
+          if (el) {
+            el.textContent = "n/a";
+            el.title = why;
+          }
+        };
+        const credited = this.preset?.input?.contributors;
+        setStat("contributions", Array.isArray(credited) ? credited.length : 0);
         this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() }).then((res) => setStat("discussions", (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== "members" || c.encryptedBody)).length)).catch(() => setStat("discussions", 0));
-        this.client?.itemStats?.({ type: this.type, slug, path: this.itemPath }).then((st) => {
-          if (st) STAT_DEFS.forEach((s) => setStat(s.key, st[s.key]));
-        }).catch(() => {
-        });
+        if (typeof this.client?.itemStats === "function") {
+          this.client.itemStats({ type: this.type, slug, path: this.itemPath }).then((st) => {
+            if (st && st.revisions != null) setStat("revisions", st.revisions);
+            else failStat("revisions", "The revision count is not available for this item");
+          }).catch((err) => failStat("revisions", err?.message ? `Could not read revisions: ${err.message}` : "Could not read revisions"));
+        } else {
+          failStat("revisions", "This host does not read revision history");
+        }
       }
       this.$$("[data-cover]").forEach((c) => {
         const file = c.querySelector("[data-cover-file]");
@@ -22035,6 +22046,8 @@ From the author:
       // SOW-027: edit prefill -> { path, frontmatter, body }
       listPRs: () => request("GET", "/api/prs"),
       prStatus: ({ number }) => request("GET", `/api/pr-status${qs({ number })}`),
+      itemStats: ({ path }) => request("GET", `/api/item-stats${qs({ path })}`),
+      // sow-232: the editor's Live revisions tile
       listContributions: () => request("GET", "/api/contributions"),
       // SOW-028: incoming contributions to review -> { contributions: [...] }
       getContribution: ({ number }) => request("GET", `/api/contribution${qs({ number })}`),

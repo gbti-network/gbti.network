@@ -18279,6 +18279,10 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
     },
     /** The decoded text of a file at a ref (the PR head SHA), or null if it does not exist there (a removed file).
      *  Used to render the "preview as merged" view of the proposed content. */
+    // sow-232: the commits on a ref that touched one path (newest first, capped at 100 by per_page).
+    async listCommits(path4, { ref = "main", perPage = 100 } = {}) {
+      return req("GET", `/repos/${upstream}/commits?path=${encodeURIComponent(path4)}&sha=${encodeURIComponent(ref)}&per_page=${perPage}`);
+    },
     async getFileContent(path4, ref) {
       if (appMode) {
         const p = await callWorker("GET", `/membership/file?path=${encodeURIComponent(path4)}&ref=${encodeURIComponent(ref)}`);

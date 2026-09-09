@@ -55,12 +55,14 @@ const DOC_SECTION_KEYS = { project: new Set(['video']) };
 // SOW-062 P6 rail-2: the stat tiles (hi-fi rail footer). Discussions is live now (client.listComments count); the
 // rest are wired to an optional client.itemStats() that a later backend phase provides -- until then they show a
 // pending dash. Order matches the mockup.
+// sow-232 (owner decision 2026-09-09): only what is REAL. Draft revisions (a hosted draft is one copy, nothing to
+// count) and Referrals (no per-item attribution exists yet) are gone rather than shown as a dash that reads as
+// loading. Live revisions come from client.itemStats() (commits on main touching the item); Contributions is the
+// item's credited contributors (the SOW-008/009 credit model); Discussions is the live comment count.
 const STAT_DEFS = [
-  { key: 'revisions', label: 'Live revisions' },
-  { key: 'forkRevisions', label: 'Draft revisions' },
-  { key: 'contributions', label: 'Contributions' },
-  { key: 'referrals', label: 'Referrals' },
   { key: 'discussions', label: 'Discussions' },
+  { key: 'revisions', label: 'Live revisions', title: 'Commits on the main branch that touched this item' },
+  { key: 'contributions', label: 'Contributions', title: 'Members credited as contributors on this item' },
 ];
 const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', profile: 'Profile' };
 
@@ -410,13 +412,13 @@ class GbtiContentEditor extends GbtiElement {
                <div class="rcard-h"><span class="rcard-t">Activity</span></div>
                <div class="rcard-b">
                  <div class="rail-stats">${STAT_DEFS.map((s) => {
-                   const inner = `<span class="rs-n" data-statn="${s.key}">${s.key === 'discussions' ? '…' : '—'}</span><span class="rs-l">${esc(s.label)}</span>`;
+                   const inner = `<span class="rs-n" data-statn="${s.key}">…</span><span class="rs-l"${s.title ? ` title="${esc(s.title)}"` : ''}>${esc(s.label)}</span>`;
                    // SOW-112 QA: the Discussions tile links to the discussion section below the content.
                    return s.key === 'discussions' && discussionSection
                      ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>`
                      : `<div class="rstat">${inner}</div>`;
                  }).join('')}</div>
-                 <p class="rail-foot-note">Live once published. Revisions, contributions, and referrals arrive with the stats backend.</p>
+                 <p class="rail-foot-note">Live once published.</p>
                </div>
              </section>` : '';
     this.set(
@@ -839,18 +841,28 @@ class GbtiContentEditor extends GbtiElement {
         }).catch(() => {});
       }
     }
-    // SOW-062 P6 rail-2: fill the Discussions stat tile from the live comment count; fill the rest from an optional
-    // client.itemStats() once a later backend phase provides it (until then they stay a pending dash).
+    // SOW-062 P6 rail-2 + sow-232: Discussions from the live comment count; Contributions from the item's credited
+    // contributors (already in the loaded frontmatter, no request); Live revisions from client.itemStats(), which the
+    // website (a Worker route) and the npm host implement. A tile that cannot be filled reads "n/a" with the reason
+    // in its title, never a dash that looks like loading.
     if (showStats) {
       const setStat = (key, n) => { const el = this.$(`[data-statn="${key}"]`); if (el && n != null) el.textContent = String(n); };
+      const failStat = (key, why) => { const el = this.$(`[data-statn="${key}"]`); if (el) { el.textContent = 'n/a'; el.title = why; } };
+      const credited = this.preset?.input?.contributors;
+      setStat('contributions', Array.isArray(credited) ? credited.length : 0);
       // Parity with the PUBLIC thread count: union the rename aliases, exclude author notes (pinned, not
       // replies) and legacy members rows with no encrypted body (the page excludes them too). A just-posted
       // comment still counts here before the deploy (the live echo) — deliberately ahead of the public page.
       this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() })
         .then((res) => setStat('discussions', (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== 'members' || c.encryptedBody)).length))
         .catch(() => setStat('discussions', 0));
-      this.client?.itemStats?.({ type: this.type, slug, path: this.itemPath })
-        .then((st) => { if (st) STAT_DEFS.forEach((s) => setStat(s.key, st[s.key])); }).catch(() => {});
+      if (typeof this.client?.itemStats === 'function') {
+        this.client.itemStats({ type: this.type, slug, path: this.itemPath })
+          .then((st) => { if (st && st.revisions != null) setStat('revisions', st.revisions); else failStat('revisions', 'The revision count is not available for this item'); })
+          .catch((err) => failStat('revisions', err?.message ? `Could not read revisions: ${err.message}` : 'Could not read revisions'));
+      } else {
+        failStat('revisions', 'This host does not read revision history');
+      }
     }
 
     // SOW-062 P3: the rich cover-image control(s) — preview + Choose/Replace/Remove (the kind:'image' field).
