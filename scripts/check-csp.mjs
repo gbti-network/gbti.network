@@ -7,7 +7,9 @@
 //   npm run build && npm run check:csp
 //
 // Needs the dist/ build + a Chromium for Playwright. SKIPS (exit 0) if Playwright/Chromium/_headers are absent,
-// so it is safe to run anywhere; install with `npx playwright install chromium`. NOTE: a plain http server does
+// so it is safe to run anywhere; install with `npx playwright install chromium`. sow-288: REQUIRE_BROWSER=1 turns
+// every skip into a FAILURE (the weekly layout-guards job sets it), zero pages checked is never a pass, and a page
+// that fails to load fails the run under the gate. GUARD_DIST=<dir> points the harness at another build (tests). NOTE: a plain http server does
 // not apply Cloudflare `_headers`, so we parse dist/_headers ourselves (cspForPath, mirroring the `!` unset on
 // the eval-tool subtree). `upgrade-insecure-requests` is stripped locally (the harness is http; it would upgrade
 // same-origin http assets to https and break every load). The definitive `_headers` check is `wrangler pages
@@ -19,11 +21,13 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { parseHeaders, cspForPath } from './check-headers.mjs';
 import { samplePages, coverageGaps, describeCoverage } from './lib/page-sample.mjs'; // sow-248: pages by content shape
+import { requireBrowser, skipOrDie, verdict } from './lib/browser-guard.mjs'; // sow-288: skips fail under the gate; zero is never a pass
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-const DIST = path.join(ROOT, 'dist');
+const DIST = process.env.GUARD_DIST ? path.resolve(process.env.GUARD_DIST) : path.join(ROOT, 'dist');
+const GATE = requireBrowser();
 
-function skip(msg) { console.log('· check:csp skipped: ' + msg); process.exit(0); }
+function skip(msg) { skipOrDie('check:csp', msg, { requireBrowser: GATE }); }
 
 if (!fs.existsSync(DIST)) skip('dist/ not found (run `npm run build` first)');
 const headersFile = path.join(DIST, '_headers');
@@ -105,6 +109,7 @@ await page.addInitScript(() => {
 page.on('console', (m) => { if (m.type() === 'error' && /content security policy|refused to (load|execute|apply|connect|frame)/i.test(m.text())) violations.push({ url: currentUrl, directive: 'console', blockedURI: m.text().slice(0, 160) }); });
 
 let checked = 0;
+let loadFailures = 0;
 for (const url of pages) {
   currentUrl = url;
   try {
@@ -112,7 +117,9 @@ for (const url of pages) {
     await page.waitForTimeout(400); // let deferred scripts + async violations fire
     checked++;
   } catch (e) {
-    // a navigation/network error is NOT a CSP violation; note it but do not fail on it
+    // a navigation/network error is NOT a CSP violation; noted here, and under REQUIRE_BROWSER it fails the run
+    // below (an unreached page in CI is a broken harness, not evidence about the site).
+    loadFailures++;
     console.log(`· ${url}: load note ${e.message.split('\n')[0]}`);
   }
 }
@@ -124,4 +131,10 @@ if (violations.length) {
   for (const v of violations) console.error(`  - ${v.url}  [${v.directive}]  blocked: ${v.blockedURI}${v.source ? `  (${v.source}:${v.line})` : ''}`);
   process.exit(1);
 }
-console.log(`✓ CSP guard passed: force-enforced across ${checked} pages, no securitypolicyviolation. ${describeCoverage(sample)}`);
+// sow-288: zero pages is never a pass, and an unreached page fails under the gate.
+const v = verdict({ checked, loadFailures, failures: 0, requireBrowser: GATE });
+if (!v.ok) {
+  console.error(`✗ CSP guard cannot claim a pass: ${v.reason}`);
+  process.exit(1);
+}
+console.log(`✓ CSP guard passed: force-enforced across ${checked} pages, no securitypolicyviolation. ${describeCoverage(sample)}${v.reason ? ' ' + v.reason + '.' : ''}`);

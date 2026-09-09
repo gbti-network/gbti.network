@@ -6,9 +6,10 @@ name: Layout guards
 # build once a week. It is NOT in the deploy path on purpose: a Playwright pass over the shape sample costs
 # minutes, and a layout regression is worth a weekly alert, not a blocked deploy.
 #
-# check:csp is deliberately not run here: whether that guard is green against a real build is sow-288's
-# question, and a first scheduled red from a guard that has never run would be noise on this one's signal.
-# Once sow-288 has measured it, add `npm run check:csp` as a second step.
+# sow-288: check:csp runs here too, as a second step, with REQUIRE_BROWSER=1 on both guards so a missing browser or
+# a missing build is a red rather than a green skip (owner decision 2026-09-09: a weekly report, not a deploy
+# block). Both guards refuse to pass on zero pages. The gate was measured once against a real build before
+# this step was added; the result is recorded in sow-288.
 
 on:
   schedule:
@@ -40,6 +41,13 @@ jobs:
           GBTI_CF_ANALYTICS_TOKEN: ${{ vars.GBTI_CF_ANALYTICS_TOKEN }}
       - name: Overflow guard (every content shape, three viewports)
         run: npm run check:overflow
+        env:
+          REQUIRE_BROWSER: '1'
+      - name: CSP guard (force-enforced policy, every content shape)
+        if: always()
+        run: npm run check:csp
+        env:
+          REQUIRE_BROWSER: '1'
       # sow-298: a SCHEDULED failure has nobody watching it (GitHub emails the automation account that last
       # touched this file, and the per-commit board stays green). This step never fails the job: if: failure()
       # and the script always exits zero.

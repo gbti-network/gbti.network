@@ -7,15 +7,19 @@
 //
 // Needs the dist/ build + a Chromium for Playwright. If Playwright or its browser is unavailable, the check
 // SKIPS (exit 0) with a note, so it is safe to run anywhere; install with `npx playwright install chromium`.
+// sow-288: REQUIRE_BROWSER=1 turns every skip into a FAILURE (the weekly layout-guards job sets it) and zero
+// renders is never a pass. GUARD_DIST=<dir> points the harness at another build (tests).
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { samplePages, coverageGaps, describeCoverage } from './lib/page-sample.mjs'; // sow-248: pages by content shape
+import { requireBrowser, skipOrDie, verdict } from './lib/browser-guard.mjs'; // sow-288
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-const DIST = path.join(ROOT, 'dist');
+const DIST = process.env.GUARD_DIST ? path.resolve(process.env.GUARD_DIST) : path.join(ROOT, 'dist');
+const GATE = requireBrowser();
 const VIEWPORTS = [['mobile', 390], ['tablet', 768], ['desktop', 1440]];
 // px slack. Horizontal-scroll carousels (the "Recently created" / "Editor's pick" sliders) clip their
 // children but their own scroll container can spill 1-3 sub-pixel-rounded px from scroll-snap + gaps. 4px
@@ -23,7 +27,7 @@ const VIEWPORTS = [['mobile', 390], ['tablet', 768], ['desktop', 1440]];
 // +16px to +398px). Raise only if a genuine sub-4px regression is ever confirmed harmless.
 const TOLERANCE = 4;
 
-function skip(msg) { console.log('· check:overflow skipped: ' + msg); process.exit(0); }
+function skip(msg) { skipOrDie('check:overflow', msg, { requireBrowser: GATE }); }
 
 if (!fs.existsSync(DIST)) skip('dist/ not found (run `npm run build` first)');
 
@@ -103,6 +107,12 @@ server.close();
 if (failures.length) {
   console.error(`✗ overflow guard failed (${failures.length} of ${checked} checks):`);
   for (const f of failures) console.error('  - ' + f);
+  process.exit(1);
+}
+// sow-288: a load error already counts as a failure above; what is left to refuse is a run that rendered nothing.
+const v = verdict({ checked, loadFailures: 0, failures: 0, requireBrowser: GATE });
+if (!v.ok) {
+  console.error(`✗ overflow guard cannot claim a pass: ${v.reason}`);
   process.exit(1);
 }
 console.log(`✓ overflow guard passed: no horizontal overflow at ${VIEWPORTS.map(([, w]) => w).join('/')}px on ${pages.length} pages (${checked} renders). ${describeCoverage(sample)}`);
