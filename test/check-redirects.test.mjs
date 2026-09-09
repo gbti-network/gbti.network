@@ -52,13 +52,17 @@ test('fails on a destination that does not resolve (a 301 to a 404)', () => {
 
 test('skips external and wildcard destinations', () => {
   const root = tmpRoot();
+  // sow-245: one resolvable rule rides along, because a file whose every rule is skipped leaves the guard with
+  // no subjects, which is now (correctly) an error of its own. The skip semantics are unchanged.
+  buildPage(root, 'membership');
   writeRedirects(root, [
     '/discord https://discord.gg/abc 302',
     '/author/* /members/* 301',
+    '/join /membership/ 301',
   ]);
   const { errors, notes, checked } = checkRedirects({ root });
   assert.deepEqual(errors, []);
-  assert.equal(checked, 0);
+  assert.equal(checked, 1);
   assert.ok(notes.some((n) => /external destination skipped/.test(n)));
   assert.ok(notes.some((n) => /wildcard destination skipped/.test(n)));
   fs.rmSync(root, { recursive: true, force: true });
@@ -89,11 +93,34 @@ test('candidatesFor maps the three destination shapes', () => {
   assert.deepEqual(candidatesFor(d, '/about'), [path.join(d, 'about', 'index.html'), path.join(d, 'about.html')]);
 });
 
-test('notes (does not error) when the composed dist/_redirects is absent', () => {
+// sow-245: INVERTED on purpose. This case used to assert "no error" when the composed file was absent, which is
+// the vacuous pass the guard printed for months ("✓ 0 destinations resolve in dist"). A guard with no subjects
+// now says so and fails, in the wording check-article-closing-slot established.
+test('sow-245: errors (does not merely note) when the composed dist/_redirects is absent', () => {
   const root = tmpRoot();
   fs.rmSync(path.join(root, 'dist'), { recursive: true, force: true });
-  const { errors, notes } = checkRedirects({ root });
-  assert.deepEqual(errors, []);
-  assert.ok(notes.some((n) => /dist\/_redirects not found/.test(n)));
+  const { errors, checked } = checkRedirects({ root });
+  assert.equal(checked, 0);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /dist\/_redirects not found, so this guard had no subjects and proved nothing/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-245: errors when dist/ itself is absent (the pre-build run)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-redirects-'));
+  const { errors } = checkRedirects({ root });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /not found, so this guard had no subjects/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-245: a PARTIAL dist (pages built, _redirects with no resolvable rule) fails rather than passing on zero', () => {
+  const root = tmpRoot();
+  buildPage(root, 'membership');
+  writeRedirects(root, ['# only comments and an external rule', '/old https://example.com/new 301']);
+  const { errors, checked } = checkRedirects({ root });
+  assert.equal(checked, 0, 'the external rule is skipped, so nothing was resolved');
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /no root-relative destination to resolve, so this guard had no subjects/);
   fs.rmSync(root, { recursive: true, force: true });
 });

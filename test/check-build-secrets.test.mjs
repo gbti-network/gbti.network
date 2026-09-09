@@ -11,6 +11,8 @@ function tmpRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-guard-'));
   fs.mkdirSync(path.join(root, 'house/_enc'), { recursive: true });
   fs.mkdirSync(path.join(root, 'dist/_astro'), { recursive: true });
+  // sow-245: the guard now refuses a dist with no HTML page (no subjects), so every fixture carries one page.
+  fs.writeFileSync(path.join(root, 'dist/index.html'), '<html>ok</html>');
   return root;
 }
 const validEnvelope = JSON.stringify({ v: 1, kid: '1', iv: 'AAAAAAAAAAAAAAAA', aad: 'a', ct: 'AAAA' });
@@ -21,6 +23,39 @@ test('a clean tree passes (valid .enc, no plaintext, no leak)', () => {
   fs.writeFileSync(path.join(root, 'dist/index.html'), '<html>ok</html>');
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors, []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+// sow-245: the guard used to return { errors, notes } with NO subject count and print "✓ no key material in
+// dist" over a dist it never opened. It now counts the HTML pages it scanned and fails on zero.
+test('sow-245: errors when dist/ is absent, and reports zero pages scanned', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-guard-'));
+  fs.mkdirSync(path.join(root, 'house/_enc'), { recursive: true });
+  const { errors, checked } = checkBuildSecrets({ root, env: {} });
+  assert.equal(checked, 0);
+  assert.ok(errors.some((e) => /dist\/ not found, so this guard had no subjects and proved nothing/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-245: a PARTIAL dist (assets, no HTML page) fails rather than passing on zero', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-guard-'));
+  fs.mkdirSync(path.join(root, 'house/_enc'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'dist/_astro'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/_astro/app.js'), 'console.log(1)');
+  const { errors, checked } = checkBuildSecrets({ root, env: {} });
+  assert.equal(checked, 0);
+  assert.ok(errors.some((e) => /carries no HTML page, so this guard had no subjects/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-245: checked counts the HTML pages the scan actually read', () => {
+  const root = tmpRoot();
+  fs.mkdirSync(path.join(root, 'dist/blog/a'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/blog/a/index.html'), '<html>a</html>');
+  fs.writeFileSync(path.join(root, 'dist/_astro/x.css'), 'body{}');
+  const { errors, checked } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(errors, []);
+  assert.equal(checked, 2, 'index.html + blog/a/index.html; the css is scanned but is not a page');
   fs.rmSync(root, { recursive: true, force: true });
 });
 

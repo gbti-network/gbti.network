@@ -52,11 +52,14 @@ test('errors when dist/_headers is missing but dist exists (public/_headers did 
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('notes (no error) when dist/ is absent (pre-build)', () => {
+// sow-245: INVERTED on purpose. This used to assert "no error" on a missing dist, the run that printed
+// "✓ headers guard passed (0 CSP present + well-formed)". No subjects is now an error.
+test('sow-245: errors (does not merely note) when dist/ is absent (pre-build)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-headers-'));
-  const { errors, notes } = checkHeaders({ root });
-  assert.deepEqual(errors, []);
-  assert.ok(notes.some((n) => /dist\/ not found/.test(n)));
+  const { errors, checked } = checkHeaders({ root });
+  assert.equal(checked, 0);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /dist\/ not found, so this guard had no subjects and proved nothing/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -116,9 +119,14 @@ test('parseCsp splits directives and flags duplicates', () => {
 
 test('the REAL public/_headers passes the guard', () => {
   // Every other case here runs on a synthetic fixture, so nothing asserted the file we actually ship.
+  // sow-245: the guard now refuses a missing dist (no subjects), and a checkout has none until a build, so
+  // this case points the dist at a temp dir and keeps the headers file at the shipped one. The subject under
+  // test is the file's CONTENT; the dist presence is the other tests' business.
   const root = path.resolve(import.meta.dirname, '..');
-  const { errors } = checkHeaders({ root, headersFile: path.join(root, 'public/_headers') });
+  const distDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-headers-real-'));
+  const { errors } = checkHeaders({ root, distDir, headersFile: path.join(root, 'public/_headers') });
   assert.deepEqual(errors, []);
+  fs.rmSync(distDir, { recursive: true, force: true });
 });
 
 test('the REAL public/_headers keeps the /embed relay framable by the extension', () => {

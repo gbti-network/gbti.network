@@ -93,7 +93,8 @@ export function checkHeaders({ root, distDir = path.join(root, 'dist'), headersF
   let checked = 0;
 
   if (!fs.existsSync(distDir)) {
-    notes.push('dist/ not found, skipped the headers check (run after `npm run build`).');
+    // sow-245: a missing dist is an ERROR, not a note; the tick this used to print asserted "0 CSP present + well-formed".
+    errors.push("dist/ not found, so this guard had no subjects and proved nothing. Run `npm run build` first. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
     return { errors, notes, checked };
   }
   if (!fs.existsSync(headersFile)) {

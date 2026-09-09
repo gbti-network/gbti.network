@@ -39,6 +39,10 @@ const BINARY = /\.(png|jpe?g|webp|avif|gif|ico|woff2?|ttf|eot|otf|pdf|wasm|mp4|w
 export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env = process.env, buildDrafts = buildRepoDraftsIndex } = {}) {
   const errors = [];
   const notes = [];
+  // sow-245: the subject count. This guard returned { errors, notes } with no count, so a caller could not tell
+  // "scanned everything" from "scanned nothing", and its tick asserted "no key material in dist" about a dist it
+  // never opened. `checked` is the number of HTML pages the build-output scan actually read; zero is an error.
+  let checked = 0;
 
   // 1) Known secret VALUES must never appear in the built output: MEMBER_CONTENT_KEY (when the build env has
   //    it) plus any extra values passed via SCAN_SECRETS.
@@ -51,6 +55,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       if (BINARY.test(f)) continue;
       const rel = path.relative(root, f);
       const txt = fs.readFileSync(f, 'utf8');
+      if (/\.html$/i.test(f)) checked++;
       for (const [label, value] of needles) {
         if (value && value.length >= 8 && txt.includes(value)) errors.push(`leaked ${label} in build output: ${rel}`);
       }
@@ -68,8 +73,9 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
         errors.push(`the members-only marker leaked into build output: ${rel} (a publish failed to split the body; the gated section may be exposed). See SOW-016.`);
       }
     }
+    if (checked === 0) errors.push("dist/ carries no HTML page, so this guard had no subjects and proved nothing. Run `npm run build` first; a dist with no page is a partial build. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
   } else {
-    notes.push('dist/ not found, skipped the build-output scan (run after `npm run build`).');
+    errors.push("dist/ not found, so this guard had no subjects and proved nothing. Run `npm run build` first. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
   }
 
   const modeAItemPaths = []; // sow-165: filled by the Mode A walk below, read by the media-index check after it
@@ -437,18 +443,18 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     }
   }
 
-  return { errors, notes };
+  return { errors, notes, checked };
 }
 
 // CLI
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-  const { errors, notes } = checkBuildSecrets({ root: ROOT });
+  const { errors, notes, checked } = checkBuildSecrets({ root: ROOT });
   for (const n of notes) console.log('· ' + n);
   if (errors.length) {
     console.error(`✗ build-secrets guard failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):`);
     for (const e of errors) console.error('  - ' + e);
     process.exit(1);
   }
-  console.log('✓ build-secrets guard passed (no key material in dist, no plaintext beside ciphertext)');
+  console.log(`✓ build-secrets guard passed (${checked} page${checked === 1 ? '' : 's'} scanned: no key material in dist, no plaintext beside ciphertext)`);
 }

@@ -35,11 +35,13 @@ export function checkRedirects({ root, distDir = path.join(root, 'dist'), redire
   let checked = 0;
 
   if (!fs.existsSync(redirectsFile)) {
-    notes.push('dist/_redirects not found, nothing to check (run astro build + scripts/compose-redirects.mjs).');
+    // sow-245: a missing subject is an ERROR, not a note. This guard used to print a green tick over a dist that
+    // had no redirects file, which is exactly the partial build it exists to catch.
+    errors.push("dist/_redirects not found, so this guard had no subjects and proved nothing. Run astro build + scripts/compose-redirects.mjs first. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
     return { errors, notes, checked };
   }
   if (!fs.existsSync(distDir)) {
-    notes.push('dist/ not found, skipped the redirect-resolution check (run after `npm run build`).');
+    errors.push("dist/ not found, so this guard had no subjects and proved nothing. Run `npm run build` first. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
     return { errors, notes, checked };
   }
 
@@ -58,6 +60,9 @@ export function checkRedirects({ root, distDir = path.join(root, 'dist'), redire
       errors.push(`redirect destination does not resolve in dist: ${source} -> ${dest} (no ${candidates.map((c) => path.relative(distDir, c)).join(' or ')}). Re-run scripts/gen-redirects.mjs.`);
     }
   }
+  // sow-245: the composed file always carries root-relative rules on this site (54 when this landed), so zero
+  // resolvable destinations means a partial compose or a partial build, never a legitimate empty state.
+  if (checked === 0) errors.push("dist/_redirects carries no root-relative destination to resolve, so this guard had no subjects and proved nothing. Re-run scripts/compose-redirects.mjs after a full build. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
   return { errors, notes, checked };
 }
 
