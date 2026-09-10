@@ -727,7 +727,15 @@ async function main() {
   // A FAILURE HERE MUST NOT FAIL THE RUN. The compile treats a missing or old list as "nobody is entitled" and
   // sends everybody the public issue, which is the safe direction, so a mirror blip costs one week of member
   // share titles rather than breaking membership reconciliation. Logged, and the exit code is left alone.
-  if (dryRun) {
+  //
+  // AND NEVER FROM A TARGETED RUN (2026-09-10). This PUT replaces the whole list with a projection of
+  // `members`, and a repository_dispatch run gathers ONE member. The same one-member roster that emptied the
+  // Shop Talk guest list on 2026-09-09 was, on the same night, published here as "the entitled members": one
+  // github_id, until the next full run. A compile in that window sends every other member the public issue.
+  const digestSkip = digestEntitlementTargetedSkip(targetId);
+  if (digestSkip) {
+    console.log('reconcile: ' + digestSkip);
+  } else if (dryRun) {
     console.log('reconcile: DRY RUN would publish the digest entitlement list to KV (key digest:entitled).');
   } else {
     try {
@@ -1065,6 +1073,12 @@ async function main() {
  * because a sweep that enrolls nobody while looking healthy is the failure this whole feature is built to
  * avoid.
  */
+/** Same guard for the digest entitlement list: a whole-roster artifact must never be built from one member. */
+export function digestEntitlementTargetedSkip(targetId) {
+  if (!targetId) return null;
+  return `digest entitlement publish SKIPPED in targeted mode (github_id ${targetId}): a one-member roster would replace the whole list. The daily run publishes it.`;
+}
+
 /** The one-line reason a targeted run does not sweep, or null for a full run. Pure, so it is a unit test. */
 export function shoptalkTargetedSkip(targetId) {
   if (!targetId) return null;
