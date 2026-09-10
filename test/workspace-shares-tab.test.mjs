@@ -49,7 +49,7 @@ test('the list element emits gbti-edit-share, consumes a pending edit-id once, a
 
 test('the share composer has an edit mode that re-publishes the same id and never carries encryptedBody', () => {
   const src = read('client-ui/src/elements/gbti-share-composer.mjs');
-  for (const s of ['async editShare(item)', 'cancelEdit()', 'editInputFor({ share: edited', 'encRemovalFor({ share: edited', "postShare({ input, body, removeEnc })", "edited: true"]) assert.ok(src.includes(s), s);
+  for (const s of ['async editShare(item)', 'cancelEdit()', 'editInputFor({ share: edited', 'encRemovalFor({ share: edited', "postShare({ input, body, removeEnc, ...(authorTarget ? { authorTarget, removePaths } : {}) })", "edited: true", 'authorMoveRemovals({ share: edited, authorTarget })', "this._authorTarget()", 'data-author-row']) assert.ok(src.includes(s), s);
   assert.match(src, /url\.readOnly = true/);
   assert.match(src, /data-remove-link/);
   assert.match(src, /data-unpublish/);

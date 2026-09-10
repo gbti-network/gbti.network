@@ -609,3 +609,13 @@ test('planPublishImage: bytes nowhere and no file on main REFUSES, naming the im
     onMain: async (r) => { assert.equal(r.commitPath, 'members/gwen/posts/hello/images/lead.png'); return false; },
   });
 });
+
+// sow-183 for shares (2026-09-10): the delete entries an author move adds, own folder only.
+import { shareMoveDeletions } from '../src/lib/workbench-client-core.mjs';
+
+test('shareMoveDeletions: own-folder paths become delete entries; anything else is dropped; duplicates collapse', () => {
+  const out = shareMoveDeletions({ user: 'alice', removePaths: ['members/alice/shares/x.md', 'members/alice/_enc/share-x-body.enc', 'members/alice/shares/x.md', 'members/bob/shares/x.md', 'members/alice/../bob/shares/x.md', 42] });
+  assert.deepEqual(out, [{ path: 'members/alice/shares/x.md', content: null }, { path: 'members/alice/_enc/share-x-body.enc', content: null }]);
+  assert.deepEqual(shareMoveDeletions({ user: '', removePaths: ['members/alice/shares/x.md'] }), []);
+  assert.deepEqual(shareMoveDeletions({ user: 'alice' }), []);
+});

@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
 
@@ -722,18 +722,28 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // carried (the planner re-derives it from the audience), and on a members-to-public flip `removeEnc` names
     // the old ciphertext under the member's own _enc/ so the Worker deletes it in the same pull request. The
     // Worker's share checks (audience needs Curator for public, own folder only) apply to the edit unchanged.
-    async postShare({ input = {}, body = '', removeEnc = null }: any) {
+    // sow-183 for shares (2026-09-10): `authorTarget` (a member login) is the superadmin composer's Author pick. The
+    // file is built under THAT member's folder, so the frontmatter author and the folder agree; on an edit that
+    // moves the share, `removePaths` names the old stub and ciphertext in the caller's own folder and they are
+    // deleted in the same pull request. The Worker only accepts the cross-folder write from a re-verified
+    // superadmin (allowAnyFolder), so this is convenience, not the boundary.
+    async postShare({ input = {}, body = '', removeEnc = null, authorTarget = null, removePaths = [] }: any) {
       const isEdit = !!(input && input.id);
       const createdAt = isEdit && input.createdAt ? new Date(input.createdAt).toISOString() : new Date().toISOString();
       const id_ = (input && input.id) || makeShareId(createdAt, input?.title);
       const { encryptedBody: _stale, ...clean } = input || {};
+      const owner = typeof authorTarget === 'string' && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : user;
       let built: any;
-      try { built = buildShareFile({ username: user, input: { ...clean, id: id_, createdAt }, body }); }
+      try { built = buildShareFile({ username: owner, input: { ...clean, id: id_, createdAt }, body }); }
       catch (e: any) { throw new WorkbenchClientError('invalid-content', e?.message || 'the share is invalid'); }
       const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });
       const files: any[] = plan ? plan.files : [{ path: built.path, content: built.markdown }];
       if (isEdit && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${user}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
-      const title = `${isEdit ? 'Update Share' : 'New Share'}${built.frontmatter?.title ? `: ${built.frontmatter.title}` : ''}`;
+      if (isEdit && owner !== user) {
+        const already = new Set(files.map((f: any) => f.path));
+        for (const d of shareMoveDeletions({ user, removePaths })) if (!already.has(d.path)) files.push(d);
+      }
+      const title = `${isEdit ? (owner !== user ? 'Move Share' : 'Update Share') : 'New Share'}${built.frontmatter?.title ? `: ${built.frontmatter.title}` : ''}`;
       const res = await workerPost('/membership/author', { itemId: `share-${id_}`, files, title });
       return { id: id_, path: built.path, visibility: built.frontmatter?.visibility ?? 'members', status: built.frontmatter?.status ?? 'published', encrypted: Boolean(plan?.encPath), prNumber: res.number, prUrl: res.html_url, updated: !!res.already || isEdit, edited: isEdit };
     },

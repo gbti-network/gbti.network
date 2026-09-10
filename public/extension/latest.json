@@ -3,6 +3,6 @@
   "name": "GBTI Network Extension",
   "zip": "/extension/gbti-network-extension.zip",
   "webStoreUrl": "",
-  "bytes": 2595323,
+  "bytes": 2602589,
   "mcp": "mcp/gbti-network-mcp.mjs"
 }

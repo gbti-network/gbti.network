@@ -482,6 +482,24 @@ export function mergedRedirectFrom({ oldFm, inputRedirectFrom, renaming, type, o
 }
 
 /** The comments folder for a { scope, username }: house's is fixed; a member's is their own folder. */
+/**
+ * sow-183 for shares: the delete entries an author MOVE adds to the hosted request. Every path must sit in the
+ * caller's OWN folder: the composer only ever edits the caller's own shares, so a move is "mine, going to them",
+ * and a path anywhere else is dropped rather than sent. The Worker re-checks the superadmin either way.
+ */
+export function shareMoveDeletions({ user, removePaths } = {}) {
+  const own = `members/${String(user || '').toLowerCase()}/`;
+  if (!user || !Array.isArray(removePaths)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const p of removePaths) {
+    if (typeof p !== 'string' || !p.startsWith(own) || p.includes('..') || seen.has(p)) continue;
+    seen.add(p);
+    out.push({ path: p, content: null });
+  }
+  return out;
+}
+
 export function introFolderFor({ scope, username } = {}) {
   // sow-195: the 'house' scope key is retained (it is persisted in the WorkBench preference) but resolves to the
   // network's real member folder, so an intro comment lands beside its item instead of in a folder that is gone.

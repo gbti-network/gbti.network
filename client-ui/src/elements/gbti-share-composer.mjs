@@ -13,7 +13,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { TIER, tierLabel } from '../../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
-import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
+import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote, shareAuthorTarget, authorMoveRemovals } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
@@ -162,6 +162,10 @@ const CSS = `
   .autoblock { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
   .autolabel { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--brand); margin-bottom:8px; }
   .autolabel svg { width:14px; height:14px; fill:currentColor; flex:none; }
+  .authorrow { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
+  .authorrow[hidden] { display:none; }
+  .authorrow select { width:100%; }
+  .authornote { margin:0; }
   .notetabs { display:flex; align-items:center; gap:4px; margin-bottom:8px; }
   .notetabs .nt { font:inherit; font-size:13px; font-weight:600; padding:5px 12px; border:1.5px solid var(--line); border-radius:8px; background:var(--panel); color:var(--muted); cursor:pointer; }
   .notetabs .nt.on { border-color:var(--brand); color:var(--brand); }
@@ -296,6 +300,11 @@ class GbtiShareComposer extends GbtiElement {
             </select>
             <input class="tags" type="text" aria-label="Tags" placeholder="Tags (optional, comma separated)" maxlength="120" />
           </div>
+          <div class="authorrow" data-author-row hidden>
+            <span class="autolabel">Author</span>
+            <select class="author" aria-label="Author"><option value="">You</option></select>
+            <p class="sub authornote" data-author-note hidden></p>
+          </div>
         </section>
 
         <section class="step" data-step="3" hidden>
@@ -359,6 +368,7 @@ class GbtiShareComposer extends GbtiElement {
     this._applyPublicLock();
     this._go(1);
     this._loadTopics();
+    this._loadAuthorTargets(); // sow-183 for shares: superadmin-only, renders nothing for everyone else
   }
 
   // Delegated wizard navigation + toggles.
@@ -497,6 +507,7 @@ class GbtiShareComposer extends GbtiElement {
     if (box) { box.hidden = !this._image; box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : ''; }
     this._selectAudience(item.visibility === 'public' ? 'public' : 'members');
     this._applyEditChrome(decryptNote);
+    this._paintAuthorRow(); // sow-183 for shares: the picker starts on this share's own author
     this._setNoteTab('write');
     this._go(1);
     return true;
@@ -593,6 +604,53 @@ class GbtiShareComposer extends GbtiElement {
     sel.innerHTML = `<option value="">Category (optional)</option>` +
       this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('');
     this._applySuggested();
+  }
+
+  /**
+   * sow-183 for shares (owner, 2026-09-10): the Author picker. Sourced from the OPTIONAL client capability
+   * client.authorTargets, which only the website adapter implements and which only ever succeeds for a superadmin,
+   * so a plain member, or the extension, gets no options and the row stays hidden. UX gating only: the Worker
+   * re-verifies the caller before accepting a write into another member's folder.
+   */
+  async _loadAuthorTargets() {
+    if (this._authorMembers === undefined) {
+      this._authorMembers = null;
+      try {
+        const t = await this.client?.authorTargets?.();
+        if (t && Array.isArray(t.members) && t.members.length) this._authorMembers = t.members.map((m) => String(m.username || '')).filter(Boolean);
+      } catch { this._authorMembers = null; }
+    }
+    this._paintAuthorRow();
+  }
+
+  /** Fill the Author select for the current mode: "You" first on a new share, the share's own author on an edit. */
+  _paintAuthorRow() {
+    const row = this.$('[data-author-row]');
+    const sel = this.$('select.author');
+    if (!row || !sel) return;
+    if (!this._authorMembers) { row.hidden = true; return; }
+    const current = this._edit ? String(this._edit.author || '') : '';
+    const members = this._authorMembers.includes(current) || !current ? this._authorMembers : [current, ...this._authorMembers];
+    sel.innerHTML = (current ? '' : '<option value="">You</option>') + members.map((u) => `<option value="${esc(u)}">@${esc(u)}</option>`).join('');
+    sel.value = current;
+    const note = this.$('[data-author-note]');
+    if (note) { note.hidden = true; note.textContent = ''; }
+    row.hidden = false;
+    sel.onchange = () => {
+      const target = shareAuthorTarget(sel.value, current);
+      if (note) {
+        note.textContent = target ? (this._edit ? `This share moves to @${target}'s folder; its address changes with it.` : `Posted under @${target}, as their share.`) : '';
+        note.hidden = !target;
+      }
+    };
+  }
+
+  /** The Author pick as a target for the write, or undefined when it is where the share already is. */
+  _authorTarget() {
+    const row = this.$('[data-author-row]');
+    const sel = this.$('select.author');
+    if (!row || row.hidden || !sel) return undefined;
+    return shareAuthorTarget(sel.value, this._edit ? String(this._edit.author || '') : '');
   }
 
   // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
@@ -699,8 +757,11 @@ class GbtiShareComposer extends GbtiElement {
         const input = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, visibility, removeUrl: edited.removeUrl === true } });
         if (!input) throw new Error('this share cannot be edited');
         const removeEnc = encRemovalFor({ share: edited, visibility: input.visibility, username: edited.author || null });
-        const res = await this.client.postShare({ input, body, removeEnc });
-        const what = input.status === 'draft' ? 'Removed from the network' : status === 'published' ? 'Published again' : 'Saved';
+        // sow-183 for shares: a changed Author pick moves the share; the old stub + ciphertext leave in the same PR.
+        const authorTarget = this._authorTarget();
+        const removePaths = authorTarget ? authorMoveRemovals({ share: edited, authorTarget }) : [];
+        const res = await this.client.postShare({ input, body, removeEnc, ...(authorTarget ? { authorTarget, removePaths } : {}) });
+        const what = authorTarget ? `Moved to @${authorTarget}` : input.status === 'draft' ? 'Removed from the network' : status === 'published' ? 'Published again' : 'Saved';
         const pr = res?.prNumber ? ` (PR #${res.prNumber})` : '';
         this._say(msg, `${what}${pr}. It merges automatically and the change reaches the site in a few minutes.`, 'ok');
         const item = optimisticShareItem({ res, input: { ...input, image: this._image }, body, now: input.createdAt });
@@ -716,11 +777,13 @@ class GbtiShareComposer extends GbtiElement {
       if (category) input.category = category; // SOW-087: routes the share's category Discord post
       if (tags.length) input.tags = tags; // sow-303: feeds {tags-hashtags} / {hashtags} on syndication
       if (this._image) input.image = this._image; // SOW-057: the featured image (OG-fetched, author-clearable)
-      const res = await this.client.postShare({ input, body });
-      this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), 'ok'); // SOW-072 P2: consistent ack
+      const authorTarget = this._authorTarget(); // sow-183 for shares: post AS another member (superadmin only)
+      const res = await this.client.postShare({ input, body, ...(authorTarget ? { authorTarget } : {}) });
+      this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ''}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, 'ok'); // SOW-072 P2: consistent ack
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
       const cat = this.$('select.cat'); if (cat) cat.value = '';
       const tg = this.$('input.tags'); if (tg) tg.value = '';
+      this._paintAuthorRow(); // back to "You"
       const postedImage = this._image;
       this._image = null;
       this._suggested = null;

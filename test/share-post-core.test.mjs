@@ -90,3 +90,32 @@ test('SHARE_LOCKED_STATES is the single definition, and the element no longer ke
   assert.ok(/shareComposerView\(/.test(src), 'the element must ASK the helper, or these assertions test nothing it uses');
   assert.ok(!/^const LOCKED = /m.test(src), 'the element re-declared its own locked-state list');
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-183 for shares (owner, 2026-09-10): a superadmin may post a share as another member or move one of their
+// own shares to another member. The untouched picker must never move anything, and a move may only ever delete
+// files inside the share's CURRENT author folder.
+// ---------------------------------------------------------------------------------------------------------
+import { shareAuthorTarget, authorMoveRemovals } from '../client-ui/src/share-post-core.mjs';
+
+test('shareAuthorTarget: empty or unchanged is undefined; a different clean login is the target; junk is refused', () => {
+  assert.equal(shareAuthorTarget('', ''), undefined, 'a new share with "You" selected');
+  assert.equal(shareAuthorTarget('alice', 'alice'), undefined, 'an edit whose picker was not touched');
+  assert.equal(shareAuthorTarget('Alice ', 'alice'), undefined, 'case and whitespace do not make a move');
+  assert.equal(shareAuthorTarget('bob', 'alice'), 'bob');
+  assert.equal(shareAuthorTarget('bob', ''), 'bob', 'a new share posted as bob');
+  assert.equal(shareAuthorTarget('../house', 'alice'), undefined);
+});
+
+test('authorMoveRemovals names the old stub and ciphertext, only inside the current author folder', () => {
+  const share = { id: 'x', author: 'alice', path: 'members/alice/shares/x.md', encryptedBody: 'members/alice/_enc/share-x-body.enc' };
+  assert.deepEqual(authorMoveRemovals({ share, authorTarget: 'bob' }), ['members/alice/shares/x.md', 'members/alice/_enc/share-x-body.enc']);
+  assert.deepEqual(authorMoveRemovals({ share, authorTarget: 'alice' }), [], 'same author: nothing to remove');
+  assert.deepEqual(authorMoveRemovals({ share, authorTarget: '' }), []);
+  const publicShare = { id: 'y', author: 'alice', path: 'members/alice/shares/y.md' };
+  assert.deepEqual(authorMoveRemovals({ share: publicShare, authorTarget: 'bob' }), ['members/alice/shares/y.md'], 'a public share has no ciphertext');
+  const odd = { id: 'z', author: 'alice', path: 'members/carol/shares/z.md', encryptedBody: 'members/carol/_enc/share-z-body.enc' };
+  assert.deepEqual(authorMoveRemovals({ share: odd, authorTarget: 'bob' }), [], 'paths outside the author folder are never named');
+  const fromPath = { id: 'w', path: 'members/alice/shares/w.md' };
+  assert.deepEqual(authorMoveRemovals({ share: fromPath, authorTarget: 'bob' }), ['members/alice/shares/w.md'], 'the author is read from the path when the item carries none');
+});

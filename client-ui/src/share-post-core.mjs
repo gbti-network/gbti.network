@@ -181,6 +181,33 @@ export function encRemovalFor({ share, visibility, username = null } = {}) {
   return enc;
 }
 
+/**
+ * sow-183 for shares (owner, 2026-09-10): a superadmin may post a share AS another member, or move one of their own
+ * shares to another member. The picker's value is a member login; '' means "me" on a new share. The target to send
+ * is the pick when it differs from where the share is, else undefined, so an untouched picker never moves anything.
+ */
+export function shareAuthorTarget(selected, current = '') {
+  const v = String(selected || '').trim().toLowerCase();
+  const c = String(current || '').trim().toLowerCase();
+  if (!v || v === c) return undefined;
+  return /^[a-z0-9][a-z0-9-]*$/.test(v) ? v : undefined;
+}
+
+/**
+ * The files an author move must DELETE from the old folder: the stub .md and, for a members share, its ciphertext.
+ * Only paths under the share's CURRENT author folder are ever named, so a move can never delete outside it.
+ */
+export function authorMoveRemovals({ share, authorTarget } = {}) {
+  const from = String(share?.author || authorFromPath(share?.path) || '').toLowerCase();
+  const to = String(authorTarget || '').trim().toLowerCase();
+  if (!from || !to || from === to) return [];
+  const out = [];
+  if (typeof share?.path === 'string' && share.path.startsWith(`members/${from}/shares/`)) out.push(share.path);
+  const enc = typeof share?.encryptedBody === 'string' ? share.encryptedBody : '';
+  if (enc && enc.startsWith(`members/${from}/_enc/`)) out.push(enc);
+  return out;
+}
+
 /** One line under the audience cards when an edit changes the audience; '' when it does not. */
 export function audienceChangeNote(from, to) {
   const f = from === 'public' ? 'public' : 'members';
