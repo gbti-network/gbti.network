@@ -60,6 +60,21 @@ export function normalizeAddress(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 }
 
+/** The writable attendee fields Google keeps per guest. A guest already on the list is written back with all of
+ *  them so their RSVP (responseStatus), their note, their optional flag and their plus-ones survive the write.
+ *  Read-only fields (self, organizer, resource, id) are deliberately not echoed. A new guest is bare. */
+export const ATTENDEE_CARRIED_FIELDS = Object.freeze(['email', 'displayName', 'responseStatus', 'optional', 'comment', 'additionalGuests']);
+
+export function carryAttendee(existing, email) {
+  if (!existing || typeof existing !== 'object') return { email };
+  const out = { email };
+  for (const k of ATTENDEE_CARRIED_FIELDS) {
+    if (k === 'email') continue;
+    if (existing[k] !== undefined && existing[k] !== null) out[k] = existing[k];
+  }
+  return out;
+}
+
 export function createGoogleCalendarClient({
   clientId,
   clientSecret,
@@ -196,20 +211,39 @@ export function createGoogleCalendarClient({
      *
      * The whole-list shape is Google's, not a choice: the API has no add-one-guest verb, so every change is a
      * read, a modify and a write of the entire array. `expectedEtag` is what stops two of those racing.
+     *
+     * EVERY EXISTING GUEST'S RSVP IS CARRIED BACK, AND THIS IS WHAT KEEPS THE OWNER'S COMMITMENTS (2026-09-10).
+     * Google's patch semantics for an array field are documented as "overwrite the existing array; this
+     * discards any previous array elements". The first version of this method wrote bare { email } objects,
+     * so every list change, even adding one new guest, reset every other guest's answer to needsAction. Their
+     * calendar apps then re-sent the old answers, and the organizer inbox filled with a Tentative and a
+     * Declined from the same member every morning a sweep ran. So the current attendee objects are read first
+     * and each guest already on the list is written back with their response intact; only a guest who is new
+     * to the list is written bare, which is what makes Google send them the one invitation.
+     *
+     * The same read supplies the etag for If-Match when the caller has none, so the race guard is real rather
+     * than optional.
      */
-    setAttendees(eventId, addresses, { expectedEtag, sendUpdates = 'all' } = {}) {
+    async setAttendees(eventId, addresses, { expectedEtag, sendUpdates = 'all' } = {}) {
+      const event = await this.getEvent(eventId);
+      if (!event) throw new GoogleCalendarError(404, `event ${eventId} not found; the guest list was not written`);
+      const current = new Map();
+      for (const a of Array.isArray(event.attendees) ? event.attendees : []) {
+        const email = normalizeAddress(a?.email);
+        if (email) current.set(email, a);
+      }
       const seen = new Set();
       const attendees = [];
       for (const a of Array.isArray(addresses) ? addresses : []) {
         const email = normalizeAddress(a);
         if (!email || seen.has(email)) continue;
         seen.add(email);
-        attendees.push({ email });
+        attendees.push(carryAttendee(current.get(email), email));
       }
       // PATCH, not PUT: only `attendees` is sent, so nothing else on the event can be reverted by a sweep.
       return req('PATCH', eventPath(eventId), {
         body: { attendees },
-        etag: expectedEtag,
+        etag: expectedEtag ?? event.etag,
         query: { sendUpdates },
       });
     },

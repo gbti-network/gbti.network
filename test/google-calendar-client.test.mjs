@@ -235,3 +235,62 @@ test('attendeeDetails carries each guest RSVP, normalized, and null on a missing
   ]);
   assert.equal(await c.attendeeDetails('gone'), null);
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// 2026-09-10: a guest-list write carries every existing guest's RSVP back. Google overwrites the attendees
+// array wholesale, so a bare { email } for somebody already on the list reset their answer to needsAction;
+// their calendar app re-sent the old answer and the organizer inbox got a Tentative and a Declined from the
+// same member every morning a sweep changed the list.
+// ---------------------------------------------------------------------------------------------------------
+import { carryAttendee, ATTENDEE_CARRIED_FIELDS } from '../clients/google-calendar.mjs';
+
+const LIVE_EVENT = JSON.stringify({
+  id: 'ev1', etag: '"etag-live"',
+  attendees: [
+    { email: 'Stef@Example.com', responseStatus: 'tentative', comment: 'maybe', self: false },
+    { email: 'yes@example.com', responseStatus: 'accepted', optional: true, additionalGuests: 1, organizer: false },
+    { email: 'quiet@example.com', responseStatus: 'needsAction' },
+  ],
+});
+
+test('an attendee write carries each existing guest RSVP back and writes only a NEW guest bare', async () => {
+  const f = fakeFetch([['oauth2.googleapis.com/token', ok(TOKEN_OK)], ['/events/', ok(LIVE_EVENT)]]);
+  await client(f).setAttendees('ev1', ['stef@example.com', 'yes@example.com', 'new@example.com']);
+  const write = f.calls.find((c) => c.init.method === 'PATCH');
+  assert.ok(write);
+  const body = JSON.parse(write.init.body);
+  assert.deepEqual(body.attendees, [
+    { email: 'stef@example.com', responseStatus: 'tentative', comment: 'maybe' },
+    { email: 'yes@example.com', responseStatus: 'accepted', optional: true, additionalGuests: 1 },
+    { email: 'new@example.com' },
+  ], 'the tentative and the accepted survive; the new guest is bare so Google invites them; read-only fields are not echoed');
+  assert.ok(!('self' in body.attendees[0]) && !('organizer' in body.attendees[1]));
+});
+
+test('control: the old bare write would have reset the tentative guest (the defect, pinned as a counter-example)', () => {
+  // A bare object is what Google would have received before, and a bare object carries no answer.
+  assert.deepEqual(carryAttendee(undefined, 'stef@example.com'), { email: 'stef@example.com' });
+  assert.equal(ATTENDEE_CARRIED_FIELDS.includes('responseStatus'), true);
+});
+
+test('a removal keeps everyone else\'s answer', async () => {
+  const f = fakeFetch([['oauth2.googleapis.com/token', ok(TOKEN_OK)], ['/events/', ok(LIVE_EVENT)]]);
+  await client(f).setAttendees('ev1', ['stef@example.com', 'yes@example.com']);
+  const body = JSON.parse(f.calls.find((c) => c.init.method === 'PATCH').init.body);
+  assert.deepEqual(body.attendees.map((a) => [a.email, a.responseStatus]), [['stef@example.com', 'tentative'], ['yes@example.com', 'accepted']]);
+});
+
+test('the write uses the read event etag for If-Match when the caller has none, and the caller etag when given', async () => {
+  const f = fakeFetch([['oauth2.googleapis.com/token', ok(TOKEN_OK)], ['/events/', ok(LIVE_EVENT)]]);
+  const c = client(f);
+  await c.setAttendees('ev1', ['stef@example.com']);
+  assert.equal(f.calls.find((x) => x.init.method === 'PATCH').init.headers['If-Match'], '"etag-live"', 'the race guard is real now, not optional');
+  await c.setAttendees('ev1', ['stef@example.com'], { expectedEtag: '"mine"' });
+  assert.equal(f.calls.filter((x) => x.init.method === 'PATCH')[1].init.headers['If-Match'], '"mine"');
+});
+
+test('a write to a missing event is an error, not a silent no-op', async () => {
+  const f = fakeFetch([['oauth2.googleapis.com/token', ok(TOKEN_OK)], ['/events/', ok('{"error":"nope"}', 404)]]);
+  await assert.rejects(() => client(f).setAttendees('gone', ['a@example.com']), (e) => e instanceof GoogleCalendarError && e.status === 404);
+  assert.equal(f.calls.filter((c) => c.init.method === 'PATCH').length, 0);
+});
