@@ -2,7 +2,7 @@
 status: published
 id: 20260910215127-google-deepmind-releases-predictions-for-9-billi
 createdAt: '2026-09-10T21:51:27.574Z'
-updatedAt: '2026-09-10T21:55:02.148Z'
+updatedAt: '2026-09-10T22:19:02.656Z'
 url: https://mlq.ai/news/google-deepmind-releases-predictions-for-9-billion-human-dna-variants/
 title: Google DeepMind releases predictions for 9 billion human DNA variants
 shortDescription: >-
@@ -22,7 +22,7 @@ tags:
   - personalized-medicine
 visibility: public
 type: share
-author: atwellpub
+author: gbtilabs
 ---
 
 DeepMind has built something resembling an AI “Google Maps” of human genetic mutations, showing researchers where potentially important mutations are, but not yet telling doctors with certainty what those mutations mean for a person.
