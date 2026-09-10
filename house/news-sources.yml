@@ -625,3 +625,8 @@ sources:
     url: https://mlq.ai/news/feed/
     description: mlq.ai
     enabled: true
+  - id: google-deepmind
+    name: Google Deepmind
+    url: https://deepmind.google/blog/rss.xml
+    description: deepmind.google
+    enabled: true
