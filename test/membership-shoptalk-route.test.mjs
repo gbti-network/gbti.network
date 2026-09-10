@@ -162,3 +162,92 @@ test('erasure removes the opt-out marker', async () => {
   assert.deepEqual(await eraseMemberShoptalk({}, '7', { kv }), { ok: true });
   assert.equal(kv.map.size, 0);
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// 2026-09-10: the member decides. A decline stays declined, a removed seat stays removed, and Rejoin is the
+// one way back, sending exactly one fresh invitation.
+// ---------------------------------------------------------------------------------------------------------
+import { SEEN_KEY } from '../scripts/lib/shoptalk-state.mjs';
+import { SHOPTALK_SEEN_KEY } from '../workers/signup/membership-shoptalk.mjs';
+
+/** A calendar double that also knows each guest's RSVP, the way the real client's attendeeDetails does. */
+function rsvpCal({ guests = [], declined = [] } = {}) {
+  const cal = fakeCal({ guests });
+  cal.declined = new Set(declined);
+  cal.attendeeDetails = async () => cal.guests.map((email) => ({ email, responseStatus: cal.declined.has(email) ? 'declined' : 'needsAction' }));
+  return cal;
+}
+
+test('the Worker reads the same seen record the sweep writes (one spelling, pinned)', () => {
+  assert.equal(SHOPTALK_SEEN_KEY, SEEN_KEY);
+});
+
+test('GET reports a DECLINED guest as declined, still enrolled', async () => {
+  const r = await handleShoptalk(req('GET'), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: rsvpCal({ guests: ['m@x.com'], declined: ['m@x.com'] }), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.body.enrolled, true);
+  assert.equal(r.body.declined, true);
+  assert.equal(r.body.dropped, false);
+});
+
+test('GET reports a member invited before and no longer on the list as DROPPED, not "being added"', async () => {
+  const kv = fakeKv({ [SEEN_KEY]: JSON.stringify({ 'm@x.com': '1' }) });
+  const r = await handleShoptalk(req('GET'), {}, {
+    kv, authorize: authAs('paid'), calendar: rsvpCal({ guests: [] }), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.body.enrolled, false);
+  assert.equal(r.body.dropped, true, 'the sweep will not re-add them, so the page must not promise it');
+});
+
+test('GET: a member never invited and not on the list is NOT dropped (the sweep will add them)', async () => {
+  const r = await handleShoptalk(req('GET'), {}, {
+    kv: fakeKv({ [SEEN_KEY]: JSON.stringify({ 'someone-else@x.com': '2' }) }), authorize: authAs('paid'), calendar: rsvpCal({ guests: [] }), lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.body.dropped, false);
+});
+
+test('REJOIN while declined takes the guest off silently and puts them back with one invitation', async () => {
+  const cal = rsvpCal({ guests: ['a@x.com', 'm@x.com', 'z@x.com'], declined: ['m@x.com'] });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin' }), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.applied, true);
+  assert.equal(r.body.resent, true);
+  assert.equal(cal.writes.length, 2);
+  assert.equal(cal.writes[0].opts.sendUpdates, 'none', 'the removal must not mail a cancellation to somebody asking to come back');
+  assert.deepEqual(cal.writes[0].list, ['a@x.com', 'z@x.com']);
+  assert.equal(cal.writes[1].opts.sendUpdates, 'all', 'the re-add is the one invitation they asked for');
+  assert.deepEqual(cal.writes[1].list, ['a@x.com', 'z@x.com', 'm@x.com']);
+});
+
+test('REJOIN while on the list and not declined changes nothing and says so', async () => {
+  const cal = rsvpCal({ guests: ['m@x.com'] });
+  const r = await handleShoptalk(req('POST', { action: 'rejoin' }), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: cal, lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.body.applied, false);
+  assert.match(r.body.message, /already on the guest list/);
+  assert.equal(cal.writes.length, 0);
+});
+
+test('REJOIN with no reachable calendar is an error, not a promise the sweep would break', async () => {
+  // Under rule 5 the sweep never re-adds an address it has seen, so "goes out on the next sweep" would be false.
+  const r = await handleShoptalk(req('POST', { action: 'rejoin' }), {}, {
+    kv: fakeKv(), authorize: authAs('paid'), calendar: null, lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 503);
+  assert.equal(r.body.error, 'calendar_unavailable');
+  assert.match(r.body.message, /Try again/);
+});
+
+test('LEAVE with no reachable calendar is still recorded (the sweep completes it)', async () => {
+  const kv = fakeKv();
+  const r = await handleShoptalk(req('POST', { action: 'leave' }), {}, {
+    kv, authorize: authAs('paid'), calendar: null, lookupEmail: async () => 'm@x.com',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.optedOut, true);
+  assert.ok(kv.map.has(SHOPTALK_OPTOUT_KEY('1')), 'the marker is what the sweep reads');
+});

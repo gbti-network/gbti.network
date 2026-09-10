@@ -72,9 +72,12 @@ test('a real apply adds the member, preserves a hand-added guest, and records ow
   assert.equal(r.ok, true);
   assert.equal(r.applied, true);
   assert.deepEqual(cal.writes[0].list, ['hand@owner.com', 'new@x.com']);
-  assert.equal(puts.length, 1, 'the placed record is written back exactly once');
+  // Two writes since 2026-09-10: the placed record and the seen record (rule 5), each exactly once.
+  assert.equal(puts.length, 2, 'the placed record and the seen record are each written back exactly once');
   assert.deepEqual(JSON.parse(puts[0]), { 'new@x.com': '1' });
   assert.ok(!JSON.parse(puts[0])['hand@owner.com'], 'a guest we did not place never enters the record');
+  assert.deepEqual(JSON.parse(puts[1]), { 'new@x.com': '1' }, 'the seen record remembers the invitation');
+  assert.ok(!JSON.parse(puts[1])['hand@owner.com'], 'a non-member address is not remembered either');
 });
 
 test('a DRY RUN plans against the real guest list and writes nothing anywhere', async () => {

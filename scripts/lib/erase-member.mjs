@@ -28,7 +28,7 @@ import { mailHash, MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress
 import { normalizeSubscriber } from '../../membership/mail-subscriber.mjs'; // SOW-166: the record shape the scan matches on
 import { eraseSubscriberMail } from '../../workers/signup/mail-store.mjs'; // SOW-166: the one shared mail eraser
 import { FOLLOWERS_KEY, normalizeFollowers, applyFollower } from '../../membership/member-followers.mjs'; // SOW-186 phase 3
-import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, OPTOUT_PREFIX as SHOPTALK_OPTOUT_PREFIX } from './shoptalk-state.mjs'; // sow-314
+import { readPlaced as readShoptalkPlaced, writePlaced as writeShoptalkPlaced, readSeen as readShoptalkSeen, writeSeen as writeShoptalkSeen, OPTOUT_PREFIX as SHOPTALK_OPTOUT_PREFIX } from './shoptalk-state.mjs'; // sow-314
 import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-series.mjs'; // sow-314
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 import { SHOPTALK_QUERY as SHOPTALK_SERIES_QUERY } from './shoptalk-sweep.mjs'; // sow-314: one definition of the search, shared with the sweep
@@ -98,10 +98,20 @@ export async function eraseShoptalk({ githubId, env = process.env, fetchImpl = g
   if (!githubId) throw new Error('a github_id is required');
   const id = String(githubId);
   const opt = await deleteKvKey({ key: `${SHOPTALK_OPTOUT_PREFIX}${id}`, env, fetchImpl });
+  // The seen record (rule 5) holds the member's address keyed to their id: personal data, scrubbed here. Read
+  // fail-closed like the placed record; an unreadable record is reported, never overwritten.
+  const seenRead = await readShoptalkSeen({ env, fetchImpl });
+  if (!seenRead.ok) return { ok: false, reason: `shoptalk: ${seenRead.reason}`, optOutDeleted: opt?.ok === true };
+  const mineSeen = [...seenRead.seen.entries()].filter(([, who]) => who === id).map(([address]) => address);
+  if (mineSeen.length) {
+    for (const address of mineSeen) seenRead.seen.delete(address);
+    const wroteSeen = await writeShoptalkSeen(seenRead.seen, { env, fetchImpl });
+    if (wroteSeen && wroteSeen.ok === false) return { ok: false, reason: 'shoptalk: the seen record could not be rewritten', optOutDeleted: opt?.ok === true };
+  }
   const placedRead = await readShoptalkPlaced({ env, fetchImpl });
-  if (!placedRead.ok) return { ok: false, reason: `shoptalk: ${placedRead.reason}`, optOutDeleted: opt?.ok === true };
+  if (!placedRead.ok) return { ok: false, reason: `shoptalk: ${placedRead.reason}`, optOutDeleted: opt?.ok === true, seenScrubbed: mineSeen.length };
   const mine = [...placedRead.placed.entries()].filter(([, who]) => who === id).map(([address]) => address);
-  if (!mine.length) return { ok: true, skipped: true, reason: 'not on the Shop Talk placed record', matched: 0, optOutDeleted: opt?.ok === true };
+  if (!mine.length) return { ok: true, skipped: true, reason: 'not on the Shop Talk placed record', matched: 0, optOutDeleted: opt?.ok === true, seenScrubbed: mineSeen.length };
   const cal = calendar ?? (
     env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET && env.GOOGLE_CALENDAR_REFRESH_TOKEN
       ? createGoogleCalendarClient({
@@ -119,7 +129,7 @@ export async function eraseShoptalk({ githubId, env = process.env, fetchImpl = g
   for (const address of mine) placedRead.placed.delete(address);
   const wrote = await writeShoptalkPlaced(placedRead.placed, { env, fetchImpl });
   if (wrote && wrote.ok === false) return { ok: false, reason: 'shoptalk: the address left the event but the placed record could not be rewritten; the next sweep will report it', matched: mine.length, removedFromEvent: next.length !== guests.length };
-  return { ok: true, matched: mine.length, removedFromEvent: next.length !== guests.length, optOutDeleted: opt?.ok === true };
+  return { ok: true, matched: mine.length, removedFromEvent: next.length !== guests.length, optOutDeleted: opt?.ok === true, seenScrubbed: mineSeen.length };
 }
 
 export async function erasePrefs({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {

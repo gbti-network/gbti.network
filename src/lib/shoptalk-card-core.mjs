@@ -1,7 +1,12 @@
 // sow-314: what the account page's Shop Talk card says, from the Worker's answer. Pure, so every state is a
 // unit test rather than a screenshot. The Worker answer is { eligible, status, enrolled, address, optedOut,
-// nextCall }; `enrolled` is null when the calendar could not be read, which must read as "unknown", never as
-// "no". The action is what the button does next: 'leave', 'rejoin', or nothing.
+// nextCall, declined, dropped }; `enrolled` is null when the calendar could not be read, which must read as
+// "unknown", never as "no". The action is what the button does next: 'leave', 'rejoin', or nothing.
+//
+// TWO STATES ADDED 2026-09-10, when the owner ruled that the invitation goes out once and the member decides
+// the rest: `declined` (on the list, answered No on the calendar) and `dropped` (invited once, since removed
+// from the list, by anyone). In both the sweep will never mail them again on its own, so the card says so
+// and Rejoin is the member's one way back. It sends exactly one fresh invitation.
 
 const when = (iso) => {
   const t = Date.parse(String(iso || ''));
@@ -34,6 +39,20 @@ export function shoptalkCardState(res) {
       action: null, actionLabel: null, href: null, hrefLabel: null,
     };
   }
+  if (r.enrolled === true && r.declined) {
+    return {
+      headline: 'You declined the Saturday call invitation',
+      body: `Nothing more is sent unless you ask. Rejoin and a fresh invitation goes to ${r.address}.${nextLine}`,
+      action: 'rejoin', actionLabel: 'Rejoin the call list', href: null, hrefLabel: null,
+    };
+  }
+  if (r.enrolled === false && r.dropped) {
+    return {
+      headline: 'You are off the Saturday call list',
+      body: `Your seat under ${r.address} was removed, and nothing more is sent unless you ask. Rejoin and a fresh invitation goes to ${r.address}.${nextLine}`,
+      action: 'rejoin', actionLabel: 'Rejoin the call list', href: null, hrefLabel: null,
+    };
+  }
   if (r.enrolled === true) {
     return {
       headline: 'You are on the Saturday call',
@@ -60,5 +79,5 @@ export function shoptalkAfterAction(res, action) {
   const r = res && typeof res === 'object' ? res : {};
   if (r.message) return { note: r.message };
   if (action === 'leave') return { note: r.applied ? 'Removed from the guest list. Google sends the update to your inbox.' : 'Recorded; the change reaches the calendar on the next sweep.' };
-  return { note: r.applied ? 'Invitation sent again.' : 'Recorded; the invitation goes out on the next sweep.' };
+  return { note: r.applied ? 'Invitation sent. Accept it in your inbox and the Meet admits you.' : 'You are already on the guest list.' };
 }

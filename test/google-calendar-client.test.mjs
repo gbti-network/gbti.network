@@ -223,3 +223,15 @@ test('nextOccurrences returns [] rather than undefined when Google sends no item
   ]);
   assert.deepEqual(await client(f).nextOccurrences('x'), []);
 });
+
+test('attendeeDetails carries each guest RSVP, normalized, and null on a missing event', async () => {
+  const event = JSON.stringify({ attendees: [{ email: 'Yes@Example.com', responseStatus: 'accepted' }, { email: 'no@example.com', responseStatus: 'declined' }, { email: 'quiet@example.com' }, { displayName: 'no address' }] });
+  const f = fakeFetch([['oauth2', ok(TOKEN_OK)], ['/events/ev1', ok(event)], ['/events/gone', ok('{"error":"nope"}', 404)]]);
+  const c = client(f);
+  assert.deepEqual(await c.attendeeDetails('ev1'), [
+    { email: 'yes@example.com', responseStatus: 'accepted' },
+    { email: 'no@example.com', responseStatus: 'declined' },
+    { email: 'quiet@example.com', responseStatus: 'needsAction' },
+  ]);
+  assert.equal(await c.attendeeDetails('gone'), null);
+});

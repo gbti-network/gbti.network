@@ -28,7 +28,7 @@ import { createDiscordClient } from '../clients/discord.mjs';
 import { createGoogleCalendarClient } from '../clients/google-calendar.mjs';           // sow-314
 import { stripeModeNote } from '../membership/stripe-mode.mjs';                       // sow-314 follow-up
 import { runShoptalkSweep, describeSweep } from './lib/shoptalk-sweep.mjs';            // sow-314
-import { readPlaced, writePlaced, readOptedOut } from './lib/shoptalk-state.mjs';      // sow-314
+import { readPlaced, writePlaced, readOptedOut, readSeen, writeSeen } from './lib/shoptalk-state.mjs'; // sow-314
 import { createResendClient } from '../clients/resend.mjs';
 import { deriveStatusFromCustomer, deriveMembershipFromCustomer, STATUS } from '../membership/derive-status.mjs';
 import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '../membership/overrides.mjs';
@@ -1008,13 +1008,25 @@ async function main() {
   // dry-run mode: `npm run reconcile` printed no Shop Talk line at all and exited 0, so the preview the whole
   // "always dry-run first" rule depends on silently did not exist. The unit tests could not catch it because
   // they call enactShoptalk directly and never run main(). `apply: !dryRun` is what keeps it read-only here.
-  try {
-    const shop = await enactShoptalk(members, { env, apply: !dryRun });
-    console.log('reconcile: ' + (shop.ok ? shop.summary : shop.reason));
-    if (!shop.ok && !shop.skipped) process.exitCode = 1;
-  } catch (e) {
-    console.error('reconcile: Shop Talk enrollment FAILED:', e?.message ?? e);
-    process.exitCode = 1;
+  //
+  // AND NEVER IN TARGETED MODE (2026-09-10). A repository_dispatch run gathers ONE member. On 2026-09-09 that
+  // one-member roster reached the sweep, which read every other placed seat as lapsed and mailed 22 members
+  // a cancellation; the next morning's full run mailed them all a fresh invitation. The planner's rule 4 now
+  // makes that structurally impossible, and this guard makes it unnecessary to rely on: a partial roster
+  // never reaches the sweep at all. The daily run seats a new payer by the next morning.
+  const shopSkip = shoptalkTargetedSkip(targetId);
+  if (shopSkip) {
+    console.log('reconcile: ' + shopSkip);
+  } else {
+    try {
+      const shop = await enactShoptalk(members, { env, apply: !dryRun });
+      console.log('reconcile: ' + (shop.ok ? shop.summary : shop.reason));
+      if (!shop.ok && !shop.skipped) process.exitCode = 1;
+      if (shop.ok && shop.withheld?.length) process.exitCode = 1; // the removal cap fired: red, so somebody looks
+    } catch (e) {
+      console.error('reconcile: Shop Talk enrollment FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
   }
 
   if (dryRun) {
@@ -1053,6 +1065,12 @@ async function main() {
  * because a sweep that enrolls nobody while looking healthy is the failure this whole feature is built to
  * avoid.
  */
+/** The one-line reason a targeted run does not sweep, or null for a full run. Pure, so it is a unit test. */
+export function shoptalkTargetedSkip(targetId) {
+  if (!targetId) return null;
+  return `Shop Talk sweep SKIPPED in targeted mode (github_id ${targetId}): a one-member roster must never reach the sweep. The daily run covers enrollment.`;
+}
+
 export async function enactShoptalk(members, { env = process.env, fetchImpl = globalThis.fetch, apply = false, calendar = null } = {}) {
   const cal = calendar ?? (
     env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET && env.GOOGLE_CALENDAR_REFRESH_TOKEN
@@ -1071,15 +1089,20 @@ export async function enactShoptalk(members, { env = process.env, fetchImpl = gl
   if (!placedRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${placedRead.reason}` };
   const optRead = await readOptedOut({ env, fetchImpl });
   if (!optRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${optRead.reason}` };
+  const seenRead = await readSeen({ env, fetchImpl });
+  if (!seenRead.ok) return { ok: false, reason: `Shop Talk enrollment SKIPPED: ${seenRead.reason}` };
 
   const result = await runShoptalkSweep({
-    members, cal, placed: placedRead.placed, optedOut: optRead.optedOut, apply,
+    members, cal, placed: placedRead.placed, optedOut: optRead.optedOut, seen: seenRead.seen, apply,
   });
   if (!result.ok) return { ok: false, reason: result.message };
 
   // Written ONLY after a successful apply. Writing it on a dry run, or after a failed one, would record
   // ownership of addresses that were never placed.
   if (result.applied && result.placed) await writePlaced(result.placed, { env, fetchImpl });
+  // The seen record is written on ANY apply run whose reading changed it, including a zero-change run: the
+  // first run after rule 5 landed has to remember everybody already on the event without touching the event.
+  if (apply && result.seenChanged) await writeSeen(result.seen, { env, fetchImpl });
   return { ok: true, ...result, summary: describeSweep(result) };
 }
 

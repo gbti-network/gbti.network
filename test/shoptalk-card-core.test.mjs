@@ -53,11 +53,34 @@ test('after an action: the Worker message wins; otherwise applied-now versus nex
   assert.equal(shoptalkAfterAction({ ok: true, message: 'recorded; the change reaches the calendar on the next sweep' }, 'leave').note, 'recorded; the change reaches the calendar on the next sweep');
   assert.match(shoptalkAfterAction({ ok: true, applied: true }, 'leave').note, /Removed from the guest list/);
   assert.match(shoptalkAfterAction({ ok: true, applied: false }, 'leave').note, /next sweep/);
-  assert.match(shoptalkAfterAction({ ok: true, applied: true }, 'rejoin').note, /sent again/);
+  assert.match(shoptalkAfterAction({ ok: true, applied: true }, 'rejoin').note, /Invitation sent/);
+  assert.match(shoptalkAfterAction({ ok: true, applied: false }, 'rejoin').note, /already on the guest list/, 'rule 5: no promise that a sweep will send it');
 });
 
 test('junk in, a safe card out', () => {
   const st = shoptalkCardState(null);
   assert.equal(st.action, null);
   assert.equal(st.href, '/membership/');
+});
+
+// 2026-09-10: the member decides. Two states in which the sweep will never mail them again on its own.
+test('declined on the calendar: says so, promises no more mail, offers Rejoin', () => {
+  const st = shoptalkCardState({ eligible: true, status: 'paid', enrolled: true, declined: true, address: 'm@x.com', optedOut: false, nextCall: NEXT });
+  assert.match(st.headline, /declined/);
+  assert.match(st.body, /Nothing more is sent unless you ask/);
+  assert.match(st.body, /m@x\.com/);
+  assert.equal(st.action, 'rejoin');
+});
+
+test('dropped (invited once, removed since): says the seat was removed, offers Rejoin, never "being added"', () => {
+  const st = shoptalkCardState({ eligible: true, status: 'trialing', enrolled: false, dropped: true, address: 'm@x.com', optedOut: false, nextCall: NEXT });
+  assert.match(st.headline, /off the Saturday call list/);
+  assert.doesNotMatch(st.body, /next nightly sweep/);
+  assert.equal(st.action, 'rejoin');
+});
+
+test('control: not on the list and never invited still reads as "being added"', () => {
+  const st = shoptalkCardState({ eligible: true, status: 'paid', enrolled: false, dropped: false, address: 'm@x.com', optedOut: false });
+  assert.match(st.headline, /being added/);
+  assert.equal(st.action, 'leave');
 });

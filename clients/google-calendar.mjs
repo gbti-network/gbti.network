@@ -179,6 +179,18 @@ export function createGoogleCalendarClient({
         .filter(Boolean);
     },
 
+    /** The guest list with each guest's RSVP, for the surfaces that need to know a member DECLINED: the
+     *  account page shows a declined member their state and offers Rejoin, which resends the invitation. The
+     *  sweep does not use this: a declined guest is still a guest, and removing them would mail a
+     *  cancellation to somebody who already said no. Returns null on 404 like listAttendees. */
+    async attendeeDetails(eventId) {
+      const event = await this.getEvent(eventId);
+      if (!event) return null;
+      return (Array.isArray(event.attendees) ? event.attendees : [])
+        .map((a) => ({ email: normalizeAddress(a?.email), responseStatus: a?.responseStatus || 'needsAction' }))
+        .filter((a) => a.email);
+    },
+
     /**
      * Replace the attendee list wholesale, guarded by the event's etag.
      *

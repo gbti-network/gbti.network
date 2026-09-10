@@ -98,3 +98,23 @@ test('positive control: the Google credentials build a real client when none is 
   await assert.rejects(eraseShoptalk({ githubId: '77', env: { ...CF, ...GOOGLE }, fetchImpl }), /invalid_grant|token|400/i);
   assert.equal(kv.store.get('shoptalk:placed'), PLACED, 'a failed calendar call leaves the record alone');
 });
+
+// 2026-09-10: the seen record (rule 5) carries the member's address keyed to their id, so erasure scrubs it.
+test('erasure scrubs the member from the seen record, and leaves everybody else in it', async () => {
+  const kv = fakeKv({ 'shoptalk:placed': PLACED, 'shoptalk:seen': JSON.stringify({ 'stef@example.com': '77', 'old-stef@example.com': '77', 'other@example.com': '12' }) });
+  const cal = fakeCalendar(['stef@example.com', 'other@example.com']);
+  const r = await eraseShoptalk({ githubId: '77', env: { ...CF, ...GOOGLE }, fetchImpl: kv.fetchImpl, calendar: cal });
+  assert.equal(r.ok, true);
+  assert.equal(r.seenScrubbed, 2);
+  assert.deepEqual(JSON.parse(kv.store.get('shoptalk:seen')), { 'other@example.com': '12' });
+  assert.ok(kv.writes.some(([m, k]) => m === 'PUT' && k === 'shoptalk:seen'));
+});
+
+test('erasure with NO seen record yet is a cold start, not a failure', async () => {
+  const kv = fakeKv({ 'shoptalk:placed': PLACED });
+  const cal = fakeCalendar(['stef@example.com']);
+  const r = await eraseShoptalk({ githubId: '77', env: { ...CF, ...GOOGLE }, fetchImpl: kv.fetchImpl, calendar: cal });
+  assert.equal(r.ok, true);
+  assert.equal(r.seenScrubbed, 0);
+  assert.ok(!kv.writes.some(([m, k]) => m === 'PUT' && k === 'shoptalk:seen'), 'nothing to scrub means nothing written');
+});

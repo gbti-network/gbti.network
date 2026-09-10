@@ -201,5 +201,5 @@ test('enrollmentCounts reports every bucket and survives a malformed plan', () =
   const empty = enrollmentCounts(null);
   assert.equal(empty.changes, 0);
   assert.deepEqual(Object.keys(empty).sort(),
-    ['add', 'alreadyOn', 'changes', 'foreign', 'optedOut', 'remove', 'unreachable']);
+    ['add', 'alreadyOn', 'changes', 'dropped', 'foreign', 'optedOut', 'remove', 'stale', 'unaccounted', 'unreachable']);
 });

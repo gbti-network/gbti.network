@@ -2,7 +2,7 @@
 // and every dependency injected, so the whole thing is testable without a network or a clock.
 //
 //   membership/shoptalk-series.mjs   picks WHICH series (never a config id, see that file)
-//   scripts/lib/shoptalk-enroll.mjs  decides WHO is added and removed (the three safety rules)
+//   scripts/lib/shoptalk-enroll.mjs  decides WHO is added and removed (the five safety rules)
 //   clients/google-calendar.mjs      does the IO
 //
 // It sits beside enactDiscord in reconcile and follows the same shape: reconcile holds the service credential
@@ -16,6 +16,13 @@
 // DRY RUN IS THE DEFAULT, and it is a real dry run: it resolves the series and READS the guest list, so the
 // numbers it reports are the numbers `--apply` would act on. A dry run that skipped the reads would print a
 // plan computed from nothing.
+//
+// TWO GUARDS ADDED 2026-09-10, after the sweep mailed 22 members a cancellation and then a re-invitation:
+//   the planner's rule 4 (absence from the roster is not a lapse) and rule 5 (the invitation goes out once),
+//   and, here, a CAP ON REMOVALS PER RUN. A roster that shrinks by more than a handful in one night is far
+//   more likely a bad read than a mass lapse, and the cost of being wrong is a cancellation email per seat.
+//   Past the cap the sweep withholds every removal, still applies the additions, and reports the refusal as
+//   an error so the run goes red and somebody looks.
 
 import { seriesFromInstances, isSeriesProblem, describeSeries } from '../../membership/shoptalk-series.mjs';
 import { planShoptalkEnrollment, enrollmentCounts, normalizeAddress } from './shoptalk-enroll.mjs';
@@ -25,6 +32,9 @@ export const SHOPTALK_QUERY = 'Shop TALK';
 
 /** KV document holding the addresses THIS SYSTEM placed: { "<address>": "<githubId>" }. */
 export const SHOPTALK_PLACED_KEY = 'shoptalk:placed';
+
+/** The most seats one run may remove. Above this the removals are withheld and the run reports an error. */
+export const MAX_REMOVALS_PER_RUN = 5;
 
 /**
  * Build the attendee list to write.
@@ -61,6 +71,25 @@ export function nextPlacedRecord(placed, plan) {
 }
 
 /**
+ * Apply the plan to the seen record (rule 5): every member address on the event or added this run is
+ * remembered; an address the sweep itself removed (a lapse, an opt-out) is released, so a member who comes back
+ * gets one fresh invitation rather than none. Nothing else ever leaves this record except erasure.
+ */
+export function nextSeenRecord(seen, plan) {
+  const next = new Map(seen || []);
+  for (const r of plan.alreadyOn || []) next.set(normalizeAddress(r.address), String(r.githubId));
+  for (const r of plan.add || []) next.set(normalizeAddress(r.address), String(r.githubId));
+  for (const r of plan.remove || []) next.delete(normalizeAddress(r.address));
+  return next;
+}
+
+function sameRecord(a, b) {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
+}
+
+/**
  * Run the sweep.
  *
  * @param {object[]} members     reconcile gather output
@@ -68,11 +97,13 @@ export function nextPlacedRecord(placed, plan) {
  * @param {Map}      placed      address -> githubId, what this system put there
  * @param {Set}      optedOut    githubIds that removed themselves
  * @param {Map}      preferred   githubId -> chosen address
+ * @param {Map}      seen        address -> githubId, every member address ever seen on the event (rule 5)
  * @param {boolean}  apply       false (default) reads and plans but writes nothing
+ * @param {number}   maxRemovals the per-run removal cap
  */
 export async function runShoptalkSweep({
-  members = [], cal, placed = new Map(), optedOut = new Set(), preferred = new Map(),
-  apply = false, now = () => new Date(),
+  members = [], cal, placed = new Map(), optedOut = new Set(), preferred = new Map(), seen = new Map(),
+  apply = false, now = () => new Date(), maxRemovals = MAX_REMOVALS_PER_RUN,
 } = {}) {
   if (!cal) throw new Error('runShoptalkSweep: a calendar client is required');
 
@@ -96,20 +127,29 @@ export async function runShoptalkSweep({
     };
   }
 
-  const plan = planShoptalkEnrollment({ members, attendees, placed, optedOut, preferred });
-  const counts = enrollmentCounts(plan);
+  const plan = planShoptalkEnrollment({ members, attendees, placed, optedOut, preferred, seen });
 
-  if (!apply || counts.changes === 0) {
-    return { ok: true, applied: false, seriesId: series.seriesId, startsAt: series.startsAt, plan, counts };
+  // The removal cap. Withheld removals are reported, not enacted, and the seen record is NOT released for
+  // them (nextSeenRecord only sees what plan.remove still carries), so nothing about them changes at all.
+  let withheld = [];
+  if (plan.remove.length > maxRemovals) {
+    withheld = plan.remove;
+    plan.remove = [];
   }
+
+  const counts = enrollmentCounts(plan);
+  const nextSeen = nextSeenRecord(seen, plan);
+  const base = {
+    ok: true, seriesId: series.seriesId, startsAt: series.startsAt, plan, counts, withheld,
+    seen: nextSeen, seenChanged: !sameRecord(seen instanceof Map ? seen : new Map(), nextSeen),
+  };
+
+  if (!apply || counts.changes === 0) return { ...base, applied: false };
 
   const list = nextAttendeeList(attendees, plan);
   await cal.setAttendees(series.seriesId, list, { expectedEtag: undefined, sendUpdates: 'all' });
 
-  return {
-    ok: true, applied: true, seriesId: series.seriesId, startsAt: series.startsAt,
-    plan, counts, placed: nextPlacedRecord(placed, plan),
-  };
+  return { ...base, applied: true, placed: nextPlacedRecord(placed, plan) };
 }
 
 /** One line for the reconcile summary. A failed sweep must not read like a quiet success. */
@@ -117,6 +157,13 @@ export function describeSweep(result) {
   if (!result?.ok) return result?.message || 'Shop Talk enrollment failed for an unknown reason.';
   const c = result.counts;
   const verb = result.applied ? 'applied' : 'planned';
-  return `Shop Talk ${verb}: +${c.add} guest(s), -${c.remove}, ${c.alreadyOn} already on, `
-    + `${c.optedOut} opted out, ${c.unreachable} unreachable, ${c.foreign} left alone (not ours).`;
+  let line = `Shop Talk ${verb}: +${c.add} guest(s), -${c.remove}, ${c.alreadyOn} already on, `
+    + `${c.dropped} dropped (invited before, not re-invited), ${c.optedOut} opted out, ${c.unreachable} unreachable, `
+    + `${c.unaccounted} unaccounted (not in this roster, left alone), ${c.stale} address changed (left alone), `
+    + `${c.foreign} left alone (not ours).`;
+  if (result.withheld?.length) {
+    line += ` REFUSED ${result.withheld.length} removal(s): more than ${MAX_REMOVALS_PER_RUN} seats in one run reads as a bad `
+      + 'roster read, not a mass lapse. Nothing was removed. Check the roster before rerunning.';
+  }
+  return line;
 }

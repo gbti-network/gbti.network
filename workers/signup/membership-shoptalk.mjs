@@ -25,6 +25,34 @@ import { seriesFromInstances, isSeriesProblem } from '../../membership/shoptalk-
 
 export const SHOPTALK_OPTOUT_KEY = (githubId) => `shoptalk:optout:${githubId}`;
 export const SHOPTALK_QUERY = 'Shop TALK';
+/** The sweep's seen record (scripts/lib/shoptalk-state.mjs SEEN_KEY): every member address ever invited. Read
+ *  here so a member whose seat was removed is told so and offered Rejoin, rather than "your seat is being
+ *  added", which under rule 5 (the invitation goes out once) would be untrue. A literal rather than an import
+ *  because that module pulls node-only helpers; the route test pins the two spellings together. */
+export const SHOPTALK_SEEN_KEY = 'shoptalk:seen';
+
+/** Has the sweep ever invited this address? Unreadable reads as "no": the page then says "being added", which
+ *  is the older, milder inaccuracy, and the sweep itself never trusts this read. */
+async function everInvited(kv, address) {
+  if (!address) return false;
+  try {
+    const raw = await kv.get(SHOPTALK_SEEN_KEY);
+    if (!raw) return false;
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return !!(obj && typeof obj === 'object' && obj[address]);
+  } catch { return false; }
+}
+
+/** The guest list as addresses plus, when the client can say, each guest's RSVP. */
+async function readGuests(calendar, seriesId) {
+  if (typeof calendar.attendeeDetails === 'function') {
+    const details = await calendar.attendeeDetails(seriesId);
+    if (details === null) return null;
+    return { guests: details.map((d) => d.email).filter(Boolean), declined: new Set(details.filter((d) => d.responseStatus === 'declined').map((d) => d.email)) };
+  }
+  const guests = await calendar.listAttendees(seriesId);
+  return guests === null ? null : { guests, declined: new Set() };
+}
 
 /** Resolve the member's calendar address. Same Stripe lookup the mail drain uses; no second source of truth. */
 async function addressFor(env, githubId, { stripe, lookupEmail } = {}) {
@@ -54,15 +82,21 @@ export async function handleShoptalk(request, env, {
     // not need, and would be a lie told confidently.
     let enrolled = null;
     let nextCall = null;
+    let declined = false; // on the list, and answered No on the calendar
+    let dropped = false;  // invited once, no longer on the list: the sweep will not re-invite (rule 5)
     if (calendar) {
       const s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
       if (!isSeriesProblem(s)) {
         nextCall = s.startsAt;
-        const guests = await calendar.listAttendees(s.seriesId);
-        if (guests) enrolled = address ? guests.includes(address) : false;
+        const read = await readGuests(calendar, s.seriesId);
+        if (read) {
+          enrolled = address ? read.guests.includes(address) : false;
+          declined = enrolled && read.declined.has(address);
+        }
       }
     }
-    return { status: 200, body: { ok: true, eligible, status: auth.status, enrolled, address: address || null, optedOut, nextCall } };
+    if (enrolled === false && !optedOut) dropped = await everInvited(kv, address);
+    return { status: 200, body: { ok: true, eligible, status: auth.status, enrolled, declined, dropped, address: address || null, optedOut, nextCall } };
   }
 
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
@@ -91,24 +125,40 @@ export async function handleShoptalk(request, env, {
     return { status: 200, body: { ok: true, optedOut: action === 'leave', enrolled: null, address: null, applied: false,
       message: 'we have no email address for this account, so the guest list could not be changed' } };
   }
-  if (!calendar) {
-    return { status: 200, body: { ok: true, optedOut: action === 'leave', enrolled: null, address, applied: false,
-      message: 'recorded; the change reaches the calendar on the next sweep' } };
-  }
+  // A LEAVE without a reachable calendar is still recorded: the marker is set and the sweep completes the
+  // removal (rule 2's backstop). A REJOIN without one is an ERROR, not a promise: under rule 5 the sweep never
+  // re-adds an address it has seen, so "the invitation goes out on the next sweep" would be a promise nothing
+  // keeps. The member is told to try again instead.
+  const unavailable = { status: 503, body: { error: 'calendar_unavailable', message: 'The calendar could not be reached just now. Try again in a few minutes.' } };
+  const recorded = { status: 200, body: { ok: true, optedOut: true, enrolled: null, address, applied: false,
+    message: 'recorded; the change reaches the calendar on the next sweep' } };
+  if (!calendar) return action === 'leave' ? recorded : unavailable;
 
   const s = seriesFromInstances(await calendar.nextOccurrences(SHOPTALK_QUERY));
-  if (isSeriesProblem(s)) {
-    return { status: 200, body: { ok: true, optedOut: action === 'leave', enrolled: null, address, applied: false,
-      message: 'recorded; the change reaches the calendar on the next sweep' } };
-  }
-  const guests = (await calendar.listAttendees(s.seriesId)) || [];
+  if (isSeriesProblem(s)) return action === 'leave' ? recorded : unavailable;
+  const read = (await readGuests(calendar, s.seriesId)) || { guests: [], declined: new Set() };
+  const guests = read.guests;
   const has = guests.includes(address);
-  let next = guests;
-  if (action === 'leave' && has) next = guests.filter((g) => g !== address);
-  if (action === 'rejoin' && !has) next = [...guests, address];
-  if (next !== guests) await calendar.setAttendees(s.seriesId, next, { sendUpdates: 'all' });
 
-  return { status: 200, body: { ok: true, optedOut: action === 'leave', enrolled: action === 'rejoin', address, applied: next !== guests } };
+  if (action === 'leave') {
+    if (has) await calendar.setAttendees(s.seriesId, guests.filter((g) => g !== address), { sendUpdates: 'all' });
+    return { status: 200, body: { ok: true, optedOut: true, enrolled: false, address, applied: has } };
+  }
+
+  // Rejoin. Three cases, each with exactly the mail the member asked for and no more:
+  //   not on the list         -> added, one invitation (sendUpdates=all mails only the added guest)
+  //   on the list, declined   -> taken off with NO mail, put back with one invitation: a fresh RSVP
+  //   on the list, not declined -> nothing to do, and the page says so
+  if (!has) {
+    await calendar.setAttendees(s.seriesId, [...guests, address], { sendUpdates: 'all' });
+    return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: true } };
+  }
+  if (read.declined.has(address)) {
+    await calendar.setAttendees(s.seriesId, guests.filter((g) => g !== address), { sendUpdates: 'none' });
+    await calendar.setAttendees(s.seriesId, [...guests.filter((g) => g !== address), address], { sendUpdates: 'all' });
+    return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: true, resent: true } };
+  }
+  return { status: 200, body: { ok: true, optedOut: false, enrolled: true, address, applied: false, message: 'You are already on the guest list.' } };
 }
 
 /** SOW-024 right-to-erasure: drop the member's opt-out marker. The calendar seat is removed separately. */

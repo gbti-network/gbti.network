@@ -2,14 +2,14 @@
 // the live guest list in, a plan out. The runner does the Stripe walk and the Google writes around it.
 //
 // Modeled on scripts/lib/mail-enroll.mjs (sow-166), which solved the same problem for the weekly digest, and
-// which had already learned two of the three rules below the expensive way.
+// which had already learned two of the first three rules below the expensive way.
 //
 // WHAT IT IS FOR. The owner adds member addresses to the recurring Saturday event by hand so members can enter
 // the Meet without knocking. This plans that automatically: paid and trial members are added, a lapse removes
 // the seat.
 //
 // ============================================================================================
-// THREE RULES. EACH NAMES SOMETHING THAT BREAKS, NOT A DESIGN PREFERENCE.
+// FIVE RULES. EACH NAMES SOMETHING THAT BROKE, OR WOULD.
 // ============================================================================================
 //
 // 1. NEVER REMOVE AN ATTENDEE WE DID NOT PLACE. The owner's calendar carries guests added by hand and may
@@ -29,6 +29,21 @@
 //    amount of retrying enrolls them. A silent skip is indistinguishable from success in every count the
 //    owner reads, so they are returned BY NAME for the owner to handle person by person.
 //
+// 4. ABSENCE FROM THE ROSTER IS NOT A LAPSE. Learned on 2026-09-09: a targeted reconcile (the one-member run
+//    a payment fires) handed this planner a roster of ONE, and the first version of the removal pass read
+//    every other placed seat as "no longer belongs to an eligible member". Twenty-two members were mailed a
+//    cancellation that night and a fresh invitation the next morning, and their RSVPs were reset. A seat now
+//    comes off ONLY when its member is PRESENT in the roster and ineligible, or has opted out. A placed
+//    address whose member is missing from the roster is left alone and reported as `unaccounted`, because a
+//    short roster is a short read, not twenty-two lapses.
+//
+// 5. THE INVITATION GOES OUT ONCE (owner, 2026-09-10). Every member address the sweep has ever seen on the
+//    guest list, or placed there, is remembered in `seen`. An address that has since left the event is NEVER
+//    re-added by the sweep, whoever removed it: the owner by hand, a re-created series, a member deleting the
+//    event. It is reported as `dropped`. Re-entry is the member's own act, the Rejoin button on the account
+//    page, or the owner's hand. A lapse is the one exception: the sweep releases the address from `seen` when
+//    it removes the seat itself, so a member who comes back after lapsing gets one fresh invitation.
+//
 // ============================================================================================
 
 /** Effective statuses that earn a seat on the call (owner, 2026-09-04: paid AND trial, not free, not lapsed).
@@ -38,14 +53,18 @@
  *  nobody, and report a clean run every time. */
 export const ELIGIBLE_STATUSES = Object.freeze(new Set(['paid', 'trialing']));
 
-/** Why a member could not be given a seat. Per person, never a property of the run. */
+/** Why a member could not be given a seat, or why a placed seat was left where it is. Per person. */
 export const SKIP_REASON = Object.freeze({
   NO_EMAIL: 'no email address anywhere in the system',
   OPTED_OUT: 'removed themselves from the call',
+  DROPPED: 'invited once already and since removed from the event; the sweep does not re-invite',
+  UNACCOUNTED: 'not in this run\'s roster; absence is not a lapse, so the seat stays',
+  STALE: 'the placed address is no longer the address on file; left alone rather than cancelled',
 });
 
 const idOf = (m) => String(m?.githubId ?? '').trim();
 const statusOf = (m) => m?.effective?.status ?? null;
+const eligible = (m) => ELIGIBLE_STATUSES.has(statusOf(m));
 
 /** Lowercase and trim, the way Google compares attendee addresses. Anything else is not an address. */
 export function normalizeAddress(email) {
@@ -72,16 +91,23 @@ function who(m) {
  * @param {Set} optedOut        githubIds that removed themselves. Keyed by member, not by address, so an
  *                              opt-out survives the member changing which address they use.
  * @param {Map} preferred       githubId -> address override (a linked Google account), when set
+ * @param {Map} seen            normalized address -> githubId, every member address ever seen on the event
+ *                              or placed there. Rule 5: an address in here is never added by the sweep.
  * @returns {object} the plan
  */
-export function planShoptalkEnrollment({ members = [], attendees = [], placed = new Map(), optedOut = new Set(), preferred = new Map() } = {}) {
+export function planShoptalkEnrollment({
+  members = [], attendees = [], placed = new Map(), optedOut = new Set(), preferred = new Map(), seen = new Map(),
+} = {}) {
   const plan = {
-    add: [],           // eligible, has an address, not on the list yet
-    remove: [],        // an address WE placed that no longer belongs to an eligible member
+    add: [],           // eligible, has an address, never invited before, not on the list yet
+    remove: [],        // an address WE placed whose member is PRESENT and no longer eligible, or opted out
     alreadyOn: [],     // eligible and already present: the common case, and a no-op
-    optedOut: [],      // eligible but self-removed. Never re-added. See rule 2.
-    unreachable: [],   // eligible but no address exists anywhere. See rule 3.
-    foreign: [],       // on the event, placed by somebody else. NEVER touched. See rule 1.
+    dropped: [],       // eligible, invited before, since removed from the event. Never re-added. Rule 5.
+    optedOut: [],      // eligible but self-removed. Never re-added. Rule 2.
+    unreachable: [],   // eligible but no address exists anywhere. Rule 3.
+    unaccounted: [],   // placed and on the event, but the member is not in this roster. Left alone. Rule 4.
+    stale: [],         // placed and on the event, member present and eligible under a DIFFERENT address. Left alone.
+    foreign: [],       // on the event, placed by somebody else. NEVER touched. Rule 1.
   };
 
   const onEvent = new Set();
@@ -90,7 +116,24 @@ export function planShoptalkEnrollment({ members = [], attendees = [], placed = 
     if (addr) onEvent.add(addr);
   }
 
-  // Addresses we placed that this pass has justified keeping. Anything left over is a removal.
+  const seenAddr = new Set();
+  for (const a of seen instanceof Map ? seen.keys() : []) {
+    const addr = normalizeAddress(a);
+    if (addr) seenAddr.add(addr);
+  }
+  for (const a of placed instanceof Map ? placed.keys() : []) {
+    const addr = normalizeAddress(a);
+    if (addr) seenAddr.add(addr); // placed implies seen: the sweep put it there itself
+  }
+
+  // The roster by member, for the removal pass. Presence in it is what rule 4 turns on.
+  const roster = new Map();
+  for (const m of members) {
+    const githubId = idOf(m);
+    if (githubId) roster.set(githubId, m);
+  }
+
+  // Addresses we placed that this pass has justified keeping. Anything left over goes to the removal pass.
   const keep = new Set();
 
   for (const m of members) {
@@ -101,9 +144,9 @@ export function planShoptalkEnrollment({ members = [], attendees = [], placed = 
     // because Meet identifies a participant by the Google account they are signed into.
     const address = normalizeAddress(preferred.get(githubId) ?? m?.email);
 
-    if (!ELIGIBLE_STATUSES.has(statusOf(m))) {
-      // Not eligible. Their seat comes off IF WE PLACED IT, and only then. A banned or lapsed member whose
-      // address the owner added by hand is the owner's business, not ours.
+    if (!eligible(m)) {
+      // Not eligible. Their seat comes off IF WE PLACED IT, and only then, in the removal pass below. A banned
+      // or lapsed member whose address the owner added by hand is the owner's business, not ours.
       continue;
     }
 
@@ -125,16 +168,41 @@ export function planShoptalkEnrollment({ members = [], attendees = [], placed = 
       continue;
     }
 
+    if (seenAddr.has(address)) {
+      // Rule 5. Invited once, gone now, and the sweep is not the one who gets to decide they come back.
+      plan.dropped.push({ ...who(m), address, reason: SKIP_REASON.DROPPED });
+      continue;
+    }
+
     plan.add.push({ ...who(m), address });
   }
 
-  // Removal pass. Driven ONLY off `placed`, never off the event, which is rule 1 made structural rather than
-  // remembered: there is no code path here that can reach an address this system did not record placing.
+  // Removal pass. Driven ONLY off `placed`, never off the event (rule 1), and ONLY for a member this roster
+  // can actually see (rule 4). There is no code path here that reaches an address this system did not record
+  // placing, and none that removes a seat on the strength of a member being missing from a list.
   for (const [address, ownerId] of placed) {
     const addr = normalizeAddress(address);
     if (!addr || keep.has(addr)) continue;
-    if (!onEvent.has(addr)) continue; // already gone: nothing to remove, and a removal call would be a no-op
-    plan.remove.push({ githubId: String(ownerId ?? ''), address: addr });
+    if (!onEvent.has(addr)) continue; // already gone: nothing to remove, and rule 5 keeps it gone
+    const githubId = String(ownerId ?? '');
+    const m = roster.get(githubId);
+    if (!m) {
+      plan.unaccounted.push({ githubId, address: addr, reason: SKIP_REASON.UNACCOUNTED });
+      continue;
+    }
+    if (optedOut.has(githubId)) {
+      // The Worker removes an opt-out at button time; this is the backstop for a calendar that was unreachable
+      // then. The member asked for exactly this removal.
+      plan.remove.push({ githubId, address: addr, why: 'opted-out' });
+      continue;
+    }
+    if (!eligible(m)) {
+      plan.remove.push({ githubId, address: addr, why: 'not-eligible', status: statusOf(m) });
+      continue;
+    }
+    // Present, eligible, and the placed address is not the address the roster now carries for them. Their
+    // address changed. Removing the old one mails a cancellation for a change of address, so it is left.
+    plan.stale.push({ ...who(m), address: addr, reason: SKIP_REASON.STALE });
   }
 
   // Everything on the event that this system cannot account for. Reported so the owner can see what the sweep
@@ -160,8 +228,11 @@ export function enrollmentCounts(plan) {
     add: n('add'),
     remove: n('remove'),
     alreadyOn: n('alreadyOn'),
+    dropped: n('dropped'),
     optedOut: n('optedOut'),
     unreachable: n('unreachable'),
+    unaccounted: n('unaccounted'),
+    stale: n('stale'),
     foreign: n('foreign'),
     changes: n('add') + n('remove'),
   };
