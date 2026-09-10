@@ -582,28 +582,34 @@ export async function gatherTargetedMember(stripe, overrides, now, githubId, { r
  *
  * Exported for tests. Returns the number of grants applied.
  */
-export async function applyPendingCouponGrants({ overrides, env = process.env, now = new Date(), listRedemptions = listCouponRedemptions, root = ROOT } = {}) {
+export async function applyPendingCouponGrants({
+  overrides, env = process.env, now = new Date(), listRedemptions = listCouponRedemptions, readGrandfathered = null, root = ROOT,
+} = {}) {
   if (!overrides?.grandfathers) return 0;
   let grants = [];
   try {
     const kv = await listRedemptions({ env });
     if (!kv?.available || !Array.isArray(kv.redemptions) || kv.redemptions.length === 0) return 0;
-    // `.parsed`, not the wrapper: readGrandfatheredFromDisk returns { text, parsed } and planCouponGrants
-    // wants the parsed document. Handing it the wrapper would make grandfathersFromParsed find nothing, so
-    // EVERY already-folded grant would look new and be re-applied. Harmless in effect, wrong in reasoning,
-    // and it would have masked a real regression here later.
-    // sow-213 Phase 3b: the file is gone, so this is null now. Destructuring it would throw a TypeError that
-    // the catch below would report as a mysterious pre-apply failure rather than the plain fact that the
-    // grants file is retired. Say the real thing instead.
-    const onDisk = readGrandfatheredFromDisk(root);
-    if (!onDisk) {
-      console.warn(
-        'reconcile: coupon-grant pre-apply SKIPPED: house/grandfathered.yml is retired (sow-213 Phase 3b) ' +
-          'and the fold does not write to KV yet, so no redemption can be pre-applied this run.',
-      );
+    // THE ALREADY-FOLDED SET IS READ FROM THE KV MIRROR, the same document the durable fold below diffs
+    // against, so both paths see one set of grants and one answer per member.
+    //
+    // 2026-09-10: this read house/grandfathered.yml, which sow-213 Phase 3b DELETED, so from that day this
+    // function returned 0 with a warning and the pre-apply was dead. The cost was not "one run late". The
+    // signup Worker gives a coupon member @Member the moment they link Discord, and the next daily run then
+    // read them as UNPAID (their grant is folded AFTER the plan, further down main) and swapped them to Locked
+    // until the run after that restored Member. A real member sat locked out of the guild for two hours on
+    // 2026-09-08 (job 102055325536 at 12:09 UTC: add-role locked, remove-role member; job 102090418008 at
+    // 13:55: the reverse). Reading the mirror here is what makes the FIRST run after a signup correct.
+    const read = readGrandfathered ?? (async () => {
+      const m = await readOverridesMirrorRest({ env });
+      return m.available ? { parsed: m.mirror?.grandfathered ?? { grandfathered: [] } } : null;
+    });
+    const source = await read();
+    if (!source) {
+      console.warn('reconcile: coupon-grant pre-apply SKIPPED: the KV overrides mirror could not be read; unfolded coupon grants apply on the next run.');
       return 0;
     }
-    const { parsed } = onDisk;
+    const { parsed } = source;
     // sow-185: the SAME couponsParsed the durable fold uses. Both paths run planCouponGrants, and if only
     // one of them saw the registry they could disagree about a member's tier WITHIN A SINGLE RUN: this run
     // would gate on one tier while the PR it opens records the other. One input, one answer.
