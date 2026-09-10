@@ -620,3 +620,8 @@ sources:
     url: https://marcelschmitz.com/
     description: marcelschmitz.com
     enabled: true
+  - id: mlq-ai
+    name: MLQ.ai
+    url: https://mlq.ai/news/feed/
+    description: mlq.ai
+    enabled: true
