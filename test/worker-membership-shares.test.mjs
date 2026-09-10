@@ -114,3 +114,63 @@ test('listSharesFeed: a Trees failure is a 502, never a partial open', async () 
   const r = await listSharesFeed(req(), {}, { ...boom, authorize: paidAuth });
   assert.equal(r.status, 502);
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// 2026-09-10: one GraphQL call for all the blobs, with the REST path as the fallback. The count of fetches is
+// the claim: the old reader spent one subrequest per share.
+// ---------------------------------------------------------------------------------------------------------
+import { readBlobsGraphQL } from '../workers/signup/membership-shares.mjs';
+
+/** A GitHub that answers Trees over REST and the blob batch over GraphQL, counting every call. */
+function fakeGitHubGraphQL(files) {
+  const calls = [];
+  const impl = async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method || 'GET' });
+    if (url.includes('/git/trees/')) {
+      return { ok: true, json: async () => ({ tree: Object.keys(files).map((path) => ({ path, type: 'blob' })) }) };
+    }
+    if (url.endsWith('/graphql')) {
+      const q = JSON.parse(init.body).query;
+      const repo = {};
+      for (const m of q.matchAll(/(b\d+): object\(expression: "main:([^"]+)"\)/g)) {
+        const f = files[m[2]];
+        repo[m[1]] = f ? { text: Buffer.from(f.content, 'base64').toString('utf8'), isBinary: false } : null;
+      }
+      return { ok: true, json: async () => ({ data: { repository: repo } }) };
+    }
+    throw new Error('REST per-file read must not happen when GraphQL answers: ' + url);
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+test('enumerateShares reads every blob in ONE GraphQL call after the Trees call (two fetches, not N+1)', async () => {
+  const f = fakeGitHubGraphQL(FIXTURE);
+  const items = await enumerateShares({}, { fetchImpl: f, kv: null, useCache: false, getToken: async () => 'tok', upstream: 'gbti-network/gbti.network' });
+  assert.equal(f.calls.length, 2, 'Trees + one GraphQL batch');
+  assert.equal(f.calls[1].method, 'POST');
+  assert.deepEqual(items.map((i) => i.id), ['20260301000000-newest', '20260201000000-mid', '20260101000000-oldest'], 'same result as the REST path, drafts dropped');
+});
+
+test('enumerateShares falls back to per-file REST when GraphQL is refused, and still answers', async () => {
+  const rest = fakeGitHub(FIXTURE);
+  let graphqlHits = 0;
+  const impl = async (url, init) => {
+    if (String(url).endsWith('/graphql')) { graphqlHits += 1; return { ok: false, status: 403, json: async () => ({}) }; }
+    return rest(url, init);
+  };
+  const items = await enumerateShares({}, { fetchImpl: impl, kv: null, useCache: false, getToken: async () => 'tok', upstream: 'gbti-network/gbti.network' });
+  assert.equal(graphqlHits, 1);
+  assert.equal(items.length, 3, 'the fallback is the old reader, which is slower but complete');
+});
+
+test('readBlobsGraphQL: a missing path is absent, a binary blob is skipped, an empty request makes no call', async () => {
+  const f = fakeGitHubGraphQL({ 'a.md': { content: Buffer.from('hello').toString('base64') } });
+  const m = await readBlobsGraphQL(['a.md', 'missing.md'], { fetchImpl: f, token: 't', upstream: 'o/r' });
+  assert.equal(m.get('a.md'), 'hello');
+  assert.equal(m.has('missing.md'), false);
+  assert.equal(f.calls.length, 1);
+  const none = await readBlobsGraphQL([], { fetchImpl: f, token: 't', upstream: 'o/r' });
+  assert.equal(none.size, 0);
+  assert.equal(f.calls.length, 1, 'no call for no paths');
+});

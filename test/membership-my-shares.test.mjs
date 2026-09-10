@@ -77,3 +77,51 @@ test('a free (non-paid) signed-in member can still list their own shares (readin
   assert.equal(r.status, 200);
   assert.equal(r.body.items.length, 3);
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// 2026-09-10: the folder comes back in ONE GraphQL call (listing + text). The owner's tab took 8 to 10 seconds
+// on 46 sequential per-file reads; the count of fetches is the claim.
+// ---------------------------------------------------------------------------------------------------------
+function fakeGitHubGraphQL(folders) {
+  const calls = [];
+  const impl = async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method || 'GET' });
+    if (String(url).endsWith('/graphql')) {
+      const dir = JSON.parse(init.body).query.match(/expression: "main:([^"]+)"/)[1];
+      if (!folders[dir]) return { ok: true, json: async () => ({ data: { repository: { object: null } } }) };
+      const entries = folders[dir].map((name) => ({ name, type: 'blob', object: FILES[`${dir}/${name}`] ? { text: Buffer.from(FILES[`${dir}/${name}`], 'base64').toString('utf8'), isBinary: false } : { text: 'not a share', isBinary: false } }));
+      return { ok: true, json: async () => ({ data: { repository: { object: { entries } } } }) };
+    }
+    throw new Error('REST must not be used when GraphQL answers: ' + url);
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+test('listMemberShares: ONE GraphQL call returns the folder, newest first, drafts included; no REST read', async () => {
+  const f = fakeGitHubGraphQL(FOLDERS);
+  const items = await listMemberShares({}, 'alice', deps({ fetchImpl: f }));
+  assert.equal(f.calls.length, 1, 'one call, not one per file');
+  assert.equal(f.calls[0].method, 'POST');
+  assert.deepEqual(items.map((i) => i.id), ['20260301-new', '20260201-gone', '20260101-old']);
+  assert.equal(items.find((i) => i.id === '20260201-gone').status, 'draft', 'a draft still shows in the owner\'s own list');
+});
+
+test('listMemberShares: a member with no shares folder is an empty list from the same one call', async () => {
+  const f = fakeGitHubGraphQL(FOLDERS);
+  assert.deepEqual(await listMemberShares({}, 'nobody', deps({ fetchImpl: f })), []);
+  assert.equal(f.calls.length, 1);
+});
+
+test('listMemberShares: when GraphQL is refused the REST path answers, reading files in parallel', async () => {
+  const rest = fakeGitHub(FOLDERS);
+  const seen = [];
+  const impl = async (url, init) => {
+    if (String(url).endsWith('/graphql')) return { ok: false, status: 403, json: async () => ({}) };
+    seen.push(String(url));
+    return rest(url, init);
+  };
+  const items = await listMemberShares({}, 'alice', deps({ fetchImpl: impl }));
+  assert.equal(items.length, 3);
+  assert.equal(seen.length, 4, 'the listing plus one read per share file, as before');
+});
