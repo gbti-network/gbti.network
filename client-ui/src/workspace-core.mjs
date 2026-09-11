@@ -287,6 +287,27 @@ export function scopeFor(stored, { personalCount = 0, role = 'member' } = {}) {
  * falls back to its publishedAt rather than sorting as dateless, so a never-edited item still ranks by when it
  * actually appeared instead of jumping to the top.
  */
+/** sow-317: the author of a list row, from the row or its path. '' when neither says. */
+export function authorOf(item) {
+  if (item && typeof item.author === 'string' && item.author) return item.author.toLowerCase();
+  const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(item?.path || ''));
+  return m ? m[1].toLowerCase() : '';
+}
+
+/** sow-317: every author present in a list, sorted, for the Network content author filter. */
+export function authorsIn(items) {
+  const set = new Set();
+  for (const it of Array.isArray(items) ? items : []) { const a = authorOf(it); if (a) set.add(a); }
+  return [...set].sort();
+}
+
+/** sow-317: narrow a list to one author; '' or 'all' keeps everything. */
+export function filterByAuthor(items, author = '') {
+  const a = String(author || '').toLowerCase();
+  if (!a || a === 'all') return Array.isArray(items) ? items : [];
+  return (Array.isArray(items) ? items : []).filter((it) => authorOf(it) === a);
+}
+
 export function sortItems(items, sort = DEFAULT_SORT) {
   const list = Array.isArray(items) ? [...items] : [];
   const byTitle = (a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' });

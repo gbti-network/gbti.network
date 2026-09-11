@@ -619,3 +619,14 @@ test('shareMoveDeletions: own-folder paths become delete entries; anything else 
   assert.deepEqual(shareMoveDeletions({ user: '', removePaths: ['members/alice/shares/x.md'] }), []);
   assert.deepEqual(shareMoveDeletions({ user: 'alice' }), []);
 });
+
+// sow-317: a superadmin editing another member's item must resolve its origin from that member's folder.
+import { isForeignMemberPath } from '../src/lib/workbench-client-core.mjs';
+
+test('isForeignMemberPath: another member\'s canonical item path is foreign; own, house and junk are not', () => {
+  assert.equal(isForeignMemberPath('members/bob/posts/x/index.md', 'alice'), true);
+  assert.equal(isForeignMemberPath('members/Alice/posts/x/index.md', 'alice'), false);
+  assert.equal(isForeignMemberPath('house/posts/x/index.md', 'alice'), false);
+  assert.equal(isForeignMemberPath('members/bob/shares/x.md', 'alice'), false, 'not a canonical content item path');
+  assert.equal(isForeignMemberPath('', 'alice'), false);
+});

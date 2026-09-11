@@ -49,7 +49,7 @@ test('the list element emits gbti-edit-share, consumes a pending edit-id once, a
 
 test('the share composer has an edit mode that re-publishes the same id and never carries encryptedBody', () => {
   const src = read('client-ui/src/elements/gbti-share-composer.mjs');
-  for (const s of ['async editShare(item)', 'cancelEdit()', 'editInputFor({ share: edited', 'encRemovalFor({ share: edited', "postShare({ input, body, removeEnc, ...(authorTarget ? { authorTarget, removePaths } : {}) })", "edited: true", 'authorMoveRemovals({ share: edited, authorTarget })', "this._authorTarget()", 'data-author-row']) assert.ok(src.includes(s), s);
+  for (const s of ['async editShare(item)', 'cancelEdit()', 'editInputFor({ share: edited', 'encRemovalFor({ share: edited', "postShare({ input, body, removeEnc, ...(owner ? { authorTarget: owner, removePaths } : {}) })", "edited: true", 'authorMoveRemovals({ share: edited, authorTarget: owner })', "this._editOwner()", 'data-author-row']) assert.ok(src.includes(s), s);
   assert.match(src, /url\.readOnly = true/);
   assert.match(src, /data-remove-link/);
   assert.match(src, /data-unpublish/);
@@ -67,4 +67,16 @@ test('both transports honour an edit: createdAt kept, the stale pointer dropped,
   assert.match(npm, /files\.push\(\{ path: removeEnc, content: null \}\)/);
   const ui = read('client-ui/src/client.mjs');
   assert.match(ui, /myShares: \(\) => request\('GET', '\/api\/my-shares'\)/);
+});
+
+// sow-317: the Network content scope reaches every member's content, and the pieces that make an edit land in place.
+test('sow-317: the Network scope pins: author filter + chips in the workspace, the share list scope, the foreign-path publish', () => {
+  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  for (const lit of ['data-author', 'filterByAuthor(content, this._authorFilter)', "authorOf(it)", 'scope="network"', 'Unpublished items across the network']) assert.ok(ws.includes(lit), lit);
+  const sl = read('client-ui/src/elements/gbti-share-list.mjs');
+  for (const lit of ["getAttribute('scope') === 'network'", 'this.client.networkShares()', 'Network shares']) assert.ok(sl.includes(lit), lit);
+  const web = read('src/lib/workbench-client.ts');
+  for (const lit of ['isForeignMemberPath(path, user)', "/membership/network-content?type=", "async networkShares()", "removeEnc.startsWith(`members/${owner}/_enc/`)"]) assert.ok(web.includes(lit), lit);
+  const worker = read('workers/signup/index.mjs');
+  for (const lit of ["'/membership/network-content'", "'/membership/network-shares'"]) assert.ok(worker.includes(lit), lit);
 });

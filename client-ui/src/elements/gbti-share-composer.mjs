@@ -645,12 +645,26 @@ class GbtiShareComposer extends GbtiElement {
     };
   }
 
-  /** The Author pick as a target for the write, or undefined when it is where the share already is. */
+  /** The Author pick as a target for a NEW share, or undefined for "me". */
   _authorTarget() {
     const row = this.$('[data-author-row]');
     const sel = this.$('select.author');
     if (!row || row.hidden || !sel) return undefined;
-    return shareAuthorTarget(sel.value, this._edit ? String(this._edit.author || '') : '');
+    return shareAuthorTarget(sel.value, '');
+  }
+
+  /**
+   * The folder an EDIT is written under: the picker's choice, else the share's own author. Always the share's
+   * author when the picker is hidden, so a superadmin editing another member's share from the Network content
+   * scope (sow-317) republishes it in place, and a member editing their own share builds under themselves as
+   * before. The client only deletes anything when removePaths names a real move.
+   */
+  _editOwner() {
+    const current = this._edit ? String(this._edit.author || '') : '';
+    const row = this.$('[data-author-row]');
+    const sel = this.$('select.author');
+    const pick = row && !row.hidden && sel ? String(sel.value || '') : '';
+    return (pick || current || '').toLowerCase() || undefined;
   }
 
   // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
@@ -758,10 +772,11 @@ class GbtiShareComposer extends GbtiElement {
         if (!input) throw new Error('this share cannot be edited');
         const removeEnc = encRemovalFor({ share: edited, visibility: input.visibility, username: edited.author || null });
         // sow-183 for shares: a changed Author pick moves the share; the old stub + ciphertext leave in the same PR.
-        const authorTarget = this._authorTarget();
-        const removePaths = authorTarget ? authorMoveRemovals({ share: edited, authorTarget }) : [];
-        const res = await this.client.postShare({ input, body, removeEnc, ...(authorTarget ? { authorTarget, removePaths } : {}) });
-        const what = authorTarget ? `Moved to @${authorTarget}` : input.status === 'draft' ? 'Removed from the network' : status === 'published' ? 'Published again' : 'Saved';
+        const owner = this._editOwner();
+        const moved = !!(owner && edited.author && owner !== String(edited.author).toLowerCase());
+        const removePaths = moved ? authorMoveRemovals({ share: edited, authorTarget: owner }) : [];
+        const res = await this.client.postShare({ input, body, removeEnc, ...(owner ? { authorTarget: owner, removePaths } : {}) });
+        const what = moved ? `Moved to @${owner}` : input.status === 'draft' ? 'Removed from the network' : status === 'published' ? 'Published again' : 'Saved';
         const pr = res?.prNumber ? ` (PR #${res.prNumber})` : '';
         this._say(msg, `${what}${pr}. It merges automatically and the change reaches the site in a few minutes.`, 'ok');
         const item = optimisticShareItem({ res, input: { ...input, image: this._image }, body, now: input.createdAt });

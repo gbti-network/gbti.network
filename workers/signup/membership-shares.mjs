@@ -92,7 +92,7 @@ export async function readBlobsGraphQL(paths, { fetchImpl, token, upstream }) {
 }
 
 /** The REST fallback: one Contents read per path, `REST_PARALLEL` at a time. Returns Map path -> text. */
-async function readBlobsRest(paths, { fetchImpl, token, upstream }) {
+export async function readBlobsRest(paths, { fetchImpl, token, upstream }) {
   const out = new Map();
   for (let i = 0; i < paths.length; i += REST_PARALLEL) {
     const batch = paths.slice(i, i + REST_PARALLEL);

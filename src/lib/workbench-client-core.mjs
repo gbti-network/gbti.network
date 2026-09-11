@@ -453,6 +453,18 @@ const FOLDER_TYPE = { posts: 'post', projects: 'project', products: 'project', p
 // gated to role==='superadmin' (gbti-workspace.mjs _canScope). This function does no authorization of its own;
 // the real fail-closed gate is the Worker's independent authorizeSuperadmin re-check (membership-admin.mjs),
 // exactly like every other client-side convenience in this file.
+/**
+ * sow-317: is this a canonical item path in a member folder that is NOT the caller's? A superadmin editing another
+ * member's item from the Network content scope loads exactly such a path, and publish() must resolve the item's
+ * origin from it (so the edit lands in place) rather than treating the path as foreign and building a duplicate
+ * under the caller's own folder. The Worker re-verifies the superadmin on the write.
+ */
+export function isForeignMemberPath(path, username) {
+  const m = OWN_ITEM_PATH_RE.exec(String(path || ''));
+  if (!m) return false;
+  return m[1].toLowerCase() !== String(username || '').toLowerCase();
+}
+
 export function renameOriginOf({ path, username, type, allowAnyFolder = false } = {}) {
   const p = String(path || '');
   const h = HOUSE_ITEM_PATH_RE.exec(p);

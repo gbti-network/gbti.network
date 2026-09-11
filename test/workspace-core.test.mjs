@@ -410,3 +410,23 @@ test('authorTargetFor: a real pick still reassigns, in both directions', () => {
   assert.equal(authorTargetFor('member:', 'house'), undefined);
   assert.equal(authorTargetFor('nonsense', 'house'), undefined);
 });
+
+// sow-317: the Network content author filter.
+import { authorOf, authorsIn, filterByAuthor } from '../client-ui/src/workspace-core.mjs';
+
+test('authorOf reads the row, else the path; authorsIn is sorted and unique; filterByAuthor narrows or keeps all', () => {
+  const items = [
+    { path: 'members/bob/posts/a/index.md', title: 'A' },
+    { path: 'members/alice/posts/b/index.md', title: 'B', author: 'Alice' },
+    { path: 'members/bob/prompts/c/index.md', title: 'C' },
+    { path: 'house/x', title: 'no author' },
+  ];
+  assert.equal(authorOf(items[0]), 'bob');
+  assert.equal(authorOf(items[1]), 'alice');
+  assert.equal(authorOf(items[3]), '');
+  assert.deepEqual(authorsIn(items), ['alice', 'bob']);
+  assert.deepEqual(filterByAuthor(items, 'bob').map((i) => i.title), ['A', 'C']);
+  assert.equal(filterByAuthor(items, '').length, 4);
+  assert.equal(filterByAuthor(items, 'all').length, 4);
+  assert.deepEqual(filterByAuthor(null, 'bob'), []);
+});

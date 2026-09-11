@@ -3134,6 +3134,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (SCOPE_MODES.has(stored)) return stored;
     return Number(personalCount) > 0 ? "member" : "house";
   }
+  function authorOf(item) {
+    if (item && typeof item.author === "string" && item.author) return item.author.toLowerCase();
+    const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(item?.path || ""));
+    return m ? m[1].toLowerCase() : "";
+  }
+  function authorsIn(items) {
+    const set = /* @__PURE__ */ new Set();
+    for (const it of Array.isArray(items) ? items : []) {
+      const a = authorOf(it);
+      if (a) set.add(a);
+    }
+    return [...set].sort();
+  }
+  function filterByAuthor(items, author = "") {
+    const a = String(author || "").toLowerCase();
+    if (!a || a === "all") return Array.isArray(items) ? items : [];
+    return (Array.isArray(items) ? items : []).filter((it) => authorOf(it) === a);
+  }
   function sortItems(items, sort = DEFAULT_SORT) {
     const list = Array.isArray(items) ? [...items] : [];
     const byTitle = (a, b) => String(a?.title || "").localeCompare(String(b?.title || ""), void 0, { sensitivity: "base" });
@@ -4360,12 +4378,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       };
     }
-    /** The Author pick as a target for the write, or undefined when it is where the share already is. */
+    /** The Author pick as a target for a NEW share, or undefined for "me". */
     _authorTarget() {
       const row = this.$("[data-author-row]");
       const sel = this.$("select.author");
       if (!row || row.hidden || !sel) return void 0;
-      return shareAuthorTarget(sel.value, this._edit ? String(this._edit.author || "") : "");
+      return shareAuthorTarget(sel.value, "");
+    }
+    /**
+     * The folder an EDIT is written under: the picker's choice, else the share's own author. Always the share's
+     * author when the picker is hidden, so a superadmin editing another member's share from the Network content
+     * scope (sow-317) republishes it in place, and a member editing their own share builds under themselves as
+     * before. The client only deletes anything when removePaths names a real move.
+     */
+    _editOwner() {
+      const current = this._edit ? String(this._edit.author || "") : "";
+      const row = this.$("[data-author-row]");
+      const sel = this.$("select.author");
+      const pick = row && !row.hidden && sel ? String(sel.value || "") : "";
+      return (pick || current || "").toLowerCase() || void 0;
     }
     // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
     _applySuggested() {
@@ -4467,10 +4498,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const input2 = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, visibility, removeUrl: edited.removeUrl === true } });
           if (!input2) throw new Error("this share cannot be edited");
           const removeEnc = encRemovalFor({ share: edited, visibility: input2.visibility, username: edited.author || null });
-          const authorTarget2 = this._authorTarget();
-          const removePaths = authorTarget2 ? authorMoveRemovals({ share: edited, authorTarget: authorTarget2 }) : [];
-          const res2 = await this.client.postShare({ input: input2, body, removeEnc, ...authorTarget2 ? { authorTarget: authorTarget2, removePaths } : {} });
-          const what = authorTarget2 ? `Moved to @${authorTarget2}` : input2.status === "draft" ? "Removed from the network" : status === "published" ? "Published again" : "Saved";
+          const owner = this._editOwner();
+          const moved = !!(owner && edited.author && owner !== String(edited.author).toLowerCase());
+          const removePaths = moved ? authorMoveRemovals({ share: edited, authorTarget: owner }) : [];
+          const res2 = await this.client.postShare({ input: input2, body, removeEnc, ...owner ? { authorTarget: owner, removePaths } : {} });
+          const what = moved ? `Moved to @${owner}` : input2.status === "draft" ? "Removed from the network" : status === "published" ? "Published again" : "Saved";
           const pr = res2?.prNumber ? ` (PR #${res2.prNumber})` : "";
           this._say(msg, `${what}${pr}. It merges automatically and the change reaches the site in a few minutes.`, "ok");
           const item2 = optimisticShareItem({ res: res2, input: { ...input2, image: this._image }, body, now: input2.createdAt });
@@ -18233,7 +18265,11 @@ ${String(body ?? "")}`;
   // client-ui/src/elements/gbti-share-list.mjs
   var GbtiShareList = class extends GbtiElement {
     static get observedAttributes() {
-      return ["edit-id"];
+      return ["edit-id", "scope"];
+    }
+    /** sow-317: `scope="network"` lists EVERY member's shares (superadmin, through client.networkShares). */
+    _network() {
+      return this.getAttribute("scope") === "network" && typeof this.client?.networkShares === "function";
     }
     connectedCallback() {
       this._items = null;
@@ -18249,7 +18285,7 @@ ${String(body ?? "")}`;
         return;
       }
       try {
-        const r = await this.client.myShares();
+        const r = this._network() ? await this.client.networkShares() : await this.client.myShares();
         this._items = Array.isArray(r?.items) ? r.items : [];
         this._error = "";
       } catch (err) {
@@ -18282,7 +18318,7 @@ ${String(body ?? "")}`;
       .rowacts { display: inline-flex; gap: 6px; flex: none; }
       .tag.muted { opacity: .7; }
     `) + `<div class="panel">
-           <h2>My shares</h2>
+           <h2>${this._network() ? "Network shares" : "My shares"}</h2>
            ${body}
          </div>`);
       this.$$("button[data-i]").forEach((b) => b.addEventListener("click", () => {
@@ -18302,8 +18338,9 @@ ${String(body ?? "")}`;
       const when = it.createdAt ? `<time datetime="${esc(it.createdAt)}" title="${esc(absTime(it.createdAt))}">${esc(relTime(it.createdAt))}</time>` : "";
       const edited = it.updatedAt ? ` <span class="muted">(edited ${esc(relTime(it.updatedAt))})</span>` : "";
       const view = url ? `<button class="ghost" data-view="${esc(url)}" title="Open the live public page in a new tab">View</button>` : "";
+      const who = this._network() && it.author ? `<span class="tag who">@${esc(String(it.author))}</span> ` : "";
       return `<li class="row">
-      <span class="sh-main"><span class="sh-t">${esc(title)}</span><span class="sh-m">${when}${edited} <span class="tag ${state.tone}">${esc(state.label)}</span> <span class="tag">${vis}</span></span></span>
+      <span class="sh-main"><span class="sh-t">${esc(title)}</span><span class="sh-m">${who}${when}${edited} <span class="tag ${state.tone}">${esc(state.label)}</span> <span class="tag">${vis}</span></span></span>
       <span class="rowacts">${view}<button class="ghost" data-i="${i}">Edit</button></span>
     </li>`;
     }
@@ -18791,6 +18828,7 @@ ${String(body ?? "")}`;
       this._page = 0;
       this._sort = sortModeFor(typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
       this._statusFilter = "all";
+      this._authorFilter = "";
       this._viewList = [];
       this._scope = null;
       this._scopeResolved = false;
@@ -19317,7 +19355,7 @@ ${String(body ?? "")}`;
       if (this._tab === "overview") return this._overviewHtml();
       if (this._tab === "earnings") return this._renderEarnings();
       if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
-      if (this._tab === "share") return `<gbti-share-list${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
+      if (this._tab === "share") return `<gbti-share-list${this._scopeNow() === "house" ? ' scope="network"' : ""}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
       if (this._tab === "prs") {
@@ -19341,11 +19379,12 @@ ${String(body ?? "")}`;
       const content = this._cache?.[this._ck(type)];
       if (!content) return `<p class="empty">Loading...</p>`;
       const typeDrafts = this._scopeNow() === "house" ? [] : (this._drafts || []).filter((d) => d.type === type);
-      const view = filterByStatus(sortItems(mergeTypeItems(content, typeDrafts), this._sort), this._statusFilter);
+      const scoped = this._scopeNow() === "house" ? filterByAuthor(content, this._authorFilter) : content;
+      const view = filterByStatus(sortItems(mergeTypeItems(scoped, typeDrafts), this._sort), this._statusFilter);
       this._viewList = view;
       const controls = this._listControls();
       const note = this._msg || this._draftMsg ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : "";
-      const draftNote = this._statusFilter === "draft" ? `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>` : "";
+      const draftNote = this._statusFilter === "draft" ? this._scopeNow() === "house" ? `<p class="muted draft-intro">Unpublished items across the network. Republish restores one to the site.</p>` : `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>` : "";
       if (view.length === 0) {
         const empty = this._statusFilter === "all" ? `No ${esc(tab.label.toLowerCase())} yet.` : this._statusFilter === "draft" ? `No drafts in ${esc(tab.label)}.` : `No published ${esc(tab.label.toLowerCase())}.`;
         return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
@@ -19389,7 +19428,14 @@ ${String(body ?? "")}`;
       const now = this._scopeNow();
       const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? "on" : ""}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
       const scopeSwitch = this._canScope() ? `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn("member", "My content")}${scopeBtn("house", "Network content")}</div>` : "";
-      return `<div class="lc-bar">` + scopeSwitch + `<div class="lc-filter" role="group" aria-label="Filter by status">${f("all", "All")}${f("published", "Published")}${f("draft", "Drafts")}</div><label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt("newest", "Newest")}${opt("oldest", "Oldest")}${opt("updated", "Recently updated")}${opt("title-asc", "Title A-Z")}${opt("title-desc", "Title Z-A")}</select></label></div>`;
+      let authorPick = "";
+      if (now === "house") {
+        const tab = TABS.find((t) => t.id === this._tab);
+        const authors = authorsIn(this._cache?.[this._ck(tab?.type)] || []);
+        const cur = this._authorFilter || "";
+        authorPick = `<label class="lc-sort lc-author"><span class="lc-sl">Author</span><select data-author aria-label="Filter by author"><option value=""${cur ? "" : " selected"}>All members</option>` + authors.map((a) => `<option value="${esc(a)}"${cur === a ? " selected" : ""}>@${esc(a)}</option>`).join("") + `</select></label>`;
+      }
+      return `<div class="lc-bar">` + scopeSwitch + authorPick + `<div class="lc-filter" role="group" aria-label="Filter by status">${f("all", "All")}${f("published", "Published")}${f("draft", "Drafts")}</div><label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt("newest", "Newest")}${opt("oldest", "Oldest")}${opt("updated", "Recently updated")}${opt("title-asc", "Title A-Z")}${opt("title-desc", "Title Z-A")}</select></label></div>`;
     }
     // SOW-145: switch the content scope (My content <-> House content), persist it, reset the page + status filter,
     // and load the newly-active scope's list for the current tab (the scope-keyed cache makes a repeat switch instant).
@@ -19402,6 +19448,7 @@ ${String(body ?? "")}`;
         if (typeof localStorage !== "undefined") localStorage.setItem(WORKSPACE_SCOPE_KEY, scope);
       } catch {
       }
+      this._authorFilter = "";
       this._page = 0;
       this._statusFilter = "all";
       this.render();
@@ -19418,7 +19465,8 @@ ${String(body ?? "")}`;
       const pub = it.status === "published" ? publicPathFor({ type: it.type, path: it.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const view = pub ? `<a class="btn" href="${esc(isExt ? SITE13 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+      const who = this._scopeNow() === "house" && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : "";
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
     // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
@@ -19526,6 +19574,11 @@ ${String(body ?? "")}`;
           this._page = 0;
           this.render();
         }));
+        this.$("[data-author]")?.addEventListener("change", (e) => {
+          this._authorFilter = String(e.target.value || "");
+          this._page = 0;
+          this.render();
+        });
         this.$$("[data-scope]").forEach((b) => b.addEventListener("click", () => this._setScope(b.dataset.scope)));
       }
       this.$$("[data-page]").forEach((b) => b.addEventListener("click", () => {

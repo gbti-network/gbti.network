@@ -10,7 +10,10 @@ import { shareRowState, sharePublicUrl } from '../share-post-core.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 
 class GbtiShareList extends GbtiElement {
-  static get observedAttributes() { return ['edit-id']; }
+  static get observedAttributes() { return ['edit-id', 'scope']; }
+
+  /** sow-317: `scope="network"` lists EVERY member's shares (superadmin, through client.networkShares). */
+  _network() { return this.getAttribute('scope') === 'network' && typeof this.client?.networkShares === 'function'; }
 
   connectedCallback() {
     this._items = null;
@@ -23,7 +26,7 @@ class GbtiShareList extends GbtiElement {
   async reload() {
     if (!this.client || typeof this.client.myShares !== 'function') { this._items = null; this.render(); return; }
     try {
-      const r = await this.client.myShares();
+      const r = this._network() ? await this.client.networkShares() : await this.client.myShares();
       this._items = Array.isArray(r?.items) ? r.items : [];
       this._error = '';
     } catch (err) {
@@ -64,7 +67,7 @@ class GbtiShareList extends GbtiElement {
       .rowacts { display: inline-flex; gap: 6px; flex: none; }
       .tag.muted { opacity: .7; }
     `) + `<div class="panel">
-           <h2>My shares</h2>
+           <h2>${this._network() ? 'Network shares' : 'My shares'}</h2>
            ${body}
          </div>`);
     this.$$('button[data-i]').forEach((b) => b.addEventListener('click', () => {
@@ -85,8 +88,9 @@ class GbtiShareList extends GbtiElement {
     const when = it.createdAt ? `<time datetime="${esc(it.createdAt)}" title="${esc(absTime(it.createdAt))}">${esc(relTime(it.createdAt))}</time>` : '';
     const edited = it.updatedAt ? ` <span class="muted">(edited ${esc(relTime(it.updatedAt))})</span>` : '';
     const view = url ? `<button class="ghost" data-view="${esc(url)}" title="Open the live public page in a new tab">View</button>` : '';
+    const who = this._network() && it.author ? `<span class="tag who">@${esc(String(it.author))}</span> ` : ''; // sow-317
     return `<li class="row">
-      <span class="sh-main"><span class="sh-t">${esc(title)}</span><span class="sh-m">${when}${edited} <span class="tag ${state.tone}">${esc(state.label)}</span> <span class="tag">${vis}</span></span></span>
+      <span class="sh-main"><span class="sh-t">${esc(title)}</span><span class="sh-m">${who}${when}${edited} <span class="tag ${state.tone}">${esc(state.label)}</span> <span class="tag">${vis}</span></span></span>
       <span class="rowacts">${view}<button class="ghost" data-i="${i}">Edit</button></span>
     </li>`;
   }

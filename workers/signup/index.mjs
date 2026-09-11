@@ -108,7 +108,8 @@ import { membershipDeployStatus } from './membership-deploy-status.mjs'; // sow-
 import { handleDiscordInvite } from './discord-invite.mjs';
 import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent, itemRevisions } from './github-app.mjs';
 import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner-scoped repo-draft listing
-import { listSharesFeed, listMyShares } from './membership-shares.mjs'; // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
+import { listSharesFeed, listMyShares } from './membership-shares.mjs';
+import { listNetworkContent, listNetworkShares } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
 import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy, membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool, membershipAdminNewsEngagement, membershipAdminSyndicationSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool; sow-161 B: the channel-map manager pool reads (superadmin)
@@ -1597,6 +1598,17 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'GET') {
           const r = await listMyShares(request, env);
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization, Cookie' });
+        }
+      }
+
+      // sow-317: the WorkBench's Network content scope, superadmin-only: every member's items for a type (the
+      // site's published index plus what sits unpublished on main) and every member's shares, drafts included.
+      if (pathname === '/membership/network-content' || pathname === '/membership/network-shares') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = pathname === '/membership/network-content' ? await listNetworkContent(request, env) : await listNetworkShares(request, env);
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization, Cookie' });
         }
       }

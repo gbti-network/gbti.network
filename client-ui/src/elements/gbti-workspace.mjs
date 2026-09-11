@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, authorsIn, filterByAuthor, authorOf } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -183,6 +183,7 @@ class GbtiWorkspace extends GbtiElement {
     // content tab, the index target the row action handlers read.
     this._sort = sortModeFor(typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
     this._statusFilter = 'all';
+    this._authorFilter = ''; // sow-317: the Network content author filter (session-only, like the status filter)
     this._viewList = [];
     // SOW-145: the content SCOPE (My content / Network content), superadmin-only. Unresolved (null) until the
     // Overview arrives with the caller's role + personal counts; treated as 'member' until then (so a
@@ -699,7 +700,7 @@ class GbtiWorkspace extends GbtiElement {
     // The id is NOT cleared here: every render re-mounts the list, and the first instance is usually replaced
     // (client arrival, the overview load) before its request returns. The list announces each completed load and
     // the listener in connectedCallback drops the id then, so exactly one live list ever emits the edit.
-    if (this._tab === 'share') return `<gbti-share-list${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ''}></gbti-share-list>`;
+    if (this._tab === 'share') return `<gbti-share-list${this._scopeNow() === 'house' ? ' scope="network"' : ''}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ''}></gbti-share-list>`; // sow-317: every member's shares in Network scope
     if (this._tab === 'saved') return `<gbti-saved></gbti-saved>`; // SOW-037
     if (this._tab === 'subs') return `<gbti-subscriptions></gbti-subscriptions>`; // SOW-037
     if (this._tab === 'prs') {
@@ -739,7 +740,9 @@ class GbtiWorkspace extends GbtiElement {
     // SOW-145: house content publishes directly (no fork-staged house drafts in v1), so never merge the member's
     // fork drafts into the house list; the member scope keeps the SOW-085 merged-draft view.
     const typeDrafts = this._scopeNow() === 'house' ? [] : (this._drafts || []).filter((d) => d.type === type);
-    const view = filterByStatus(sortItems(mergeTypeItems(content, typeDrafts), this._sort), this._statusFilter);
+    // sow-317: in Network scope the author filter narrows first; member scope has one author and ignores it.
+    const scoped = this._scopeNow() === 'house' ? filterByAuthor(content, this._authorFilter) : content;
+    const view = filterByStatus(sortItems(mergeTypeItems(scoped, typeDrafts), this._sort), this._statusFilter);
     this._viewList = view;
     const controls = this._listControls();
     // SOW-085: the status-flip ack (_msg) AND draft-action errors (_draftMsg, previously shown on the Drafts tab)
@@ -747,7 +750,9 @@ class GbtiWorkspace extends GbtiElement {
     const note = (this._msg || this._draftMsg) ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : '';
     // The "drafts live on your fork" copy that lived on the Drafts tab now shows only when the Drafts filter is on.
     const draftNote = this._statusFilter === 'draft'
-      ? `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>` : '';
+      ? (this._scopeNow() === 'house'
+        ? `<p class="muted draft-intro">Unpublished items across the network. Republish restores one to the site.</p>`
+        : `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>`) : '';
     if (view.length === 0) {
       const empty = this._statusFilter === 'all' ? `No ${esc(tab.label.toLowerCase())} yet.`
         : this._statusFilter === 'draft' ? `No drafts in ${esc(tab.label)}.`
@@ -802,8 +807,18 @@ class GbtiWorkspace extends GbtiElement {
     const scopeSwitch = this._canScope()
       ? `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn('member', 'My content')}${scopeBtn('house', 'Network content')}</div>`
       : '';
+    // sow-317: in Network scope, an author filter over the loaded list (every author present, "All members" first).
+    let authorPick = '';
+    if (now === 'house') {
+      const tab = TABS.find((t) => t.id === this._tab);
+      const authors = authorsIn(this._cache?.[this._ck(tab?.type)] || []);
+      const cur = this._authorFilter || '';
+      authorPick = `<label class="lc-sort lc-author"><span class="lc-sl">Author</span><select data-author aria-label="Filter by author"><option value=""${cur ? '' : ' selected'}>All members</option>`
+        + authors.map((a) => `<option value="${esc(a)}"${cur === a ? ' selected' : ''}>@${esc(a)}</option>`).join('') + `</select></label>`;
+    }
     return `<div class="lc-bar">`
       + scopeSwitch
+      + authorPick
       + `<div class="lc-filter" role="group" aria-label="Filter by status">${f('all', 'All')}${f('published', 'Published')}${f('draft', 'Drafts')}</div>`
       + `<label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt('newest', 'Newest')}${opt('oldest', 'Oldest')}${opt('updated', 'Recently updated')}${opt('title-asc', 'Title A-Z')}${opt('title-desc', 'Title Z-A')}</select></label>`
       + `</div>`;
@@ -817,6 +832,7 @@ class GbtiWorkspace extends GbtiElement {
     this._scope = scope;
     this._scopeResolved = true; // an explicit choice pins it (the auto empty-personal default no longer applies)
     try { if (typeof localStorage !== 'undefined') localStorage.setItem(WORKSPACE_SCOPE_KEY, scope); } catch { /* private mode */ }
+    this._authorFilter = ''; // sow-317
     this._page = 0;
     this._statusFilter = 'all';
     this.render();
@@ -844,9 +860,11 @@ class GbtiWorkspace extends GbtiElement {
     const view = pub
       ? `<a class="btn" href="${esc(isExt ? SITE + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ''} title="View the live page">View</a>`
       : '';
+    // sow-317: in Network scope every row names its author; the list mixes every member's items.
+    const who = this._scopeNow() === 'house' && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : '';
     return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
       + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
-      + `<span class="right">${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+      + `<span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
   }
 
   // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
@@ -969,6 +987,7 @@ class GbtiWorkspace extends GbtiElement {
         this._page = 0; this.render();
       });
       this.$$('[data-filter]').forEach((b) => b.addEventListener('click', () => { this._statusFilter = b.dataset.filter; this._page = 0; this.render(); }));
+      this.$('[data-author]')?.addEventListener('change', (e) => { this._authorFilter = String(e.target.value || ''); this._page = 0; this.render(); }); // sow-317
       // SOW-145: the superadmin scope switch (My content / House content).
       this.$$('[data-scope]').forEach((b) => b.addEventListener('click', () => this._setScope(b.dataset.scope)));
     }

@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
 
@@ -244,7 +244,10 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // gated to role==='superadmin' (gbti-workspace.mjs _canScope, the editor's Author field) -- the Worker
     // independently re-verifies the caller is superadmin (authorizeSuperadmin) before accepting the write, so
     // this is UX convenience, not the security boundary; a non-superadmin's stray attempt still fails closed.
-    const allowAnyFolder = String(path || '').startsWith('house/') || authorTarget != null;
+    // sow-317: a superadmin editing ANOTHER member's item from the Network content scope loads that member's path.
+    // Without this arm the origin resolved to null and the target fell through to the caller's own folder, so a
+    // plain "save" of somebody else's article would have published a duplicate under the superadmin's name.
+    const allowAnyFolder = String(path || '').startsWith('house/') || authorTarget != null || isForeignMemberPath(path, user);
     // Resolve the origin (the item the editor loaded) and read its frontmatter for the redirectFrom merge, the
     // publishedAt preservation, the old .enc path, and (with authorTarget) the old owner to move away from.
     const origin = renameOriginOf({ path, username: user, type, allowAnyFolder });
@@ -590,10 +593,22 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       let raw: any = null;
       try { raw = await sameOriginJson('/' + json); } catch { return { items: [] }; }
       const rawItems: any[] = Array.isArray(raw?.items) ? raw.items : [];
-      const selected = scope === 'house' ? networkContent(rawItems, 9999) : memberContent(rawItems, user, 9999);
-      const items = selected.map((it: any) => ({ ...it, status: 'published' }));
+      // sow-317 (owner, 2026-09-10): the Network content scope is EVERY member's content, published items from the
+      // same index plus what sits unpublished on main, each with its author, from the superadmin-only Worker route.
+      // A refused or failed call (not a superadmin, Worker down) falls back to the network's own folder, which is
+      // what the scope meant before, so the tab never goes blank.
+      if (scope === 'house') {
+        try {
+          const r = await workerGet(`/membership/network-content?type=${encodeURIComponent(String(type))}`);
+          if (Array.isArray(r?.items)) return { items: r.items };
+        } catch { /* fall through to the network-folder view */ }
+        return { items: networkContent(rawItems, 9999).map((it: any) => ({ ...it, status: 'published' })) };
+      }
+      const items = memberContent(rawItems, user, 9999).map((it: any) => ({ ...it, status: 'published' }));
       return { items };
     },
+    // sow-317: every member's shares (drafts included) for the Network content scope; superadmin-only at the Worker.
+    async networkShares() { return workerGet('/membership/network-shares'); },
 
     getContentItem({ path }: any) { return readAndReassemble(path); },
     // SOW-031 reader parity: read any own published item (same source as getContentItem for the WorkBench).
@@ -738,12 +753,18 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       catch (e: any) { throw new WorkbenchClientError('invalid-content', e?.message || 'the share is invalid'); }
       const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });
       const files: any[] = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-      if (isEdit && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${user}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
-      if (isEdit && owner !== user) {
+      // The ciphertext to drop on a members-to-public flip sits under the share's OWN folder: the caller's for their own
+      // share, the owner's for a superadmin editing another member's share in place (sow-317).
+      if (isEdit && typeof removeEnc === 'string' && (removeEnc.startsWith(`members/${user}/_enc/`) || removeEnc.startsWith(`members/${owner}/_enc/`)) && !plan?.encPath) files.push({ path: removeEnc, content: null });
+      // A MOVE names the old files in removePaths (the composer computed them from the share's current folder); an
+      // in-place edit of another member's share (sow-317) carries none, so nothing is deleted.
+      const moving = isEdit && Array.isArray(removePaths) && removePaths.length > 0;
+      if (moving) {
         const already = new Set(files.map((f: any) => f.path));
-        for (const d of shareMoveDeletions({ user, removePaths })) if (!already.has(d.path)) files.push(d);
+        const from = (/^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(removePaths[0] || '')) || [])[1]?.toLowerCase() || user;
+        for (const d of shareMoveDeletions({ user: from, removePaths })) if (!already.has(d.path)) files.push(d);
       }
-      const title = `${isEdit ? (owner !== user ? 'Move Share' : 'Update Share') : 'New Share'}${built.frontmatter?.title ? `: ${built.frontmatter.title}` : ''}`;
+      const title = `${isEdit ? (moving ? 'Move Share' : 'Update Share') : 'New Share'}${built.frontmatter?.title ? `: ${built.frontmatter.title}` : ''}`;
       const res = await workerPost('/membership/author', { itemId: `share-${id_}`, files, title });
       return { id: id_, path: built.path, visibility: built.frontmatter?.visibility ?? 'members', status: built.frontmatter?.status ?? 'published', encrypted: Boolean(plan?.encPath), prNumber: res.number, prUrl: res.html_url, updated: !!res.already || isEdit, edited: isEdit };
     },
