@@ -8,6 +8,8 @@
 // The host supplies everything surface-specific through callbacks. The module owns the popovers, the selection
 // plumbing and the link semantics, and knows nothing about blocks, Markdown or how the host stores its document.
 import { isDangerousUrl } from './markdown-blocks.mjs';
+import { applyImageLayoutAction } from '../../client/src/image-attrs.mjs'; // what an image-bar click means
+import { imageLayoutButtonsHtml } from './image-layout-ui.mjs';            // the image bar's buttons, shared with the editor card
 
 const STYLE_ID = 'gbti-selection-toolbar-css';
 
@@ -30,6 +32,10 @@ export const SELECTION_TOOLBAR_CSS = `
   font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
 }
 .gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
+.gbti-stb button[aria-pressed="true"] { background: var(--stb-accent); color: #fff; }
+.gbti-stb button[disabled] { opacity: .4; cursor: default; }
+.gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-imgbar button { font-weight: 600; }
 .gbti-lp {
   flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
   background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
@@ -118,16 +124,21 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  *                    thumbnail (a data: URL is fine), `ref` is the Markdown path to insert. No fetching happens
  *                    here: the toolbar only ever offers what the host already holds, so there is no new route.
  * @param onInsertImage (el, { ref, alt }) => insert the chosen image after el's block.
+ * @param imageTools  { layoutOf(el), onLayout(el, layout), onRemove(el) }. OPT-IN (2026-09-11). The image bar
+ *                    (Natural | Full width, Left | Center | Right, Wrap text, Remove) the host shows over an image
+ *                    block through showImageTools(el). layoutOf reads the block's CURRENT layout out of the host's
+ *                    source; onLayout receives the NEXT one (applyImageLayoutAction applied to it) to write back;
+ *                    onRemove deletes the block. The bar never touches the document itself.
  */
 export function createSelectionToolbar({
   root, host, editableOf, allowInline = () => true, onCommit = () => {},
-  onRetype = null, listItemImages = null, onInsertImage = () => {},
+  onRetype = null, listItemImages = null, onInsertImage = () => {}, imageTools = null,
 }) {
   const hostEl = () => (typeof host === 'function' ? host() : host);
   // The stub must carry EVERY method of the real object below, not just the three a caller happened to
   // optional-chain. `?.` guards a missing OBJECT, never a missing METHOD, so an absent editLink here threw
   // `editLink is not a function` on a link click rather than doing nothing. Keep the two shapes in step.
-  if (!hostEl()) return { destroy() {}, isPanelOpen: () => false, hide() {}, editLink() {} };
+  if (!hostEl()) return { destroy() {}, isPanelOpen: () => false, hide() {}, editLink() {}, showImageTools() {} };
 
   /** Append (or re-append) a popover to the CURRENT host. A re-rendered surface leaves the old node orphaned. */
   const mount = (node) => {
@@ -159,6 +170,9 @@ export function createSelectionToolbar({
   const hideTb = () => { if (tb) tb.style.display = 'none'; };
   const hidePanel = () => { if (lp) lp.style.display = 'none'; lk = null; };
   const hideImagePanel = () => { if (ip) ip.style.display = 'none'; ik = null; };
+  let ib = null;      // the image bar (2026-09-11)
+  let ibEl = null;    // the image block the bar is showing for
+  const hideImageBar = () => { if (ib) ib.style.display = 'none'; ibEl = null; };
   const anyPanelOpen = () => (!!lp && lp.style.display !== 'none') || (!!ip && ip.style.display !== 'none');
 
   // --- the toolbar -------------------------------------------------------------------------------------------
@@ -368,12 +382,63 @@ export function createSelectionToolbar({
     hideTb();
   }
 
+  // --- the image bar (2026-09-11) ------------------------------------------------------------------------------
+  // Natural | Full width, Left | Center | Right, Wrap text, Remove, over an image block the host says is one. The
+  // host reads the current layout out of its SOURCE (imageTools.layoutOf) and writes the next one back
+  // (imageTools.onLayout); the bar only decides what a click means, through the shared applyImageLayoutAction, so
+  // the Preview and the editor card cannot disagree. Modeled on the image picker.
+  const layoutOfEl = (el) => {
+    try { return (typeof imageTools?.layoutOf === 'function' && imageTools.layoutOf(el)) || {}; } catch { return {}; }
+  };
+  function paintImageBar(layout) {
+    if (!ib) return;
+    ib.innerHTML = imageLayoutButtonsHtml(layout)
+      + '<span class="gbti-stb-sep" aria-hidden="true"></span>'
+      + '<button type="button" data-il="remove" title="Remove this image">Remove</button>';
+  }
+  function buildImageBar() {
+    const el = document.createElement('div');
+    el.className = 'gbti-stb gbti-imgbar';
+    el.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus where it is
+    el.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('button[data-il]') : null;
+      const target = ibEl;
+      if (!b || !target || b.disabled) return;
+      const act = b.dataset.il;
+      if (act === 'remove') { hideImageBar(); if (typeof imageTools?.onRemove === 'function') imageTools.onRemove(target); return; }
+      const next = applyImageLayoutAction(layoutOfEl(target), act);
+      paintImageBar(next);
+      if (typeof imageTools?.onLayout === 'function') imageTools.onLayout(target, next);
+    });
+    return el;
+  }
+  function showImageTools(el) {
+    if (!el || !imageTools) return;
+    hideTb(); hidePanel(); hideImagePanel();
+    if (!ib) ib = buildImageBar();
+    ibEl = el;
+    paintImageBar(layoutOfEl(el));
+    const img = (el.querySelector && el.querySelector('img')) || el;
+    place(ib, img.getBoundingClientRect(), true);
+  }
+  // A click anywhere but the bar or its image puts the bar away. composedPath, because the doc editor's host is
+  // a shadow root and e.target there is the host element, not the button.
+  const onDocDown = (e) => {
+    if (!ib || ib.style.display === 'none') return;
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    if (path.includes(ib) || (ibEl && path.includes(ibEl))) return;
+    hideImageBar();
+  };
+  document.addEventListener('mousedown', onDocDown, true);
+
   const onSel = () => update();
   document.addEventListener('selectionchange', onSel);
 
   return {
     isPanelOpen: () => anyPanelOpen(),
-    hide() { hideTb(); hidePanel(); hideImagePanel(); },
+    hide() { hideTb(); hidePanel(); hideImagePanel(); hideImageBar(); },
+    /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
+    showImageTools(el) { showImageTools(el); },
     /**
      * Open the link manager for an existing anchor, without going through the selection. A single click on a link
      * inside a contenteditable neither navigates (Chrome and Firefox both suppress that) nor shows anything, so
@@ -389,8 +454,9 @@ export function createSelectionToolbar({
     },
     destroy() {
       document.removeEventListener('selectionchange', onSel);
-      tb?.remove(); lp?.remove(); ip?.remove();
-      tb = null; lp = null; lk = null; ip = null; ik = null;
+      document.removeEventListener('mousedown', onDocDown, true);
+      tb?.remove(); lp?.remove(); ip?.remove(); ib?.remove();
+      tb = null; lp = null; lk = null; ip = null; ik = null; ib = null; ibEl = null;
     },
   };
 }

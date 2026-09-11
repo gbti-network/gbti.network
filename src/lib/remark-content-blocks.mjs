@@ -5,6 +5,7 @@
 // no new dependency. Only a NORMALIZED provider URL (via the one shared embedUrl) becomes an iframe src -- never
 // author-supplied HTML -- and callout bodies are HTML-escaped, so no author script executes.
 import { embedUrl, bareVideoLine } from '../../client/src/video-embed.mjs';
+import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
 
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -95,6 +96,32 @@ export function splitParagraphEmbeds(p) {
   return out;
 }
 
+/**
+ * Image layout words. `![alt](url){full}` parses as an image node followed by a text node beginning "{full}"; the
+ * words become the image's classes (img-full, img-left, img-center, img-right, img-wrap: client/src/image-attrs.mjs)
+ * and the braces leave the text. Braces carrying anything else are not layout and stay exactly as written. Astro
+ * keeps className through its image optimiser, so the built <img> carries the class; the sanitizer admits these
+ * five classes on an image and nothing else. Applies to EVERY source, not only comments: it is how an author's
+ * Preview choice (full width, align left, wrap) reaches the published article.
+ */
+export function applyImageLayouts(paragraph) {
+  const kids = paragraph?.children;
+  if (!Array.isArray(kids)) return;
+  for (let j = 0; j + 1 < kids.length; j++) {
+    const im = kids[j];
+    const tx = kids[j + 1];
+    if (!im || im.type !== 'image' || !tx || tx.type !== 'text') continue;
+    const split = splitImageSuffix(tx.value);
+    if (!split) continue;
+    const cls = imageLayoutClasses(split.layout);
+    if (cls.length) {
+      im.data = im.data || {};
+      im.data.hProperties = { ...(im.data.hProperties || {}), className: cls };
+    }
+    if (split.rest.trim() === '') kids.splice(j + 1, 1); else tx.value = split.rest;
+  }
+}
+
 export function remarkContentBlocks() {
   return (tree, file) => {
     const autoEmbed = isCommentSource(file);
@@ -102,6 +129,7 @@ export function remarkContentBlocks() {
       if (!node || !Array.isArray(node.children)) return;
       for (let i = 0; i < node.children.length; i++) {
         const n = node.children[i];
+        if (n && n.type === 'paragraph') applyImageLayouts(n);
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {
           node.children[i] = { type: 'html', value: renderBlock(n) };
         } else if (autoEmbed && n && n.type === 'paragraph') {

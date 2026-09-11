@@ -15,6 +15,7 @@
 // DOM cannot express is carried through untouched because it never left the source. parseBlocks/serializeBlocks
 // are the doc editor's existing model, reused rather than reimplemented.
 import { parseBlocks, serializeBlocks, inlineHtmlToMd } from './markdown-blocks.mjs';
+import { normalizeImageLayout } from '../../client/src/image-attrs.mjs';
 
 /** Rendered tags the Preview can edit. hr has nothing to edit; a callout/embed renders as a div and is not text. */
 export const EDITABLE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'PRE']);
@@ -151,10 +152,42 @@ export function planBlockRetype(sourceText, toType, level) {
 export function planImageInsert(sourceText, imageRef, alt) {
   const url = String(imageRef ?? '').trim();
   if (!url) return null;
+  // A blank anchor (the paragraph the author emptied before pasting) is REPLACED by the image rather than kept
+  // above it as an empty line: applyBlockEdit hands an emptied paragraph over as '', and an image pasted into an
+  // empty block should land where the block was.
+  if (!String(sourceText ?? '').trim()) return [serializeBlocks([{ type: 'image', alt: String(alt ?? ''), url }])];
   const blocks = parseBlocks(String(sourceText ?? ''));
   if (blocks.length !== 1) return null;
   const kept = String(sourceText ?? '').replace(/\r\n/g, '\n').split('\n');
   while (kept.length && kept[kept.length - 1].trim() === '') kept.pop();   // own the separator we are about to add
   const imageLine = serializeBlocks([{ type: 'image', alt: String(alt ?? ''), url }]);
   return [...kept, '', imageLine];
+}
+
+/**
+ * The rendered form of an image block: a paragraph holding exactly one image and no text (client/src/markdown.mjs
+ * wraps a lone image line in <p>). It has no text to edit, so the Preview offers the image bar over it instead of
+ * a caret. DOM-only by nature, and deliberately thin.
+ */
+export function isImageBlockEl(el) {
+  if (!el || String(el.tagName || '').toUpperCase() !== 'P') return false;
+  const kids = el.children ? Array.from(el.children) : [];
+  return kids.length === 1 && String(kids[0].tagName || '').toUpperCase() === 'IMG' && String(el.textContent || '').trim() === '';
+}
+
+/** The single image block a source range holds, or null when the range is not exactly one image block. */
+export function imageBlockOf(sourceText) {
+  const blocks = parseBlocks(String(sourceText ?? ''));
+  return blocks.length === 1 && blocks[0].type === 'image' ? blocks[0] : null;
+}
+
+/**
+ * Rewrite ONE image block's layout words ({full}, {left wrap}: client/src/image-attrs.mjs) and nothing else: alt and
+ * url are carried through from the source. Returns the replacement LINES for spliceBlock, or null when the range
+ * is not exactly one image block, so a click on the image bar can never write over a paragraph.
+ */
+export function planImageLayout(sourceText, layout) {
+  const b = imageBlockOf(sourceText);
+  if (!b) return null;
+  return [serializeBlocks([{ type: 'image', alt: b.alt ?? '', url: b.url ?? '', ...normalizeImageLayout(layout) }])];
 }

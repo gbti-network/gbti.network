@@ -5,6 +5,7 @@
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
+import { parseImageLayout, imageLayoutClasses } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
@@ -130,7 +131,14 @@ function inline(escaped, fn = null) {
   // Images BEFORE links (the syntaxes nest). Alt may be empty (![](...)). Accepted srcs: absolute http(s),
   // site-absolute /..., and repo-relative ./... (the reader pre-resolves relatives to a CDN URL; an
   // unresolved relative still renders as an img and fails visibly rather than as literal markdown text).
-  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)/g, (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`);
+  // A brace suffix of layout words (client/src/image-attrs.mjs) becomes the image's classes; braces carrying
+  // anything else are not layout and print as the literal text they are.
+  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)(\{[^}]*\})?/g, (_m, alt, src, suffix) => {
+    const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
+    if (!layout) return `<img src="${src}" alt="${alt}" loading="lazy">${suffix}`;
+    const cls = imageLayoutClasses(layout);
+    return `<img src="${src}" alt="${alt}" loading="lazy"${cls.length ? ` class="${cls.join(' ')}"` : ''}>`;
+  });
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
   t = emphasis(t);
   t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ''}</code>`);

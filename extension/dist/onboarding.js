@@ -302,6 +302,77 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-auth", GbtiAuth);
 
+  // client/src/image-attrs.mjs
+  var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
+  var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
+  var IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]*)\)(?:\{([^}]*)\})?\s*$/;
+  function parseImageLayout(suffix) {
+    if (suffix == null) return {};
+    const words = String(suffix).trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return null;
+    const out = {};
+    for (const w of words) {
+      if (!IMAGE_LAYOUT_WORDS.includes(w)) return null;
+      if (w === "full") out.width = "full";
+      else if (w === "wrap") out.wrap = true;
+      else if (ALIGNS.has(w)) {
+        if (out.align && out.align !== w) return null;
+        out.align = w;
+      }
+    }
+    return out;
+  }
+  function normalizeImageLayout(layout) {
+    const out = {};
+    if (layout?.width === "full") out.width = "full";
+    if (ALIGNS.has(layout?.align)) out.align = layout.align;
+    if (layout?.wrap === true) out.wrap = true;
+    return out;
+  }
+  function imageLayoutSuffix(layout) {
+    const n = normalizeImageLayout(layout);
+    const words = [];
+    if (n.width) words.push(n.width);
+    if (n.align) words.push(n.align);
+    if (n.wrap) words.push("wrap");
+    return words.length ? `{${words.join(" ")}}` : "";
+  }
+  function parseImageLine(line) {
+    const m = IMAGE_LINE_RE.exec(String(line ?? ""));
+    if (!m) return null;
+    const layout = parseImageLayout(m[3]);
+    if (!layout) return null;
+    return { alt: m[1], url: m[2], layout };
+  }
+  function applyImageLayoutAction(layout, action) {
+    const n = normalizeImageLayout(layout);
+    switch (String(action || "")) {
+      case "natural":
+        delete n.width;
+        break;
+      case "full":
+        n.width = "full";
+        break;
+      case "left":
+      case "right":
+        n.align = action;
+        break;
+      case "center":
+        n.align = "center";
+        delete n.wrap;
+        break;
+      case "wrap":
+        if (n.align === "left" || n.align === "right") {
+          if (n.wrap) delete n.wrap;
+          else n.wrap = true;
+        }
+        break;
+      default:
+        break;
+    }
+    return n;
+  }
+
   // client-ui/src/markdown-blocks.mjs
   var MEMBERS_MARKER = "<!-- members-only -->";
   var isTableDelimLine = (l) => /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/.test(l) || /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/.test(l);
@@ -371,7 +442,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return [line(head), delim, ...rows.map(line)].join("\n");
       }
       case "image":
-        return `![${b.alt ?? ""}](${b.url ?? ""})`;
+        return `![${b.alt ?? ""}](${b.url ?? ""})${imageLayoutSuffix(b)}`;
       case "embed":
         return "```embed\n" + (b.url ?? "") + "\n```";
       case "paragraph":
@@ -455,9 +526,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         blocks2.push({ type: "table", head, aligns, rows });
         continue;
       }
-      m = line.match(/^!\[([^\]]*)\]\(([^)]*)\)\s*$/);
-      if (m) {
-        blocks2.push({ type: "image", alt: m[1], url: m[2] });
+      const im = parseImageLine(line);
+      if (im) {
+        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.layout });
         i++;
         continue;
       }
@@ -600,9 +671,74 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/<br\s*\/?>/gi, "  \n");
     s = s.replace(/^\s*<div>/i, "");
     s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
+    s = s.replace(/<img\b([^>]*)>/gi, (_m, attrs) => {
+      const at = (name) => {
+        const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(attrs);
+        return m ? m[1] ?? m[2] ?? "" : "";
+      };
+      const ref = at("data-ref") || at("src");
+      if (!/^(https?:\/\/|\.\/)/i.test(ref)) return "";
+      return `![${at("alt").replace(/[\[\]]/g, "")}](${ref})`;
+    });
     s = s.replace(/<[^>]+>/g, "");
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
+  }
+
+  // client-ui/src/image-layout-ui.mjs
+  var IMAGE_LAYOUT_GROUPS = Object.freeze([
+    Object.freeze([{ action: "natural", label: "Natural", title: "Natural size" }, { action: "full", label: "Full width", title: "Span the column" }]),
+    Object.freeze([{ action: "left", label: "Left", title: "Align left" }, { action: "center", label: "Center", title: "Center" }, { action: "right", label: "Right", title: "Align right" }]),
+    Object.freeze([{ action: "wrap", label: "Wrap text", title: "Let the text flow beside the image (left or right only)" }])
+  ]);
+  function imageLayoutPressed(layout, action) {
+    const n = normalizeImageLayout(layout);
+    switch (action) {
+      case "natural":
+        return !n.width;
+      case "full":
+        return n.width === "full";
+      case "left":
+      case "center":
+      case "right":
+        return n.align === action;
+      case "wrap":
+        return !!n.wrap && (n.align === "left" || n.align === "right");
+      default:
+        return false;
+    }
+  }
+  function imageLayoutDisabled(layout, action) {
+    const n = normalizeImageLayout(layout);
+    return action === "wrap" && !(n.align === "left" || n.align === "right");
+  }
+  function imageLayoutButtonsHtml(layout, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
+    return IMAGE_LAYOUT_GROUPS.map((group) => group.map((b) => `<button type="button" data-il="${b.action}" title="${b.title}"` + (imageLayoutPressed(layout, b.action) ? ' aria-pressed="true"' : "") + (imageLayoutDisabled(layout, b.action) ? " disabled" : "") + `>${b.label}</button>`).join("")).join(sep);
+  }
+  var IMAGE_LAYOUT_ROW_CSS = `
+  .imglay { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .imglay .gbti-stb-sep { display:none; }
+  .imglay button { font:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;
+    border:1px solid var(--s-line-2); background:transparent; color:var(--s-fg); }
+  .imglay button:hover { border-color:var(--s-green); }
+  .imglay button[aria-pressed="true"] { background:var(--s-tint); color:var(--s-green-fg); border-color:var(--s-green); }
+  .imglay button[disabled] { opacity:.4; cursor:default; }
+`;
+  function imageLayoutProseCss(scope) {
+    const s = String(scope || "").trim();
+    return `
+  ${s} { display: flow-root; }
+  ${s} img.img-full { display: block; width: 100%; }
+  ${s} img.img-left, ${s} img.img-center, ${s} img.img-right { display: block; }
+  ${s} img.img-left { margin-left: 0; margin-right: auto; }
+  ${s} img.img-right { margin-left: auto; margin-right: 0; }
+  ${s} img.img-center { margin-left: auto; margin-right: auto; }
+  ${s} img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  ${s} img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  @media (max-width: 640px) {
+    ${s} img.img-wrap.img-left:not(.img-full), ${s} img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
+  }
+`;
   }
 
   // client-ui/src/selection-toolbar.mjs
@@ -624,6 +760,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
 }
 .gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
+.gbti-stb button[aria-pressed="true"] { background: var(--stb-accent); color: #fff; }
+.gbti-stb button[disabled] { opacity: .4; cursor: default; }
+.gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-imgbar button { font-weight: 600; }
 .gbti-lp {
   flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
   background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
@@ -686,12 +826,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     onRetype = null,
     listItemImages = null,
     onInsertImage = () => {
-    }
+    },
+    imageTools = null
   }) {
     const hostEl = () => typeof host === "function" ? host() : host;
     if (!hostEl()) return { destroy() {
     }, isPanelOpen: () => false, hide() {
     }, editLink() {
+    }, showImageTools() {
     } };
     const mount2 = (node) => {
       const h = hostEl();
@@ -730,6 +872,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const hideImagePanel = () => {
       if (ip) ip.style.display = "none";
       ik = null;
+    };
+    let ib = null;
+    let ibEl = null;
+    const hideImageBar = () => {
+      if (ib) ib.style.display = "none";
+      ibEl = null;
     };
     const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
     function buildTb() {
@@ -957,6 +1105,55 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       place(ip, range.getBoundingClientRect(), false);
       hideTb();
     }
+    const layoutOfEl = (el) => {
+      try {
+        return typeof imageTools?.layoutOf === "function" && imageTools.layoutOf(el) || {};
+      } catch {
+        return {};
+      }
+    };
+    function paintImageBar(layout) {
+      if (!ib) return;
+      ib.innerHTML = imageLayoutButtonsHtml(layout) + '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-il="remove" title="Remove this image">Remove</button>';
+    }
+    function buildImageBar() {
+      const el = document.createElement("div");
+      el.className = "gbti-stb gbti-imgbar";
+      el.addEventListener("mousedown", (e) => e.preventDefault());
+      el.addEventListener("click", (e) => {
+        const b = e.target && e.target.closest ? e.target.closest("button[data-il]") : null;
+        const target = ibEl;
+        if (!b || !target || b.disabled) return;
+        const act = b.dataset.il;
+        if (act === "remove") {
+          hideImageBar();
+          if (typeof imageTools?.onRemove === "function") imageTools.onRemove(target);
+          return;
+        }
+        const next = applyImageLayoutAction(layoutOfEl(target), act);
+        paintImageBar(next);
+        if (typeof imageTools?.onLayout === "function") imageTools.onLayout(target, next);
+      });
+      return el;
+    }
+    function showImageTools(el) {
+      if (!el || !imageTools) return;
+      hideTb();
+      hidePanel();
+      hideImagePanel();
+      if (!ib) ib = buildImageBar();
+      ibEl = el;
+      paintImageBar(layoutOfEl(el));
+      const img = el.querySelector && el.querySelector("img") || el;
+      place(ib, img.getBoundingClientRect(), true);
+    }
+    const onDocDown = (e) => {
+      if (!ib || ib.style.display === "none") return;
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+      if (path.includes(ib) || ibEl && path.includes(ibEl)) return;
+      hideImageBar();
+    };
+    document.addEventListener("mousedown", onDocDown, true);
     const onSel = () => update();
     document.addEventListener("selectionchange", onSel);
     return {
@@ -965,6 +1162,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         hideTb();
         hidePanel();
         hideImagePanel();
+        hideImageBar();
+      },
+      /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
+      showImageTools(el) {
+        showImageTools(el);
       },
       /**
        * Open the link manager for an existing anchor, without going through the selection. A single click on a link
@@ -981,14 +1183,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       },
       destroy() {
         document.removeEventListener("selectionchange", onSel);
+        document.removeEventListener("mousedown", onDocDown, true);
         tb?.remove();
         lp?.remove();
         ip?.remove();
+        ib?.remove();
         tb = null;
         lp = null;
         lk = null;
         ip = null;
         ik = null;
+        ib = null;
+        ibEl = null;
       }
     };
   }
@@ -1211,6 +1417,7 @@ ${String(body ?? "")}`;
   .imgph svg { width:30px; height:30px; opacity:.55; }
   .imgph-t { font-family:var(--font-mono,monospace); font-size:12px; }
   .up { display:flex; align-items:center; gap:10px; }
+  ${IMAGE_LAYOUT_ROW_CSS}
   .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
   .up-btn:hover { border-color:var(--s-green); color:var(--s-green); }
   .up-st { font-size:12px; color:var(--s-fg-mute); }
@@ -1466,7 +1673,7 @@ ${String(body ?? "")}`;
         case "image": {
           const hasUrl = !!b.url;
           const src = hasUrl ? esc(this._stagedSrc && this._stagedSrc[b.url] || resolveContentAsset(b.url, this.itemPath)) : "";
-          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
+          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
         }
         case "embed":
           return `<div class="card"><div class="card-h">${svg("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
@@ -1711,6 +1918,19 @@ ${String(body ?? "")}`;
           const to = this._indexOf(blk.dataset.id);
           this._blocks.splice(to < 0 ? this._blocks.length : to, 0, moved);
           this._dragId = null;
+          this._render();
+          this._change();
+        });
+      });
+      this.$$("[data-imglay] button[data-il]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const b = this._byId(btn.closest("[data-imglay]")?.dataset.imglay);
+          if (!b || btn.disabled) return;
+          const next = applyImageLayoutAction(b, btn.dataset.il);
+          delete b.width;
+          delete b.align;
+          delete b.wrap;
+          Object.assign(b, normalizeImageLayout(next));
           this._render();
           this._change();
         });
@@ -10033,6 +10253,8 @@ ${String(body ?? "")}`;
   .unlocked p { margin: 0 0 1em; line-height: 1.6; }
   .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
   .unlocked a { color: var(--accent); }
+  .unlocked img { max-width: 100%; height: auto; border-radius: 10px; }
+  ${imageLayoutProseCss(".unlocked")}
   .unlocked pre { background: var(--panel); padding: 12px; border-radius: 8px; overflow:auto; }
   .unlocked code { font-family: ui-monospace, monospace; }
   /* clip/reveal for a long code block */
@@ -20347,6 +20569,7 @@ From the author:
   .body p { margin:0 0 1em; }
   .body a { color:var(--accent); }
   .body img { max-width:100%; height:auto; border-radius:10px; }
+  ${imageLayoutProseCss(".body")}
   .body ul,.body ol { padding-left:1.4em; margin:0 0 1em; }
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,

@@ -172,6 +172,9 @@
     window.gbtiLightbox = { openEmbed };
 
     document.addEventListener('click', (e) => {
+      // A surface that already handled this click (the WorkBench Preview's image bar over a body image in edit
+      // mode, 2026-09-11) says so with preventDefault; opening the viewer on top of it hid the bar.
+      if (e.defaultPrevented) return;
       const el = e.target.closest('[data-lightbox], .prose-gbti img');
       if (!el) return;
       if (el.matches('.prose-gbti img') && el.closest('a')) return; // linked body image: honor the link

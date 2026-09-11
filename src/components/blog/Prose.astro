@@ -41,6 +41,23 @@
   .prose-gbti blockquote p { color: var(--fg); font-style: italic; }
   .prose-gbti blockquote cite { display: block; margin-top: 0.5em; color: var(--green-700); font-style: normal; font-size: 0.95rem; }
   .prose-gbti img { border-radius: 10px; margin: 1.5em auto; max-width: 100%; height: auto; }
+  /* Image layout words (client/src/image-attrs.mjs, set from the WorkBench Preview's image bar or the editor's
+     image card): {full} spans the column; {left} / {center} / {right} place the image on its own line;
+     {left wrap} / {right wrap} float it at up to half the column so the following text flows beside it. Full width
+     wins over a float. A phone column is too narrow to share, so a float falls back to a block there. The container
+     is a flow root so a trailing float never spills under the article footer. Mirrored for the client renderers by
+     imageLayoutProseCss in client-ui/src/image-layout-ui.mjs; test/image-layout.test.mjs pins the two in step. */
+  .prose-gbti { display: flow-root; }
+  .prose-gbti img.img-full { display: block; width: 100%; }
+  .prose-gbti img.img-left, .prose-gbti img.img-center, .prose-gbti img.img-right { display: block; }
+  .prose-gbti img.img-left { margin-left: 0; margin-right: auto; }
+  .prose-gbti img.img-right { margin-left: auto; margin-right: 0; }
+  .prose-gbti img.img-center { margin-left: auto; margin-right: auto; }
+  .prose-gbti img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  .prose-gbti img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  @media (max-width: 640px) {
+    .prose-gbti img.img-wrap.img-left:not(.img-full), .prose-gbti img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
+  }
   .prose-gbti figure { margin: 1.5em auto; text-align: center; }
   .prose-gbti figcaption { font-family: var(--f-mono); background: var(--tint); color: var(--fg-mute); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
   .prose-gbti :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; overflow-wrap: anywhere; }

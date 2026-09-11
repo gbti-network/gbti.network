@@ -14,6 +14,8 @@ import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath }
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 import { paletteFor } from '../doc-editor-core.mjs'; // the compact (comment) subset of the palette
+import { imageLayoutButtonsHtml, IMAGE_LAYOUT_ROW_CSS } from '../image-layout-ui.mjs'; // Natural | Full width, Left | Center | Right, Wrap text
+import { applyImageLayoutAction, normalizeImageLayout } from '../../../client/src/image-attrs.mjs'; // what one of those clicks means
 
 let UID = 0;
 const withId = (b) => { if (b && !b._id) b._id = ++UID; return b; };
@@ -144,6 +146,7 @@ const CSS = `
   .imgph svg { width:30px; height:30px; opacity:.55; }
   .imgph-t { font-family:var(--font-mono,monospace); font-size:12px; }
   .up { display:flex; align-items:center; gap:10px; }
+  ${IMAGE_LAYOUT_ROW_CSS}
   .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
   .up-btn:hover { border-color:var(--s-green); color:var(--s-green); }
   .up-st { font-size:12px; color:var(--s-fg-mute); }
@@ -398,7 +401,10 @@ class GbtiDocEditor extends GbtiElement {
           + `</div>`
           + `<input data-edit="url" data-id="${b._id}" value="${esc(b.url || '')}" placeholder="Image URL or repo path" />`
           + `<input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || '')}" placeholder="Alt text" />`
-          + `<div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg('img')} ${hasUrl ? 'Replace image' : 'Choose image'}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg('img')} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
+          + `<div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg('img')} ${hasUrl ? 'Replace image' : 'Choose image'}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg('img')} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div>`
+          // The layout row (2026-09-11): the same words the Preview's image bar writes ({full}, {left wrap}), so an
+          // image laid out on either surface reads back the same on the other.
+          + `<div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
       }
       case 'embed':
         return `<div class="card"><div class="card-h">${svg('video')} Video / embed</div>`
@@ -533,6 +539,18 @@ class GbtiDocEditor extends GbtiElement {
         const to = this._indexOf(blk.dataset.id); // recompute after the splice; insert BEFORE the drop target
         this._blocks.splice(to < 0 ? this._blocks.length : to, 0, moved);
         this._dragId = null; this._render(); this._change();
+      });
+    });
+    // The image layout row: one click, one normalized layout written onto the block, re-rendered so the pressed
+    // state and the disabled Wrap button follow it.
+    this.$$('[data-imglay] button[data-il]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const b = this._byId(btn.closest('[data-imglay]')?.dataset.imglay);
+        if (!b || btn.disabled) return;
+        const next = applyImageLayoutAction(b, btn.dataset.il);
+        delete b.width; delete b.align; delete b.wrap;
+        Object.assign(b, normalizeImageLayout(next));
+        this._render(); this._change();
       });
     });
     // Image upload (reused from the Phase-4 editor).

@@ -20323,6 +20323,41 @@ function isPortraitEmbed(src) {
   return /tiktok\.com\/embed\//.test(String(src || ""));
 }
 
+// client/src/image-attrs.mjs
+var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
+var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
+function parseImageLayout(suffix) {
+  if (suffix == null) return {};
+  const words = String(suffix).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const out = {};
+  for (const w of words) {
+    if (!IMAGE_LAYOUT_WORDS.includes(w)) return null;
+    if (w === "full") out.width = "full";
+    else if (w === "wrap") out.wrap = true;
+    else if (ALIGNS.has(w)) {
+      if (out.align && out.align !== w) return null;
+      out.align = w;
+    }
+  }
+  return out;
+}
+function normalizeImageLayout(layout) {
+  const out = {};
+  if (layout?.width === "full") out.width = "full";
+  if (ALIGNS.has(layout?.align)) out.align = layout.align;
+  if (layout?.wrap === true) out.wrap = true;
+  return out;
+}
+function imageLayoutClasses(layout) {
+  const n = normalizeImageLayout(layout);
+  const out = [];
+  if (n.width) out.push("img-full");
+  if (n.align) out.push(`img-${n.align}`);
+  if (n.wrap && (n.align === "left" || n.align === "right")) out.push("img-wrap");
+  return out;
+}
+
 // client/src/markdown.mjs
 var EMBED_RELAY = "https://gbti.network/embed/";
 function escapeHtml(s) {
@@ -20418,7 +20453,12 @@ function inline(escaped, fn = null) {
       return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
     });
   }
-  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)/g, (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`);
+  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)(\{[^}]*\})?/g, (_m, alt, src, suffix) => {
+    const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
+    if (!layout) return `<img src="${src}" alt="${alt}" loading="lazy">${suffix}`;
+    const cls = imageLayoutClasses(layout);
+    return `<img src="${src}" alt="${alt}" loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+  });
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url2) => `<a href="${url2}" target="_blank" rel="noopener">${txt}</a>`);
   t = emphasis(t);
   t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);

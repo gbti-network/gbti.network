@@ -8,6 +8,7 @@
 // No existing member or house body hand-writes raw HTML (audited 2026-07-25: every apparent tag sits
 // inside code fences), so the allowlist breaks nothing that authors wrote.
 import { defaultSchema } from 'rehype-sanitize';
+import { IMAGE_LAYOUT_CLASS_RE } from '../../client/src/image-attrs.mjs'; // the five image layout classes
 
 /** The only hosts an <iframe> may point at: the shared embedUrl() providers (client/src/video-embed.mjs)
  *  plus the tweet-embed host reserved for sow-152. hast-util-sanitize filters protocols, not hosts, so
@@ -44,7 +45,9 @@ export const sanitizeSchema = {
     pre: [...(defaultSchema.attributes?.pre ?? []), 'style', 'tabIndex', 'dataLanguage'],
     code: [...(defaultSchema.attributes?.code ?? []), 'style'],
     span: [...(defaultSchema.attributes?.span ?? []), 'style', 'className'],
-    img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding', 'srcSet', 'sizes', 'width', 'height', 'style'],
+    // The image layout classes (client/src/image-attrs.mjs: {full} / {left wrap} on an image line) and NOTHING
+    // else on an image's class. A raw <img class="anything"> in member markdown loses its class here.
+    img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding', 'srcSet', 'sizes', 'width', 'height', 'style', ['className', IMAGE_LAYOUT_CLASS_RE]],
     li: [...(defaultSchema.attributes?.li ?? []), 'id'],
     section: ['dataFootnotes', 'className'],
   },

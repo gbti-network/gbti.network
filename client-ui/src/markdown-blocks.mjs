@@ -4,6 +4,8 @@
 // round-trips EXACTLY (the Worker splits on it at publish). Inline Markdown (bold/links) is left as block text
 // (we model block STRUCTURE, not inline), so it round-trips verbatim.
 
+import { parseImageLine, imageLayoutSuffix } from '../../client/src/image-attrs.mjs'; // the {full} / {left wrap} layout words
+
 export const MEMBERS_MARKER = '<!-- members-only -->';
 export const BLOCK_TYPES = ['paragraph', 'heading', 'code', 'quote', 'list', 'table', 'image', 'embed', 'callout', 'members'];
 
@@ -84,7 +86,7 @@ function serializeBlock(b) {
       }).join(' | ') + ' |';
       return [line(head), delim, ...rows.map(line)].join('\n');
     }
-    case 'image': return `![${b.alt ?? ''}](${b.url ?? ''})`;
+    case 'image': return `![${b.alt ?? ''}](${b.url ?? ''})${imageLayoutSuffix(b)}`;
     case 'embed': return '```embed\n' + (b.url ?? '') + '\n```';
     case 'paragraph':
     default: return String(b.text ?? '');
@@ -158,8 +160,10 @@ export function parseBlocks(md) {
       blocks.push({ type: 'table', head, aligns, rows });
       continue;
     }
-    m = line.match(/^!\[([^\]]*)\]\(([^)]*)\)\s*$/);
-    if (m) { blocks.push({ type: 'image', alt: m[1], url: m[2] }); i++; continue; }
+    // An image line, with or without its layout suffix ({full}, {left wrap}: client/src/image-attrs.mjs). Braces
+    // carrying anything else are not layout, so the line falls through to the paragraph branch as it always did.
+    const im = parseImageLine(line);
+    if (im) { blocks.push({ type: 'image', alt: im.alt, url: im.url, ...im.layout }); i++; continue; }
     if (isBareUrl(line) && isVideoUrl(line)) { blocks.push({ type: 'embed', url: line.trim() }); i++; continue; }
     // paragraph: consecutive lines that start no other block
     const para = [];
@@ -309,6 +313,20 @@ export function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
   // line, so it contributes no break; emitting one there put a stray hard break at the head of the paragraph.
   s = s.replace(/^\s*<div>/i, '');
   s = s.replace(/<div>/gi, '  \n').replace(/<\/div>/gi, '');
+  // An inline image reads back as the markdown it was, instead of vanishing with the stray-markup strip below (a
+  // pasted image disappeared on "Done editing" in the Preview, 2026-09-11). The Preview resolves a repo-relative
+  // ref to a CDN or staged src for display and stamps the ORIGINAL ref as data-ref, which wins here so the source
+  // keeps ./images/x.png rather than the resolved URL. A data: or blob: image has no storable ref and is dropped:
+  // the Preview stages a pasted file BEFORE it can reach this path, so nothing that matters arrives that way.
+  s = s.replace(/<img\b([^>]*)>/gi, (_m, attrs) => {
+    const at = (name) => {
+      const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)')`, 'i').exec(attrs);
+      return m ? (m[1] ?? m[2] ?? '') : '';
+    };
+    const ref = at('data-ref') || at('src');
+    if (!/^(https?:\/\/|\.\/)/i.test(ref)) return '';
+    return `![${at('alt').replace(/[\[\]]/g, '')}](${ref})`;
+  });
   s = s.replace(/<[^>]+>/g, ''); // drop any stray markup (paste is hardened; nothing else should appear)
   // Decode NON-anchor text. &quot; and &#39; were missing, so an edited paragraph containing a double quote stored
   // the literal string "&quot;", which re-renders to &amp;quot; and shows the entity to the reader. &amp; stays LAST

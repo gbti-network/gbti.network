@@ -7,6 +7,7 @@
 // locked / upgrade message. Read-only: it never holds the key or the ciphertext beyond this call.
 
 import { GbtiElement, define } from '../base.mjs';
+import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
 
 // A long code block in a comment (e.g. a shared prompt) is clipped to CLIP_LINES with a fade + a Show
@@ -35,6 +36,8 @@ const PROSE = `
   .unlocked p { margin: 0 0 1em; line-height: 1.6; }
   .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
   .unlocked a { color: var(--accent); }
+  .unlocked img { max-width: 100%; height: auto; border-radius: 10px; }
+  ${imageLayoutProseCss('.unlocked')}
   .unlocked pre { background: var(--panel); padding: 12px; border-radius: 8px; overflow:auto; }
   .unlocked code { font-family: ui-monospace, monospace; }
   /* clip/reveal for a long code block */

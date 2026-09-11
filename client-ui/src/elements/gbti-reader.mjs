@@ -13,6 +13,7 @@
 // revealed on inspection), and the discussion thread beneath it. Fenced code blocks upgrade into code cards with
 // a language label + Copy button.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
@@ -134,6 +135,7 @@ const CSS = `
   .body p { margin:0 0 1em; }
   .body a { color:var(--accent); }
   .body img { max-width:100%; height:auto; border-radius:10px; }
+  ${imageLayoutProseCss('.body')}
   .body ul,.body ol { padding-left:1.4em; margin:0 0 1em; }
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
