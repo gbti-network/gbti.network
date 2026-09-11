@@ -674,7 +674,7 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout, planImageCaption } = await import('../../../client-ui/src/block-commit.mjs');
       const { imagePastePlan, pastedImageName, fileToDataUrl, fitImageFile } = await import('../../../client-ui/src/image-paste.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
@@ -974,6 +974,20 @@ const labelOf = CATEGORY_LABELS;
               });
             },
             onRemove: (el: HTMLElement) => { void deleteIn(docOfEl(el), el); },
+            // The caption is the image title in the source line; set, changed or removed through the same splice.
+            captionOf: (el: HTMLElement) => {
+              const b: any = imageBlockOf(sourceOf(docOfEl(el), el));
+              return b ? String(b.caption || '') : '';
+            },
+            onCaption: (el: HTMLElement, caption: string) => {
+              const doc = docOfEl(el);
+              const idx = Number(el.dataset[doc.attr]);
+              void spliceBlock(doc, el, (before: string[]) => planImageCaption(before.join('\n'), caption)).then(() => {
+                const scope = doc === noteDoc ? $('[data-pv-note-card]') : bodyEl;
+                const again = scope?.querySelector(`[data-${doc.attr}="${idx}"]`) as HTMLElement | null;
+                if (again && isImageBlockEl(again)) seltb?.showImageTools(again);
+              });
+            },
           },
         });
       };
@@ -1005,10 +1019,12 @@ const labelOf = CATEGORY_LABELS;
           // A range spanning several lines is fine now that commitBlock rebuilds the block from its source.
           // hr has nothing to edit, and the footnotes section is synthesized and carries a null range.
           const range = doc.ranges[Number(el.dataset[doc.attr])];
-          if (!range || !isEditableBlockTag(el.tagName)) return;
-          // An image block has no text to edit: it gets the image bar (full width, alignment, wrap, remove) on
-          // click instead of a caret, and never contenteditable, so a stray keystroke cannot delete the image.
+          if (!range) return;
+          // An image block has no text to edit: it gets the image bar (full width, alignment, wrap, caption, remove)
+          // on click instead of a caret, and never contenteditable, so a stray keystroke cannot delete the image.
+          // Checked BEFORE the editable-tag test: a captioned image is a <figure>, which is not an editable tag.
           if (isImageBlockEl(el)) { wireImageBlock(el); return; }
+          if (!isEditableBlockTag(el.tagName)) return;
           // sow-235 follow-up: contenteditable is set EAGERLY on every editable block while edit mode is on,
           // rather than lazily on click. The selection toolbar's editableOf only recognises a block already
           // carrying contenteditable="true", so with the attribute set on click a drag-selection across an

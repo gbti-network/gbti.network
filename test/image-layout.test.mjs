@@ -95,8 +95,8 @@ test('splitImageSuffix and parseImageLine: a valid group is consumed, anything e
   assert.equal(splitImageSuffix('{banana} text'), null);
   assert.equal(splitImageSuffix(' {full}'), null, 'the group must begin the text');
   assert.equal(splitImageSuffix('plain'), null);
-  assert.deepEqual(parseImageLine('![A](./images/x.png)'), { alt: 'A', url: './images/x.png', layout: {} });
-  assert.deepEqual(parseImageLine('![A](./images/x.png){right}  '), { alt: 'A', url: './images/x.png', layout: { align: 'right' } });
+  assert.deepEqual(parseImageLine('![A](./images/x.png)'), { alt: 'A', url: './images/x.png', caption: '', layout: {} });
+  assert.deepEqual(parseImageLine('![A](./images/x.png){right}  '), { alt: 'A', url: './images/x.png', caption: '', layout: { align: 'right' } });
   assert.equal(parseImageLine('![A](./images/x.png){banana}'), null, 'not an image line: the block parser reads a paragraph');
   assert.equal(parseImageLine('![A](./images/x.png) trailing'), null);
   assert.equal(parseImageLine('A paragraph.'), null);

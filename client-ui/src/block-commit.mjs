@@ -15,7 +15,7 @@
 // DOM cannot express is carried through untouched because it never left the source. parseBlocks/serializeBlocks
 // are the doc editor's existing model, reused rather than reimplemented.
 import { parseBlocks, serializeBlocks, inlineHtmlToMd } from './markdown-blocks.mjs';
-import { normalizeImageLayout } from '../../client/src/image-attrs.mjs';
+import { normalizeImageLayout, cleanCaption } from '../../client/src/image-attrs.mjs';
 
 /** Rendered tags the Preview can edit. hr has nothing to edit; a callout/embed renders as a div and is not text. */
 export const EDITABLE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'PRE']);
@@ -170,9 +170,13 @@ export function planImageInsert(sourceText, imageRef, alt) {
  * a caret. DOM-only by nature, and deliberately thin.
  */
 export function isImageBlockEl(el) {
-  if (!el || String(el.tagName || '').toUpperCase() !== 'P') return false;
-  const kids = el.children ? Array.from(el.children) : [];
-  return kids.length === 1 && String(kids[0].tagName || '').toUpperCase() === 'IMG' && String(el.textContent || '').trim() === '';
+  const t = String(el?.tagName || '').toUpperCase();
+  const kids = el?.children ? Array.from(el.children) : [];
+  const tag = (n) => String(n?.tagName || '').toUpperCase();
+  // A captioned image renders as a figure (the image, then its caption strip); it is the same one image block.
+  if (t === 'FIGURE') return kids.length >= 1 && tag(kids[0]) === 'IMG' && kids.slice(1).every((k) => tag(k) === 'FIGCAPTION');
+  if (t !== 'P') return false;
+  return kids.length === 1 && tag(kids[0]) === 'IMG' && String(el.textContent || '').trim() === '';
 }
 
 /** The single image block a source range holds, or null when the range is not exactly one image block. */
@@ -189,5 +193,17 @@ export function imageBlockOf(sourceText) {
 export function planImageLayout(sourceText, layout) {
   const b = imageBlockOf(sourceText);
   if (!b) return null;
-  return [serializeBlocks([{ type: 'image', alt: b.alt ?? '', url: b.url ?? '', ...normalizeImageLayout(layout) }])];
+  return [serializeBlocks([{ type: 'image', alt: b.alt ?? '', url: b.url ?? '', ...(b.caption ? { caption: b.caption } : {}), ...normalizeImageLayout(layout) }])];
+}
+
+/**
+ * Set, change or remove ONE image block's caption (the image title: `![alt](url "caption")`), keeping alt, url and
+ * the layout words. '' removes it. Null unless the range is exactly one image block.
+ */
+export function planImageCaption(sourceText, caption) {
+  const b = imageBlockOf(sourceText);
+  if (!b) return null;
+  const c = cleanCaption(caption);
+  const { caption: _old, ...rest } = b;
+  return [serializeBlocks([{ ...rest, ...(c ? { caption: c } : {}) }])];
 }

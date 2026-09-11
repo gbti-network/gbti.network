@@ -5,7 +5,7 @@
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
-import { parseImageLayout, imageLayoutClasses } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"
+import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
@@ -133,11 +133,14 @@ function inline(escaped, fn = null) {
   // unresolved relative still renders as an img and fails visibly rather than as literal markdown text).
   // A brace suffix of layout words (client/src/image-attrs.mjs) becomes the image's classes; braces carrying
   // anything else are not layout and print as the literal text they are.
-  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)(\{[^}]*\})?/g, (_m, alt, src, suffix) => {
+  // An inline image with a title keeps it as title= (a caption strip belongs to a lone image line, which renderDoc
+  // turns into a figure before the paragraph gather ever sees it). The input is escaped, so the quotes are &quot;.
+  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
     const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
-    if (!layout) return `<img src="${src}" alt="${alt}" loading="lazy">${suffix}`;
+    const titleAttr = title ? ` title="${title}"` : '';
+    if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
     const cls = imageLayoutClasses(layout);
-    return `<img src="${src}" alt="${alt}" loading="lazy"${cls.length ? ` class="${cls.join(' ')}"` : ''}>`;
+    return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(' ')}"` : ''}>`;
   });
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
   t = emphasis(t);
@@ -333,6 +336,16 @@ function renderDoc(md, ids, opts = {}) {
       continue;
     }
     if (/^\s*$/.test(line)) { flushList(); i++; continue; }
+    // A lone image line WITH a caption (its title) is a figure of its own: the caption strip under the image, the
+    // layout classes on the figure so a float or full width carries the caption along. Without a caption the line
+    // stays a paragraph holding an image, exactly as before (client/src/image-attrs.mjs owns the line's grammar).
+    const fig = parseImageLine(line);
+    if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
+      flushList();
+      const cls = imageLayoutClasses(fig.layout);
+      emit(`<figure${cls.length ? ` class="${cls.join(' ')}"` : ''}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
+      i++; continue;
+    }
 
     // paragraph: gather consecutive plain lines
     flushList();

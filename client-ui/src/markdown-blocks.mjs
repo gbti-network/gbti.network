@@ -4,7 +4,7 @@
 // round-trips EXACTLY (the Worker splits on it at publish). Inline Markdown (bold/links) is left as block text
 // (we model block STRUCTURE, not inline), so it round-trips verbatim.
 
-import { parseImageLine, imageLayoutSuffix } from '../../client/src/image-attrs.mjs'; // the {full} / {left wrap} layout words
+import { parseImageLine, imageLayoutSuffix, imageTitleSuffix } from '../../client/src/image-attrs.mjs'; // the {full} / {left wrap} layout words; the title is the caption
 
 export const MEMBERS_MARKER = '<!-- members-only -->';
 export const BLOCK_TYPES = ['paragraph', 'heading', 'code', 'quote', 'list', 'table', 'image', 'embed', 'callout', 'members'];
@@ -86,7 +86,7 @@ function serializeBlock(b) {
       }).join(' | ') + ' |';
       return [line(head), delim, ...rows.map(line)].join('\n');
     }
-    case 'image': return `![${b.alt ?? ''}](${b.url ?? ''})${imageLayoutSuffix(b)}`;
+    case 'image': return `![${b.alt ?? ''}](${b.url ?? ''}${imageTitleSuffix(b.caption)})${imageLayoutSuffix(b)}`;
     case 'embed': return '```embed\n' + (b.url ?? '') + '\n```';
     case 'paragraph':
     default: return String(b.text ?? '');
@@ -163,7 +163,7 @@ export function parseBlocks(md) {
     // An image line, with or without its layout suffix ({full}, {left wrap}: client/src/image-attrs.mjs). Braces
     // carrying anything else are not layout, so the line falls through to the paragraph branch as it always did.
     const im = parseImageLine(line);
-    if (im) { blocks.push({ type: 'image', alt: im.alt, url: im.url, ...im.layout }); i++; continue; }
+    if (im) { blocks.push({ type: 'image', alt: im.alt, url: im.url, ...(im.caption ? { caption: im.caption } : {}), ...im.layout }); i++; continue; }
     if (isBareUrl(line) && isVideoUrl(line)) { blocks.push({ type: 'embed', url: line.trim() }); i++; continue; }
     // paragraph: consecutive lines that start no other block
     const para = [];

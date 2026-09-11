@@ -122,6 +122,29 @@ export function applyImageLayouts(paragraph) {
   }
 }
 
+/**
+ * A lone image WITH a title (`![alt](url "caption")`) becomes a figure: the image, then a figcaption holding the
+ * title, with the layout classes on the FIGURE so a float or full width carries the caption along. Returns the
+ * figure node to put in the paragraph's place, or null when the paragraph is not exactly one titled image (an
+ * inline titled image keeps its title= tooltip). The image node itself is kept, so Astro's image optimiser still
+ * sees it; its title moves to the caption and its classes to the figure.
+ */
+export function figureForCaptionedImage(paragraph) {
+  const kids = paragraph?.children;
+  if (!Array.isArray(kids) || kids.length !== 1) return null;
+  const im = kids[0];
+  if (!im || im.type !== 'image' || !String(im.title || '').trim()) return null;
+  const caption = String(im.title).replace(/\s+/g, ' ').trim();
+  const cls = im.data?.hProperties?.className || [];
+  im.title = null;
+  if (im.data?.hProperties) delete im.data.hProperties.className;
+  return {
+    type: 'figure',
+    data: { hName: 'figure', ...(cls.length ? { hProperties: { className: cls } } : {}) },
+    children: [im, { type: 'figcaption', data: { hName: 'figcaption' }, children: [{ type: 'text', value: caption }] }],
+  };
+}
+
 export function remarkContentBlocks() {
   return (tree, file) => {
     const autoEmbed = isCommentSource(file);
@@ -129,7 +152,11 @@ export function remarkContentBlocks() {
       if (!node || !Array.isArray(node.children)) return;
       for (let i = 0; i < node.children.length; i++) {
         const n = node.children[i];
-        if (n && n.type === 'paragraph') applyImageLayouts(n);
+        if (n && n.type === 'paragraph') {
+          applyImageLayouts(n);
+          const fig = figureForCaptionedImage(n);
+          if (fig) { node.children[i] = fig; continue; }
+        }
         if (n && n.type === 'code' && (n.lang === 'callout' || n.lang === 'embed')) {
           node.children[i] = { type: 'html', value: renderBlock(n) };
         } else if (autoEmbed && n && n.type === 'paragraph') {

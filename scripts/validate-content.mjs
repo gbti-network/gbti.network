@@ -130,7 +130,7 @@ function checkMemberGating(fm, rel, body = '') {
 // name a file the item expects to be there. Only the image form breaks the build; a link-form reference to a
 // file that is not committed is the 404-on-click defect sow-165 already had to fix four times by hand.
 // Catching them with one rule costs nothing and the message says which form was found.
-const BODY_IMAGE_REF_RE = /(!?)\[[^\]]*\]\((\.\/images\/[^)\s]+)\)/g;
+const BODY_IMAGE_REF_RE = /(!?)\[[^\]]*\]\((\.\/images\/[^)\s]+)(?:\s+"[^"]*")?\)/g; // an optional title (the caption) after the path
 
 // Counts what the rule actually examined. A guard that reports "passed" after inspecting zero subjects is
 // this repo's most-recorded failure, and nothing downstream disagrees with it, so the number is printed.

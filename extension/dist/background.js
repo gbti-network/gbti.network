@@ -20326,6 +20326,10 @@ function isPortraitEmbed(src) {
 // client/src/image-attrs.mjs
 var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
 var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
+var IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
+function cleanCaption(s) {
+  return String(s ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
+}
 function parseImageLayout(suffix) {
   if (suffix == null) return {};
   const words = String(suffix).trim().split(/\s+/).filter(Boolean);
@@ -20356,6 +20360,13 @@ function imageLayoutClasses(layout) {
   if (n.align) out.push(`img-${n.align}`);
   if (n.wrap && (n.align === "left" || n.align === "right")) out.push("img-wrap");
   return out;
+}
+function parseImageLine(line) {
+  const m = IMAGE_LINE_RE.exec(String(line ?? ""));
+  if (!m) return null;
+  const layout = parseImageLayout(m[4]);
+  if (!layout) return null;
+  return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
 }
 
 // client/src/markdown.mjs
@@ -20453,11 +20464,12 @@ function inline(escaped, fn = null) {
       return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
     });
   }
-  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)(\{[^}]*\})?/g, (_m, alt, src, suffix) => {
+  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
     const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
-    if (!layout) return `<img src="${src}" alt="${alt}" loading="lazy">${suffix}`;
+    const titleAttr = title ? ` title="${title}"` : "";
+    if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
     const cls = imageLayoutClasses(layout);
-    return `<img src="${src}" alt="${alt}" loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+    return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
   });
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url2) => `<a href="${url2}" target="_blank" rel="noopener">${txt}</a>`);
   t = emphasis(t);
@@ -20659,6 +20671,14 @@ function renderDoc(md, ids, opts = {}) {
     }
     if (/^\s*$/.test(line)) {
       flushList();
+      i++;
+      continue;
+    }
+    const fig = parseImageLine(line);
+    if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
+      flushList();
+      const cls = imageLayoutClasses(fig.layout);
+      emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
       i++;
       continue;
     }

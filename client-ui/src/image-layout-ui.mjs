@@ -72,8 +72,20 @@ export function imageLayoutProseCss(scope) {
   ${s} img.img-center { margin-left: auto; margin-right: auto; }
   ${s} img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
   ${s} img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  ${s} figure { margin: 1.5em auto; text-align: center; }
+  ${s} figure img { display: block; margin: 0 auto; }
+  ${s} figcaption { font-family: var(--f-mono, ui-monospace, monospace); background: var(--tint, rgba(127,127,127,.12)); color: var(--muted, var(--fg-mute)); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
+  ${s} figure.img-full { width: 100%; }
+  ${s} figure.img-full img { width: 100%; }
+  ${s} figure.img-left, ${s} figure.img-center, ${s} figure.img-right { width: fit-content; max-width: 100%; }
+  ${s} figure.img-left { margin-left: 0; margin-right: auto; }
+  ${s} figure.img-right { margin-left: auto; margin-right: 0; }
+  ${s} figure.img-center { margin-left: auto; margin-right: auto; }
+  ${s} figure.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  ${s} figure.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
   @media (max-width: 640px) {
     ${s} img.img-wrap.img-left:not(.img-full), ${s} img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
+    ${s} figure.img-wrap.img-left:not(.img-full), ${s} figure.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; width: fit-content; }
   }
 `;
 }

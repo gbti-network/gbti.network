@@ -133,6 +133,7 @@ const CSS = `
   /* SOW-062 P6: image drop-zone placeholder (striped) + the preview frame */
   .imgframe { border:1.5px solid var(--s-line-2); border-radius:9px; overflow:hidden; background:var(--s-surface-2); }
   .imgframe img { width:100%; display:block; }
+  .imgframe figcaption { font-family:var(--font-mono,monospace); font-size:12px; color:var(--s-fg-mute); background:var(--s-tint); padding:4px 8px; }
   .imgph { aspect-ratio:16/8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; color:var(--s-fg-mute); cursor:pointer;
     background-image:repeating-linear-gradient(45deg, var(--s-surface-3) 0 12px, transparent 12px 24px); transition:color .14s ease, box-shadow .14s ease; }
   .imgph:hover { color:var(--s-green-fg); }
@@ -388,11 +389,12 @@ class GbtiDocEditor extends GbtiElement {
         const src = hasUrl ? esc((this._stagedSrc && this._stagedSrc[b.url]) || resolveContentAsset(b.url, this.itemPath)) : '';
         return `<div class="card"><div class="card-h">${svg('img')} Image</div>`
           + `<div class="imgframe">`
-          +   (hasUrl ? `<img src="${src}" alt="" />` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg('img')}<span class="imgph-t">Drop an image here, or click to upload</span></div>`)
+          +   (hasUrl ? `<img src="${src}" alt="" />${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ''}` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg('img')}<span class="imgph-t">Drop an image here, or click to upload</span></div>`)
           +   `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" />`
           + `</div>`
           + `<input data-edit="url" data-id="${b._id}" value="${esc(b.url || '')}" placeholder="Image URL or repo path" />`
           + `<input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || '')}" placeholder="Alt text" />`
+          + `<input data-edit="caption" data-id="${b._id}" value="${esc(b.caption || '')}" placeholder="Caption (shown under the image)" />`
           + `<div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg('img')} ${hasUrl ? 'Replace image' : 'Choose image'}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg('img')} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div>`
           // The layout row (2026-09-11): the same words the Preview's image bar writes ({full}, {left wrap}), so an
           // image laid out on either surface reads back the same on the other.

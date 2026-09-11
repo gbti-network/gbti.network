@@ -28,7 +28,19 @@ export const IMAGE_LAYOUT_CLASS_RE = /^img-(full|left|center|right|wrap)$/;
  * A whole image line: `![alt](url)` with an OPTIONAL `{words}` suffix and trailing whitespace. Group 3 is the
  * inside of the braces when present (possibly empty), undefined when the line has no suffix.
  */
-export const IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]*)\)(?:\{([^}]*)\})?\s*$/;
+export const IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
+
+/** A caption (the image title: `![alt](url "caption")`) holds no double quote and no line break, so the line stays
+ *  one regex group; whitespace collapses. '' when nothing is left. */
+export function cleanCaption(s) {
+  return String(s ?? '').replace(/"/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** The ` "caption"` part of an image line, or '' when there is no caption. */
+export function imageTitleSuffix(caption) {
+  const c = cleanCaption(caption);
+  return c ? ` "${c}"` : '';
+}
 
 /**
  * Parse the inside of a brace suffix into a layout. Returns `{}` for no suffix (null/undefined), a layout with
@@ -99,16 +111,16 @@ export function splitImageSuffix(text) {
 }
 
 /**
- * Parse a whole image LINE. `{ alt, url, layout }` for `![alt](url)` with no suffix or a valid one; null for
- * anything else, including an image line whose braces are not layout (the block parser then reads a paragraph,
- * exactly as it did before).
+ * Parse a whole image LINE. `{ alt, url, caption, layout }` for `![alt](url)`, `![alt](url "caption")`, with no
+ * suffix or a valid one; null for anything else, including an image line whose braces are not layout (the block
+ * parser then reads a paragraph, exactly as it did before). caption is '' when the line has no title.
  */
 export function parseImageLine(line) {
   const m = IMAGE_LINE_RE.exec(String(line ?? ''));
   if (!m) return null;
-  const layout = parseImageLayout(m[3]);
+  const layout = parseImageLayout(m[4]);
   if (!layout) return null;
-  return { alt: m[1], url: m[2], layout };
+  return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
 }
 
 /**

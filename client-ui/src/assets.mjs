@@ -86,7 +86,9 @@ export function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO, r
   const folder = String(itemPath || '').replace(/\/[^/]*$/, '').replace(/^\/+/, '');
   if (!folder) return md;
   const base = cdnBase(repo, ref); // sow-315: a commit when one is known, else `main`
-  return md.replace(/(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
+  // The path may be followed by a title (the caption: `./images/x.png "caption")`), so the match ends at the
+  // path, not at the closing paren.
+  return md.replace(/(!\[[^\]]*\]\()(\.\/)([^\s)]+)/g,
     (_m, pre, _dot, rest) => `${pre}${base}/${folder}/${rest}`);
 }
 

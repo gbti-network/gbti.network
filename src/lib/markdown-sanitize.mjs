@@ -36,7 +36,7 @@ export const IFRAME_HOSTS = new Set([
 export const sanitizeSchema = {
   ...defaultSchema,
   clobberPrefix: '',
-  tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup'])],
+  tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'iframe', 'section', 'sup', 'figure', 'figcaption'])], // figure: a captioned image
   attributes: {
     ...defaultSchema.attributes,
     div: [...(defaultSchema.attributes?.div ?? []), ['className', /^callout(-(info|note|warning|tip|body))?$|^embed-wrap$/]],
@@ -48,6 +48,8 @@ export const sanitizeSchema = {
     // The image layout classes (client/src/image-attrs.mjs: {full} / {left wrap} on an image line) and NOTHING
     // else on an image's class. A raw <img class="anything"> in member markdown loses its class here.
     img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding', 'srcSet', 'sizes', 'width', 'height', 'style', ['className', IMAGE_LAYOUT_CLASS_RE]],
+    // A figure (a captioned image) carries the same five layout classes and nothing else.
+    figure: [['className', IMAGE_LAYOUT_CLASS_RE]],
     li: [...(defaultSchema.attributes?.li ?? []), 'id'],
     section: ['dataFootnotes', 'className'],
   },

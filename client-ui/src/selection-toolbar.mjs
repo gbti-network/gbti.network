@@ -54,6 +54,7 @@ export const SELECTION_TOOLBAR_CSS = `
 .gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
 .gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
 .gbti-ip { min-width: 300px; max-width: 360px; }
+.gbti-ic { min-width: 320px; }
 .gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
 .gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
 .gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
@@ -124,11 +125,13 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  *                    thumbnail (a data: URL is fine), `ref` is the Markdown path to insert. No fetching happens
  *                    here: the toolbar only ever offers what the host already holds, so there is no new route.
  * @param onInsertImage (el, { ref, alt }) => insert the chosen image after el's block.
- * @param imageTools  { layoutOf(el), onLayout(el, layout), onRemove(el) }. OPT-IN (2026-09-11). The image bar
- *                    (Natural | Full width, Left | Center | Right, Wrap text, Remove) the host shows over an image
- *                    block through showImageTools(el). layoutOf reads the block's CURRENT layout out of the host's
- *                    source; onLayout receives the NEXT one (applyImageLayoutAction applied to it) to write back;
- *                    onRemove deletes the block. The bar never touches the document itself.
+ * @param imageTools  { layoutOf(el), onLayout(el, layout), onRemove(el), captionOf(el), onCaption(el, text) }.
+ *                    OPT-IN (2026-09-11). The image bar (Natural | Full width, Left | Center | Right, Wrap text,
+ *                    Caption, Remove) the host shows over an image block through showImageTools(el). layoutOf reads
+ *                    the block's CURRENT layout out of the host's source; onLayout receives the NEXT one
+ *                    (applyImageLayoutAction applied to it) to write back; onRemove deletes the block; captionOf
+ *                    reads the caption (the image title) and onCaption writes it ('' removes). The bar never
+ *                    touches the document itself.
  */
 export function createSelectionToolbar({
   root, host, editableOf, allowInline = () => true, onCommit = () => {},
@@ -172,7 +175,9 @@ export function createSelectionToolbar({
   const hideImagePanel = () => { if (ip) ip.style.display = 'none'; ik = null; };
   let ib = null;      // the image bar (2026-09-11)
   let ibEl = null;    // the image block the bar is showing for
-  const hideImageBar = () => { if (ib) ib.style.display = 'none'; ibEl = null; };
+  let ic = null;      // the caption panel under the image bar
+  const hideCaptionPanel = () => { if (ic) ic.style.display = 'none'; };
+  const hideImageBar = () => { if (ib) ib.style.display = 'none'; ibEl = null; hideCaptionPanel(); };
   const anyPanelOpen = () => (!!lp && lp.style.display !== 'none') || (!!ip && ip.style.display !== 'none');
 
   // --- the toolbar -------------------------------------------------------------------------------------------
@@ -394,7 +399,40 @@ export function createSelectionToolbar({
     if (!ib) return;
     ib.innerHTML = imageLayoutButtonsHtml(layout)
       + '<span class="gbti-stb-sep" aria-hidden="true"></span>'
+      + '<button type="button" data-il="caption" title="Add or edit the caption under the image">Caption</button>'
       + '<button type="button" data-il="remove" title="Remove this image">Remove</button>';
+  }
+  // The caption panel: one field, Apply, Remove. Reads through imageTools.captionOf, writes through onCaption.
+  function buildCaptionPanel() {
+    const el = document.createElement('div');
+    el.className = 'gbti-lp gbti-ic';
+    el.innerHTML = '<input type="text" data-ic-text placeholder="Caption under the image" maxlength="300" />'
+      + '<div class="lp-btns"><button type="button" data-lk-apply data-ic-apply>Apply</button>'
+      + '<button type="button" data-ic-remove title="Remove the caption">Remove</button></div>';
+    el.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
+    const apply = (text) => {
+      const target = ibEl;
+      hideCaptionPanel();
+      if (target && typeof imageTools?.onCaption === 'function') imageTools.onCaption(target, String(text ?? ''));
+    };
+    el.querySelector('[data-ic-apply]').addEventListener('click', () => apply(el.querySelector('[data-ic-text]').value));
+    el.querySelector('[data-ic-remove]').addEventListener('click', () => apply(''));
+    el.querySelector('[data-ic-text]').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); apply(el.querySelector('[data-ic-text]').value); }
+      if (e.key === 'Escape') { e.preventDefault(); hideCaptionPanel(); }
+    });
+    return el;
+  }
+  function openCaptionPanel(target) {
+    if (!ic) ic = buildCaptionPanel();
+    let current = '';
+    try { current = typeof imageTools?.captionOf === 'function' ? String(imageTools.captionOf(target) || '') : ''; } catch { current = ''; }
+    const input = ic.querySelector('[data-ic-text]');
+    input.value = current;
+    ic.querySelector('[data-ic-remove]').style.display = current ? '' : 'none';
+    const img = (target.querySelector && target.querySelector('img')) || target;
+    place(ic, img.getBoundingClientRect(), false);
+    setTimeout(() => input.focus(), 0);
   }
   function buildImageBar() {
     const el = document.createElement('div');
@@ -406,6 +444,7 @@ export function createSelectionToolbar({
       if (!b || !target || b.disabled) return;
       const act = b.dataset.il;
       if (act === 'remove') { hideImageBar(); if (typeof imageTools?.onRemove === 'function') imageTools.onRemove(target); return; }
+      if (act === 'caption') { openCaptionPanel(target); return; }
       const next = applyImageLayoutAction(layoutOfEl(target), act);
       paintImageBar(next);
       if (typeof imageTools?.onLayout === 'function') imageTools.onLayout(target, next);
@@ -414,7 +453,7 @@ export function createSelectionToolbar({
   }
   function showImageTools(el) {
     if (!el || !imageTools) return;
-    hideTb(); hidePanel(); hideImagePanel();
+    hideTb(); hidePanel(); hideImagePanel(); hideCaptionPanel();
     if (!ib) ib = buildImageBar();
     ibEl = el;
     paintImageBar(layoutOfEl(el));
@@ -426,7 +465,7 @@ export function createSelectionToolbar({
   const onDocDown = (e) => {
     if (!ib || ib.style.display === 'none') return;
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-    if (path.includes(ib) || (ibEl && path.includes(ibEl))) return;
+    if (path.includes(ib) || (ic && path.includes(ic)) || (ibEl && path.includes(ibEl))) return;
     hideImageBar();
   };
   document.addEventListener('mousedown', onDocDown, true);
@@ -455,8 +494,8 @@ export function createSelectionToolbar({
     destroy() {
       document.removeEventListener('selectionchange', onSel);
       document.removeEventListener('mousedown', onDocDown, true);
-      tb?.remove(); lp?.remove(); ip?.remove(); ib?.remove();
-      tb = null; lp = null; lk = null; ip = null; ik = null; ib = null; ibEl = null;
+      tb?.remove(); lp?.remove(); ip?.remove(); ib?.remove(); ic?.remove();
+      tb = null; lp = null; lk = null; ip = null; ik = null; ib = null; ibEl = null; ic = null;
     },
   };
 }

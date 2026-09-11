@@ -55,8 +55,20 @@
   .prose-gbti img.img-center { margin-left: auto; margin-right: auto; }
   .prose-gbti img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
   .prose-gbti img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  /* A captioned image is a figure (the image title is the caption); the layout classes sit on the FIGURE so a
+     float or full width carries the caption strip along. Same numbers as the img rules above. */
+  .prose-gbti figure img { display: block; margin: 0 auto; }
+  .prose-gbti figure.img-full { width: 100%; }
+  .prose-gbti figure.img-full img { width: 100%; }
+  .prose-gbti figure.img-left, .prose-gbti figure.img-center, .prose-gbti figure.img-right { width: fit-content; max-width: 100%; }
+  .prose-gbti figure.img-left { margin-left: 0; margin-right: auto; }
+  .prose-gbti figure.img-right { margin-left: auto; margin-right: 0; }
+  .prose-gbti figure.img-center { margin-left: auto; margin-right: auto; }
+  .prose-gbti figure.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  .prose-gbti figure.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
   @media (max-width: 640px) {
     .prose-gbti img.img-wrap.img-left:not(.img-full), .prose-gbti img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
+    .prose-gbti figure.img-wrap.img-left:not(.img-full), .prose-gbti figure.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; width: fit-content; }
   }
   .prose-gbti figure { margin: 1.5em auto; text-align: center; }
   .prose-gbti figcaption { font-family: var(--f-mono); background: var(--tint); color: var(--fg-mute); font-size: 0.85rem; padding: 4px 8px; text-align: left; }

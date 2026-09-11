@@ -2747,7 +2747,7 @@
     if (!folder2) return md;
     const base = cdnBase(repo, ref);
     return md.replace(
-      /(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
+      /(!\[[^\]]*\]\()(\.\/)([^\s)]+)/g,
       (_m, pre, _dot, rest) => `${pre}${base}/${folder2}/${rest}`
     );
   }
@@ -3442,7 +3442,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client/src/image-attrs.mjs
   var IMAGE_LAYOUT_WORDS = Object.freeze(["full", "left", "center", "right", "wrap"]);
   var ALIGNS = /* @__PURE__ */ new Set(["left", "center", "right"]);
-  var IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]*)\)(?:\{([^}]*)\})?\s*$/;
+  var IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]*)\})?\s*$/;
+  function cleanCaption(s) {
+    return String(s ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
+  }
+  function imageTitleSuffix(caption) {
+    const c = cleanCaption(caption);
+    return c ? ` "${c}"` : "";
+  }
   function parseImageLayout(suffix) {
     if (suffix == null) return {};
     const words = String(suffix).trim().split(/\s+/).filter(Boolean);
@@ -3485,9 +3492,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function parseImageLine(line) {
     const m = IMAGE_LINE_RE.exec(String(line ?? ""));
     if (!m) return null;
-    const layout = parseImageLayout(m[3]);
+    const layout = parseImageLayout(m[4]);
     if (!layout) return null;
-    return { alt: m[1], url: m[2], layout };
+    return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
   }
   function applyImageLayoutAction(layout, action) {
     const n = normalizeImageLayout(layout);
@@ -3587,7 +3594,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return [line(head), delim, ...rows.map(line)].join("\n");
       }
       case "image":
-        return `![${b.alt ?? ""}](${b.url ?? ""})${imageLayoutSuffix(b)}`;
+        return `![${b.alt ?? ""}](${b.url ?? ""}${imageTitleSuffix(b.caption)})${imageLayoutSuffix(b)}`;
       case "embed":
         return "```embed\n" + (b.url ?? "") + "\n```";
       case "paragraph":
@@ -3673,7 +3680,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const im = parseImageLine(line);
       if (im) {
-        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.layout });
+        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
         i++;
         continue;
       }
@@ -7931,8 +7938,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   ${s} img.img-center { margin-left: auto; margin-right: auto; }
   ${s} img.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
   ${s} img.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
+  ${s} figure { margin: 1.5em auto; text-align: center; }
+  ${s} figure img { display: block; margin: 0 auto; }
+  ${s} figcaption { font-family: var(--f-mono, ui-monospace, monospace); background: var(--tint, rgba(127,127,127,.12)); color: var(--muted, var(--fg-mute)); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
+  ${s} figure.img-full { width: 100%; }
+  ${s} figure.img-full img { width: 100%; }
+  ${s} figure.img-left, ${s} figure.img-center, ${s} figure.img-right { width: fit-content; max-width: 100%; }
+  ${s} figure.img-left { margin-left: 0; margin-right: auto; }
+  ${s} figure.img-right { margin-left: auto; margin-right: 0; }
+  ${s} figure.img-center { margin-left: auto; margin-right: auto; }
+  ${s} figure.img-wrap.img-left:not(.img-full) { float: left; max-width: 50%; margin: 0.35em 1.5em 0.75em 0; }
+  ${s} figure.img-wrap.img-right:not(.img-full) { float: right; max-width: 50%; margin: 0.35em 0 0.75em 1.5em; }
   @media (max-width: 640px) {
     ${s} img.img-wrap.img-left:not(.img-full), ${s} img.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; }
+    ${s} figure.img-wrap.img-left:not(.img-full), ${s} figure.img-wrap.img-right:not(.img-full) { float: none; max-width: 100%; margin: 1.5em auto; width: fit-content; }
   }
 `;
   }
@@ -7978,6 +7997,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
 .gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
 .gbti-ip { min-width: 300px; max-width: 360px; }
+.gbti-ic { min-width: 320px; }
 .gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
 .gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
 .gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
@@ -8071,9 +8091,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
     let ib = null;
     let ibEl = null;
+    let ic3 = null;
+    const hideCaptionPanel = () => {
+      if (ic3) ic3.style.display = "none";
+    };
     const hideImageBar = () => {
       if (ib) ib.style.display = "none";
       ibEl = null;
+      hideCaptionPanel();
     };
     const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
     function buildTb() {
@@ -8310,7 +8335,48 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
     function paintImageBar(layout) {
       if (!ib) return;
-      ib.innerHTML = imageLayoutButtonsHtml(layout) + '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-il="remove" title="Remove this image">Remove</button>';
+      ib.innerHTML = imageLayoutButtonsHtml(layout) + '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-il="caption" title="Add or edit the caption under the image">Caption</button><button type="button" data-il="remove" title="Remove this image">Remove</button>';
+    }
+    function buildCaptionPanel() {
+      const el = document.createElement("div");
+      el.className = "gbti-lp gbti-ic";
+      el.innerHTML = '<input type="text" data-ic-text placeholder="Caption under the image" maxlength="300" /><div class="lp-btns"><button type="button" data-lk-apply data-ic-apply>Apply</button><button type="button" data-ic-remove title="Remove the caption">Remove</button></div>';
+      el.addEventListener("mousedown", (e) => {
+        if (e.target.tagName !== "INPUT") e.preventDefault();
+      });
+      const apply2 = (text) => {
+        const target = ibEl;
+        hideCaptionPanel();
+        if (target && typeof imageTools?.onCaption === "function") imageTools.onCaption(target, String(text ?? ""));
+      };
+      el.querySelector("[data-ic-apply]").addEventListener("click", () => apply2(el.querySelector("[data-ic-text]").value));
+      el.querySelector("[data-ic-remove]").addEventListener("click", () => apply2(""));
+      el.querySelector("[data-ic-text]").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          apply2(el.querySelector("[data-ic-text]").value);
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          hideCaptionPanel();
+        }
+      });
+      return el;
+    }
+    function openCaptionPanel(target) {
+      if (!ic3) ic3 = buildCaptionPanel();
+      let current = "";
+      try {
+        current = typeof imageTools?.captionOf === "function" ? String(imageTools.captionOf(target) || "") : "";
+      } catch {
+        current = "";
+      }
+      const input = ic3.querySelector("[data-ic-text]");
+      input.value = current;
+      ic3.querySelector("[data-ic-remove]").style.display = current ? "" : "none";
+      const img = target.querySelector && target.querySelector("img") || target;
+      place(ic3, img.getBoundingClientRect(), false);
+      setTimeout(() => input.focus(), 0);
     }
     function buildImageBar() {
       const el = document.createElement("div");
@@ -8326,6 +8392,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           if (typeof imageTools?.onRemove === "function") imageTools.onRemove(target);
           return;
         }
+        if (act === "caption") {
+          openCaptionPanel(target);
+          return;
+        }
         const next = applyImageLayoutAction(layoutOfEl(target), act);
         paintImageBar(next);
         if (typeof imageTools?.onLayout === "function") imageTools.onLayout(target, next);
@@ -8337,6 +8407,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       hideTb();
       hidePanel();
       hideImagePanel();
+      hideCaptionPanel();
       if (!ib) ib = buildImageBar();
       ibEl = el;
       paintImageBar(layoutOfEl(el));
@@ -8346,7 +8417,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const onDocDown = (e) => {
       if (!ib || ib.style.display === "none") return;
       const path = typeof e.composedPath === "function" ? e.composedPath() : [];
-      if (path.includes(ib) || ibEl && path.includes(ibEl)) return;
+      if (path.includes(ib) || ic3 && path.includes(ic3) || ibEl && path.includes(ibEl)) return;
       hideImageBar();
     };
     document.addEventListener("mousedown", onDocDown, true);
@@ -8384,6 +8455,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         lp?.remove();
         ip?.remove();
         ib?.remove();
+        ic3?.remove();
         tb = null;
         lp = null;
         lk = null;
@@ -8391,6 +8463,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ik = null;
         ib = null;
         ibEl = null;
+        ic3 = null;
       }
     };
   }
@@ -8586,6 +8659,7 @@ ${String(body ?? "")}`;
   /* SOW-062 P6: image drop-zone placeholder (striped) + the preview frame */
   .imgframe { border:1.5px solid var(--s-line-2); border-radius:9px; overflow:hidden; background:var(--s-surface-2); }
   .imgframe img { width:100%; display:block; }
+  .imgframe figcaption { font-family:var(--font-mono,monospace); font-size:12px; color:var(--s-fg-mute); background:var(--s-tint); padding:4px 8px; }
   .imgph { aspect-ratio:16/8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; color:var(--s-fg-mute); cursor:pointer;
     background-image:repeating-linear-gradient(45deg, var(--s-surface-3) 0 12px, transparent 12px 24px); transition:color .14s ease, box-shadow .14s ease; }
   .imgph:hover { color:var(--s-green-fg); }
@@ -8845,7 +8919,7 @@ ${String(body ?? "")}`;
         case "image": {
           const hasUrl = !!b.url;
           const src = hasUrl ? esc(this._stagedSrc && this._stagedSrc[b.url] || resolveContentAsset(b.url, this.itemPath)) : "";
-          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
+          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ""}` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><input data-edit="caption" data-id="${b._id}" value="${esc(b.caption || "")}" placeholder="Caption (shown under the image)" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
         }
         case "embed":
           return `<div class="card"><div class="card-h">${svg("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
@@ -9830,11 +9904,12 @@ ${String(body ?? "")}`;
         return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
       });
     }
-    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)(\{[^}]*\})?/g, (_m, alt, src, suffix) => {
+    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
       const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
-      if (!layout) return `<img src="${src}" alt="${alt}" loading="lazy">${suffix}`;
+      const titleAttr = title ? ` title="${title}"` : "";
+      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
       const cls = imageLayoutClasses(layout);
-      return `<img src="${src}" alt="${alt}" loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
     });
     t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
     t = emphasis(t);
@@ -10036,6 +10111,14 @@ ${String(body ?? "")}`;
       }
       if (/^\s*$/.test(line)) {
         flushList();
+        i++;
+        continue;
+      }
+      const fig = parseImageLine(line);
+      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
+        flushList();
+        const cls = imageLayoutClasses(fig.layout);
+        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
         i++;
         continue;
       }
