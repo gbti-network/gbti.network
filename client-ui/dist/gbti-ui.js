@@ -372,6 +372,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (n.wrap) words.push("wrap");
     return words.length ? `{${words.join(" ")}}` : "";
   }
+  function imageLayoutClasses(layout) {
+    const n = normalizeImageLayout(layout);
+    const out = [];
+    if (n.width) out.push("img-full");
+    if (n.align) out.push(`img-${n.align}`);
+    if (n.wrap && (n.align === "left" || n.align === "right")) out.push("img-wrap");
+    return out;
+  }
   function parseImageLine(line) {
     const m = IMAGE_LINE_RE.exec(String(line ?? ""));
     if (!m) return null;
@@ -1312,21 +1320,6 @@ ${String(body ?? "")}`;
     return out;
   }
 
-  // client-ui/src/doc-editor-core.mjs
-  var COMPACT_KEYS = Object.freeze(["paragraph", "quote", "code", "ul", "ol", "embed"]);
-  function paletteFor(all, { compact = false } = {}) {
-    const list = Array.isArray(all) ? all : [];
-    return compact ? list.filter((c) => c && COMPACT_KEYS.includes(c.key)) : list.slice();
-  }
-  var COMMENT_MAX_BYTES = 8e3;
-  function commentBodyTooLong(md) {
-    try {
-      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
-    } catch {
-      return String(md ?? "").length > COMMENT_MAX_BYTES;
-    }
-  }
-
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
   var withId = (b) => {
@@ -1384,11 +1377,6 @@ ${String(body ?? "")}`;
      (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
      40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
   :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; container-type:inline-size; }
-  /* compact: the comment box's editor. A smaller tool gutter, a reply-sized minimum, a bordered field so it reads
-     as an input under a thread rather than a document page. */
-  :host([compact]) { --blk-gutter:118px; }
-  :host([compact]) .doc-blocks { min-height:90px; border:1.5px solid var(--s-line); border-radius:10px; padding:8px 10px; padding-right:var(--blk-gutter); background:var(--s-surface); }
-  :host([compact]) .doc-blocks:focus-within { border-color:var(--s-green); }
   .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
@@ -1632,12 +1620,8 @@ ${String(body ?? "")}`;
     _change() {
       this.emit("block-change");
     }
-    /** compact: the comment box's editor (see doc-editor-core.mjs). Read live so a host can set it before or after connect. */
-    get compact() {
-      return this.hasAttribute("compact");
-    }
     _palette() {
-      return paletteFor(CONVERT, { compact: this.compact });
+      return CONVERT.slice();
     }
     _render() {
       const blocks2 = this._blocks || [];
@@ -1652,7 +1636,7 @@ ${String(body ?? "")}`;
       });
       const addRow = `<div class="add-row">
       <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg("plus")} Add block</button><div class="add-pop" data-addpop hidden></div></div>
-      ${hasMembers || this.compact ? "" : `<button class="add-btn" data-addmembers type="button">${svg("lock")} Add members-only section</button>`}
+      ${hasMembers ? "" : `<button class="add-btn" data-addmembers type="button">${svg("lock")} Add members-only section</button>`}
     </div>`;
       this._slash = null;
       this.set(this.css(EDITOR_SURFACE + CSS) + `<div class="doc-blocks">${parts.join("")}${addRow}</div>`);
@@ -2591,9 +2575,9 @@ ${String(body ?? "")}`;
     }
     return void 0;
   }
-  function authoringEnabled(attr, isExtension) {
-    if (attr === null || attr === void 0) return !isExtension;
-    return String(attr).trim().toLowerCase() !== "off";
+  function authoringEnabled(attr2, isExtension) {
+    if (attr2 === null || attr2 === void 0) return !isExtension;
+    return String(attr2).trim().toLowerCase() !== "off";
   }
   function visibleTabs(tabs, authoring) {
     const all = Array.isArray(tabs) ? tabs : [];
@@ -2912,9 +2896,888 @@ ${String(body ?? "")}`;
     }
   }
 
+  // client/src/video-embed.mjs
+  function embedUrl(v) {
+    const s = String(v || "").trim();
+    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return `https://player.vimeo.com/video/${m[1]}`;
+    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
+    if (m) return `https://rumble.com/embed/${m[1]}/`;
+    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+    return null;
+  }
+  function bareVideoLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return embedUrl(s) ? s : null;
+  }
+  function embedPoster(url) {
+    const src = embedUrl(url);
+    if (!src) return null;
+    const yt = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+    const provider = yt ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
+    return { src, thumb: yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+  }
+  var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  function embedPosterHtml(url, { frameSrc } = {}) {
+    const p = embedPoster(url);
+    if (!p) return "";
+    const src = frameSrc || p.src;
+    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr2(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr2(p.provider)}</span>`;
+    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr2(src)}" data-embed-url="${escAttr2(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
+  }
+  function isPortraitEmbed(src) {
+    return /tiktok\.com\/embed\//.test(String(src || ""));
+  }
+
+  // client/src/markdown.mjs
+  var EMBED_RELAY = "https://gbti.network/embed/";
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  }
+  var REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
+  var DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
+  function decodeEntities(s) {
+    let p = String(s ?? "");
+    for (let i = 0; i < 4; i++) {
+      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
+        try {
+          return String.fromCodePoint(parseInt(h, 16));
+        } catch {
+          return "";
+        }
+      }).replace(/&#(\d+);?/g, (_m, d) => {
+        try {
+          return String.fromCodePoint(parseInt(d, 10));
+        } catch {
+          return "";
+        }
+      }).replace(/&amp;/gi, "&");
+      if (n === p) break;
+      p = n;
+    }
+    return p;
+  }
+  var isDangerousAnchorHref = (url) => {
+    const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
+    return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
+  };
+  var attrOf2 = (attrs, name) => {
+    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
+    return m ? m[1] : "";
+  };
+  var escAttr3 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function emphasis(t) {
+    return String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  }
+  var SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
+  var sanitizeAnchorInner = (html) => String(html ?? "").replace(
+    /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
+    (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
+  );
+  function rawAnchorHtml(attrs, inner) {
+    const href = decodeEntities(attrOf2(attrs, "href"));
+    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
+    const rel = [];
+    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
+    const blank = attrOf2(attrs, "target").toLowerCase() === "_blank";
+    if (blank && !rel.includes("noopener")) rel.push("noopener");
+    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
+    const tgtAttr = blank ? ' target="_blank"' : "";
+    return `<a href="${escAttr3(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+  }
+  function escapeKeepingLinks(s, keep) {
+    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+      keep.push(rawAnchorHtml(attrs, inner));
+      return `${keep.length - 1}`;
+    });
+    return escapeHtml(stripped);
+  }
+  var FN_ID = "[A-Za-z0-9_-]+";
+  function collectFootnoteIds(lines) {
+    const ids = /* @__PURE__ */ new Set();
+    let fence = 0;
+    for (const line of lines) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
+      if (d) ids.add(d[1]);
+    }
+    return ids;
+  }
+  function inline(escaped, fn = null) {
+    let t = escaped;
+    const codes = [];
+    t = t.replace(/`([^`]+)`/g, (_m, c) => {
+      codes.push(c);
+      return `${codes.length - 1}`;
+    });
+    if (fn) {
+      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
+        if (!fn.ids.has(id)) return m;
+        const n = (fn.counts.get(id) ?? 0) + 1;
+        fn.counts.set(id, n);
+        return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
+      });
+    }
+    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)(\{[^}]*\})?/g, (_m, alt, src, suffix) => {
+      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
+      if (!layout) return `<img src="${src}" alt="${alt}" loading="lazy">${suffix}`;
+      const cls = imageLayoutClasses(layout);
+      return `<img src="${src}" alt="${alt}" loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+    });
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+    t = emphasis(t);
+    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
+    return t;
+  }
+  function codeOpen(lang) {
+    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
+    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
+  }
+  var CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
+  function renderFence(lang, buf, fn = null, { poster = false } = {}) {
+    const info = String(lang || "").trim().split(/\s+/);
+    const body = buf.join("\n");
+    if (info[0] === "callout") {
+      const v = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
+      const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
+      return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+    }
+    if (info[0] === "embed") {
+      const url = body.trim();
+      const src = embedUrl(url);
+      if (src && poster) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
+      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
+      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
+    }
+    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
+  }
+  function splitTableRow2(line) {
+    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
+    const cells = [];
+    let cur = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "\\" && s[i + 1] === "|") {
+        cur += "|";
+        i++;
+        continue;
+      }
+      if (ch === "|") {
+        cells.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+  function tableAlignments(line) {
+    if (!/\|/.test(String(line ?? ""))) return null;
+    const cells = splitTableRow2(line);
+    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
+    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+  }
+  function hardBreak(escaped, raw) {
+    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
+  }
+  function renderMarkdown(md, opts = {}) {
+    return renderDoc(md, false, opts).html;
+  }
+  function renderDoc(md, ids, opts = {}) {
+    const autoEmbed = !!opts.autoEmbed;
+    const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+    const ranges = [];
+    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
+    const emit = (html2, start, end) => {
+      out.push(stamp(html2, out.length));
+      ranges.push(start == null ? null : { start, end });
+    };
+    let codeFence = 3;
+    let fenceStart = 0;
+    let listStart = null;
+    let inCode = false;
+    let codeBuf = [];
+    let codeLang2 = "";
+    let listType = null;
+    let listBuf = [];
+    const footnotes = [];
+    const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
+    const linkKeep = [];
+    const flushList = () => {
+      if (listType) {
+        emit(`<${listType}>${listBuf.join("")}</${listType}>`, listStart, i - 1);
+        listType = null;
+        listBuf = [];
+        listStart = null;
+      }
+    };
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const fence = /^(`{3,})(.*)$/.exec(line);
+      if (fence) {
+        if (!inCode) {
+          inCode = true;
+          fenceStart = i;
+          codeBuf = [];
+          codeFence = fence[1].length;
+          codeLang2 = fence[2];
+          i++;
+          continue;
+        }
+        if (fence[1].length >= codeFence && !fence[2].trim()) {
+          inCode = false;
+          flushList();
+          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed }), fenceStart, i);
+          codeLang2 = "";
+          i++;
+          continue;
+        }
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      if (inCode) {
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
+      if (def) {
+        flushList();
+        const parts = [def[2].trim()];
+        i++;
+        while (i < lines.length && /^ {4,}\S/.test(lines[i])) {
+          parts.push(lines[i].trim());
+          i++;
+        }
+        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join("<br/>") });
+        continue;
+      }
+      if (autoEmbed) {
+        const videoUrl = bareVideoLine(line);
+        if (videoUrl) {
+          flushList();
+          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
+          i++;
+          continue;
+        }
+      }
+      const esc2 = escapeKeepingLinks(line, linkKeep);
+      let m;
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc2)) {
+        flushList();
+        emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i);
+        i++;
+        continue;
+      }
+      if (/^\s*[-*]\s+/.test(line)) {
+        if (listType !== "ul") {
+          flushList();
+          listType = "ul";
+          listStart = i;
+        }
+        listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ""), linkKeep), fn)}</li>`);
+        i++;
+        continue;
+      }
+      if (/^\s*\d+\.\s+/.test(line)) {
+        if (listType !== "ol") {
+          flushList();
+          listType = "ol";
+          listStart = i;
+        }
+        listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ""), linkKeep), fn)}</li>`);
+        i++;
+        continue;
+      }
+      if (/^\s*>\s?/.test(line)) {
+        flushList();
+        emit(`<blockquote>${inline(escapeKeepingLinks(line.replace(/^\s*>\s?/, ""), linkKeep), fn)}</blockquote>`, i, i);
+        i++;
+        continue;
+      }
+      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+        flushList();
+        emit("<hr/>", i, i);
+        i++;
+        continue;
+      }
+      const aligns = i + 1 < lines.length ? tableAlignments(lines[i + 1]) : null;
+      if (aligns && line.includes("|")) {
+        const tableStart = i;
+        flushList();
+        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn);
+        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
+        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) {
+          rows.push(splitTableRow2(lines[i]));
+          i++;
+        }
+        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
+        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
+        continue;
+      }
+      if (/^\s*$/.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
+      flushList();
+      const paraStart = i;
+      const para = [hardBreak(esc2, line)];
+      i++;
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
+        para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
+        i++;
+      }
+      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
+      emit(`<p>${inline(joined2, fn).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
+    }
+    flushList();
+    if (inCode) emit(renderFence(codeLang2, codeBuf, fn), fenceStart, lines.length - 1);
+    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
+    if (referenced.length) {
+      const items = referenced.map((f) => {
+        const n = fn.counts.get(f.id);
+        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
+        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
+      }).join("");
+      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
+    }
+    const joined = out.join("\n");
+    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
+    return { html, blocks: ranges };
+  }
+
+  // client-ui/src/prose-editor-core.mjs
+  var COMMENT_MAX_BYTES = 8e3;
+  function commentBodyTooLong(md) {
+    try {
+      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
+    } catch {
+      return String(md ?? "").length > COMMENT_MAX_BYTES;
+    }
+  }
+  var PROSE_CONTROLS = Object.freeze([
+    { act: "bold", label: "Bold", key: "B" },
+    { act: "italic", label: "Italic", key: "I" },
+    { act: "code", label: "Inline code" },
+    { act: "link", label: "Link" },
+    null,
+    { act: "quote", label: "Quote" },
+    { act: "ul", label: "Bulleted list" },
+    { act: "ol", label: "Numbered list" },
+    { act: "codeblock", label: "Code block" },
+    { act: "video", label: "Video" }
+  ]);
+  function editorHtmlFromMarkdown(md) {
+    const html = renderMarkdown(String(md ?? ""), { autoEmbed: true }).trim();
+    return html || "<p><br></p>";
+  }
+  var ELEMENT = 1;
+  var TEXT = 3;
+  var BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "DIV", "BLOCKQUOTE", "UL", "OL", "LI", "PRE", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "FIGURE", "SECTION", "ARTICLE"]);
+  var tagOf = (n) => String(n?.tagName || "").toUpperCase();
+  var attr = (n, name) => (typeof n?.getAttribute === "function" ? n.getAttribute(name) : null) || "";
+  var kids = (n) => Array.from(n?.childNodes || []);
+  var escapeText = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-embed(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
+  var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
+  var hasBlockChild = (n) => kids(n).some(isBlock);
+  var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
+  var inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
+  function codeText(el) {
+    const html = String(el?.innerHTML ?? "");
+    const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    return t.replace(/\n+$/, "");
+  }
+  function codeLang(pre) {
+    const code = kids(pre).find((c) => c.nodeType === ELEMENT && tagOf(c) === "CODE") || null;
+    const el = code || pre;
+    const lang = attr(el, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el, "class")) || [])[1] || "";
+    return { el, lang: String(lang).replace(/[^\w+-]/g, "") };
+  }
+  function walk(node, out) {
+    let buf = "";
+    const flush = () => {
+      const t = inline2(buf);
+      if (t.trim()) out.push(t);
+      buf = "";
+    };
+    for (const c of kids(node)) {
+      if (c.nodeType === TEXT) {
+        buf += escapeText(c.textContent);
+        continue;
+      }
+      if (c.nodeType !== ELEMENT) continue;
+      if (!isBlock(c)) {
+        if (tagOf(c) === "BR") {
+          buf += "<br>";
+          continue;
+        }
+        buf += String(c.outerHTML ?? "");
+        continue;
+      }
+      flush();
+      blockOf(c, out);
+    }
+    flush();
+  }
+  function blockOf(n, out) {
+    const t = tagOf(n);
+    if (isCard(n)) {
+      out.push(attr(n, "data-embed-url").trim());
+      return;
+    }
+    if (t === "P" || t === "DIV" || t === "SECTION" || t === "ARTICLE" || t === "FIGURE") {
+      if (hasBlockChild(n)) {
+        walk(n, out);
+        return;
+      }
+      const text = inline2(n.innerHTML);
+      if (text.trim()) out.push(text);
+      return;
+    }
+    if (t === "BLOCKQUOTE") {
+      const inner = [];
+      if (hasBlockChild(n)) walk(n, inner);
+      else {
+        const text = inline2(n.innerHTML);
+        if (text.trim()) inner.push(text);
+      }
+      const lines = flat(inner);
+      out.push({ quote: true, text: lines.length ? lines.join("\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : ">" });
+      return;
+    }
+    if (t === "UL" || t === "OL") {
+      const items = [];
+      for (const li of kids(n)) {
+        if (li.nodeType !== ELEMENT || tagOf(li) !== "LI") continue;
+        let text;
+        if (hasBlockChild(li)) {
+          const inner = [];
+          walk(li, inner);
+          text = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
+        } else text = inline2(li.innerHTML);
+        if (text.trim()) items.push(text);
+      }
+      if (!items.length) return;
+      out.push(items.map((it, i) => t === "OL" ? `${i + 1}. ${it}` : `- ${it}`).join("\n"));
+      return;
+    }
+    if (t === "PRE") {
+      const { el, lang } = codeLang(n);
+      out.push("```" + lang + "\n" + codeText(el) + "\n```");
+      return;
+    }
+    if (/^H[1-6]$/.test(t)) {
+      const text = inline2(n.innerHTML);
+      if (text.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text}`);
+      return;
+    }
+    if (t === "HR") {
+      out.push("---");
+      return;
+    }
+    if (t === "LI") {
+      const text = inline2(n.innerHTML);
+      if (text.trim()) out.push(`- ${text}`);
+      return;
+    }
+    if (t === "TABLE") {
+      const text = inline2(n.innerHTML);
+      if (text.trim()) out.push(text);
+      return;
+    }
+  }
+  function domToMarkdown(root) {
+    const out = [];
+    walk(root, out);
+    const blocks2 = [];
+    let run = null;
+    const closeRun = () => {
+      if (!run) return;
+      while (run.length && run[0] === ">") run.shift();
+      while (run.length && run[run.length - 1] === ">") run.pop();
+      if (run.length) blocks2.push(run.join("\n"));
+      run = null;
+    };
+    for (const b of out) {
+      if (b && typeof b === "object" && b.quote) {
+        (run ||= []).push(b.text);
+        continue;
+      }
+      closeRun();
+      if (typeof b === "string" && b.trim()) blocks2.push(b);
+    }
+    closeRun();
+    return blocks2.join("\n\n");
+  }
+
+  // client-ui/src/elements/gbti-prose-editor.mjs
+  var ic2 = {
+    code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    quote: '<path d="M9 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3M19 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+    ul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    ol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+    codeblock: '<rect x="3.5" y="5" width="17" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9.5l-2.5 2.5 2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+    video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+  };
+  var svg2 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
+  var CSS2 = `
+  :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
+  .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .box:focus-within { border-color: var(--brand); }
+  /* The header: small, muted, brand on hover. Quiet by design (owner, 2026-09-11). */
+  .hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .hdr button { width: 28px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer; font: 700 13px/1 var(--font-body); }
+  .hdr button:hover, .hdr button:focus-visible { color: var(--brand); background: rgba(31,158,95,.1); outline: 0; }
+  .hdr button svg { width: 16px; height: 16px; }
+  .hdr .k-italic { font-style: italic; font-family: Georgia, 'Times New Roman', serif; font-weight: 600; }
+  .hdr .sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
+  .vid { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .vid[hidden] { display: none; }
+  .vid input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); }
+  .vid input.bad { border-color: #c0392b; }
+  .vid button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+  .vid button.vid-add { border-color: var(--brand); background: var(--brand); color: #fff; }
+  .surface { position: relative; min-height: 96px; padding: 10px 12px; font-size: 14.5px; line-height: 1.6; outline: 0; caret-color: var(--brand); word-break: break-word; }
+  .surface.empty::before { content: attr(data-ph); position: absolute; left: 12px; top: 10px; color: var(--muted); pointer-events: none; }
+  .surface p, .surface div { margin: 0 0 .7em; }
+  .surface > :last-child { margin-bottom: 0; }
+  .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+  .surface blockquote + blockquote { margin-top: -.7em; }
+  .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
+  .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
+  .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
+  .surface pre code { background: none; padding: 0; font-size: inherit; }
+  .surface a { color: var(--brand); }
+  .surface strong { font-weight: 700; }
+  ${EMBED_POSTER_CSS}
+  .surface .md-embed { margin: .4em 0 .9em; }
+  .surface .md-embed .md-embed-open { cursor: default; }
+  .pe-x { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    padding: 0; border: 0; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; }
+  .pe-x svg { width: 15px; height: 15px; }
+  .pe-x:hover { background: #c0392b; }
+`;
+  var GbtiProseEditor = class extends GbtiElement {
+    /** Markdown in, markdown out. The surface is read back on every get, so the value is always current. */
+    get value() {
+      const s = this._surface();
+      return s ? domToMarkdown(s) : String(this._pending ?? "");
+    }
+    set value(md) {
+      this._pending = String(md ?? "");
+      if (this._surface()) this._load(this._pending);
+    }
+    get placeholder() {
+      return this.getAttribute("placeholder") || "Write a comment";
+    }
+    _surface() {
+      return this.$("[data-surface]");
+    }
+    render() {
+      if (this._rendered) return;
+      this._rendered = true;
+      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc(c.label)}" aria-label="${esc(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg2(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
+      this.set(this.css(CSS2) + `<div class="box" data-box>
+      <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
+      <div class="vid" data-vid hidden>
+        <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
+        <button type="button" class="vid-add" data-vid-add>Add</button>
+        <button type="button" data-vid-cancel>Cancel</button>
+      </div>
+      <div class="surface" contenteditable="true" data-surface data-ph="${esc(this.placeholder)}" role="textbox" aria-multiline="true"></div>
+    </div>`);
+      this._wire();
+      this._load(this._pending ?? "");
+    }
+    _load(md) {
+      const s = this._surface();
+      if (!s) return;
+      s.innerHTML = editorHtmlFromMarkdown(md);
+      this._decorateCards();
+      this._syncEmpty();
+    }
+    /** A video card is one atomic, non-editable thing with its own Remove; Backspace over it removes it whole. */
+    _decorateCards() {
+      for (const card of this.$$("[data-surface] .md-embed")) {
+        if (card.dataset.peCard) continue;
+        card.dataset.peCard = "1";
+        card.setAttribute("contenteditable", "false");
+        const x = document.createElement("button");
+        x.type = "button";
+        x.className = "pe-x";
+        x.title = "Remove video";
+        x.setAttribute("aria-label", "Remove video");
+        x.innerHTML = svg2("x");
+        x.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          card.remove();
+          this._changed();
+        });
+        card.appendChild(x);
+      }
+    }
+    _syncEmpty() {
+      const s = this._surface();
+      if (s) s.classList.toggle("empty", !String(this.value || "").trim());
+    }
+    _changed() {
+      this._syncEmpty();
+      this.emit("input");
+    }
+    _sel() {
+      try {
+        return (this.root.getSelection ? this.root.getSelection() : null) || document.getSelection();
+      } catch {
+        return document.getSelection();
+      }
+    }
+    /** The nearest ancestor of `node` with this tag, stopping at the surface. */
+    _closest(node, tag) {
+      const s = this._surface();
+      let n = node && node.nodeType === 1 ? node : node?.parentNode;
+      while (n && n !== s) {
+        if (String(n.tagName || "").toUpperCase() === tag) return n;
+        n = n.parentNode;
+      }
+      return null;
+    }
+    /** The top-level block of the surface that holds `node`. */
+    _blockAt(node) {
+      const s = this._surface();
+      let n = node;
+      while (n && n.parentNode && n.parentNode !== s) n = n.parentNode;
+      return n && n.parentNode === s ? n : null;
+    }
+    _wire() {
+      const surface = this._surface();
+      if (!surface) return;
+      this._tb = createSelectionToolbar({ root: this.root, host: () => this.$("[data-box]"), editableOf: () => null, onCommit: () => this._changed() });
+      this.$$("[data-act]").forEach((b) => {
+        b.addEventListener("mousedown", (e) => e.preventDefault());
+        b.addEventListener("click", () => this._act(b.dataset.act));
+      });
+      surface.addEventListener("input", () => this._changed());
+      surface.addEventListener("paste", (e) => {
+        e.preventDefault();
+        const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
+        if (t) document.execCommand("insertText", false, t);
+      });
+      surface.addEventListener("keydown", (e) => this._key(e));
+      this.$("[data-vid-add]")?.addEventListener("click", () => this._addVideo());
+      this.$("[data-vid-cancel]")?.addEventListener("click", () => this._toggleVideo(false));
+      this.$("[data-vid-url]")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this._addVideo();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          this._toggleVideo(false);
+        }
+      });
+    }
+    _act(act) {
+      const surface = this._surface();
+      if (!surface) return;
+      if (act === "video") {
+        this._toggleVideo(true);
+        return;
+      }
+      surface.focus();
+      switch (act) {
+        case "bold":
+          document.execCommand("bold");
+          break;
+        case "italic":
+          document.execCommand("italic");
+          break;
+        case "code":
+          this._toggleCode();
+          break;
+        case "link":
+          this._link();
+          return;
+        // commits through the panel
+        case "quote":
+          this._formatBlock("BLOCKQUOTE");
+          break;
+        case "codeblock":
+          this._formatBlock("PRE");
+          break;
+        case "ul":
+          document.execCommand("insertUnorderedList");
+          break;
+        case "ol":
+          document.execCommand("insertOrderedList");
+          break;
+        default:
+          return;
+      }
+      this._changed();
+    }
+    /** Quote and code block toggle: the same control puts a block back to a paragraph. */
+    _formatBlock(tag) {
+      const sel = this._sel();
+      const inside = sel && this._closest(sel.anchorNode, tag);
+      document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
+    }
+    /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
+    _toggleCode() {
+      const sel = this._sel();
+      if (!sel || !sel.rangeCount) return;
+      const existing = this._closest(sel.anchorNode, "CODE");
+      if (existing && !this._closest(existing, "PRE")) {
+        existing.replaceWith(document.createTextNode(existing.textContent));
+        return;
+      }
+      if (sel.isCollapsed) return;
+      const r = sel.getRangeAt(0);
+      const node = document.createElement("code");
+      try {
+        node.appendChild(r.extractContents());
+        r.insertNode(node);
+      } catch {
+      }
+    }
+    /** Link: the panel over the anchor the selection is in, or a new anchor around the selection. */
+    _link() {
+      const sel = this._sel();
+      if (!sel || !sel.rangeCount) return;
+      let a = this._closest(sel.anchorNode, "A");
+      if (!a) {
+        if (sel.isCollapsed) return;
+        const r = sel.getRangeAt(0);
+        a = document.createElement("a");
+        a.setAttribute("href", "");
+        try {
+          a.appendChild(r.extractContents());
+          r.insertNode(a);
+        } catch {
+          return;
+        }
+      }
+      this._tb?.editLink(this._surface(), a);
+    }
+    _key(e) {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      const sel = this._sel();
+      const pre = sel && this._closest(sel.anchorNode, "PRE");
+      if (pre) {
+        e.preventDefault();
+        const last = pre.lastChild;
+        const prev = last?.previousSibling;
+        const isBr = (n) => n && n.nodeType === 1 && String(n.tagName).toUpperCase() === "BR";
+        if (isBr(last) && isBr(prev) && sel.isCollapsed && this._closest(sel.anchorNode, "PRE") === pre && !sel.anchorNode.nextSibling) {
+          last.remove();
+          prev.remove();
+          const p = document.createElement("p");
+          p.innerHTML = "<br>";
+          pre.after(p);
+          this._caretIn(p);
+        } else document.execCommand("insertLineBreak");
+        this._changed();
+        return;
+      }
+      const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
+      if (quote && sel.isCollapsed) {
+        const line = this._closest(sel.anchorNode, "DIV") || this._closest(sel.anchorNode, "P") || quote;
+        if (!String(line.textContent || "").trim()) {
+          e.preventDefault();
+          document.execCommand("outdent");
+          this._changed();
+        }
+      }
+    }
+    _caretIn(el) {
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        r.collapse(true);
+        const sel = this._sel();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      } catch {
+      }
+    }
+    _toggleVideo(show) {
+      const row = this.$("[data-vid]");
+      const input = this.$("[data-vid-url]");
+      if (!row || !input) return;
+      if (show) {
+        const sel = this._sel();
+        this._vidAnchor = sel && sel.anchorNode ? this._blockAt(sel.anchorNode) : null;
+        row.hidden = false;
+        input.value = "";
+        input.classList.remove("bad");
+        setTimeout(() => input.focus(), 0);
+      } else {
+        row.hidden = true;
+        this._surface()?.focus();
+      }
+    }
+    /** The link becomes its own line in the markdown and renders as the poster at once. */
+    _addVideo() {
+      const input = this.$("[data-vid-url]");
+      const surface = this._surface();
+      if (!input || !surface) return;
+      const url = String(input.value || "").trim();
+      if (!url || !embedUrl(url)) {
+        input.classList.add("bad");
+        input.focus();
+        return;
+      }
+      const p = document.createElement("p");
+      p.textContent = url;
+      const anchor = this._vidAnchor && this._vidAnchor.parentNode === surface ? this._vidAnchor : null;
+      if (anchor) anchor.after(p);
+      else surface.appendChild(p);
+      this._load(this.value);
+      this._toggleVideo(false);
+      const cards = this.$$("[data-surface] .md-embed").filter((c) => c.getAttribute("data-embed-url") === url);
+      const card = cards[cards.length - 1];
+      if (card) {
+        let next = card.nextElementSibling;
+        if (!next || String(next.tagName).toUpperCase() !== "P") {
+          next = document.createElement("p");
+          next.innerHTML = "<br>";
+          card.after(next);
+        }
+        surface.focus();
+        this._caretIn(next);
+      }
+      this._changed();
+    }
+  };
+  define("gbti-prose-editor", GbtiProseEditor);
+
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS2 = `
+  var CSS3 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
   .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size: 13.5px; color: var(--muted); }
   .nudge a { color: var(--brand); font-weight: 600; }
@@ -2923,7 +3786,7 @@ ${String(body ?? "")}`;
   .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
   .edit:hover { color: var(--brand); text-decoration: underline; }
   .form { margin-top: 14px; }
-  gbti-doc-editor { display: block; font-size: 14px; }
+  gbti-prose-editor { display: block; }
   /* Members only | Public: the comment's audience, the author's choice (SOW-044's members-only rule ended 2026-09-11). */
   .vis { display: inline-flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
   .vis button { font: inherit; font-weight: 600; font-size: 12.5px; padding: 5px 11px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
@@ -2964,16 +3827,24 @@ ${String(body ?? "")}`;
       this._editId ? this._renderEditAffordance() : this._renderCompose();
     }
     // ---- EDIT mode: only the comment's author sees an Edit link ----
+    /** The host sits in a flex row beside "edited . view history" (the article page) or the discussion's footer; an
+     *  open form must take the whole row (owner, 2026-09-11: the edit form was half the width of its card), and the
+     *  Edit link or the Write a comment button must not. */
+    _fullRow(on) {
+      this.style.flex = on ? "1 1 100%" : "";
+      this.style.width = on ? "100%" : "";
+    }
     _renderEditAffordance() {
+      this._fullRow(false);
       if (!this._identity || this._identity.username !== this._editAuthor) {
-        this.set(this.css(CSS2) + "");
+        this.set(this.css(CSS3) + "");
         return;
       }
-      this.set(this.css(CSS2) + `<button class="edit" type="button">Edit</button>`);
+      this.set(this.css(CSS3) + `<button class="edit" type="button">Edit</button>`);
       this.on(".edit", "click", () => this._openEdit());
     }
     async _openEdit() {
-      this.set(this.css(CSS2) + `<p class="msg">Loading…</p>`);
+      this.set(this.css(CSS3) + `<p class="msg">Loading…</p>`);
       let body = "";
       let visibility = "members";
       try {
@@ -2981,7 +3852,7 @@ ${String(body ?? "")}`;
         body = c?.body ?? "";
         visibility = c?.visibility ?? c?.frontmatter?.visibility ?? "members";
       } catch {
-        this.set(this.css(CSS2) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.set(this.css(CSS3) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
         this.on(".edit", "click", () => this._openEdit());
         return;
       }
@@ -2990,31 +3861,33 @@ ${String(body ?? "")}`;
     // ---- COMPOSE mode ----
     _renderCompose() {
       if (LOCKED.has(this._membership)) {
-        this.set(this.css(CSS2) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        this.set(this.css(CSS3) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
         return;
       }
       if (this._membership === "trialing") {
-        this.set(this.css(CSS2) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        this.set(this.css(CSS3) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
         return;
       }
       if (!this._identity) {
-        this.set(this.css(CSS2) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS3) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
         return;
       }
-      this.set(this.css(CSS2) + `<button class="open" type="button">Write a comment</button>`);
+      this._fullRow(false);
+      this.set(this.css(CSS3) + `<button class="open" type="button">Write a comment</button>`);
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit, visibility = "members" }) {
       const isIntroTarget = ["post", "project", "prompt"].includes(this._target().type);
       const noteRow = !edit && isIntroTarget ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>` : "";
       const vis = visibility === "public" ? "public" : "members";
+      this._fullRow(true);
       const visRow = `<div class="vis" role="group" aria-label="Who can read this comment" data-vis-row>
         <button type="button" data-vis="members" class="${vis === "members" ? "on" : ""}" aria-pressed="${vis === "members"}">Members only</button>
         <button type="button" data-vis="public" class="${vis === "public" ? "on" : ""}" aria-pressed="${vis === "public"}">Public</button>
       </div>`;
-      this.set(this.css(CSS2) + `
+      this.set(this.css(CSS3) + `
       <div class="form">
-        <gbti-doc-editor compact data-editor></gbti-doc-editor>
+        <gbti-prose-editor data-editor></gbti-prose-editor>
         <div class="row">
           ${visRow}
           ${noteRow}
@@ -3165,7 +4038,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-discussion.mjs
-  var CSS3 = `
+  var CSS4 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
@@ -3258,11 +4131,11 @@ ${String(body ?? "")}`;
       const targetType = this._type();
       const targetSlug = this._slug();
       if (!targetType || !targetSlug) {
-        this.set(this.css(CSS3));
+        this.set(this.css(CSS4));
         return;
       }
       if (!this.client) {
-        this.set(this.css(CSS3) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
+        this.set(this.css(CSS4) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
         return;
       }
       if (this._role == null) {
@@ -3275,7 +4148,7 @@ ${String(body ?? "")}`;
           this._me = null;
         }
       }
-      if (!this._loaded) this.set(this.css(CSS3) + `<p class="empty">Loading the discussion…</p>`);
+      if (!this._loaded) this.set(this.css(CSS4) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
       const cacheKey = `comments-${targetType}`;
       if (!this._painted) {
@@ -3297,13 +4170,13 @@ ${String(body ?? "")}`;
         wbCacheSet(targetSlug, cacheKey, items).catch(() => {
         });
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS3) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS4) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
       try {
         await this._resolveAndRender(targetType, targetSlug, items);
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS3) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS4) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
       }
       this._loaded = true;
     }
@@ -3352,7 +4225,7 @@ ${String(body ?? "")}`;
       </div></div>`;
       }).join("");
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
-      this.set(this.css(CSS3) + threadHtml + this._composeHtml(targetType, targetSlug));
+      this.set(this.css(CSS4) + threadHtml + this._composeHtml(targetType, targetSlug));
       wireEmbedPosters(this.root);
       this.$$("[data-fold]").forEach((b) => b.addEventListener("click", () => this._toggleFold(b.dataset.fold)));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec, b.dataset.authornote === "1")));
@@ -5072,8 +5945,8 @@ ${String(body ?? "")}`;
         this._slugVal = v;
         const mirror = this.$('[data-key="slug"]');
         if (mirror) mirror.value = v;
-        const inline2 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline2) inline2.textContent = v;
+        const inline4 = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline4) inline4.textContent = v;
         const note = input.closest(".fld")?.querySelector(".urlprev");
         if (note && this.itemPath) {
           note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
@@ -5544,7 +6417,7 @@ ${String(body ?? "")}`;
     }
     return "just now";
   }
-  var CSS4 = `
+  var CSS5 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .count { display:inline-block; min-width:20px; text-align:center; margin-left:6px; padding:1px 7px; border-radius:999px;
     background:var(--accent); color:#fff; font-size:12px; font-weight:800; vertical-align:middle; }
@@ -5581,7 +6454,7 @@ ${String(body ?? "")}`;
       } catch {
         errored = true;
       }
-      this.set(this.css(CSS4) + this._html(list, errored));
+      this.set(this.css(CSS5) + this._html(list, errored));
       this.$$("[data-review]").forEach((b) => b.addEventListener("click", () => {
         this.dispatchEvent(new CustomEvent("contrib-open", { detail: { number: Number(b.dataset.review) }, bubbles: true, composed: true }));
       }));
@@ -5630,7 +6503,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-contrib-review.mjs
-  var CSS5 = `
+  var CSS6 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   h2 { font-size:18px; margin:0 0 4px; }
   .sub { color:var(--muted); font-size:13px; margin:0 0 14px; }
@@ -5729,17 +6602,17 @@ ${String(body ?? "")}`;
     render() {
       if (!this.client) return;
       if (this._error && !this._data) {
-        this.set(this.css(CSS5) + `<p class="err">${esc(this._error)}</p>`);
+        this.set(this.css(CSS6) + `<p class="err">${esc(this._error)}</p>`);
         return;
       }
       if (!this._data) {
-        this.set(this.css(CSS5) + `<p class="muted">Loading the contribution...</p>`);
+        this.set(this.css(CSS6) + `<p class="muted">Loading the contribution...</p>`);
         return;
       }
       const d = this._data;
       const body = this._tab === "preview" ? this._previewHtml() : this._diffHtml();
       this.set(
-        this.css(CSS5) + `<h2>${esc(d.title || "Contribution #" + d.number)}</h2>
+        this.css(CSS6) + `<h2>${esc(d.title || "Contribution #" + d.number)}</h2>
          <p class="sub">From ${d.author?.login ? "@" + esc(d.author.login) : "a member"} &middot;
            <a href="${esc(d.html_url || "#")}" target="_blank" rel="noopener">#${esc(d.number)} on GitHub</a></p>
          <div class="tabs" role="tablist">
@@ -5993,7 +6866,7 @@ ${String(body ?? "")}`;
     banned: "Suspended",
     unknown: "Unknown"
   };
-  var CSS6 = `
+  var CSS7 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -6105,7 +6978,7 @@ ${String(body ?? "")}`;
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS6) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
+        this.set(this.css(CSS7) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
         return;
       }
       let appearance = "";
@@ -6114,12 +6987,12 @@ ${String(body ?? "")}`;
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS6) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
+        this.set(this.css(CSS7) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
         this._wire();
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS6) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE2}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS7) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE2}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -6129,7 +7002,7 @@ ${String(body ?? "")}`;
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS6) + sections);
+      this.set(this.css(CSS7) + sections);
       this._wire();
     }
     _account() {
@@ -6336,7 +7209,7 @@ ${String(body ?? "")}`;
     unindex: "Unindex this item? Its page asks search engines not to index it and it leaves the sitemap; the site still points at it (reversible).",
     reindex: "Reindex this item? Search engines are allowed to index it again."
   };
-  var CSS7 = `
+  var CSS8 = `
   :host { display:inline-flex; }
   .mod { display:inline-flex; gap:6px; align-items:center; }
   .ma { font:inherit; font-size:12px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
@@ -6370,7 +7243,7 @@ ${String(body ?? "")}`;
         return;
       }
       const btns = actions.map((a) => `<button class="ma ma-${a}" type="button" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
-      this.set(this.css(CSS7) + `<span class="mod">${btns}</span>`);
+      this.set(this.css(CSS8) + `<span class="mod">${btns}</span>`);
       this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._do(b.dataset.act)));
     }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
@@ -6401,7 +7274,7 @@ ${String(body ?? "")}`;
   // client-ui/src/elements/gbti-admin.mjs
   var RANK3 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS8 = `
+  var CSS9 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .rolebar { display:flex; align-items:center; gap:8px; margin:0 0 2px; }
   .rolebar .lbl { font-size:13px; color:var(--muted); }
@@ -6436,7 +7309,7 @@ ${String(body ?? "")}`;
   var GbtiAdmin = class extends GbtiElement {
     async render() {
       if (!this.client) {
-        this.set(this.css(CSS8) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
+        this.set(this.css(CSS9) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
         return;
       }
       let role = "member";
@@ -6446,13 +7319,13 @@ ${String(body ?? "")}`;
       }
       const rank = RANK3[role] ?? 0;
       if (rank < RANK3.moderator) {
-        this.set(this.css(CSS8) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
+        this.set(this.css(CSS9) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
         return;
       }
       const caps = this.hasAttribute("caps") ? this.getAttribute("caps").split(",").map((s) => s.trim()).filter(Boolean) : null;
       const capOn = (g) => !caps || caps.includes(g);
       this.set(
-        this.css(CSS8) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
+        this.css(CSS9) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
 
          <div class="grp">
            <h4>Content moderation</h4>
@@ -6593,7 +7466,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE3 = "https://gbti.network";
-  var CSS9 = `
+  var CSS10 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
   .chip { font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; }
@@ -6788,19 +7661,19 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS9) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
+        this.set(this.css(CSS10) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
         return;
       }
       if (this._error === "forbidden") {
-        this.set(this.css(CSS9) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
+        this.set(this.css(CSS10) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
         return;
       }
       if (this._error === "auth") {
-        this.set(this.css(CSS9) + `<p class="muted">Sign in to view the member roster.</p>`);
+        this.set(this.css(CSS10) + `<p class="muted">Sign in to view the member roster.</p>`);
         return;
       }
       if (this._error) {
-        this.set(this.css(CSS9) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
+        this.set(this.css(CSS10) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
         return;
       }
       if (!this._data) {
@@ -6808,7 +7681,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this._load();
         }
-        this.set(this.css(CSS9) + `<p class="muted">Loading the member roster...</p>`);
+        this.set(this.css(CSS10) + `<p class="muted">Loading the member roster...</p>`);
         return;
       }
       const s = this._data.summary || {};
@@ -6849,7 +7722,7 @@ ${String(body ?? "")}`;
         const panel = canManage && this._managing === m.githubId ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : "";
         return main + panel;
       }).join("");
-      this.set(this.css(CSS9) + `${chips}
+      this.set(this.css(CSS10) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Tier &amp; flags</th><th>Content</th><th>github_id</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status and tier follow ban &gt; staff &gt; grandfather &gt; Stripe. The override tiers (ban / staff / grandfather) are always authoritative from the public repo; the live Stripe tier shows when the admin Stripe endpoint is reachable. A <b>pending</b> (dashed) tag is a coupon grant a member has redeemed but reconcile has not yet folded into the repo: it is an annotation, not effective access yet, and it clears once the grant is recorded. Member actions open a house PR and take effect once it merges.</p>
       ${this._pullsSection()}
@@ -6871,7 +7744,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-category-manager.mjs
   var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS10 = `
+  var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; line-height:1.5; }
   .muted { color:var(--muted); font-size:13.5px; }
@@ -6922,7 +7795,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS10) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
+        this.set(this.css(CSS11) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -6930,11 +7803,11 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS10) + `<p class="muted">Loading categories...</p>`);
+        this.set(this.css(CSS11) + `<p class="muted">Loading categories...</p>`);
         return;
       }
       this._paths = this._flatten(this._tree);
-      this.set(this.css(CSS10) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS11) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add-top">
         <input class="key" data-newtop-key type="text" placeholder="new-key (kebab-case)" />
@@ -6958,7 +7831,7 @@ ${String(body ?? "")}`;
       return Object.entries(map || {}).map(([key, node]) => {
         const p = [...path, key];
         const ps = p.join("/");
-        const kids = node && node.children ? this._renderLevel(node.children, p) : "";
+        const kids2 = node && node.children ? this._renderLevel(node.children, p) : "";
         return `<li class="node">
         <div class="row">
           <code class="key">${esc(key)}</code>
@@ -6970,7 +7843,7 @@ ${String(body ?? "")}`;
           <button class="lk danger" type="button" data-remove="${esc(ps)}">Remove</button>
         </div>
         ${this._moving === ps ? this._movePicker(ps) : ""}
-        ${kids ? `<ul class="tree">${kids}</ul>` : ""}
+        ${kids2 ? `<ul class="tree">${kids2}</ul>` : ""}
       </li>`;
       }).join("");
     }
@@ -7206,7 +8079,7 @@ ${String(body ?? "")}`;
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
-  var CSS11 = `
+  var CSS12 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; --r7:7px; } /* default border radius is 7px (owner) */
   .muted { color:var(--muted); font-size:13.5px; }
   button { font:inherit; cursor:pointer; }
@@ -7449,7 +8322,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS11) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
+        this.set(this.css(CSS12) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -7457,7 +8330,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS11) + `<p class="muted">Loading the taxonomy…</p>`);
+        this.set(this.css(CSS12) + `<p class="muted">Loading the taxonomy…</p>`);
         return;
       }
       const plan = batchPlan(this._pending);
@@ -7470,13 +8343,13 @@ ${String(body ?? "")}`;
       </div>`;
       const body = `${this._newOpen ? this._newCatHtml() : ""}<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
       ${this._msg ? `<p class="msg">${this._msg}</p>` : ""}`;
-      this.set(this.css(CSS11) + header + body);
+      this.set(this.css(CSS12) + header + body);
       this._wire();
     }
     // SOW-100 QA (owner): a real add-category form — key, label, and a PARENT picker over the whole tree —
     // instead of the bare prompt() pair. Adding lands in the pending set like any other edit.
     _newCatHtml() {
-      const flat = flattenTree(this._tree);
+      const flat2 = flattenTree(this._tree);
       const preselect = this._sel ? this._sel.join("/") : "";
       return `<div class="card newcat">
       <div class="sech" style="margin-top:0">New category</div>
@@ -7485,7 +8358,7 @@ ${String(body ?? "")}`;
         <div class="fld"><label>Display label</label><input id="nclabel" placeholder="Display label" /></div>
         <div class="fld"><label>Parent</label><select id="ncparent">
           <option value="">Top level</option>
-          ${flat.map((n) => `<option value="${esc(n.path.join("/"))}"${n.path.join("/") === preselect ? " selected" : ""}>${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}
+          ${flat2.map((n) => `<option value="${esc(n.path.join("/"))}"${n.path.join("/") === preselect ? " selected" : ""}>${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}
         </select></div>
       </div>
       <div class="ncacts"><button class="btn" id="ncadd" type="button">Add to the pending edits</button><button class="btn soft" id="nccancel" type="button">Cancel</button><span class="hint" id="ncerr"></span></div>
@@ -7493,34 +8366,34 @@ ${String(body ?? "")}`;
     }
     _treeHtml() {
       const q = this._q.trim().toLowerCase();
-      const flat = flattenTree(this._tree);
+      const flat2 = flattenTree(this._tree);
       const matches = (n) => !q || n.label.toLowerCase().includes(q) || n.key.toLowerCase().includes(q);
       const deepMatch = /* @__PURE__ */ new Set();
       if (q) {
-        for (const n of flat) {
+        for (const n of flat2) {
           if (matches(n)) for (let d = 1; d <= n.path.length; d++) deepMatch.add(n.path.slice(0, d).join("/"));
         }
       }
       const rows = [];
-      const walk = (tree, parentPath) => {
+      const walk2 = (tree, parentPath) => {
         for (const [key, node] of Object.entries(tree || {})) {
           const path = [...parentPath, key];
           const pk = path.join("/");
           if (q && !deepMatch.has(pk)) continue;
           const level = parentPath.length;
-          const kids = node?.children && Object.keys(node.children).length;
+          const kids2 = node?.children && Object.keys(node.children).length;
           const closed = !q && this._collapsed.has(pk);
           const on = this._sel && this._sel.join("/") === pk;
-          rows.push(`<button class="titem lvl${level} ind${Math.min(level, 3)}${closed ? " closed" : ""}${on ? " on" : ""}" type="button" data-sel="${esc(pk)}" data-kids="${kids ? 1 : 0}">
-          <span class="car${kids ? "" : " leaf"}" data-car="${esc(pk)}">▾</span>
+          rows.push(`<button class="titem lvl${level} ind${Math.min(level, 3)}${closed ? " closed" : ""}${on ? " on" : ""}" type="button" data-sel="${esc(pk)}" data-kids="${kids2 ? 1 : 0}">
+          <span class="car${kids2 ? "" : " leaf"}" data-car="${esc(pk)}">▾</span>
           <span class="lab">${esc(this.labelOf(path))}</span>
           <span class="cnt">${this.countOf(path)}</span>
           ${this._channelsOn ? `<span class="dot ${esc(this.statusOf(path))}"></span>` : ""}
         </button>`);
-          if (kids && !closed) walk(node.children, path);
+          if (kids2 && !closed) walk2(node.children, path);
         }
       };
-      walk(this._tree, []);
+      walk2(this._tree, []);
       return `<aside class="tree-col">
       <div class="csearch"><input id="tsearch" type="search" placeholder="Filter categories…" value="${esc(this._q)}" /></div>
       <div class="tscroll" role="tree">${rows.join("") || `<p class="muted" style="padding:10px">No categories match.</p>`}
@@ -7541,7 +8414,7 @@ ${String(body ?? "")}`;
       const lvl = path.length === 1 ? "Top level" : node.children && Object.keys(node.children).length ? "Subcategory" : "Leaf";
       const crumb = [`<b data-desel>Taxonomy</b>`, ...path.slice(0, -1).map((k, i) => `<b data-crumb="${esc(path.slice(0, i + 1).join("/"))}">${esc(this.labelOf(path.slice(0, i + 1)))}</b>`)].join(" / ");
       const c = this._counts?.get(path.join("/")) || { post: 0, prompt: 0, project: 0, total: 0 };
-      const kids = Object.entries(node.children || {});
+      const kids2 = Object.entries(node.children || {});
       const editor = `
       <div class="card">
         <div class="crumb">${crumb}</div>
@@ -7552,7 +8425,7 @@ ${String(body ?? "")}`;
         </div>
         ${this._discordHtml(key)}
         <div class="sech">Subcategories</div>
-        <div class="sublist">${kids.map(([k2]) => {
+        <div class="sublist">${kids2.map(([k2]) => {
         const p2 = [...path, k2];
         return `<button class="subrow" type="button" data-sel="${esc(p2.join("/"))}"><span>${esc(this.labelOf(p2))}</span><span class="k">${esc(k2)}</span><span class="n">${this.countOf(p2)}</span></button>`;
       }).join("") || `<p class="muted">No subcategories.</p>`}</div>
@@ -7572,7 +8445,7 @@ ${String(body ?? "")}`;
       const dash = `
       <div>
         <div class="stats">
-          <div class="stat accent"><div class="n">${kids.length}</div><div class="l">Subcategories</div></div>
+          <div class="stat accent"><div class="n">${kids2.length}</div><div class="l">Subcategories</div></div>
           <div class="stat"><div class="n">${c.post}</div><div class="l">Articles</div></div>
           <div class="stat"><div class="n">${c.prompt}</div><div class="l">Prompts</div></div>
           <div class="stat"><div class="n">${c.project}</div><div class="l">Projects</div></div>
@@ -7632,13 +8505,13 @@ ${String(body ?? "")}`;
       return `<div class="cbtabs">${tabs}</div>${rows || `<div class="cbempty">Nothing filed here yet.</div>`}${pager}`;
     }
     _emptyHtml() {
-      const flat = flattenTree(this._tree);
-      const mapped = flat.filter((n) => channelStatusFor(n.key, this._pool || [], []) === "synced").length;
-      const needs = flat.filter((n) => n.path.length === 1 && channelStatusFor(n.key, this._pool || [], []) === "none");
+      const flat2 = flattenTree(this._tree);
+      const mapped = flat2.filter((n) => channelStatusFor(n.key, this._pool || [], []) === "synced").length;
+      const needs = flat2.filter((n) => n.path.length === 1 && channelStatusFor(n.key, this._pool || [], []) === "none");
       return `<div class="card">
       <div class="empty-hero"><h3>No category selected</h3><p class="muted">Pick a category from the tree to edit it, map its Discord channel, and browse its content.</p></div>
       <div class="stats" style="margin-top:14px">
-        <div class="stat accent"><div class="n">${flat.length}</div><div class="l">Categories</div></div>
+        <div class="stat accent"><div class="n">${flat2.length}</div><div class="l">Categories</div></div>
         <div class="stat"><div class="n">${mapped}</div><div class="l">Mapped to Discord</div></div>
         <div class="stat warn"><div class="n">${needs.length}</div><div class="l">Need a channel</div></div>
         <div class="stat"><div class="n">${this._pending.size}</div><div class="l">Unmerged edits</div></div>
@@ -7820,12 +8693,12 @@ ${String(body ?? "")}`;
     _dangerMove() {
       const ui = this.$("#dangerui");
       if (!ui) return;
-      const flat = flattenTree(this._tree).filter((n) => {
+      const flat2 = flattenTree(this._tree).filter((n) => {
         const pk = n.path.join("/");
         const selPk = this._sel.join("/");
         return pk !== selPk && !pk.startsWith(`${selPk}/`) && pk !== this._sel.slice(0, -1).join("/");
       });
-      ui.innerHTML = `<div class="moverow"><span class="hint">Move this category AND everything under it beneath:</span><select id="movesel"><option value="">Top level</option>${flat.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="movego" type="button">Move</button></div>`;
+      ui.innerHTML = `<div class="moverow"><span class="hint">Move this category AND everything under it beneath:</span><select id="movesel"><option value="">Top level</option>${flat2.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="movego" type="button">Move</button></div>`;
       ui.querySelector("#movego")?.addEventListener("click", () => {
         const to = ui.querySelector("#movesel")?.value || "";
         this._migrate("move", { toParent: to ? to.split("/") : [] }, `Move "${this.labelOf(this._sel)}" and ALL its subcategories${to ? ` under ${to}` : " to the top level"}? One migration PR re-parents the subtree and rewrites every filed item.`);
@@ -7837,11 +8710,11 @@ ${String(body ?? "")}`;
       const ui = this.$("#dangerui");
       if (!ui) return;
       const selPk = this._sel.join("/");
-      const flat = flattenTree(this._tree).filter((n) => {
+      const flat2 = flattenTree(this._tree).filter((n) => {
         const pk = n.path.join("/");
         return pk !== selPk && !pk.startsWith(`${selPk}/`);
       });
-      ui.innerHTML = `<div class="moverow"><span class="hint">Merge this category (content + subcategories) INTO:</span><select id="mergesel">${flat.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="mergego" type="button">Merge</button></div>`;
+      ui.innerHTML = `<div class="moverow"><span class="hint">Merge this category (content + subcategories) INTO:</span><select id="mergesel">${flat2.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="mergego" type="button">Merge</button></div>`;
       ui.querySelector("#mergego")?.addEventListener("click", () => {
         const into = ui.querySelector("#mergesel")?.value || "";
         if (!into) return;
@@ -7868,7 +8741,7 @@ ${String(body ?? "")}`;
     archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>'
   };
   var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
-  var CSS12 = `
+  var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     --panel2:color-mix(in srgb, var(--fg) 5%, var(--panel));
     --raise:color-mix(in srgb, var(--fg) 8%, var(--panel));
@@ -8089,7 +8962,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS12) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
+        this.set(this.css(CSS13) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
         return;
       }
       const list = this._filtered();
@@ -8132,7 +9005,7 @@ ${String(body ?? "")}`;
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
         </a>`).join("")}</div>
       </div>` : `<div class="detail empty"><div><div class="ico">${TAG_ICO}</div><p>Select a tag to see the content carrying it.</p></div></div>`;
-      this.set(this.css(CSS12) + `
+      this.set(this.css(CSS13) + `
       <div class="top"><div><div class="eyebrow">Admin · Tags</div><div class="title">Tag manager</div></div>
         <div class="count"><b>${list.length}</b> of <b>${this._rows.length}</b> tags · <b>${uses}</b> uses</div></div>
       <div class="toolbar">
@@ -8209,7 +9082,7 @@ ${String(body ?? "")}`;
       return url || "";
     }
   };
-  var CSS13 = `
+  var CSS14 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -8257,7 +9130,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS13) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
         return;
       }
       if (!this._sources) {
@@ -8265,7 +9138,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS13) + `<p class="muted">Loading news sources...</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Loading news sources...</p>`);
         return;
       }
       const enabled = this._sources.filter((s) => s && s.enabled !== false).length;
@@ -8273,7 +9146,7 @@ ${String(body ?? "")}`;
         const on = s && s.enabled !== false;
         return `<li class="src ${on ? "" : "off"}"><div class="row"><code class="id">${esc(s.id || "")}</code><span class="nm">${esc(s.name || "")}</span><a class="url" href="${esc(s.url || "")}" target="_blank" rel="noopener nofollow">${esc(hostOf(s.url))}</a><span class="sp"></span><button class="lk" type="button" data-toggle="${esc(s.id)}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(s.id)}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS13) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS14) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._sources.length} sources, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -8334,7 +9207,7 @@ ${String(body ?? "")}`;
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
   // client-ui/src/elements/gbti-quote-manager.mjs
-  var CSS14 = `
+  var CSS15 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -8380,7 +9253,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS14) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
         return;
       }
       if (!this._quotes) {
@@ -8388,7 +9261,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS14) + `<p class="muted">Loading quotes...</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Loading quotes...</p>`);
         return;
       }
       const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
@@ -8396,7 +9269,7 @@ ${String(body ?? "")}`;
         const on = q && q.enabled !== false;
         return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc(q.text || "")}</span><span class="by">${esc(q.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc(q.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(q.text || "")}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS14) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._quotes.length} quotes, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -8487,7 +9360,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var CSS15 = `
+  var CSS16 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -8569,7 +9442,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
         return;
       }
       if (!this._coupons) {
@@ -8577,7 +9450,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS15) + `<p class="muted">Loading coupons...</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading coupons...</p>`);
         return;
       }
       const rows = this._coupons.map((c) => {
@@ -8598,7 +9471,7 @@ ${String(body ?? "")}`;
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS15) + `
+      this.set(this.css(CSS16) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -8720,7 +9593,7 @@ ${String(body ?? "")}`;
   define("gbti-coupon-manager", GbtiCouponManager);
 
   // client-ui/src/elements/gbti-applications-manager.mjs
-  var CSS16 = `
+  var CSS17 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -8768,7 +9641,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to review creator applications.</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (admin) to review creator applications.</p>`);
         return;
       }
       if (!this._apps) {
@@ -8776,12 +9649,12 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS16) + `<p class="muted">Loading applications...</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Loading applications...</p>`);
         return;
       }
       const pending = this._apps.filter((a) => a.state === "pending").length;
       const rows = this._apps.map((a) => this._appHtml(a)).join("");
-      this.set(this.css(CSS16) + `
+      this.set(this.css(CSS17) + `
       <div class="head">
         <h3>Creator applications</h3>
         <span class="hint">${pending} awaiting a decision. Approving grants the ${tierLabel(TIER.creator)} plan immediately; there is no payment step.</span>
@@ -8830,7 +9703,7 @@ ${String(body ?? "")}`;
   define("gbti-applications-manager", GbtiApplicationsManager);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
@@ -8875,7 +9748,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
         return;
       }
       if (!this._toggles) {
@@ -8883,14 +9756,14 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS17) + `<p class="muted">Loading site settings...</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Loading site settings...</p>`);
         return;
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
         return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc(t.label || t.key)}</span><span class="desc">${esc(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS17) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
@@ -8917,7 +9790,7 @@ ${String(body ?? "")}`;
   define("gbti-site-settings-manager", GbtiSiteSettingsManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -9017,11 +9890,11 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS18) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS19) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -9030,7 +9903,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS18) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && (!QUEUE_CACHE || Date.now() - QUEUE_CACHE.at > CACHE_FRESH_MS)) {
@@ -9040,7 +9913,7 @@ ${String(body ?? "")}`;
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="fbar">
@@ -9309,7 +10182,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS19 = `
+  var CSS20 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -9804,7 +10677,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -9812,7 +10685,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS19) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS20) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -9825,7 +10698,7 @@ ${String(body ?? "")}`;
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS19) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS20) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -10431,7 +11304,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS20 = `
+  var CSS21 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -10467,7 +11340,7 @@ ${String(body ?? "")}`;
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS20) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS21) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -10504,7 +11377,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS21 = `
+  var CSS22 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -10544,7 +11417,7 @@ ${String(body ?? "")}`;
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS21) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS22) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -10603,7 +11476,7 @@ ${String(body ?? "")}`;
       const t = this._target();
       const rows = (this._collections || []).map((c) => {
         const inIt = (c.items || []).some((it) => it.type === t.type && it.slug === t.slug);
-        return `<div class="row ${inIt ? "in" : ""}" data-id="${c.id}"><span class="box">${inIt ? "✓" : ""}</span><span class="nm">${escapeHtml(c.name)}</span></div>`;
+        return `<div class="row ${inIt ? "in" : ""}" data-id="${c.id}"><span class="box">${inIt ? "✓" : ""}</span><span class="nm">${escapeHtml2(c.name)}</span></div>`;
       }).join("");
       return `<div class="pop ${this._busy ? "busy" : ""}"><h4>Save to collection</h4>${rows || '<div class="empty">No collections yet. Create one below.</div>'}<div class="new"><input type="text" placeholder="New collection" maxlength="80" /><button type="button">Create</button></div></div>`;
     }
@@ -10661,7 +11534,7 @@ ${String(body ?? "")}`;
       this.render();
     }
   };
-  function escapeHtml(s) {
+  function escapeHtml2(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
   define("gbti-collection", GbtiCollection);
@@ -10761,7 +11634,7 @@ ${String(body ?? "")}`;
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS22 = `
+  var CSS23 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -10823,7 +11696,7 @@ ${String(body ?? "")}`;
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS22));
+      this.set(this.css(CSS23));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -10896,13 +11769,13 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS22));
+        this.set(this.css(CSS23));
         return;
       }
       const u = esc(this._username || "");
       const av = `https://github.com/${u}.png?size=80`;
       if (!this._loaded) {
-        this.set(this.css(CSS22) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS23) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -10914,7 +11787,7 @@ ${String(body ?? "")}`;
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS22) + `
+      this.set(this.css(CSS23) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -11002,7 +11875,7 @@ ${String(body ?? "")}`;
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS23 = `
+  var CSS24 = `
   .wrap { display:inline-flex; align-items:center; gap:8px; }
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
@@ -11040,7 +11913,7 @@ ${String(body ?? "")}`;
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS23) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS24) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -11293,7 +12166,7 @@ ${String(body ?? "")}`;
     if (OG_REASON_TEXT[reason]) return { kind: "empty", message: OG_REASON_TEXT[reason], retry: reason !== "not-a-page" };
     return { kind: "empty", message: "No preview available for this link.", retry: false };
   }
-  var CSS24 = `
+  var CSS25 = `
   /* sow-304: edit-mode controls */
   .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
   .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
@@ -11423,9 +12296,9 @@ ${String(body ?? "")}`;
     render() {
       switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
         case "no-client":
-          return this.set(this.css(CSS24) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+          return this.set(this.css(CSS25) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
         case "loading":
-          return this.set(this.css(CSS24) + `<div class="card"><p class="sub">Loading…</p></div>`);
+          return this.set(this.css(CSS25) + `<div class="card"><p class="sub">Loading…</p></div>`);
         case "locked":
           return this._renderLocked();
         case "trial":
@@ -11440,7 +12313,7 @@ ${String(body ?? "")}`;
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS24) + this._noticeHtml(
+      this.set(this.css(CSS25) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
@@ -11450,7 +12323,7 @@ ${String(body ?? "")}`;
     // and it states the tier plainly, because "your PR was rejected" after writing a Share is the experience this
     // exists to prevent.
     _renderTrial() {
-      this.set(this.css(CSS24) + this._noticeHtml(
+      this.set(this.css(CSS25) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares requires a paid membership. <a href="https://gbti.network/membership/">Upgrade to a paid membership</a> to post.',
         "👀"
@@ -11466,7 +12339,7 @@ ${String(body ?? "")}`;
       this._noteTab = "write";
       this._visibility = "members";
       const rail = STEP_LABELS.map((l, i) => `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join("");
-      this.set(this.css(CSS24) + `
+      this.set(this.css(CSS25) + `
       <div class="card wizard">
         <div class="rail">${rail}</div>
 
@@ -12204,25 +13077,6 @@ ${String(body ?? "")}`;
     return s.split("&").filter((p) => !/^do=/.test(p)).join("&");
   }
 
-  // client/src/video-embed.mjs
-  function embedUrl(v) {
-    const s = String(v || "").trim();
-    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
-    if (m) return `https://www.youtube.com/embed/${m[1]}`;
-    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (m) return `https://player.vimeo.com/video/${m[1]}`;
-    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
-    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
-    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
-    if (m) return `https://rumble.com/embed/${m[1]}/`;
-    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
-    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
-    return null;
-  }
-  function isPortraitEmbed(src) {
-    return /tiktok\.com\/embed\//.test(String(src || ""));
-  }
-
   // client-ui/src/cat-glyph.mjs
   var GLYPH_SVG = {
     spark: '<path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
@@ -12307,15 +13161,15 @@ ${String(body ?? "")}`;
     const login = a === "gbti" || a === "house" ? "gbti-network" : item.author;
     return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : "", title: authorName2(item.author) };
   }
-  function thumbRaw(item = {}, isCard = false) {
-    return (isCard && item.thumbCard ? item.thumbCard : item.thumb || item.thumbCard) || null;
+  function thumbRaw(item = {}, isCard2 = false) {
+    return (isCard2 && item.thumbCard ? item.thumbCard : item.thumb || item.thumbCard) || null;
   }
   function categoryLeaf(labels) {
     const a = Array.isArray(labels) ? labels : [];
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS25 = `
+  var CSS26 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -12440,8 +13294,8 @@ ${String(body ?? "")}`;
       return raw ? resolveAsset(raw) : null;
     }
     _media(item) {
-      const isCard = this.mode === "card";
-      if (lc2(item.type) === "news" && !isCard) return "";
+      const isCard2 = this.mode === "card";
+      if (lc2(item.type) === "news" && !isCard2) return "";
       const thumb = this._thumbUrl(item);
       if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
@@ -12492,11 +13346,11 @@ ${String(body ?? "")}`;
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS25) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS26) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS25) + body);
+      this.set(this.css(CSS26) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -12607,7 +13461,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS26 = `
+  var CSS27 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -12729,10 +13583,10 @@ ${String(body ?? "")}`;
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS26) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS27) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -12749,7 +13603,7 @@ ${String(body ?? "")}`;
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS26) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS27) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -12775,12 +13629,12 @@ ${String(body ?? "")}`;
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS26) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS27) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS26) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS27) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -12852,7 +13706,7 @@ ${String(body ?? "")}`;
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS26) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS27) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -12895,21 +13749,21 @@ ${String(body ?? "")}`;
       }
     }
     _splash() {
-      this.set(this.css(CSS26) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS27) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS27 = `
+  var CSS28 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS27) + `<div class="stack">
+      this.set(this.css(CSS28) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -15292,7 +16146,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS28 = `
+  var CSS29 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -15308,7 +16162,7 @@ ${String(body ?? "")}`;
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS28) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS29) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -15316,7 +16170,7 @@ ${String(body ?? "")}`;
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS28) + `<div class="splash">
+        this.set(this.css(CSS29) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -15325,7 +16179,7 @@ ${String(body ?? "")}`;
       </div>`);
         return;
       }
-      this.set(this.css(CSS28) + `<slot></slot>`);
+      this.set(this.css(CSS29) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -15333,7 +16187,7 @@ ${String(body ?? "")}`;
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS = 15e3;
   var POLL_MAX = 20;
-  var CSS29 = `
+  var CSS30 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -15404,7 +16258,7 @@ ${String(body ?? "")}`;
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS29) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS30) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -15505,7 +16359,7 @@ ${String(body ?? "")}`;
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS30 = `
+  var CSS31 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -15613,13 +16467,13 @@ ${String(body ?? "")}`;
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS30) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS31) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       const hostedLike = Boolean(s.mode && s.mode !== "app");
       if (s.ready) {
         const note = hostedLike ? "Sign-in is all it takes: your drafts save privately, and the network publishes for you." : "Your drafts save to your copy, and we open the review request for you.";
-        this.set(this.css(CSS30) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS31) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">${note}</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -15637,7 +16491,7 @@ ${String(body ?? "")}`;
         return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS30) + `
+      this.set(this.css(CSS31) + `
       <div class="head"><h2>${hostedLike ? "Sign in to publish" : "Set up publishing"}</h2><span class="count">${nDone} of ${stepIds.length}</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / stepIds.length * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -15909,7 +16763,7 @@ ${String(body ?? "")}`;
   var SITE7 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
-  var CSS31 = `
+  var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
   .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
@@ -15992,14 +16846,14 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS31) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS32) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS31) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS32) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS31) + `
+      this.set(this.css(CSS32) + `
       <div class="bar">
         <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
         <span class="cnt" data-cnt></span>
@@ -16095,7 +16949,7 @@ ${String(body ?? "")}`;
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var CSS32 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     /* The design handoff's dark palette (the extension default). */
     --wf-surface:#232029; --wf-panel:#2a2731; --wf-panel2:#302c37; --wf-raise:#35313d;
@@ -16519,7 +17373,7 @@ ${String(body ?? "")}`;
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS32) + `<div class="splashwrap">
+      this.set(this.css(CSS33) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check2}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -16577,7 +17431,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS32) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`);
+        this.set(this.css(CSS33) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`);
         return;
       }
       if (this._authGate && !this._authenticated) {
@@ -16598,7 +17452,7 @@ ${String(body ?? "")}`;
       const footR = this._done ? `<button class="gbtn" data-review type="button">Review steps</button>
          <button class="pbtn" data-done type="button">Go to your profile</button>` : `${showSkip ? `<button class="skipbtn" data-step-next type="button">Skip</button>` : ""}
          <button class="pbtn" data-step-next type="button">${isLast ? "I am all set" : "Continue &rarr;"}</button>`;
-      this.set(this.css(CSS32) + `<div class="wf">
+      this.set(this.css(CSS33) + `<div class="wf">
       ${this._railHtml()}
       <div class="main">
         <div class="top">
@@ -16930,7 +17784,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE9 = "https://gbti.network";
-  var CSS33 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -17002,15 +17856,15 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS33) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS33) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS33) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -17026,7 +17880,7 @@ ${String(body ?? "")}`;
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS33) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS34) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -17084,7 +17938,7 @@ ${String(body ?? "")}`;
   var SITE10 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS34 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -17167,11 +18021,11 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS34) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS34) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -17180,7 +18034,7 @@ ${String(body ?? "")}`;
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS34) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -17286,7 +18140,7 @@ ${String(body ?? "")}`;
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -17869,7 +18723,7 @@ ${String(body ?? "")}`;
       }
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS35) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS36) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -17896,7 +18750,7 @@ ${String(body ?? "")}`;
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS35) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS36) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -17915,7 +18769,7 @@ ${String(body ?? "")}`;
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS35) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS36) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
@@ -17934,8 +18788,8 @@ ${String(body ?? "")}`;
     // what test/ui-mount-safety.test.mjs enforces, and reading the attribute unguarded broke it. No attribute
     // is reachable in that environment, so null is the honest answer and authoringEnabled applies its default.
     _authoring() {
-      const attr = typeof this.getAttribute === "function" ? this.getAttribute("authoring") : null;
-      return authoringEnabled(attr, isExtensionHost());
+      const attr2 = typeof this.getAttribute === "function" ? this.getAttribute("authoring") : null;
+      return authoringEnabled(attr2, isExtensionHost());
     }
     _profileHtml() {
       if (!this._profile) return "";
@@ -18358,7 +19212,7 @@ ${String(body ?? "")}`;
     } catch {
     }
   }
-  var CSS36 = `
+  var CSS37 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -18593,7 +19447,7 @@ ${String(body ?? "")}`;
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS36) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS37) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -18691,7 +19545,7 @@ ${String(body ?? "")}`;
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS37 = `
+  var CSS38 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -18823,7 +19677,7 @@ ${String(body ?? "")}`;
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS37) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS38) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -18878,7 +19732,7 @@ ${String(body ?? "")}`;
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS38 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -18979,11 +19833,11 @@ ${String(body ?? "")}`;
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS38) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE13}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS39) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE13}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global);
@@ -19006,7 +19860,7 @@ ${String(body ?? "")}`;
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE13}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS38) + `
+      this.set(this.css(CSS39) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -19089,7 +19943,7 @@ ${String(body ?? "")}`;
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS39 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -19249,12 +20103,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS39) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS40) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS39) + head + `<div data-body></div>`);
+      this.set(this.css(CSS40) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -19352,10 +20206,10 @@ ${String(body ?? "")}`;
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count = s.count != null ? `${s.count} items` : "";
-        const inline2 = [domain, count].filter(Boolean).join(" · ");
+        const inline4 = [domain, count].filter(Boolean).join(" · ");
         const showDesc = s.description && lc5(s.description) !== lc5(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count ? `<span class="hc-n">${esc(count)}</span>` : "") + `</div>`;
-        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline2 ? `<span class="d">${esc(inline2)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline4 ? `<span class="d">${esc(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
       host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
       this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
@@ -19365,7 +20219,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS40 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -19478,12 +20332,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS40) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS41) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS40) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS41) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -19501,7 +20355,7 @@ ${String(body ?? "")}`;
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS40) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS41) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -19800,7 +20654,7 @@ From the author:
     };
     return String(text).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
   }
-  function inline(text, { bold, italic, strike, link }) {
+  function inline3(text, { bold, italic, strike, link }) {
     return String(text).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
   }
   function blocks(md) {
@@ -19885,7 +20739,7 @@ From the author:
       const store2 = [];
       const masked = maskRuns(text, store2);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
-      const done = inline(masked, {
+      const done = inline3(masked, {
         bold: (t) => t,
         italic: (t) => t,
         strike: (t) => t,
@@ -19971,7 +20825,7 @@ From the author:
     } catch {
     }
   };
-  var CSS41 = `
+  var CSS42 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -20016,7 +20870,7 @@ From the author:
         this.set("");
         return;
       }
-      this.set(this.css(CSS41) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS42) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -20568,7 +21422,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS42 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -20899,7 +21753,7 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS42));
+        this.set(this.css(CSS43));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
@@ -20938,7 +21792,7 @@ From the author:
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
       const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS42) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -21062,7 +21916,7 @@ From the author:
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS43 = `
+  var CSS44 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -21188,7 +22042,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS43) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS44) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -21196,7 +22050,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS43) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS44) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -21240,7 +22094,7 @@ From the author:
     } catch {
     }
   }
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -21374,7 +22228,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS44) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS45) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -21387,7 +22241,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS44) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS45) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];

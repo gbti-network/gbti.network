@@ -10,8 +10,8 @@
 // the page (the edit form fetches the current body on demand).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
-import { commentBodyTooLong, COMMENT_MAX_BYTES } from '../doc-editor-core.mjs';
-import './gbti-doc-editor.mjs'; // the WorkBench visual editor, in its compact mode, replaces the textarea (owner, 2026-09-11)
+import { commentBodyTooLong, COMMENT_MAX_BYTES } from '../prose-editor-core.mjs';
+import './gbti-prose-editor.mjs'; // one prose surface backed by markdown, full width, a quiet header of controls (owner, 2026-09-11)
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -24,7 +24,7 @@ const CSS = `
   .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
   .edit:hover { color: var(--brand); text-decoration: underline; }
   .form { margin-top: 14px; }
-  gbti-doc-editor { display: block; font-size: 14px; }
+  gbti-prose-editor { display: block; }
   /* Members only | Public: the comment's audience, the author's choice (SOW-044's members-only rule ended 2026-09-11). */
   .vis { display: inline-flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
   .vis button { font: inherit; font-weight: 600; font-size: 12.5px; padding: 5px 11px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
@@ -61,7 +61,12 @@ class GbtiCommentBox extends GbtiElement {
   }
 
   // ---- EDIT mode: only the comment's author sees an Edit link ----
+  /** The host sits in a flex row beside "edited . view history" (the article page) or the discussion's footer; an
+   *  open form must take the whole row (owner, 2026-09-11: the edit form was half the width of its card), and the
+   *  Edit link or the Write a comment button must not. */
+  _fullRow(on) { this.style.flex = on ? '1 1 100%' : ''; this.style.width = on ? '100%' : ''; }
   _renderEditAffordance() {
+    this._fullRow(false);
     if (!this._identity || this._identity.username !== this._editAuthor) { this.set(this.css(CSS) + ''); return; } // not the author: invisible
     this.set(this.css(CSS) + `<button class="edit" type="button">Edit</button>`);
     this.on('.edit', 'click', () => this._openEdit());
@@ -80,6 +85,7 @@ class GbtiCommentBox extends GbtiElement {
     if (LOCKED.has(this._membership)) { this.set(this.css(CSS) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`); return; }
     if (this._membership === 'trialing') { this.set(this.css(CSS) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`); return; }
     if (!this._identity) { this.set(this.css(CSS) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`); return; }
+    this._fullRow(false);
     this.set(this.css(CSS) + `<button class="open" type="button">Write a comment</button>`);
     this.on('.open', 'click', () => this._form({ body: '', edit: false }));
   }
@@ -95,13 +101,14 @@ class GbtiCommentBox extends GbtiElement {
       ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>`
       : '';
     const vis = visibility === 'public' ? 'public' : 'members';
+    this._fullRow(true);
     const visRow = `<div class="vis" role="group" aria-label="Who can read this comment" data-vis-row>
         <button type="button" data-vis="members" class="${vis === 'members' ? 'on' : ''}" aria-pressed="${vis === 'members'}">Members only</button>
         <button type="button" data-vis="public" class="${vis === 'public' ? 'on' : ''}" aria-pressed="${vis === 'public'}">Public</button>
       </div>`;
     this.set(this.css(CSS) + `
       <div class="form">
-        <gbti-doc-editor compact data-editor></gbti-doc-editor>
+        <gbti-prose-editor data-editor></gbti-prose-editor>
         <div class="row">
           ${visRow}
           ${noteRow}

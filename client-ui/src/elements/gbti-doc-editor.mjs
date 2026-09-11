@@ -13,7 +13,6 @@ import { resolveContentAsset } from '../assets.mjs';
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
-import { paletteFor } from '../doc-editor-core.mjs'; // the compact (comment) subset of the palette
 import { imageLayoutButtonsHtml, IMAGE_LAYOUT_ROW_CSS } from '../image-layout-ui.mjs'; // Natural | Full width, Left | Center | Right, Wrap text
 import { applyImageLayoutAction, normalizeImageLayout } from '../../../client/src/image-attrs.mjs'; // what one of those clicks means
 
@@ -78,11 +77,6 @@ const CSS = `
      (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
      40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
   :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; container-type:inline-size; }
-  /* compact: the comment box's editor. A smaller tool gutter, a reply-sized minimum, a bordered field so it reads
-     as an input under a thread rather than a document page. */
-  :host([compact]) { --blk-gutter:118px; }
-  :host([compact]) .doc-blocks { min-height:90px; border:1.5px solid var(--s-line); border-radius:10px; padding:8px 10px; padding-right:var(--blk-gutter); background:var(--s-surface); }
-  :host([compact]) .doc-blocks:focus-within { border-color:var(--s-green); }
   .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
@@ -303,9 +297,7 @@ class GbtiDocEditor extends GbtiElement {
   _indexOf(id) { return (this._blocks || []).findIndex((b) => String(b._id) === String(id)); }
   _change() { this.emit('block-change'); }
 
-  /** compact: the comment box's editor (see doc-editor-core.mjs). Read live so a host can set it before or after connect. */
-  get compact() { return this.hasAttribute('compact'); }
-  _palette() { return paletteFor(CONVERT, { compact: this.compact }); }
+  _palette() { return CONVERT.slice(); }
 
   _render() {
     const blocks = this._blocks || [];
@@ -317,7 +309,7 @@ class GbtiDocEditor extends GbtiElement {
     });
     const addRow = `<div class="add-row">
       <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg('plus')} Add block</button><div class="add-pop" data-addpop hidden></div></div>
-      ${(hasMembers || this.compact) ? '' : `<button class="add-btn" data-addmembers type="button">${svg('lock')} Add members-only section</button>`}
+      ${hasMembers ? '' : `<button class="add-btn" data-addmembers type="button">${svg('lock')} Add members-only section</button>`}
     </div>`;
     this._slash = null; // the slash popover lived in the old DOM (this.set replaced it); the selection toolbar remounts itself
     this.set(this.css(EDITOR_SURFACE + CSS) + `<div class="doc-blocks">${parts.join('')}${addRow}</div>`);

@@ -14,8 +14,8 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 test('the comment box: the compact editor replaces the textarea, the Members only | Public control defaults to members, an intro forces public, and both post and save send the choice', () => {
   const box = read('client-ui/src/elements/gbti-comment-box.mjs');
-  assert.match(box, /import '\.\/gbti-doc-editor\.mjs';/);
-  assert.match(box, /<gbti-doc-editor compact data-editor><\/gbti-doc-editor>/);
+  assert.match(box, /import '\.\/gbti-prose-editor\.mjs';/);
+  assert.match(box, /<gbti-prose-editor data-editor><\/gbti-prose-editor>/);
   assert.doesNotMatch(box, /<textarea/, 'no plain textarea left');
   assert.match(box, /_bodyValue\(\) \{ return String\(this\.\$\('\[data-editor\]'\)\?\.value \|\| ''\)\.trim\(\); \}/);
   assert.match(box, /const vis = visibility === 'public' \? 'public' : 'members';/, 'members is the default');

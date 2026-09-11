@@ -40,6 +40,7 @@ import './elements/gbti-shares-feed.mjs';
 import './elements/gbti-shares.mjs';
 import './elements/gbti-lock-gate.mjs';
 import './elements/gbti-comment-box.mjs';
+import './elements/gbti-prose-editor.mjs'; // the comment editor: one prose surface backed by markdown
 import './elements/gbti-comment-echoes.mjs'; // the author's own pending comments on a public page (SOW-076 echoes, website since 2026-09-11)
 import './elements/gbti-onboarding.mjs';
 import './elements/gbti-welcome.mjs';
