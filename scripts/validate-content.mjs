@@ -256,14 +256,15 @@ function checkContent(file, owner, type) {
     if (type === 'comment' && fmc.targetType === 'news' && !/^news-[a-z0-9]+$/.test(String(fmc.targetSlug || ''))) {
       errors.push(`${rel}: a news comment targetSlug must be "news-<hash>" (the hashed news guid; see newsTargetSlug). See SOW-046 D.`);
     }
-    // SOW-044: comments are members-only + encrypted. A `public` comment is allowed ONLY as a from-the-author
-    // intro (authorNote:true) on a post/product/prompt; a discussion reply, and ANY comment on a Share, must be
-    // members. A members comment must carry its body in an encrypted envelope, never as committed plaintext.
+    // A comment's audience is its author's choice (owner, 2026-09-11; SOW-044's "public only as an intro" rule
+    // ended). What still holds is the leak rule and its mirror: a members comment carries its body in an
+    // encrypted envelope, never as committed plaintext, and a public comment carries no encryptedBody pointer
+    // (a stale .enc beside a public stub is a half-flip: the body would render from the plaintext while the old
+    // ciphertext lingers in the tree).
     if (type === 'comment') {
       const cvis = fmc.visibility ?? 'members';
-      const isPublicIntro = fmc.authorNote === true && ['post', 'project', 'prompt'].includes(fmc.targetType);
-      if (cvis === 'public' && !isPublicIntro) {
-        errors.push(`${rel}: a public comment is only allowed as a from-the-author intro (authorNote:true on a post/product/prompt). A discussion comment, and any comment on a share, must be visibility:members. See SOW-044.`);
+      if (cvis === 'public' && fmc.encryptedBody) {
+        errors.push(`${rel}: a public comment must not carry an encryptedBody pointer (a members->public flip must delete the old .enc in the same change).`);
       }
       if (cvis === 'members' && bodyOf(txt).trim() && !fmc.encryptedBody) {
         errors.push(`${rel}: a members-only comment must encrypt its body to an encryptedBody .enc, never commit plaintext. Publish via the client. See SOW-044.`);

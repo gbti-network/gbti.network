@@ -19736,7 +19736,7 @@ async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, mes
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
-async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody }) {
+async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody, removeEnc = null } = {}) {
   const token = ctx2.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   let plan;
@@ -19749,6 +19749,7 @@ async function planAndPublishComment(ctx2, repo, built, body, { message, title, 
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  if (!plan?.encPath && typeof removeEnc === "string" && removeEnc) files.push({ path: removeEnc, content: null });
   const pr = isHostedCtx(ctx2) ? await hostedPublishFiles(ctx2, { branch: `gbti/comment-${built.id}`, files, title }) : await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
   return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
 }
@@ -19763,7 +19764,7 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
   const cid = commentId(createdAt, commentSuffix());
   const input = { id: cid, targetType, targetSlug, createdAt, status: "published" };
   const isPublicIntro = authorNote === true && ["post", "project", "prompt"].includes(targetType);
-  input.visibility = visibility === "public" && isPublicIntro ? "public" : "members";
+  input.visibility = visibility === "public" || isPublicIntro ? "public" : "members";
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
   let built;
@@ -19790,7 +19791,7 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
   }
   return out;
 }
-async function editComment(ctx2, { id, body, authorNote } = {}) {
+async function editComment(ctx2, { id, body, authorNote, visibility } = {}) {
   const idn = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   if (!id || typeof id !== "string") throw new OperationError("bad-request", "a comment id is required");
@@ -19807,12 +19808,13 @@ async function editComment(ctx2, { id, body, authorNote } = {}) {
   const updatedAt = ctx2.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const effAuthorNote = authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote);
   const isPublicIntro = effAuthorNote && ["post", "project", "prompt"].includes(fm.targetType);
+  const effVisibility = visibility === "public" || visibility === "members" ? visibility : fm.visibility === "public" ? "public" : "members";
   const input = {
     id,
     targetType: fm.targetType,
     targetSlug: fm.targetSlug,
     status: fm.status ?? "published",
-    visibility: fm.visibility === "public" && isPublicIntro ? "public" : "members",
+    visibility: effVisibility === "public" || isPublicIntro ? "public" : "members",
     authorNote: effAuthorNote,
     parentId: fm.parentId,
     createdAt: fm.createdAt,
@@ -19824,10 +19826,12 @@ async function editComment(ctx2, { id, body, authorNote } = {}) {
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
+  const staleEnc = input.visibility === "public" && typeof fm.encryptedBody === "string" && fm.encryptedBody.startsWith(`members/${idn.username}/_enc/`) ? fm.encryptedBody : null;
   const r = await planAndPublishComment(ctx2, repo, built, body, {
     message: `Edit comment ${id}`,
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
-    prBody: void 0
+    prBody: void 0,
+    removeEnc: staleEnc
   });
   return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
 }

@@ -480,12 +480,15 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
   // body is encrypted to a sibling .enc (planMemberFiles) and the stub .md carries only the pointer; a public
   // author-note intro is committed plaintext. Both files live under members/<login>/, which the hosted validator
   // permits, and ride the own-folder-gated /membership/author (idempotent per comment-<id> item).
-  async function commitComment(input: any, body: string) {
+  // `removeEnc`: the comment's previous ciphertext, deleted in the same PR when the comment flips to public
+  // (a stale .enc beside a public stub is the half-flip the build guard now refuses). Own _enc/ only.
+  async function commitComment(input: any, body: string, { removeEnc = null }: { removeEnc?: string | null } = {}) {
     let built: any;
     try { built = buildCommentFile({ username: user, input, body }); }
     catch (e: any) { throw new WorkbenchClientError('invalid-content', e?.message || 'the comment is invalid'); }
     const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });
     const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+    if (!plan?.encPath && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${user}/_enc/`)) files.push({ path: removeEnc, content: null });
     const res = await workerPost('/membership/author', { itemId: `comment-${built.id}`, files, title: `Comment on ${input.targetType}: ${input.targetSlug}` });
     return { id: built.id, path: built.path, prNumber: res.number, prUrl: res.html_url, visibility: built.frontmatter.visibility, encrypted: Boolean(plan?.encPath) };
   }
@@ -498,7 +501,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     if (text == null) throw err('not-found', 'no such comment in your folder');
     const { frontmatter, body } = parseContentFile(text);
     const enc = (frontmatter as any)?.encryptedBody;
-    return { path, frontmatter, body: enc ? await decryptEnc(enc) : body };
+    return { path, frontmatter, body: enc ? await decryptEnc(enc) : body, visibility: (frontmatter as any)?.visibility === 'public' ? 'public' : 'members' };
   }
 
   // The caller's effective tier (for the SOW-078 member-stub read gate), fail-closed to a non-member on any error.
@@ -965,16 +968,18 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       if (r?.prNumber) await writeCommentEcho({ id, targetType, targetSlug, body: body ?? '', prNumber: r.prNumber, createdAt });
       return { ...r, targetType, targetSlug };
     },
-    async editComment({ id, body, authorNote }: any) {
+    async editComment({ id, body, authorNote, visibility }: any) {
       const cur = await getCommentLocal(String(id || ''));
       const fm: any = cur.frontmatter || {};
       const effAuthorNote = authorNote !== undefined ? Boolean(authorNote) : Boolean(fm.authorNote);
+      // The audience is the author's (2026-09-11): a given visibility wins, else the comment keeps its own.
+      const effVisibility = visibility === 'public' || visibility === 'members' ? visibility : (fm.visibility === 'public' ? 'public' : 'members');
       const input = coerceCommentInput({
         id: fm.id, targetType: fm.targetType, targetSlug: fm.targetSlug,
         createdAt: fm.createdAt, updatedAt: new Date().toISOString(),
-        authorNote: effAuthorNote, parentId: fm.parentId, visibility: fm.visibility,
+        authorNote: effAuthorNote, parentId: fm.parentId, visibility: effVisibility,
       });
-      const r = await commitComment(input, body ?? '');
+      const r = await commitComment(input, body ?? '', { removeEnc: typeof fm.encryptedBody === 'string' ? fm.encryptedBody : null });
       return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
     },
     async deleteComment({ id }: any) {

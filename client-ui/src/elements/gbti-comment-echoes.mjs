@@ -7,6 +7,7 @@
 // static "N Comments" heading and hides the "No comments yet" card while a row is pending, and polls the pull
 // list for the merge outcome for a few minutes. Inert with no client (an anonymous visitor sees nothing).
 import { GbtiElement, define, esc } from '../base.mjs';
+import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs';
 import { relTime } from '../time-core.mjs';
 import { pendingRows, pullOutcome, echoNote, pullsOf } from '../comment-echo-core.mjs';
 
@@ -28,7 +29,7 @@ const CSS = `
   .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; }
   .body p { margin:0 0 .6em; } .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--hover); padding:8px; border-radius:6px; overflow:auto; }
-  .body .md-embed { margin:.6em 0; } .body .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
+  ${EMBED_POSTER_CSS}
   .note { margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; }
   .note.ok { color:var(--s-green-fg, #1f9e5f); } .note.bad { color:var(--danger, #c0392b); }
   .dot { width:8px; height:8px; border-radius:999px; background:currentColor; opacity:.7; flex:none; }
@@ -68,6 +69,7 @@ class GbtiCommentEchoes extends GbtiElement {
       </li>`;
     }).join('');
     this.set(this.css(CSS) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+    wireEmbedPosters(this.root);
     this._syncPage(this._rows.length);
   }
 

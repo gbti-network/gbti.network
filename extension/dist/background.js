@@ -18981,7 +18981,7 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, mess
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
-async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody: prBody2 }) {
+async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody: prBody2, removeEnc = null } = {}) {
   const token = ctx.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   let plan;
@@ -18994,6 +18994,7 @@ async function planAndPublishComment(ctx, repo, built, body, { message, title, p
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  if (!plan?.encPath && typeof removeEnc === "string" && removeEnc) files.push({ path: removeEnc, content: null });
   const pr = isHostedCtx(ctx) ? await hostedPublishFiles(ctx, { branch: `gbti/comment-${built.id}`, files, title }) : await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody2 });
   return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
 }
@@ -19008,7 +19009,7 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const cid = commentId(createdAt, commentSuffix());
   const input = { id: cid, targetType, targetSlug, createdAt, status: "published" };
   const isPublicIntro = authorNote === true && ["post", "project", "prompt"].includes(targetType);
-  input.visibility = visibility === "public" && isPublicIntro ? "public" : "members";
+  input.visibility = visibility === "public" || isPublicIntro ? "public" : "members";
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
   let built;
@@ -19079,7 +19080,7 @@ async function getComment(ctx, { id } = {}) {
   }
   return item;
 }
-async function editComment(ctx, { id, body, authorNote } = {}) {
+async function editComment(ctx, { id, body, authorNote, visibility } = {}) {
   const idn = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   if (!id || typeof id !== "string") throw new OperationError("bad-request", "a comment id is required");
@@ -19096,12 +19097,13 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
   const updatedAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const effAuthorNote = authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote);
   const isPublicIntro = effAuthorNote && ["post", "project", "prompt"].includes(fm.targetType);
+  const effVisibility = visibility === "public" || visibility === "members" ? visibility : fm.visibility === "public" ? "public" : "members";
   const input = {
     id,
     targetType: fm.targetType,
     targetSlug: fm.targetSlug,
     status: fm.status ?? "published",
-    visibility: fm.visibility === "public" && isPublicIntro ? "public" : "members",
+    visibility: effVisibility === "public" || isPublicIntro ? "public" : "members",
     authorNote: effAuthorNote,
     parentId: fm.parentId,
     createdAt: fm.createdAt,
@@ -19113,10 +19115,12 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
+  const staleEnc = input.visibility === "public" && typeof fm.encryptedBody === "string" && fm.encryptedBody.startsWith(`members/${idn.username}/_enc/`) ? fm.encryptedBody : null;
   const r = await planAndPublishComment(ctx, repo, built, body, {
     message: `Edit comment ${id}`,
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
-    prBody: void 0
+    prBody: void 0,
+    removeEnc: staleEnc
   });
   return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
 }
@@ -20300,6 +20304,24 @@ function bareVideoLine(line) {
   if (!/^https?:\/\/\S+$/.test(s)) return null;
   return embedUrl(s) ? s : null;
 }
+function embedPoster(url2) {
+  const src = embedUrl(url2);
+  if (!src) return null;
+  const yt = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+  const provider = yt ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
+  return { src, thumb: yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+}
+var escAttr = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+function embedPosterHtml(url2, { frameSrc } = {}) {
+  const p = embedPoster(url2);
+  if (!p) return "";
+  const src = frameSrc || p.src;
+  const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr(p.provider)}</span>`;
+  return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr(src)}" data-embed-url="${escAttr(String(url2).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
+}
+function isPortraitEmbed(src) {
+  return /tiktok\.com\/embed\//.test(String(src || ""));
+}
 
 // client/src/markdown.mjs
 var EMBED_RELAY = "https://gbti.network/embed/";
@@ -20337,7 +20359,7 @@ var attrOf = (attrs, name) => {
   const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
   return m ? m[1] : "";
 };
-var escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+var escAttr2 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function emphasis(t) {
   return String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
 }
@@ -20355,7 +20377,7 @@ function rawAnchorHtml(attrs, inner) {
   if (blank && !rel.includes("noopener")) rel.push("noopener");
   const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
   const tgtAttr = blank ? ' target="_blank"' : "";
-  return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+  return `<a href="${escAttr2(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
 }
 function escapeKeepingLinks(s, keep) {
   const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
@@ -20407,7 +20429,7 @@ function codeOpen(lang) {
   return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
 }
 var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-function renderFence(lang, buf, fn = null) {
+function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   const info = String(lang || "").trim().split(/\s+/);
   const body = buf.join("\n");
   if (info[0] === "callout") {
@@ -20418,6 +20440,7 @@ function renderFence(lang, buf, fn = null) {
   if (info[0] === "embed") {
     const url2 = body.trim();
     const src = embedUrl(url2);
+    if (src && poster) return embedPosterHtml(url2, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url2)}` });
     if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url2)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
     return `<p><a href="${escapeHtml(url2)}" target="_blank" rel="noopener">${escapeHtml(url2)}</a></p>`;
   }
@@ -20502,7 +20525,7 @@ function renderDoc(md, ids, opts = {}) {
       if (fence[1].length >= codeFence && !fence[2].trim()) {
         inCode = false;
         flushList();
-        emit(renderFence(codeLang, codeBuf, fn), fenceStart, i);
+        emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed }), fenceStart, i);
         codeLang = "";
         i++;
         continue;
@@ -20532,7 +20555,7 @@ function renderDoc(md, ids, opts = {}) {
       const videoUrl = bareVideoLine(line);
       if (videoUrl) {
         flushList();
-        emit(renderFence("embed", [videoUrl], fn), i, i);
+        emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
         i++;
         continue;
       }

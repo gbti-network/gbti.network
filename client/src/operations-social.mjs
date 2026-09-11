@@ -80,7 +80,7 @@ export async function publishShare(ctx, { input = {}, body = '', removeEnc = nul
 export const commentSuffix = () => Math.random().toString(36).slice(2, 8); // short collision-avoidance suffix for the id
 
 
-export async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody }) {
+export async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody, removeEnc = null } = {}) {
   const token = ctx.store?.get?.('githubToken');
   const encrypt = (plaintext, assetId) =>
     encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
@@ -94,6 +94,9 @@ export async function planAndPublishComment(ctx, repo, built, body, { message, t
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  // A comment that flipped to public leaves its old ciphertext behind unless it rides in the same PR as a delete
+  // (the same rule publishShare applies). Only when nothing was encrypted this time, and only the caller's own.
+  if (!plan?.encPath && typeof removeEnc === 'string' && removeEnc) files.push({ path: removeEnc, content: null });
   // Idempotent by branch: re-editing the same comment id updates the same PR (hosted reuses one hosted branch).
   const pr = isHostedCtx(ctx)
     ? await hostedPublishFiles(ctx, { branch: `gbti/comment-${built.id}`, files, title })
@@ -118,8 +121,10 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
   // (authorNote) on a post/product/prompt; a discussion reply, and ANY comment on a Share, is always members. The
   // server is the boundary: coerce anything that is not a legitimate public intro to members, regardless of what
   // the client sent (a members body is then encrypted by planMemberFiles, never committed plaintext).
+  // The audience is the author's choice (owner, 2026-09-11; SOW-044's members-only rule ended): public when asked,
+  // members otherwise. An intro (authorNote) is public by definition.
   const isPublicIntro = authorNote === true && ['post', 'project', 'prompt'].includes(targetType);
-  input.visibility = (visibility === 'public' && isPublicIntro) ? 'public' : 'members';
+  input.visibility = (visibility === 'public' || isPublicIntro) ? 'public' : 'members';
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
   let built;
@@ -201,7 +206,7 @@ export async function getComment(ctx, { id } = {}) {
 }
 
 
-export async function editComment(ctx, { id, body, authorNote } = {}) {
+export async function editComment(ctx, { id, body, authorNote, visibility } = {}) {
   const idn = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   if (!id || typeof id !== 'string') throw new OperationError('bad-request', 'a comment id is required');
@@ -217,19 +222,19 @@ export async function editComment(ctx, { id, body, authorNote } = {}) {
   }
   const fm = existing.frontmatter ?? {};
   const updatedAt = ctx.now?.() ?? new Date().toISOString();
-  // SOW-044: re-derive visibility the SAME way publishComment does, so an edit can NEVER strand a comment as a
-  // public non-intro (or a public Share comment) with a plaintext body. A comment is public only as a
-  // from-the-author intro (authorNote) on a post/product/prompt; anything else is coerced to members and its body
-  // is re-encrypted on re-publish. Symmetric with publishComment (the CI guards are the backstop, not the boundary).
+  // The audience is the author's (2026-09-11): a given visibility wins, else the comment keeps its own; an intro
+  // stays public. A members body is re-encrypted on re-publish; a public one is committed plaintext and the old
+  // ciphertext is deleted below (a stale .enc beside a public stub is the half-flip the CI guards refuse).
   const effAuthorNote = authorNote !== undefined ? Boolean(authorNote) : Boolean(fm.authorNote);
   const isPublicIntro = effAuthorNote && ['post', 'project', 'prompt'].includes(fm.targetType);
+  const effVisibility = (visibility === 'public' || visibility === 'members') ? visibility : (fm.visibility === 'public' ? 'public' : 'members');
   // Preserve identity-defining fields; set updatedAt so the "edited . view history" link renders.
   const input = {
     id,
     targetType: fm.targetType,
     targetSlug: fm.targetSlug,
     status: fm.status ?? 'published',
-    visibility: (fm.visibility === 'public' && isPublicIntro) ? 'public' : 'members',
+    visibility: (effVisibility === 'public' || isPublicIntro) ? 'public' : 'members',
     authorNote: effAuthorNote,
     parentId: fm.parentId,
     createdAt: fm.createdAt,
@@ -241,10 +246,12 @@ export async function editComment(ctx, { id, body, authorNote } = {}) {
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
+  const staleEnc = input.visibility === 'public' && typeof fm.encryptedBody === 'string' && fm.encryptedBody.startsWith(`members/${idn.username}/_enc/`) ? fm.encryptedBody : null;
   const r = await planAndPublishComment(ctx, repo, built, body, {
     message: `Edit comment ${id}`,
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
     prBody: undefined,
+    removeEnc: staleEnc,
   });
   // Carry the target back (mirrors publishComment) so the gbti-comment-edited event can refresh the right open
   // thread (e.g. the SOW-032 Shares discussion, keyed on the composite targetSlug).

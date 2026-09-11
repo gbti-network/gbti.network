@@ -1106,6 +1106,21 @@ ${String(body ?? "")}`;
     return out;
   }
 
+  // client-ui/src/doc-editor-core.mjs
+  var COMPACT_KEYS = Object.freeze(["paragraph", "quote", "code", "ul", "ol", "embed"]);
+  function paletteFor(all, { compact = false } = {}) {
+    const list = Array.isArray(all) ? all : [];
+    return compact ? list.filter((c) => c && COMPACT_KEYS.includes(c.key)) : list.slice();
+  }
+  var COMMENT_MAX_BYTES = 8e3;
+  function commentBodyTooLong(md) {
+    try {
+      return new TextEncoder().encode(String(md ?? "")).length > COMMENT_MAX_BYTES;
+    } catch {
+      return String(md ?? "").length > COMMENT_MAX_BYTES;
+    }
+  }
+
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
   var withId = (b) => {
@@ -1163,6 +1178,11 @@ ${String(body ?? "")}`;
      (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
      40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
   :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; container-type:inline-size; }
+  /* compact: the comment box's editor. A smaller tool gutter, a reply-sized minimum, a bordered field so it reads
+     as an input under a thread rather than a document page. */
+  :host([compact]) { --blk-gutter:118px; }
+  :host([compact]) .doc-blocks { min-height:90px; border:1.5px solid var(--s-line); border-radius:10px; padding:8px 10px; padding-right:var(--blk-gutter); background:var(--s-surface); }
+  :host([compact]) .doc-blocks:focus-within { border-color:var(--s-green); }
   .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
@@ -1405,6 +1425,13 @@ ${String(body ?? "")}`;
     _change() {
       this.emit("block-change");
     }
+    /** compact: the comment box's editor (see doc-editor-core.mjs). Read live so a host can set it before or after connect. */
+    get compact() {
+      return this.hasAttribute("compact");
+    }
+    _palette() {
+      return paletteFor(CONVERT, { compact: this.compact });
+    }
     _render() {
       const blocks2 = this._blocks || [];
       const hasMembers = blocks2.some((b) => b.type === "members");
@@ -1418,7 +1445,7 @@ ${String(body ?? "")}`;
       });
       const addRow = `<div class="add-row">
       <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg("plus")} Add block</button><div class="add-pop" data-addpop hidden></div></div>
-      ${hasMembers ? "" : `<button class="add-btn" data-addmembers type="button">${svg("lock")} Add members-only section</button>`}
+      ${hasMembers || this.compact ? "" : `<button class="add-btn" data-addmembers type="button">${svg("lock")} Add members-only section</button>`}
     </div>`;
       this._slash = null;
       this.set(this.css(EDITOR_SURFACE + CSS) + `<div class="doc-blocks">${parts.join("")}${addRow}</div>`);
@@ -1658,7 +1685,7 @@ ${String(body ?? "")}`;
       const menuBtn = this.$("[data-addmenu]");
       const pop = this.$("[data-addpop]");
       if (menuBtn && pop) {
-        pop.innerHTML = CONVERT.map((c) => paletteRow(c, `data-newkey="${c.key}"`)).join("");
+        pop.innerHTML = this._palette().map((c) => paletteRow(c, `data-newkey="${c.key}"`)).join("");
         const hideAddPop = () => {
           pop.hidden = true;
           document.removeEventListener("click", hideAddPop);
@@ -1990,7 +2017,7 @@ ${String(body ?? "")}`;
       if (!b || !host || !blk) return;
       const pop = document.createElement("div");
       pop.className = "slash-pop";
-      pop.innerHTML = CONVERT.map((c) => paletteRow(c, `data-ck="${c.key}"`, convertKey(b) === c.key)).join("");
+      pop.innerHTML = this._palette().map((c) => paletteRow(c, `data-ck="${c.key}"`, convertKey(b) === c.key)).join("");
       pop.style.top = `${blk.offsetTop + blk.offsetHeight + 4}px`;
       pop.style.left = `${Math.max(0, blk.offsetLeft + blk.offsetWidth - 268)}px`;
       pop.querySelectorAll("[data-ck]").forEach((row) => row.addEventListener("click", (e) => {
@@ -2024,7 +2051,7 @@ ${String(body ?? "")}`;
     }
     _openSlash(el, query) {
       const q = String(query || "").toLowerCase();
-      const matches = CONVERT.filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q));
+      const matches = this._palette().filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q));
       this._closeSlash();
       const host = this.$(".doc-blocks");
       const blk = el.closest(".blk");
@@ -2496,6 +2523,74 @@ ${String(body ?? "")}`;
     return input;
   }
 
+  // client-ui/src/embed-lightbox.mjs
+  var FALLBACK_ID = "gbti-embed-lightbox";
+  function fallbackDialog() {
+    let dlg = document.getElementById(FALLBACK_ID);
+    if (dlg) return dlg;
+    dlg = document.createElement("dialog");
+    dlg.id = FALLBACK_ID;
+    dlg.setAttribute("aria-label", "Video");
+    dlg.style.cssText = "inset:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:transparent;overflow:hidden;";
+    dlg.innerHTML = "<style>#" + FALLBACK_ID + "::backdrop{background:rgba(20,19,24,.88)}#" + FALLBACK_ID + "[open]{display:flex;align-items:center;justify-content:center}#" + FALLBACK_ID + " .f{width:min(92vw,1100px);aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.55)}#" + FALLBACK_ID + " iframe{width:100%;height:100%;border:0}#" + FALLBACK_ID + ' .x{position:fixed;top:14px;right:16px;width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:22px;line-height:1}</style><button type="button" class="x" aria-label="Close">&times;</button><div class="f"><iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+    dlg.querySelector(".x").addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    dlg.addEventListener("close", () => {
+      const f = dlg.querySelector("iframe");
+      if (f) f.removeAttribute("src");
+    });
+    document.body.appendChild(dlg);
+    return dlg;
+  }
+  function autoplaySrc(src) {
+    const s = String(src || "");
+    if (!s) return "";
+    return s + (s.includes("?") ? "&" : "?") + "autoplay=1";
+  }
+  function openEmbedLightbox(src) {
+    if (typeof document === "undefined" || !src) return false;
+    if (document.querySelector("[data-lightbox-root]")) {
+      document.dispatchEvent(new CustomEvent("gbti-embed-open", { bubbles: true, composed: true, detail: { src } }));
+      return true;
+    }
+    const dlg = fallbackDialog();
+    if (typeof dlg.showModal !== "function") {
+      window.open(src, "_blank", "noopener");
+      return false;
+    }
+    const f = dlg.querySelector("iframe");
+    if (f) f.src = autoplaySrc(src);
+    dlg.showModal();
+    return true;
+  }
+  function wireEmbedPosters(root) {
+    if (!root || typeof root.querySelectorAll !== "function") return 0;
+    let n = 0;
+    for (const btn of root.querySelectorAll(".md-embed-poster .md-embed-open")) {
+      if (btn.dataset.lbWired) continue;
+      btn.dataset.lbWired = "1";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const box = btn.closest(".md-embed-poster");
+        openEmbedLightbox(box?.dataset.embedSrc || "");
+      });
+      n++;
+    }
+    return n;
+  }
+  var EMBED_POSTER_CSS = `
+  .md-embed { position:relative; width:100%; margin:.6em 0 1em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
+  .md-embed.md-embed-portrait { aspect-ratio:9/16; max-width:360px; }
+  .md-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .md-embed-open { position:absolute; inset:0; width:100%; height:100%; display:block; padding:0; border:0; background:#111; cursor:pointer; }
+  .md-embed-thumb { width:100%; height:100%; object-fit:cover; display:block; }
+  .md-embed-panel { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font:600 14px/1 var(--f-mono, ui-monospace, monospace); letter-spacing:.08em; text-transform:uppercase; }
+  .md-embed-play { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:999px; background:rgba(0,0,0,.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(0,0,0,.4); transition:background .15s ease, transform .15s ease; }
+  .md-embed-open:hover .md-embed-play, .md-embed-open:focus-visible .md-embed-play { background:var(--accent, #1f9e5f); transform:scale(1.06); }
+`;
+
   // client-ui/src/workbench-cache.mjs
   var WB_CACHE_PREFIX = "gbti:wb";
   var WB_DEFAULT_TTL_MS = 10 * 60 * 1e3;
@@ -2608,8 +2703,12 @@ ${String(body ?? "")}`;
   .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
   .edit:hover { color: var(--brand); text-decoration: underline; }
   .form { margin-top: 14px; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
-  textarea:focus { outline: none; border-color: var(--brand); }
+  gbti-doc-editor { display: block; font-size: 14px; }
+  /* Members only | Public: the comment's audience, the author's choice (SOW-044's members-only rule ended 2026-09-11). */
+  .vis { display: inline-flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+  .vis button { font: inherit; font-weight: 600; font-size: 12.5px; padding: 5px 11px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+  .vis button.on { background: var(--brand); color: #fff; }
+  .vis[hidden] { display: none; }
   .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
   label.chk { font: inherit; font-size: 13px; color: var(--muted); }
   .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
@@ -2656,14 +2755,17 @@ ${String(body ?? "")}`;
     async _openEdit() {
       this.set(this.css(CSS2) + `<p class="msg">Loading…</p>`);
       let body = "";
+      let visibility = "members";
       try {
-        body = (await this.client.getComment({ id: this._editId }))?.body ?? "";
+        const c = await this.client.getComment({ id: this._editId });
+        body = c?.body ?? "";
+        visibility = c?.visibility ?? c?.frontmatter?.visibility ?? "members";
       } catch {
         this.set(this.css(CSS2) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
         this.on(".edit", "click", () => this._openEdit());
         return;
       }
-      this._form({ body, edit: true });
+      this._form({ body, edit: true, visibility });
     }
     // ---- COMPOSE mode ----
     _renderCompose() {
@@ -2682,13 +2784,19 @@ ${String(body ?? "")}`;
       this.set(this.css(CSS2) + `<button class="open" type="button">Write a comment</button>`);
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
-    _form({ body, edit }) {
+    _form({ body, edit, visibility = "members" }) {
       const isIntroTarget = ["post", "project", "prompt"].includes(this._target().type);
       const noteRow = !edit && isIntroTarget ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>` : "";
+      const vis = visibility === "public" ? "public" : "members";
+      const visRow = `<div class="vis" role="group" aria-label="Who can read this comment" data-vis-row>
+        <button type="button" data-vis="members" class="${vis === "members" ? "on" : ""}" aria-pressed="${vis === "members"}">Members only</button>
+        <button type="button" data-vis="public" class="${vis === "public" ? "on" : ""}" aria-pressed="${vis === "public"}">Public</button>
+      </div>`;
       this.set(this.css(CSS2) + `
       <div class="form">
-        <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
+        <gbti-doc-editor compact data-editor></gbti-doc-editor>
         <div class="row">
+          ${visRow}
           ${noteRow}
           <div class="actions">
             <span class="msg" aria-live="polite"></span>
@@ -2697,20 +2805,55 @@ ${String(body ?? "")}`;
           </div>
         </div>
       </div>`);
+      const ed = this.$("[data-editor]");
+      if (ed) ed.value = body || "";
+      this._vis = vis;
+      this.$$("[data-vis]").forEach((b) => b.addEventListener("click", () => {
+        this._vis = b.dataset.vis === "public" ? "public" : "members";
+        this.$$("[data-vis]").forEach((x) => {
+          const on = x.dataset.vis === this._vis;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-pressed", String(on));
+        });
+      }));
+      this.$("[data-authornote]")?.addEventListener("change", (e) => {
+        const row = this.$("[data-vis-row]");
+        if (e.target.checked) {
+          this._visBeforeNote = this._vis;
+          this._vis = "public";
+          if (row) row.hidden = true;
+        } else {
+          this._vis = this._visBeforeNote || "members";
+          if (row) row.hidden = false;
+          this.$$("[data-vis]").forEach((x) => {
+            const on = x.dataset.vis === this._vis;
+            x.classList.toggle("on", on);
+            x.setAttribute("aria-pressed", String(on));
+          });
+        }
+      });
       this.on(".cancel", "click", () => edit ? this._renderEditAffordance() : this._renderCompose());
       this.on(".post", "click", () => edit ? this._save() : this._post());
+    }
+    /** The markdown in the editor, trimmed. */
+    _bodyValue() {
+      return String(this.$("[data-editor]")?.value || "").trim();
     }
     async _post() {
       const wrap = this.$(".form");
       const msg = this.$(".msg");
-      const body = (this.$("textarea")?.value || "").trim();
+      const body = this._bodyValue();
       if (!body) {
         this._say(msg, "Write something first.", "err");
         return;
       }
+      if (commentBodyTooLong(body)) {
+        this._say(msg, `The comment is too long (over ${COMMENT_MAX_BYTES} bytes).`, "err");
+        return;
+      }
       const t = this._target();
       const authorNote = !!this.$("[data-authornote]")?.checked && ["post", "project", "prompt"].includes(t.type);
-      const visibility = authorNote ? "public" : "members";
+      const visibility = authorNote ? "public" : this._vis === "public" ? "public" : "members";
       wrap?.classList.add("busy");
       try {
         const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
@@ -2723,14 +2866,19 @@ ${String(body ?? "")}`;
     async _save() {
       const wrap = this.$(".form");
       const msg = this.$(".msg");
-      const body = (this.$("textarea")?.value || "").trim();
+      const body = this._bodyValue();
       if (!body) {
         this._say(msg, "A comment cannot be empty.", "err");
         return;
       }
+      if (commentBodyTooLong(body)) {
+        this._say(msg, `The comment is too long (over ${COMMENT_MAX_BYTES} bytes).`, "err");
+        return;
+      }
       wrap?.classList.add("busy");
       try {
-        const res = await this.client.editComment({ id: this._editId, body });
+        const visibility = this._vis === "public" ? "public" : "members";
+        const res = await this.client.editComment({ id: this._editId, body, visibility });
         this._done(msg, submitAck({ prNumber: res?.prNumber }), "gbti-comment-edited", res);
       } catch (err) {
         this._fail(msg, err);
@@ -2814,7 +2962,7 @@ ${String(body ?? "")}`;
   .cfoot { display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
-  .cbody .md-embed { margin:.5em 0; } .cbody .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
+  ${EMBED_POSTER_CSS}
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
@@ -2985,6 +3133,7 @@ ${String(body ?? "")}`;
       }).join("");
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS3) + threadHtml + this._composeHtml(targetType, targetSlug));
+      wireEmbedPosters(this.root);
       this.$$("[data-fold]").forEach((b) => b.addEventListener("click", () => this._toggleFold(b.dataset.fold)));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec, b.dataset.authornote === "1")));
       this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc, b.dataset.authornote === "1")));
@@ -9912,6 +10061,7 @@ ${String(body ?? "")}`;
     return { clip, copy: true, moreLabel: clip ? `Show more (${lines} lines)` : null, lessLabel: clip ? "Show less" : null };
   }
   var PROSE = `
+  ${EMBED_POSTER_CSS}
   .state, .locked { color: var(--muted); font-size: 14px; padding: 10px 0; }
   .locked a { color: var(--accent); font-weight: 600; }
   .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
@@ -9960,6 +10110,7 @@ ${String(body ?? "")}`;
       }
       this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
       this.decorateCode();
+      wireEmbedPosters(this.root);
       this.emit("gbti-unlocked", { encPath });
     }
     /** Give every decrypted <pre> a Copy button, and clip the long ones behind a Show more / Show less toggle. */
@@ -14976,7 +15127,7 @@ ${String(body ?? "")}`;
   .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; }
   .body p { margin:0 0 .6em; } .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--hover); padding:8px; border-radius:6px; overflow:auto; }
-  .body .md-embed { margin:.6em 0; } .body .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
+  ${EMBED_POSTER_CSS}
   .note { margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; }
   .note.ok { color:var(--s-green-fg, #1f9e5f); } .note.bad { color:var(--danger, #c0392b); }
   .dot { width:8px; height:8px; border-radius:999px; background:currentColor; opacity:.7; flex:none; }
@@ -15032,6 +15183,7 @@ ${String(body ?? "")}`;
       </li>`;
       }).join("");
       this.set(this.css(CSS29) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
     async load() {

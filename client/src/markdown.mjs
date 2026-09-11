@@ -4,7 +4,7 @@
 // common blocks (headings, lists, blockquotes, fenced code, hr, paragraphs) and inline (code, links, bold,
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
-import { embedUrl, bareVideoLine } from './video-embed.mjs';
+import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
@@ -149,7 +149,7 @@ function codeOpen(lang) {
 // provider iframe instead of a code block; everything else stays a normal code block. HTML is still escaped, and the
 // iframe src is a NORMALIZED provider URL (never author HTML), so no author script executes.
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
-function renderFence(lang, buf, fn = null) {
+function renderFence(lang, buf, fn = null, { poster = false } = {}) {
   const info = String(lang || '').trim().split(/\s+/);
   const body = buf.join('\n');
   if (info[0] === 'callout') {
@@ -165,6 +165,9 @@ function renderFence(lang, buf, fn = null) {
     // same way gbti-reader and gbti-shares-feed already do. embedUrl still gates it, so an unrecognized URL
     // stays a plain link and no ?u= is minted for something the relay would refuse to play anyway.
     const src = embedUrl(url);
+    // poster: a comment (autoEmbed) shows the poster the lightbox opens; the editor writes a fence for a pasted
+    // video link, so without this a comment would look different after its first edit.
+    if (src && poster) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
     if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
     return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
   }
@@ -271,7 +274,7 @@ function renderDoc(md, ids, opts = {}) {
       if (!inCode) { inCode = true; fenceStart = i; codeBuf = []; codeFence = fence[1].length; codeLang = fence[2]; i++; continue; }
       // CommonMark: a fence closes only on a fence of >= the OPENING length with no info string, so a
       // ````markdown block can carry ``` fences as CONTENT (the /ci skill prompt broke on this).
-      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); emit(renderFence(codeLang, codeBuf, fn), fenceStart, i); codeLang = ''; i++; continue; }
+      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); emit(renderFence(codeLang, codeBuf, fn, { poster: autoEmbed }), fenceStart, i); codeLang = ''; i++; continue; }
       codeBuf.push(line); i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
@@ -291,7 +294,9 @@ function renderDoc(md, ids, opts = {}) {
     // Comments: a line that is only a video URL becomes the embed block, the same output as a ```embed fence.
     if (autoEmbed) {
       const videoUrl = bareVideoLine(line);
-      if (videoUrl) { flushList(); emit(renderFence('embed', [videoUrl], fn), i, i); i++; continue; }
+      // A comment shows a POSTER (the lightbox opens the player on click); a body ```embed fence keeps the
+      // inline player. The frame src is the https relay, as the fence uses (see renderFence).
+      if (videoUrl) { flushList(); emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i); i++; continue; }
     }
     const esc = escapeKeepingLinks(line, linkKeep);
     let m;

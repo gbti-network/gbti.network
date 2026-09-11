@@ -34,6 +34,38 @@ export function bareVideoLine(line) {
   return embedUrl(s) ? s : null;
 }
 
+/**
+ * The poster a COMMENT shows for a video instead of the live player (owner, 2026-09-11): a click on a live
+ * iframe goes to the provider, never to the page, so a lightbox needs a poster to click. YouTube has a
+ * public thumbnail per id; the other providers have none without a fetch, so they get a labelled panel.
+ * Returns null for anything embedUrl does not recognise.
+ */
+export function embedPoster(url) {
+  const src = embedUrl(url);
+  if (!src) return null;
+  const yt = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+  const provider = yt ? 'YouTube' : /vimeo/.test(src) ? 'Vimeo' : /tiktok/.test(src) ? 'TikTok' : /rumble/.test(src) ? 'Rumble' : 'Video';
+  return { src, thumb: yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+}
+
+const escAttr = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * The poster markup every comment renderer shares (the client renderer, the built page's swap script, the
+ * pending-comment cards). `frameSrc` is what the lightbox frames (the https relay on the extension, the
+ * provider URL on the site); the poster itself never loads a player. The play glyph is inline SVG so no
+ * icon sprite is needed inside a shadow root.
+ */
+export function embedPosterHtml(url, { frameSrc } = {}) {
+  const p = embedPoster(url);
+  if (!p) return '';
+  const src = frameSrc || p.src;
+  const face = p.thumb
+    ? `<img class="md-embed-thumb" src="${escAttr(p.thumb)}" alt="" loading="lazy" decoding="async" />`
+    : `<span class="md-embed-panel">${escAttr(p.provider)}</span>`;
+  return `<div class="md-embed md-embed-poster${p.portrait ? ' md-embed-portrait' : ''}" data-embed-src="${escAttr(src)}" data-embed-url="${escAttr(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
+}
+
 /** SOW-092: portrait providers (TikTok) render in a tall 9:16 frame instead of the default 16:9. */
 export function isPortraitEmbed(src) {
   return /tiktok\.com\/embed\//.test(String(src || ''));

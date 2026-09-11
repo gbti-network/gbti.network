@@ -139,11 +139,34 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
   .cmt-rich ul li { list-style: disc; }
   .cmt-rich ol li { list-style: decimal; }
   .cmt-rich blockquote { border-left: 4px solid var(--green); margin: 0.8em 0; padding: 0.1em 0 0.1em 14px; color: var(--fg); font-style: italic; }
+  /* A video in a comment: full container width, rounded, 16:9 (9:16 for a portrait provider). The built markup
+     is the sanitizer's iframe in .embed-wrap; the script below swaps it for the poster the client renderers use,
+     which opens the page lightbox. Both shapes get the same box. */
+  .cmt-rich .embed-wrap, .cmt-rich .md-embed { position: relative; width: 100%; margin: .6em 0 1em; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; }
+  .cmt-rich .md-embed.md-embed-portrait { aspect-ratio: 9 / 16; max-width: 360px; }
+  .cmt-rich .embed-wrap iframe, .cmt-rich .md-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .cmt-rich .md-embed-open { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0; border: 0; background: #111; cursor: pointer; }
+  .cmt-rich .md-embed-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cmt-rich .md-embed-panel { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 600 14px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .cmt-rich .md-embed-play { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 999px; background: rgba(0, 0, 0, .65); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 18px rgba(0, 0, 0, .4); transition: background .15s ease, transform .15s ease; }
+  .cmt-rich .md-embed-open:hover .md-embed-play, .cmt-rich .md-embed-open:focus-visible .md-embed-play { background: var(--green); transform: scale(1.06); }
   .cmt-rich :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
   /* "edited" affordance: a quiet link to the comment file's git commit history (the public repo is the database). */
   .cmt-edited { display: inline-block; font-size: 12px; color: var(--fg-mute); text-decoration: none; }
   .cmt-edited:hover { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
 </style>
+
+<script>
+  // 2026-09-11: a public comment's built video (the sanitizer's iframe inside .embed-wrap, from the remark pass)
+  // becomes the same poster the client renderers draw, so a click opens the page lightbox instead of playing
+  // in place. Comment sections only; an article body keeps its inline player. Runs for every reader.
+  import { embedPosterHtml } from '../../../client/src/video-embed.mjs';
+  document.querySelectorAll<HTMLElement>('#comments .cmt-rich .embed-wrap').forEach((wrap) => {
+    const src = wrap.querySelector('iframe')?.getAttribute('src') || '';
+    const html = src ? embedPosterHtml(src, { frameSrc: src }) : '';
+    if (html) wrap.outerHTML = html;
+  });
+</script>
 
 <script>
   // sow-158: the public content pages never called setClient(), so a member signed in on the WEBSITE saw only

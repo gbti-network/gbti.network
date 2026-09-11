@@ -222,19 +222,27 @@ const writeComment = (root, rel, fm) => {
   fs.writeFileSync(path.join(root, rel), `---\n${front}\n---\n${body}\n`);
 };
 
-test('SOW-044: a public discussion comment (no authorNote) fails the build', () => {
+test('a public discussion comment passes the build (the audience is the author\'s, 2026-09-11)', () => {
   const root = tmpRoot();
   writeComment(root, 'members/alice/comments/c1.md', { type: 'comment', visibility: 'public', targetType: 'post', __body: 'a public reply' });
   const { errors } = checkBuildSecrets({ root, env: {} });
-  assert.ok(errors.some((e) => /a public comment is only allowed as a from-the-author intro/.test(e)), errors.join('; '));
+  assert.deepEqual(errors, []);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('SOW-044: a public comment on a SHARE fails the build even with authorNote', () => {
+test('a public comment on a SHARE passes the build', () => {
   const root = tmpRoot();
-  writeComment(root, 'members/alice/comments/c2.md', { type: 'comment', visibility: 'public', authorNote: true, targetType: 'share', __body: 'reply' });
+  writeComment(root, 'members/alice/comments/c2.md', { type: 'comment', visibility: 'public', targetType: 'share', __body: 'reply' });
   const { errors } = checkBuildSecrets({ root, env: {} });
-  assert.ok(errors.some((e) => /a public comment is only allowed as a from-the-author intro/.test(e)), errors.join('; '));
+  assert.deepEqual(errors, []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a public comment that still carries an encryptedBody pointer (a half-flip) fails the build', () => {
+  const root = tmpRoot();
+  writeComment(root, 'members/alice/comments/c3.md', { type: 'comment', visibility: 'public', targetType: 'post', encryptedBody: 'members/alice/_enc/comment-c3-body.enc', __body: 'flipped but not cleaned' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /a public comment carries an encryptedBody pointer/.test(e)), errors.join('; '));
   fs.rmSync(root, { recursive: true, force: true });
 });
 

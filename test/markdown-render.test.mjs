@@ -328,14 +328,16 @@ test('bareVideoLine: only a line that is nothing but a recognized video URL', ()
 test('reader: with autoEmbed the owner\'s comment ("More please" + a URL line) renders the paragraph and the player; without it, not', () => {
   const md = 'More please\nhttps://www.youtube.com/watch?v=56f2Pn8KPDE';
   const on = renderMarkdown(md, { autoEmbed: true });
-  assert.match(on, /<p>More please<\/p>\s*<div class="md-embed"><iframe src="https:\/\/gbti\.network\/embed\/\?u=https%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D56f2Pn8KPDE"/);
+  // 2026-09-11 later the same day: a comment shows the POSTER the lightbox opens, not the inline player.
+  assert.match(on, /<p>More please<\/p>\s*<div class="md-embed md-embed-poster" data-embed-src="https:\/\/gbti\.network\/embed\/\?u=https%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D56f2Pn8KPDE"/);
+  assert.doesNotMatch(on, /<iframe/);
   const off = renderMarkdown(md);
   assert.doesNotMatch(off, /md-embed/);
   assert.match(off, /<p>More please https:\/\/www\.youtube\.com\/watch\?v=56f2Pn8KPDE<\/p>/);
   // a URL alone is the whole comment; text after the URL line starts a new paragraph; a fenced URL stays code
-  assert.match(renderMarkdown('https://youtu.be/56f2Pn8KPDE', { autoEmbed: true }), /^<div class="md-embed">/);
-  assert.match(renderMarkdown('https://youtu.be/56f2Pn8KPDE\nthen words', { autoEmbed: true }), /md-embed[\s\S]*<p>then words<\/p>/);
-  assert.doesNotMatch(renderMarkdown('```\nhttps://youtu.be/56f2Pn8KPDE\n```', { autoEmbed: true }), /md-embed/);
+  assert.match(renderMarkdown('https://youtu.be/56f2Pn8KPDE', { autoEmbed: true }), /^<div class="md-embed md-embed-poster"/);
+  assert.match(renderMarkdown('https://youtu.be/56f2Pn8KPDE\nthen words', { autoEmbed: true }), /md-embed-poster[\s\S]*<p>then words<\/p>/);
+  assert.doesNotMatch(renderMarkdown('```\nhttps://youtu.be/56f2Pn8KPDE\n```', { autoEmbed: true }), /md-embed/, 'a plain code fence stays code');
   assert.doesNotMatch(renderMarkdown('see https://youtu.be/56f2Pn8KPDE today', { autoEmbed: true }), /md-embed/);
 });
 

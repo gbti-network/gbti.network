@@ -97,20 +97,28 @@ test('publishComment: SOW-044 a from-the-author intro (authorNote on a product) 
   assert.ok(!puts.some((p) => /_enc\//.test(p.path)), 'no .enc for a public intro');
 });
 
-test('publishComment: SOW-044 a public NON-intro (no authorNote) is COERCED to members + encrypted', async () => {
+test('publishComment: the audience is the author\'s (2026-09-11): a public non-intro is committed public + plaintext', async () => {
   const puts = [];
   const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'post', targetSlug: 'hello', body: 'just a reply', visibility: 'public' });
-  assert.equal(r.visibility, 'members'); // the server ignores a public request without an authorNote intro
-  assert.equal(r.encrypted, true);
-  assert.doesNotMatch(decodeOf(puts, /comments\/.*\.md$/), /just a reply/);
+  assert.equal(r.visibility, 'public');
+  assert.equal(r.encrypted, false);
+  const md = decodeOf(puts, /comments\/.*\.md$/);
+  assert.match(md, /just a reply/);
+  assert.match(md, /visibility: public/);
+  assert.doesNotMatch(md, /encryptedBody:/);
 });
 
-test('publishComment: SOW-044 a Share comment is ALWAYS members, even with authorNote (no public intro on a Share)', async () => {
+test('publishComment: a Share comment may be public too, and stays members by default', async () => {
   const puts = [];
-  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'nice find', authorNote: true, visibility: 'public' });
-  assert.equal(r.visibility, 'members'); // a share is not a post/product/prompt, so authorNote cannot make it public
-  assert.equal(r.encrypted, true);
-  assert.doesNotMatch(decodeOf(puts, /comments\/.*\.md$/), /nice find/);
+  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'nice find', visibility: 'public' });
+  assert.equal(r.visibility, 'public');
+  assert.equal(r.encrypted, false);
+  assert.match(decodeOf(puts, /comments\/.*\.md$/), /nice find/);
+  const puts2 = [];
+  const d = await publishComment(ctxFor({ repo: fakeRepo(puts2) }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'members thought' });
+  assert.equal(d.visibility, 'members');
+  assert.equal(d.encrypted, true);
+  assert.doesNotMatch(decodeOf(puts2, /comments\/.*\.md$/), /members thought/);
 });
 
 test('publishComment: a trial member is blocked before any PR (paid-only)', async () => {
@@ -139,18 +147,32 @@ test('editComment: preserves createdAt + target, sets updatedAt, re-publishes th
   assert.match(file, /visibility: public/);
 });
 
-test('editComment: SOW-044 un-flagging an intro (authorNote->false) coerces it to members + encrypts (no plaintext strand)', async () => {
+test('editComment: un-flagging an intro keeps its audience unless told; asking for members encrypts it (no plaintext strand)', async () => {
   const puts = [];
-  const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'project', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z', __body: 'was an intro' };
-  // Explicitly drop the author-note flag on edit: the comment is no longer a from-the-author intro, so it must
-  // become members-only + encrypted rather than stranding as a public non-intro plaintext comment.
-  const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'now just a reply', authorNote: false });
+  const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'project', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z' };
+  const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'now just a reply', authorNote: false, visibility: 'members' });
   assert.equal(r.visibility, 'members');
   assert.equal(r.encrypted, true);
   const stub = decodeOf(puts, /comments\/20260101000000-old\.md$/);
   assert.doesNotMatch(stub, /now just a reply/, 'the demoted comment body must be encrypted, not committed plaintext');
   assert.match(stub, /encryptedBody:/);
   assert.ok(puts.some((p) => /_enc\/comment-.*-body\.enc$/.test(p.path)));
+});
+
+test('editComment: a members comment flipped to public is committed plaintext and its old ciphertext is deleted in the same change', async () => {
+  const puts = [];
+  const existing = { type: 'comment', id: '20260101000000-mem', author: 'alice', targetType: 'share', targetSlug: 'bob/20260101000000-x', status: 'published', visibility: 'members', createdAt: '2026-01-01T00:00:00Z', encryptedBody: 'members/alice/_enc/comment-20260101000000-mem-body.enc' };
+  // publishFiles deletes only a file that exists on the branch (getFileSha), through repo.deleteFile: this fake
+  // knows the old .enc and records its removal beside the puts.
+  const repo = { ...fakeRepo(puts), async getFileSha(_full, p) { return p.endsWith('.enc') ? 'encsha' : null; }, async deleteFile(_full, p) { puts.push({ path: p, content: null }); } };
+  const r = await editComment(ctxFor({ repo, comment: existing }), { id: '20260101000000-mem', body: 'now for everyone', visibility: 'public' });
+  assert.equal(r.visibility, 'public');
+  assert.equal(r.encrypted, false);
+  const stub = decodeOf(puts, /comments\/20260101000000-mem\.md$/);
+  assert.match(stub, /now for everyone/);
+  assert.doesNotMatch(stub, /encryptedBody:/, 'the pointer is gone');
+  const del = puts.find((p) => p.path === 'members/alice/_enc/comment-20260101000000-mem-body.enc');
+  assert.ok(del && del.content === null, 'the old .enc rides as a delete');
 });
 
 test('editComment: another member’s comment (author mismatch) is rejected', async () => {

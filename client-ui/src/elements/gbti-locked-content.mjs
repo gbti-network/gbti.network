@@ -7,6 +7,7 @@
 // locked / upgrade message. Read-only: it never holds the key or the ciphertext beyond this call.
 
 import { GbtiElement, define } from '../base.mjs';
+import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
 
 // A long code block in a comment (e.g. a shared prompt) is clipped to CLIP_LINES with a fade + a Show
 // more / Show less toggle, so a member can scan the note without scrolling past the whole block.
@@ -27,6 +28,7 @@ export function codeBlockPlan(lineCount) {
 }
 
 const PROSE = `
+  ${EMBED_POSTER_CSS}
   .state, .locked { color: var(--muted); font-size: 14px; padding: 10px 0; }
   .locked a { color: var(--accent); font-weight: 600; }
   .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
@@ -80,6 +82,7 @@ class GbtiLockedContent extends GbtiElement {
     }
     this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
     this.decorateCode();
+    wireEmbedPosters(this.root);
     this.emit('gbti-unlocked', { encPath });
   }
 

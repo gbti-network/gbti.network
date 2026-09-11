@@ -24,6 +24,11 @@
     <img class="lb-img" data-lb-img alt="" />
     <figcaption class="lb-cap" data-lb-cap></figcaption>
   </figure>
+  {/* The video mode (2026-09-11): a comment's video poster opens the player here. The iframe carries a src only
+      while the dialog is open; close clears it so nothing plays behind a closed lightbox. */}
+  <div class="lb-frame" data-lb-frame hidden>
+    <iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>
+  </div>
   <button type="button" class="lb-nav lb-next" data-lb-next aria-label="Next image" hidden>
     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
@@ -52,6 +57,10 @@
     line-height: 1.5; max-width: 90vw; text-align: center;
   }
   .lb-cap:empty { display: none; }
+  .lb-frame { width: min(92vw, 1100px); aspect-ratio: 16 / 9; max-height: 86vh; background: #000; border-radius: 10px; overflow: hidden; box-shadow: 0 12px 48px rgba(0, 0, 0, .55); }
+  .lb-frame[hidden] { display: none; }
+  .lb-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .lb[data-mode="video"] .lb-fig { display: none; }
   .lb-x, .lb-nav {
     position: fixed; display: inline-flex; align-items: center; justify-content: center;
     color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .22);
@@ -79,6 +88,8 @@
     if (!dlg || typeof dlg.showModal !== 'function') return; // no <dialog> support: body-image links still work
     const imgEl = dlg.querySelector('[data-lb-img]');
     const capEl = dlg.querySelector('[data-lb-cap]');
+    const frame = dlg.querySelector('[data-lb-frame]');
+    const frameEl = frame ? frame.querySelector('iframe') : null;
     const prevBtn = dlg.querySelector('[data-lb-prev]');
     const nextBtn = dlg.querySelector('[data-lb-next]');
 
@@ -136,6 +147,30 @@
     };
     const close = () => { dlg.close(); };
 
+    // The video mode: a comment's poster (client-ui/src/embed-lightbox.mjs dispatches `gbti-embed-open` from
+    // inside a shadow root; the built page's posters click through here directly). Autoplay on open: the
+    // viewer already pressed play on the poster.
+    const openEmbed = (src) => {
+      if (!src || !frame || !frameEl) return;
+      lastTrigger = document.activeElement;
+      group = []; idx = 0;
+      prevBtn.hidden = true; nextBtn.hidden = true;
+      dlg.setAttribute('data-mode', 'video');
+      frame.hidden = false;
+      frameEl.src = src + (src.includes('?') ? '&' : '?') + 'autoplay=1';
+      document.documentElement.style.overflow = 'hidden';
+      dlg.showModal();
+    };
+    document.addEventListener('gbti-embed-open', (e) => openEmbed(e.detail && e.detail.src));
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest && e.target.closest('.md-embed-poster .md-embed-open');
+      if (!btn || btn.getRootNode() !== document) return; // shadow-root posters reach us through the event above
+      e.preventDefault();
+      const box = btn.closest('.md-embed-poster');
+      openEmbed(box ? box.getAttribute('data-embed-src') : '');
+    });
+    window.gbtiLightbox = { openEmbed };
+
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-lightbox], .prose-gbti img');
       if (!el) return;
@@ -166,6 +201,9 @@
     dlg.addEventListener('close', () => {
       document.documentElement.style.overflow = '';
       imgEl.removeAttribute('src'); // free the decoded image
+      if (frameEl) frameEl.removeAttribute('src'); // stop the player
+      if (frame) frame.hidden = true;
+      dlg.removeAttribute('data-mode');
       // sow-175: <dialog> restores focus to whatever was focused when it opened, which was <body> while the
       // trigger was an unfocusable div. Restore explicitly so this holds regardless of whether the browser
       // focuses a tabindex element on click.

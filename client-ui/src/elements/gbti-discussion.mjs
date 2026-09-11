@@ -5,6 +5,7 @@
 // renders oldest-first, and mounts an inert <gbti-comment-box> for paid members to reply. Reloads only itself
 // when a comment for its target is posted/edited. The token never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
 import { wbCacheGet, wbCacheSet } from '../workbench-cache.mjs'; // SOW-089: SWR for the thread
 // sow-221 follow-up: the private relTime that used to live here flattened everything under 24 hours to
 // "today". The shared one reports "3 hours ago", which is what the owner asked for and what the content
@@ -31,7 +32,7 @@ const CSS = `
   .cfoot { display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
-  .cbody .md-embed { margin:.5em 0; } .cbody .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
+  ${EMBED_POSTER_CSS}
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
@@ -204,6 +205,7 @@ class GbtiDiscussion extends GbtiElement {
     }).join('');
     const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
     this.set(this.css(CSS) + threadHtml + this._composeHtml(targetType, targetSlug));
+    wireEmbedPosters(this.root);
     this.$$('[data-fold]').forEach((b) => b.addEventListener('click', () => this._toggleFold(b.dataset.fold)));
     this.$$('[data-hidec]').forEach((b) => b.addEventListener('click', () => this._hideComment(b.dataset.hidec, b.dataset.authornote === '1')));
     this.$$('[data-delc]').forEach((b) => b.addEventListener('click', () => this._deleteComment(b.dataset.delc, b.dataset.authornote === '1')));

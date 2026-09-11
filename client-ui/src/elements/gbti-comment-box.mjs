@@ -10,6 +10,8 @@
 // the page (the edit form fetches the current body on demand).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { commentBodyTooLong, COMMENT_MAX_BYTES } from '../doc-editor-core.mjs';
+import './gbti-doc-editor.mjs'; // the WorkBench visual editor, in its compact mode, replaces the textarea (owner, 2026-09-11)
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -22,8 +24,12 @@ const CSS = `
   .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
   .edit:hover { color: var(--brand); text-decoration: underline; }
   .form { margin-top: 14px; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
-  textarea:focus { outline: none; border-color: var(--brand); }
+  gbti-doc-editor { display: block; font-size: 14px; }
+  /* Members only | Public: the comment's audience, the author's choice (SOW-044's members-only rule ended 2026-09-11). */
+  .vis { display: inline-flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+  .vis button { font: inherit; font-weight: 600; font-size: 12.5px; padding: 5px 11px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+  .vis button.on { background: var(--brand); color: #fff; }
+  .vis[hidden] { display: none; }
   .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
   label.chk { font: inherit; font-size: 13px; color: var(--muted); }
   .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
@@ -63,10 +69,10 @@ class GbtiCommentBox extends GbtiElement {
 
   async _openEdit() {
     this.set(this.css(CSS) + `<p class="msg">Loading…</p>`);
-    let body = '';
-    try { body = (await this.client.getComment({ id: this._editId }))?.body ?? ''; }
+    let body = ''; let visibility = 'members';
+    try { const c = await this.client.getComment({ id: this._editId }); body = c?.body ?? ''; visibility = c?.visibility ?? c?.frontmatter?.visibility ?? 'members'; }
     catch { this.set(this.css(CSS) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`); this.on('.edit', 'click', () => this._openEdit()); return; }
-    this._form({ body, edit: true });
+    this._form({ body, edit: true, visibility });
   }
 
   // ---- COMPOSE mode ----
@@ -78,19 +84,26 @@ class GbtiCommentBox extends GbtiElement {
     this.on('.open', 'click', () => this._form({ body: '', edit: false }));
   }
 
-  _form({ body, edit }) {
-    // SOW-044: comments are members-only by default and there is no free public/members choice. The ONLY public
-    // comment is a from-the-author intro (authorNote), and only on a post/product/prompt — never on a Share. So
-    // the author-note checkbox is the sole public path, shown only for those targets in compose mode. Edit mode
-    // preserves the comment's existing audience (it only changes the body).
+  _form({ body, edit, visibility = 'members' }) {
+    // The audience is the author's choice (owner, 2026-09-11; SOW-044 had made every comment members-only except
+    // a from-the-author intro). Members only stays the default. The intro checkbox (post/product/prompt, compose
+    // only) still forces public and hides the control, since an intro is public by definition. Edit mode
+    // prefills the comment's current audience, and a flip re-publishes it (members -> public deletes the old
+    // ciphertext; public -> members encrypts).
     const isIntroTarget = ['post', 'project', 'prompt'].includes(this._target().type);
     const noteRow = (!edit && isIntroTarget)
       ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>`
       : '';
+    const vis = visibility === 'public' ? 'public' : 'members';
+    const visRow = `<div class="vis" role="group" aria-label="Who can read this comment" data-vis-row>
+        <button type="button" data-vis="members" class="${vis === 'members' ? 'on' : ''}" aria-pressed="${vis === 'members'}">Members only</button>
+        <button type="button" data-vis="public" class="${vis === 'public' ? 'on' : ''}" aria-pressed="${vis === 'public'}">Public</button>
+      </div>`;
     this.set(this.css(CSS) + `
       <div class="form">
-        <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
+        <gbti-doc-editor compact data-editor></gbti-doc-editor>
         <div class="row">
+          ${visRow}
           ${noteRow}
           <div class="actions">
             <span class="msg" aria-live="polite"></span>
@@ -99,19 +112,36 @@ class GbtiCommentBox extends GbtiElement {
           </div>
         </div>
       </div>`);
+    const ed = this.$('[data-editor]');
+    if (ed) ed.value = body || '';
+    this._vis = vis;
+    this.$$('[data-vis]').forEach((b) => b.addEventListener('click', () => {
+      this._vis = b.dataset.vis === 'public' ? 'public' : 'members';
+      this.$$('[data-vis]').forEach((x) => { const on = x.dataset.vis === this._vis; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
+    }));
+    // An intro is public by definition: checking it forces Public and hides the control; unchecking restores it.
+    this.$('[data-authornote]')?.addEventListener('change', (e) => {
+      const row = this.$('[data-vis-row]');
+      if (e.target.checked) { this._visBeforeNote = this._vis; this._vis = 'public'; if (row) row.hidden = true; }
+      else { this._vis = this._visBeforeNote || 'members'; if (row) row.hidden = false; this.$$('[data-vis]').forEach((x) => { const on = x.dataset.vis === this._vis; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); }
+    });
     this.on('.cancel', 'click', () => (edit ? this._renderEditAffordance() : this._renderCompose()));
     this.on('.post', 'click', () => (edit ? this._save() : this._post()));
   }
 
+  /** The markdown in the editor, trimmed. */
+  _bodyValue() { return String(this.$('[data-editor]')?.value || '').trim(); }
+
   async _post() {
     const wrap = this.$('.form'); const msg = this.$('.msg');
-    const body = (this.$('textarea')?.value || '').trim();
+    const body = this._bodyValue();
     if (!body) { this._say(msg, 'Write something first.', 'err'); return; }
+    if (commentBodyTooLong(body)) { this._say(msg, `The comment is too long (over ${COMMENT_MAX_BYTES} bytes).`, 'err'); return; }
     const t = this._target();
-    // A checked author-note on a post/product/prompt is the public intro; everything else is members-only. The
-    // server (publishComment) coerces independently, so this only sets the UX-correct intent.
+    // A checked author-note on a post/product/prompt is the public intro (public by definition); otherwise the
+    // audience is the control's choice. Members only is the default.
     const authorNote = !!this.$('[data-authornote]')?.checked && ['post', 'project', 'prompt'].includes(t.type);
-    const visibility = authorNote ? 'public' : 'members';
+    const visibility = authorNote ? 'public' : (this._vis === 'public' ? 'public' : 'members');
     wrap?.classList.add('busy');
     try {
       const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
@@ -121,13 +151,15 @@ class GbtiCommentBox extends GbtiElement {
 
   async _save() {
     const wrap = this.$('.form'); const msg = this.$('.msg');
-    const body = (this.$('textarea')?.value || '').trim();
+    const body = this._bodyValue();
     if (!body) { this._say(msg, 'A comment cannot be empty.', 'err'); return; }
+    if (commentBodyTooLong(body)) { this._say(msg, `The comment is too long (over ${COMMENT_MAX_BYTES} bytes).`, 'err'); return; }
     wrap?.classList.add('busy');
     try {
-      // SOW-044: editing only changes the body; the comment's audience (public intro vs members) is preserved by
-      // editComment (it defaults a missing authorNote/visibility to the existing values), so it never re-leaks.
-      const res = await this.client.editComment({ id: this._editId, body });
+      // The audience rides with the edit: a flip re-publishes the comment (members -> public deletes the old
+      // ciphertext, public -> members encrypts); an intro keeps its authorNote (editComment defaults it).
+      const visibility = this._vis === 'public' ? 'public' : 'members';
+      const res = await this.client.editComment({ id: this._editId, body, visibility });
       this._done(msg, submitAck({ prNumber: res?.prNumber }), 'gbti-comment-edited', res); // SOW-072 P2: consistent, accurate ack
     } catch (err) { this._fail(msg, err); wrap?.classList.remove('busy'); }
   }
