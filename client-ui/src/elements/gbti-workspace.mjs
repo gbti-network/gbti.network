@@ -195,7 +195,19 @@ class GbtiWorkspace extends GbtiElement {
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
     // sow-304: a live Shares list has looked for the deep-link id (found or not): stop re-issuing it.
-    this.shadowRoot?.addEventListener('gbti-share-list-loaded', () => { this._editShareId = null; });
+    this.shadowRoot?.addEventListener('gbti-share-list-loaded', (e) => {
+      const id = this._editShareId;
+      this._editShareId = null;
+      // A superadmin's Edit link on ANOTHER member's share page lands here in member scope, where My shares
+      // cannot hold the id (2026-09-11). Once the role is known, move to Network shares for this visit only and
+      // re-issue the id; the re-mounted list finds it there and opens the composer. A non-superadmin never
+      // moves (scopeFor pins them to member and the Worker refuses network shares regardless), and a list that
+      // has not resolved its role yet keeps the id for the render the resolve triggers.
+      if (id && !e?.detail?.consumed) {
+        if (!this._scopeResolved) { this._editShareId = id; return; }
+        if (this._canScope() && this._scopeNow() === 'member') { this._editShareId = id; this._setScope('house', { persist: false }); }
+      }
+    });
     this._loadProfile();
     this._ensureTab(this._tab);
     // SOW-145: the Overview carries the caller's role + personal counts, which resolve the content SCOPE and gate
@@ -303,6 +315,10 @@ class GbtiWorkspace extends GbtiElement {
       const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
       const moved = resolved !== this._scopeNow(); // compare BEFORE assigning
       this._scope = resolved;
+      // A share deep link the list looked for BEFORE this resolve was kept for it (the loaded listener); a
+      // member cannot be moved to Network shares, so nothing will look again: drop it rather than let a stale
+      // id ride into the next Shares render.
+      if (this._editShareId && !this._canScope()) this._editShareId = null;
       // Guard every render here with !this._editing (mirrors the other overview-time renders). An UNGUARDED
       // render() while the editor is open re-mounts <gbti-content-editor> and wipes in-progress edits — reachable
       // via a #new= / #edit= deep-link whose editor opens before this async resolve lands. When the scope MOVED,
@@ -700,7 +716,13 @@ class GbtiWorkspace extends GbtiElement {
     // The id is NOT cleared here: every render re-mounts the list, and the first instance is usually replaced
     // (client arrival, the overview load) before its request returns. The list announces each completed load and
     // the listener in connectedCallback drops the id then, so exactly one live list ever emits the edit.
-    if (this._tab === 'share') return `<gbti-share-list${this._scopeNow() === 'house' ? ' scope="network"' : ''}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ''}></gbti-share-list>`; // sow-317: every member's shares in Network scope
+    // The Shares tab carries the same My content / Network content switch the content tabs do (superadmin only;
+    // the owner found it missing here on 2026-09-11, so Network shares were reachable only by switching on
+    // another tab first). The buttons are wired by the same [data-scope] handler in _wireBody.
+    if (this._tab === 'share') {
+      const scopeBar = this._canScope() ? `<div class="lc-bar">${this._scopeSwitchHtml()}</div>` : '';
+      return `${scopeBar}<gbti-share-list${this._scopeNow() === 'house' ? ' scope="network"' : ''}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ''}></gbti-share-list>`; // sow-317: every member's shares in Network scope
+    }
     if (this._tab === 'saved') return `<gbti-saved></gbti-saved>`; // SOW-037
     if (this._tab === 'subs') return `<gbti-subscriptions></gbti-subscriptions>`; // SOW-037
     if (this._tab === 'prs') {
@@ -797,16 +819,20 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   // SOW-085: the shared list-controls bar (sort + published/draft filter). Rendered above every content list.
+  /** SOW-145: the My content / Network content switch, one markup for the content tabs and the Shares tab. */
+  _scopeSwitchHtml() {
+    const now = this._scopeNow();
+    const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? 'on' : ''}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
+    return `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn('member', 'My content')}${scopeBtn('house', 'Network content')}</div>`;
+  }
+
   // SOW-145: a superadmin also gets a scope switch (My content / Network content) on the far left; a non-superadmin
   // never sees it (and the server re-checks the house gate regardless).
   _listControls() {
     const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? 'on' : ''}" data-filter="${v}" type="button">${label}</button>`;
     const opt = (v, label) => `<option value="${v}"${this._sort === v ? ' selected' : ''}>${label}</option>`;
     const now = this._scopeNow();
-    const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? 'on' : ''}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
-    const scopeSwitch = this._canScope()
-      ? `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn('member', 'My content')}${scopeBtn('house', 'Network content')}</div>`
-      : '';
+    const scopeSwitch = this._canScope() ? this._scopeSwitchHtml() : '';
     // sow-317: in Network scope, an author filter over the loaded list (every author present, "All members" first).
     let authorPick = '';
     if (now === 'house') {
@@ -826,12 +852,14 @@ class GbtiWorkspace extends GbtiElement {
 
   // SOW-145: switch the content scope (My content <-> House content), persist it, reset the page + status filter,
   // and load the newly-active scope's list for the current tab (the scope-keyed cache makes a repeat switch instant).
-  _setScope(scope) {
+  _setScope(scope, { persist = true } = {}) {
     if (scope !== 'member' && scope !== 'house') return;
     if (scope === this._scopeNow()) return;
     this._scope = scope;
     this._scopeResolved = true; // an explicit choice pins it (the auto empty-personal default no longer applies)
-    try { if (typeof localStorage !== 'undefined') localStorage.setItem(WORKSPACE_SCOPE_KEY, scope); } catch { /* private mode */ }
+    // persist:false is the deep-link move onto another member's share: a visit, not a preference the next
+    // WorkBench open should inherit.
+    if (persist) { try { if (typeof localStorage !== 'undefined') localStorage.setItem(WORKSPACE_SCOPE_KEY, scope); } catch { /* private mode */ } }
     this._authorFilter = ''; // sow-317
     this._page = 0;
     this._statusFilter = 'all';
@@ -988,9 +1016,11 @@ class GbtiWorkspace extends GbtiElement {
       });
       this.$$('[data-filter]').forEach((b) => b.addEventListener('click', () => { this._statusFilter = b.dataset.filter; this._page = 0; this.render(); }));
       this.$('[data-author]')?.addEventListener('change', (e) => { this._authorFilter = String(e.target.value || ''); this._page = 0; this.render(); }); // sow-317
-      // SOW-145: the superadmin scope switch (My content / House content).
-      this.$$('[data-scope]').forEach((b) => b.addEventListener('click', () => this._setScope(b.dataset.scope)));
     }
+    // SOW-145: the superadmin scope switch (My content / Network content). Wired OUTSIDE the content-tab block
+    // since 2026-09-11: the Shares tab renders the same switch, and while this sat inside `if (tab?.type)` its
+    // buttons painted there and did nothing (the harness showed the click leaving scope, list and calls untouched).
+    this.$$('[data-scope]').forEach((b) => b.addEventListener('click', () => this._setScope(b.dataset.scope)));
     // SOW-062 + SOW-085: client-side paging, wired for whichever pager is present (content tabs OR Pull requests).
     this.$$('[data-page]').forEach((b) => b.addEventListener('click', () => {
       if (b.hasAttribute('disabled')) return;

@@ -80,3 +80,43 @@ test('sow-317: the Network scope pins: author filter + chips in the workspace, t
   const worker = read('workers/signup/index.mjs');
   for (const lit of ["'/membership/network-content'", "'/membership/network-shares'"]) assert.ok(worker.includes(lit), lit);
 });
+
+// 2026-09-11, owner report: the Shares tab had no My content / Network content switch (Network shares were
+// reachable only by switching on another tab first), and the share page showed Edit to the author alone while
+// every other content page shows it to the owner OR a superadmin. Three pins, one per repair.
+test('the Shares tab renders the same scope switch the content tabs do, from one markup helper', () => {
+  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const shareBranch = ws.slice(ws.indexOf("if (this._tab === 'share') {"), ws.indexOf('</gbti-share-list>`', ws.indexOf("if (this._tab === 'share') {")));
+  assert.ok(shareBranch.length > 0 && shareBranch.length < 900, 'the Shares tab branch was found');
+  assert.match(shareBranch, /this\._canScope\(\) \? `<div class="lc-bar">\$\{this\._scopeSwitchHtml\(\)\}<\/div>` : ''/, 'superadmin-only, the same lc-bar wrapper');
+  assert.match(shareBranch, /<gbti-share-list\$\{this\._scopeNow\(\) === 'house' \? ' scope="network"' : ''\}/, 'the list still follows the scope');
+  assert.equal((ws.match(/this\._scopeSwitchHtml\(\)/g) || []).length, 2, 'the content tabs and the Shares tab render the one helper');
+  assert.match(ws, /_scopeSwitchHtml\(\) \{[\s\S]*?data-scope="\$\{v\}"[\s\S]*?scopeBtn\('member', 'My content'\)\}\$\{scopeBtn\('house', 'Network content'\)\}/, 'the helper carries both buttons with data-scope');
+  assert.match(ws, /this\.\$\$\('\[data-scope\]'\)\.forEach\(\(b\) => b\.addEventListener\('click', \(\) => this\._setScope\(b\.dataset\.scope\)\)\)/, 'one wiring serves every rendered switch');
+});
+
+test('a deep link to another member\'s share moves a superadmin to Network shares for the visit, and nobody else anywhere', () => {
+  const ws = read('client-ui/src/elements/gbti-workspace.mjs');
+  const listener = ws.slice(ws.indexOf("addEventListener('gbti-share-list-loaded'"), ws.indexOf('\n    });', ws.indexOf("addEventListener('gbti-share-list-loaded'")) + 8);
+  assert.match(listener, /if \(id && !e\?\.detail\?\.consumed\)/, 'only an id the live list did NOT find is re-issued');
+  assert.match(listener, /if \(!this\._scopeResolved\) \{ this\._editShareId = id; return; \}/, 'before the role is known the id is kept, not acted on');
+  assert.match(listener, /if \(this\._canScope\(\) && this\._scopeNow\(\) === 'member'\) \{ this\._editShareId = id; this\._setScope\('house', \{ persist: false \}\); \}/, 'a superadmin in member scope moves once, unpersisted');
+  assert.match(ws, /if \(this\._editShareId && !this\._canScope\(\)\) this\._editShareId = null;/, 'a member\'s kept id is dropped once the role resolves');
+  assert.match(ws, /_setScope\(scope, \{ persist = true \} = \{\}\)/);
+  assert.match(ws, /if \(persist\) \{ try \{ if \(typeof localStorage !== 'undefined'\) localStorage\.setItem\(WORKSPACE_SCOPE_KEY, scope\); \}/, 'the toggle still persists; the deep-link move does not');
+  const sl = read('client-ui/src/elements/gbti-share-list.mjs');
+  assert.match(sl, /this\.emit\('gbti-share-list-loaded', \{ count: [^,]+, consumed \}\)/, 'the list reports whether it consumed the id');
+});
+
+test('the share page reveals Edit to the owner or a superadmin through the shared helper, never its own login compare', () => {
+  const page = read('src/pages/shares/[author]/[id].astro');
+  assert.match(page, /import \{ wireEditAffordance \} from '\.\.\/\.\.\/\.\.\/lib\/content';/);
+  assert.match(page, /wireEditAffordance\('\[data-share-edit\]', 'data-author'\)/);
+  assert.match(page, /<a class="share-edit-link" data-share-edit data-author=\{d\.author\} href=\{`\/workbench\/#tab=share&edit-share=\$\{encodeURIComponent\(d\.id\)\}`\} hidden>Edit<\/a>/, 'the link, its owner stamp and the deep link are unchanged');
+  assert.doesNotMatch(page, /login === String\(a\.dataset\.author/, 'the author-only compare is gone');
+  const rule = read('src/lib/content-edit.mjs');
+  assert.match(rule, /if \(identity\.role === 'superadmin'\) return true;/, 'the shared rule admits a superadmin');
+  const helper = read('src/lib/content.ts');
+  assert.match(helper, /export function wireEditAffordance\(selector: string, ownerAttr: string\)/);
+  assert.match(helper, /btn\.hidden = !canEditItem\(identity, owner\)/);
+});

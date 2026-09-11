@@ -64,8 +64,10 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
           {srcDomain && <a class="sss-member" href={authorHref(d.author)} aria-label={authorDisplay(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={20} /></a>}
         </span>
         <span class="tmeta"><a class="who" href={authorHref(d.author)}>{authorDisplay(d.author)}</a><span class="dotsep"></span>{formatDate(d.createdAt)}{d.updatedAt && <span class="share-edited"><span class="dotsep"></span>edited {formatDate(d.updatedAt)}</span>}</span>
-        {/* sow-304: the author's own Edit control. Hidden in the static page; the script below reveals it when the
-            signed-in member IS the author. It deep-links into the WorkBench, which opens the composer on this share. */}
+        {/* sow-304: the Edit control. Hidden in the static page; the script below reveals it to the share's author
+            or a superadmin (the same rule as every other content page, wired through wireEditAffordance since
+            2026-09-11). It deep-links into the WorkBench, which opens the composer on this share; for a superadmin
+            on someone else's share the WorkBench moves to Network shares to find it. */}
         <a class="share-edit-link" data-share-edit data-author={d.author} href={`/workbench/#tab=share&edit-share=${encodeURIComponent(d.id)}`} hidden>Edit</a>
         <span class="kind-tag kt-share">shared{srcDomain ? ` · ${srcDomain}` : ''}</span>
       </div>
@@ -147,15 +149,11 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
 </BaseLayout>
 
 <script>
-  // sow-304: reveal the Edit link to the share's author only. Presentational: the WorkBench and the Worker
-  // enforce whose share it is; a mismatch here shows a link that leads to an empty list at worst.
-  import { currentIdentity, readMemberSignal, onMemberSignal } from '../../../lib/member-signal';
-  function reveal(s: any) {
-    const login = s && s.login ? String(s.login).toLowerCase() : '';
-    document.querySelectorAll<HTMLElement>('[data-share-edit]').forEach((a) => { a.hidden = !(login && login === String(a.dataset.author || '').toLowerCase()); });
-  }
-  reveal(currentIdentity(readMemberSignal()));
-  onMemberSignal(reveal);
+  // sow-304 / sow-183: reveal the Edit link to the share's author or a superadmin, the one rule every detail page
+  // shares (canEditItem). Presentational: the WorkBench and the Worker enforce whose share it is; a mismatch here
+  // shows a link that leads to an empty list at worst.
+  import { wireEditAffordance } from '../../../lib/content';
+  wireEditAffordance('[data-share-edit]', 'data-author');
 </script>
 
 <style>

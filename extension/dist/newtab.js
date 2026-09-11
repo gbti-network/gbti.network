@@ -18835,8 +18835,19 @@ ${String(body ?? "")}`;
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
-      this.shadowRoot?.addEventListener("gbti-share-list-loaded", () => {
+      this.shadowRoot?.addEventListener("gbti-share-list-loaded", (e) => {
+        const id = this._editShareId;
         this._editShareId = null;
+        if (id && !e?.detail?.consumed) {
+          if (!this._scopeResolved) {
+            this._editShareId = id;
+            return;
+          }
+          if (this._canScope() && this._scopeNow() === "member") {
+            this._editShareId = id;
+            this._setScope("house", { persist: false });
+          }
+        }
       });
       this._loadProfile();
       this._ensureTab(this._tab);
@@ -18941,6 +18952,7 @@ ${String(body ?? "")}`;
         const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
         const moved = resolved !== this._scopeNow();
         this._scope = resolved;
+        if (this._editShareId && !this._canScope()) this._editShareId = null;
         if (!this._editing) {
           if (moved) {
             this._page = 0;
@@ -19355,7 +19367,10 @@ ${String(body ?? "")}`;
       if (this._tab === "overview") return this._overviewHtml();
       if (this._tab === "earnings") return this._renderEarnings();
       if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
-      if (this._tab === "share") return `<gbti-share-list${this._scopeNow() === "house" ? ' scope="network"' : ""}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
+      if (this._tab === "share") {
+        const scopeBar = this._canScope() ? `<div class="lc-bar">${this._scopeSwitchHtml()}</div>` : "";
+        return `${scopeBar}<gbti-share-list${this._scopeNow() === "house" ? ' scope="network"' : ""}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
+      }
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
       if (this._tab === "prs") {
@@ -19420,14 +19435,19 @@ ${String(body ?? "")}`;
       return 0;
     }
     // SOW-085: the shared list-controls bar (sort + published/draft filter). Rendered above every content list.
+    /** SOW-145: the My content / Network content switch, one markup for the content tabs and the Shares tab. */
+    _scopeSwitchHtml() {
+      const now = this._scopeNow();
+      const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? "on" : ""}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
+      return `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn("member", "My content")}${scopeBtn("house", "Network content")}</div>`;
+    }
     // SOW-145: a superadmin also gets a scope switch (My content / Network content) on the far left; a non-superadmin
     // never sees it (and the server re-checks the house gate regardless).
     _listControls() {
       const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? "on" : ""}" data-filter="${v}" type="button">${label}</button>`;
       const opt = (v, label) => `<option value="${v}"${this._sort === v ? " selected" : ""}>${label}</option>`;
       const now = this._scopeNow();
-      const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? "on" : ""}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
-      const scopeSwitch = this._canScope() ? `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn("member", "My content")}${scopeBtn("house", "Network content")}</div>` : "";
+      const scopeSwitch = this._canScope() ? this._scopeSwitchHtml() : "";
       let authorPick = "";
       if (now === "house") {
         const tab = TABS.find((t) => t.id === this._tab);
@@ -19439,14 +19459,16 @@ ${String(body ?? "")}`;
     }
     // SOW-145: switch the content scope (My content <-> House content), persist it, reset the page + status filter,
     // and load the newly-active scope's list for the current tab (the scope-keyed cache makes a repeat switch instant).
-    _setScope(scope) {
+    _setScope(scope, { persist = true } = {}) {
       if (scope !== "member" && scope !== "house") return;
       if (scope === this._scopeNow()) return;
       this._scope = scope;
       this._scopeResolved = true;
-      try {
-        if (typeof localStorage !== "undefined") localStorage.setItem(WORKSPACE_SCOPE_KEY, scope);
-      } catch {
+      if (persist) {
+        try {
+          if (typeof localStorage !== "undefined") localStorage.setItem(WORKSPACE_SCOPE_KEY, scope);
+        } catch {
+        }
       }
       this._authorFilter = "";
       this._page = 0;
@@ -19579,8 +19601,8 @@ ${String(body ?? "")}`;
           this._page = 0;
           this.render();
         });
-        this.$$("[data-scope]").forEach((b) => b.addEventListener("click", () => this._setScope(b.dataset.scope)));
       }
+      this.$$("[data-scope]").forEach((b) => b.addEventListener("click", () => this._setScope(b.dataset.scope)));
       this.$$("[data-page]").forEach((b) => b.addEventListener("click", () => {
         if (b.hasAttribute("disabled")) return;
         this._page = Number(b.dataset.page) || 0;
