@@ -61,3 +61,45 @@ export function fileToDataUrl(file) {
     r.readAsDataURL(file);
   });
 }
+
+/** The Worker's cap for one image (workbench-client.ts MAX_IMAGE_BYTES, check-media). */
+export const IMAGE_MAX_BYTES = 1_048_576;
+
+/**
+ * The sizes and qualities tried, in order, when an image is over the cap: the long edge in CSS pixels and the
+ * WEBP quality. A screenshot re-encodes under the cap at the first step nearly always; a photo walks down.
+ */
+export const FIT_LADDER = Object.freeze([[1600, 0.9], [1600, 0.8], [1600, 0.7], [1200, 0.75], [1000, 0.7], [800, 0.65]]);
+
+/**
+ * An image that fits the cap, or the reason it cannot. Owner report, 2026-09-11: a 174 KB webp copied out of a
+ * Chrome tab pasted as "over 1 MB", because a browser puts a copied image on the clipboard as a decoded PNG
+ * bitmap, many times the size of the file it came from. So an image over the cap is re-encoded here as WEBP,
+ * walking FIT_LADDER until it fits; an image already under the cap is passed through untouched (a dropped
+ * webp keeps its bytes, its name and its format). Browser-only past the first line (canvas); `encode` is
+ * injectable for tests. Returns { blob, name, reencoded } or throws the cap error when nothing on the ladder fits.
+ */
+export async function fitImageFile(file, { maxBytes = IMAGE_MAX_BYTES, ladder = FIT_LADDER, encode = null } = {}) {
+  const name = String(file?.name || 'image.png');
+  if (!(Number(file?.size) > maxBytes)) return { blob: file, name, reencoded: false };
+  const base = name.replace(/\.[a-z0-9]+$/i, '') || 'image';
+  const enc = encode || encodeWebp;
+  for (const [edge, quality] of ladder) {
+    const blob = await enc(file, edge, quality);
+    if (blob && blob.size <= maxBytes) return { blob, name: `${base}.webp`, reencoded: true };
+  }
+  throw new Error('That image is over 1 MB even after shrinking it. Please optimize it (or pick a smaller one) first.');
+}
+
+/** Draw the image at most `edge` pixels on its long side and encode WEBP at `quality`. Browser-only. */
+async function encodeWebp(file, edge, quality) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, edge / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale));
+  const h = Math.max(1, Math.round(bmp.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  try { bmp.close?.(); } catch { /* not every host */ }
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/webp', quality));
+}

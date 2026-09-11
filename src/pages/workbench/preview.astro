@@ -675,7 +675,7 @@ const labelOf = CATEGORY_LABELS;
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
       const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout } = await import('../../../client-ui/src/block-commit.mjs');
-      const { imagePastePlan, pastedImageName, fileToDataUrl } = await import('../../../client-ui/src/image-paste.mjs');
+      const { imagePastePlan, pastedImageName, fileToDataUrl, fitImageFile } = await import('../../../client-ui/src/image-paste.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
@@ -854,8 +854,11 @@ const labelOf = CATEGORY_LABELS;
           try {
             const taken = referencedDraftImages(fm, String(bodyDoc.get() || ''))
               .map((p: string) => stagedImageName(p) || String(p).split('/').pop() || '');
-            const filename = pastedImageName(plan.file, taken);
-            const dataUrl = await fileToDataUrl(plan.file);
+            // A copied image arrives as a decoded PNG bitmap, often over the cap for a small webp; fitImageFile
+            // re-encodes anything over the cap as WEBP and passes a file that already fits through untouched.
+            const fit = await fitImageFile(plan.file);
+            const filename = pastedImageName({ name: fit.name, type: fit.blob?.type || plan.file?.type }, taken);
+            const dataUrl = await fileToDataUrl(fit.blob);
             const res = await client.stageImage({ filename, dataBase64: dataUrl.split(',')[1] || '', itemPath, item: `${type}:${slug}` });
             ref = String(res?.path || '');
             alt = filename.replace(/\.[a-z0-9]+$/i, '');
@@ -875,6 +878,28 @@ const labelOf = CATEGORY_LABELS;
         if (!el) return;
         const plan = imagePastePlan(ev.clipboardData);
         if (!plan) return;
+        ev.preventDefault();
+        void pasteImage(docOfEl(el), el, plan);
+      }, true);
+      // A dropped image file (owner, 2026-09-11: a webp dragged in from the file explorer did nothing) lands the
+      // same way a pasted one does, after the block under the pointer, or after the last block when dropped on
+      // the margin. dragover must be cancelled for the drop to be offered at all.
+      const dropBlockOf = (ev: DragEvent): HTMLElement | null => {
+        const at = (ev.target as HTMLElement | null)?.closest?.('[data-blk], [data-nblk]') as HTMLElement | null;
+        if (at) return at;
+        const all = bodyEl ? Array.from(bodyEl.querySelectorAll('[data-blk]')) as HTMLElement[] : [];
+        return all.length ? all[all.length - 1] : null;
+      };
+      document.addEventListener('dragover', (ev: DragEvent) => {
+        if (!editing || !bodyEl?.contains(ev.target as Node)) return;
+        if (Array.from(ev.dataTransfer?.types || []).includes('Files')) { ev.preventDefault(); if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy'; }
+      }, true);
+      document.addEventListener('drop', (ev: DragEvent) => {
+        if (!editing || !bodyEl?.contains(ev.target as Node)) return;
+        const plan = imagePastePlan(ev.dataTransfer);
+        if (!plan) return;
+        const el = dropBlockOf(ev);
+        if (!el) return;
         ev.preventDefault();
         void pasteImage(docOfEl(el), el, plan);
       }, true);

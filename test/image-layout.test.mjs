@@ -298,3 +298,34 @@ test('an image with a layout suffix leaves a bio excerpt whole', () => {
   assert.equal(bioExcerpt('Before ![A](./images/x.png){full} after'), 'Before after');
   assert.equal(bioExcerpt('Before ![A](./images/x.png){left wrap} after'), 'Before after');
 });
+
+// ---- the follow-up (owner, 2026-09-11 night): a dropped file, and a copied image that arrives over the cap --------
+
+test('fitImageFile: a file under the cap passes through untouched; one over it walks the ladder and becomes webp', async () => {
+  const { fitImageFile, FIT_LADDER, IMAGE_MAX_BYTES } = await import('../client-ui/src/image-paste.mjs');
+  assert.equal(IMAGE_MAX_BYTES, 1_048_576, 'the Worker gate and check-media cap');
+  assert.deepEqual(FIT_LADDER.map((s) => s[0]), [1600, 1600, 1600, 1200, 1000, 800], 'edges step down after quality');
+  const small = { name: 'photo.webp', type: 'image/webp', size: 174_000 };
+  assert.deepEqual(await fitImageFile(small), { blob: small, name: 'photo.webp', reencoded: false });
+  const tried = [];
+  const encode = async (_f, edge, q) => { tried.push([edge, q]); return { size: tried.length < 3 ? 2_000_000 : 400_000, type: 'image/webp' }; };
+  const big = { name: 'image.png', type: 'image/png', size: 3_000_000 };
+  const out = await fitImageFile(big, { encode });
+  assert.equal(out.name, 'image.webp');
+  assert.equal(out.reencoded, true);
+  assert.equal(out.blob.size, 400_000);
+  assert.deepEqual(tried, [[1600, 0.9], [1600, 0.8], [1600, 0.7]], 'stops at the first step that fits');
+  await assert.rejects(fitImageFile(big, { encode: async () => ({ size: 5_000_000 }) }), /over 1 MB even after shrinking/);
+  await assert.rejects(fitImageFile(big, { encode: async () => null }), /over 1 MB/);
+});
+
+test('the Preview fits a pasted image before staging it and lands a dropped file the same way', () => {
+  const src = read('src/pages/workbench/preview.astro');
+  assert.ok(src.includes('const fit = await fitImageFile(plan.file);'), 'fit before staging');
+  assert.ok(src.includes('const dataUrl = await fileToDataUrl(fit.blob);'), 'the fitted bytes are what is staged');
+  assert.ok(src.includes("pastedImageName({ name: fit.name, type: fit.blob?.type || plan.file?.type }, taken)"), 'and named after the fit (a re-encode is .webp)');
+  assert.ok(src.includes("document.addEventListener('dragover', (ev: DragEvent) => {"), 'dragover is cancelled so the drop is offered');
+  assert.ok(src.includes("document.addEventListener('drop', (ev: DragEvent) => {"), 'a drop listener');
+  assert.ok(src.includes('const plan = imagePastePlan(ev.dataTransfer);'), 'that asks the same planner');
+  assert.ok(src.includes('void pasteImage(docOfEl(el), el, plan);\n      }, true);\n      // A dropped image file'), 'and lands through the same insert path');
+});
