@@ -43,7 +43,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
   if (key && !catLabels[key]) catLabels[key] = categoryLabel(key);
 }
 ---
-<div class="wrap feedwrap feed-page" data-feedview data-view="card" data-signup-base={SIGNUP_BASE} data-cat-labels={JSON.stringify(catLabels)}>
+<div class="wrap feedwrap feed-page" data-feedview data-narrow={narrow} data-view="card" data-signup-base={SIGNUP_BASE} data-cat-labels={JSON.stringify(catLabels)}>
   {!isNews && (
     <div class="feed-topbar">
       <button type="button" class="members-toggle" data-members-toggle aria-pressed="false">
@@ -101,13 +101,10 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       (workers/signup/membership-shares.mjs, sow-158), so members bodies stay pointer-only and are decrypted
       through the Worker on expand. THE AFFORDANCE IS NOT THE BOUNDARY: that route gates server-side, so a
       wrong branch here shows the wrong UI, never member content to a non-member. */}
-  {isShares && (
-    <div class="feed-member-stream" data-member-stream hidden>
-      <h2 class="fms-h">Member stream</h2>
-      <p class="fms-sub">Shares posted to members only, including anything posted since the last deploy.</p>
-      <gbti-shares-feed></gbti-shares-feed>
-    </div>
-  )}
+  {/* sow-312 used to reveal a "Member stream" here for a paid or trial member, rendered by the account hub's
+      element in the extension's row design above these cards. The owner wanted one grid in the site's cards
+      (2026-09-11): the members-only shares now arrive as the SAME cards, merged into the list below by date
+      (the script at the foot of this file, src/lib/feed-share-cards.mjs). */}
 
   {isNews ? (
     <>
@@ -184,7 +181,10 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
     // The News view has no server-rendered FeedList; list stays null there and only the density +
     // news-renderer paths below apply.
     const list = view.querySelector<HTMLElement>('[data-feedlist]');
-    const rows = list ? Array.from(list.querySelectorAll<HTMLElement>('[data-fi]')) : [];
+    let rows = list ? Array.from(list.querySelectorAll<HTMLElement>('[data-fi]')) : [];
+    // Live share cards (a member's members-only shares) land after load; re-collect so the toggle and the
+    // tag filter see them too.
+    list?.addEventListener('feed-rows-changed', () => { rows = Array.from(list.querySelectorAll<HTMLElement>('[data-fi]')); apply(); });
     const empty = view.querySelector<HTMLElement>('[data-feed-empty]');
     const banner = view.querySelector<HTMLElement>('[data-tag-banner]');
     const bannerLabel = view.querySelector<HTMLElement>('[data-tag-label]');
@@ -369,35 +369,48 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
 </script>
 
 <script>
-  // sow-312: reveal the live member stream for a paid or trialing member, and hide the locked count card that
-  // was being shown to them. Mirrors the /account hub's mount exactly (account.astro), including the tier
-  // test, so the two surfaces cannot drift into disagreeing about who sees the stream.
+  // sow-312, reshaped 2026-09-11: for a paid or trialing member the shares feed is ONE grid. The members-only
+  // shares (and any share newer than the last deploy) come from the tier-gated /membership/shares route and
+  // are drawn as the same cards FeedList builds, slotted into the ladder by date. The locked count card that
+  // was being shown to members is hidden. The tier test is the one predicate the /account hub uses
+  // (src/lib/member-stream.mjs), pinned against the Worker's READ_MEMBERS, so the two cannot drift.
+  // THE AFFORDANCE IS NOT THE BOUNDARY: the route gates server-side; a wrong branch here shows the wrong UI,
+  // never member content to a non-member. A failed read leaves the built cards exactly as they are.
   import { currentIdentity, readMemberSignal, onMemberSignal } from '../../lib/member-signal';
   import { canReadMemberStream } from '../../lib/member-stream.mjs';
+  import { mergeSharesIntoFeed } from '../../lib/feed-share-cards.mjs';
+  import { authorDisplay, authorHref } from '../../lib/authors';
+  import { githubAvatarUrl } from '../../lib/avatars';
+  import { defaultFeatureImage } from '../../lib/feature-image';
 
   (() => {
-    const mount = document.querySelector<HTMLElement>('[data-member-stream]');
-    if (!mount) return; // not the shares view
-    let mounted = false;
+    const view = document.querySelector<HTMLElement>('[data-feedview][data-narrow="shares"]');
+    const list = view?.querySelector<HTMLElement>('[data-feedlist]');
+    if (!view || !list) return; // not the shares view
+    let merged = false;
 
     async function render(s: ReturnType<typeof currentIdentity>) {
-      // One shared predicate (src/lib/member-stream.mjs), pinned by test against the Worker's READ_MEMBERS,
-      // so this view and the /account hub cannot drift into disagreeing about who sees the stream.
       const entitled = canReadMemberStream(s);
       document.querySelectorAll<HTMLElement>('[data-locked-shares]').forEach((el) => { el.hidden = entitled; });
-      mount.hidden = !entitled;
-      if (!entitled || mounted) return;
-      mounted = true;
-      const signupBase = document.documentElement.dataset.signupBase || '';
-      const { createWorkbenchClient } = await import('../../lib/workbench-client');
-      const { setClient } = await import('../../../client-ui/src/base.mjs');
-      setClient(createWorkbenchClient({
-        signupBase,
-        login: String(s!.login),
-        githubId: s!.githubId != null ? String(s!.githubId) : null,
-      }));
-      // Defining the element upgrades the static tag; it renders on the setClient subscriber fan-out.
-      await import('../../../client-ui/src/elements/gbti-shares-feed.mjs');
+      if (!entitled || merged) return;
+      merged = true;
+      try {
+        const signupBase = document.documentElement.dataset.signupBase || '';
+        const { createWorkbenchClient } = await import('../../lib/workbench-client');
+        const client = createWorkbenchClient({
+          signupBase,
+          login: String(s!.login),
+          githubId: s!.githubId != null ? String(s!.githubId) : null,
+        });
+        const r = await client.listShares({ limit: 100 });
+        mergeSharesIntoFeed(list, r?.items ?? [], {
+          now: Date.now(),
+          avatarUrl: (login: string) => githubAvatarUrl(login, 64),
+          authorDisplay,
+          authorHref,
+          fallbackImage: defaultFeatureImage('share'),
+        });
+      } catch { /* the built cards stand */ }
     }
 
     render(currentIdentity(readMemberSignal()));

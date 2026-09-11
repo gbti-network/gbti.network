@@ -50,6 +50,7 @@ const catsOf = (it: FeedItem) => catsAttr(it.categories);
               data-tags={tagsAttr(it)}
               data-cats={catsOf(it)}
               data-share-slug={it.kind === 'share' ? it.slug : undefined}
+              data-ts={it.date}
             >
               <div class="feed-main">
                 <div class="feed-meta">
