@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown } from '../client/src/markdown.mjs';
-import { embedUrl, isPortraitEmbed } from '../client/src/video-embed.mjs';
+import { embedUrl, isPortraitEmbed, bareVideoLine } from '../client/src/video-embed.mjs';
 import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
@@ -310,4 +310,55 @@ test('the two spaces are not content, and a trailing break at the end of a parag
   assert.ok(!/  <br/.test(renderMarkdown('one  \ntwo')), 'the marker spaces leaked into the output');
   const html = renderMarkdown('trailing  ');
   assert.ok(!/<br/.test(html), 'a hard break with nothing after it is not a break');
+});
+
+// 2026-09-11 (owner): a raw video URL pasted into a COMMENT frames the player. One shared line test
+// (bareVideoLine) drives both renderers; the site build applies it to comment files only, the client renderer
+// only when asked (comment bodies), so an article renders exactly as written in both.
+test('bareVideoLine: only a line that is nothing but a recognized video URL', () => {
+  assert.equal(bareVideoLine('https://www.youtube.com/watch?v=56f2Pn8KPDE'), 'https://www.youtube.com/watch?v=56f2Pn8KPDE');
+  assert.equal(bareVideoLine('  https://youtu.be/56f2Pn8KPDE  '), 'https://youtu.be/56f2Pn8KPDE');
+  assert.equal(bareVideoLine('https://vimeo.com/123456'), 'https://vimeo.com/123456');
+  assert.equal(bareVideoLine('watch https://youtu.be/56f2Pn8KPDE'), null, 'words around it');
+  assert.equal(bareVideoLine('https://example.com/a'), null, 'not a video host');
+  assert.equal(bareVideoLine('56f2Pn8KPDE'), null, 'a bare id is not a URL');
+  assert.equal(bareVideoLine('[watch](https://youtu.be/56f2Pn8KPDE)'), null, 'a titled link');
+});
+
+test('reader: with autoEmbed the owner\'s comment ("More please" + a URL line) renders the paragraph and the player; without it, not', () => {
+  const md = 'More please\nhttps://www.youtube.com/watch?v=56f2Pn8KPDE';
+  const on = renderMarkdown(md, { autoEmbed: true });
+  assert.match(on, /<p>More please<\/p>\s*<div class="md-embed"><iframe src="https:\/\/gbti\.network\/embed\/\?u=https%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D56f2Pn8KPDE"/);
+  const off = renderMarkdown(md);
+  assert.doesNotMatch(off, /md-embed/);
+  assert.match(off, /<p>More please https:\/\/www\.youtube\.com\/watch\?v=56f2Pn8KPDE<\/p>/);
+  // a URL alone is the whole comment; text after the URL line starts a new paragraph; a fenced URL stays code
+  assert.match(renderMarkdown('https://youtu.be/56f2Pn8KPDE', { autoEmbed: true }), /^<div class="md-embed">/);
+  assert.match(renderMarkdown('https://youtu.be/56f2Pn8KPDE\nthen words', { autoEmbed: true }), /md-embed[\s\S]*<p>then words<\/p>/);
+  assert.doesNotMatch(renderMarkdown('```\nhttps://youtu.be/56f2Pn8KPDE\n```', { autoEmbed: true }), /md-embed/);
+  assert.doesNotMatch(renderMarkdown('see https://youtu.be/56f2Pn8KPDE today', { autoEmbed: true }), /md-embed/);
+});
+
+test('build: a comment file frames a bare video line (gfm autolink or plain text), keeps the other lines\' formatting, and an article does not', async () => {
+  const md = 'More please\nhttps://www.youtube.com/watch?v=56f2Pn8KPDE\n\nAnd **bold** after.';
+  const run = (path, extra = {}) => unified()
+    .use(remarkParse).use(remarkGfm).use(remarkContentBlocks)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeRaw).use(rehypeSanitize, sanitizeSchema)
+    .use(rehypeIframeHostAllowlist).use(rehypeStyleAllowlist).use(rehypeIdSafety)
+    .use(rehypeStringify).process({ value: md, path, ...extra }).then(String);
+  const asComment = await run('/repo/members/atwellpub/comments/20260911-abc.md');
+  assert.match(asComment, /<p>More please<\/p>\s*<div class="embed-wrap"><iframe src="https:\/\/www\.youtube\.com\/embed\/56f2Pn8KPDE"/, 'the URL line is the player, the words stay a paragraph');
+  assert.match(asComment, /<p>And <strong>bold<\/strong> after\.<\/p>/, 'the next paragraph is untouched');
+  assert.doesNotMatch(asComment, /watch\?v=56f2Pn8KPDE<\/a>/, 'no leftover autolink');
+  const asPost = await run('/repo/members/atwellpub/posts/x/index.md');
+  assert.doesNotMatch(asPost, /embed-wrap/, 'an article body keeps the plain link');
+  assert.match(asPost, /<a href="https:\/\/www\.youtube\.com\/watch\?v=56f2Pn8KPDE">/);
+  // the second signal: a comment's frontmatter (targetType + targetSlug) when no path is handed over
+  const byFrontmatter = await run(undefined, { data: { astro: { frontmatter: { targetType: 'share', targetSlug: 'a/b' } } } });
+  assert.match(byFrontmatter, /embed-wrap/, 'a comment recognised by frontmatter alone');
+  // a titled link and a URL with words around it stay links even in a comment
+  const kept = await unified().use(remarkParse).use(remarkGfm).use(remarkContentBlocks).use(remarkRehype, { allowDangerousHtml: true }).use(rehypeRaw).use(rehypeStringify)
+    .process({ value: '[watch](https://youtu.be/56f2Pn8KPDE)\n\nsee https://youtu.be/56f2Pn8KPDE now', path: '/r/members/a/comments/c.md' }).then(String);
+  assert.doesNotMatch(kept, /embed-wrap/);
 });

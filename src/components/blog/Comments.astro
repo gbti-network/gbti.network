@@ -76,12 +76,12 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
     </article>
   )}
 
-  <h2 class="h3" style={intro ? 'margin-top:40px' : ''}>
+  <h2 class="h3" style={intro ? 'margin-top:40px' : ''} data-comments-count={thread.length}>
     {thread.length} {thread.length === 1 ? 'Comment' : 'Comments'}
   </h2>
 
   {thread.length === 0 ? (
-    <div class="card" style="padding:24px;background:var(--tint-warm);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
+    <div class="card" data-comments-empty style="padding:24px;background:var(--tint-warm);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
       <p class="body-sm muted" style="margin:0">
         No comments yet. Be the first.<span class="cmt-join-pitch"> Members comment from the GBTI local client, where comments are
         submitted as pull requests and auto-published for paid members.</span>
@@ -114,6 +114,11 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
       ))}
     </ul>
   )}
+
+  {/* SOW-076 on the website (2026-09-11): the signed-in author's own comments still posting, rendered here as
+      cards with a merge-status note the moment they post, so a fresh comment does not look lost for the 2 to 3
+      minutes the site takes to rebuild. Inert (empty) for everyone else; the built thread above stays the record. */}
+  <gbti-comment-echoes data-gbti-target-type={targetType} data-gbti-target-slug={targetSlug}></gbti-comment-echoes>
 
   {/* SOW-027: the inert comment composer; the GBTI client upgrades it for a paid member, inert otherwise. */}
   <CommentBox targetType={targetType} targetSlug={targetSlug} readerPath={itemReaderPath} />

@@ -1608,7 +1608,9 @@ export default {
         const cors = corsHeaders(request, env, { credentials: true });
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'GET') {
-          const r = pathname === '/membership/network-content' ? await listNetworkContent(request, env) : await listNetworkShares(request, env);
+          // allowCookie: the WorkBench on the website has no bearer token; without it the second superadmin saw
+          // "a GitHub bearer token is required" on Network shares (2026-09-11). The role is still the fresh mirror.
+          const r = pathname === '/membership/network-content' ? await listNetworkContent(request, env, { allowCookie: true }) : await listNetworkShares(request, env, { allowCookie: true });
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization, Cookie' });
         }
       }

@@ -21,6 +21,19 @@ export function embedUrl(v) {
   return null;
 }
 
+/**
+ * A line that is NOTHING but a recognized video URL (an http(s) URL alone on its line, that embedUrl knows how
+ * to frame). Both comment renderers (the site build's remark pass and the client renderer) turn such a line
+ * into the same embed the ```embed fence produces, so a member who pastes a YouTube link into a comment gets
+ * the player without knowing the fence (owner, 2026-09-11). Returns the trimmed URL, or null. A URL with
+ * words around it, a titled markdown link, or a bare id stays as it is.
+ */
+export function bareVideoLine(line) {
+  const s = String(line ?? '').trim();
+  if (!/^https?:\/\/\S+$/.test(s)) return null;
+  return embedUrl(s) ? s : null;
+}
+
 /** SOW-092: portrait providers (TikTok) render in a tall 9:16 frame instead of the default 16:9. */
 export function isPortraitEmbed(src) {
   return /tiktok\.com\/embed\//.test(String(src || ''));

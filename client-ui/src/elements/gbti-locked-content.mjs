@@ -71,7 +71,10 @@ class GbtiLockedContent extends GbtiElement {
     }
     let html = '';
     try {
-      html = (await this.client.preview({ body: text }))?.html ?? ''; // renderMarkdown escapes raw HTML, so this is safe
+      // autoEmbed for a COMMENT body: a bare video link frames the player, as the built public comment does.
+      // Share comments are members-only, so this decrypted path is the one most comments actually render through.
+      const autoEmbed = (this.dataset.gbtiKind || this.getAttribute('data-gbti-kind') || '') === 'comment';
+      html = (await this.client.preview({ body: text, autoEmbed }))?.html ?? ''; // renderMarkdown escapes raw HTML, so this is safe
     } catch {
       html = '';
     }

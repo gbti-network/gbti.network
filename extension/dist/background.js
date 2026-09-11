@@ -20295,6 +20295,11 @@ function embedUrl(v) {
   if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
   return null;
 }
+function bareVideoLine(line) {
+  const s = String(line ?? "").trim();
+  if (!/^https?:\/\/\S+$/.test(s)) return null;
+  return embedUrl(s) ? s : null;
+}
 
 // client/src/markdown.mjs
 var EMBED_RELAY = "https://gbti.network/embed/";
@@ -20448,10 +20453,11 @@ function tableAlignments(line) {
 function hardBreak(escaped, raw) {
   return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
 }
-function renderMarkdown(md) {
-  return renderDoc(md, false).html;
+function renderMarkdown(md, opts = {}) {
+  return renderDoc(md, false, opts).html;
 }
-function renderDoc(md, ids) {
+function renderDoc(md, ids, opts = {}) {
+  const autoEmbed = !!opts.autoEmbed;
   const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
   const ranges = [];
@@ -20522,6 +20528,15 @@ function renderDoc(md, ids) {
       footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join("<br/>") });
       continue;
     }
+    if (autoEmbed) {
+      const videoUrl = bareVideoLine(line);
+      if (videoUrl) {
+        flushList();
+        emit(renderFence("embed", [videoUrl], fn), i, i);
+        i++;
+        continue;
+      }
+    }
     const esc2 = escapeKeepingLinks(line, linkKeep);
     let m;
     if (m = /^(#{1,6})\s+(.*)$/.exec(esc2)) {
@@ -20588,7 +20603,7 @@ function renderDoc(md, ids) {
     const paraStart = i;
     const para = [hardBreak(esc2, line)];
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i])) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
       para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
       i++;
     }
@@ -22293,7 +22308,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/members-content":
         return ok(await listMembersOnly(ctx));
       case "/api/preview":
-        return ok({ html: renderMarkdown(body?.body ?? "") });
+        return ok({ html: renderMarkdown(body?.body ?? "", { autoEmbed: !!body?.autoEmbed }) });
+      // autoEmbed: comment bodies frame a bare video URL
       // SOW-082 + sow-204: what survives of draft staging in the EXTENSION is this read/save pair, which the
       // reader uses. The list, discard and publish-from-draft routes were authoring and left with the rest.
       case "/api/draft":

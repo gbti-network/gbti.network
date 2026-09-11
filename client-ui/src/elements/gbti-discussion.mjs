@@ -12,6 +12,7 @@ import { wbCacheGet, wbCacheSet } from '../workbench-cache.mjs'; // SOW-089: SWR
 import { relTime } from '../time-core.mjs';
 import './gbti-comment-box.mjs';
 import { RANK } from '../mod-actions-core.mjs'; // SOW-071: the moderator+ gate for per-comment Hide
+import { echoNote } from '../comment-echo-core.mjs'; // a pending (echo) row's merge-status note, worded like the website's
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -29,6 +30,8 @@ const CSS = `
   /* SOW-088 QA: the mod tools live in a footer row under the body, off the crowded header line. */
   .cfoot { display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
+  .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
+  .cbody .md-embed { margin:.5em 0; } .cbody .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
@@ -169,7 +172,9 @@ class GbtiDiscussion extends GbtiElement {
       }
       const reply = c.parentId ? ' reply' : '';
       const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : '')
-        + (c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '');
+        + (c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '')
+        + (c._pending ? `<span class="cbadge">Posting</span>` : ''); // SOW-076: the author's own echo, not yet built
+      const pendNote = c._pending ? `<div class="cpend">${esc(echoNote({ prNumber: c.prNumber }).text)}</div>` : '';
       // SOW-096: a per-viewer collapse fold. Keyed on the comment's stable id/path (index as a last resort);
       // collapsed clamps the body to one line. Client-only view state, nothing on the server changes.
       const foldKey = String(c.id ?? c.path ?? `i${i}`);
@@ -194,7 +199,7 @@ class GbtiDiscussion extends GbtiElement {
       const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : '';
       return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
         <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
-        ${bodyHtml}${acts}
+        ${bodyHtml}${pendNote}${acts}
       </div></div>`;
     }).join('');
     const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
@@ -262,9 +267,9 @@ class GbtiDiscussion extends GbtiElement {
       if (c.visibility === 'members') {
         if (!c.encryptedBody) return ''; // a members comment with no body
         const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
-        return (await this.client.preview({ body: text }))?.html ?? '';
+        return (await this.client.preview({ body: text, autoEmbed: true }))?.html ?? '';
       }
-      return c.body ? (await this.client.preview({ body: c.body }))?.html ?? '' : '';
+      return c.body ? (await this.client.preview({ body: c.body, autoEmbed: true }))?.html ?? '' : ''; // autoEmbed: a bare video link frames the player
     } catch (err) {
       const locked = err?.code === 'membership-required' || err?.code === 'not-authenticated';
       return { locked };

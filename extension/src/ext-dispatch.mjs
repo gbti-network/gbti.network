@@ -131,7 +131,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         // forgot to await. The op awaits now, so both hosts go through it and the identity check it performs.
         return ok(await listMembersOnly(ctx));
       case '/api/preview':
-        return ok({ html: renderMarkdown(body?.body ?? '') });
+        return ok({ html: renderMarkdown(body?.body ?? '', { autoEmbed: !!body?.autoEmbed }) }); // autoEmbed: comment bodies frame a bare video URL
       // SOW-082 + sow-204: what survives of draft staging in the EXTENSION is this read/save pair, which the
       // reader uses. The list, discard and publish-from-draft routes were authoring and left with the rest.
       case '/api/draft':

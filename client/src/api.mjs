@@ -189,7 +189,7 @@ export async function handleApi(reqInfo, ctx) {
     if (!fields) return { status: 400, json: { error: 'bad-request', message: `unknown type: ${query.type}` } };
     return { status: 200, json: { type: query.type, fields } };
   }
-  if (method === 'POST' && pathname === '/api/preview') return { status: 200, json: { html: renderMarkdown(body?.body ?? '') } };
+  if (method === 'POST' && pathname === '/api/preview') return { status: 200, json: { html: renderMarkdown(body?.body ?? '', { autoEmbed: !!body?.autoEmbed }) } };
   if (method === 'POST' && pathname === '/api/image') return run(() => stageImage(ctx, body ?? {}));
 
   if (method === 'GET' && pathname === '/api/members-content') return run(() => listMembersOnly(ctx));

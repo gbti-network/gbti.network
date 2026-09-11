@@ -23,6 +23,7 @@
 // house/authorTarget handling below is UX convenience, not the security boundary; a non-superadmin's stray
 // attempt still fails closed server-side.
 
+import { mergeCommentEchoes } from '../../membership/comment-echo.mjs'; // SOW-076 echoes, wired for the website 2026-09-11
 import { buildContentFile, buildCommentFile, buildShareFile, shareId as makeShareId, flipContentStatus, parseContentFile, commentId } from '../../client/src/content-ops.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -513,7 +514,37 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     let all: any[] = [];
     try { all = (await sameOriginJson('/comments-index.json'))?.items ?? []; } catch { return { items: [] }; }
     const canSeeMembers = MEMBER_READ_TIER.has(await currentTier()); // SOW-078: gate the member stubs by tier
-    return { items: filterThreadComments(all, { targetType, targetSlug, aliases, limit, canSeeMembers }) };
+    const deployed = filterThreadComments(all, { targetType, targetSlug, aliases, limit, canSeeMembers });
+    return { items: await withCommentEchoes(targetType, targetSlug, deployed) };
+  }
+
+  // SOW-076, wired for the WEBSITE on 2026-09-11 (the npm + extension hosts had it since the SOW; here a member's
+  // fresh comment stayed invisible until the site rebuilt, which the owner read as "several minutes to land").
+  // The caller's OWN pending echoes for the thread, merged behind the deployed rows: a row the deployed index
+  // already carries reaps its echo (fire-and-forget). No web session, no echoes to ask for; any failure is the
+  // deployed list unchanged.
+  async function withCommentEchoes(targetType: string, targetSlug: string, deployed: any[]) {
+    if (!readCsrf()) return deployed;
+    let echoes: any[] = [];
+    try {
+      const r = await workerGet(`/membership/comment-echo?targetType=${encodeURIComponent(targetType)}&targetSlug=${encodeURIComponent(targetSlug)}`);
+      echoes = Array.isArray(r?.echoes) ? r.echoes : [];
+    } catch { return deployed; }
+    if (!echoes.length) return deployed;
+    const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+    if (reap.length) workerPost('/membership/comment-echo', { action: 'reap', targetType, targetSlug, ids: reap }).catch(() => {});
+    return comments;
+  }
+
+  // The echo write behind a fresh comment: awaited (bounded) so the page's reload after the post already finds
+  // it, swallowed on failure because the PR is the durable record and the echo is only the instant view of it.
+  async function writeCommentEcho(echo: any) {
+    try {
+      await Promise.race([
+        workerPost('/membership/comment-echo', { action: 'add', echo }),
+        new Promise((_, rej) => { setTimeout(() => rej(new Error('echo timed out')), 4000); }),
+      ]);
+    } catch { /* best-effort */ }
   }
 
   // sow-161 B (owner-approved Option A, band seq 35): the SUPERADMIN channel-map surface, THE ROLE GATE.
@@ -616,7 +647,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
 
     // ----- pure form/preview/validate (no network) -----
     formFields({ type }: any) { return { type, fields: fieldsFor(type) || [] }; },
-    preview({ body }: any) { return { html: renderMarkdown(body ?? '') }; },
+    preview({ body, autoEmbed }: any) { return { html: renderMarkdown(body ?? '', { autoEmbed: !!autoEmbed }) }; }, // autoEmbed: comment bodies frame a bare video URL
     validateContent({ type, input, body }: any) {
       try {
         const built = buildContentFile({ type, username: user, input, body });
@@ -924,13 +955,15 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     listShareComments({ targetSlug, limit }: any = {}) { return listCommentsLocal({ targetType: 'share', targetSlug, limit }); },
     getComment({ id }: any) { return getCommentLocal(String(id || '')); },
     // Post a discussion reply (members-only, encrypted) or a from-the-author intro (public). Paid-only, gate-backed.
-    postComment({ targetType, targetSlug, body, authorNote, parentId, visibility }: any) {
+    async postComment({ targetType, targetSlug, body, authorNote, parentId, visibility }: any) {
       if (!COMMENT_TARGET_TYPES.has(targetType)) throw err('bad-request', 'a valid targetType is required');
       if (!targetSlug) throw err('bad-request', 'a targetSlug is required');
       const createdAt = new Date().toISOString();
       const id = commentId(createdAt, Math.random().toString(36).slice(2, 8));
       const input = coerceCommentInput({ id, targetType, targetSlug, createdAt, authorNote, parentId, visibility });
-      return commitComment(input, body ?? '');
+      const r = await commitComment(input, body ?? '');
+      if (r?.prNumber) await writeCommentEcho({ id, targetType, targetSlug, body: body ?? '', prNumber: r.prNumber, createdAt });
+      return { ...r, targetType, targetSlug };
     },
     async editComment({ id, body, authorNote }: any) {
       const cur = await getCommentLocal(String(id || ''));

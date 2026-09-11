@@ -4,7 +4,7 @@
 // common blocks (headings, lists, blockquotes, fenced code, hr, paragraphs) and inline (code, links, bold,
 // italic). Pure + unit-testable.
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
-import { embedUrl } from './video-embed.mjs';
+import { embedUrl, bareVideoLine } from './video-embed.mjs';
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
@@ -225,11 +225,17 @@ function hardBreak(escaped, raw) {
   return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, '') + '\u0000BR\u0000' : escaped;
 }
 
-export function renderMarkdown(md) {
-  return renderDoc(md, false).html;
+/**
+ * @param {string} md
+ * @param {{ autoEmbed?: boolean }} [opts]  autoEmbed: a line that is only a video URL renders as the embed block
+ *   (comments; see bareVideoLine). Off by default so an article body renders exactly as the site builds it.
+ */
+export function renderMarkdown(md, opts = {}) {
+  return renderDoc(md, false, opts).html;
 }
 
-function renderDoc(md, ids) {
+function renderDoc(md, ids, opts = {}) {
+  const autoEmbed = !!opts.autoEmbed;
   const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
   const ranges = [];
@@ -282,6 +288,11 @@ function renderDoc(md, ids) {
       continue;
     }
 
+    // Comments: a line that is only a video URL becomes the embed block, the same output as a ```embed fence.
+    if (autoEmbed) {
+      const videoUrl = bareVideoLine(line);
+      if (videoUrl) { flushList(); emit(renderFence('embed', [videoUrl], fn), i, i); i++; continue; }
+    }
     const esc = escapeKeepingLinks(line, linkKeep);
     let m;
     if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i); i++; continue; }
@@ -315,7 +326,7 @@ function renderDoc(md, ids) {
     const paraStart = i;
     const para = [hardBreak(esc, line)]; // the FIRST line can carry a hard break too
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i])) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
       // CommonMark hard break: a line ending in TWO OR MORE spaces breaks the line. A marker is pushed rather
       // than a <br> because the line is about to go through inline(), and the marker carries no markdown
       // characters so nothing downstream can mangle it. Without this, every hard break in the repository was

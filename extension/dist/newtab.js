@@ -9572,6 +9572,30 @@ ${String(body ?? "")}`;
     return r >= RANK4.admin ? ["hide", "unhide", "remove"] : ["hide", "unhide"];
   }
 
+  // client-ui/src/comment-echo-core.mjs
+  function pendingRows(items) {
+    return (Array.isArray(items) ? items : []).filter((c) => c && c._pending);
+  }
+  function pullOutcome(pulls, number) {
+    const n = Number(number);
+    const pr = (Array.isArray(pulls) ? pulls : []).find((p) => p && Number(p.number) === n);
+    if (!pr) return "unknown";
+    if (pr.merged === true || pr.state === "merged") return "merged";
+    if (pr.state === "closed") return "closed";
+    return "open";
+  }
+  function echoNote({ outcome = "unknown", prNumber = null } = {}) {
+    const pr = prNumber ? `Pull request #${prNumber}` : "Its pull request";
+    if (outcome === "merged") return { text: "Merged. Everyone sees this after the next site rebuild, in about 2 to 3 minutes.", tone: "ok", terminal: true };
+    if (outcome === "closed") return { text: "This comment was declined. Track it in your WorkBench.", tone: "bad", terminal: true };
+    return { text: `Posting. ${pr} merges automatically; everyone sees this after the site rebuilds, in about 2 to 3 minutes.`, tone: "pending", terminal: false };
+  }
+  function pullsOf(res) {
+    if (Array.isArray(res?.prs)) return res.prs;
+    if (Array.isArray(res?.items)) return res.items;
+    return Array.isArray(res) ? res : [];
+  }
+
   // client-ui/src/elements/gbti-discussion.mjs
   var CSS9 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -9589,6 +9613,8 @@ ${String(body ?? "")}`;
   /* SOW-088 QA: the mod tools live in a footer row under the body, off the crowded header line. */
   .cfoot { display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
+  .cpend { margin-top:6px; font-size:12px; color:var(--muted); }
+  .cbody .md-embed { margin:.5em 0; } .cbody .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
   .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
@@ -9738,7 +9764,8 @@ ${String(body ?? "")}`;
           return `<div class="ctomb">Comment deleted here right away. The removal merges automatically and the public site updates in about 2 to 3 minutes. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
         }
         const reply = c.parentId ? " reply" : "";
-        const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : "") + (c.visibility === "members" ? `<span class="cbadge">Members</span>` : "");
+        const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : "") + (c.visibility === "members" ? `<span class="cbadge">Members</span>` : "") + (c._pending ? `<span class="cbadge">Posting</span>` : "");
+        const pendNote = c._pending ? `<div class="cpend">${esc(echoNote({ prNumber: c.prNumber }).text)}</div>` : "";
         const foldKey = String(c.id ?? c.path ?? `i${i}`);
         const collapsed = this._collapsed?.has(foldKey);
         const clamp = collapsed ? " clamp" : "";
@@ -9753,7 +9780,7 @@ ${String(body ?? "")}`;
         const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : "";
         return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
         <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
-        ${bodyHtml}${acts}
+        ${bodyHtml}${pendNote}${acts}
       </div></div>`;
       }).join("");
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
@@ -9820,9 +9847,9 @@ ${String(body ?? "")}`;
         if (c.visibility === "members") {
           if (!c.encryptedBody) return "";
           const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
-          return (await this.client.preview({ body: text }))?.html ?? "";
+          return (await this.client.preview({ body: text, autoEmbed: true }))?.html ?? "";
         }
-        return c.body ? (await this.client.preview({ body: c.body }))?.html ?? "" : "";
+        return c.body ? (await this.client.preview({ body: c.body, autoEmbed: true }))?.html ?? "" : "";
       } catch (err) {
         const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
         return { locked };
@@ -16553,7 +16580,8 @@ ${String(body ?? "")}`;
       }
       let html = "";
       try {
-        html = (await this.client.preview({ body: text }))?.html ?? "";
+        const autoEmbed = (this.dataset.gbtiKind || this.getAttribute("data-gbti-kind") || "") === "comment";
+        html = (await this.client.preview({ body: text, autoEmbed }))?.html ?? "";
       } catch {
         html = "";
       }
@@ -18068,6 +18096,167 @@ ${String(body ?? "")}`;
   };
   define("gbti-lock-gate", GbtiLockGate);
 
+  // client-ui/src/elements/gbti-comment-echoes.mjs
+  var POLL_MS2 = 15e3;
+  var POLL_MAX = 20;
+  var CSS34 = `
+  /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
+     rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
+     (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
+  :host { display:block; }
+  .rows { list-style:none; padding:0; margin:24px 0 0; display:flex; flex-direction:column; gap:24px; }
+  .card { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:20px; display:flex; gap:14px; align-items:flex-start; }
+  .cav { width:44px; height:44px; border-radius:999px; background:var(--hover); color:var(--muted); display:inline-flex; align-items:center; justify-content:center; font-weight:700; flex:none; overflow:hidden; }
+  .cav img { width:100%; height:100%; object-fit:cover; }
+  .main { flex:1; min-width:0; }
+  .meta { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); flex-wrap:wrap; }
+  .name { font-weight:700; color:var(--fg); font-size:15px; }
+  .badge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--line); border-radius:999px; padding:0 6px; white-space:nowrap; }
+  .body { margin-top:8px; color:var(--fg); font-size:15px; line-height:1.6; }
+  .body p { margin:0 0 .6em; } .body a { color:var(--accent, var(--brand)); }
+  .body pre { background:var(--hover); padding:8px; border-radius:6px; overflow:auto; }
+  .body .md-embed { margin:.6em 0; } .body .md-embed iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; }
+  .note { margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .note.ok { color:var(--s-green-fg, #1f9e5f); } .note.bad { color:var(--danger, #c0392b); }
+  .dot { width:8px; height:8px; border-radius:999px; background:currentColor; opacity:.7; flex:none; }
+  .note.pending .dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:.25 } 50% { opacity:.9 } }
+`;
+  var GbtiCommentEchoes = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+      this._onPosted = (e) => {
+        const d = e?.detail || {};
+        if (!d.targetSlug || d.targetSlug === this._slug()) this.load();
+      };
+      document.addEventListener("gbti-comment-posted", this._onPosted);
+      this.load();
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      if (this._onPosted) document.removeEventListener("gbti-comment-posted", this._onPosted);
+      this._stopPolling();
+    }
+    _type() {
+      return this.dataset.gbtiTargetType || "";
+    }
+    _slug() {
+      return this.dataset.gbtiTargetSlug || "";
+    }
+    render() {
+      if (!this.client) {
+        this.set("");
+        return;
+      }
+      if (!this._rows) {
+        if (!this._loading) this.load();
+        this.set("");
+        return;
+      }
+      if (!this._rows.length) {
+        this.set("");
+        this._syncPage(0);
+        return;
+      }
+      const cards = this._rows.map(({ c, html, outcome }) => {
+        const note = echoNote({ outcome, prNumber: c.prNumber });
+        const ini = esc(String(c.author || "?").trim().charAt(0).toUpperCase() || "?");
+        return `<li class="card" data-echo="${esc(String(c.id))}">
+        <span class="cav">${this._avatar ? `<img src="${esc(this._avatar)}" alt="">` : ini}</span>
+        <div class="main">
+          <div class="meta"><span class="name">${esc(String(c.author || ""))}</span><span>${esc(relTime(c.createdAt))}</span><span class="badge">Yours, posting</span></div>
+          <div class="body">${html}</div>
+          <div class="note ${note.tone}" data-note><span class="dot" aria-hidden="true"></span><span>${esc(note.text)}</span></div>
+        </div>
+      </li>`;
+      }).join("");
+      this.set(this.css(CSS34) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this._syncPage(this._rows.length);
+    }
+    async load() {
+      const targetType = this._type();
+      const targetSlug = this._slug();
+      if (!this.client || !targetType || !targetSlug || this._loading) return;
+      this._loading = true;
+      try {
+        if (this._avatar === void 0) {
+          try {
+            const st = await this.client.status?.();
+            this._avatar = st?.identity?.avatar || st?.identity?.avatarUrl || null;
+          } catch {
+            this._avatar = null;
+          }
+        }
+        const r = await this.client.listComments({ targetType, targetSlug });
+        const pending = pendingRows(r?.items);
+        const prev = new Map((this._rows || []).map((row) => [String(row.c.id), row.outcome]));
+        this._rows = await Promise.all(pending.map(async (c) => ({ c, html: await this._html(c.body), outcome: prev.get(String(c.id)) || "unknown" })));
+      } catch {
+        this._rows = [];
+      }
+      this._loading = false;
+      this.render();
+      this._startPolling();
+    }
+    async _html(body) {
+      try {
+        return (await this.client.preview({ body: body || "", autoEmbed: true }))?.html || "";
+      } catch {
+        return `<p>${esc(body || "")}</p>`;
+      }
+    }
+    // The static page around this element: the built heading count and the empty-state card.
+    _syncPage(pendingCount) {
+      const root = this.closest("#comments") || document;
+      const h = root.querySelector("[data-comments-count]");
+      if (h) {
+        const base = Number(h.dataset.commentsCount) || 0;
+        const n = base + pendingCount;
+        h.textContent = `${n} ${n === 1 ? "Comment" : "Comments"}`;
+      }
+      const empty = root.querySelector("[data-comments-empty]");
+      if (empty) empty.hidden = pendingCount > 0;
+    }
+    _startPolling() {
+      this._stopPolling();
+      const open = (this._rows || []).filter((row) => row.c.prNumber && !echoNote({ outcome: row.outcome }).terminal);
+      if (!open.length || typeof this.client?.listPRs !== "function") return;
+      this._polls = 0;
+      this._timer = setInterval(() => this._pollOnce().catch(() => {
+      }), POLL_MS2);
+      this._pollOnce().catch(() => {
+      });
+    }
+    _stopPolling() {
+      if (this._timer) {
+        clearInterval(this._timer);
+        this._timer = null;
+      }
+    }
+    async _pollOnce() {
+      if (!this.isConnected || !this._rows?.length) {
+        this._stopPolling();
+        return;
+      }
+      if (++this._polls > POLL_MAX) {
+        this._stopPolling();
+        return;
+      }
+      const pulls = pullsOf(await this.client.listPRs());
+      let changed = false;
+      for (const row of this._rows) {
+        const outcome = pullOutcome(pulls, row.c.prNumber);
+        if (outcome !== "unknown" && outcome !== row.outcome) {
+          row.outcome = outcome;
+          changed = true;
+        }
+      }
+      if (changed) this.render();
+      if (this._rows.every((row) => echoNote({ outcome: row.outcome }).terminal)) this._stopPolling();
+    }
+  };
+  define("gbti-comment-echoes", GbtiCommentEchoes);
+
   // client-ui/src/elements/gbti-onboarding.mjs
   var STEP_IDS = ["signin", "fork", "install"];
   var HOSTED_SIGNIN_META = {
@@ -18081,7 +18270,7 @@ ${String(body ?? "")}`;
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS34 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -18189,13 +18378,13 @@ ${String(body ?? "")}`;
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS34) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS35) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       const hostedLike = Boolean(s.mode && s.mode !== "app");
       if (s.ready) {
         const note = hostedLike ? "Sign-in is all it takes: your drafts save privately, and the network publishes for you." : "Your drafts save to your copy, and we open the review request for you.";
-        this.set(this.css(CSS34) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS35) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
         <p class="note">${note}</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -18213,7 +18402,7 @@ ${String(body ?? "")}`;
         return `<li class="row"><span class="ic">${check2(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS34) + `
+      this.set(this.css(CSS35) + `
       <div class="head"><h2>${hostedLike ? "Sign in to publish" : "Set up publishing"}</h2><span class="count">${nDone} of ${stepIds.length}</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / stepIds.length * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -18349,7 +18538,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE11 = "https://gbti.network";
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -18421,15 +18610,15 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS35) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS35) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -18445,7 +18634,7 @@ ${String(body ?? "")}`;
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -18503,7 +18692,7 @@ ${String(body ?? "")}`;
   var SITE12 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS36 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -18586,11 +18775,11 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -18599,7 +18788,7 @@ ${String(body ?? "")}`;
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -18705,7 +18894,7 @@ ${String(body ?? "")}`;
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS37 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -19288,7 +19477,7 @@ ${String(body ?? "")}`;
       }
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS37) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS38) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -19315,7 +19504,7 @@ ${String(body ?? "")}`;
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS37) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS38) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -19334,7 +19523,7 @@ ${String(body ?? "")}`;
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS37) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS38) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
@@ -19788,7 +19977,7 @@ ${String(body ?? "")}`;
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS38 = `
+  var CSS39 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -19920,7 +20109,7 @@ ${String(body ?? "")}`;
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS38) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS39) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -19975,7 +20164,7 @@ ${String(body ?? "")}`;
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS39 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -20076,11 +20265,11 @@ ${String(body ?? "")}`;
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS39) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE14}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS40) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE14}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS40) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global);
@@ -20103,7 +20292,7 @@ ${String(body ?? "")}`;
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE14}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS39) + `
+      this.set(this.css(CSS40) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -20186,7 +20375,7 @@ ${String(body ?? "")}`;
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS40 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -20346,12 +20535,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS40) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS41) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS40) + head + `<div data-body></div>`);
+      this.set(this.css(CSS41) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -20462,7 +20651,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS41 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -20575,12 +20764,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS41) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS41) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS42) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -20598,7 +20787,7 @@ ${String(body ?? "")}`;
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS41) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS42) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -20866,7 +21055,7 @@ From the author:
     } catch {
     }
   };
-  var CSS42 = `
+  var CSS43 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -20911,7 +21100,7 @@ From the author:
         this.set("");
         return;
       }
-      this.set(this.css(CSS42) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS43) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -21463,7 +21652,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS43 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -21793,7 +21982,7 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS43));
+        this.set(this.css(CSS44));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
@@ -21832,7 +22021,7 @@ From the author:
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
       const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -21956,7 +22145,7 @@ From the author:
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -22082,7 +22271,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS44) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS45) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -22090,7 +22279,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS44) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS45) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -22134,7 +22323,7 @@ From the author:
     } catch {
     }
   }
-  var CSS45 = `
+  var CSS46 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -22268,7 +22457,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS45) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS46) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -22281,7 +22470,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS45) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS46) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];

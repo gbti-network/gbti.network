@@ -134,3 +134,17 @@ test('readContentTree ignores trees, non-content blobs and images', async () => 
   assert.equal(t.content.length, 5);
   assert.equal(t.shares.length, 2);
 });
+
+// 2026-09-11 (owner report): the second superadmin, signed in on the website, saw "a GitHub bearer token is
+// required" on Network shares. The WorkBench there has no bearer token; the routes must accept the cookie
+// session like every other WorkBench read, and the handlers must hand that option to the superadmin check.
+test('the two network routes accept the website cookie session, and both handlers forward it to the superadmin check', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const root = path.resolve(new URL('..', import.meta.url).pathname);
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+  const idx = read('workers/signup/index.mjs');
+  assert.match(idx, /await listNetworkContent\(request, env, \{ allowCookie: true \}\) : await listNetworkShares\(request, env, \{ allowCookie: true \}\)/);
+  const src = read('workers/signup/membership-network.mjs');
+  assert.equal((src.match(/const superadmin = await authorizeSuper\(request, env, deps\);/g) || []).length, 2, 'both handlers pass their deps (allowCookie rides in them) to authorizeSuper');
+});
