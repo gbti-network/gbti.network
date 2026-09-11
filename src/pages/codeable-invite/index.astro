@@ -1,420 +1,72 @@
 ---
-// SOW-119: the Codeable expert invite landing, rebuilt onto the owner's Claude Design handoff
-// ("GBTI Invite.dc.html", project GBTI Network Landing Redesign, imported 2026-07-18). Standalone page
-// chrome (its own sticky anchor nav + minimal footer, BaseLayout `bare`), light + dark via the site's
-// html[data-theme] with the design's surface palette mapped onto local vars. Unlisted by design: noindex
-// meta + excluded from the sitemap (astro.config.mjs filter).
+// SOW-119 / sow-243: the Codeable expert invite landing. Since 2026-09-11 this page is CAMPAIGN DATA and copy
+// only; the chrome (nav, hero grid, sticky claim card, coupon chip, Turnstile-gated CTA and its script, FAQ
+// accordion, footer, styles) lives once in src/components/invite/InviteLander.astro. It used to be a full copy
+// of that markup here, and two more copies at /member-invite/ and /curator-invite/.
 //
-// The SOW-119 mechanics under the skin, per the 2026-07-18 QA feedback: NO secret token links. A shared
-// link carries a plain visible ?coupon=CODEABLEYEAR, which prefills the chip (still editable, applied
-// badge while it matches); with no param the chip is a hand-editable field (manual entry at signup).
-// The CTA is the same Turnstile-gated /signup/start flow as /membership/, plus the coupon parameter.
-// TITLE: pass the BARE title, with no brand suffix. BaseLayout builds `fullTitle` as `${title} | GBTI
-// Network` and uses it for BOTH <title> and og:title, so a title that carries the brand itself double-brands
-// the page. This one shipped as "Codeable experts: your first year on us · GBTI Network | GBTI Network" and
-// was caught in a Slack unfurl of a real invite (owner, 2026-08-13), which is the worst place to find it:
-// og:title is what every share preview shows.
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import { REF_COOKIE, REF_VIA_COOKIE } from '../../lib/referral';
-import { TOUCH_CAPTURE_ENABLED, TOUCH_SID_COOKIE } from '../../lib/touch.mjs';
-import {
-  BILLING_PERIOD,
-  TURNSTILE_SITE_KEY,
-  SIGNUP_BASE,
-} from '../../lib/membership';
+// THIS INVITE CONFERS `member`, NOT `creator` (owner ruling 2026-08-24: the coupons "should only offer
+// membership rather than creator"). house/coupons.yml names `tier: member` on CODEABLEYEAR, and that tier is
+// stamped into the redemption record, so this page and the grant agree only if BOTH say member. The constants
+// are named for what they are; `const creator = tierDisplay('member')` would be a false name.
+//
+// THE BENEFIT LIST IS RENDERED FROM house/membership-tiers.yml AND IS NOT WRITTEN HERE. A hand-written array
+// once carried Creator claims that no string check could see, because a sentence promising publishing never
+// names a tier or a price. If a claim is not a bullet in that file, it cannot reach this page.
+//
+// NO BENEFIT LIST IN THE FAQ, NO REVENUE COPY (banned-patterns.md #2). Every answer that sold a Creator
+// benefit is gone rather than reworded. The tier name and the price come from tierDisplay(), so no answer can
+// quote a stale figure. Any sentence about what a tier is belongs HERE, in this page's data, never in the
+// shared template: a template that interpolated a label but kept "the network's top tier" would advertise the
+// wrong tier at the right price, which is the trap sow-243 names.
+//
+// THE CAMPAIGN. A shared link carries a plain visible ?coupon=CODEABLEYEAR, which prefills the coupon field
+// (QA 2026-07-18: no secret token links); with no parameter the field is hand-editable. The parity test reads
+// this line to check that the campaign's tier and this page's tier agree.
+import InviteLander from '../../components/invite/InviteLander.astro';
+import { BILLING_PERIOD } from '../../lib/membership';
 import { tierDisplay, tierLabel, TIER } from '../../lib/tiers'; // sow-316: tierLabel NAMES a tier; tierDisplay binds this page's product
 
-// THIS INVITE CONFERS `member`, NOT `creator`. Corrected 2026-08-24 under the owner's ruling that the
-// coupons "should only offer membership rather than creator".
-//
-// It was already true in the config and false on this page, which is the worst version of the bug because
-// the config looks correct. `house/coupons.yml` names `tier: member` on CODEABLEYEAR, that tier is stamped
-// into the redemption record and written into the grandfather fold rather than re-derived, and this page
-// meanwhile advertised "Content Creator membership, the network's top tier" at $150. A Codeable expert was
-// being promised publishing, syndication and a creator profile, and granted a $50 reading-and-commenting
-// membership. The comment that used to sit here asserted `tier: creator` outright, so it read as evidence.
-//
-// The constants are RENAMED rather than left as `creator`. `const creator = tierDisplay('member')` would
-// work and would be a false name, which is the exact defect class this file just demonstrated. Same
-// treatment as /member-invite/, which was corrected first and is the pattern this follows.
 const memberTier = tierDisplay('member');
 const TIER_LABEL = memberTier?.label ?? 'Network Member';
 const TIER_PRICE_LABEL = `$${memberTier?.priceAnnual ?? 50}`;
-
-// THE BENEFIT LIST IS RENDERED FROM house/membership-tiers.yml AND IS NOT WRITTEN HERE.
-//
-// The hand-written array that used to sit here is what carried the lie: it promised creating gated content
-// and network syndication, both Creator benefits, and neither one names a tier or a price, so every check
-// that scanned for "Content Creator", "top tier" and "$150" came back clean over them.
-//
-// house/membership-tiers.yml states the rule in its own header: benefit copy is a legal line on a paid page
-// and must never advertise a benefit that does not exist. So the fix is not proofreading, it is removing the
-// ability to type a benefit here at all. If a claim is not a bullet in that file, it cannot reach this page.
-// If this section looks thin, add the benefit to the yml where it is reviewed, or leave it thin.
 const memberBenefits = memberTier?.benefits ?? [];
 
-// THE FAQ ANSWERS THE OFFER, not the network in general. Someone reading this was sent a link by a person;
-// what they need first is what they are getting, whether they will be charged, what happens when the year
-// ends, and how to claim it. Network context follows, and for a publishing tier that legitimately includes
-// how content is stored and what the editorial team takes, because those bear on whether the offer is worth
-// accepting.
-//
-// EVERY ANSWER THAT SOLD A CREATOR BENEFIT IS GONE rather than reworded, because rewording means
-// hand-writing tier claims again one file away from the thing that just broke. Cut: the editorial-submissions
-// answer, the weekly-shop-talk answer and the "you can publish openly" half of the storage answer, all three
-// Creator. Kept and turned to the READER side: what the network is, and how member-only content works.
-//
-// NO BENEFIT LIST HERE: "what does this give me" points at the cards above rather than restating them.
-// Restating benefits in prose is what put Creator copy on this page. Tier name and price come from
-// tierDisplay(), so no answer can quote a stale figure.
-//
-// NO REVENUE OR EARNINGS COPY (banned-patterns.md #2).
 const faqs = [
   ['What does this invite give me?', `A full year at the ${TIER_LABEL} tier, with everything listed above, at no cost. It is a normal membership for the year, not a limited preview.`],
   ['Do I need a card to claim it?', 'No. No card is collected at any point during the free year, and nothing bills automatically.'],
   ['What happens when the free year ends?', `Nothing happens on its own. ${TIER_LABEL} is ${TIER_PRICE_LABEL} per ${BILLING_PERIOD} if you decide to continue, and you will not be charged unless you choose to.`],
   ['How do I claim it?', 'Sign in with GitHub from this page. Your coupon is already applied, so there is nothing to enter or remember.'],
   ['Can I pass this on to someone else?', 'It is meant for you, but the link works for whoever opens it first, so treat it as personal rather than forwardable.'],
-  [`What is the GBTI Network?', 'A professional publishing network for developers. Members read and discuss the work published across it and take part in a private community. Publishing your own articles, projects and prompts is the ${tierLabel(TIER.creator)} tier.`],
+  ['What is the GBTI Network?', `A professional publishing network for developers. Members read and discuss the work published across it and take part in a private community. Publishing your own articles, projects and prompts is the ${tierLabel(TIER.creator)} tier.`],
   // ASKED AND ANSWERED PLAINLY, because the audience makes it the obvious question. Codeable experts are
-  // working professionals, and the page they were sent used to promise publishing. Saying nothing about it
-  // now would read as an omission rather than an answer.
+  // working professionals, and the page they were sent used to promise publishing.
   ['Can I publish my own work with this invite?', `Not on this invite. Publishing articles, projects and prompts is the ${tierLabel(TIER.creator)} tier, and this covers a year at ${TIER_LABEL}: reading members-only work, commenting anywhere on the network, and full Discord access. You can move up whenever you want to publish.`],
   ['Is all content public or private?', 'Both. Some work is published openly, and some is network-only. For network-only work, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
   ['Are comments on public-facing content also public?', 'By default, they are not, and can only be read inside the extension by other members. There is, however, the option to make a comment fully public.'],
   ['What does GBTI stand for?', 'God Bless The Internet; a phrase that expresses appreciation and goodwill toward the continued growth and enrichment of the internet.'],
-  // The founding story is a FACT about GBTI and stays true whatever tier the invite confers. Kept verbatim,
-  // including the sentence about Codeable, which is the one thing on this page that is genuinely
-  // audience-specific and is sourced rather than invented.
+  // The founding story is a FACT about GBTI and stays true whatever tier the invite confers. The sentence
+  // about Codeable is the one thing on this page that is genuinely audience-specific and is sourced.
   ['Why is my first year free?', `The GBTI Network was founded by members of the Codeable network seeking a place to discuss the nuances of project development. The expertise at Codeable is well known and respected, and we are happy to be an answer to any interest in community that Codeable experts might have. As a Codeable expert your first year at the ${TIER_LABEL} tier is on us.`],
-];
-
-
-const year = new Date().getFullYear();
+] as const;
 ---
 
-<BaseLayout
+<InviteLander
   title="Codeable experts: your first year on us"
   description="A private invitation for Codeable experts: a full year of Network Member access, first year free with your coupon."
-  noindex
-  bare
->
-  <div class="ci">
-
-    <!-- ================= NAV ================= -->
-    <div class="ci-nav">
-      <div class="ci-nav-in">
-        <a class="ci-brand" href="/" aria-label="GBTI Network home">
-          <img src="/brand/logo/mark-green.png" alt="" width="30" height="30" class="mark-light" />
-          <img src="/brand/logo/mark-mint.png" alt="" width="30" height="30" class="mark-dark" />
-          <span>GBTI</span>
-        </a>
-        <nav class="ci-links" aria-label="Sections">
-          <a href="#benefits">What you get</a>
-          <a href="#faq">FAQ</a>
-        </nav>
-        <button type="button" class="ci-theme" data-ci-theme aria-label="Toggle dark mode">
-          <svg class="ico-sun" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-          <svg class="ico-moon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- ================= HERO ================= -->
-    <div class="ci-hero">
-      <div class="ci-hero-in">
-        <div>
-          <h1>Welcome, Codeable experts!</h1>
-          <p class="lead">GBTI is a professional publishing network for developers. Read the work published
-            across it and join the conversation. Your Codeable invite covers a full year at the{' '}{TIER_LABEL}
-            tier, no card required.</p>
-          <div class="ci-cta-row">
-            <a href="#claim" class="btn-primary">Claim your free year</a>
-            <a href="#benefits" class="btn-ghost">What you get</a>
-          </div>
-          <!-- FACTS ABOUT THE OFFER, not benefit claims about the tier, which is why they are allowed to be
-               literal text here while every benefit sentence comes from the yml. The two that used to sit
-               here ("Publish under your own name", "Weekly shop talk") were both Creator benefits. -->
-          <div class="ci-ticks">
-            <span>&#10003; &nbsp;No card required</span>
-            <span>&#10003; &nbsp;Nothing bills automatically</span>
-          </div>
-        </div>
-        <div id="claim" class="ci-claim">
-          <div class="ci-price">Year one free</div>
-          <div class="ci-sub">then {TIER_PRICE_LABEL}/{BILLING_PERIOD} if you choose to stay</div>
-          <div class="ci-rule"></div>
-          <div class="ci-coupon-label">Coupon</div>
-          <div class="ci-chip" data-coupon-chip>
-            <input id="ci-coupon" type="text" autocomplete="off" spellcheck="false" placeholder="Enter your coupon code" aria-label="Coupon code" />
-            <span class="applied" data-coupon-applied hidden>&#10003; applied</span>
-          </div>
-          <div class="signup-cta">
-            <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileFail" data-theme="auto"></div>
-            <button id="signup-go" type="button" class="btn-primary btn-claim" disabled>Claim your free year</button>
-            <p class="ci-ts-note" data-ts-note hidden>The human verification did not load, so the button stays
-              disabled. If you use a content blocker, allow challenges.cloudflare.com and refresh this page.</p>
-          </div>
-          <p class="ci-fine">Sign in with GitHub. No card at any point during the free year, and nothing
-            bills automatically.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- THE "A HOME FOR YOUR WORK" AND "SHOP TALK" SECTIONS WERE CUT 2026-08-24, and this note exists so
-         nobody restores them from git thinking they were lost. Both sold Creator benefits on what is a
-         member-tier invite: publishing without a CMS, work rendering on a member profile, content structured
-         for AI recommendation, and the weekly shop talk. They were cut rather than reworded for the same
-         reason the benefit array was deleted, that a hand-written section is where the tier claim escapes
-         review.
-         UPDATED 2026-08-26: shop talk is no longer a TIER benefit at all. The owner ruled it out of the
-         Curator tier's list (sow-201, 2026-08-18) because it is positioning rather than software, and
-         sow-185 section 7 requires a named owner and a cadence before such a thing appears in pricing copy.
-         The only copy that still describes it is src/components/JoinOffers.astro, and that component is
-         UNMOUNTED (zero imports, renders on no page), so in practice shop talk is currently advertised
-         nowhere on the live site. Either way this section does not come back by reclassifying it in the
-         yml; it would need the session to have a host and a calendar first. -->
-    <!-- ================= BENEFITS ================= -->
-    <section id="benefits" class="ci-sec">
-      <h2 style="max-width:20ch">What {TIER_LABEL} gives you</h2>
-      <!-- Title and body are both yml fields. The lead sentence that sat here ("a place to publish useful
-           work") was a benefit claim in a paragraph's clothing, and it is gone for the same reason. -->
-      <div class="grid2">
-        {memberBenefits.map((b) => (
-          <div class="card lift bcard">
-            <div class="bod">
-              <h3>{b.label}</h3>
-              {b.description && <p>{b.description}</p>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- ================= FAQ ================= -->
-    <section id="faq" class="ci-sec ci-faq">
-      <h2 class="tcenter">Network FAQ</h2>
-      <div class="ci-faq-list">
-        {faqs.map(([q, a]) => (
-          <div class="ci-q card">
-            <button type="button" data-faq aria-expanded="false">
-              <span>{q}</span><span class="sign" aria-hidden="true">+</span>
-            </button>
-            <div class="ci-a" hidden>{a}</div>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- ================= FOOTER ================= -->
-    <div class="ci-foot">
-      <div class="ci-foot-in">
-        <span class="ci-brand"><img src="/brand/logo/mark-green.png" alt="" width="26" height="26" class="mark-light" /><img src="/brand/logo/mark-mint.png" alt="" width="26" height="26" class="mark-dark" /><span class="god">GOD BLESS THE INTERNET</span></span>
-        <span class="cr">&copy; {year} GBTI Network</span>
-      </div>
-    </div>
-
-  </div>
-</BaseLayout>
-
-<script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<script define:vars={{ signupBase: SIGNUP_BASE, refCookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, sidCookie: TOUCH_SID_COOKIE, touchEnabled: TOUCH_CAPTURE_ENABLED }}>
-  // The SOW-119 mechanics under the design skin: token -> locked "applied" chip; otherwise manual entry.
-  // The CTA is the same Turnstile-gated /signup/start navigation as /membership/, plus the coupon param.
-  (function () {
-    function cookie(name) {
-      var c = document.cookie.split('; ').find(function (x) { return x.indexOf(name + '=') === 0; });
-      return c ? decodeURIComponent(c.split('=').slice(1).join('=')) : '';
-    }
-    var input = document.getElementById('ci-coupon');
-    var chip = document.querySelector('[data-coupon-chip]');
-    var applied = document.querySelector('[data-coupon-applied]');
-    // A visible ?coupon=CODE prefills the chip (QA 2026-07-18: no secret token links). The field stays
-    // editable; the applied badge shows while the value matches the shared code.
-    var shared = (new URLSearchParams(location.search).get('coupon') || '').trim().toUpperCase();
-    function syncApplied() {
-      var match = shared && input && input.value.trim().toUpperCase() === shared;
-      chip.classList.toggle('locked', Boolean(match));
-      if (applied) applied.hidden = !match;
-    }
-    if (shared && /^[A-Z0-9]{3,32}$/.test(shared) && input) {
-      input.value = shared;
-      syncApplied();
-      input.addEventListener('input', syncApplied);
-    }
-
-    var btn = document.getElementById('signup-go');
-    var tsNote = document.querySelector('[data-ts-note]');
-    window.gbtiTurnstileOk = function (token) {
-      if (btn) { btn.disabled = false; btn.dataset.token = token; }
-      if (tsNote) tsNote.hidden = true;
-    };
-    window.gbtiTurnstileReset = function () { if (btn) { btn.disabled = true; delete btn.dataset.token; } };
-    // Widget error (network failure, blocked frame): reset the button and explain why it is disabled.
-    window.gbtiTurnstileFail = function () {
-      window.gbtiTurnstileReset();
-      if (tsNote) tsNote.hidden = false;
-      return true;
-    };
-    // Blocked script: api.js never arrives, no callback ever fires, the button would stay silently dead.
-    setTimeout(function () {
-      if (!window.turnstile && tsNote && btn && btn.disabled) tsNote.hidden = false;
-    }, 8000);
-    if (btn) btn.addEventListener('click', function () {
-      var token = btn.dataset.token;
-      if (!token) return;
-      var u = new URL(signupBase + '/signup/start');
-      u.searchParams.set('cf-turnstile-response', token);
-      var code = input && input.value ? input.value.trim() : '';
-      if (code) u.searchParams.set('coupon', code);
-      var ref = cookie(refCookie); if (ref) u.searchParams.set('ref', ref);
-      var via = cookie(viaCookie); if (via) u.searchParams.set('via', via);
-      if (touchEnabled) { var sid = cookie(sidCookie); if (sid) u.searchParams.set('sid', sid); }
-      window.location.href = u.toString();
-    });
-
-    // The design's theme toggle, wired to the site's html[data-theme] + the persisted gbti-theme key.
-    document.querySelector('[data-ci-theme]')?.addEventListener('click', function () {
-      var root = document.documentElement;
-      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', next);
-      try { localStorage.setItem('gbti-theme', next); } catch (e) { /* no storage */ }
-    });
-
-    // FAQ accordion: one open at a time, the +/- sign mirrors state.
-    var qs = Array.prototype.slice.call(document.querySelectorAll('[data-faq]'));
-    qs.forEach(function (b) {
-      b.addEventListener('click', function () {
-        var a = b.nextElementSibling;
-        var open = a && a.hidden === false;
-        qs.forEach(function (o) {
-          var oa = o.nextElementSibling;
-          if (oa) oa.hidden = true;
-          o.setAttribute('aria-expanded', 'false');
-          var s = o.querySelector('.sign'); if (s) s.textContent = '+';
-        });
-        if (!open && a) {
-          a.hidden = false;
-          b.setAttribute('aria-expanded', 'true');
-          var s2 = b.querySelector('.sign'); if (s2) s2.textContent = '−';
-        }
-      });
-    });
-  })();
-</script>
-
-<style>
-  /* The design's surface palette mapped onto the site's html[data-theme] switch. Light is the default. */
-  .ci {
-    --ci-surface: #ffffff; --ci-hero: #fbfbfa; --ci-panel: #f5f4f2; --ci-sunk: #f5f4f2; --ci-chip: #ffffff;
-    --ci-line: rgba(20,17,26,.10); --ci-line2: rgba(20,17,26,.2); --ci-navline: rgba(20,17,26,.08);
-    --ci-fg: #1a1720; --ci-soft: #55505c; --ci-mute: #847f8d; --ci-faint: #a7a2ad;
-    --ci-green: #178a50; --ci-green-ink: #1f9e5f; --ci-amber: #a9781c; --ci-pill: #ffffff; --ci-bg: #f2f0ee;
-    background: var(--ci-bg); color: var(--ci-fg); min-height: 100vh;
-  }
-  :global(html[data-theme="dark"]) .ci {
-    --ci-surface: #232029; --ci-hero: #232029; --ci-panel: #2a2731; --ci-sunk: #1d1a23; --ci-chip: #17151c;
-    --ci-line: rgba(255,255,255,.09); --ci-line2: rgba(255,255,255,.16); --ci-navline: rgba(255,255,255,.07);
-    --ci-fg: #f3f2f0; --ci-soft: #bdbac4; --ci-mute: #847f8d; --ci-faint: #5c5865;
-    --ci-green: #5fd49a; --ci-amber: #f0c883; --ci-pill: #2a2731; --ci-bg: #17151c;
-  }
-  .ci .mark-dark { display: none; }
-  :global(html[data-theme="dark"]) .ci .mark-light { display: none; }
-  :global(html[data-theme="dark"]) .ci .mark-dark { display: inline; }
-  .ci .ico-moon { display: none; }
-  :global(html[data-theme="dark"]) .ci .ico-sun { display: none; }
-  :global(html[data-theme="dark"]) .ci .ico-moon { display: inline; }
-
-  .ci a { color: var(--ci-green); text-decoration: none; }
-  .ci a:hover { color: var(--ci-green-ink); }
-  .ci .eyebrow { font-family: var(--f-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .16em; color: var(--ci-green); margin: 0 0 14px; }
-  .ci .tcenter { text-align: center; }
-  .ci h2 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 4.4vw, 40px); line-height: 1.08; letter-spacing: -0.015em; color: var(--ci-fg); margin: 0 0 16px; }
-
-  .btn-primary { background: #1f9e5f; color: #fff; font-weight: 700; border-radius: 7px; border: 0; cursor: pointer; display: inline-block; font-size: 15px; padding: 15px 26px; box-shadow: 0 6px 20px rgba(31,158,95,.35); transition: transform .12s, box-shadow .2s; }
-  .btn-primary:hover:not(:disabled) { color: #fff; transform: translateY(-1px); box-shadow: 0 10px 28px rgba(31,158,95,.45); }
-  .btn-primary:disabled { opacity: .55; cursor: default; }
-  .btn-ghost { border: 1px solid var(--ci-line2); color: var(--ci-fg); font-weight: 600; border-radius: 7px; font-size: 15px; padding: 14px 24px; }
-  .btn-ghost:hover { color: var(--ci-fg); border-color: var(--ci-green); }
-  /* The hero CTAs are anchors, and `.ci a` outranks `.btn-*` on specificity, so re-assert the button ink. */
-  .ci a.btn-primary, .ci a.btn-primary:hover { color: #fff; }
-  .ci a.btn-ghost, .ci a.btn-ghost:hover { color: var(--ci-fg); }
-  .lift { transition: transform .15s, border-color .2s; }
-  .lift:hover { transform: translateY(-3px); border-color: rgba(31,158,95,.45); }
-  .card { background: var(--ci-panel); border: 1px solid var(--ci-line); border-radius: 7px; }
-
-  /* nav */
-  .ci-nav { position: sticky; top: 0; z-index: 20; background: var(--ci-surface); border-bottom: 1px solid var(--ci-navline); }
-  /* the sticky nav is ~63px tall; without this every anchor jump lands the section under the bar */
-  .ci-sec, .ci-claim { scroll-margin-top: 78px; }
-  .ci-nav-in { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; gap: 28px; padding: 14px 40px; }
-  .ci-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 19px; color: var(--ci-fg) !important; letter-spacing: -0.01em; }
-  .ci-links { display: flex; gap: 24px; font-size: 14px; margin-left: 8px; }
-  .ci-links a { color: var(--ci-soft); }
-  .ci-links a:hover { color: var(--ci-fg); }
-  .ci-theme { margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ci-line); background: var(--ci-pill); color: var(--ci-soft); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  @media (max-width: 760px) { .ci-links { display: none; } }
-
-  /* hero + claim card */
-  .ci-hero { background: var(--ci-hero); border-bottom: 1px solid var(--ci-navline); }
-  .ci-hero-in { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 400px; gap: 56px; padding: 72px 40px 76px; }
-  @media (max-width: 960px) { .ci-hero-in { grid-template-columns: 1fr; padding: 48px 24px 56px; } }
-  .ci-hero h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(40px, 6vw, 64px); line-height: 1.02; letter-spacing: -0.02em; color: var(--ci-fg); margin: 0 0 24px; text-wrap: balance; }
-  .ci-hero .eyebrow { margin-bottom: 22px; }
-  .ci-hero .lead { font-size: 18px; line-height: 1.6; color: var(--ci-soft); max-width: 46ch; margin: 0 0 34px; }
-  .ci-cta-row { display: flex; gap: 13px; align-items: center; flex-wrap: wrap; }
-  .ci-ticks { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 38px; font-size: 13.5px; color: var(--ci-mute); }
-
-  .ci-claim { background: var(--ci-panel); border: 1px solid var(--ci-line); border-radius: 7px; padding: 30px 28px; align-self: start; }
-  .ci-price { font-family: var(--f-display); font-weight: 700; font-size: 34px; color: var(--ci-fg); text-align: center; margin-top: 6px; }
-  .ci-sub { text-align: center; color: var(--ci-mute); font-size: 13.5px; margin-top: 4px; }
-  .ci-rule { height: 1px; background: var(--ci-line); margin: 24px 0; }
-  .ci-coupon-label { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ci-mute); margin-bottom: 9px; }
-  .ci-chip { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--ci-chip); border: 1.5px solid var(--ci-line2); border-radius: 7px; padding: 3px 15px 3px 3px; }
-  .ci-chip.locked { border-color: #1f9e5f; box-shadow: 0 0 0 3px rgba(31,158,95,.14); }
-  .ci-chip input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-family: var(--f-mono); font-size: 14px; color: var(--ci-fg); letter-spacing: .05em; text-transform: uppercase; padding: 10px 12px; }
-  .ci-chip input::placeholder { color: var(--ci-mute); text-transform: none; letter-spacing: 0; }
-  .ci-chip .applied { flex: none; color: var(--ci-green); font-size: 13px; font-weight: 600; }
-  .signup-cta .cf-turnstile { margin: 16px auto 0; min-height: 65px; }
-  .btn-claim { width: 100%; text-align: center; font-size: 15.5px; padding: 15px; margin-top: 12px; box-shadow: 0 6px 20px rgba(31,158,95,.3); }
-  .ci-fine { font-size: 11.5px; line-height: 1.5; color: var(--ci-mute); text-align: center; margin: 14px 0 0; }
-  .ci-ts-note { font-size: 12px; line-height: 1.5; color: var(--ci-amber); text-align: center; margin: 10px 0 0; }
-
-  /* sections */
-  .ci-sec { max-width: 1160px; margin: 0 auto; padding: 84px 40px 20px; }
-  @media (max-width: 760px) { .ci-sec { padding: 56px 24px 12px; } }
-  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  @media (max-width: 960px) { .grid2 { grid-template-columns: 1fr; } .grid4 { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .grid4 { grid-template-columns: 1fr; } }
-  .card { padding: 26px 24px; }
-  .card h3 { font-family: var(--f-display); font-weight: 600; font-size: 19px; color: var(--ci-fg); margin: 0 0 8px; }
-  .card p { font-size: 14.5px; line-height: 1.55; color: var(--ci-soft); margin: 0; }
-  /* benefits cards carry a 5:3 photo above the copy */
-  .card.bcard { padding: 0; overflow: hidden; }
-  .bcard .bod { padding: 22px 24px 26px; }
-
-  .pct { font-family: var(--f-display); font-weight: 700; font-size: 30px; }
-  .pct.green { color: var(--ci-green); } .pct.amber { color: var(--ci-amber); } .pct.plain { color: var(--ci-fg); }
-  .pct-name { font-weight: 600; font-size: 14.5px; color: var(--ci-fg); margin: 6px 0 5px; }
-  .pct-body { font-size: 13px; line-height: 1.5; color: var(--ci-soft); margin: 0; }
-  .ci-more { margin-top: 22px; }
-  .ci-more a { font-weight: 600; font-size: 15px; }
-
-  /* shop talk band */
-
-  /* FAQ */
-  .ci-faq h2 { margin-bottom: 36px; }
-  .ci-faq-list { display: flex; flex-direction: column; gap: 12px; }
-  .ci-q { padding: 0; overflow: hidden; }
-  .ci-q button { width: 100%; text-align: left; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 16px; padding: 19px 22px; color: var(--ci-fg); font-family: var(--f-sans); font-weight: 600; font-size: 16.5px; }
-  .ci-q button span:first-child { flex: 1; }
-  .ci-q .sign { flex: none; color: var(--ci-green); font-size: 22px; line-height: 1; }
-  .ci-a { padding: 0 22px 20px; font-size: 15px; line-height: 1.6; color: var(--ci-soft); }
-
-  /* footer */
-  .ci-foot { max-width: 1160px; margin: 0 auto; padding: 56px 40px 48px; }
-  .ci-foot-in { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between; }
-  .ci-foot .god { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; color: var(--ci-mute); }
-  .ci-foot .cr { font-size: 13px; color: var(--ci-faint); }
-</style>
+  tierLabel={TIER_LABEL}
+  tierPriceLabel={TIER_PRICE_LABEL}
+  benefits={memberBenefits}
+  benefitsHeading={`What ${TIER_LABEL} gives you`}
+  benefitsLayout="grid2"
+  nav={[{ href: '#benefits', label: 'What you get' }, { href: '#faq', label: 'FAQ' }]}
+  hero={{
+    titleHtml: 'Welcome, Codeable experts!',
+    lead: `GBTI is a professional publishing network for developers. Read the work published across it and join the conversation. Your Codeable invite covers a full year at the ${TIER_LABEL} tier, no card required.`,
+    ctaLabel: 'Claim your free year',
+    secondaryCta: { href: '#benefits', label: 'What you get' },
+    // Facts about the OFFER, not benefit claims about the tier.
+    ticks: ['No card required', 'Nothing bills automatically'],
+  }}
+  claimStyle="classic"
+  faqs={faqs}
+/>

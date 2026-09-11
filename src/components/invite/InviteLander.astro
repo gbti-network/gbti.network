@@ -1,0 +1,481 @@
+---
+// sow-243: THE ONE INVITE LANDING, rendered by three thin pages (/codeable-invite/, /member-invite/,
+// /curator-invite/). Until 2026-09-11 each page was a full copy of this file: the same nav, hero grid, sticky
+// claim card, coupon chip, Turnstile-gated /signup/start CTA and its script, FAQ accordion, footer and a
+// 115 to 185 line stylesheet, three times over. The interest on that debt was paid once already: a member-tier
+// page shipped with creator benefit prose that had arrived by copy. Nobody wrote it for that page.
+//
+// WHAT LIVES HERE AND WHAT DOES NOT. This template carries the mechanism only. It renders the benefit list it
+// is HANDED (every page binds its own through the tier registry, so the parity test can see the binding in each
+// page's source), the FAQ it is handed, and the hero copy it is handed. It holds no sentence about what any
+// tier is or does, no price and no tier name of its own: the trap sow-243 names is a template that
+// interpolates the tier label but leaves a superlative about the tier hardcoded, so any such sentence
+// belongs in a page's campaign data, never here.
+//
+// The SOW-119 mechanics under the skin, per the 2026-07-18 QA feedback: NO secret token links. A shared link
+// carries a plain visible ?coupon=<CODE>, which prefills the coupon; with no parameter the field is
+// hand-editable. The CTA is the same Turnstile-gated /signup/start flow as /membership/, plus the coupon.
+//
+// Two claim-card styles are kept, because two designs shipped: `classic` (the chip with an applied badge, the
+// original design) and `panel` (the sow-230 design: the applied panel that replaces the entry, a tier line
+// with the struck price, and three quick wins). A page picks one. One script serves both by checking which elements are
+// present. STYLES ARE GLOBAL, PREFIXED WITH `.ci`, on purpose: Astro scopes a component's <style> to the
+// component's own elements, and the story sections the pages pass through the slots would otherwise render
+// unstyled. Every rule below starts with `.ci`, so nothing leaks past this page's own tree.
+//
+// TITLE: pass the BARE title, no brand suffix. BaseLayout builds `${title} | GBTI Network` for both <title>
+// and og:title; a title that carries the brand double-brands the share preview (caught in a Slack unfurl,
+// 2026-08-13).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { REF_COOKIE, REF_VIA_COOKIE } from '../../lib/referral';
+import { TOUCH_CAPTURE_ENABLED, TOUCH_SID_COOKIE } from '../../lib/touch.mjs';
+import { BILLING_PERIOD, TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../../lib/membership';
+
+export interface Benefit { label: string; description?: string }
+export interface Props {
+  title: string;
+  description: string;
+  /** The tier label and annual price label the PAGE resolved from the tier registry; rendered, never derived here. */
+  tierLabel: string;
+  tierPriceLabel: string;
+  /** The benefit list the page resolved from house/membership-tiers.yml. */
+  benefits: readonly Benefit[];
+  benefitsHeading: string;
+  benefitsLead?: string;
+  /** 'grid2' (two-up, the sow-230 design) or 'grid3'. */
+  benefitsLayout?: 'grid2' | 'grid3';
+  nav: { href: string; label: string }[];
+  navCta?: { href: string; label: string };
+  hero: {
+    /** May carry inline markup (a <br />). Written by the page, not by a visitor. */
+    titleHtml: string;
+    lead: string;
+    ctaLabel: string;
+    secondaryCta?: { href: string; label: string };
+    /** Tick lines beside the CTA (facts about the OFFER or the page's own tier claims from its campaign data). */
+    ticks?: string[];
+    /** Mono meta chips (the sow-230 design). */
+    meta?: string[];
+  };
+  claimStyle?: 'classic' | 'panel';
+  claimCtaLabel?: string;
+  faqs: readonly (readonly [string, string])[];
+  faqHeading?: string;
+}
+const {
+  title, description, tierLabel, tierPriceLabel, benefits, benefitsHeading, benefitsLead, benefitsLayout = 'grid2',
+  nav, navCta, hero, claimStyle = 'classic', claimCtaLabel = 'Claim your free year', faqs, faqHeading = 'Network FAQ',
+} = Astro.props;
+const panel = claimStyle === 'panel';
+const year = new Date().getFullYear();
+---
+
+<BaseLayout title={title} description={description} noindex bare>
+  <div class="ci">
+
+    <!-- ================= NAV ================= -->
+    <div class="ci-nav">
+      <div class="ci-nav-in">
+        <a class="ci-brand" href="/" aria-label="GBTI Network home">
+          <img src="/brand/logo/mark-green.png" alt="" width="30" height="30" class="mark-light" />
+          <img src="/brand/logo/mark-mint.png" alt="" width="30" height="30" class="mark-dark" />
+          <span>GBTI</span>
+        </a>
+        <nav class="ci-links" aria-label="Sections">
+          {nav.map((l) => <a href={l.href}>{l.label}</a>)}
+          {navCta && <a href={navCta.href} class="ci-nav-cta">{navCta.label}</a>}
+        </nav>
+        <button type="button" class="ci-theme" data-ci-theme aria-label="Toggle dark mode">
+          <svg class="ico-sun" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="ico-moon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= HERO ================= -->
+    <div class="ci-hero">
+      <div class="ci-hero-in">
+        <div>
+          <h1 set:html={hero.titleHtml} />
+          <p class="lead">{hero.lead}</p>
+          <div class="ci-cta-row">
+            <a href="#claim" class="btn-primary">{hero.ctaLabel}</a>
+            {hero.secondaryCta && <a href={hero.secondaryCta.href} class="btn-ghost">{hero.secondaryCta.label}</a>}
+          </div>
+          {hero.ticks && hero.ticks.length > 0 && (
+            <div class="ci-ticks">{hero.ticks.map((t) => <span>&#10003; &nbsp;{t}</span>)}</div>
+          )}
+          {hero.meta && hero.meta.length > 0 && (
+            <div class="ci-meta">{hero.meta.map((m) => <span>{m}</span>)}</div>
+          )}
+        </div>
+        <!-- STICKY on desktop: the claim card is the only place the coupon is confirmed, so it stays on screen
+             while the reader scrolls. Below the hero breakpoint the grid is one column and sticky is dropped. -->
+        <div id="claim" class="ci-claim">
+          {panel && (
+            <div class="ci-claim-top">
+              <span class="ci-tier">{tierLabel}</span>
+              <span class="ci-was">{tierPriceLabel}/yr</span>
+            </div>
+          )}
+          <div class="ci-price">Year one free</div>
+          <div class="ci-sub">then {tierPriceLabel}/{BILLING_PERIOD} if you choose to stay</div>
+          {panel ? (
+            <Fragment>
+              <!-- Two states, and the design draws only one: the applied panel shows with a ?coupon=, the entry
+                   field otherwise, because a visitor on a bare link must still be able to type a code. -->
+              <div class="ci-applied" data-coupon-applied hidden>
+                <div class="ci-applied-body">
+                  <div class="ci-applied-label">Coupon applied</div>
+                  <div class="ci-applied-code" data-coupon-code></div>
+                </div>
+                <span class="ci-applied-tick" aria-hidden="true">&#10003;</span>
+              </div>
+              <div class="ci-entry" data-coupon-entry>
+                <div class="ci-coupon-label">Coupon</div>
+                <div class="ci-chip" data-coupon-chip>
+                  <input id="ci-coupon" type="text" autocomplete="off" spellcheck="false" placeholder="Enter your coupon code" aria-label="Coupon code" />
+                </div>
+              </div>
+            </Fragment>
+          ) : (
+            <Fragment>
+              <div class="ci-rule"></div>
+              <div class="ci-coupon-label">Coupon</div>
+              <div class="ci-chip" data-coupon-chip>
+                <input id="ci-coupon" type="text" autocomplete="off" spellcheck="false" placeholder="Enter your coupon code" aria-label="Coupon code" />
+                <span class="applied" data-coupon-applied hidden>&#10003; applied</span>
+              </div>
+            </Fragment>
+          )}
+          <div class="signup-cta">
+            <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileFail" data-theme="auto"></div>
+            <button id="signup-go" type="button" class="btn-primary btn-claim" disabled>{claimCtaLabel}</button>
+            <p class="ci-ts-note" data-ts-note hidden>The human verification did not load, so the button stays
+              disabled. If you use a content blocker, allow challenges.cloudflare.com and refresh this page.</p>
+          </div>
+          <p class="ci-fine">Sign in with GitHub. No card at any point during the free year, and nothing
+            bills automatically.</p>
+          {panel && benefits.length > 0 && (
+            <!-- The design's quick wins, from the registry labels, so they cannot drift from the list they summarize. -->
+            <div class="ci-wins">
+              {benefits.slice(0, 3).map((b) => (
+                <div class="ci-win"><span class="tick" aria-hidden="true">&#10003;</span><span>{b.label}</span></div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
+    <slot name="before-benefits" />
+
+    <!-- ================= BENEFITS ================= -->
+    <section id="benefits" class="ci-sec">
+      <h2 style="max-width:20ch">{benefitsHeading}</h2>
+      {benefitsLead && <p class="sec-lead">{benefitsLead}</p>}
+      <div class={`${benefitsLayout} ci-bnum`}>
+        {benefits.map((b) => (
+          <div class="card lift bcard">
+            <div class="bod">
+              <h3>{b.label}</h3>
+              {b.description && <p>{b.description}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- ================= FAQ ================= -->
+    <section id="faq" class="ci-sec ci-faq">
+      <h2 class="tcenter">{faqHeading}</h2>
+      <div class="ci-faq-list">
+        {faqs.map(([q, a]) => (
+          <div class="ci-q card">
+            <button type="button" data-faq aria-expanded="false">
+              <span>{q}</span><span class="sign" aria-hidden="true">+</span>
+            </button>
+            <div class="ci-a" hidden>{a}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <slot name="after-faq" />
+
+    <!-- ================= FOOTER ================= -->
+    <div class="ci-foot">
+      <div class="ci-foot-in">
+        <span class="ci-brand"><img src="/brand/logo/mark-green.png" alt="" width="26" height="26" class="mark-light" /><img src="/brand/logo/mark-mint.png" alt="" width="26" height="26" class="mark-dark" /><span class="god">GOD BLESS THE INTERNET</span></span>
+        <span class="cr">&copy; {year} GBTI Network</span>
+      </div>
+    </div>
+
+  </div>
+</BaseLayout>
+
+<script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script define:vars={{ signupBase: SIGNUP_BASE, refCookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, sidCookie: TOUCH_SID_COOKIE, touchEnabled: TOUCH_CAPTURE_ENABLED }}>
+  // The SOW-119 mechanics under the design skin, for BOTH claim styles: a visible ?coupon=CODE prefills the
+  // field; the classic chip shows an applied badge while the value matches, the panel style swaps the entry
+  // for the applied panel. The CTA is the same Turnstile-gated /signup/start navigation as /membership/.
+  (function () {
+    function cookie(name) {
+      var c = document.cookie.split('; ').find(function (x) { return x.indexOf(name + '=') === 0; });
+      return c ? decodeURIComponent(c.split('=').slice(1).join('=')) : '';
+    }
+    var input = document.getElementById('ci-coupon');
+    var chip = document.querySelector('[data-coupon-chip]');
+    var applied = document.querySelector('[data-coupon-applied]');
+    var entry = document.querySelector('[data-coupon-entry]');       // panel style only
+    var appliedCode = document.querySelector('[data-coupon-code]');  // panel style only
+    var closeWrap = document.querySelector('[data-close-code]');     // a page's closing band, when it has one
+    var closeEcho = document.querySelector('[data-coupon-echo]');
+    var shared = (new URLSearchParams(location.search).get('coupon') || '').trim().toUpperCase();
+    var hasShared = Boolean(shared) && /^[A-Z0-9]{3,32}$/.test(shared);
+    function syncApplied() {
+      var match = hasShared && input && input.value.trim().toUpperCase() === shared;
+      if (chip) chip.classList.toggle('locked', Boolean(match));
+      if (applied && !appliedCode) applied.hidden = !match; // the classic badge follows the field
+    }
+    if (hasShared && input) {
+      input.value = shared;
+      if (appliedCode) {
+        appliedCode.textContent = shared;
+        if (applied) applied.hidden = false;
+        if (entry) entry.hidden = true;
+      } else {
+        syncApplied();
+        input.addEventListener('input', syncApplied);
+      }
+      if (closeEcho) closeEcho.textContent = shared;
+      if (closeWrap) closeWrap.hidden = false;
+    }
+
+    var btn = document.getElementById('signup-go');
+    var tsNote = document.querySelector('[data-ts-note]');
+    window.gbtiTurnstileOk = function (token) {
+      if (btn) { btn.disabled = false; btn.dataset.token = token; }
+      if (tsNote) tsNote.hidden = true;
+    };
+    window.gbtiTurnstileReset = function () { if (btn) { btn.disabled = true; delete btn.dataset.token; } };
+    // Widget error (network failure, blocked frame): reset the button and explain why it is disabled.
+    window.gbtiTurnstileFail = function () {
+      window.gbtiTurnstileReset();
+      if (tsNote) tsNote.hidden = false;
+      return true;
+    };
+    // Blocked script: api.js never arrives, no callback ever fires, the button would stay silently dead.
+    setTimeout(function () {
+      if (!window.turnstile && tsNote && btn && btn.disabled) tsNote.hidden = false;
+    }, 8000);
+    if (btn) btn.addEventListener('click', function () {
+      var token = btn.dataset.token;
+      if (!token) return;
+      var u = new URL(signupBase + '/signup/start');
+      u.searchParams.set('cf-turnstile-response', token);
+      var code = input && input.value ? input.value.trim() : '';
+      if (code) u.searchParams.set('coupon', code);
+      var ref = cookie(refCookie); if (ref) u.searchParams.set('ref', ref);
+      var via = cookie(viaCookie); if (via) u.searchParams.set('via', via);
+      if (touchEnabled) { var sid = cookie(sidCookie); if (sid) u.searchParams.set('sid', sid); }
+      window.location.href = u.toString();
+    });
+
+    // The design's theme toggle, wired to the site's html[data-theme] + the persisted gbti-theme key.
+    document.querySelector('[data-ci-theme]')?.addEventListener('click', function () {
+      var root = document.documentElement;
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('gbti-theme', next); } catch (e) { /* no storage */ }
+    });
+
+    // FAQ accordion: one open at a time, the +/- sign mirrors state.
+    var qs = Array.prototype.slice.call(document.querySelectorAll('[data-faq]'));
+    qs.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var a = b.nextElementSibling;
+        var open = a && a.hidden === false;
+        qs.forEach(function (o) {
+          var oa = o.nextElementSibling;
+          if (oa) oa.hidden = true;
+          o.setAttribute('aria-expanded', 'false');
+          var s = o.querySelector('.sign'); if (s) s.textContent = '+';
+        });
+        if (!open && a) {
+          a.hidden = false;
+          b.setAttribute('aria-expanded', 'true');
+          var s2 = b.querySelector('.sign'); if (s2) s2.textContent = '−';
+        }
+      });
+    });
+  })();
+</script>
+
+<style is:global>
+  /* GLOBAL AND `.ci`-PREFIXED, see the header: slotted story sections must pick these up. Light is the
+     default; dark maps the design's surface palette onto the site's html[data-theme] switch. */
+  .ci {
+    --ci-surface: #ffffff; --ci-hero: #fbfbfa; --ci-panel: #f5f4f2; --ci-sunk: #f5f4f2; --ci-chip: #ffffff;
+    --ci-line: rgba(20,17,26,.10); --ci-line2: rgba(20,17,26,.2); --ci-navline: rgba(20,17,26,.08);
+    --ci-fg: #1a1720; --ci-soft: #55505c; --ci-mute: #847f8d; --ci-faint: #a7a2ad;
+    --ci-green: #178a50; --ci-green-ink: #1f9e5f; --ci-amber: #a9781c; --ci-pill: #ffffff; --ci-bg: #f2f0ee;
+    background: var(--ci-bg); color: var(--ci-fg); min-height: 100vh;
+  }
+  html[data-theme="dark"] .ci {
+    --ci-surface: #232029; --ci-hero: #232029; --ci-panel: #2a2731; --ci-sunk: #1d1a23; --ci-chip: #17151c;
+    --ci-line: rgba(255,255,255,.09); --ci-line2: rgba(255,255,255,.16); --ci-navline: rgba(255,255,255,.07);
+    --ci-fg: #f3f2f0; --ci-soft: #bdbac4; --ci-mute: #847f8d; --ci-faint: #5c5865;
+    --ci-green: #5fd49a; --ci-amber: #f0c883; --ci-pill: #2a2731; --ci-bg: #17151c;
+  }
+  .ci .mark-dark { display: none; }
+  html[data-theme="dark"] .ci .mark-light { display: none; }
+  html[data-theme="dark"] .ci .mark-dark { display: inline; }
+  .ci .ico-moon { display: none; }
+  html[data-theme="dark"] .ci .ico-sun { display: none; }
+  html[data-theme="dark"] .ci .ico-moon { display: inline; }
+
+  .ci a { color: var(--ci-green); text-decoration: none; }
+  .ci a:hover { color: var(--ci-green-ink); }
+  .ci .eyebrow { font-family: var(--f-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .16em; color: var(--ci-green); margin: 0 0 14px; }
+  .ci .tcenter { text-align: center; }
+  .ci h2 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 4.4vw, 40px); line-height: 1.08; letter-spacing: -0.015em; color: var(--ci-fg); margin: 0 0 16px; }
+  .ci .sec-lead { font-size: 17px; line-height: 1.6; color: var(--ci-soft); max-width: 66ch; margin: 0 0 44px; }
+
+  .ci .btn-primary { background: #1f9e5f; color: #fff; font-weight: 700; border-radius: 7px; border: 0; cursor: pointer; display: inline-block; font-size: 15px; padding: 15px 26px; box-shadow: 0 6px 20px rgba(31,158,95,.35); transition: transform .12s, box-shadow .2s; }
+  .ci .btn-primary:hover:not(:disabled) { color: #fff; transform: translateY(-1px); box-shadow: 0 10px 28px rgba(31,158,95,.45); }
+  .ci .btn-primary:disabled { opacity: .55; cursor: default; }
+  .ci .btn-ghost { border: 1px solid var(--ci-line2); color: var(--ci-fg); font-weight: 600; border-radius: 7px; font-size: 15px; padding: 14px 24px; }
+  .ci .btn-ghost:hover { color: var(--ci-fg); border-color: var(--ci-green); }
+  /* The hero CTAs are anchors, and `.ci a` outranks `.btn-*` on specificity, so re-assert the button ink. */
+  .ci a.btn-primary, .ci a.btn-primary:hover { color: #fff; }
+  .ci a.btn-ghost, .ci a.btn-ghost:hover { color: var(--ci-fg); }
+  .ci .lift { transition: transform .15s, border-color .2s; }
+  .ci .lift:hover { transform: translateY(-3px); border-color: rgba(31,158,95,.45); }
+  .ci .card { background: var(--ci-panel); border: 1px solid var(--ci-line); border-radius: 7px; padding: 26px 24px; }
+  .ci .card h3 { font-family: var(--f-display); font-weight: 600; font-size: 19px; color: var(--ci-fg); margin: 0 0 8px; }
+  .ci .card p { font-size: 14.5px; line-height: 1.55; color: var(--ci-soft); margin: 0; }
+  .ci .card.bcard { padding: 0; overflow: hidden; }
+  .ci .bcard .bod { padding: 22px 24px 26px; }
+  .ci .ic { width: 40px; height: 40px; border-radius: 7px; background: rgba(31,158,95,.14); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; flex: none; }
+
+  /* nav */
+  .ci .ci-nav { position: sticky; top: 0; z-index: 20; background: var(--ci-surface); border-bottom: 1px solid var(--ci-navline); }
+  /* the sticky nav is ~63px tall; without this every anchor jump lands the section under the bar */
+  .ci .ci-sec, .ci .ci-band, .ci .ci-claim { scroll-margin-top: 78px; }
+  .ci .ci-nav-in { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; gap: 28px; padding: 14px 40px; }
+  .ci .ci-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 19px; color: var(--ci-fg) !important; letter-spacing: -0.01em; }
+  .ci .ci-links { display: flex; gap: 24px; font-size: 14px; margin-left: 8px; align-items: center; }
+  .ci .ci-links a { color: var(--ci-soft); }
+  .ci .ci-links a:hover { color: var(--ci-fg); }
+  .ci .ci-nav-cta { background: var(--ci-green-ink); color: #fff !important; font-weight: 600; padding: 8px 16px; border-radius: 7px; }
+  .ci .ci-nav-cta:hover { background: var(--ci-green); color: #fff !important; }
+  .ci .ci-theme { margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ci-line); background: var(--ci-pill); color: var(--ci-soft); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  @media (max-width: 760px) { .ci .ci-links { display: none; } }
+
+  /* hero + claim card */
+  .ci .ci-hero { background: var(--ci-hero); border-bottom: 1px solid var(--ci-navline); }
+  .ci .ci-hero-in { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 400px; gap: 56px; padding: 72px 40px 76px; }
+  @media (max-width: 960px) { .ci .ci-hero-in { grid-template-columns: minmax(0, 1fr); padding: 48px 24px 56px; } }
+  .ci .ci-hero h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(40px, 6vw, 64px); line-height: 1.02; letter-spacing: -0.02em; color: var(--ci-fg); margin: 0 0 24px; text-wrap: balance; }
+  .ci .ci-hero .lead { font-size: 18px; line-height: 1.6; color: var(--ci-soft); max-width: 46ch; margin: 0 0 34px; }
+  .ci .ci-cta-row { display: flex; gap: 13px; align-items: center; flex-wrap: wrap; }
+  .ci .ci-ticks { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 38px; font-size: 13.5px; color: var(--ci-mute); }
+  .ci .ci-meta { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--ci-line); }
+  .ci .ci-meta span { color: var(--ci-mute); font-size: 13.5px; font-family: var(--f-mono); }
+
+  /* STICKY: the claim card is the only place the coupon is confirmed. `align-self: start` is what lets
+     position:sticky work inside the grid; below the breakpoint the grid is one column and sticky is dropped. */
+  .ci .ci-claim { background: var(--ci-panel); border: 1px solid var(--ci-line); border-radius: 7px; padding: 28px 26px; align-self: start; position: sticky; top: 88px; }
+  @media (max-width: 960px) { .ci .ci-claim { position: static; } }
+  .ci .ci-claim-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .ci .ci-tier { font-family: var(--f-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: var(--ci-green); }
+  .ci .ci-was { font-family: var(--f-mono); font-size: 13px; color: var(--ci-mute); text-decoration: line-through; }
+  .ci .ci-price { font-family: var(--f-display); font-weight: 700; font-size: 36px; line-height: 1.1; color: var(--ci-fg); text-align: center; margin-top: 8px; }
+  .ci .ci-sub { text-align: center; color: var(--ci-mute); font-size: 13.5px; margin-top: 6px; }
+  .ci .ci-claim-top + .ci-price, .ci .ci-claim-top ~ .ci-sub { text-align: left; }
+  .ci .ci-applied { margin-top: 22px; border: 1.5px solid var(--ci-green-ink); background: color-mix(in srgb, var(--ci-green-ink) 10%, transparent); padding: 12px 14px; display: flex; align-items: center; gap: 12px; border-radius: 7px; }
+  .ci .ci-applied[hidden] { display: none !important; }
+  .ci .ci-applied-body { flex: 1; min-width: 0; }
+  .ci .ci-applied-label { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--ci-green); font-weight: 600; }
+  .ci .ci-applied-code { font-family: var(--f-mono); font-size: 16px; font-weight: 600; letter-spacing: .02em; color: var(--ci-fg); overflow: hidden; text-overflow: ellipsis; }
+  .ci .ci-applied-tick { color: var(--ci-green); font-size: 20px; line-height: 1; flex: none; }
+  .ci .ci-entry { margin-top: 22px; }
+  .ci .ci-entry[hidden] { display: none !important; }
+  .ci .ci-wins { display: flex; flex-direction: column; gap: 9px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--ci-line); }
+  .ci .ci-win { display: flex; gap: 9px; align-items: flex-start; color: var(--ci-mute); font-size: 14px; }
+  .ci .ci-win .tick { color: var(--ci-green); flex: none; }
+  .ci .ci-rule { height: 1px; background: var(--ci-line); margin: 24px 0; }
+  .ci .ci-coupon-label { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ci-mute); margin-bottom: 9px; }
+  .ci .ci-chip { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--ci-chip); border: 1.5px solid var(--ci-line2); border-radius: 7px; padding: 3px 15px 3px 3px; }
+  .ci .ci-chip.locked { border-color: #1f9e5f; box-shadow: 0 0 0 3px rgba(31,158,95,.14); }
+  .ci .ci-chip input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-family: var(--f-mono); font-size: 14px; color: var(--ci-fg); letter-spacing: .05em; text-transform: uppercase; padding: 10px 12px; }
+  .ci .ci-chip input::placeholder { color: var(--ci-mute); text-transform: none; letter-spacing: 0; }
+  .ci .ci-chip .applied { flex: none; color: var(--ci-green); font-size: 13px; font-weight: 600; }
+  .ci .signup-cta .cf-turnstile { margin: 16px auto 0; min-height: 65px; }
+  .ci .btn-claim { width: 100%; text-align: center; font-size: 15.5px; padding: 15px; margin-top: 12px; box-shadow: 0 6px 20px rgba(31,158,95,.3); }
+  .ci .ci-fine { font-size: 11.5px; line-height: 1.5; color: var(--ci-mute); text-align: center; margin: 14px 0 0; }
+  .ci .ci-ts-note { font-size: 12px; line-height: 1.5; color: var(--ci-amber); text-align: center; margin: 10px 0 0; }
+
+  /* sections */
+  .ci .ci-sec { max-width: 1160px; margin: 0 auto; padding: 84px 40px 20px; }
+  @media (max-width: 760px) { .ci .ci-sec { padding: 56px 24px 12px; } }
+  .ci .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .ci .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .ci .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 960px) { .ci .grid3 { grid-template-columns: 1fr; } .ci .grid4 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 760px) { .ci .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .ci .grid4 { grid-template-columns: 1fr; } }
+  .ci .ci-bnum .card.bcard { padding: 0; }
+  .ci .ci-bnum .bod { padding: 20px; }
+  .ci .ci-bnum h3 { font-size: 18px; font-weight: 700; margin: 0; color: var(--ci-fg); }
+  .ci .ci-bnum p { color: var(--ci-mute); font-size: 14.5px; margin: 6px 0 0; }
+
+  /* a story band (the curator page's shop-talk section) */
+  .ci .ci-band { background: var(--ci-surface); border-top: 1px solid var(--ci-navline); border-bottom: 1px solid var(--ci-navline); margin-top: 84px; }
+  .ci .ci-band-in { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 440px; gap: 56px; padding: 80px 40px; align-items: center; }
+  @media (max-width: 960px) { .ci .ci-band-in { grid-template-columns: 1fr; padding: 56px 24px; } }
+  .ci .ci-pills { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ci .ci-pills span { background: var(--ci-panel); border: 1px solid var(--ci-line); border-radius: 999px; padding: 8px 15px; font-size: 13.5px; color: var(--ci-fg); }
+  .ci .ci-session { padding: 28px; }
+  .ci .ci-live { display: flex; align-items: center; gap: 9px; margin-bottom: 20px; }
+  .ci .ci-live .dot { width: 9px; height: 9px; border-radius: 50%; background: #1f9e5f; box-shadow: 0 0 0 4px rgba(31,158,95,.2); }
+  .ci .ci-live .lbl { font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ci-mute); }
+  .ci .ci-srow { display: flex; gap: 13px; align-items: center; margin-top: 16px; }
+  .ci .ci-srow:first-of-type { margin-top: 0; }
+  .ci .ci-srow .ic { width: 36px; height: 36px; margin: 0; }
+  .ci .ci-srow b { display: block; font-weight: 600; font-size: 15px; color: var(--ci-fg); }
+  .ci .ci-srow span { display: block; font-size: 13px; color: var(--ci-mute); }
+
+  /* a closing band (the member page) */
+  .ci .ci-close { border: 1px solid var(--ci-line); border-radius: 7px; background: var(--ci-surface); padding: 36px; text-align: center; }
+  .ci .ci-close h2 { font-family: var(--f-display); font-weight: 700; font-size: 32px; margin: 0; color: var(--ci-fg); }
+  .ci .ci-close p { color: var(--ci-mute); font-size: 16px; margin: 8px auto 0; max-width: 54ch; }
+  .ci .ci-close .btn-primary { margin-top: 20px; }
+  .ci .ci-close-code { font-family: var(--f-mono); font-size: 12.5px; color: var(--ci-mute); margin-top: 12px; }
+  .ci .ci-close-code[hidden] { display: none !important; }
+
+  /* FAQ */
+  .ci .ci-faq h2 { margin-bottom: 36px; }
+  .ci .ci-faq-list { display: flex; flex-direction: column; gap: 12px; }
+  .ci .ci-q { padding: 0; overflow: hidden; }
+  .ci .ci-q button { width: 100%; text-align: left; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 16px; padding: 19px 22px; color: var(--ci-fg); font-family: var(--f-sans); font-weight: 600; font-size: 16.5px; }
+  .ci .ci-q button span:first-child { flex: 1; }
+  .ci .ci-q .sign { flex: none; color: var(--ci-green); font-size: 22px; line-height: 1; }
+  .ci .ci-a { padding: 0 22px 20px; font-size: 15px; line-height: 1.6; color: var(--ci-soft); }
+
+  /* footer */
+  .ci .ci-foot { max-width: 1160px; margin: 0 auto; padding: 56px 40px 48px; }
+  .ci .ci-foot-in { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between; }
+  .ci .ci-foot .god { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; color: var(--ci-mute); }
+  .ci .ci-foot .cr { font-size: 13px; color: var(--ci-faint); }
+
+  /* PHONE WIDTHS, LAST SO SOURCE ORDER WINS. The Turnstile widget is a fixed 300px iframe, and a grid column
+     of plain 1fr grows to its min-content, so on a 375 to 390px phone the claim card pushed the whole page
+     3 to 16px wider than the viewport (a horizontal scroll on every lander, pre-consolidation). The column
+     is now minmax(0, 1fr), and below 560px the card gives up 8px of padding a side and borrows 8px of the
+     hero gutter, so a 300px widget fits inside it at 375px. */
+  @media (max-width: 560px) {
+    .ci .ci-claim { padding: 22px 18px; margin: 0 -8px; }
+  }
+</style>

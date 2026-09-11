@@ -8,7 +8,7 @@
 // a control.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { shouldUpgradeSaveControls, websiteClientArgs, cookieValue } from '../src/lib/save-controls-core.mjs';
@@ -82,8 +82,22 @@ test('coverage: every page that could render a save control goes through BaseLay
   // A known-subject control rather than a numeric floor: the walk must have found the homepage and the embed.
   const names = pages.map((p) => p.replace(ROOT, ''));
   assert.ok(names.includes('src/pages/index.astro') && names.includes('src/pages/embed.astro'), `the walk missed known pages: ${names.length} found`);
-  const outside = pages.filter((p) => !/BaseLayout/.test(readFileSync(p, 'utf8'))).map((p) => p.replace(ROOT, ''));
+  // A page is inside the layout when its own source names BaseLayout, or when a component it imports from
+  // src/components does (the three invite landers render through one shared InviteLander since sow-243). The
+  // indirection is followed ONE level and only into files that exist, so a page cannot satisfy this by naming
+  // a layout in a comment or importing a component that never mounts one.
+  const layoutBearingImport = (p) => {
+    const src = readFileSync(p, 'utf8');
+    for (const m of src.matchAll(/import \w+ from '((?:\.\.\/)+components\/[^']+\.astro)'/g)) {
+      const dep = join(p, '..', m[1]);
+      if (existsSync(dep) && /BaseLayout/.test(readFileSync(dep, 'utf8'))) return true;
+    }
+    return false;
+  };
+  const outside = pages.filter((p) => !/BaseLayout/.test(readFileSync(p, 'utf8')) && !layoutBearingImport(p)).map((p) => p.replace(ROOT, ''));
   assert.deepEqual(outside, ['src/pages/embed.astro'], 'the iframe embed is the only page outside the layout');
+  const viaComponent = pages.filter((p) => !/BaseLayout/.test(readFileSync(p, 'utf8')) && layoutBearingImport(p)).map((p) => p.replace(ROOT, '')).sort();
+  assert.deepEqual(viaComponent, ['src/pages/codeable-invite/index.astro', 'src/pages/curator-invite/index.astro', 'src/pages/member-invite/index.astro'], 'the pages that reach the layout through a component are exactly the three invite landers');
   const embed = readFileSync(join(ROOT, 'src/pages/embed.astro'), 'utf8');
   assert.doesNotMatch(embed, /FavoriteButton|CollectionButton|gbti-favorite|gbti-collection/, 'and it renders no save control');
 });
