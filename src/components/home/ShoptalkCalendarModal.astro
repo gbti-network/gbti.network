@@ -64,7 +64,10 @@ const outlook = outlookCalendarUrl(event);
 </dialog>
 
 <style>
-  .sc { border: 0; padding: 0; background: transparent; max-width: min(92vw, 26rem); }
+  /* Centered on purpose: the site's global reset zeroes every margin, which strips the browser's own
+     `margin: auto` that centres a modal dialog, so without this the chooser sat in the top-left corner
+     (owner screenshot, 2026-09-11). inset: 0 + margin: auto is the native centring, restated. */
+  .sc { border: 0; padding: 0; background: transparent; max-width: min(92vw, 26rem); position: fixed; inset: 0; margin: auto; }
   .sc::backdrop { background: rgb(0 0 0 / 0.5); }
   .sc-card { background: var(--bg-1, #fff); color: var(--fg, #25232b); border: 1px solid var(--line, #e6e4ea); border-radius: 14px; padding: 20px; }
   .sc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
