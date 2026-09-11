@@ -6,36 +6,24 @@ import { contentFlagsOf } from './content-flags'; // sow-189: the superadmin sta
 
 type Gatable = { data: { status: 'draft' | 'published'; visibility: 'public' | 'members'; publicStub?: boolean } };
 
-/**
- * Public static build shows only published + public entries.
- * Members-only and drafts are excluded from the public bundle (SOW-001 soft-gating);
- * the SOW-005 controller still reads every entry regardless of state.
- * Use this where the body must be FULLY readable (e.g. RelatedPosts, the comments feed).
- */
-export function isPublic(entry: Gatable): boolean {
-  return entry.data.status === 'published' && entry.data.visibility === 'public';
-}
+// sow-246: the four gating predicates live in the pure, node-testable content-gating.mjs and are re-exported
+// here under their own names, so every consumer keeps importing them from this module. See that file for the
+// mode table; test/content-gating.test.mjs drives the four frontmatter shapes through it.
+import {
+  isPublic as isPublicCore,
+  hasPublicPage as hasPublicPageCore,
+  isStub as isStubCore,
+  isListed as isListedCore,
+} from './content-gating.mjs';
 
-/**
- * SOW-016: does this entry get a public detail PAGE? published AND (public OR a members stub).
- * Mode A (members + no stub) and drafts get no page. This is the getStaticPaths predicate.
- */
-export function hasPublicPage(entry: Gatable): boolean {
-  return entry.data.status === 'published' && (entry.data.visibility === 'public' || entry.data.publicStub === true);
-}
-
+/** Public static build shows only published + public entries (full body readable). */
+export function isPublic(entry: Gatable): boolean { return isPublicCore(entry); }
+/** SOW-016: does this entry get a public detail PAGE? Mode A and drafts do not. The getStaticPaths predicate. */
+export function hasPublicPage(entry: Gatable): boolean { return hasPublicPageCore(entry); }
 /** SOW-016: a members item that renders a public STUB (header + locked body), i.e. Mode B. */
-export function isStub(entry: Gatable): boolean {
-  return entry.data.visibility === 'members' && entry.data.publicStub === true;
-}
-
-/**
- * SOW-016: appears in public listings/indexes. Same predicate as hasPublicPage — a Mode B stub shows as a
- * LOCKED card; a Mode A item is absent. Use this in index pages; keep `isPublic` where a locked card is noise.
- */
-export function isListed(entry: Gatable): boolean {
-  return hasPublicPage(entry);
-}
+export function isStub(entry: Gatable): boolean { return isStubCore(entry); }
+/** SOW-016: appears in public listings/indexes (a Mode B stub as a locked card; a Mode A item absent). */
+export function isListed(entry: Gatable): boolean { return isListedCore(entry); }
 
 type Keyed = Gatable & { collection?: string; data: Gatable['data'] & { slug?: string } };
 const FLAG_TYPE: Record<string, 'post' | 'project' | 'prompt'> = { post: 'post', project: 'project', applet: 'project', prompt: 'prompt' };

@@ -199,7 +199,7 @@ test('SOW-016: a Mode B item authored `publicStub: True` (capital) is NOT miscla
   fs.mkdirSync(path.join(root, 'house/posts/stub'), { recursive: true });
   fs.writeFileSync(path.join(root, 'house/posts/stub/index.md'), '---\ntype: post\nslug: stub\nvisibility: members\npublicStub: True\n---\n');
   fs.mkdirSync(path.join(root, 'dist/blog/stub'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'dist/blog/stub/index.html'), '<html>a legit Mode B stub page</html>');
+  fs.writeFileSync(path.join(root, 'dist/blog/stub/index.html'), '<html><gbti-locked-content data-gbti-region="locked"></gbti-locked-content></html>') // sow-246: a stub page carries the locked body, and the guard now checks it;
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors, [], 'publicStub: True is a stub (Mode B), so its page is allowed');
   fs.rmSync(root, { recursive: true, force: true });
@@ -464,5 +464,64 @@ test('guard: a repo with no wrangler.toml is simply not checked', () => {
   fs.writeFileSync(path.join(root, 'house/_enc/ok.enc'), validEnvelope);
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors, []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-246: the Mode B guard, the one mode this file did not guard. A stub item (members + publicStub) MUST
+// have a built page and that page MUST carry the locked body. Planted fixtures, mutation-checked: with the
+// marker string changed in the guard the "with marker" case reds; with the branch removed the "without" case
+// passes. Both restored before commit.
+// ---------------------------------------------------------------------------------------------------------
+function modeBRoot({ page = null } = {}) {
+  const root = tmpRoot();
+  fs.mkdirSync(path.join(root, 'members/stef/posts/gated'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'members/stef/posts/gated/index.md'), '---\ntitle: Gated\nstatus: published\nvisibility: members\npublicStub: true\nslug: gated\n---\nteaser\n');
+  if (page !== null) {
+    fs.mkdirSync(path.join(root, 'dist/blog/gated'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'dist/blog/gated/index.html'), page);
+  }
+  return root;
+}
+
+test('sow-246: a Mode B item whose built page carries the locked body passes, and is counted', () => {
+  const root = modeBRoot({ page: '<html><gbti-locked-content data-gbti-enc="x" data-gbti-region="locked"></gbti-locked-content></html>' });
+  const { errors, notes } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(errors.filter((e) => /Mode B/.test(e)), []);
+  assert.ok(notes.some((n) => /Mode B: 1 stub item\(s\) checked/.test(n)), notes.join(' | '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-246: a Mode B item with NO built page is an error naming the item', () => {
+  const root = modeBRoot({ page: null });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /Mode B item .* NO public page .*blog\/gated/.test(e)), errors.join(' | '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-246: a Mode B page WITHOUT the locked body is an error: the gate stopped presenting', () => {
+  const root = modeBRoot({ page: '<html><article>the whole members text, in the clear</article></html>' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /Mode B item .* WITHOUT the locked body/.test(e)), errors.join(' | '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-246: a DRAFT stub has no page by design and is not counted; zero stubs is reported, not silent', () => {
+  const root = modeBRoot({ page: null });
+  fs.writeFileSync(path.join(root, 'members/stef/posts/gated/index.md'), '---\ntitle: Gated\nstatus: draft\nvisibility: members\npublicStub: true\nslug: gated\n---\nteaser\n');
+  const { errors, notes } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(errors.filter((e) => /Mode B/.test(e)), []);
+  assert.ok(notes.some((n) => /Mode B: 0 stub item\(s\) checked/.test(n)), 'the zero case is printed');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-246 control: the Mode A rule is unchanged by the new branch', () => {
+  const root = tmpRoot();
+  fs.mkdirSync(path.join(root, 'members/stef/posts/secret'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'members/stef/posts/secret/index.md'), '---\ntitle: Secret\nstatus: published\nvisibility: members\nslug: secret\n---\nbody\n');
+  fs.mkdirSync(path.join(root, 'dist/blog/secret'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/blog/secret/index.html'), '<html>leak</html>');
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /Mode A item .* has a public page/.test(e)), errors.join(' | '));
   fs.rmSync(root, { recursive: true, force: true });
 });

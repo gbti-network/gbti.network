@@ -79,6 +79,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
   }
 
   const modeAItemPaths = []; // sow-165: filled by the Mode A walk below, read by the media-index check after it
+  let modeBChecked = 0; // sow-246: Mode B items whose built page was verified to carry the locked body
   // SOW-016: a Mode A item (visibility: members, no public stub) must have NO public page. Assert none exists
   // in dist for any such item (a backstop if getStaticPaths were reverted to plain isPublic-without-stub).
   if (fs.existsSync(distDir)) {
@@ -103,9 +104,27 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
           const idx = path.join(dir, slugDir, 'index.md');
           if (!fs.existsSync(idx)) continue;
           const txt = fs.readFileSync(idx, 'utf8');
-          // Mode A = members + not a stub. Parse publicStub case-insensitively (YAML accepts true/True/TRUE).
-          if (fmField(txt, 'visibility') !== 'members' || /^true$/i.test(String(fmField(txt, 'publicStub') ?? ''))) continue;
+          if (fmField(txt, 'visibility') !== 'members') continue;
+          const stubFlag = /^true$/i.test(String(fmField(txt, 'publicStub') ?? '')); // YAML accepts true/True/TRUE
           const slug = fmField(txt, 'slug') || slugDir;
+          // sow-246: MODE B (members + stub). The one mode this guard did not guard: a stub item MUST have a
+          // public page, and that page MUST carry the locked body the gate renders in place of the members
+          // text. A page without the marker means the gate silently stopped presenting (the realistic failure,
+          // measured: the gated tail lives in the .enc, so this is a lock not appearing, not text escaping).
+          // Only a draft is exempt, because a draft has no page by design.
+          if (stubFlag) {
+            if (fmField(txt, 'status') === 'draft') continue;
+            const page = path.join(distDir, distSeg, slug, 'index.html');
+            const rel = path.relative(root, page);
+            if (!fs.existsSync(page)) {
+              errors.push(`Mode B item (members + publicStub) has NO public page in dist: ${rel}. A stub must render its teaser and locked body. See SOW-016 / sow-246.`);
+            } else if (!fs.readFileSync(page, 'utf8').includes('data-gbti-region="locked"')) {
+              errors.push(`Mode B item (members + publicStub) built a page WITHOUT the locked body: ${rel}. The gate stopped presenting; the item's members text may be shown in the clear. See SOW-016 / sow-246.`);
+            }
+            modeBChecked += 1;
+            continue;
+          }
+          // Mode A = members + not a stub.
           modeAItemPaths.push(path.relative(root, idx).split(path.sep).join('/'));
           const page = path.join(distDir, distSeg, slug, 'index.html');
           if (fs.existsSync(page)) {
@@ -115,6 +134,10 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       }
     }
   }
+
+  // sow-246: say how many Mode B pages were verified. Zero is the current truth (no stub item exists yet), and
+  // it is printed rather than silent so the first real one is visibly the first one checked.
+  if (fs.existsSync(distDir)) notes.push(`Mode B: ${modeBChecked} stub item(s) checked for a locked body in dist`);
 
   // sow-165: /media-index.json backs the editor's image reuse picker and SHIPS IN DIST, so a Mode A item's
   // path in it would disclose that the item exists. The endpoint filters with isListed, and this is the guard
