@@ -63,6 +63,9 @@ test('the page: the comment section mounts <gbti-comment-echoes> before the comp
   const composer = page.indexOf('<CommentBox targetType={targetType} targetSlug={targetSlug} readerPath={itemReaderPath} />');
   assert.ok(mount > 0 && composer > mount, 'the echoes sit between the built thread and the composer');
   assert.match(read('client-ui/src/index.mjs'), /import '\.\/elements\/gbti-comment-echoes\.mjs';/);
+  // The website does NOT load the whole registry: its mount script imports the elements it upgrades by name.
+  const mountList = page.slice(page.indexOf('await Promise.all(['), page.indexOf(']);', page.indexOf('await Promise.all([')));
+  assert.match(mountList, /import\('\.\.\/\.\.\/\.\.\/client-ui\/src\/elements\/gbti-comment-echoes\.mjs'\)/, 'the website mount script defines the element, or the baked tag stays inert');
 });
 
 test('the element: reads pending rows through listComments, renders bodies with autoEmbed, syncs the heading and empty card, polls the pull list and stops on a terminal outcome', () => {

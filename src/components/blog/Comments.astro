@@ -188,6 +188,10 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
     await Promise.all([
       import('../../../client-ui/src/elements/gbti-comment-box.mjs'),
       import('../../../client-ui/src/elements/gbti-locked-content.mjs'),
+      // The author's own pending comments (SOW-076 echoes on the website). Without this import the baked
+      // <gbti-comment-echoes> tag is an unknown element and stays inert: the harness bundled the whole registry
+      // and hid exactly that (2026-09-11), so the pin in test/comment-echo-website.test.mjs reads this list.
+      import('../../../client-ui/src/elements/gbti-comment-echoes.mjs'),
     ]);
   }
 
