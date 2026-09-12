@@ -1,99 +1,112 @@
 ---
-type: post
-title: "ProxMoxBox: Migrating My Home Server to LXC | GBTI"
+title: I've Migrated My Home Server to Proxmox.
 slug: proxmoxbox-migrating-my-home-server-to-lxc
-author: atwellpub
-status: draft
+status: published
 visibility: public
-publishedAt: 2026-08-15
-excerpt: "A closet home server running a radio station and a camera system moves off Windows and WSL onto Proxmox VE, with each app in its own unprivileged LXC container and no open ports anywhere."
-categories: ["devops", "tooling"]
-tags: ["proxmox", "lxc", "tailscale", "self-hosting", "home-server", "wsl"]
-coverImage: "./images/proxmox-cover.webp"
+publicStub: false
+excerpt: >-
+  A closet home server running a radio station and a camera system moves off Windows and WSL onto
+  Proxmox VE, with each app in its own unprivileged LXC container and no open ports anywhere.
+categories:
+  - devops
+  - tooling
+tags:
+  - proxmox
+  - lxc
+  - tailscale
+  - self-hosting
+  - home-server
+  - wsl
+  - retropie
+  - security
+  - windows
+  - linux
+layout: editorial
+coverImage: ./images/proxmox-cover.webp
+featured: false
+publishedAt: '2026-08-15T00:00:00.000Z'
+updatedAt: '2026-09-12T14:40:14.869Z'
+type: post
+author: atwellpub
+encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
 ---
 
-I've had an ASRock H110 Pro BTC+ in the closest since Ethereum was POW (Proof of Work).
+12gb ram, 100gb SSD, 1TB external HD. i7-7700 CPU.
 
-In 2026 GPU mining is long-since no more, but the home server has lived on operating Windows 10 with WSL (Windows Subsystem for Linux) running a lonely SavePoint radio server, offering a sandbox for remote testing.
+Not much, but these are the specs of my home server and until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sublinux system to run a copy of [SavePoint Station Manager](https://savepoint.fm) for a community radio project.
 
-12gb ram, 100gb SSD, 1TB external HD. i7-7700 CPU. Not much but it has been a reliable second rig.
+As a developer neck deep in the AI boom, I am building (and downloading) more self-hosted software than ever. 100GB is a good amount of space, and Windows, even though *Tiny*, takes up too much of it. Not only that, Windows has been a great OS for direct use over the years, but with my home server, my use is more and more remote; which makes the need for a user-first OS less important. What is more important is claiming and delgating resources across linux first applications.
 
-Times have changed over the years. Hardware and storage costs seem to be at their highest over competition for parts. 100GB might not seem like much, but Windows is a heavy OS (quickly taking up to 40gb of hard drive space).
+On my Windows home server I was frequently using WSL and it is [not an ideal development environment](https://www.xda-developers.com/wsl-great-run-linux-natively-instead/). Now, I have finally come to the point where I want my home server environment to be more singular purposed, like the VPN I rent on [Cloudways](https://gbti.network/outbound/cloudways) that I can tunnel into (saving 100USD a year) .
 
-Windows users often use WSL because much of modern development tooling is built for Linux, while they still want Windows as their main desktop OS. But any WSL user can native Linux can be easier to work with than WSL, and also provides performance benefits.
+So I've ditched Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
 
-I wanted to see what was out there and what others were using when it came to the home server space. Something native linux, low OS footprint, and with an active developer (and aftermarket) community.
+## Part 1: Proxmox and the "ProxMoxBox"
 
-Along my way to find a replacement I learned about Prox Mox, and its approach to virtual machines and sub linux containers. This article will introduce you to what I was able to learn during the conversion of my home server from Windows to Proxmox.
+Proxmox is a linux-first OS platform that manages virtual machines and LXC containers from one web interface.
 
-## Proxmox and the ProxMoxBox box
+Proxmox offers a specialized operating system that allows segmentation of machines and containers. Think of it as your own linux container manager; similar to a collection of Dropbox instances.
 
-[Proxmox VE](https://www.proxmox.com/en/proxmox-virtual-environment/overview) is a Debian-based virtualization platform that manages both VMs and LXC containers behind one web interface. I am running 9.2.2, which sits on Debian 13.
+Instead of piling every self-hosted application into WSL under Windows, each service can live in its own container environment. This makes applications easier to install, start up, back up, restart, move, upgrade, and occasionally break without taking the rest of the server down with them.
 
-The machine is now, unavoidably, the ProxMoxBox box. Say it three times fast. I will wait.
+Proxmox can do this with full virtual machines, but many self-hosted Linux applications can run in much lighter *LXC *containers.  Proxmox OS can even bind multiple machines together under a single cluster/interface. So if you have two home server machines, they can combine into one network accessible singular OS.
 
-There is a genuine reason to pick Proxmox beyond the feature list, and it is the ecosystem. Home servers have a large and active community of people solving the same problems, publishing helper scripts, and answering questions from someone running exactly your hardware. That is worth a great deal when something does not work at two in the morning.
+Proxmox OS was built in such a way that home server management is a primary and not a secondary consideration, where as Windows was not created for compartmentalized application management (though it can support it).
 
-## What LXC is, and how it differs from a virtual machine
+## Part 2: What LXC is, and how it differs from a virtual machine
 
-A container and a virtual machine cost the machine very different amounts, and that decides how many services fit on one box.
+I used the word LXC earlier, which for me was a brand new term when I started my ProxMox journey. It stands for "Linux Container", plainly.
 
-A virtual machine emulates a computer. It boots its own kernel, runs its own device drivers through QEMU, and holds its own memory. When you give a VM 4 GB, that 4 GB is allocated to it and the host cannot use it for anything else, whether the VM is busy or idle.
+![pasted-20260911-203944](./images/pasted-20260911-203944.webp "Borrowed meme from: https://www.reddit.com/r/ProgrammerHumor/comments/qq8l3h/dont_shame_me_plz/")
 
-An LXC container shares the host's kernel. There is no guest kernel to boot, no QEMU, no virtio device state. What you get instead is a set of isolated namespaces and cgroup limits around a normal Linux process tree. In practice a bare Debian container idles at something like 30 to 60 MB of RAM before you run anything, where the same services in a VM cost 200 to 400 MB just to exist. A container starts in under a second. A VM takes 15 to 30 seconds to boot.
+One of the first questions my AI agent proposed to me during my first home server application setup was, "Do you want to install this application as a virtual machine or a LXC?" while simultaneously advising that I choose LXC.
 
-**Unprivileged** changes the blast radius. An unprivileged container maps its root user to an unprivileged user on the host, so root inside the container is nobody in particular outside it. Both of mine are unprivileged.
+When asking why it recommended an LXC over a virtual machine, I was informed that an LXC container and a virtual machine require different resource commitments. The VM required an upfront delegation of resources that subsequent LXC containers would share resources from. If I delegated 50% machine resources to VM One, then I would have 50% resources for VM two. They would not share the resources. While rather if I only created VM One, and then created several LXC containers within that VM, these sub containers would share.
 
-Separating the two applications was worth as much to me as the efficiency was. Under the old setup they shared one Linux environment, which meant they shared their dependencies, their failure modes and their fate: whatever took one down was liable to take the other with it. Now each application is its own container, with its own packages, its own resource ceiling and its own restart. The radio can crash without the cameras noticing. Proxmox also snapshots and backs up each container independently, on a schedule, which replaces the previous arrangement of remembering to export the whole thing by hand and usually not doing it.
+Without a distinct need to create multiple VMs on one computer, I would be better off with just one and then all my sub-linux containers would share the whole of that machines resources (which would be better for my purpouse).
 
-Here is the part I originally described, incorrectly, as load balancing. Proxmox does not balance load between containers. What actually happens is subtler and more useful: the `cores` setting is a ceiling, not a reservation. I have allocated 10 cores across 8 threads, deliberately overlapping, because each service can burst up to its ceiling whenever the other is idle. Container memory is elastic in the same way, where VM memory is not without ballooning. On top of that, `cpuunits` gives the cameras priority over the radio when both want the CPU at once.
+A virtual machine emulates a computer. It boots its own kernel, runs its own device drivers through
+QEMU, and holds its own memory. When you give a VM 4 GB, that 4 GB is allocated to it and the host cannot
+use it for anything else, whether the VM is busy or idle.
 
-Ceilings rather than reservations is what lets two services share 12 GB without either being starved, which is not what "load balancing" describes.
+An LXC container shares the host's kernel. There is no guest kernel to boot, no QEMU, no virtio device state. What you get instead is a set of isolated namespaces and cgroup limits around a normal Linux process tree.   
 
-## Reaching it: Tailscale, and what actually provides the security
+In practice a bare Debian container idles at something like 30 to 60 MB of RAM before you run anything, where the same services in a VM cost 200 to 400 MB just to exist. A container starts in under a second. A VM takes 15 to 30 seconds to boot.
 
-Both services stay off the public internet entirely: no forwarded port on my router, no reverse proxy with a certificate facing the world. Everything is reached over [Tailscale](https://tailscale.com/), running 1.102.2 in both containers.
+## Part 3: Using Tailscale with Poxmox
 
-Tailscale builds a private mesh network between your own devices. Its MagicDNS feature gives each machine a stable hostname on that network, so I reach the radio and the cameras by name rather than by chasing an IP address that changes. Because every connection is initiated outbound from the device, it works perfectly well from behind the NAT described earlier. NAT traversal is a convenience here, not a defence.
+Converting Windows to Poxmox was the first part of my home server migration.
 
-I want to be careful about that last point, because it is the sort of thing that gets stated loosely and then repeated. Not exposing a port is real and worthwhile, but obscurity is not the security boundary here. The tailnet access control list is. Only devices I have added to my network can reach these services at all, and the ACL decides which of those devices may reach which service. That is a policy I control and can audit, rather than a hope that nobody scans my address.
+![pasted-20260911-173457](./images/pasted-20260911-173457.png){full}
 
-On cost: as of the pricing change in April 2026, Tailscale's free Personal plan covers up to 6 users with unlimited devices, which is comfortably more than a household needs. Check the current terms before you rely on that, since it changed once already this year.
+The second part of the home network setup was making my server applications accessible inside my home network (as well as outside of it).
 
-There is one container-specific trap worth recording. Tailscale in an unprivileged LXC container needs `/dev/net/tun` passed through explicitly. Containers do not get it by default, and without it the daemon simply cannot build a tunnel. Separately, Debian ships `tailscaled` with `Restart=on-failure`. It exited cleanly once with status 0, systemd counted that as success, and remote access stayed down for three minutes. That is now `Restart=always`.
+To solve this, we have used a service called **<a href="https://tailscale.com/" rel="noopener" target="_blank">Tailscale</a>.**
 
-## Where it stands right now
+Let's give an example...
 
-I am writing this while the migration is still finishing, and I would rather say so than present a tidy retrospective.
+At home I have two Nest Cameras (Google) and instead of paying the 5USD a month to store and access doorbell+driveway footage from Google's cloud, **I built my own surveillance storage that stores the footage on a spare USB HD.** 
 
-The Proxmox host is built. Both containers are built, configured and verified: the cold-start test passed, with Wi-Fi associating on its own, storage mounting, both containers auto-starting and both services answering. What remains is data. The media library is copying to the newly reformatted volume, after which the media paths get repointed, both containers restart, and the radio gets a fresh deploy.
+With **Tailscale**, I can type `http://homesurveillance` into a browser on any device connected to my Tailscale network and reach the server as though I were still at home.
 
-The concrete result, though, is already visible. Both containers running put the host at 2.0 GB used with 9.4 GB available. The same two workloads as virtual machines would have consumed roughly 6 GB before executing a single line of application code. On a 12 GB machine, that difference is the entire reason this approach works.
+![aha-starlight-survailence-1](./images/aha-starlight-survailence-1.webp "Yes these are two of my cameras! I converted them to the style of Aha's Take on Me to help depersonalize them."){full}
 
-<!-- SCREENSHOT PLACEHOLDER: SavePoint station in motion, streaming from the new host -->
+Access to these host endpoints are controlled by policies I define, so only approved devices and users can connect.  
 
-<!-- SCREENSHOT PLACEHOLDER: the camera application in motion, both cameras live -->
+Under the hood, Tailscale creates an encrypted WireGuard connection between my devices and gives each one a stable private address and hostname. On an iPhone, the Tailscale app uses iOS's built-in VPN interface to route that private traffic securely back to the home server.  
 
-## The two applications
+The best part about the TailScale solution has been their extremely generous free tier offering that covers nearly all personal usage. I already have several devices connected and host addresses for almost 8 different home server applications (this number seems to keepgrowing as I add more containers to my PoxMoxBox.
 
-[SavePoint](https://savepoint.fm) is an online radio management platform with multi-channel streaming to Discord and YouTube. I build it, and I run a hobby station on it called TaverRX that plays role-playing game soundtrack music. Running the station is genuinely how I find the rough edges in the platform, which is a good argument for keeping it alive through a hardware migration rather than letting it stay dark.
+## The final migration; ProxMox in use:
 
-The surveillance system is my own code, driving two Google Nest cameras through Google's Smart Device Management API. A bridge process holds and extends the Nest sessions against a quota of 100 queries per hour per camera, which is the sort of constraint that shapes an entire design once you hit it. Support for Ring cameras is planned but not built.
+Since starting this small article, the ProxMox server is not only completely setup. I've added a second machine to it, 8gb more ram, an addition 1tb SSD, a Zotec 1060 with 6gb virtual memory, and I've reformatted two external hard drives from NFTS to EXT4 so they are compatable with the Linux machines.   
 
-That project is not open source yet. I intend to publish it this year, and I will update this article with a link when it is available.
+The only thing left to do now is share some screenshots of my servers and let you know how I am using it to improve my personal computing experience:
 
-## What migration is actually good for
+![chrome_GCXZ6LAnhV](./images/chrome_gcxz6lanhv.png)
 
-A migration is an excellent bug finder, because it forces every assumption into the open. This one surfaced four latent faults in the camera project that had never been triggered: a recorder configured to dial an RTSP port that nothing was listening on, systemd units bound to a service that had been replaced and no longer existed, a restart-limit directive sitting in the wrong section where systemd ignores it entirely, and a hardened unit with no write access to the directory it records footage into.
+So what are we running?   
 
-All four were waiting to be found. None was caused by the move.
+I've created a members-only breakdown of the current contents of my home server, with links to the open-source software that helps me run these apps.   
 
----
-
-If you self-host anything, the question worth asking is whether your services come back on their own after the next power cut, not whether they are running today. Mine did not come back, and that is what started this.
-
-For more tutorials, AI skills and member-built products, have a look around [GBTI Network](https://gbti.network/). We are a developer co-op, and this is the sort of thing we spend our time on.
-
-Cover photograph by Daniel Reche on Pexels, with the Proxmox logo added.[^1]
-
-[^1]: Cover photograph by Daniel Reche on Pexels, used under the [Pexels License](https://www.pexels.com/license/): [pexels.com/photo/6570266](https://www.pexels.com/photo/a-mug-of-beer-on-the-table-6570266/). Proxmox is a registered trademark of [Proxmox Server Solutions GmbH](https://www.proxmox.com/); its logo appears here to identify the software this article is about.
+Happy to discuss any of these applications or my setup in the comments or on Discord. Thanks for reading, and good luck with your home server build 🙌
