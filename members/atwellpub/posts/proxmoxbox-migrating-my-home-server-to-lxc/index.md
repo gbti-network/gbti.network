@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T21:08:59.839Z'
+updatedAt: '2026-09-12T21:12:01.460Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -84,7 +84,7 @@ To solve this, we have used a service called **<a href="https://tailscale.com/" 
 
 Let's give an example...
 
-At home I have two Nest Cameras (Google) and instead of paying the 5USD a month to store and access doorbell+driveway footage from Google's cloud, **I built my own surveillance storage that stores the footage on a spare USB HD.** 
+At home I have two Google Nest cameras. Instead of paying about $5 a month for cloud storage and access to my doorbell and driveway footage, **I built my own surveillance storage that stores the footage on a spare USB HD.** 
 
 With **Tailscale**, I can type `http://homesurveillance` into a browser on any device connected to my Tailscale network and reach the server as though I were still at home.
 
@@ -96,9 +96,9 @@ Under the hood, Tailscale creates an encrypted WireGuard connection between my d
 
 The best part about the Tailscale solution has been their extremely generous free tier offering that covers nearly all personal usage. I already have several devices connected and host addresses for almost 8 different home server applications (this number seems to keep growing as I add more containers to my PoxMoxBox).
 
-## The final migration; ProxMox in use:
+## The final migration; Proxmox in use:
 
-Since starting this small article, the ProxMox server is not only completely setup. I've added a second machine to it, 8gb more ram, an addition 1tb SSD, a Zotec 1060 with 6gb virtual memory, and I've reformatted two external hard drives from NFTS to EXT4 so they are compatable with the Linux machines.   
+Since starting this article, the project has already grown beyond the original machine. I’ve added a second Proxmox server, another 8 GB of RAM, an additional 1 TB SSD, and a Zotac GTX 1060 with 6 GB of VRAM. I also reformatted two external drives from NTFS to EXT4, giving them a Linux-native filesystem that is better suited to how I’m using the storage now.
 
 The only thing left to do now is share some screenshots of my servers and let you know how I am using it to improve my personal computing experience:
 
