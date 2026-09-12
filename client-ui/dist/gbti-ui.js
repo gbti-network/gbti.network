@@ -1601,6 +1601,18 @@ ${String(body ?? "")}`;
     100% { background:transparent; box-shadow:0 0 0 4px transparent; }
   }
   @media (prefers-reduced-motion: reduce) { .blk-flash { animation-duration:.01s; outline:2px solid var(--s-amber, #d9a13c); } }
+  /* sow-328: THE BRIDGE, and without it the toolbar cannot be reached with a mouse at all.
+     The toolbar is absolutely positioned into the gutter, which is PADDING on .doc-blocks, so it sits
+     entirely outside .blk's own box with a dead strip between the two (a 142px offset against a 134px
+     toolbar leaves 8px, measured in a browser, not inferred). Crossing that strip drops :hover, which sets
+     the toolbar to pointer-events:none before the pointer arrives, and a non-hit-testable element cannot
+     restore the hover it needs: landing squarely on the toolbar still read opacity 0. So it vanished every
+     single time it was approached. Only :focus-within saved the text blocks, by keeping it up after a click
+     into the prose, which is why this read as an image-block problem.
+     This invisible child makes the gutter beside a block part of that block's own hover region, so the whole
+     column is a valid approach path. It is a ::before rather than ::after so the toolbar, later in DOM
+     order, still paints and hit-tests above it and keeps its clicks. */
+  .blk::before { content:''; position:absolute; top:0; right:calc(var(--blk-gutter) * -1); width:var(--blk-gutter); height:100%; }
   .blk-tools { position:absolute; top:0; right:calc(var(--blk-gutter) * -1); display:flex; gap:2px; align-items:center; padding:2px;
     background:var(--s-surface); border:1px solid var(--s-line); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08);
     opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:2; }
@@ -1731,6 +1743,8 @@ ${String(body ?? "")}`;
      measured 142px column. */
   @container (max-width: 560px) {
     .doc-blocks { padding-right:0; }
+    /* No gutter here, so the bridge would hang off the right edge and push the page sideways. */
+    .blk::before { content:none; }
     .ce-p { padding-right:0; }
     .blk-tools { position:static; display:none; width:max-content; margin:0 0 6px auto; opacity:1; }
     .blk:focus-within > .blk-tools { display:flex; }

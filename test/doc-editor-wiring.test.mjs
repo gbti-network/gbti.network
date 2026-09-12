@@ -149,6 +149,39 @@ test('the toolbar reserves its space through the gutter, not through the old par
     'the toolbar is not positioned into the gutter, so widening the gutter alone would not move it');
 });
 
+test('the gutter beside a block is part of that block, or its toolbar cannot be reached at all', () => {
+  // sow-328, owner: "I cannot reach the toolbar on the top right of the image... Every time I try with the
+  // mouse it disappears."
+  //
+  // MEASURED IN A BROWSER, not inferred. The gutter is PADDING on .doc-blocks, so .blk stops at the column
+  // edge while its toolbar is positioned out into the gutter: a 142px offset against a 134px toolbar leaves
+  // an 8px dead strip between them. Two pixels into that strip, :hover went false, the toolbar dropped to
+  // opacity 0 and pointer-events:none, and a non-hit-testable element cannot restore the hover it needs, so
+  // landing squarely on the toolbar still read opacity 0. The control was unreachable by mouse on every
+  // block; only :focus-within rescued the text ones, by holding it up after a click into the prose, which is
+  // why the report came from an image.
+  //
+  // The bridge is an invisible ::before spanning the gutter beside the block, which makes the whole column a
+  // valid approach. After it, every step of the same walk read opacity 1, and a real click on Move down
+  // reordered the body.
+  assert.match(editor, /\.blk::before \{[^}]*content:''/,
+    'the hover bridge is gone, so the toolbar is unreachable with a mouse again');
+  assert.match(editor, /\.blk::before \{[^}]*right:calc\(var\(--blk-gutter\) \* -1\)/,
+    'the bridge must start where the block ends, using the SAME variable the toolbar is offset by');
+  assert.match(editor, /\.blk::before \{[^}]*width:var\(--blk-gutter\)/,
+    'a bridge narrower than the gutter leaves part of the strip dead');
+  assert.match(editor, /\.blk::before \{[^}]*height:100%/, 'the bridge must span the block, not just its first line');
+
+  // It is a ::before rather than ::after on purpose: an ::after paints after the element's children, so it
+  // would cover the toolbar and swallow its clicks.
+  assert.ok(!/\.blk::after \{[^}]*right:calc\(var\(--blk-gutter\)/.test(editor),
+    'a bridge as ::after would paint over the toolbar and eat the clicks it exists to enable');
+
+  // And it must be off where there is no gutter, or it hangs off the edge and scrolls the page sideways.
+  const phone = editor.slice(editor.indexOf('@container (max-width: 560px)'));
+  assert.match(phone, /\.blk::before \{ content:none/, 'the phone branch must drop the bridge with the gutter');
+});
+
 test('the type control is an icon button opening a palette, not the dropdown that caused the overlap', () => {
   // Comments are stripped first: the explanatory note above _tools mentions the old <select> by name, and
   // without this the guard matches that prose and fails on a file that is completely correct. This exact trap
