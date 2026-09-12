@@ -54,6 +54,7 @@ import { unlinkDiscord } from './discord-unlink.mjs'; // sow-218: disconnect Dis
 import { buildEnvPriceTierMap } from '../../membership/tier-gate.mjs'; // sow-185: price -> tier map for the Creator badge
 import { startOnboarding } from './connect.mjs';
 import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEvent } from './webhook.mjs';
+import { verifyResendSignature, handleResendBounceEvent } from './resend-webhook.mjs'; // sow-324: auto-unsubscribe on email bounce
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses, membershipAdminOverrides } from './membership-admin.mjs';
@@ -810,6 +811,40 @@ async function handleWebhook(request, env) {
   return json({ ok: true, summary });
 }
 
+// sow-324: the Resend bounce/complaint webhook. Mirrors handleWebhook: verify the svix signature over the raw
+// body BEFORE parsing, fail closed, dedupe on the svix id, and mark the event seen only after the handler
+// succeeds so a transient failure is retried rather than dropped. A permanent bounce or a spam complaint writes
+// the same suppression marker a one-click unsubscribe writes, so the drain skips the address on every send.
+async function handleResendWebhook(request, env) {
+  const payload = await request.text();
+  const svixId = request.headers.get('svix-id');
+  const event = await verifyResendSignature({
+    id: svixId,
+    timestamp: request.headers.get('svix-timestamp'),
+    signatureHeader: request.headers.get('svix-signature'),
+    secret: env.RESEND_WEBHOOK_SECRET,
+    body: payload,
+  });
+  // Fail closed. This is also the state before the owner provisions RESEND_WEBHOOK_SECRET, so the route is inert
+  // until then and safe to ship first.
+  if (!event) return json({ error: 'invalid_signature' }, 400);
+
+  if (await isDuplicateEvent({ kv: env.SIGNUP_KV, eventId: svixId })) {
+    return json({ ok: true, duplicate: true });
+  }
+
+  let summary;
+  try {
+    summary = await handleResendBounceEvent({ event, kv: env.SIGNUP_KV, secret: env.MAIL_SUPPRESS_KEY });
+  } catch (err) {
+    console.error('resend webhook handler failed', svixId, err?.message);
+    return json({ error: 'handler_failed' }, 500);
+  }
+
+  await markEventSeen({ kv: env.SIGNUP_KV, eventId: svixId });
+  return json({ ok: true, summary });
+}
+
 /**
  * UnifiedWorker cron dispatch. `workers/signup/wrangler.toml` must carry these strings EXACTLY, in BOTH
  * [triggers] and [env.production.triggers] (wrangler does not inherit triggers into a named env).
@@ -1063,6 +1098,7 @@ export default {
       if (method === 'GET' && pathname === '/referral/connect/return') return await handleConnectReturn(request, env);
 
       if (method === 'POST' && pathname === '/webhook') return await handleWebhook(request, env);
+      if (method === 'POST' && pathname === '/resend/webhook') return await handleResendWebhook(request, env); // sow-324: auto-unsubscribe on bounce
 
       // SOW-011: the membership-status oracle for the local client (GitHub-bearer-token authenticated).
       // Cross-origin (the extension + the npm host call it), and it carries no cookies, so a wildcard CORS

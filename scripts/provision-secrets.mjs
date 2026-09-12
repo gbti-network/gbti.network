@@ -41,6 +41,7 @@ const REGISTRY = [
   { name: 'STRIPE_SECRET_KEY', targets: ['worker', 'actions'], classify: 'stripe', note: 'Worker=write key, Actions=read key. Prod must be a LIVE key for real charges.' },
   { name: 'STRIPE_PRICE_ID', targets: ['worker'], kind: 'var', note: 'The annual $150 price id. NON-SECRET var in wrangler.toml [env.production.vars], not a secret.' },
   { name: 'STRIPE_WEBHOOK_SECRET', targets: ['worker'], optional: true, note: 'Only if the optional Stripe webhook is enabled.' },
+  { name: 'RESEND_WEBHOOK_SECRET', targets: ['worker'], optional: true, note: 'sow-324: verifies the Resend bounce/complaint webhook (svix signature) at /resend/webhook. Set only once the Resend webhook endpoint is configured; until then the route fails closed and auto-unsubscribe does nothing.' },
   { name: 'SESSION_SECRET', targets: ['worker'], note: 'Signed session/state cookie.' },
   { name: 'MEMBER_CONTENT_KEY', targets: ['worker'], note: 'AES key for member-only content (never leaves the Worker).' },
   // sow-212. NOT tracked here until 2026-08-21, which is its own small lesson: the registry README documents

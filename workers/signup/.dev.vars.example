@@ -31,6 +31,10 @@ STRIPE_SECRET_KEY="rk_test_xxxxxxxxxxxxxxxx"
 # Stripe webhook signing secret (only needed if the optional webhook is enabled).
 STRIPE_WEBHOOK_SECRET="whsec_xxxxxxxxxxxxxxxx"
 
+# sow-324: Resend bounce/complaint webhook signing secret (svix). Only needed once the Resend webhook
+# endpoint is configured; /resend/webhook fails closed until it is set.
+RESEND_WEBHOOK_SECRET="whsec_xxxxxxxxxxxxxxxx"
+
 # GitHub OAuth app client secret (scope read:user).
 GITHUB_OAUTH_CLIENT_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 

@@ -8,6 +8,8 @@
 # Secrets (Stripe key, OAuth client secrets, bot token, session secret, dispatch token, Turnstile
 # secret) are NEVER committed. Set them with `npx wrangler secret put <NAME>` for production and via
 # .dev.vars for local dev. The [vars] block below holds only non-secret configuration placeholders.
+# sow-324: RESEND_WEBHOOK_SECRET (optional) verifies the Resend bounce/complaint webhook at /resend/webhook;
+# the route fails closed until it is set. Provision with `wrangler secret put RESEND_WEBHOOK_SECRET --env production`.
 
 name = "gbti-signup"
 main = "index.mjs"
