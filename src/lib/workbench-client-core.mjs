@@ -219,6 +219,54 @@ export function bodyImageCandidates(body, oldBody, stagedNames) {
 }
 
 /**
+ * sow-323: split a body's image references into the ones whose bytes this session holds and the ones whose
+ * EXISTENCE has to be verified against the repository.
+ *
+ * THIS REPLACES bodyImageCandidates AT THE PUBLISH CALL SITE, and the reason is a defect that reached the
+ * owner. bodyImageCandidates filters out any reference the previously committed body already carried, on the
+ * stated ground that "anything already in it is already committed, so its file is already in the item's
+ * folder". Nothing verifies that, and on 2026-09-12 it was false for two images in a live article: the body on
+ * main referenced ./images/pasted-20260911-203944.webp and ./images/aha-starlight-survailence-1.webp and
+ * neither file was in the repository. The consequences compound in the worst order:
+ *   - planPublishImage WOULD have refused the publish ("no longer staged; choose it again"), but the filter
+ *     removed both references before it ever saw them, so the publish succeeded silently.
+ *   - Astro fails the site build on a missing image ([ImageNotFound]) rather than rendering a broken one, so
+ *     the push red main, and post-publish remediation flipped the owner's published article to draft.
+ *   - And because both names ARE in the committed body, every subsequent publish filters them out again. The
+ *     author cannot heal it by re-publishing. That is what makes this a trap rather than a one-off.
+ *
+ * The cost property the old filter existed to protect is kept, and improved. Its worry was real and measured:
+ * the largest article here carries 50 body images, and a candidate costs up to three lookups, two of them
+ * network reads, so a naive scan spends about a hundred sequential round-trips proving what is already true.
+ * Verifying EXISTENCE is one read per unstaged reference and the caller runs them CONCURRENTLY, so the wall
+ * cost is a single round-trip for the whole body rather than a hundred, and an image proven present is then
+ * skipped without the other two lookups. Correct and cheaper than what it replaces.
+ *
+ * Pure: the caller supplies the verification. Returns { staged, toVerify }, both arrays of body refs.
+ */
+export function partitionBodyImages(body, stagedNames) {
+  const staged = stagedNames instanceof Set ? stagedNames : new Set(stagedNames || []);
+  const refs = bodyImageRefs(body);
+  return {
+    staged: refs.filter((r) => staged.has(r.name)),
+    toVerify: refs.filter((r) => !staged.has(r.name)),
+  };
+}
+
+/**
+ * The body references ONE publish must resolve, given which unstaged names were found in the repository.
+ * A staged name is always resolved (the author may have replaced the file under the same name, so the bytes on
+ * main are stale). An unstaged name PROVEN present needs nothing. An unstaged name that is absent is resolved,
+ * which sends it to planPublishImage, which commits it from the store or REFUSES the publish. Fail closed: a
+ * name whose verification did not come back positive is treated as absent.
+ */
+export function bodyImagesToResolve(body, stagedNames, presentNames) {
+  const present = presentNames instanceof Set ? presentNames : new Set(presentNames || []);
+  const { staged, toVerify } = partitionBodyImages(body, stagedNames);
+  return [...staged, ...toVerify.filter((r) => !present.has(r.name))];
+}
+
+/**
  * The full list of images ONE publish has to resolve, each flagged for whether the sow-183 move applies.
  *
  * Extracted so the decision is testable. Left inline in publish() it would be glue no unit test can reach,

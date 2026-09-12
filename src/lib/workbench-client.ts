@@ -29,6 +29,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
+import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
 import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
@@ -349,9 +350,20 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // the ceiling. Moving them would hard-fail the rename outright, which is worse than today's behaviour of
     // leaving them orphaned at the old folder. That half needs a chunked or Worker-side move, and sow-165
     // records the measurement.
+    // sow-323: which body images this publish has to resolve. The old rule inferred "already committed" from
+    // the previously committed BODY and never checked, which let a publish commit markdown pointing at a file
+    // that is not in the repository (two of them in a live article on 2026-09-12), red the site build, and get
+    // the article auto-drafted, with every later publish filtering the same references out again so the author
+    // could not heal it. Existence is now VERIFIED, and concurrently, so the whole body costs one round-trip of
+    // wall time instead of the ~100 sequential reads the old comment was right to avoid.
+    const bodyParts = partitionBodyImages(body, new Set(pendingImages.keys()));
+    const presentOnMain = new Set<string>(
+      (await Promise.all(bodyParts.toVerify.map(async (r: any) =>
+        ((await readOwnFile(`${imagesDir}/${r.name}`)) != null ? r.name : null)))).filter(Boolean) as string[],
+    );
     const imageRefs: Array<{ name: string; move: boolean }> = planImageRefs(
       referencedImages(built.frontmatter),
-      bodyImageCandidates(body, oldBody, new Set(pendingImages.keys())),
+      bodyImagesToResolve(body, new Set(pendingImages.keys()), presentOnMain),
     );
     for (const ref of imageRefs) {
       const commitPath = `${imagesDir}/${ref.name}`;

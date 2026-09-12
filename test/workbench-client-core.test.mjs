@@ -3,6 +3,7 @@
 // filter/tier-gate, the comment-visibility coercion, and the favorite derivation. Uses a FAKE encrypt (no Worker).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { partitionBodyImages, bodyImagesToResolve } from '../src/lib/workbench-client-core.mjs';
 import { planMemberFiles, planPublishImage, planPublishImageFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, bodyImageRefs, bodyImageCandidates, planImageRefs, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
 import { buildCommentFile, buildContentFile, buildShareFile, shareId, commentId, parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 
@@ -653,3 +654,41 @@ test('isForeignMemberPath: another member\'s canonical item path is foreign; own
   assert.equal(isForeignMemberPath('members/bob/shares/x.md', 'alice'), false, 'not a canonical content item path');
   assert.equal(isForeignMemberPath('', 'alice'), false);
 });
+
+// sow-323: THE REGRESSION THAT REACHED THE OWNER. bodyImageCandidates filtered out any reference the previously
+// committed body already carried, on the stated ground that it must therefore already be committed. Nothing
+// verified that, and on 2026-09-12 it was false for two images in a live article: the body on main referenced
+// ./images/pasted-20260911-203944.webp and ./images/aha-starlight-survailence-1.webp and neither file existed in
+// the repository. planPublishImage WOULD have refused the publish, but the filter removed both references before
+// it could; the site build then failed on the missing image and post-publish remediation drafted the article. And
+// because both names were in the committed body, every later publish filtered them out again, so re-publishing
+// could not heal it. Existence is verified now instead of inferred.
+test('bodyImagesToResolve: an unstaged reference that is NOT in the repository is resolved, not assumed committed', () => {
+  const body = '![](./images/a.webp)\n![](./images/gone.webp)';
+  const names = bodyImagesToResolve(body, [], ['a.webp']).map((r) => r.name);
+  assert.deepEqual(names, ['gone.webp'],
+    'a name absent from the repository must reach planPublishImage, which refuses the publish rather than committing a dangling reference');
+});
+
+test('bodyImagesToResolve keeps the cost property: everything present resolves nothing', () => {
+  // The worry the old filter existed for was real and measured (the largest article here carries 50 body
+  // images, each costing up to three lookups, two of them network reads). This asserts the replacement did not
+  // trade the cost away: what is proven present needs no further lookup at all.
+  const body = '![](./images/a.webp)\n![](./images/b.webp)\n![](./images/c.webp)';
+  assert.deepEqual(bodyImagesToResolve(body, [], ['a.webp', 'b.webp', 'c.webp']), []);
+  // and the verification itself is one read per UNSTAGED name, which the caller runs concurrently
+  assert.deepEqual(partitionBodyImages(body, ['b.webp']).toVerify.map((r) => r.name), ['a.webp', 'c.webp']);
+  assert.deepEqual(partitionBodyImages(body, ['b.webp']).staged.map((r) => r.name), ['b.webp']);
+});
+
+test('bodyImagesToResolve: a STAGED name is always resolved, and an unknown verification FAILS CLOSED', () => {
+  const body = '![](./images/a.webp)';
+  // staged wins even when the file is present on main: the author replaced it under the same name
+  assert.deepEqual(bodyImagesToResolve(body, ['a.webp'], ['a.webp']).map((r) => r.name), ['a.webp']);
+  // no verification information at all means resolve it, never skip it
+  for (const present of [null, undefined, []]) {
+    assert.deepEqual(bodyImagesToResolve(body, [], present).map((r) => r.name), ['a.webp'],
+      'an unverified name must be resolved: skipping it is what committed a dangling reference');
+  }
+});
+
