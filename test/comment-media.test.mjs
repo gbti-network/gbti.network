@@ -60,7 +60,7 @@ test('the lightbox helper: autoplay on open, one shared poster stylesheet (full 
 
 test('the page lightbox has a video mode: the frame, the event listener, the light-DOM click, autoplay, and a close that clears the player', () => {
   const lb = read('src/components/Lightbox.astro');
-  assert.match(lb, /<div class="lb-frame" data-lb-frame hidden>\s*<iframe title="Video"[^>]*sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"/);
+  assert.match(lb, /<div class="lb-frame" data-lb-frame hidden>\s*<iframe title="Video"[^>]*sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"/);
   assert.match(lb, /document\.addEventListener\('gbti-embed-open', \(e\) => openEmbed\(e\.detail && e\.detail\.src\)\);/);
   assert.match(lb, /e\.target\.closest\('\.md-embed-poster \.md-embed-open'\)/);
   assert.match(lb, /frameEl\.src = src \+ \(src\.includes\('\?'\) \? '&' : '\?'\) \+ 'autoplay=1';/);

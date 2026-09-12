@@ -25,9 +25,14 @@
     <figcaption class="lb-cap" data-lb-cap></figcaption>
   </figure>
   {/* The video mode (2026-09-11): a comment's video poster opens the player here. The iframe carries a src only
-      while the dialog is open; close clears it so nothing plays behind a closed lightbox. */}
+      while the dialog is open; close clears it so nothing plays behind a closed lightbox.
+      allow-popups-to-escape-sandbox (2026-09-12): sandbox flags propagate into the relay's NESTED provider frame
+      and into any tab that frame opens, so the player's channel and title links landed in a sandboxed tab. Chrome
+      refuses to navigate a sandboxed context to a page that carries Cross-Origin-Opener-Policy, which youtube.com
+      watch pages do, and reports ERR_BLOCKED_BY_RESPONSE ("www.youtube.com refused to connect"). The flag lifts the
+      sandbox off the NEW tab only; the framed player keeps every other restriction. */}
   <div class="lb-frame" data-lb-frame hidden>
-    <iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>
+    <iframe title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"></iframe>
   </div>
   <button type="button" class="lb-nav lb-next" data-lb-next aria-label="Next image" hidden>
     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
