@@ -24,7 +24,7 @@ tags:
 layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
-publishedAt: '2026-08-15T00:00:00.000Z'
+publishedAt: '2026-09-12T14:40:14.869Z'
 updatedAt: '2026-09-12T15:40:48.780Z'
 type: post
 author: atwellpub
