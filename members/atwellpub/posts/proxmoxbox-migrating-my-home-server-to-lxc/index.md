@@ -1,7 +1,7 @@
 ---
 title: I've Migrated My Home Server to Proxmox.
 slug: proxmoxbox-migrating-my-home-server-to-lxc
-status: published
+status: draft
 visibility: public
 publicStub: false
 excerpt: >-
