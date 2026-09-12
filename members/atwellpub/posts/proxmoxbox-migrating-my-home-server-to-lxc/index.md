@@ -39,7 +39,7 @@ As a developer neck deep in the AI boom, I am building (and downloading) more se
 
 On my Windows home server I was frequently using WSL and it is [not an ideal development environment](https://www.xda-developers.com/wsl-great-run-linux-natively-instead/). Now, I have finally come to the point where I want my home server environment to be more singular purposed, like the VPN I rent on [Cloudways](https://gbti.network/outbound/cloudways) that I can tunnel into (saving 100USD a year) .
 
-So I've ditched Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
+So I've ditched Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/)** as my new home server OS.
 
 ## Part 1: Proxmox and the "ProxMoxBox"
 
