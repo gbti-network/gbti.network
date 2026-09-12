@@ -1,7 +1,7 @@
 ---
 title: I've Migrated My Home Server to Proxmox.
 slug: proxmoxbox-migrating-my-home-server-to-lxc
-status: draft
+status: published
 visibility: public
 publicStub: false
 excerpt: >-
@@ -21,7 +21,7 @@ tags:
   - security
   - windows
   - linux
-layout: editorial
+layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-08-15T00:00:00.000Z'
