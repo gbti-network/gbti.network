@@ -2,7 +2,7 @@
 id: intro-proxmoxbox-migrating-my-home-server-to-lxc
 targetType: post
 targetSlug: proxmoxbox-migrating-my-home-server-to-lxc
-createdAt: '2026-09-12T17:48:33.280Z'
+createdAt: '2026-09-12T18:06:43.474Z'
 status: published
 visibility: public
 authorNote: true
@@ -10,4 +10,4 @@ type: comment
 author: atwellpub
 ---
 
-This staged draft is ahead of the live edge — your changes are not published yet. Publish to make them live.
+This was my first time working with both Proxmox and Tailscale, and I’m very pleased with the end result. Hopefully, my story will inspire more people like me to make the same decision.
