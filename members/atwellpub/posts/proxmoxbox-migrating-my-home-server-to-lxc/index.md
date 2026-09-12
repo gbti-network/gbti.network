@@ -25,13 +25,13 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-08-15T00:00:00.000Z'
-updatedAt: '2026-09-12T15:34:29.470Z'
+updatedAt: '2026-09-12T15:40:48.780Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
 ---
 
-The current hardware specs of my home server is modest;12gb ram, 100gb SSD, 1TB external HD. i7-7700 CPU.
+The current hardware specs of my home server read:12gb DDR4 ram, 100gb SSD, 1TB external HD, and an i7-7700 CPU. Modest but for years its done whatever I needed to do from the coziness of my office closet. 
 
 Until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sublinux system to run a copy of [SavePoint Station Manager](https://savepoint.fm) for a community radio project.
 
@@ -39,7 +39,7 @@ As a developer neck deep in the AI boom, I am building (and downloading) more se
 
 On my Windows home server I was frequently using WSL and it is [not an ideal development environment](https://www.xda-developers.com/wsl-great-run-linux-natively-instead/). Now, I have finally come to the point where I want my home server environment to be more singular purposed, like the VPN I rent on [Cloudways](https://gbti.network/outbound/cloudways) that I can tunnel into (saving 100USD a year) .
 
-So I've ditched Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/)** as my new home server OS.
+So I've ditched Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
 
 ## Part 1: Proxmox and the "ProxMoxBox"
 
