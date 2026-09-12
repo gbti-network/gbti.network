@@ -7,11 +7,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { parseTierDisplay } from '../../membership/tiers-display.mjs';
+import { parseTierDisplay, offeredTiers as sharedOfferedTiers } from '../../membership/tiers-display.mjs';
 
 // sow-201: benefit copy composed into a SENTENCE, for prose surfaces (the membership FAQ) that would otherwise
 // hand-write it and drift from the registry. Re-exported here so a page gets display data and prose in one import.
 export { benefitProse } from '../../membership/tiers-display.mjs';
+
+// sow-323: revenueFragments splits a revenue line into text plus at most one inline link. It used to live inside
+// MembershipTiers.astro while the homepage accordion rendered the same registry string as plain text, so the
+// live homepage showed the raw brackets and URL to every visitor. One function, both renderers.
+export { revenueFragments } from '../../membership/tiers-display.mjs';
 
 // Re-export the AXIS (bind, do NOT rebuild): TIER identity, ranking, and the fail-closed membership test.
 export { TIER, tierRank, meetsTier, isTier, tierLabel } from '../../membership/tiers.mjs';
@@ -26,6 +31,8 @@ export interface TierDisplay {
   /** sow-230: a benefit is `{label, description}`. `description` is '' unless the yml gives one. */
   benefits: readonly { label: string; description: string }[];
   revenue: string;
+  /** sow-323: is this tier for sale today? Only offered tiers get a pricing card. Defaults to true. */
+  offered: boolean;
 }
 
 const file = path.resolve(process.cwd(), 'house/membership-tiers.yml');
@@ -42,4 +49,19 @@ export function tierDisplay(key: string): TierDisplay | undefined {
 /** The purchasable tiers (a monthly or annual price above zero), in display order. */
 export function paidTiers(): readonly TierDisplay[] {
   return TIER_DISPLAY.filter((t) => t.priceMonthly > 0 || t.priceAnnual > 0);
+}
+
+/**
+ * sow-323: the tiers a PRICING surface may show, in display order.
+ *
+ * Every axis tier is still in the registry, because the axis is what gates and parseTierDisplay requires all
+ * three. Only these are OFFERED. Since 2026-09-12 that is Free and Network Supporter: the Curator entry stays
+ * for the grants, the staff resolution and the legacy Stripe price it still names, and shows on no card.
+ */
+export function offeredTiers(): readonly TierDisplay[] {
+  // Calls the shared helper rather than repeating its filter. The first version reimplemented it here and so
+  // lost its "at least one paid tier must be offered" throw, which is the one thing that stops a malformed
+  // registry rendering a pricing section with nothing to buy. Two copies of one rule is how the homepage
+  // accordion ended up printing raw markdown while the membership page rendered a proper link.
+  return sharedOfferedTiers(TIER_DISPLAY) as readonly TierDisplay[];
 }

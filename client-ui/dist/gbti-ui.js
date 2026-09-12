@@ -2607,25 +2607,6 @@ ${String(body ?? "")}`;
     return Object.prototype.hasOwnProperty.call(LEGACY_TYPE_ALIASES, t) ? LEGACY_TYPE_ALIASES[t] : t;
   }
 
-  // membership/tiers.mjs
-  var TIER = Object.freeze({
-    none: "none",
-    // not paid, or paid for something we cannot identify (see tierForPrice)
-    member: "member",
-    // Network Member: $5 monthly / $50 annual
-    creator: "creator"
-    // Content Creator: $15 monthly / $150 annual
-  });
-  var TIER_LABEL = Object.freeze({
-    [TIER.none]: "",
-    [TIER.member]: "Network Member",
-    [TIER.creator]: "Curator"
-  });
-  function tierLabel(tier) {
-    return TIER_LABEL[tier] ?? "";
-  }
-  var RANK = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
-
   // client-ui/src/workspace-core.mjs
   var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "share", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
@@ -2880,17 +2861,13 @@ ${String(body ?? "")}`;
   function curatorBanner(membership, paidTier, authoring) {
     if (membership !== "paid") return null;
     if (paidTier === "creator") return null;
-    const headline = `Publishing needs ${tierLabel(TIER.creator)} status`;
-    return authoring ? {
+    const headline = "Your work publishes to members first";
+    const body = "Everything you publish goes out to members straight away. A superadmin reviews it before it appears on the public site, and you will be told either way.";
+    return {
       headline,
-      body: `You can author and stage drafts here now. Publishing articles, projects and prompts to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
-      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
-      ctaHref: "https://gbti.network/creator-application/"
-    } : {
-      headline,
-      body: `Publishing to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
-      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
-      ctaHref: "https://gbti.network/creator-application/"
+      body: authoring ? `${body} You can keep writing in the meantime.` : body,
+      ctaLabel: "How publishing works",
+      ctaHref: "https://gbti.network/submit-content/"
     };
   }
   function trialBanner(membership, authoring) {
@@ -2930,6 +2907,25 @@ ${String(body ?? "")}`;
   function makePublicPrompt(title) {
     const name = typeof title === "string" && title.trim() ? `"${title.trim()}"` : "this item";
     return `Make ${name} public? This opens a pull request changing its visibility, and it goes live on the next deploy.`;
+  }
+  var AUDIENCE_MODES = Object.freeze(["switch", "locked-public", "locked-members"]);
+  function audienceControl({ paidTier = null, isSuperadmin = false, currentVisibility = null, existing = false } = {}) {
+    const vis = String(currentVisibility ?? "") === "members" ? "members" : "public";
+    if (isSuperadmin || paidTier === "creator") {
+      return { mode: "switch", value: vis, note: "" };
+    }
+    if (existing && vis === "public") {
+      return {
+        mode: "locked-public",
+        value: "public",
+        note: "This is public, approved by a superadmin. Your edits stay public."
+      };
+    }
+    return {
+      mode: "locked-members",
+      value: "members",
+      note: "Members read this as soon as you publish. A superadmin reviews it before it appears on the public site."
+    };
   }
 
   // client-ui/src/editor-core.mjs
@@ -4264,7 +4260,7 @@ ${String(body ?? "")}`;
   define("gbti-comment-box", GbtiCommentBox);
 
   // client-ui/src/mod-actions-core.mjs
-  var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var TYPE_DIR = { post: "posts", project: "projects", product: "projects", prompt: "prompts" };
   var SAFE = /^[A-Za-z0-9_-]+$/;
   function modPathFor({ type, author, slug, id } = {}) {
@@ -4275,10 +4271,10 @@ ${String(body ?? "")}`;
     return `members/${author}/${dir}/${slug}/index.md`;
   }
   function visibleActions(role) {
-    const r = RANK2[role] ?? 0;
-    if (r < RANK2.moderator) return [];
-    if (r >= RANK2.superadmin) return ["hide", "unhide", "remove", "stale", "unstale", "unindex", "reindex"];
-    return r >= RANK2.admin ? ["hide", "unhide", "remove"] : ["hide", "unhide"];
+    const r = RANK[role] ?? 0;
+    if (r < RANK.moderator) return [];
+    if (r >= RANK.superadmin) return ["hide", "unhide", "remove", "stale", "unstale", "unindex", "reindex"];
+    return r >= RANK.admin ? ["hide", "unhide", "remove"] : ["hide", "unhide"];
   }
 
   // client-ui/src/comment-echo-core.mjs
@@ -4459,8 +4455,8 @@ ${String(body ?? "")}`;
       const EYE2 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
       const TRASH2 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
       const CHEV3 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-      const canMod = (RANK2[this._role] ?? 0) >= RANK2.moderator;
-      const canRemove = (RANK2[this._role] ?? 0) >= RANK2.admin;
+      const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
+      const canRemove = (RANK[this._role] ?? 0) >= RANK.admin;
       const hideNotes = this.hasAttribute("data-gbti-hide-author-notes");
       const visible = hideNotes ? rows.filter(({ c }) => !c.authorNote) : rows;
       const ordered = [...visible.filter(({ c }) => c.authorNote), ...visible.filter(({ c }) => !c.authorNote)];
@@ -4920,6 +4916,7 @@ ${String(body ?? "")}`;
       try {
         const st = await this.client.status();
         membership = st?.membership ?? "unknown";
+        this._paidTier = st?.paidTier ?? null;
         canStage = this.itemScope !== "house" && (membership === "unknown" || st?.canStageDrafts === true);
         authorInitial = (st?.identity?.login || "").slice(0, 1).toUpperCase() || "A";
       } catch {
@@ -4936,6 +4933,7 @@ ${String(body ?? "")}`;
         } catch {
         }
       }
+      this._isSuperadmin = authorMembers != null;
       const ownerSelValue = authorSelectValue({
         itemPath: this.itemPath,
         author: this.presetStr(p.author),
@@ -5168,6 +5166,11 @@ ${String(body ?? "")}`;
         .chip-neutral { background:var(--s-surface-3); color:var(--s-fg-soft); border-color:var(--s-line-2); }
         .visfield { padding-bottom:4px; }
         .visswitch { position:relative; display:grid; grid-template-columns:1fr 1fr; padding:4px; border-radius:7px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); margin-top:2px; }
+  /* sow-323: the locked audience state, for an author who does not choose it (most of them). Same box as
+     the switch so the rail does not jump when the control changes shape. */
+  .vislocked { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line);
+    border-radius:9px; background:var(--surface-2, var(--surface)); font-size:13.5px; }
+  .vislocked svg { width:15px; height:15px; flex:none; color:var(--muted); }
         .visswitch .vs-thumb { position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 4px); border-radius:7px; background:var(--s-surface); box-shadow:0 1px 3px rgba(0,0,0,.12); border:1.5px solid var(--s-line-2); transition:transform .18s cubic-bezier(.3,.7,.4,1); }
         .visswitch[data-active="members"] .vs-thumb { transform:translateX(calc(100% + 4px)); background:var(--s-tint); border-color:var(--s-tint-2); }
         .visswitch .vs-opt { position:relative; z-index:1; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 6px; border:0; background:transparent; font:inherit; font-size:13.5px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; }
@@ -5507,9 +5510,24 @@ ${String(body ?? "")}`;
       const label = `<label>${esc(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ""}${f.hint ? ` <span class="hint">· ${esc(f.hint)}</span>` : ""}</label>`;
       const wrap = (inner, cls = "") => `<div class="fld${cls ? " " + cls : ""}" data-fkey="${f.key}"${visible ? "" : " hidden"}>${inner}</div>`;
       if (f.kind === "enum" && f.key === "visibility") {
-        const isMembers = String(v) === "members";
+        const aud = audienceControl({
+          paidTier: this._paidTier,
+          isSuperadmin: this._isSuperadmin === true,
+          currentVisibility: v,
+          existing: !!this.itemPath
+        });
+        const isMembers = aud.value === "members";
         const stubField = this.fields.find((x) => x.key === "publicStub");
         const stubOn = this._presetBool("publicStub");
+        if (aud.mode !== "switch") {
+          const icon2 = isMembers ? LOCK : GLOBE;
+          const word = isMembers ? "Members only" : "Public";
+          return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Audience</label>
+          <div class="vislocked" data-vislocked>${icon2} <b>${word}</b></div>
+          <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
+          <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
+          <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
+        }
         return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Visibility</label>
         <div class="visswitch" data-visswitch data-active="${isMembers ? "members" : "public"}"><span class="vs-thumb"></span>
           <button class="vs-opt ${isMembers ? "" : "on"}" data-vis="public" type="button">${GLOBE} Public</button>
@@ -7539,6 +7557,29 @@ ${String(body ?? "")}`;
   };
   define("gbti-mod-actions", GbtiModActions);
 
+  // membership/tiers.mjs
+  var TIER = Object.freeze({
+    none: "none",
+    // not paid, or paid for something we cannot identify (see tierForPrice)
+    member: "member",
+    // Network Member: $5 monthly / $50 annual
+    creator: "creator"
+    // Content Creator: $15 monthly / $150 annual
+  });
+  var TIER_LABEL = Object.freeze({
+    [TIER.none]: "",
+    // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
+    [TIER.member]: "Network Supporter",
+    // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
+    // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+    // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
+    [TIER.creator]: "Curator"
+  });
+  function tierLabel(tier) {
+    return TIER_LABEL[tier] ?? "";
+  }
+  var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
+
   // client-ui/src/elements/gbti-admin.mjs
   var RANK3 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
@@ -7608,10 +7649,10 @@ ${String(body ?? "")}`;
 
          ${rank >= RANK3.admin && capOn("membership") ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: ${tierLabel(TIER.member)} reads, ${tierLabel(TIER.creator)} can also publish. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose what the grant confers: ${tierLabel(TIER.member)} is the paid membership, and ${tierLabel(TIER.creator)} adds the internal trust level that exempts a supporter from editorial review. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
-           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: ${tierLabel(TIER.member)}</option><option value="creator">Grant tier: ${tierLabel(TIER.creator)}</option></select>
+           <select class="fld" id="gtier" aria-label="Grant level"><option value="member">Grant: ${tierLabel(TIER.member)}</option><option value="creator">Grant: ${tierLabel(TIER.member)} plus ${tierLabel(TIER.creator)} (no editorial review)</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>
@@ -10337,8 +10378,8 @@ ${String(body ?? "")}`;
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
-  var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
-  var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+  var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Supporter]({member-url}).** Originally published on [gbti.network]({url}).";
+  var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Supporter.** Originally published on [gbti.network]({url}).";
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
@@ -12670,8 +12711,11 @@ ${String(body ?? "")}`;
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
           <p class="sub" data-public-nudge hidden>
-            Sharing publicly is part of ${tierLabel(TIER.creator)} membership.
-            <a href="https://gbti.network/creator-application/">Apply to become a ${tierLabel(TIER.creator)}</a>.
+            <!-- sow-323: this said "Sharing publicly is part of Curator membership. Apply to become a Curator."
+                 Public sharing is not a plan any more: the share goes out to members now and a superadmin
+                 reviews it for the public site. Nothing to buy, nothing to apply for. -->
+            Members see this straight away. A superadmin reviews it before it appears publicly.
+            <a href="https://gbti.network/submit-content/">How publishing works</a>.
           </p>
         </section>
 

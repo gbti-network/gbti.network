@@ -5,7 +5,7 @@
 // that publishes through the SOW-156/157 hosted-authoring path (the Worker commits with GBTI's App installation
 // token; the SOW-005 gate is the only merger). noindex: this is a private authoring app, not a content page.
 import BaseLayout from '../layouts/BaseLayout.astro';
-import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225: the shared share bar + modal, creator-only
+import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225: the shared share bar + modal
 ---
 <BaseLayout title="WorkBench" description="Author and publish your GBTI Network content." noindex={true}>
   <section class="band wb-band">
@@ -16,8 +16,9 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
       </div>
       {/* sow-225 (owner decisions 2026-09-09): the quick actions live in this page, the website shell, around the
           shared component. New: three buttons, one tap each, via the SOW-064 #new= deep link the component already
-          routes. The share bar and the MCP tile are Curator-only (paidTier creator), hidden until the session says so,
-          the same presentational gate the account page uses; the Worker gates the real actions. */}
+          routes. sow-323: the share bar and the MCP tile need a PAID membership (they were gated on the top paid
+          tier while two plans existed), hidden until the session says so, the same presentational gate the account
+          page uses; the Worker gates the real actions. */}
       <div class="wb-quick" data-wb-quick hidden>
         <div class="wb-new" data-wb-new>
           <a class="btn btn-primary" href="/workbench/#new=post">New article</a>
@@ -48,6 +49,7 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
   </section>
 
   <script>
+    import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-323: the tier axis, bound not spelled
     // The page is a gated authoring app: resolve the signed-in member AUTHORITATIVELY from the httpOnly-cookie
     // session (the Worker's /membership/status oracle, credentialed) before loading the ~large client-ui bundle.
     // A signed-out visitor (no session, or an invalid one) is redirected to /login and the bundle never loads.
@@ -97,25 +99,26 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
         location.replace(RETURN_TO); // definitive signed-out
       }
     }
-    // sow-225: reveal the New buttons for any signed-in member; the share bar and the MCP tile only for a Curator
-    // (paidTier === 'creator', compared to the exact string and defaulting to hidden, the account page's rule).
+    // sow-225: reveal the New buttons for any signed-in member; the share bar and the MCP tile only for a paid
+    // one. sow-323 widened that from the top paid tier to any paid membership, because the two paid plans became
+    // one; meetsTier is the fail-closed axis test, so an absent or unrecognized tier still hides both.
     // The share composer element is imported only when the bar shows, after mount() has set the client.
     function renderQuick(p: any) {
       const quick = document.querySelector<HTMLElement>('[data-wb-quick]');
       if (quick) quick.hidden = false;
-      const isCreator = p && p.paidTier === 'creator';
+      const isPaid = !!p && meetsTier(p.paidTier, TIER.member);
       const mcp = document.querySelector<HTMLElement>('[data-wb-mcp]');
-      if (mcp) mcp.hidden = !isCreator;
+      if (mcp) mcp.hidden = !isPaid;
       const share = document.querySelector<HTMLElement>('[data-wb-share]');
-      if (share) share.hidden = !isCreator;
-      if (isCreator) {
+      if (share) share.hidden = !isPaid;
+      if (isPaid) {
         document.querySelectorAll<HTMLImageElement>('.hsb-av').forEach((img) => {
           img.src = 'https://github.com/' + encodeURIComponent(String(p.login)) + '.png?size=68';
           img.alt = '@' + String(p.login);
         });
       }
-      // sow-304: every paid member can EDIT their shares (a members share needs no Curator tier), so the composer
-      // element is defined for any signed-in member, not only when the share bar shows.
+      // sow-304: every paid member can EDIT their shares, so the composer element is defined for any signed-in
+      // member, not only when the share bar shows.
       import('../../client-ui/src/elements/gbti-share-composer.mjs').catch(() => {});
     }
 

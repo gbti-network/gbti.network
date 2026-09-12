@@ -23,7 +23,13 @@ const SITE = 'https://gbti.network';
 // The built-in byline; the Worker normally pre-renders the devto-intro template into item.devtoIntro.
 // SOW-140: kept in sync with DEFAULT_DEVTO_INTRO (mentions the member's dev.to profile, else their name) so
 // this dead-fallback path can never resurrect the old name-only byline if templateFor ever returns null.
-const DEFAULT_INTRO = '**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).';
+// sow-323: the plan is named "Network Supporter" since 2026-09-12, and this byline goes out under the GBTI name
+// on someone else's platform, where a stale plan name is read by people we never see. The name is left
+// as a literal rather than bound to tiers.mjs because its twin (DEFAULT_DEVTO_INTRO in
+// membership/syndication-config-core.mjs) is a literal too and the two are compared by eye: they must say the
+// same thing, and that twin is the copy that actually SHIPS, since house/syndication-config.yml overrides
+// devto-intro for nobody today and this constant is reached only when templateFor returns null.
+const DEFAULT_INTRO = '**By {member-devto-handle}, [GBTI Network Supporter]({member-url}).** Originally published on [gbti.network]({url}).';
 // The stub middle is now the devto-stub TEMPLATE (admin-editable; the old hardcoded read-more line
 // lives on inside DEFAULT_STUB_TEMPLATES['devto-stub']).
 

@@ -37,7 +37,12 @@ export default defineConfig({
   // The interactive /news/ member app was retired into the unified feeds view (owner, 2026-08-27); /news/
   // now 301s to /feeds/news/. This key covers /news and /news/ but NOT /news/item/ (a distinct route the
   // news feed deep-links into), so the news-detail page keeps working.
-  redirects: { '/model': '/revenue-model', '/about': '/revenue-model', '/co-op': '/revenue-model', '/news': '/feeds/news' },
+  // sow-323: /creator-application 301s to /submit-content. The Curator plan stopped being offered on
+  // 2026-09-12 (the owner collapsed the two paid plans into one), so the intake page is deleted in this SAME
+  // change. It has to be the same change: this map is static, and a redirect key that collides with a live
+  // page is the /model collision sow-010 already paid for. A private link to the application is in
+  // circulation, so the address forwards rather than 404ing.
+  redirects: { '/model': '/revenue-model', '/about': '/revenue-model', '/co-op': '/revenue-model', '/news': '/feeds/news', '/creator-application': '/submit-content' },
   // SOW-062 5d: remarkContentBlocks renders the body ```callout / ```embed fences (runs on mdast, before Shiki).
   // sow-158 Phase 1a: member markdown is SANITIZED at build. ORDER IS LOAD-BEARING: rehypeRaw first
   // (parses the raw-HTML nodes the fences + Shiki emit into real elements; sanitize alone would DELETE

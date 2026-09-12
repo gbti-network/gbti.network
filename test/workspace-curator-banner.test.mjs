@@ -1,23 +1,32 @@
-// sow-316 Phase 2: a paid member below the Curator tier is told publishing needs Curator status, before writing.
+// sow-323: a paid supporter is told, BEFORE they write, that their work publishes to members first and a
+// superadmin reviews it for the public site.
 //
-// Until 2026-09-08 nothing said so until the Worker refused the publish, and the refusal said "upgrade" for a
-// tier that is granted by application. A new member reported it in his first hour.
+// The banner's whole purpose has now been wrong twice in the same place, and the history is the lesson. Until
+// 2026-09-08 nothing told a paid member anything and the Worker refused the publish with "upgrade", for a tier
+// that was granted by application rather than bought (sow-316 fixed the wording). On 2026-09-12 the owner
+// collapsed the two paid plans, publishing became part of the membership, and the corrected wording went wrong
+// in the other direction: it told a paying supporter they needed a plan that no longer exists. The test moved
+// with it both times, which is exactly why a test pinning copy has to name what the copy is FOR.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { curatorBanner, trialBanner } from '../client-ui/src/workspace-core.mjs';
 
-test('a paid member below Curator gets the banner, pointing at the application', () => {
+test('a paid supporter is told their work goes to members first and is reviewed', () => {
   const b = curatorBanner('paid', 'member', true);
-  assert.ok(b, 'a basic paid member must be told');
-  assert.match(b.headline, /Curator/);
-  assert.match(b.body, /granted by application/, 'it must not say upgrade: the tier is apply-only (sow-293)');
-  assert.doesNotMatch(b.body, /upgrade/i);
-  assert.equal(b.ctaHref, 'https://gbti.network/creator-application/');
+  assert.ok(b, 'a paid supporter must be told before they write, not refused afterwards');
+  assert.match(b.headline, /members first/i);
+  assert.match(b.body, /superadmin reviews it/, 'it must say who decides and what they decide');
+  // The three things it must NOT do any more. Each of these was true copy once.
+  assert.doesNotMatch(b.body, /upgrade/i, 'publishing is included: there is nothing to upgrade to');
+  assert.doesNotMatch(b.body, /apply/i, 'there is no application: the plan it applied for is retired');
+  assert.doesNotMatch(JSON.stringify(b), /Curator/, 'the internal trust level must not appear in member copy');
+  assert.equal(b.ctaHref, 'https://gbti.network/submit-content/', 'it points at the page that explains publishing');
 });
 
-test('a Curator gets NO banner', () => {
-  assert.equal(curatorBanner('paid', 'creator', true), null, 'nagging a curator to apply for curator is the bug tier-cta already guards against');
+test('a TRUSTED author gets NO banner, because for them nothing waits', () => {
+  assert.equal(curatorBanner('paid', 'creator', true), null,
+    'a superadmin silently granted this tier publishes straight to public; telling them their work waits would be false');
 });
 
 test('a trial member gets the TRIAL banner, not this one, and never both', () => {

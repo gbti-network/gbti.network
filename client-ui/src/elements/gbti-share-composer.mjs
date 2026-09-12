@@ -10,7 +10,6 @@
 //                       real authority and will reject a genuinely non-paid post)
 // The host holds the GitHub token; this element only calls the injected client.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { TIER, tierLabel } from '../../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
 import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote, shareAuthorTarget, authorMoveRemovals } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
@@ -334,8 +333,11 @@ class GbtiShareComposer extends GbtiElement {
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
           <p class="sub" data-public-nudge hidden>
-            Sharing publicly is part of ${tierLabel(TIER.creator)} membership.
-            <a href="https://gbti.network/creator-application/">Apply to become a ${tierLabel(TIER.creator)}</a>.
+            <!-- sow-323: this said "Sharing publicly is part of Curator membership. Apply to become a Curator."
+                 Public sharing is not a plan any more: the share goes out to members now and a superadmin
+                 reviews it for the public site. Nothing to buy, nothing to apply for. -->
+            Members see this straight away. A superadmin reviews it before it appears publicly.
+            <a href="https://gbti.network/submit-content/">How publishing works</a>.
           </p>
         </section>
 

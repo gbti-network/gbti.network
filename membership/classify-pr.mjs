@@ -218,29 +218,35 @@ export function contentTypesTouched(paths, ownedFolder) {
 }
 
 /**
- * sow-185: the minimum TIER required to author a set of content types (from contentTypesTouched). Content
- * Creator authors public presence (post / project / prompt / profile); a Network Member authors comments.
- * Fail closed: an empty or mixed set, or any non-comment type, requires creator, the higher tier, so a type we
- * cannot cleanly classify as comments-only never publishes on the member floor.
+ * sow-323: the minimum TIER required to author a set of content types (from contentTypesTouched).
+ *
+ * IT IS THE MEMBER FLOOR FOR EVERYTHING NOW. The owner collapsed the two paid plans into one on 2026-09-12, so
+ * every paid supporter authors articles, projects, prompts, shares and their profile. What used to be gated
+ * here is gated by AUDIENCE instead, in the Worker (membership-author.mjs, which can see the frontmatter this
+ * gate deliberately cannot) and by the superadmin approval that follows: a member item lands members-only and
+ * a superadmin decides what becomes public.
+ *
+ * WHY THIS FUNCTION SURVIVES AT ALL, rather than being deleted with the tier it enforced: it is the one place
+ * that answers "what tier does this content need", the contribution path calls it for BOTH parties, and an
+ * unrecognised type must still fail closed. Keeping it means a future tier has a seat; deleting it would
+ * scatter the question back into two call sites.
+ *
+ * Fail closed on the shape, not on the tier: an empty or unparseable set still requires the higher tier, so a
+ * type nobody classified never rides in on a default.
  */
 export function requiredTierFor(types, { ownFolder = false } = {}) {
   if (!Array.isArray(types) || types.length === 0) return TIER.creator;
-  // sow-293: a SHARE joins comments on the Network Member floor. Sharing opened to every paid member, and
-  // only PUBLIC sharing stays Content Creator, but that distinction lives in the share's frontmatter and this
-  // gate reads changed PATHS only, by design (roles-and-capabilities.md: the gate inspects metadata, never PR
-  // content). It therefore cannot tell the two apart, and the owner ruled on 2026-09-03 that the website
-  // enforces the public rule while the gate admits shares at member tier.
+  // Every RECOGNISED content type sits on the member floor. `other` does not, and that is the whole of the
+  // fail-closed behaviour left here: an own-folder path this gate could not classify (classify-pr.mjs:213
+  // adds TYPE_OTHER rather than dropping it) still needs the higher tier, so a new content shape cannot ride
+  // in on a permissive default before anybody has decided what it is.
   //
-  // WHAT THAT COSTS, stated so nobody later reads this as an oversight: a paying member who hand-builds a pull
-  // request instead of using the website can publish ONE public share without holding Content Creator. It is a
-  // rule bent by an authenticated member inside their own folder, not an escalation and not an exposure. The
-  // alternatives were widening the gate to read file contents, or migrating all 58 existing shares into
-  // visibility-named folders; both were weighed and declined.
-  // The share relaxation is OPT-IN (`ownFolder`), so the DEFAULT is byte-for-byte the old rule. The owner
-  // opened sharing on a member's OWN stream; contributing a share into somebody else's folder was not part
-  // of that and keeps the creator floor, which the contribution call site gets by simply not opting in.
-  const onMemberFloor = ownFolder ? (t) => t === 'comment' || t === 'share' : (t) => t === 'comment';
-  return types.every(onMemberFloor) ? TIER.member : TIER.creator;
+  // `ownFolder` is now inert and is KEPT IN THE SIGNATURE deliberately. It used to opt a share into the member
+  // floor for the author's own stream only (sow-293, owner ruling 2026-09-03). Both call sites now get the same
+  // answer, so removing the parameter would be a silent behaviour change at the contribution site the moment
+  // somebody re-introduced a per-type floor. It is documented as inert rather than deleted.
+  const recognised = (t) => t !== TYPE_OTHER;
+  return types.every(recognised) ? TIER.member : TIER.creator;
 }
 
 const fail = (label, reason) => ({ check: 'fail', autoMerge: false, label, reasons: [reason] });

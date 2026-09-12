@@ -63,3 +63,53 @@ export function makePublicPrompt(title) {
   const name = typeof title === 'string' && title.trim() ? `"${title.trim()}"` : 'this item';
   return `Make ${name} public? This opens a pull request changing its visibility, and it goes live on the next deploy.`;
 }
+
+// ---- sow-323: the AUDIENCE control in the editor's Details rail -----------------------------------------------
+//
+// The owner collapsed the two paid plans on 2026-09-12 and made the audience the thing a superadmin decides:
+// every member item starts members-only, and a superadmin approves what becomes public. So the Public / Members
+// switch is no longer a free choice for most authors, and offering it to them would be a lie the Worker then
+// refuses (pathsNeedingApproval in membership/hosted-author.mjs).
+//
+// THE CASE THAT MATTERS MOST IS THE THIRD ONE, and it is a trap rather than a feature. An item ALREADY public
+// must keep submitting `visibility: public`, because the editor submits the whole frontmatter on every save. If
+// its author edited an approved article while the control was locked to members, their own typo fix would take
+// the live page down. The Worker admits an already-public path for exactly this reason; the editor has to agree
+// with it or the two halves disagree in the direction that loses the author their page.
+//
+// An affordance, never the boundary: the Worker re-reads the submitted frontmatter and the state of main.
+
+/** The states the audience control can render in. */
+export const AUDIENCE_MODES = Object.freeze(['switch', 'locked-public', 'locked-members']);
+
+/**
+ * How should the audience control render, and what should it say?
+ *
+ * @param paidTier           the viewer's paid tier ('member' | 'creator' | ...), from client.status()
+ * @param isSuperadmin       whether the Author rail resolved, which only a superadmin's adapter does
+ * @param currentVisibility  the item's CURRENT visibility, from the loaded preset
+ * @param existing           whether this item already exists in the repository (itemPath is set)
+ * @returns { mode, value, note }  `value` is what the hidden input must submit.
+ */
+export function audienceControl({ paidTier = null, isSuperadmin = false, currentVisibility = null, existing = false } = {}) {
+  const vis = String(currentVisibility ?? '') === 'members' ? 'members' : 'public';
+  // A trusted author (the silently granted tier) and a superadmin choose freely. meetsTier is not used here on
+  // purpose: this compares the exact string, so an absent or unresolvable tier falls through to the locked
+  // states rather than unlocking the switch. That is the safe direction for an affordance whose server side
+  // refuses anyway, and it is the same disposition the share composer's nudge takes.
+  if (isSuperadmin || paidTier === 'creator') {
+    return { mode: 'switch', value: vis, note: '' };
+  }
+  if (existing && vis === 'public') {
+    return {
+      mode: 'locked-public',
+      value: 'public',
+      note: 'This is public, approved by a superadmin. Your edits stay public.',
+    };
+  }
+  return {
+    mode: 'locked-members',
+    value: 'members',
+    note: 'Members read this as soon as you publish. A superadmin reviews it before it appears on the public site.',
+  };
+}

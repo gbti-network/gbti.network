@@ -392,11 +392,16 @@ test('sow-301: a paid NETWORK MEMBER may post a comment', async () => {
   assert.equal(r.status, 200, `a paid member was denied a comment: ${JSON.stringify(r.body)}`);
 });
 
-test('sow-301: the SAME member is still DENIED publishing', () => {
-  // The other direction. Without it, the test above would pass just as happily if the gate were removed.
+// sow-323: this asserted a DENIAL until 2026-09-12. Publishing is open to every paid supporter now, and what a
+// superadmin controls is the AUDIENCE: goodBody carries a public item, so the same member is still refused, but
+// for review rather than for tier, and the message no longer names a plan they cannot buy. The other direction
+// (a members-only item from the same member succeeding) lives in test/membership-author-audience.test.mjs, so
+// this pair still discriminates: remove the gate and that suite's refusal cases go green when they should not.
+test('sow-323: the SAME member publishing a PUBLIC item is refused for REVIEW, not for tier', () => {
   return membershipAuthor(req(goodBody), env, { ...deps([]), authorize: memberOk }).then((r) => {
-    assert.equal(r.status, 403, 'a member-tier caller was allowed to PUBLISH');
-    assert.match(String(r.body?.message ?? ''), /Curator/);
+    assert.equal(r.status, 403, 'an unreviewed public item was allowed through');
+    assert.equal(r.body?.error, 'review_required');
+    assert.doesNotMatch(String(r.body?.message ?? ''), /Curator/, 'it must not point at a plan that no longer exists');
   });
 });
 

@@ -6,7 +6,7 @@
 // [data-home-joincard] hook (the Phase C mount script hides it, like the join card). CTAs: Free -> create a
 // free account (/login/); paid tiers -> the membership page. "by application" is intentionally absent (not in
 // the vetted data; an open owner question in sow-185).
-import { TIER_DISPLAY } from '../../lib/tiers';
+import { offeredTiers, revenueFragments } from '../../lib/tiers';
 
 const isFree = (t: { priceMonthly: number; priceAnnual: number }) => t.priceMonthly === 0 && t.priceAnnual === 0;
 // Annual pricing only (owner decision, 2026-08-10): no monthly price is advertised.
@@ -14,10 +14,13 @@ function priceLabel(t: { priceMonthly: number; priceAnnual: number }): string {
   if (isFree(t)) return '$0';
   return `$${t.priceAnnual}/yr`;
 }
-function cta(t: { key: string; priceMonthly: number; priceAnnual: number }) {
+function cta(t: { key: string; label: string; priceMonthly: number; priceAnnual: number }) {
   if (isFree(t)) return { href: '/login/', label: 'Create a free account', primary: true };
   // sow-201: carry ?plan=<tier> so /membership/ opens pre-selected on this tier (its checkout CTA reads it).
-  return { href: `/membership/?plan=${t.key}`, label: t.key === 'creator' ? 'Become a creator' : 'Become a member', primary: false };
+  // sow-323: one paid plan, so the label comes from the registry instead of a per-key branch. "Become a creator"
+  // named a tier that is no longer offered, and hardcoding "Become a member" would have gone stale the same way
+  // the moment the plan was renamed. The registry is the only place either name lives now.
+  return { href: `/membership/?plan=${t.key}`, label: `Become a ${t.label}`, primary: false };
 }
 ---
 <details class="price-acc" data-home-joincard>
@@ -30,7 +33,7 @@ function cta(t: { key: string; priceMonthly: number; priceAnnual: number }) {
   </summary>
 
   <div class="price-grid">
-    {TIER_DISPLAY.map((t) => {
+    {offeredTiers().map((t) => {
       const c = cta(t);
       return (
         <div class:list={['price-card', t.key === 'member' && 'price-card-hl']}>
@@ -48,7 +51,12 @@ function cta(t: { key: string; priceMonthly: number; priceAnnual: number }) {
             ))}
           </ul>
           {t.revenue && (
-            <div class="price-rev"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg><span>{t.revenue}</span></div>
+            /* sow-323: through revenueFragments, like the membership page. This rendered {t.revenue} as plain
+               text while the registry value carries an inline markdown link, so the live homepage showed
+               `[revenue program](/revenue-model/)`, brackets and URL, to every visitor. */
+            <div class="price-rev"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg><span>{revenueFragments(t.revenue).map((f) => (
+              f.href ? <a href={f.href} class="price-rev-link">{f.text}</a> : <Fragment>{f.text}</Fragment>
+            ))}</span></div>
           )}
           <a href={c.href} class:list={['btn', c.primary ? 'btn-primary' : 'btn-ghost', 'price-cta']}>{c.label}</a>
         </div>

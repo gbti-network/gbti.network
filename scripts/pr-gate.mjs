@@ -31,7 +31,7 @@ import { applyOverridesSource } from './lib/overrides-source.mjs';
 import { ownedFolderFor, decide, contributionTarget } from '../membership/classify-pr.mjs';
 import { parseHostedRef, parseAdminHostedRef } from '../membership/hosted-author.mjs'; // SOW-156 hosted content + sow-161 hosted-admin canonical-head identity
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price -> tier + override-aware tier
-import { TIER, isTier, tierLabel } from '../membership/tiers.mjs';
+import { TIER, isTier } from '../membership/tiers.mjs'; // sow-323: no tier NAME appears in this file's copy any more
 
 import { createStripeClient } from '../clients/stripe.mjs';
 import { createGitHubClient } from '../clients/github.mjs';
@@ -39,8 +39,9 @@ import { createGitHubClient } from '../clients/github.mjs';
 export const STATUS_CONTEXT = 'membership-gate';
 
 /** Labels the gate auto-closes (a content PR that may never merge as-is): a non-member, a non-paid
- * (trial) member whose content or contribution is paid-only, or a paid Network Member trying to publish
- * Content-Creator content (sow-185). Each carries a sign-up / upgrade nudge. */
+ * (trial) member whose content or contribution is paid-only, or a PR carrying a path the gate cannot
+ * classify as content (sow-323: publishing is part of the one paid plan now, so `rejected-not-creator`
+ * is left holding only that fail-closed case). Each carries a sign-up, upgrade or fix-the-path nudge. */
 export const CLOSE_LABELS = Object.freeze(['rejected-not-a-member', 'rejected-not-paid', 'rejected-not-creator']);
 
 /** The close comment per auto-close label. A non-member is nudged to sign up; a trial member is nudged
@@ -57,13 +58,20 @@ export const CLOSE_NUDGE = Object.freeze({
     'cannot merge during your trial. Nothing is lost: your draft stays on your own fork. Upgrade to a ' +
     'paid membership at https://gbti.network, then your client will publish your staged drafts. See ' +
     'CONTRIBUTING.md for how trial authoring works.',
-  // sow-316: the tier name is bound, and the tier is apply-only (sow-293), so the nudge points at the application
-  // rather than telling the member to "upgrade" to a product nobody can buy.
+  // sow-323: THIS NUDGE IS NO LONGER AN UPGRADE PITCH, because the thing it used to pitch is included. The owner
+  // collapsed the two paid plans into one on 2026-09-12: a paid membership publishes articles, projects and
+  // prompts, and the application page it pointed at is being retired. What is left of this label is the
+  // fail-closed case in membership/classify-pr.mjs (requiredTierFor: an own-folder path reported as TYPE_OTHER,
+  // or a type set nobody could classify, still needs the higher tier), so the author here is ALREADY paid and
+  // the actionable fact is WHERE THE FILE SITS. The recognised locations are CONTENT_DIRS plus shares/ and
+  // profile.md, read from classify-pr.mjs; no label string and no decision logic changed, only this text.
   'rejected-not-creator':
-    `Thanks for your work. Publishing articles, projects and prompts on gbti.network is a ${tierLabel(TIER.creator)} ` +
-    `capability, so this pull request cannot merge on the ${tierLabel(TIER.member)} plan. Nothing is lost: your draft ` +
-    `stays where you staged it. Apply for ${tierLabel(TIER.creator)} status at https://gbti.network/creator-application/, ` +
-    'then your client will publish your staged drafts once it is granted. See CONTRIBUTING.md for how content authoring works.',
+    'Thanks for your work. Publishing articles, projects and prompts is part of a paid membership, so this is ' +
+    'not about your plan: this pull request changes a file the gate cannot classify as content, so it cannot ' +
+    'merge as it stands. Nothing is lost: your draft stays where you staged it. Check where the file sits: ' +
+    'content belongs inside your own member folder, under posts, ' +
+    'projects, products, prompts, comments or shares, or as your profile.md. Move it there and publish again. ' +
+    'See CONTRIBUTING.md for how content authoring works.',
 });
 
 /**

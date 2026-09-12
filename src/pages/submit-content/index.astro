@@ -1,0 +1,205 @@
+---
+// sow-323: /submit-content/, the public explanation of how the content platform works.
+//
+// The owner asked for it in the same breath as collapsing the two paid plans (2026-09-12): a footer link to
+// "Submit content" that takes the reader to a page explaining how our content platform works, including the
+// revenue program. It is the honest front door to publishing, and it replaces the Curator application page,
+// which is retired: publishing is included in the paid membership now, and what a superadmin decides is which
+// work becomes PUBLIC.
+//
+// EVERY NUMBER AND NAME ON THIS PAGE IS BOUND, NOT WRITTEN. The plan name comes from the tier registry
+// (house/membership-tiers.yml, superadmin-CODEOWNED) and the revenue splits from src/lib/membership.ts, which
+// derives them from house/referral-config.yml. A page about money that hardcodes a percentage goes stale
+// silently and reads as a promise, which is the failure the tier registry's own header was written to stop.
+// The member dashboard already states these same numbers; disagreeing with it in public would be worse than
+// saying nothing.
+//
+// The editorial criteria are the OWNER'S, taken verbatim from their answer of 2026-09-12. Nothing here invents
+// a standard, a turnaround time, or a promise about what gets approved.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { tierDisplay } from '../../lib/tiers';
+import {
+  FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT, HOLD_DAYS,
+} from '../../lib/membership';
+
+const paid = tierDisplay('member');
+if (!paid) throw new Error('submit-content: house/membership-tiers.yml is missing the member tier');
+const PLAN = paid.label;
+const PRICE = `$${paid.priceAnnual}/yr`;
+
+// The owner's approval criteria, 2026-09-12, in their terms. Do not add to this list without asking them.
+const criteria = [
+  ['Original work', 'Something you made, ran, or worked through yourself.'],
+  ['Useful to a builder', 'Someone building the same kind of thing should come away able to act on it.'],
+  ['Specific', 'Concrete enough to follow. A general overview of a topic is not the same as what you learned doing it.'],
+  ['Your own product is welcome', 'Writing about a project or product of your own is fine, as long as the write-up teaches something.'],
+  ['Not promotion alone', 'A press release, or a post whose only purpose is the link at the bottom, is not a fit.'],
+];
+
+const steps = [
+  {
+    h: 'Write it where you like',
+    p: 'The WorkBench on this site holds your articles, projects and prompts, their pull requests, and the editor. The browser extension carries the same surface, and both read the same drafts. If you work with an AI agent, the MCP server lets it author through the same flow you do.',
+  },
+  {
+    h: 'Publishing sends it to members first',
+    p: 'When you publish, your work goes out to the members of the network straight away. Signed-in members read it in full. It is not listed on the public site, not in the public feeds, and not syndicated anywhere yet.',
+  },
+  {
+    h: 'A superadmin reviews it for the public site',
+    p: 'One of the network superadmins reads it and decides whether it goes public. You are told either way, and a decline comes with a note rather than silence. Nothing you wrote is deleted or altered by the review.',
+  },
+  {
+    h: 'Once it is public it stays yours',
+    p: 'You edit a published piece whenever you like and it stays public. It keeps the date you wrote it, so review time does not cost you your place in the feed.',
+  },
+];
+---
+
+<BaseLayout
+  title="Submit content"
+  description={`How publishing works on the GBTI Network: write in the WorkBench, publish to members, and a superadmin reviews it for the public site. ${PLAN} membership includes publishing and a share of the revenue.`}
+>
+  <main class="sc-wrap">
+    <header class="sc-head">
+      <p class="sc-eyebrow">Submit content</p>
+      <h1 class="h1">Publish your work on the network</h1>
+      <p class="lead">
+        This is a developer co-op, and the content is the members. Anything you publish reaches the members of
+        the network immediately, and a superadmin reviews it before it appears on the public site. Reading is
+        free for everyone. Publishing is part of {PLAN} membership, at {PRICE}.
+      </p>
+      <div class="sc-cta">
+        <a class="btn btn-primary" href="/workbench/">Open the WorkBench</a>
+        <a class="btn btn-ghost" href="/membership/">See membership</a>
+      </div>
+    </header>
+
+    <section class="sc-sec" aria-labelledby="sc-how">
+      <h2 class="h2" id="sc-how">How it works</h2>
+      <ol class="sc-steps">
+        {steps.map((s) => (
+          <li>
+            <h3 class="sc-step-h">{s.h}</h3>
+            <p class="body">{s.p}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="sc-sec" aria-labelledby="sc-what">
+      <h2 class="h2" id="sc-what">What you can submit</h2>
+      <p class="body">
+        Articles, projects and prompts, plus shares, which are links worth reading with a note on why. Your
+        member profile is yours and needs no review. Comments are yours too, and go out as you write them.
+      </p>
+      <p class="body">
+        Your work lives in your own folder in a public git repository, as plain markdown with its images beside
+        it. You can read it, fork it, and take it with you. Nothing about publishing here signs your work over
+        to us.
+      </p>
+    </section>
+
+    <section class="sc-sec" aria-labelledby="sc-criteria">
+      <h2 class="h2" id="sc-criteria">What gets approved</h2>
+      <p class="body">A superadmin is looking for five things.</p>
+      <dl class="sc-crit">
+        {criteria.map(([term, def]) => (
+          <div class="sc-crit-row">
+            <dt>{term}</dt>
+            <dd>{def}</dd>
+          </div>
+        ))}
+      </dl>
+      <p class="body sc-quiet">
+        A decline is not a judgement on your writing, and it is not final. It comes with a note, and you can
+        rework the piece and publish it again.
+      </p>
+    </section>
+
+    <section class="sc-sec" aria-labelledby="sc-revenue">
+      <h2 class="h2" id="sc-revenue">The revenue program</h2>
+      <p class="body">
+        When a visitor becomes a paying member, the content that brought them in shares the revenue. The author
+        of the earliest piece in their journey earns {FIRST_TOUCH_PCT}, the author of the last piece before they
+        joined earns {LAST_TOUCH_PCT}, and {COLLAB_POOL_PCT} goes to a pool shared by the members whose comments
+        and accepted contributions sit on those two pieces. Your profile page counts as an entry point, so a
+        visitor who lands there and later joins credits you with no special link.
+      </p>
+      <p class="body">
+        Separately, your own invite link pays a flat {INVITE_PCT} for the life of anyone who joins through it,
+        funded from the platform's share so it never dilutes what authors earn. You take the larger of the two
+        rather than both.
+      </p>
+      <p class="body">
+        Earning starts when a piece is public, because the split follows visits to a public page. Payouts settle
+        after a {HOLD_DAYS} day hold and arrive through Stripe Connect.
+      </p>
+      <p class="body">
+        <a href="/revenue-model/">Read the full breakdown</a> for the worked example, every rule, and the
+        frequently asked questions.
+      </p>
+    </section>
+
+    <section class="sc-sec" aria-labelledby="sc-faq">
+      <h2 class="h2" id="sc-faq">Questions</h2>
+      <div class="sc-faq">
+        <details>
+          <summary>How long does a review take?</summary>
+          <p class="body">There is no promised turnaround. The network is small and a superadmin reads every piece, so it depends on what else is in the queue. Your work is live for members the whole time.</p>
+        </details>
+        <details>
+          <summary>Can I see my piece before it is public?</summary>
+          <p class="body">Yes. It has its own page from the moment you publish, and any signed-in member can read it in full. You can send another member the link.</p>
+        </details>
+        <details>
+          <summary>Do I have to publish to be a member?</summary>
+          <p class="body">No. Membership is the community first. Publishing is included, and plenty of members read, comment and take part without writing anything.</p>
+        </details>
+        <details>
+          <summary>What if I publish something and change my mind?</summary>
+          <p class="body">Edit it or unpublish it. It is your folder and your work.</p>
+        </details>
+        <details>
+          <summary>Do I need a card to read?</summary>
+          <p class="body">No. A free account with GitHub gets you the network, the news feed, public shares, follows and collections. Membership adds the community, members-only content, publishing and the revenue share.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .sc-wrap { max-width: 760px; margin: 0 auto; padding: 48px 20px 72px; }
+  .sc-head { margin: 0 0 40px; }
+  .sc-eyebrow { font-family: var(--font-mono, monospace); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-700); margin: 0 0 10px; }
+  .sc-head .lead { margin: 14px 0 0; }
+  .sc-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 0; }
+  .sc-sec { margin: 0 0 40px; }
+  .sc-sec .h2 { margin: 0 0 14px; }
+  .sc-sec .body { margin: 0 0 14px; line-height: 1.7; }
+  .sc-quiet { color: var(--fg-mute); }
+  .sc-steps { list-style: none; margin: 0; padding: 0; counter-reset: sc; display: flex; flex-direction: column; gap: 22px; }
+  .sc-steps > li { counter-increment: sc; padding-left: 44px; position: relative; }
+  .sc-steps > li::before {
+    content: counter(sc); position: absolute; left: 0; top: 0;
+    width: 30px; height: 30px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--green) 14%, transparent);
+    color: var(--green-700); font-weight: 700; font-size: 14px;
+  }
+  .sc-step-h { margin: 2px 0 6px; font-family: var(--font-display, inherit); font-size: 18px; }
+  .sc-crit { margin: 0; display: flex; flex-direction: column; gap: 14px; }
+  .sc-crit-row { border-left: 3px solid var(--green); padding: 0 0 0 14px; }
+  .sc-crit dt { font-weight: 700; margin: 0 0 3px; }
+  .sc-crit dd { margin: 0; color: var(--fg-mute); line-height: 1.6; }
+  .sc-faq { display: flex; flex-direction: column; gap: 10px; }
+  .sc-faq details { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; background: var(--surface); }
+  .sc-faq summary { cursor: pointer; font-weight: 600; }
+  .sc-faq details[open] summary { margin-bottom: 8px; }
+  .sc-faq .body { margin: 0; }
+  @media (max-width: 560px) {
+    .sc-wrap { padding: 32px 16px 56px; }
+    .sc-cta .btn { width: 100%; justify-content: center; }
+  }
+</style>

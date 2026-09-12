@@ -69,6 +69,15 @@ function normalizeTier(raw, i) {
     priceEnv,
     benefits: Object.freeze(benefits),
     revenue: String(raw.revenue ?? '').trim(),
+    // sow-323: is this tier OFFERED for sale today? The owner collapsed the two paid plans into one on
+    // 2026-09-12, so `creator` stays in the file (its label still names the tier existing grants carry, staff
+    // resolve to it, and the legacy Stripe price maps to it) but no card offers it. Default TRUE, so every
+    // existing entry and every future one is offered unless it says otherwise.
+    //
+    // It has to be read HERE or it does nothing: this function builds a frozen record from a fixed field list,
+    // so an `offered:` key in the yaml that the normaliser does not know about is dropped without a word, and
+    // the cards would keep selling a plan nobody can buy while the file said otherwise.
+    offered: raw.offered !== false,
   });
 }
 
@@ -90,6 +99,42 @@ export function parseTierDisplay(raw) {
     if (!byKey.has(k)) throw new TierDisplayError(`the tier file is missing the "${k}" tier`);
   }
   return Object.freeze(TIER_ORDER.map((k) => byKey.get(k)));
+}
+
+/**
+ * sow-323: a revenue line split into plain text and at most one inline [text](url) link.
+ *
+ * MOVED HERE from src/components/membership/MembershipTiers.astro, which had it while the homepage pricing
+ * accordion rendered the same registry string as plain text. The Curator card's line is
+ * `Curators participate in the greater [revenue program](/revenue-model/).`, so the live homepage showed the
+ * brackets and the URL to every visitor. One function, both renderers, and the copy still lives in the yaml.
+ *
+ * @returns Array<{ text: string, href?: string }>
+ */
+export function revenueFragments(s) {
+  const str = String(s ?? '');
+  const m = /\[([^\]]+)\]\(([^)\s]+)\)/.exec(str);
+  if (!m) return str ? [{ text: str }] : [];
+  const out = [];
+  if (m.index > 0) out.push({ text: str.slice(0, m.index) });
+  out.push({ text: m[1], href: m[2] });
+  const tail = str.slice(m.index + m[0].length);
+  if (tail) out.push({ text: tail });
+  return out;
+}
+
+/**
+ * sow-323: the tiers a PRICING surface may offer, in canonical order. Every axis tier still has to be present
+ * in the file (parseTierDisplay enforces that, because the axis is what gates), but only these are for sale.
+ *
+ * At least one paid tier must be offered, or the site would show a Free card and nothing to buy. That is a
+ * configuration mistake rather than a design, so it throws instead of rendering an empty pricing section.
+ */
+export function offeredTiers(parsed) {
+  const list = Array.isArray(parsed) ? parsed.filter((t) => t && t.offered !== false) : [];
+  const paid = list.filter((t) => t.priceAnnual > 0 || t.priceMonthly > 0);
+  if (!paid.length) throw new TierDisplayError('no paid tier is offered: at least one must have `offered` unset or true');
+  return Object.freeze(list);
 }
 
 /** Boolean form for CI (scripts/validate-content.mjs): { ok, error }. Never throws. */

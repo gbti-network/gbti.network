@@ -6,7 +6,10 @@
 // reach it, which is the same reason share-post-core.mjs exists.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { tierCta, TIER_RANK, CREATOR_APPLICATION_PATH } from '../src/lib/tier-cta.mjs';
+
+const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
 const STATES = [
   { signedIn: false, myTier: 'none' },
@@ -19,22 +22,21 @@ const STATES = [
   { signedIn: false, myTier: 'creator' },
 ];
 
-test('Content Creator NEVER hands off to checkout, in any viewer state', () => {
-  // Exhaustive over the states a viewer can be in, not a sample: this is the assertion the whole extraction
-  // exists for, and a single missed state is a member sent to Stripe for a product with no price.
-  for (const st of [...STATES, { signedIn: true, myTier: 'creator' }]) {
-    const cta = tierCta({ key: 'creator', label: 'Content Creator', ...st });
-    assert.equal(cta.checkout, false, `creator must never check out (state ${JSON.stringify(st)})`);
+// sow-323: the two cases that pinned the apply-only branch are GONE, with the branch. sow-293 made the Curator
+// card route to an application page and never to a checkout; the owner then collapsed the two paid plans on
+// 2026-09-12, so no pricing surface offers that tier at all and offeredTiers filters it out before render.
+// What replaces them is the assertion that matters now: no reachable card can send a viewer to the retired
+// application page, whatever their state.
+test('no OFFERED card routes a viewer to the retired application page, in any viewer state', () => {
+  for (const key of ['none', 'member']) {
+    for (const st of [...STATES, { signedIn: true, myTier: 'creator' }]) {
+      const cta = tierCta({ key, label: 'Network Supporter', ...st });
+      assert.notEqual(cta.href, CREATOR_APPLICATION_PATH, `${key} in state ${JSON.stringify(st)}`);
+      assert.doesNotMatch(String(cta.text), /^Apply to become a/, `${key} in state ${JSON.stringify(st)}`);
+    }
   }
-});
-
-test('Content Creator points at the application for everyone who does not already hold it', () => {
-  for (const st of STATES) {
-    const cta = tierCta({ key: 'creator', label: 'Content Creator', ...st });
-    assert.equal(cta.href, CREATOR_APPLICATION_PATH, `state ${JSON.stringify(st)}`);
-    assert.match(cta.text, /^Apply to become a/, `state ${JSON.stringify(st)}`);
-    assert.equal(cta.disabled, false);
-  }
+  // and the branch itself is gone from the source, not merely unreachable by these inputs
+  assert.doesNotMatch(read('src/lib/tier-cta.mjs'), /if \(key === 'creator'\)/);
 });
 
 test('somebody who already holds Content Creator is not invited to apply for it', () => {

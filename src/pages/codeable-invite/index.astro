@@ -13,21 +13,28 @@
 // once carried Creator claims that no string check could see, because a sentence promising publishing never
 // names a tier or a price. If a claim is not a bullet in that file, it cannot reach this page.
 //
-// NO BENEFIT LIST IN THE FAQ, NO REVENUE COPY (banned-patterns.md #2). Every answer that sold a Creator
-// benefit is gone rather than reworded. The tier name and the price come from tierDisplay(), so no answer can
-// quote a stale figure. Any sentence about what a tier is belongs HERE, in this page's data, never in the
-// shared template: a template that interpolated a label but kept "the network's top tier" would advertise the
-// wrong tier at the right price, which is the trap sow-243 names.
+// NO BENEFIT LIST IN THE FAQ, NO REVENUE COPY (banned-patterns.md #2). Every answer that sold a benefit this
+// invite does not confer is gone rather than reworded. The tier name and the price come from tierDisplay(), so
+// no answer can quote a stale figure. Any sentence about what a tier is belongs HERE, in this page's data,
+// never in the shared template: a template that interpolated a label but kept "the network's top tier" would
+// advertise the wrong tier at the right price, which is the trap sow-243 names.
+//
+// sow-323 (2026-09-12): the owner collapsed the two paid plans into one, and the plan that remains publishes.
+// The tier this invite confers has not changed, so the binding below has not changed either; what changed is
+// that the answers telling a Codeable expert publishing sat at a higher tier were false and are rewritten. The
+// publishing answer stays on the page because the audience asks it, and the answer is now yes.
 //
 // THE CAMPAIGN. A shared link carries a plain visible ?coupon=CODEABLEYEAR, which prefills the coupon field
 // (QA 2026-07-18: no secret token links); with no parameter the field is hand-editable. The parity test reads
 // this line to check that the campaign's tier and this page's tier agree.
 import InviteLander from '../../components/invite/InviteLander.astro';
 import { BILLING_PERIOD } from '../../lib/membership';
-import { tierDisplay, tierLabel, TIER } from '../../lib/tiers'; // sow-316: tierLabel NAMES a tier; tierDisplay binds this page's product
+// sow-323: tierLabel/TIER are gone from this import with the answers that named the other paid tier. One paid
+// plan means there is no second product for this page to name.
+import { tierDisplay } from '../../lib/tiers';
 
 const memberTier = tierDisplay('member');
-const TIER_LABEL = memberTier?.label ?? 'Network Member';
+const TIER_LABEL = memberTier?.label ?? 'Network Supporter';
 const TIER_PRICE_LABEL = `$${memberTier?.priceAnnual ?? 50}`;
 const memberBenefits = memberTier?.benefits ?? [];
 
@@ -37,11 +44,12 @@ const faqs = [
   ['What happens when the free year ends?', `Nothing happens on its own. ${TIER_LABEL} is ${TIER_PRICE_LABEL} per ${BILLING_PERIOD} if you decide to continue, and you will not be charged unless you choose to.`],
   ['How do I claim it?', 'Sign in with GitHub from this page. Your coupon is already applied, so there is nothing to enter or remember.'],
   ['Can I pass this on to someone else?', 'It is meant for you, but the link works for whoever opens it first, so treat it as personal rather than forwardable.'],
-  ['What is the GBTI Network?', `A professional publishing network for developers. Members read and discuss the work published across it and take part in a private community. Publishing your own articles, projects and prompts is the ${tierLabel(TIER.creator)} tier.`],
+  ['What is the GBTI Network?', 'A professional publishing network for developers. Members read and discuss the work published across it, publish their own articles, projects and prompts, and take part in a private community.'],
   // ASKED AND ANSWERED PLAINLY, because the audience makes it the obvious question. Codeable experts are
-  // working professionals, and the page they were sent used to promise publishing.
-  ['Can I publish my own work with this invite?', `Not on this invite. Publishing articles, projects and prompts is the ${tierLabel(TIER.creator)} tier, and this covers a year at ${TIER_LABEL}: reading members-only work, commenting anywhere on the network, and full Discord access. You can move up whenever you want to publish.`],
-  ['Is all content public or private?', 'Both. Some work is published openly, and some is network-only. For network-only work, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
+  // working professionals, and this is the first thing they want to know. sow-323 turned the answer from no to
+  // yes: publishing is part of the one paid plan, and the review step is stated so nobody is surprised by it.
+  ['Can I publish my own work with this invite?', `Yes. A year at ${TIER_LABEL} includes publishing your own articles, projects and prompts. New work goes out to members first, and a superadmin reviews it before it appears on the public website.`],
+  ['Is all content public or private?', 'Both, and members come first. New work goes out to members, and a superadmin reviews it before it appears on the public website. For work that stays members-only, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
   ['Are comments on public-facing content also public?', 'By default, they are not, and can only be read inside the extension by other members. There is, however, the option to make a comment fully public.'],
   ['What does GBTI stand for?', 'God Bless The Internet; a phrase that expresses appreciation and goodwill toward the continued growth and enrichment of the internet.'],
   // The founding story is a FACT about GBTI and stays true whatever tier the invite confers. The sentence
@@ -52,7 +60,7 @@ const faqs = [
 
 <InviteLander
   title="Codeable experts: your first year on us"
-  description="A private invitation for Codeable experts: a full year of Network Member access, first year free with your coupon."
+  description={`A private invitation for Codeable experts: a full year of ${TIER_LABEL} access, first year free with your coupon.`}
   tierLabel={TIER_LABEL}
   tierPriceLabel={TIER_PRICE_LABEL}
   benefits={memberBenefits}
@@ -61,7 +69,7 @@ const faqs = [
   nav={[{ href: '#benefits', label: 'What you get' }, { href: '#faq', label: 'FAQ' }]}
   hero={{
     titleHtml: 'Welcome, Codeable experts!',
-    lead: `GBTI is a professional publishing network for developers. Read the work published across it and join the conversation. Your Codeable invite covers a full year at the ${TIER_LABEL} tier, no card required.`,
+    lead: `GBTI is a professional publishing network for developers. Read the work published across it, publish your own, and join the conversation. Your Codeable invite covers a full year at the ${TIER_LABEL} tier, no card required.`,
     ctaLabel: 'Claim your free year',
     secondaryCta: { href: '#benefits', label: 'What you get' },
     // Facts about the OFFER, not benefit claims about the tier.

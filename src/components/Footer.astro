@@ -18,7 +18,10 @@ const columns = [
   },
   {
     title: 'Community',
-    links: [['Become a Member', '/membership/'], ['Member Handbook', '/handbook/'], ['How the network works', '/revenue-model/'], ['Member Directory', '/members/'], ['My Account', '/account/']],
+    // sow-323: "Submit content" is the owner's own wording for the link, and it goes second, right after the
+    // join link: publishing is what the paid membership now includes, so the page explaining it belongs where
+    // somebody considering joining will see it.
+    links: [['Become a Member', '/membership/'], ['Submit content', '/submit-content/'], ['Member Handbook', '/handbook/'], ['How the network works', '/revenue-model/'], ['Member Directory', '/members/'], ['My Account', '/account/']],
   },
 ];
 ---

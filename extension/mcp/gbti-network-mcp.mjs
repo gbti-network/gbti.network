@@ -19891,7 +19891,11 @@ var TIER = Object.freeze({
 });
 var TIER_LABEL = Object.freeze({
   [TIER.none]: "",
-  [TIER.member]: "Network Member",
+  // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
+  [TIER.member]: "Network Supporter",
+  // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
+  // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+  // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
   [TIER.creator]: "Curator"
 });
 var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });

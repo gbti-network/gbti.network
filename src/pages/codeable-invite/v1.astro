@@ -9,8 +9,18 @@
 // THE ARCHIVED SECTIONS BELOW STILL DESCRIBE THE CONTENT CREATOR TIER, deliberately. Preserving the design
 // work is the whole reason this file exists, and gutting it would destroy what it was kept for. So the
 // benefit cards still say publishing and syndication, the network explainer still sells running no CMS, the
-// revenue-model band still splits first and last touch, and the shop-talk band is still here. NONE of those
-// are Network Member benefits.
+// revenue-model band still splits first and last touch, and the shop-talk band is still here. On the day that
+// was written, none of those were member benefits. Read the sow-323 note below before trusting that sentence:
+// publishing and the revenue program moved onto the one remaining paid plan on 2026-09-12, so which of these
+// sections is true of what is sold today has to be re-derived from house/membership-tiers.yml, section by
+// section, rather than taken from this paragraph.
+//
+// sow-323 (2026-09-12) CHANGED WHAT THE ARCHIVE IS AN ARCHIVE OF. The owner collapsed the two paid plans into
+// one. The tier these sections describe is no longer offered to anybody, so they are no longer "the other
+// tier's copy", they are copy for a plan a reader cannot buy. Two of the things they sell (publishing, and a
+// share of the revenue) now belong to the one plan that is offered, and the rest may not. The offer surfaces
+// bind to the tier registry and followed the change on their own; the section copy binds to nothing and has
+// to be rewritten against the registry if it is ever reused.
 //
 // The consequence, stated plainly rather than left for someone to discover: this page is internally
 // inconsistent on purpose. It is noindex, excluded from the sitemap, and nothing links to it. If any of it
@@ -71,7 +81,7 @@ import { tierDisplay } from '../../lib/tiers';
 // single source of truth (house/membership-tiers.yml via tierDisplay) so this page can never drift from it. This
 // is the TIER_DISPLAY binding src/lib/membership.ts's deprecation note points every new consumer to.
 const memberTier = tierDisplay('member');
-const TIER_LABEL = memberTier?.label ?? 'Network Member';
+const TIER_LABEL = memberTier?.label ?? 'Network Supporter'; // sow-323: one paid plan; the registry supplies the label
 const TIER_PRICE_LABEL = `$${memberTier?.priceAnnual ?? 50}`;
 
 const splits = [
@@ -109,7 +119,7 @@ const year = new Date().getFullYear();
 
 <BaseLayout
   title="Codeable experts: your first year on us"
-  description="A private invitation for Codeable experts: a full year of Network Member access, first year free with your coupon."
+  description={`A private invitation for Codeable experts: a full year of ${TIER_LABEL} access, first year free with your coupon.`}
   noindex
   bare
 >

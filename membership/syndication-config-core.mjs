@@ -151,10 +151,10 @@ const DEFAULT_REDDIT_BODY = '{author-note}\n\n{short-description}';
 // SOW-140: the byline first MENTIONS the member's own dev.to profile ({member-devto-handle} -> @handle, which
 // links + notifies on dev.to) and falls back to their name; the gbti.network profile link moves onto "GBTI
 // Network Member" so it survives both cases.
-const DEFAULT_DEVTO_INTRO = '**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).';
+const DEFAULT_DEVTO_INTRO = '**By {member-devto-handle}, [GBTI Network Supporter]({member-url}).** Originally published on [gbti.network]({url}).';
 // SOW-140: Hashnode keeps the NAME-based byline (a member's dev.to handle is not their Hashnode handle, so the
 // dev.to mention must not leak onto a Hashnode post). A parallel {member-hashnode-handle} can be added later.
-const DEFAULT_HASHNODE_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
+const DEFAULT_HASHNODE_INTRO = '**By [{fullName}]({member-url}), GBTI Network Supporter.** Originally published on [gbti.network]({url}).';
 // SOW-138: the PUBLIC crosspost BODY template for dev.to + Hashnode. `{body}` expands to the full published
 // article VERBATIM (byline + this + CTA footer wrap it). The default `{body}` reproduces today's post exactly;
 // admins may wrap the article or replace it with custom copy. The MEMBERS body stays the stub (devto-stub).

@@ -22,7 +22,12 @@
 // member on Stripe. A signed-out visitor creates a free account first (/login/), then returns pre-selected.
 // The member signal (paidTier) is UNTRUSTED presentation only; the Worker and the gate are authoritative.
 // Fail closed: an unknown tier resolves DOWN, never up.
-import { TIER_DISPLAY, tierDisplay } from '../../lib/tiers';
+import { offeredTiers, tierDisplay, revenueFragments } from '../../lib/tiers';
+
+// sow-323: the cards render the OFFERED tiers. Every axis tier is still in the registry (the axis is what
+// gates, and the parser requires all three), but the Curator entry carries `offered: false` and shows on no
+// card. Bound to one local so the inherits line below indexes the SAME list it renders, not the full registry.
+const CARDS = offeredTiers();
 import { SIGNUP_BASE } from '../../lib/membership';
 import { tierCta } from '../../lib/tier-cta.mjs'; // sow-293: one CTA decision, shared by the render and the hydrate
 
@@ -38,37 +43,29 @@ const Heading = headingLevel;
 
 const isFree = (t: { priceMonthly: number; priceAnnual: number }) => t.priceMonthly === 0 && t.priceAnnual === 0;
 
-// A revenue line may carry ONE inline [text](url) link (the copy still lives in the yml, the single source of
-// truth). Split it into ordered fragments so the phrase renders as a real anchor, no raw HTML from the yml.
-function revenueFragments(s: string): { text: string; href?: string }[] {
-  const out: { text: string; href?: string }[] = [];
-  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) {
-    if (m.index > last) out.push({ text: s.slice(last, m.index) });
-    out.push({ text: m[1], href: m[2] });
-    last = m.index + m[0].length;
-  }
-  if (last < s.length) out.push({ text: s.slice(last) });
-  return out;
-}
+// sow-323: revenueFragments MOVED to membership/tiers-display.mjs and is imported above. It lived here while
+// the homepage pricing accordion rendered the same registry string as plain text, so the accordion showed the
+// raw markdown link to every visitor. One function, both renderers, and the copy still lives in the yml.
 ---
 <section class="mtiers" data-signup-base={SIGNUP_BASE} aria-labelledby="mtiers-h">
   <div class="mtiers-head">
     <Heading id="mtiers-h" class:list={[headingLevel === 'h1' ? 'h1' : 'h2']}>Choose how you take part</Heading>
     <p class="lead mtiers-sub">
-      Reading is free for everyone. <strong>Members</strong> participate in the Discord, Community Events, and
-      Members Only Content. <strong>{tierDisplay('creator')?.label ?? 'Curator'}s</strong> help curate network content and participate
-      directly in revenue sharing opportunities.<span class="mtiers-star" aria-hidden="true">*</span>
+      {/* sow-323: this described two paid plans, and named the second one as the tier that curates content and
+          shares in revenue. There is one paid plan now, and it carries both. The name is bound to the registry
+          rather than written here, which is what kept this sentence honest through the rename. */}
+      Reading is free for everyone. <strong>{tierDisplay('member')?.label ?? 'Network Supporter'}s</strong> join the
+      Discord and the community events, read members-only content, publish their own articles, projects and
+      prompts, and share in the revenue the network earns.<span class="mtiers-star" aria-hidden="true">*</span>
     </p>
     <p class="mtiers-note">
-      * See the <a href="/handbook/">content and editorial guidelines</a> for more information.
+      * Published work goes out to members first. A superadmin reviews it before it appears on the public site.
+      See <a href="/submit-content/">how publishing works</a> for what gets approved and how the revenue is split.
     </p>
   </div>
 
   <div class="mt-grid">
-    {TIER_DISPLAY.map((t, i) => (
+    {CARDS.map((t, i) => (
       <article class:list={['mt-card', t.key === 'member' && 'mt-card-hl']} data-tier={t.key}>
         <header class="mt-card-head">
           <h3 class="mt-label">{t.label}</h3>
@@ -86,7 +83,7 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
         </header>
 
         {i > 0 && (
-          <p class="mt-inherits">Everything in {TIER_DISPLAY[i - 1].label}, plus:</p>
+          <p class="mt-inherits">Everything in {CARDS[i - 1].label}, plus:</p>
         )}
         <ul class="mt-benefits">
           {t.benefits.map((b) => (

@@ -10,7 +10,6 @@
 // reads the hash on connect to open directly on that management tab. Returns a valid tab id, or null when the hash
 // carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
 import { canonicalType } from './content-types.mjs';
-import { TIER, tierLabel } from '../../membership/tiers.mjs'; // sow-316: the public tier name, bound not spelled
 
 const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'share', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs); sow-304: 'share' (the member's own shares)
 export function parseWorkspaceTab(hash) {
@@ -505,25 +504,28 @@ export function visibleTiles(tiles, tabs, authoring) {
  * is granted by APPLICATION (sow-293), not purchase. Nothing told them before the refusal. A new member hit
  * exactly this in his first hour and reported it as "it asks me to log in again".
  *
- * Only for `paid` + a tier below curator. A trial member gets trialBanner instead; a curator gets nothing.
+ * sow-323 REPLACED WHAT THIS SAYS, and it is worth reading the two versions together, because the old copy is
+ * how a wrong message survives: it told a paying supporter that publishing "needs Curator status, granted by
+ * application", which was true when written and became false when the owner collapsed the two paid plans on
+ * 2026-09-12. Publishing is included in the membership now. What a supporter needs to know before they write is
+ * a different and smaller thing: their work goes out to members first, and a superadmin reviews it before it
+ * appears on the public site. Nothing here asks them to buy or apply for anything.
+ *
+ * Only for `paid` + a tier below the trusted-author level. A trial member gets trialBanner instead; a trusted
+ * author gets nothing, because for them nothing waits.
  */
 export function curatorBanner(membership, paidTier, authoring) {
   if (membership !== 'paid') return null;
-  if (paidTier === 'creator') return null; // the internal tier key; the public name is Curator (sow-226)
-  const headline = `Publishing needs ${tierLabel(TIER.creator)} status`;
-  return authoring
-    ? {
-      headline,
-      body: `You can author and stage drafts here now. Publishing articles, projects and prompts to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
-      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
-      ctaHref: 'https://gbti.network/creator-application/',
-    }
-    : {
-      headline,
-      body: `Publishing to gbti.network is a ${tierLabel(TIER.creator)} capability, granted by application rather than purchase.`,
-      ctaLabel: `Apply to become a ${tierLabel(TIER.creator)}`,
-      ctaHref: 'https://gbti.network/creator-application/',
-    };
+  if (paidTier === 'creator') return null; // the internal trust level: their work publishes without review
+  const headline = 'Your work publishes to members first';
+  const body = 'Everything you publish goes out to members straight away. A superadmin reviews it before it '
+    + 'appears on the public site, and you will be told either way.';
+  return {
+    headline,
+    body: authoring ? `${body} You can keep writing in the meantime.` : body,
+    ctaLabel: 'How publishing works',
+    ctaHref: 'https://gbti.network/submit-content/',
+  };
 }
 
 export function trialBanner(membership, authoring) {

@@ -14,11 +14,12 @@
 
 import { githubFetchUser } from './oauth.mjs';
 import { authorizeCreator, authorizePaid } from './membership-content.mjs'; // sow-301: paid gates the route, creator gates PUBLISHING
-import { TIER, meetsTier, tierLabel } from '../../membership/tiers.mjs'; // sow-301
+import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-323: the trusted-author waiver only
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
 import { kickDispatch } from './checkout.mjs';
+import { pathsNeedingApproval, statedVisibility } from '../../membership/hosted-author.mjs'; // sow-323
 import { parseMembersIndex, validateHostedRequest, hostedBranchFor } from '../../membership/hosted-author.mjs';
 
 const GH = 'https://api.github.com';
@@ -88,77 +89,35 @@ export function isCommentOnly(files, folder) {
  * Exported for tests: this decides who may publish publicly, so it must be assertable without a Worker.
  */
 /**
- * sow-293: does this file set touch the caller's own shares/ folder at all?
+ * sow-323: is EVERY one of these repository paths already PUBLIC on main?
  *
- * Deliberately SEPARATE from isMembersOnlyShare, which additionally reads the visibility. The slow mode must
- * key on "this is a share" and nothing else: if it reused the visibility check, then a future change to what
- * counts as members-only would silently change who is throttled, in the permissive direction, with nothing
- * reporting it. Two rules, two predicates.
+ * This is the "already approved" waiver on the members-first rule. An author editing an article a superadmin
+ * already approved must not be refused, and must not have their page taken down by their own typo fix, so the
+ * gate asks main what the item's audience is today rather than trusting the request.
+ *
+ * Generalised from sow-304's isShareEdit, which read main for exactly this shape of question (does this path
+ * exist there?) in order to exempt a share edit from the six-hour throttle. The throttle is gone by the owner's
+ * decision of 2026-09-12, so its machinery now serves the audience rule instead of being deleted. The one real
+ * difference: existence is not enough any more, the file's own frontmatter has to SAY public, so this reads the
+ * raw text rather than only the status.
+ *
+ * FAILS CLOSED at every step: an empty list, a non-200, an unreadable body, a members-only file, or a thrown
+ * fetch all answer false, which sends the request to the approval refusal.
  */
-export function isShareSet(files, folder) {
-  if (!Array.isArray(files) || files.length === 0) return false;
-  if (typeof folder !== 'string' || !folder) return false;
-  const prefix = `members/${folder}/shares/`;
-  return files.some((f) => {
-    const path = typeof f === 'string' ? f : f?.path;
-    return typeof path === 'string' && path.startsWith(prefix) && !path.includes('..');
-  });
-}
-
-/**
- * sow-304: is this share set an EDIT (every share .md in it already exists on main)? Exported for tests. Fail
- * closed: no share files, a non-200 on any of them, or a thrown fetch all answer false, which sends the request
- * through the slow mode as a new share. The .enc siblings are not consulted: an audience flip replaces or deletes
- * them, so their presence says nothing about whether the share itself is new.
- */
-export async function isShareEdit({ fetchImpl, instToken, upstream, files, folder }) {
-  const list = Array.isArray(files) ? files : [];
-  const prefix = `members/${folder}/shares/`;
-  const shareMds = list.filter((f) => typeof f?.path === 'string' && f.path.startsWith(prefix) && /\.(md|mdx)$/.test(f.path));
-  if (!shareMds.length) return false;
-  for (const f of shareMds) {
+export async function approvedOnMain({ fetchImpl, instToken, upstream, paths }) {
+  const list = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p && !p.includes('..')) : [];
+  if (!list.length) return false;
+  for (const path of list) {
     try {
-      const r = await fetchImpl(`${GH}/repos/${upstream}/contents/${f.path}?ref=main`, { headers: GH_HEADERS(instToken) });
+      const r = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=main`, {
+        headers: { ...GH_HEADERS(instToken), Accept: 'application/vnd.github.raw' },
+      });
       if (!r || r.status !== 200) return false;
+      const text = await r.text();
+      if (statedVisibility(text) !== 'public') return false;
     } catch { return false; }
   }
   return true;
-}
-
-/** sow-293: the per-member share slow mode. One share per six hours, members only, creators exempt. */
-export const SHARE_SLOW_MODE_SECONDS = 6 * 60 * 60;
-
-export function isMembersOnlyShare(files, folder) {
-  if (!Array.isArray(files) || files.length === 0) return false;
-  if (typeof folder !== 'string' || !folder) return false;
-  const prefix = `members/${folder}/shares/`;
-  // sow-304 (a sow-293 defect, found while building the edit path): the ciphertext of a members share does NOT sit
-  // under shares/. planMemberFiles writes it to members/<folder>/_enc/share-<id>-body.enc (encAssetFor), so the
-  // rule "every path under shares/" refused the exact file set the website sends for a members share and sent
-  // every paid Network Member to the creator gate with the PUBLIC-sharing message. Measured against the shipped
-  // repository: all three members-share ciphertexts on main live under _enc/. The sibling is admitted ONLY at
-  // that one shape, and only when the share id it names is a share .md in the same set, so nothing else under
-  // _enc/ can ride a members-share request past the creator gate.
-  const shareIds = new Set(files.map((f) => {
-    const path = typeof f === 'string' ? f : f?.path;
-    const m = typeof path === 'string' && path.startsWith(prefix) ? /^([a-z0-9][a-z0-9-]*)\.md$/.exec(path.slice(prefix.length)) : null;
-    return m ? m[1] : null;
-  }).filter(Boolean));
-  const encFor = new RegExp(`^members/${folder}/_enc/share-([a-z0-9][a-z0-9-]*)-body\\.enc$`);
-  let sawMarkdown = false;
-  const allInFolder = files.every((f) => {
-    const path = typeof f === 'string' ? f : f?.path;
-    if (typeof path !== 'string' || path.includes('..')) return false;
-    const enc = encFor.exec(path);
-    if (enc) return shareIds.has(enc[1]); // the ciphertext of a share in this very set
-    if (!path.startsWith(prefix)) return false;
-    if (!path.endsWith('.md')) return true; // any other sibling under shares/ carries no frontmatter to judge
-    sawMarkdown = true;
-    const content = typeof f === 'string' ? null : f?.content;
-    if (typeof content !== 'string') return false; // unreadable is not a licence to assume members-only
-    return /^visibility:\s*["']?members["']?\s*$/m.test(content);
-  });
-  return allInFolder && sawMarkdown;
 }
 
 export async function membershipAuthor(request, env, deps = {}) {
@@ -239,44 +198,37 @@ export async function membershipAuthor(request, env, deps = {}) {
   const itemId = String(payload?.itemId ?? '');
   const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder });
   if (!check.ok) return { status: check.status ?? 400, body: { error: 'bad_request', message: check.error } };
-  // sow-301: PUBLISHING is creator-gated; COMMENTING is not. Decided from the resolved FILE PATHS, never from
-  // `itemId`, which arrives in the request body: gating on a `comment-` prefix would let any paid caller
-  // publish an article by naming it `comment-anything`. validateHostedRequest has already confirmed these
-  // paths sit in the caller's own folder (or that a re-verified superadmin may target another), so by here the
-  // paths are trustworthy. Fail-closed: an empty or MIXED set takes the stricter gate.
-  // sow-293 adds the second exemption: a MEMBERS-ONLY share. Sharing opened to every paid member, but PUBLIC
-  // sharing stays creator-only, and unlike a comment that distinction is not visible in the path, so
-  // isMembersOnlyShare reads the frontmatter of the files the caller sent. Same fail-closed disposition as
-  // isCommentOnly: anything it cannot positively confirm takes the stricter gate.
-  if (!isCommentOnly(payload?.files, folder) && !isMembersOnlyShare(payload?.files, folder)) {
-    if (!meetsTier(paid.tier, TIER.creator)) {
-      const publicShare = String(payload?.itemId ?? '').startsWith('share-');
-      return { status: 403, body: { error: 'forbidden', message: publicShare
-        ? `sharing publicly on gbti.network requires ${tierLabel(TIER.creator)} status; post it to members only, or apply at https://gbti.network/creator-application/`
-        : `publishing on gbti.network requires ${tierLabel(TIER.creator)} status, which is granted by application: https://gbti.network/creator-application/` } };
-    }
-  }
-
-  // sow-293: the SLOW MODE. Sharing just opened to every paid member, which is a new spam surface, so a
-  // Network Member posts at most one share per six hours. An approved Content Creator is exempt (owner
-  // answer 4, 2026-08-29): they passed human review, which is what the throttle is a substitute for.
+  // sow-323: PUBLISHING is open to any paid supporter. What is gated is the AUDIENCE: every member item
+  // starts members-only and a superadmin decides what becomes public (owner, 2026-09-12). Decided from the
+  // resolved FILE PATHS and the frontmatter of the files the caller sent, never from `itemId`, which arrives
+  // in the request body: gating on a `comment-` prefix would let any paid caller publish an article by naming
+  // it `comment-anything`. validateHostedRequest has already confirmed these paths sit in the caller's own
+  // folder (or that a re-verified superadmin may target another), so by here the paths are trustworthy.
   //
-  // THE EXEMPTION MUST NOT BECOME THE FAIL-OPEN, and this is the only interesting line here. meetsTier
-  // returns FALSE for an absent or unresolvable tier, so a caller whose tier could not be determined is
-  // THROTTLED rather than waved through. That is the safe direction and it is asserted in the tests, because
-  // the natural refactor (`if (isCreator) skip`) inverts it silently the moment the tier lookup degrades.
-  if (isShareSet(payload?.files, folder) && !meetsTier(paid.tier, TIER.creator)) {
-    // sow-304: an EDIT of a share the member already published is not a new share, so it does not spend the
-    // one-per-six-hours allowance (a member fixing a typo a minute after posting must not be told to wait). An
-    // edit is defined by the FILE, not the request: every share .md in the set already exists on main. The check
-    // FAILS CLOSED: an unreadable or missing file, or a set that mixes a new share in, is throttled as new.
-    const { shareEditCheck = isShareEdit } = deps;
-    const editing = await shareEditCheck({ fetchImpl, instToken, upstream, files: payload?.files, folder });
-    if (!editing) {
-      const slow = await limiter({ kv, id: githubId, limit: 1, windowSeconds: SHARE_SLOW_MODE_SECONDS, prefix: 'rl:share:' });
-      if (!slow.allowed) {
-        return { status: 429, body: { error: 'slow_mode', message: `you can post one share every six hours; ${tierLabel(TIER.creator)}s are not limited` } };
+  // THE WAIVERS, and each is a positive confirmation rather than an absence:
+  //   1. A trusted author (the creator tier, now granted silently by a superadmin and never sold) publishes
+  //      public directly. This is the only remaining use of that tier.
+  //   2. An item ALREADY public on main stays publishable by its author, so a typo fix does not take their
+  //      approved page down, and a rename carries its old URL in redirectFrom so that path is checked instead.
+  // Everything else is refused, including an absent `visibility` (the schema default is public, so silence
+  // means public) and an unreadable file. Comments and profiles never reach here: pathsNeedingApproval only
+  // looks under posts/, projects/, prompts/ and shares/.
+  const needsApproval = pathsNeedingApproval(payload?.files, folder);
+  if (needsApproval.length && !meetsTier(paid.tier, TIER.creator)) {
+    const { approvedCheck = approvedOnMain } = deps;
+    let allApproved = true;
+    for (const item of needsApproval) {
+      const candidates = [item.path, ...item.priorPaths];
+      let ok = false;
+      for (const path of candidates) {
+        if (await approvedCheck({ fetchImpl, instToken, upstream, paths: [path] })) { ok = true; break; }
       }
+      if (!ok) { allApproved = false; break; }
+    }
+    if (!allApproved) {
+      return { status: 403, body: { error: 'review_required', message:
+        'public content is approved by a superadmin after editorial review. Publish this to members only and it '
+        + 'enters the review queue, or ask a superadmin to approve it: https://gbti.network/submit-content/' } };
     }
   }
 

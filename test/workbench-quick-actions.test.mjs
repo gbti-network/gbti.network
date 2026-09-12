@@ -28,21 +28,27 @@ test('the WorkBench page carries three New buttons, the share bar, the modal and
   assert.ok(!src.includes('hsb-wb'), 'no WorkBench link inside the bar on the WorkBench itself');
 });
 
-test('the tile and the share bar are gated on the creator tier by the exact string', () => {
+// sow-323: both gates were an EXACT-STRING test for the creator tier, which was right while that tier was the
+// publishing plan and became wrong on 2026-09-12 when the owner collapsed the two paid plans into one. They now
+// admit any paid member through meetsTier, which is also the fail-closed helper: it returns false for an absent
+// or unresolvable tier, so a down status oracle still hides the surface rather than revealing it.
+test('the tile and the share bar admit any paid member, through the fail-closed tier test', () => {
   const src = read('src/pages/workbench.astro');
-  assert.match(src, /paidTier === 'creator'/);
-  assert.match(src, /mcp\.hidden = !isCreator/);
-  assert.match(src, /share\.hidden = !isCreator/);
+  assert.match(src, /meetsTier\(p\.paidTier, TIER\.member\)/);
+  assert.doesNotMatch(src, /paidTier === 'creator'/, 'the retired exact-string gate must not come back');
+  assert.match(src, /mcp\.hidden = !isPaid/);
+  assert.match(src, /share\.hidden = !isPaid/);
   // the New buttons are for every signed-in member: revealed unconditionally once the session resolves
   assert.match(src, /quick\.hidden = false/);
 });
 
-test('the guide page is noindex, curator-gated, and lists tools from the server definitions', () => {
+test('the guide page is noindex, gated on a PAID membership, and lists tools from the server definitions', () => {
   const src = read('src/pages/workbench/mcp/index.astro');
   assert.match(src, /noindex=\{true\}/);
-  assert.match(src, /paidTier === 'creator'/);
+  assert.match(src, /meetsTier\(s\.paidTier, TIER\.member\)/);
+  assert.doesNotMatch(src, /paidTier === 'creator'/, 'the MCP server is part of the one paid plan now');
   assert.ok(src.includes('mcpToolNames()'), 'tools come from the module that reads client/src/mcp-tools.mjs');
-  assert.ok(src.includes('data-mcp-gate'), 'the non-curator line');
+  assert.ok(src.includes('data-mcp-gate'), 'the line shown to a reader without a paid membership');
 });
 
 test('mcp-guide reads the real tool names from the server definitions and groups them all', async () => {

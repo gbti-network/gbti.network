@@ -65,6 +65,10 @@ class GbtiAdmin extends GbtiElement {
     // property) so it survives custom-element upgrade with no race. Groups: 'moderation', 'membership', 'roles'.
     const caps = this.hasAttribute('caps') ? this.getAttribute('caps').split(',').map((s) => s.trim()).filter(Boolean) : null;
     const capOn = (g) => !caps || caps.includes(g);
+    // sow-323: the two paid plans collapsed into one, so the grant control below no longer offers a CHOICE OF
+    // PLAN. Curator survives as an INTERNAL trust level (a superadmin grants it to a supporter who no longer
+    // needs editorial review), so the wording moved off "tier" and onto what the grant does. The submitted
+    // values ('member', 'creator') are unchanged, because the axis and every server-side gate still use them.
     this.set(
       this.css(CSS) +
         `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
@@ -82,10 +86,10 @@ class GbtiAdmin extends GbtiElement {
 
          ${rank >= RANK.admin && capOn('membership') ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: ${tierLabel(TIER.member)} reads, ${tierLabel(TIER.creator)} can also publish. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose what the grant confers: ${tierLabel(TIER.member)} is the paid membership, and ${tierLabel(TIER.creator)} adds the internal trust level that exempts a supporter from editorial review. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
-           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: ${tierLabel(TIER.member)}</option><option value="creator">Grant tier: ${tierLabel(TIER.creator)}</option></select>
+           <select class="fld" id="gtier" aria-label="Grant level"><option value="member">Grant: ${tierLabel(TIER.member)}</option><option value="creator">Grant: ${tierLabel(TIER.member)} plus ${tierLabel(TIER.creator)} (no editorial review)</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>
@@ -111,7 +115,7 @@ class GbtiAdmin extends GbtiElement {
       this.out('Working&hellip;');
       try {
         const res = await this.client.admin(action, args());
-        // SOW-038 P4: a governance action is idempotent — already-in-that-state returns changed:false (no PR).
+        // SOW-038 P4: a governance action is idempotent: already-in-that-state returns changed:false (no PR).
         if (res?.changed === false || res?.noop) this.out(`<span class="tag ok">No change</span> ${esc(res.message || 'already in that state')}`);
         // sow-213 Phase 2b: a governance action writes git AND KV. When the KV half did not land the action is
         // still real and in git, it just does not reach the paid oracle and the PR gate until the next

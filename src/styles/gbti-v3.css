@@ -1129,6 +1129,9 @@ a.hp-model:hover, a.hp-kind:hover { filter: brightness(.97); }
 .price-check { width: 15px; height: 15px; color: var(--green-700); flex: none; margin-top: 1px; }
 .price-rev { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.4; color: var(--fg-soft); background: var(--tint); border-radius: var(--r); padding: 9px 11px; margin-bottom: 14px; }
 .price-rev svg { width: 15px; height: 15px; color: var(--green-700); flex: none; margin-top: 1px; }
+/* sow-323: the revenue line carries one inline link now (the accordion used to print the raw markdown). */
+.price-rev-link { color: var(--green-700); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.price-rev-link:hover { color: var(--green-600); }
 .price-cta { width: 100%; justify-content: center; margin-top: auto; }
 @media (max-width: 860px) { .price-grid { grid-template-columns: 1fr; } }
 

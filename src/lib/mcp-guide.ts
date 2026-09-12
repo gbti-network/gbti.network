@@ -25,7 +25,11 @@ export const mcpPrompt = [
   '',
   '3. Show what I can work on with list_my_content, then use publish_content to publish or update a post, project, or prompt.',
   '',
-  'Important: publishing is a Curator feature of GBTI. publish_content only works when my GitHub account holds an active membership with the Curator role. Without it the gate declines the pull request, so check whoami first.',
+  // sow-323: this used to say publishing was a Curator feature requiring the Curator role. The two paid plans
+  // collapsed into one on 2026-09-12, so the rule an agent needs is the membership, plus what happens after it
+  // publishes: every member item starts members-only and a superadmin approves what becomes public.
+  'Important: publishing needs an active paid GBTI membership. publish_content only works when my GitHub account holds one, and without it the gate declines the pull request, so check whoami first.',
+  'What I publish reaches members first. It becomes public after editorial review, so do not tell me an item is live on the public site the moment the pull request merges.',
 ].join('\n');
 
 /**

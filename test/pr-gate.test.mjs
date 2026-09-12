@@ -226,7 +226,12 @@ test('banned author -> failure + banned, overriding paid status', async () => {
   assert.equal(d.label, 'banned');
 });
 
-test('grandfathered author (tierless -> member per owner Q15) publishing content -> rejected-not-creator, still effective-paid', async () => {
+// sow-323: this asserted a REJECTION until 2026-09-12, and the rejection was the whole subject of sow-301: the
+// owner's Q15 flip made a tierless grandfather resolve to member, which put every grandfathered account below the
+// publishing floor. There were twenty-two of them. Collapsing the two paid plans into one removes the floor, so
+// the case now asserts the outcome sow-301 was filed to restore. What gates their PUBLIC audience instead is the
+// superadmin approval in membership-author.mjs, which this gate never sees.
+test('sow-323: a grandfathered author (tierless -> member) publishes, and is still effective-paid', async () => {
   const ev = event({ authorId: 100 });
   const d = await evaluatePR({
     author: ev.pull_request.user.id,
@@ -236,11 +241,8 @@ test('grandfathered author (tierless -> member per owner Q15) publishing content
     stripe: fakeStripe({}), // no customer; grandfather still confers effective-paid, but the tier is now member
     now: NOW,
   });
-  // owner Q15 2026-08-18: a tierless grandfather now resolves to member, below the Content Creator floor a
-  // profile (public presence) requires, so the publish gate rejects it. This is the lost-publish consequence.
-  assert.equal(d.check, 'fail');
-  assert.equal(d.label, 'rejected-not-creator');
-  assert.equal(d.status, 'paid'); // the grandfather still confers effective-paid; only the TIER dropped
+  assert.equal(d.check, 'pass');
+  assert.equal(d.status, 'paid'); // the grandfather confers effective-paid, and the tier no longer gates publishing
 });
 
 test('unmapped author (no folder, no customer) -> rejected-not-a-member, never default-open', async () => {

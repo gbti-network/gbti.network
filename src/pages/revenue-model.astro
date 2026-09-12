@@ -7,6 +7,24 @@
 // this explainer never drifts from the model. The donut/stack-bar geometry stays literal in the markup.
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { tierDisplay } from '../lib/tiers'; // sow-316
+
+// sow-323: the worked example's dollars are DERIVED now, from the offered paid price and the same percentage
+// constants the rows already render. They were hardcoded at $45.00 / $15.00 / $7.50 / $82.50 / $150.00, which
+// were right while the only paid plan was the $150 Curator annual and went silently wrong on 2026-09-12 when
+// the owner collapsed the two plans into one at $50. A page that explains how members are paid cannot carry a
+// stale number: every figure below now follows house/membership-tiers.yml, and the prose says which price it
+// used rather than naming one.
+const PRICE = tierDisplay('member')?.priceAnnual ?? 0;
+const pct = (s: string) => Number(String(s).replace('%', '')) / 100;
+const usd = (n: number) => `$${n.toFixed(2)}`;
+const money = {
+  price: usd(PRICE),
+  first: usd(PRICE * pct(FIRST_TOUCH_PCT)),
+  last: usd(PRICE * pct(LAST_TOUCH_PCT)),
+  collab: usd(PRICE * pct(COLLAB_POOL_PCT)),
+  platform: usd(PRICE * pct(PLATFORM_RETAINED_PCT)),
+  invite: usd(PRICE * pct(INVITE_PCT)),
+};
 import {
   FIRST_TOUCH_PCT,
   LAST_TOUCH_PCT,
@@ -358,7 +376,7 @@ import {
         <div class="sec-head center">
           <p class="eyebrow">A worked example</p>
           <h2 class="h2 mt12">The same split in dollars</h2>
-          <p class="lead">Take one conversion where four members commented on or improved the first-touch and last-touch items, and no invite link was used. Using today's $150 membership, the content split lands like this.</p>
+          <p class="lead">Take one conversion where four members commented on or improved the first-touch and last-touch items, and no invite link was used. Using the current {money.price} membership, the content split lands like this.</p>
         </div>
 
         <div class="stackbar" aria-hidden="true">
@@ -369,13 +387,13 @@ import {
         </div>
 
         <div class="we-legend">
-          <div class="we-lrow"><i style="background:var(--c-first)"></i><span class="nm">First-touch owner</span><span class="pc" style="color:var(--c-first)">{FIRST_TOUCH_PCT}</span><span class="dl">$45.00</span></div>
-          <div class="we-lrow"><i style="background:var(--c-last)"></i><span class="nm">Last-touch owner</span><span class="pc" style="color:var(--c-last)">{LAST_TOUCH_PCT}</span><span class="dl">$15.00</span></div>
-          <div class="we-lrow"><i style="background:var(--c-collab)"></i><span class="nm">Collaboration pool <span>&middot; 4 shares, split evenly</span></span><span class="pc" style="color:var(--c-collab)">{COLLAB_POOL_PCT}</span><span class="dl">$7.50</span></div>
-          <div class="we-lrow"><i style="background:var(--c-retain)"></i><span class="nm">Platform &amp; community</span><span class="pc" style="color:var(--c-retain-ink)">{PLATFORM_RETAINED_PCT}</span><span class="dl">$82.50</span></div>
-          <div class="we-lrow" style="border-bottom:0"><i style="background:transparent"></i><span class="nm" style="font-weight:700">Membership</span><span class="pc">100%</span><span class="dl">$150.00</span></div>
+          <div class="we-lrow"><i style="background:var(--c-first)"></i><span class="nm">First-touch owner</span><span class="pc" style="color:var(--c-first)">{FIRST_TOUCH_PCT}</span><span class="dl">{money.first}</span></div>
+          <div class="we-lrow"><i style="background:var(--c-last)"></i><span class="nm">Last-touch owner</span><span class="pc" style="color:var(--c-last)">{LAST_TOUCH_PCT}</span><span class="dl">{money.last}</span></div>
+          <div class="we-lrow"><i style="background:var(--c-collab)"></i><span class="nm">Collaboration pool <span>&middot; 4 shares, split evenly</span></span><span class="pc" style="color:var(--c-collab)">{COLLAB_POOL_PCT}</span><span class="dl">{money.collab}</span></div>
+          <div class="we-lrow"><i style="background:var(--c-retain)"></i><span class="nm">Platform &amp; community</span><span class="pc" style="color:var(--c-retain-ink)">{PLATFORM_RETAINED_PCT}</span><span class="dl">{money.platform}</span></div>
+          <div class="we-lrow" style="border-bottom:0"><i style="background:transparent"></i><span class="nm" style="font-weight:700">Membership</span><span class="pc">100%</span><span class="dl">{money.price}</span></div>
         </div>
-        <p class="mono muted mt24" style="font-size:12px">Dollar figures use today's $150 annual membership. Percentages are fixed; the dollar amount follows the membership price. When a member joins through an invite link instead, that inviter earns the flat {INVITE_PCT} lifetime commission, $15.00 of this membership, out of the platform share, so the platform keeps {PLATFORM_RETAINED_INVITE_PCT} rather than {PLATFORM_RETAINED_PCT} and the content owners are unchanged.</p>
+        <p class="mono muted mt24" style="font-size:12px">Dollar figures use the current {money.price} annual membership. Percentages are fixed; the dollar amount follows the membership price. When a member joins through an invite link instead, that inviter earns the flat {INVITE_PCT} lifetime commission, {money.invite} of this membership, out of the platform share, so the platform keeps {PLATFORM_RETAINED_INVITE_PCT} rather than {PLATFORM_RETAINED_PCT} and the content owners are unchanged.</p>
       </div>
     </section>
 
@@ -521,7 +539,8 @@ import {
       <div class="wrap">
         <p class="eyebrow">Publish, and share in what it earns</p>
         <h2 class="h1 mt12" style="color:#fff">Your work keeps paying after you ship it.</h2>
-        <p class="lead mt16" style="color:var(--on-dark-soft);margin-left:auto;margin-right:auto">Create a free account, no card required. Publish as a {tierDisplay('creator')?.label ?? 'Curator'} to become eligible for the split.</p>
+        {/* sow-323: one paid plan, so the split is open to every paid member; the label comes from the tier registry. */}
+        <p class="lead mt16" style="color:var(--on-dark-soft);margin-left:auto;margin-right:auto">Create a free account, no card required. Publish as a {tierDisplay('member')?.label ?? 'Network Supporter'} to become eligible for the split.</p>
         <div class="rm-cta-btns">
           <a href="/membership/" class="btn btn-primary btn-lg">See membership <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
           <a href="/projects/" class="btn btn-ghost btn-lg">Browse member work</a>

@@ -112,15 +112,20 @@ export function shareComposerView({ hasClient = false, membership } = {}) {
 }
 
 /**
- * sow-293: may this member post a PUBLIC share? A members-only share needs nothing beyond the composer.
+ * sow-323: may this member post a share straight to PUBLIC, without editorial review?
  *
- * FAIL OPEN ON AN ABSENT TIER, ON PURPOSE, carried over verbatim from the gate this replaces. A down status
- * oracle must not silently strip public posting from a real Content Creator, and the affordance is not the
- * boundary: the Worker reads the file's own `visibility` before it commits anything (isMembersOnlyShare in
- * workers/signup/membership-author.mjs), so the worst case here is a member composing a public share and
- * being refused at submit, which is the same failure the composer already risks when the oracle is down.
+ * The question used to be "are they a Content Creator", sold as a plan. Since the owner collapsed the two paid
+ * plans on 2026-09-12 it is "are they a TRUSTED author": a superadmin grants that silently to a supporter who no
+ * longer needs reviewing. The tier key is unchanged, so this function is unchanged in shape; what changed is
+ * what a `false` MEANS, and therefore what the composer says next. It is no longer an invitation to buy or apply
+ * for anything. A public share by an ordinary supporter is not refused, it goes out to members and enters the
+ * review queue.
  *
- * A tier that IS present and is not creator is a real answer, and gets the upgrade nudge.
+ * FAIL OPEN ON AN ABSENT TIER, ON PURPOSE, carried over verbatim through both rewrites. A down status oracle
+ * must not silently strip direct publishing from a trusted author, and the affordance is not the boundary: the
+ * Worker reads the file's own `visibility` before committing anything (pathsNeedingApproval plus approvedOnMain
+ * in workers/signup/membership-author.mjs), so the worst case here is a composer offering an option the server
+ * then routes through review, which is the same failure it already risks when the oracle is down.
  */
 export function canSharePublicly({ membership, tier = null } = {}) {
   if (SHARE_LOCKED_STATES.has(membership) || membership === 'trialing') return false;

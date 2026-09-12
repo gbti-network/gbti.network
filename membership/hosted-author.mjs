@@ -243,3 +243,100 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
   }
   return { ok: true, paths };
 }
+
+// ---- sow-323: which submitted content needs a superadmin's approval before it may be PUBLIC ----------------
+//
+// THE RULE THE OWNER ASKED FOR (2026-09-12): every member item starts members-only, and a superadmin decides
+// what becomes public. Publishing itself is open to any paid supporter now, so this is the only remaining
+// tier gate, and it is a gate on the AUDIENCE rather than on the act of publishing.
+//
+// It lives here, node-free and pure, for the reason the share and image rules already live here: a boundary
+// buried in a Worker handler cannot be exercised by `node --test`, and this project has paid for that four
+// times. The Worker calls it and then does the one thing a pure function cannot, which is read main.
+//
+// FAIL CLOSED, and the direction matters. Anything this cannot positively confirm is members-only counts as
+// needing approval, including an UNREADABLE file and an ABSENT visibility field. The absent case is not a
+// detail: `src/content.config.ts` defaults visibility to `public` for post, project and prompt, so silence
+// means public, and a rule that admitted silence would admit everything.
+//
+// Comments and profiles are exempt BY CONSTRUCTION rather than by a carve-out: they do not live under any of
+// these four directories, so they never reach this function. That is the owner's decision of 2026-09-12 (a
+// profile is a supporter's presence, and paid access is what unlocks it; moderation flags stay the backstop).
+
+/** The member-folder directories that hold reviewable content, and the content type each one carries. */
+export const REVIEWABLE_DIRS = Object.freeze({ posts: 'post', projects: 'project', prompts: 'prompt', shares: 'share' });
+
+/** The URL base a rename records in `redirectFrom`, per type, so an old slug can be recovered from it. */
+const RENAME_URL_DIR = Object.freeze({ post: 'articles', project: 'projects', prompt: 'prompts', share: 'shares' });
+
+/**
+ * The `visibility` a content file's own frontmatter states: 'members', 'public', or null when the file carries
+ * no readable frontmatter at all. An ABSENT field returns 'public', because that is the schema default and
+ * therefore what the build would do with it.
+ */
+export function statedVisibility(content) {
+  if (typeof content !== 'string') return null; // unreadable: the caller treats this as needing approval
+  // ONLY the frontmatter block is read, and a file with no frontmatter block is not a content file this can
+  // vouch for. Both halves are anti-spoofing, and both were found by moving the sow-293 adversarial cases onto
+  // this function: without the block bound, a BODY line reading `visibility: members` would gate the item, and
+  // a file with no frontmatter at all would be judged on its prose. Neither is a content file's audience.
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
+  if (!fm) return 'public';
+  const m = /^visibility:\s*["']?([a-z]+)["']?\s*$/m.exec(fm[1]);
+  if (!m) return 'public'; // silence is public (src/content.config.ts defaults post/project/prompt to public)
+  return m[1] === 'members' ? 'members' : 'public';
+}
+
+/** Every `redirectFrom` URL a content file's frontmatter lists, as raw strings. */
+function redirectFromUrls(content) {
+  if (typeof content !== 'string') return [];
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
+  const head = fm ? fm[1] : content;
+  const inline = /^redirectFrom:\s*\[([^\]]*)\]/m.exec(head);
+  if (inline) return inline[1].split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+  const block = /^redirectFrom:\s*\r?\n((?:\s*-\s*.*\r?\n?)+)/m.exec(head);
+  if (!block) return [];
+  return block[1].split(/\r?\n/).map((l) => {
+    const m = /^\s*-\s*["']?(.+?)["']?\s*$/.exec(l);
+    return m ? m[1] : null;
+  }).filter(Boolean);
+}
+
+/**
+ * The reviewable content files in this request that are NOT positively members-only, each with the repository
+ * path it would have had before a rename (from `redirectFrom`), so the Worker can ask whether the item was
+ * ALREADY public and therefore already approved.
+ *
+ * @returns Array<{ path, type, priorPaths: string[] }>  empty means nothing in this request needs approval.
+ */
+export function pathsNeedingApproval(files, folder) {
+  if (!Array.isArray(files) || files.length === 0) return [];
+  if (typeof folder !== 'string' || !folder) return [];
+  const out = [];
+  for (const f of files) {
+    const path = typeof f === 'string' ? f : f?.path;
+    if (typeof path !== 'string' || path.includes('..')) continue;
+    const m = new RegExp(`^members/${folder}/(posts|projects|prompts|shares)/(.+)$`).exec(path);
+    if (!m) continue;                                   // comments, profile.md, images, _enc: not reviewable
+    if (!/\.(md|mdx)$/.test(path)) continue;             // only the frontmatter-bearing file states an audience
+    const type = REVIEWABLE_DIRS[m[1]];
+    const content = typeof f === 'string' ? null : f?.content;
+    if (statedVisibility(content) === 'members') continue;
+    // A rename of an item that was already public carries the old URL in redirectFrom, and only a public item
+    // ever had a public URL. Recover the old repository path from it so the Worker can check that one instead:
+    // without this an author renaming their own approved article is refused, which looks like a bug to them.
+    const tail = m[2];
+    const priorPaths = redirectFromUrls(content).map((url) => {
+      const seg = String(url).split('/').filter(Boolean);
+      const dir = RENAME_URL_DIR[type];
+      if (seg.length < 2 || seg[0] !== dir) return null;
+      const oldSlug = seg[seg.length - 1];
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(oldSlug)) return null;
+      return type === 'share'
+        ? `members/${folder}/shares/${oldSlug}.md`
+        : `members/${folder}/${m[1]}/${oldSlug}/${tail.replace(/^[^/]+\//, '')}`;
+    }).filter(Boolean);
+    out.push({ path, type, priorPaths });
+  }
+  return out;
+}

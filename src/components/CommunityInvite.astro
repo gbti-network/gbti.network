@@ -1,7 +1,7 @@
 ---
 import { authorDisplay } from '../lib/authors';
 import { refCodeForAuthor, REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
-import { tierDisplay, benefitProse } from '../lib/tiers';
+import { offeredTiers, benefitProse, revenueFragments } from '../lib/tiers';
 
 interface Props {
   /** Content author username. Resolved to the author's immutable github_id referral code. */
@@ -25,31 +25,26 @@ const joinHref = query ? `/membership/?${query}` : '/membership/';
 // advertise a benefit a tier does not carry: benefitProse renders a tier's benefit labels as one clause, and
 // the prices come from the same record. This is the same governance the membership page follows, and
 // test/community-invite-parity.test.mjs asserts the invite never hand-writes a benefit label.
-const member = tierDisplay('member');
-const creator = tierDisplay('creator');
-const memberName = member?.label ?? 'Network Member';
-const tierRows = [
-  member && {
-    label: member.label,
-    priceLabel: `$${member.priceAnnual}/year`,
-    lead: '',
-    prose: benefitProse(member),
-    // The Member revenue line is plain text in the registry, so it binds directly.
-    revenue: member.revenue,
-    revenueHref: null as string | null,
-  },
-  creator && {
-    label: creator.label,
-    priceLabel: `$${creator.priceAnnual}/year`,
-    // Creator is the higher tier and includes the Member benefits, so it leads with that rather than
-    // repeating them. benefitProse opens with a verb phrase ("publish articles..."), so this reads clean.
-    lead: `everything in ${memberName}, plus `,
-    prose: benefitProse(creator),
-    // Creator revenue is a registry markdown link; render it as a real link to the revenue model page.
-    revenue: `${tierDisplay('creator')?.label ?? 'Curator'}s share in the`,
-    revenueHref: '/revenue-model/',
-  },
-].filter(Boolean) as {
+// sow-323: ONE row now. The owner collapsed the two paid plans on 2026-09-12, so a second row would advertise
+// a plan nobody can buy, on a component that is mounted on EVERY article. The row is built from offeredTiers so
+// it follows the registry rather than naming a key: if a tier stops being offered, its row stops rendering, and
+// if another is added its row appears, with no edit here. The revenue line goes through revenueFragments for
+// the same reason the cards do, since the registry value carries an inline markdown link.
+const tierRows = offeredTiers()
+  .filter((t) => t.priceAnnual > 0 || t.priceMonthly > 0)
+  .map((t) => {
+    const frag = revenueFragments(t.revenue);
+    const link = frag.find((f) => f.href);
+    return {
+      label: t.label,
+      priceLabel: `$${t.priceAnnual}/year`,
+      lead: '',
+      prose: benefitProse(t),
+      // The text before the link, so the markup can render the link itself as an anchor.
+      revenue: frag.filter((f) => !f.href).map((f) => f.text).join('').trim().replace(/\.$/, ''),
+      revenueHref: link?.href ?? null,
+    };
+  }) as {
   label: string;
   priceLabel: string;
   lead: string;

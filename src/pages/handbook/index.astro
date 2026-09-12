@@ -68,14 +68,17 @@ const sections = [
             the page, nothing is installed, and you do not fork anything.</p></div>
           <div class="blk" data-blk><p>A free account is enough to read the network and to keep track of
             what you find. No card is requested and nothing is billed.</p></div>
-          <div class="blk" data-blk><p>Access comes in four levels. Signed out, you can browse the public
+          {/* sow-323: ONE paid plan since 2026-09-12, so this is three levels rather than four, and
+              publishing sits inside the paid membership instead of a second tier above it. The label resolves
+              from the tier registry, so a rename lands here without an edit. */}
+          <div class="blk" data-blk><p>Access comes in three levels. Signed out, you can browse the public
             site. <strong>Free</strong> (signed in with any GitHub account, no card) adds the reading
             perks: follow the news feed, save favorites, build collections, follow members and topics.
-            <strong>Network Member</strong> adds commenting across the network, the full Discord community,
-            member-only content, and the member Shares stream. <strong>{tierDisplay('creator')?.label ?? 'Curator'}</strong> unlocks
-            publishing your articles, projects, and prompts, your creator profile, syndication, and posting
-            to Shares. The <a href="/membership/">membership page</a> has pricing and the complete
-            comparison.</p></div>
+            <strong>{tierDisplay('member')?.label ?? 'Network Supporter'}</strong> adds commenting across the
+            network, the full Discord community, member-only content, the member Shares stream, and
+            publishing your own articles, projects, and prompts. Published work goes out to members first,
+            and a superadmin reviews it before it appears on the public site. The
+            <a href="/membership/">membership page</a> has pricing and the complete comparison.</p></div>
           <div class="blk" data-blk><p>The <a href="/extension/">browser extension</a> is optional. It
             carries the same authoring surface as the website, and adds a new tab feed and a reader that keeps
             you inside the extension while you browse. Add it if you want those. Skip it and the website does
@@ -151,9 +154,15 @@ const sections = [
             from you. Your drafts are held in your account, and publishing commits to a branch on the canonical
             repository through GBTI's own GitHub App. The extension works differently, staging on a fork of
             your own, which is why it asks for access the website does not need.</p></div>
-          <div class="blk" data-blk><p>Publishing is a {tierDisplay('creator')?.label ?? 'Curator'} capability. Below that tier you can
-            write and keep drafts, and nothing you stage reaches the public repository until you upgrade. When
+          {/* sow-323: publishing is no longer a tier above the membership. Every paid member publishes, and
+              what gates the PUBLIC site is editorial review by a superadmin, not a plan. */}
+          <div class="blk" data-blk><p>Publishing is included in the paid membership. On a free account you can
+            write and keep drafts, and nothing you stage reaches the public repository until you join. When
             you do, your staged drafts are there waiting to publish.</p></div>
+          <div class="blk" data-blk><p>What you publish goes out to members first. A superadmin then reviews
+            it, and it appears on the public site once that review passes. Profiles and comments are exempt
+            from that review. The full explanation of how the content platform works, the revenue program
+            included, is at <a href="/submit-content/">/submit-content/</a>.</p></div>
           <div class="blk" data-blk><p>Paid members can also contribute to one another member's folder.
             That pull request waits until the folder owner approves it with a GitHub review, then merges
             with you credited as a contributor.</p></div>
@@ -268,7 +277,8 @@ const sections = [
             <code>members/&lt;username&gt;/profile.md</code>. Edit it from
             <a href="/account/">/account/</a> or the <a href="/workbench/">WorkBench</a>, or from the
             extension if you use it. It publishes through the same pull request flow, and publishing a profile
-            is a {tierDisplay('creator')?.label ?? 'Curator'} capability.</p></div>
+            is included in the paid membership. A profile is exempt from editorial review, so it is public as
+            soon as the pull request merges.</p></div>
           <div class="blk" data-blk><p>Fields you control: display name, headline, avatar (defaults to
             your GitHub avatar), location, roles and skills, social links, a for-hire flag, and
             <code>directory: true</code> to opt in to the <a href="/members/">member directory</a>.

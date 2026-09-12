@@ -290,13 +290,21 @@ test('members-only: a trial member is a member but cannot publish (rejected-not-
 
 // sow-185: the TIER gate. Public presence (post/product/prompt/profile) needs Content Creator; comments need
 // only Network Member. A paid member below the required tier is rejected-not-creator (auto-closed with a nudge).
-test('sow-185: a Network Member publishing own-folder public content => rejected-not-creator', () => {
+// sow-323: these four cases asserted the OPPOSITE until 2026-09-12. The owner collapsed the two paid plans into
+// one, so every paid supporter authors every content type and the merge gate no longer decides audience at all:
+// an item lands members-only and a superadmin approves what goes public (enforced in membership-author.mjs,
+// which can read the frontmatter this gate deliberately cannot). What survives here is the fail-closed behaviour
+// on SHAPE: an unclassifiable own-folder path still needs the higher tier.
+test('sow-323: a paid supporter publishes own-folder content of every type => pass', () => {
   for (const p of ['members/octocat/posts/x/index.md', 'members/octocat/projects/y/index.md', 'members/octocat/prompts/z/index.md', 'members/octocat/profile.md']) {
     const d = decide({ paths: [p], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
-    assert.equal(d.check, 'fail', p);
-    assert.equal(d.label, 'rejected-not-creator', p);
-    assert.equal(d.autoMerge, false, p);
+    assert.equal(d.check, 'pass', p);
+    assert.equal(d.label, 'paid', p);
   }
+  // the shape guard still discriminates: a path this gate cannot classify is NOT on the member floor
+  const odd = decide({ paths: ['members/octocat/mystery/x.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
+  assert.equal(odd.check, 'fail', 'an unclassifiable own-folder path must still need the higher tier');
+  assert.equal(odd.label, 'rejected-not-creator');
 });
 
 test('sow-185: a Network Member publishing an own-folder comment => pass (member suffices)', () => {
@@ -319,16 +327,17 @@ test('sow-185: a paid status with tier none (an unmapped price) is denied even f
   assert.equal(d.label, 'rejected-not-creator');
 });
 
-test('sow-185 contribution: a Network Member cannot contribute public content (rejected-not-creator)', () => {
-  const d = decide({ paths: ['members/bob/posts/x/index.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member, ownerApproved: true, ownerPaid: true, ownerTier: TIER.creator });
-  assert.equal(d.check, 'fail');
-  assert.equal(d.label, 'rejected-not-creator');
+test('sow-323 contribution: a paid supporter contributes content into another supporter\'s folder', () => {
+  // Both sides sit on the member floor now, so a contribution turns only on the owner's approving review.
+  const d = decide({ paths: ['members/bob/posts/x/index.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member, ownerApproved: true, ownerPaid: true, ownerTier: TIER.member });
+  assert.equal(d.check, 'pass');
+  assert.equal(d.label, 'contribution-accepted');
 });
 
-test('sow-185 contribution: a Content Creator contributing into a Network Member owner folder is rejected (cannot live there)', () => {
-  const d = decide({ paths: ['members/bob/posts/x/index.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.creator, ownerApproved: true, ownerPaid: true, ownerTier: TIER.member });
+test('sow-323 contribution: without the owner\'s approving review it still holds', () => {
+  const d = decide({ paths: ['members/bob/posts/x/index.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member, ownerApproved: false, ownerPaid: true, ownerTier: TIER.member });
   assert.equal(d.check, 'fail');
-  assert.equal(d.label, 'rejected-not-creator');
+  assert.equal(d.label, 'contribution-pending-owner');
 });
 
 test('sow-185 contribution: a comment by a Network Member into a Network Member owner folder is accepted', () => {
@@ -337,12 +346,17 @@ test('sow-185 contribution: a comment by a Network Member into a Network Member 
   assert.equal(d.label, 'contribution-accepted');
 });
 
-test('sow-185 requiredTierFor: public types -> creator, comments-only -> member, mixed/empty -> creator', () => {
-  for (const t of ['post', 'project', 'prompt', 'profile']) assert.equal(requiredTierFor([t]), TIER.creator, t);
-  assert.equal(requiredTierFor(['comment']), TIER.member);
-  assert.equal(requiredTierFor(['comment', 'post']), TIER.creator);
+test('sow-323 requiredTierFor: every recognised type -> member; an unclassified one, or no set at all -> creator', () => {
+  for (const t of ['post', 'project', 'prompt', 'profile', 'comment', 'share']) assert.equal(requiredTierFor([t]), TIER.member, t);
+  assert.equal(requiredTierFor(['comment', 'post']), TIER.member, 'a mixed set of recognised types is still the member floor');
+  // the fail-closed half, which is the only part of the old rule that survives: `other` is what
+  // contentTypesTouched adds for an own-folder path it could not classify, and it must not ride in on a default
+  assert.equal(requiredTierFor(['other']), TIER.creator);
+  assert.equal(requiredTierFor(['comment', 'other']), TIER.creator, 'one unclassified member spoils the set');
   assert.equal(requiredTierFor([]), TIER.creator);
   assert.equal(requiredTierFor(null), TIER.creator);
+  // and ownFolder is inert now rather than removed, so both call sites get the same answer
+  assert.equal(requiredTierFor(['share']), requiredTierFor(['share'], { ownFolder: true }));
 });
 
 test('SOW-108: a superadmin auto-merges any path they touch, including house/** and Tier S', () => {
@@ -571,30 +585,29 @@ test('sow-293: a Content Creator posting an own-folder SHARE => pass', () => {
   assert.equal(d.autoMerge, true);
 });
 
-test('sow-293: contributing a share to ANOTHER member\'s folder still requires creator', () => {
-  // The half the ruling did NOT change, and the one a future refactor is most likely to relax by accident,
-  // because it runs through the same requiredTierFor. It gets the strict default by not opting in.
+test('sow-323: contributing a share to ANOTHER member\'s folder needs that owner\'s approving review', () => {
+  // sow-293 refused this outright at the tier. With one paid plan there is no tier left to refuse it, so the
+  // control is the folder owner's review, and this asserts the refusal did not simply vanish.
   const d = decide({ paths: ['members/someone-else/shares/x.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
-  assert.equal(d.check, 'fail', 'a share in someone else\'s stream was never part of the member-floor ruling');
-  assert.equal(d.label, 'rejected-not-creator');
+  assert.equal(d.check, 'fail', 'a share in someone else\'s stream still does not land unreviewed');
+  assert.equal(d.label, 'contribution-pending-owner');
 });
 
-test('sow-293: a share bundled with a comment rides the member floor in the OWN folder', () => {
-  // Both types now sit on the member floor, so the mixed set relaxes. Pinned because the old rule was the
-  // opposite and the bundling case is exactly where a share used to be able to hide.
+test('sow-323: a bundle of own-folder types rides the member floor; an unclassified path in it does not', () => {
   const d = decide({
-    paths: ['members/octocat/shares/2026-08-11-hello.md', 'members/octocat/comments/c.md'],
+    paths: ['members/octocat/shares/2026-08-11-hello.md', 'members/octocat/comments/c.md', 'members/octocat/posts/p/index.md'],
     role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member,
   });
-  assert.equal(d.check, 'pass');
+  assert.equal(d.check, 'pass', 'shares, comments and posts are all on the member floor now');
 
-  // ...but bundling a share with a POST still demands creator: the post is what raises the floor.
-  const withPost = decide({
-    paths: ['members/octocat/shares/s.md', 'members/octocat/posts/p/index.md'],
+  // The discriminating half: one path this gate cannot classify still raises the floor, so the pass above is
+  // not simply "everything passes".
+  const withMystery = decide({
+    paths: ['members/octocat/shares/s.md', 'members/octocat/mystery/m.md'],
     role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member,
   });
-  assert.equal(withPost.check, 'fail', 'a post in the bundle must still raise the floor to creator');
-  assert.equal(withPost.label, 'rejected-not-creator');
+  assert.equal(withMystery.check, 'fail', 'an unclassified path in the bundle must still raise the floor');
+  assert.equal(withMystery.label, 'rejected-not-creator');
 });
 
 test('sow-293: contentTypesTouched CLASSIFIES a share, and still reports anything else as TYPE_OTHER', () => {
@@ -612,13 +625,15 @@ test('sow-293: contentTypesTouched CLASSIFIES a share, and still reports anythin
   assert.deepEqual(contentTypesTouched(['members/someone-else/shares/x.md'], 'octocat'), []);
 });
 
-test('sow-293: the share relaxation is OPT-IN, so the default requiredTierFor is unchanged', () => {
-  // The whole safety of this change rests on the default staying strict, since the contribution call site
-  // gets it by simply not opting in. If this ever flips, a share reaches the member floor everywhere.
-  assert.equal(requiredTierFor(['share']), TIER.creator, 'the DEFAULT must stay strict');
-  assert.equal(requiredTierFor(['share'], { ownFolder: true }), TIER.member);
-  assert.equal(requiredTierFor(['share', 'comment'], { ownFolder: true }), TIER.member);
-  assert.equal(requiredTierFor(['share', 'post'], { ownFolder: true }), TIER.creator, 'a post still raises the floor');
+test('sow-323: ownFolder is INERT, and the unclassified fallback does not relax under it either', () => {
+  // sow-293 made the share relaxation opt-in, so the default stayed strict and the contribution call site got
+  // the strict answer by not opting in. With one paid plan both call sites want the same answer, so the
+  // parameter is inert. It is KEPT in the signature rather than removed, and this is the pin that says so: if
+  // somebody re-introduces a per-type floor, these equalities break and they are told, instead of the
+  // contribution site silently changing behaviour.
+  for (const set of [['share'], ['comment'], ['post'], ['share', 'comment'], ['share', 'post']]) {
+    assert.equal(requiredTierFor(set), requiredTierFor(set, { ownFolder: true }), JSON.stringify(set));
+  }
   assert.equal(requiredTierFor([TYPE_OTHER], { ownFolder: true }), TIER.creator, 'the unclassified fallback must not relax');
 });
 

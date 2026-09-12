@@ -373,19 +373,27 @@ function emptyLineHtml(empties, p, firstIssue, links) {
 // paid member, and per-recipient targeting would break the single frozen issue. OWNER 2026-08-21: the CTA is
 // ON by default (renders when there is editorial content and the compile has not set ctx.membershipCta ===
 // false), so a compile suppresses a given issue by passing false rather than opting each one in. The COPY is
-// the owner's, from the design mockup, corrected on one clause: it names comments and the members Discord
-// (paid-gated) and publishing under the Content Creator plan (sow-185), and it deliberately does NOT claim
-// "saved collections", which SOW-077 gives a FREE signed-in member (the /membership/activity route authorizes
-// with authorizeMemberCheap, not authorizePaid). That accuracy is pinned by a guard, because the mockup keeps
-// the false collections claim in two places and a future re-derivation would reintroduce it.
+// the owner's, from the design mockup, corrected on two clauses: it names comments and the members Discord
+// (paid-gated) and publishing (see below), and it deliberately does NOT claim "saved collections", which
+// SOW-077 gives a FREE signed-in member (the /membership/activity route authorizes with authorizeMemberCheap,
+// not authorizePaid). That accuracy is pinned by a guard, because the mockup keeps the false collections claim
+// in two places and a future re-derivation would reintroduce it.
+//
+// sow-323: THERE IS ONE PAID PLAN. The owner collapsed the two paid plans on 2026-09-12, so publishing is part
+// of the plan this mail is selling, not a second one a reader must step up to. The copy therefore names the
+// paid plan (bound to tiers.mjs, never spelled) instead of contrasting two, and the link stops offering a
+// comparison, because there is nothing left to compare. The publishing clause carries the audience rule with
+// it: a member item lands members-only and a superadmin decides what becomes public, so "publishing" on its
+// own would read as a promise of a public page. This copy names no revenue share: /revenue-model/ is the page that
+// explains it, and the CAN-SPAM position allows this block exactly one link.
 function membershipCtaHtml(p, links) {
   const href = escapeHtml(trackUrl('/membership/', links, 'membership-cta'));
   return `<!--membership-cta-->`
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:18px">`
-    + `Membership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the ${tierLabel(TIER.creator)} plan. `
-    + `<a href="${href}" style="color:${p.footerLink};text-decoration:underline">Compare plans</a>`
+    + `A ${tierLabel(TIER.member)} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review. `
+    + `<a href="${href}" style="color:${p.footerLink};text-decoration:underline">What membership includes</a>`
     + `</div>`
     + `</td></tr></table>`
     + `<!--/membership-cta-->`;
@@ -580,7 +588,7 @@ export function renderIssue(issue, ctx = {}) {
   const emptyText = empties.length ? `\n\n${emptyPhrase(empties, firstIssue)}` : '';
   // The text-side CTA mirrors the html: one modest line, after all editorial, only when the html renders it.
   const ctaText = showCta
-    ? `\n\nMembership adds comments on any item and the members Discord. Publishing your own prompts, skills and projects is part of the ${tierLabel(TIER.creator)} plan. Compare plans: ${trackUrl('/membership/', links, 'membership-cta')}`
+    ? `\n\nA ${tierLabel(TIER.member)} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review. What membership includes: ${trackUrl('/membership/', links, 'membership-cta')}`
     : '';
 
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n`

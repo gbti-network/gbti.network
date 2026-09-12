@@ -1,13 +1,16 @@
 ---
-// sow-225: the MCP Server guide, reached from the curator-only tile on the WorkBench. A Curator feature: the
-// steps show to a signed-in member whose paid tier is creator (presentational, like the account page's share
-// card); everyone else sees one line and the membership link. Every step was performed against the bundled
-// server before it was written (see src/lib/mcp-guide.ts). The numbered-step markup is the extension page's.
+// sow-225: the MCP Server guide, reached from the paid-only tile on the WorkBench. sow-323: it needs a PAID
+// membership, not the top paid tier, because the two paid plans became one; the steps show to a signed-in member
+// whose paid tier meets `member` (presentational, like the account page's share card), and everyone else sees one
+// line and the membership link. Every step was performed against the bundled server before it was written (see
+// src/lib/mcp-guide.ts). The numbered-step markup is the extension page's.
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { extensionZipUrl, EXTENSION } from '../../../lib/extension';
 import { MCP_FILE_IN_PACKAGE, claudeCodeAddCommand, agentConfigJson, mcpPrompt, mcpToolNames, mcpToolGroups } from '../../../lib/mcp-guide';
+import { tierDisplay } from '../../../lib/tiers'; // sow-323: the plan NAME comes from the registry, never spelled here
 const groups = mcpToolGroups(mcpToolNames());
 const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
+const paidLabel = tierDisplay('member')?.label ?? 'paid member'; // the fallback still reads as a sentence
 ---
 <BaseLayout title="MCP Server" description="Set up the GBTI Network MCP server so your AI agent can author and publish your content." noindex={true}>
   <section class="band">
@@ -18,7 +21,7 @@ const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
       <p class="mcp-back"><a class="link" href="/workbench/">Back to the WorkBench</a></p>
 
       <div class="mcp-gate" data-mcp-gate>
-        <p class="body">The MCP server is a Curator feature. Sign in with a Curator membership to see the setup steps, or read what the tier includes on the <a class="link" href="/membership/">membership page</a>.</p>
+        <p class="body">The MCP server needs an active paid membership. Sign in as a {paidLabel} to see the setup steps, or read what membership includes on the <a class="link" href="/membership/">membership page</a>.</p>
       </div>
 
       <div class="steps mt40" data-mcp-steps hidden>
@@ -58,7 +61,7 @@ const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
 
       <div class="mcp-tools mt40" data-mcp-steps hidden>
         <h2 class="h2">What the server can do</h2>
-        <p class="body-sm muted">{toolCount} tools, read from the server's own definitions when this page is built. Publishing goes through the same gate as the WorkBench: an active membership with the Curator role.</p>
+        <p class="body-sm muted">{toolCount} tools, read from the server's own definitions when this page is built. Publishing goes through the same gate as the WorkBench: an active paid membership. What you publish reaches members first, and becomes public after <a class="link" href="/submit-content/">editorial review</a>.</p>
         <div class="mcp-groups">
           {groups.map((g) => (
             <div class="mcp-group">
@@ -72,14 +75,17 @@ const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
   </section>
 
   <script>
-    // Presentational gate, the account page's rule: shown only when the member signal says paidTier is creator; an
-    // absent or unknown tier hides it. The Worker gates the real actions (login and publish) regardless.
+    // Presentational gate, the account page's rule: shown only when the member signal says the viewer holds a
+    // paid tier. sow-323 widened it from the top paid tier to any paid membership; meetsTier is the fail-closed
+    // axis test, so an absent or unrecognized tier still hides the steps. The Worker gates the real actions
+    // (login and publish) regardless.
     import { currentIdentity, readMemberSignal, onMemberSignal } from '../../../lib/member-signal';
+    import { TIER, meetsTier } from '../../../../membership/tiers.mjs'; // sow-323: the tier axis, bound not spelled
     function render(s: any) {
-      const isCreator = !!(s && s.login && s.paidTier === 'creator');
-      document.querySelectorAll<HTMLElement>('[data-mcp-steps]').forEach((el) => { el.hidden = !isCreator; });
+      const isPaid = !!(s && s.login && meetsTier(s.paidTier, TIER.member));
+      document.querySelectorAll<HTMLElement>('[data-mcp-steps]').forEach((el) => { el.hidden = !isPaid; });
       const gate = document.querySelector<HTMLElement>('[data-mcp-gate]');
-      if (gate) gate.hidden = isCreator;
+      if (gate) gate.hidden = isPaid;
     }
     render(currentIdentity(readMemberSignal()));
     onMemberSignal(render);

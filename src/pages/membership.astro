@@ -2,34 +2,46 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import MembershipTiers from '../components/membership/MembershipTiers.astro';
 import { REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
-import { FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT, HOLD_DAYS } from '../lib/membership';
+// sow-323: INVITE_PCT is deliberately NOT imported here any more. The owner asked for the rate out of the
+// plan copy and replaced by the link to the full breakdown, so this page states the mechanism and points at
+// /revenue-model/, which owns every number.
+import { FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, HOLD_DAYS } from '../lib/membership';
 import { tierDisplay, benefitProse } from '../lib/tiers';
 
-// sow-201 (2026-08-26): the tier-difference answer is COMPOSED from house/membership-tiers.yml, never typed.
-// It used to be hand-written prose, and it went on selling "Curate your feed" as a Network Member benefit for
-// eight days after the owner ruled it out, two answers below one that tells the reader the personalized feed
-// is FREE. The header note below already claimed every benefit bullet comes from the yml; this is what makes
-// that true of the FAQ as well. Fail CLOSED at build rather than render half a sentence.
-const memberTier = tierDisplay('member');
-const creatorTier = tierDisplay('creator');
-if (!memberTier || !creatorTier) throw new Error('membership.astro: house/membership-tiers.yml is missing the member or creator tier');
+// sow-201 (2026-08-26): the benefit clause in the plan answer below is COMPOSED from
+// house/membership-tiers.yml, never typed. It used to be hand-written prose, and it went on selling "Curate
+// your feed" as a paid benefit for eight days after the owner ruled it out, two answers below one that tells
+// the reader the personalized feed is FREE. The header note below already claimed every benefit bullet comes
+// from the yml; this is what makes that true of the FAQ as well.
+//
+// sow-323 (2026-09-12): one paid plan, so the `creator` lookup and the guard that threw when either tier was
+// missing are both gone. Nothing replaces the guard: parseTierDisplay requires every axis tier and
+// src/lib/tiers.ts throws at import on a malformed file, so a missing `member` entry reds the build long
+// before this line runs.
+const memberTier = tierDisplay('member')!;
 
-// sow-201: the membership page is the plans + the FAQ, nothing else (owner, 2026-08-10). The three tiers ARE
-// the hero. Every price, label, tagline, and benefit bullet still comes from house/membership-tiers.yml via
-// MembershipTiers (the legal single source of truth). The 90-day trial is retired; the $0 Free tier is the
-// no-card entry, and account creation goes through /login/ (Turnstile + GitHub live there).
+// sow-201: the membership page is the plans + the FAQ, nothing else (owner, 2026-08-10). The plans ARE the
+// hero, and since sow-323 that is the OFFERED ones: Free and the single paid plan. Every price, label,
+// tagline, and benefit bullet still comes from house/membership-tiers.yml via MembershipTiers (the legal
+// single source of truth). The 90-day trial is retired; the $0 Free tier is the no-card entry, and account
+// creation goes through /login/ (Turnstile + GitHub live there).
 const faqs = [
   {
     q: 'Do I need a credit card to start?',
     a: 'No. Create a free account with GitHub to browse the network, follow creators and topics, save items, and use the personalized feed and the new-tab extension. You add a card only when you upgrade to a paid plan.',
   },
   {
-    q: `What is the difference between a Network Member and a ${tierDisplay('creator')?.label ?? 'Curator'}?`,
-    a: `A ${memberTier.label} joins the conversation: ${benefitProse(memberTier)}. A ${creatorTier.label} does all of that and more: ${benefitProse(creatorTier)}. See the plans above for pricing, and the revenue answer below for how earning works on each.`,
+    // sow-323: this used to ask what separated the two paid plans. There is one, so the question described a
+    // choice no reader has. The benefit clause stays composed from the registry rather than typed, and the
+    // sentence after it says who reviews and what is exempt, which the bullet cannot carry in a line. It
+    // names no position in that list and repeats none of its wording, so a reordered or reworded yml cannot
+    // make it read wrong.
+    q: `What do I get as a ${memberTier.label}?`,
+    a: `There is one paid plan, and this is what it carries: ${benefitProse(memberTier)}. Editorial review means a superadmin reads the item before it goes public, and it covers articles, projects, and prompts only: a profile or a comment publishes without one. ${memberTier.label}s also share in the revenue program, which the revenue answer below explains.`,
   },
   {
     q: 'What can I do with a free account?',
-    a: 'Browse the network, the news feed, and public shares; follow creators, sources, and topics; save items and build collections; and use the personalized feed and the new-tab extension. Commenting, publishing, and the community are paid plans.',
+    a: `Browse the network, the news feed, and public shares; follow creators, sources, and topics; save items and build collections; and use the personalized feed and the new-tab extension. Commenting, publishing, and the community come with the ${memberTier.label} plan.`,
   },
   {
     q: 'Can I cancel?',
@@ -37,7 +49,7 @@ const faqs = [
   },
   {
     q: 'How does revenue share work?',
-    a: `When someone joins, the network looks at the content that brought them in and the content that closed the signup. The first earns its author ${FIRST_TOUCH_PCT}, the last earns ${LAST_TOUCH_PCT}, and a fixed ${COLLAB_POOL_PCT} pool is shared by the members who improved or discussed those items. Separately, if you bring someone in with your personal invite link, you earn a flat ${INVITE_PCT} lifetime commission paid from the platform share, so it never reduces what content owners earn. All distributions pay out after a ${HOLD_DAYS}-day hold.`,
+    a: `When someone joins, the network looks at the content that brought them in and the content that closed the signup. The first earns its author ${FIRST_TOUCH_PCT}, the last earns ${LAST_TOUCH_PCT}, and a fixed ${COLLAB_POOL_PCT} pool is shared by the members who improved or discussed those items. Separately, if you bring someone in with your personal invite link, you earn a flat lifetime commission paid from the platform share, so it never reduces what content owners earn. All distributions pay out after a ${HOLD_DAYS}-day hold. The revenue model page carries the full breakdown, with the rates and a worked example.`,
   },
   {
     q: 'Who runs GBTI?',
@@ -45,7 +57,7 @@ const faqs = [
   },
 ];
 ---
-<BaseLayout title="Membership" description={`Join the GBTI Network. Reading is free; Network Member and ${tierDisplay('creator')?.label ?? 'Curator'} plans add comments, community, publishing, and revenue share.`}>
+<BaseLayout title="Membership" description={`Join the GBTI Network. Reading is free; the ${memberTier.label} plan adds comments, community, publishing, and a share in the revenue.`}>
   <!-- ============ HERO = THE PLANS ============ -->
   <section class="band tint" id="join">
     <div class="wrap">

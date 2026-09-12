@@ -5,9 +5,13 @@
 // data and copy. This page is the pattern the others converged on: no benefit sentence is typed here, the
 // list comes from house/membership-tiers.yml through tierDisplay().
 //
-// IT EXISTS BECAUSE THE PAGE BEFORE IT ADVERTISED CREATOR BENEFITS WHILE GRANTING THE MEMBER TIER. The label
-// and the price were right (both from tierDisplay); the benefit PROSE was inherited from the Creator page it
-// was copied from. That is exactly what a shared template with no tier sentence of its own makes impossible.
+// IT EXISTS BECAUSE THE PAGE BEFORE IT ADVERTISED ANOTHER TIER'S BENEFITS WHILE GRANTING THE MEMBER TIER. The
+// label and the price were right (both from tierDisplay); the benefit PROSE was inherited from the page it was
+// copied from. That is exactly what a shared template with no tier sentence of its own makes impossible.
+//
+// sow-323 (2026-09-12): the owner collapsed the two paid plans into one, so there is no longer a tier above
+// this one to point at. The answers that told the reader publishing lived at the higher tier now say that this
+// tier publishes, which is what house/membership-tiers.yml says.
 //
 // The FAQ answers the OFFER first (what am I getting, will I be charged, what happens when the year ends, how
 // do I claim it), then the network. NO BENEFIT LIST IN THE FAQ, NO REVENUE COPY (banned-patterns.md #2).
@@ -17,10 +21,12 @@
 // this line to check that the campaign's tier and this page's tier agree.
 import InviteLander from '../../components/invite/InviteLander.astro';
 import { BILLING_PERIOD } from '../../lib/membership';
-import { tierDisplay, tierLabel, TIER } from '../../lib/tiers'; // sow-316: tierLabel NAMES a tier; tierDisplay binds this page's product
+// sow-323: tierLabel/TIER are gone from this import with the answer that named the other paid tier. There is
+// one paid plan now, so there is no second product for this page to name.
+import { tierDisplay } from '../../lib/tiers';
 
 const memberTier = tierDisplay('member');
-const TIER_LABEL = memberTier?.label ?? 'Network Member';
+const TIER_LABEL = memberTier?.label ?? 'Network Supporter';
 const TIER_PRICE_LABEL = `$${memberTier?.priceAnnual ?? 50}`;
 const memberBenefits = memberTier?.benefits ?? [];
 
@@ -30,8 +36,8 @@ const faqs = [
   ['What happens when the free year ends?', `Nothing happens on its own. ${TIER_LABEL} is ${TIER_PRICE_LABEL} per ${BILLING_PERIOD} if you decide to continue, and you will not be charged unless you choose to.`],
   ['How do I claim it?', 'Sign in with GitHub from this page. Your coupon is already applied, so there is nothing to enter or remember.'],
   ['Can I pass this on to someone else?', 'It is meant for you, but the link works for whoever opens it first, so treat it as personal rather than forwardable.'],
-  ['What is the GBTI Network?', `A professional publishing network for developers. Members read and discuss the work published across it and take part in a private community. Publishing your own articles, projects and prompts is the ${tierLabel(TIER.creator)} tier.`],
-  ['Is all content public or private?', 'Both. Some work is published openly, and some is network-only. For network-only work, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
+  ['What is the GBTI Network?', 'A professional publishing network for developers. Members read and discuss the work published across it, publish their own articles, projects and prompts, and take part in a private community.'],
+  ['Is all content public or private?', 'Both, and members come first. New work goes out to members, and a superadmin reviews it before it appears on the public website. For work that stays members-only, a stub with a short description appears on the public website, while the full content is readable by members inside the login-gated browser extension.'],
   ['Are comments on public-facing content also public?', 'By default, they are not, and can only be read inside the extension by other members. There is, however, the option to make a comment fully public.'],
   ['What does GBTI stand for?', 'God Bless The Internet; a phrase that expresses appreciation and goodwill toward the continued growth and enrichment of the internet.'],
   // The founding story is a FACT about GBTI and stays true for any audience (owner, 2026-08-15).
@@ -41,7 +47,7 @@ const faqs = [
 
 <InviteLander
   title="Your first year on us"
-  description="A private invitation: a full year at the Network Member tier, first year free with your coupon."
+  description={`A private invitation: a full year at the ${TIER_LABEL} tier, first year free with your coupon.`}
   tierLabel={TIER_LABEL}
   tierPriceLabel={TIER_PRICE_LABEL}
   benefits={memberBenefits}
@@ -51,7 +57,7 @@ const faqs = [
   navCta={{ href: '#claim', label: 'Claim free year' }}
   hero={{
     titleHtml: 'Your first year<br />on us.',
-    lead: `GBTI is a professional publishing network for developers. Read the work published across it and join the conversation: a full year at the ${TIER_LABEL} tier, no card required.`,
+    lead: `GBTI is a professional publishing network for developers. Read the work published across it, publish your own, and join the conversation: a full year at the ${TIER_LABEL} tier, no card required.`,
     ctaLabel: 'Claim your free year',
     // The design's four mono chips: facts about the OFFER (how billing works), not benefit claims.
     meta: ['no card', 'no auto-bill', 'cancel anytime', 'github sign-in'],
@@ -64,8 +70,10 @@ const faqs = [
     <section class="ci-sec">
       <div class="ci-close">
         <h2>Ready when you are</h2>
+        <!-- A short recap of the registry bullets above it, never a claim of its own (sow-323 added
+             publishing, which is the fifth benefit in house/membership-tiers.yml). -->
         <p>Your coupon covers the first year. Sign in with GitHub and you are in: commenting, Discord,
-          and members-only reading.</p>
+          members-only reading, and publishing your own work to the network.</p>
         <a href="#claim" class="btn-primary">Claim your free year</a>
         <!-- The design ended this line with "expires when the invite closes". DROPPED, because it is not
              true: every live coupon carries `expiresAt: null`, so none of them expires. -->

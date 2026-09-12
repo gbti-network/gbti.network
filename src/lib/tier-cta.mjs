@@ -47,12 +47,12 @@ export function tierCta({ key, label = key, signedIn = false, myTier = 'none', m
     };
   }
 
-  // sow-293: apply-only. Signed in or out, the answer is the application page, never a checkout. Signed-out
-  // readers are sent there too rather than to /login/ first, because the intake page asks them to sign in
-  // itself and explains why it needs to.
-  if (key === 'creator') {
-    return { text: `Apply to become a ${label}`, href: CREATOR_APPLICATION_PATH, checkout: false, disabled: false, primary: false };
-  }
+  // sow-323: the apply-only branch is GONE. sow-293 sent the creator card to an application page and never to a
+  // checkout; the owner then collapsed the two paid plans into one on 2026-09-12, so no card offers that tier at
+  // all and nothing can reach this function with key 'creator' from a pricing surface (offeredTiers filters it
+  // out before render). It is not replaced with a guard that pretends otherwise: if a caller does pass 'creator',
+  // it falls through to the ordinary paid branches below, which is the honest answer for a tier that has a price
+  // in the registry, rather than an invitation to apply for something that no longer exists.
 
   if (signedIn) {
     return { text: myRank > 0 ? `Upgrade to ${label}` : `Join as ${label}`, href: null, checkout: true, disabled: false, primary: true };

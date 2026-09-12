@@ -79,9 +79,10 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
           </a>
         </div>
 
-        {/* sow-218: ONE column now, composer above activity. The composer is CREATOR-ONLY and starts hidden, so the
+        {/* sow-218: ONE column now, composer above activity. The composer is PAID-ONLY and starts hidden, so the
             fail-closed direction is the rendered default: an unresolved tier shows nothing rather than briefly
-            offering a control the server would refuse. render() reveals it only on paidTier === 'creator'. */}
+            offering a control the server would refuse. sow-323: the two paid plans became one, so render()
+            reveals it to any paid member rather than to the top tier alone. */}
         <div class="hub-cols">
           {/* sow-314: the Saturday Shop Talk seat. Enrollment is automatic (every paid and trial member is a guest on the
               event at their GitHub email); this card shows the member which address the seat is under, lets them step
@@ -144,6 +145,7 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
   <script>
     import { onMemberSignal, currentIdentity, readMemberSignal, signOutWeb } from '../lib/member-signal';
     import { shoptalkCardState, shoptalkAfterAction } from '../lib/shoptalk-card-core.mjs'; // sow-314
+    import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-323: the tier axis, bound not spelled
 
     const out = document.querySelector('[data-account-signedout]');
     const inn = document.querySelector('[data-account-signedin]') as HTMLElement | null;
@@ -152,7 +154,7 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
     const statusEl = document.querySelector('[data-account-status]');
     const profileTile = document.querySelector('[data-account-profile]') as HTMLAnchorElement | null;
     const adminTile = document.querySelector('[data-account-admin]') as HTMLElement | null;
-    const shareCard = document.querySelector('[data-share-card]') as HTMLElement | null; // sow-218: creator-only
+    const shareCard = document.querySelector('[data-share-card]') as HTMLElement | null; // sow-323: any paid member
     const streamCard = document.querySelector('[data-stream-card]') as HTMLElement | null; // sow-218: live member stream
     const LABELS: Record<string, string> = { paid: 'Paid member', trialing: 'Free trial', expired: 'Expired', cancelled: 'Cancelled', none: 'No active membership', banned: 'Suspended', unknown: 'Signed in' };
     const RANK: Record<string, number> = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -169,13 +171,14 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
       if (statusEl) statusEl.textContent = LABELS[s.membership] || LABELS.unknown;
       if (profileTile) { profileTile.href = '/members/' + encodeURIComponent(s.login) + '/'; profileTile.hidden = false; }
       if (adminTile) adminTile.hidden = (RANK[s.role] ?? 0) < RANK.moderator; // staff-only, role from the oracle
-      // sow-218: publishing a Share is a Content Creator perk (sow-185), so the composer is tier-gated. Compared
-      // to the exact string rather than a rank, and defaulting to hidden, so an absent, unknown or newly added
-      // tier hides it: the same "absent means less privilege" rule membership/tiers.mjs applies server-side.
-      // This is a presentational gate. The Worker share endpoint remains the real boundary (sow-218 Phase 2).
-      const isCreator = s.paidTier === 'creator';
-      if (shareCard) shareCard.hidden = !isCreator;
-      if (isCreator) {
+      // sow-218 gated the composer on the top paid tier, because publishing a Share was a perk of it. sow-323
+      // collapsed the two paid plans into one, so sharing belongs to EVERY paid member and the gate widened to
+      // match. meetsTier is the fail-closed axis test: an absent, unknown or newly added tier ranks below
+      // `member` and still hides the card, which is the "absent means less privilege" rule the server applies.
+      // This stays a presentational gate. The Worker share endpoint remains the real boundary (sow-218 Phase 2).
+      const canShare = meetsTier(s.paidTier, TIER.member);
+      if (shareCard) shareCard.hidden = !canShare;
+      if (canShare) {
         // Point the collapsed share bar's avatar at the member's GitHub avatar (same convention as the homepage bar).
         document.querySelectorAll<HTMLImageElement>('.hsb-av').forEach((img) => {
           img.src = 'https://github.com/' + encodeURIComponent(String(s.login)) + '.png?size=68';
@@ -188,7 +191,7 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
       // directly above is the point, not a security boundary.
       const showStream = s.membership === 'paid' || s.membership === 'trialing';
       if (streamCard) streamCard.hidden = !showStream;
-      mountHub(s, isCreator, showStream);
+      mountHub(s, canShare, showStream);
       mountShoptalk(s);
     }
 
@@ -235,10 +238,10 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
     }
 
     // sow-218: mount only what this member can actually use. Latest Activity is the server-rendered FeedView and
-    // needs no client at all, so a signed-in member who is neither a creator nor paid loads no client-ui bundle
-    // on this page. Each element is imported only when its card is shown.
-    async function mountHub(s: any, isCreator: boolean, showStream: boolean) {
-      if (mounted || (!isCreator && !showStream)) return;
+    // needs no client at all, so a signed-in member who can neither share nor read the stream loads no client-ui
+    // bundle on this page. Each element is imported only when its card is shown.
+    async function mountHub(s: any, canShare: boolean, showStream: boolean) {
+      if (mounted || (!canShare && !showStream)) return;
       mounted = true;
       const signupBase = document.documentElement.dataset.signupBase || '';
       const { createWorkbenchClient } = await import('../lib/workbench-client');
@@ -248,7 +251,7 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
       document.querySelectorAll('.hub-load').forEach((el) => el.setAttribute('hidden', ''));
       // Defining an element upgrades its static tag; each renders on the setClient subscriber fan-out.
       await Promise.all([
-        isCreator ? import('../../client-ui/src/elements/gbti-share-composer.mjs') : null,
+        canShare ? import('../../client-ui/src/elements/gbti-share-composer.mjs') : null,
         showStream ? import('../../client-ui/src/elements/gbti-shares-feed.mjs') : null,
       ].filter(Boolean));
     }

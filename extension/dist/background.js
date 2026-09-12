@@ -20005,7 +20005,11 @@ var TIER = Object.freeze({
 });
 var TIER_LABEL = Object.freeze({
   [TIER.none]: "",
-  [TIER.member]: "Network Member",
+  // sow-323: renamed from "Network Member" on 2026-09-12, when the owner collapsed the two paid plans into one.
+  [TIER.member]: "Network Supporter",
+  // Kept, and still accurate: nothing sells or applies for this tier any more, but a superadmin grants it
+  // silently to a supporter who no longer needs editorial review, and staff resolve to it through their role.
+  // It names an internal trust level now, not a plan, so it should not appear in copy a visitor reads.
   [TIER.creator]: "Curator"
 });
 var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
@@ -21253,8 +21257,8 @@ var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddi
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
-var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
-var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Supporter]({member-url}).** Originally published on [gbti.network]({url}).";
+var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Supporter.** Originally published on [gbti.network]({url}).";
 var DEFAULT_DEVTO_BODY = "{body}";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";

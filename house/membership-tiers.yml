@@ -50,8 +50,8 @@ tiers:
     revenue: ""
 
   - key: member
-    label: Network Member
-    tagline: Join the community and start earning from your invites.
+    label: Network Supporter
+    tagline: Join the community, publish your work, and share in the revenue.
     priceMonthly: 5
     priceAnnual: 50
     priceEnv:
@@ -72,10 +72,20 @@ tiers:
         description: Read the posts and comment bodies that are hidden from logged-out visitors.
       - label: See the member-only Shares stream
         description: Read the members-only side of the Shares stream, not just the public links every visitor sees.
-    revenue: Earn 10% for life on the paid revenue of members you invite.
+      - label: Publish articles, projects and prompts, members first and public after editorial review
+        description: Write in the WorkBench and publish to the network. Work goes out to members first; a superadmin reviews it before it appears on the public site.
+    revenue: Supporters share in the [revenue program](/revenue-model/).
 
+  # sow-323: NOT OFFERED since 2026-09-12. The owner collapsed the two paid plans into one, so nothing sells or
+  # applies for this tier any more. The entry STAYS, and deleting it would break the build in three places
+  # (npm test, npm run check:content, then astro build: parseTierDisplay requires every axis tier), but that is
+  # not the only reason to keep it. The tier is still real internally: a superadmin grants it silently to a
+  # member who no longer needs editorial review, staff resolve to it through their role, and the legacy Stripe
+  # price maps to it. Its label is what those holders carry, so it stays accurate even though no card shows it.
+  # The benefits below are frozen as the historical record of what the plan offered; they are not advertised.
   - key: creator
     label: Curator
+    offered: false
     tagline: Publish, get discovered, and share in the revenue.
     priceMonthly: 15
     priceAnnual: 150

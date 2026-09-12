@@ -1,3 +1,12 @@
+// sow-323 (2026-09-12): THE APPLICATION FLOW IS RETIRED AND THIS MODULE IS EFFECTIVELY INERT. The owner
+// collapsed the two paid plans into one, so nothing SELLS or OFFERS the Curator tier any more: it survives as
+// an internal trust level a superadmin grants silently, and a member has nothing left to apply for. The intake
+// itself (the /creator-application/ page and its Worker route) is torn down in a LATER phase, which is exactly
+// why this notice is KEPT and unchanged: while the intake still stands, removing the owner's notification would
+// leave it able to accept an application nobody is told about. Everything below therefore stays as built. It is
+// owner-facing mail and it names no plan a visitor reads, so there is no wrong copy here to repair; this note
+// is the only change. Do not wire it to a new surface and do not extend it.
+//
 // sow-293: the owner-facing CREATOR APPLICATION notice. One pure helper, node-free (no fetch, no KV), so
 // what the owner reads is unit-tested without a network. Sibling of membership/coupon-notify.mjs and
 // deliberately shaped like it.

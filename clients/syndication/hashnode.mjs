@@ -24,7 +24,11 @@ const SITE = 'https://gbti.network';
 const HASHNODE_GQL = 'https://gql.hashnode.com';
 const PUBLISH_MUTATION = 'mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { id url slug } } }';
 // The built-in byline; the Worker normally pre-renders the hashnode-intro template into item.hashnodeIntro.
-const DEFAULT_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
+// sow-323: the plan is named "Network Supporter" since 2026-09-12. Same reasoning as the dev.to adapter: the
+// line is published on another platform under the GBTI name, and the name stays a literal because its twin
+// (DEFAULT_HASHNODE_INTRO in membership/syndication-config-core.mjs) is one. That twin is the copy that ships;
+// this constant is the fallback for a null template.
+const DEFAULT_INTRO = '**By [{fullName}]({member-url}), GBTI Network Supporter.** Originally published on [gbti.network]({url}).';
 
 function absoluteImage(image) {
   const v = String(image || '').trim();

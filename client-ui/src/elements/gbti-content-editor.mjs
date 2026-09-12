@@ -6,7 +6,7 @@
 
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
-import { oneClickPublicView, makePublicPatch, makePublicPrompt } from '../one-click-public-core.mjs'; // sow-293
+import { oneClickPublicView, makePublicPatch, makePublicPrompt, audienceControl } from '../one-click-public-core.mjs'; // sow-293, sow-323
 import { editorStatus, mediaSummary } from '../editor-core.mjs';
 import { splitRailSections } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import { gatherInput } from '../form.mjs';
@@ -272,6 +272,9 @@ class GbtiContentEditor extends GbtiElement {
     try {
       const st = await this.client.status();
       membership = st?.membership ?? 'unknown';
+      // sow-323: the audience control needs the paid tier. Absent means "not a trusted author", which lands on
+      // the locked states rather than unlocking the switch (see audienceControl).
+      this._paidTier = st?.paidTier ?? null;
       // SOW-145: house content publishes directly (fork-staged house drafts are deferred), so Save-draft is
       // hidden in house scope; a superadmin editing a house item Publishes (which auto-merges via SOW-108).
       canStage = this.itemScope !== 'house' && (membership === 'unknown' || st?.canStageDrafts === true);
@@ -294,6 +297,12 @@ class GbtiContentEditor extends GbtiElement {
         if (t && Array.isArray(t.members)) authorMembers = t.members;
       } catch { /* not superadmin, or unsupported on this host -- no Author section */ }
     }
+    // sow-323: the audience control needs the same superadmin signal the Author section uses, and it renders in
+    // a different method, so it is persisted rather than recomputed from a second, weaker role test. Note this
+    // is only attempted for an EXISTING item (authorTargets needs one), which is why the audience decision also
+    // accepts the paid tier: a superadmin resolves to the trusted-author tier through their role
+    // (membership/tier-gate.mjs), so they keep the free switch on a brand new item too.
+    this._isSuperadmin = authorMembers != null;
     // The item's own path is where it actually IS, and it is persisted with a draft; the frontmatter author is
     // not (it is not a form field, so gather() drops it on every save). Deriving from the path is what stops an
     // untouched picker from reading as "House / GBTI Network". See authorSelectValue.
@@ -565,6 +574,11 @@ class GbtiContentEditor extends GbtiElement {
         .chip-neutral { background:var(--s-surface-3); color:var(--s-fg-soft); border-color:var(--s-line-2); }
         .visfield { padding-bottom:4px; }
         .visswitch { position:relative; display:grid; grid-template-columns:1fr 1fr; padding:4px; border-radius:7px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); margin-top:2px; }
+  /* sow-323: the locked audience state, for an author who does not choose it (most of them). Same box as
+     the switch so the rail does not jump when the control changes shape. */
+  .vislocked { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line);
+    border-radius:9px; background:var(--surface-2, var(--surface)); font-size:13.5px; }
+  .vislocked svg { width:15px; height:15px; flex:none; color:var(--muted); }
         .visswitch .vs-thumb { position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 4px); border-radius:7px; background:var(--s-surface); box-shadow:0 1px 3px rgba(0,0,0,.12); border:1.5px solid var(--s-line-2); transition:transform .18s cubic-bezier(.3,.7,.4,1); }
         .visswitch[data-active="members"] .vs-thumb { transform:translateX(calc(100% + 4px)); background:var(--s-tint); border-color:var(--s-tint-2); }
         .visswitch .vs-opt { position:relative; z-index:1; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:9px 6px; border:0; background:transparent; font:inherit; font-size:13.5px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; }
@@ -940,9 +954,28 @@ class GbtiContentEditor extends GbtiElement {
 
     // SOW-062 P6: visibility -> segmented switch + optional public-stub sub-block (publicStub is folded in here).
     if (f.kind === 'enum' && f.key === 'visibility') {
-      const isMembers = String(v) === 'members';
+      // sow-323: the audience is a superadmin's decision now, so most authors do not get a free switch. The
+      // decision is a pure function (audienceControl) because it has a case that loses an author their live
+      // page if it is wrong: an ALREADY public item must keep submitting `visibility: public`, or the author's
+      // own edit takes it down. The Worker agrees with this; see pathsNeedingApproval and approvedOnMain.
+      const aud = audienceControl({
+        paidTier: this._paidTier,
+        isSuperadmin: this._isSuperadmin === true,
+        currentVisibility: v,
+        existing: !!this.itemPath,
+      });
+      const isMembers = aud.value === 'members';
       const stubField = this.fields.find((x) => x.key === 'publicStub');
       const stubOn = this._presetBool('publicStub');
+      if (aud.mode !== 'switch') {
+        const icon = isMembers ? LOCK : GLOBE;
+        const word = isMembers ? 'Members only' : 'Public';
+        return `<div class="fld visfield" data-fkey="visibility"${visible ? '' : ' hidden'}><label>Audience</label>
+          <div class="vislocked" data-vislocked>${icon} <b>${word}</b></div>
+          <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
+          <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
+          <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
+      }
       return `<div class="fld visfield" data-fkey="visibility"${visible ? '' : ' hidden'}><label>Visibility</label>
         <div class="visswitch" data-visswitch data-active="${isMembers ? 'members' : 'public'}"><span class="vs-thumb"></span>
           <button class="vs-opt ${isMembers ? '' : 'on'}" data-vis="public" type="button">${GLOBE} Public</button>
