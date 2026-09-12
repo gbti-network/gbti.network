@@ -177,6 +177,15 @@ const EXTRA = [
   // is issued. Do not cite it as a tracked affiliate link, and when the real URL arrives keep the explicit
   // path before any query, per the Cloudways note above.
   ['/outbound/tailscale', 'https://tailscale.com/'],
+
+  // A Share moved between member folders, added 2026-09-12. Moving a Share (sow-183) changes its page address
+  // and leaves nothing at the old one, and shares have no frontmatter redirectFrom for compose-redirects to
+  // read. Two things kept pointing at the old address: the social queue item enqueued at creation, which
+  // baked the URL in and was not re-enqueued by the move, and Cloudflare Pages itself, which keeps serving a
+  // page removed from a deploy for up to seven days, referencing a stylesheet the next deploy deleted, so the
+  // old address rendered unstyled. A zone purge by URL did not evict that copy. A redirect does, because
+  // Pages evaluates _redirects before it looks for the page.
+  ['/shares/atwellpub/20260910215127-google-deepmind-releases-predictions-for-9-billi/', '/shares/gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi/'],
 ];
 for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`); n++; }
 
