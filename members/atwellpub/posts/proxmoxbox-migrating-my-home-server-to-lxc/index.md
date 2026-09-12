@@ -21,11 +21,11 @@ tags:
   - security
   - windows
   - linux
-layout: journal
+layout: editorial
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-08-15T00:00:00.000Z'
-updatedAt: '2026-09-12T18:00:14.321Z'
+updatedAt: '2026-09-12T18:06:42.763Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
