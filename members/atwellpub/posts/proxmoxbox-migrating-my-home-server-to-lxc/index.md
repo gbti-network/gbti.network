@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T21:06:23.052Z'
+updatedAt: '2026-09-12T21:08:59.839Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -56,7 +56,7 @@ This is where Proxmox feels very different from Windows. Windows is mainly built
 
 ## Part 2: What LXC is, and how it differs from a virtual machine
 
-I used the word LXC earlier, which for me was a brand new term when I started my ProxMox journey. It stands for "Linux Containers", plainly.
+I used the word LXC earlier, which for me was a brand new term when I started my Proxmox journey. It stands for "Linux Containers", plainly.
 
 ![pasted-20260911-203944](./images/pasted-20260911-203944.webp "Borrowed meme from: https://www.reddit.com/r/ProgrammerHumor/comments/qq8l3h/dont_shame_me_plz/")
 
@@ -94,7 +94,7 @@ Access to these host endpoints are controlled by policies I define, so only appr
 
 Under the hood, Tailscale creates an encrypted WireGuard connection between my devices and gives each one a stable private address and hostname. On an iPhone, the Tailscale app uses iOS's built-in VPN interface to route that private traffic securely back to the home server.  
 
-The best part about the TailScale solution has been their extremely generous free tier offering that covers nearly all personal usage. I already have several devices connected and host addresses for almost 8 different home server applications (this number seems to keepgrowing as I add more containers to my PoxMoxBox.
+The best part about the Tailscale solution has been their extremely generous free tier offering that covers nearly all personal usage. I already have several devices connected and host addresses for almost 8 different home server applications (this number seems to keep growing as I add more containers to my PoxMoxBox).
 
 ## The final migration; ProxMox in use:
 
