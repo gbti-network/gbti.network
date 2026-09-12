@@ -19,7 +19,7 @@ layout: journal
 coverImage: ./images/status-line-cover.webp
 featured: false
 publishedAt: '2026-09-07'
-updatedAt: '2026-09-08T17:26:51.385Z'
+updatedAt: '2026-09-12T17:59:51.155Z'
 type: post
 author: atwellpub
 ---
