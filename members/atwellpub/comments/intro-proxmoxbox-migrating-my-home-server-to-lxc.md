@@ -2,7 +2,7 @@
 id: intro-proxmoxbox-migrating-my-home-server-to-lxc
 targetType: post
 targetSlug: proxmoxbox-migrating-my-home-server-to-lxc
-createdAt: '2026-09-12T20:44:30.289Z'
+createdAt: '2026-09-12T20:45:42.541Z'
 status: published
 visibility: public
 authorNote: true
