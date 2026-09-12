@@ -165,3 +165,16 @@ test('the editor and the Preview wire Tab and Shift+Tab, and both read lists bac
   assert.ok(!md.includes('listBuf.push('), 'the renderer no longer builds flat <li> strings');
   assert.ok(md.includes('emit(listHtml(run.items,'), 'it emits the nested list as one block');
 });
+
+test('a nested list takes the marker of its OWN list, and every body keeps it close under its parent item', () => {
+  // The drive on the Preview showed the bulleted details under a numbered app as "1.", "1. 2.": the descendant rule
+  // `.prose-gbti ol li` also matched a bullet list nested inside the numbered one and, written last, won.
+  const src = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+  const prose = src('src/components/blog/Prose.astro');
+  assert.ok(prose.includes('.prose-gbti ul > li { list-style: disc; }'), 'bullets from the child combinator');
+  assert.ok(prose.includes('.prose-gbti ol > li { list-style: decimal; }'), 'numbers from the child combinator');
+  assert.ok(!/\.prose-gbti (ul|ol) li \{/.test(prose), 'no descendant list-style rule is left');
+  assert.ok(prose.includes('.prose-gbti li > ul, .prose-gbti li > ol { margin: 0.25em 0 0; }'), 'a nested list sits close');
+  assert.ok(src('client-ui/src/elements/gbti-reader.mjs').includes('.body li > ul,.body li > ol { margin:.25em 0 0; }'), 'reader');
+  assert.ok(src('client-ui/src/elements/gbti-locked-content.mjs').includes('.unlocked li > ul, .unlocked li > ol { margin: .25em 0 0 1.2em; }'), 'locked body');
+});

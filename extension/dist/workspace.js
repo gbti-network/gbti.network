@@ -11393,6 +11393,7 @@ ${String(body ?? "")}`;
   .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
   .unlocked p { margin: 0 0 1em; line-height: 1.6; }
   .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
+  .unlocked li > ul, .unlocked li > ol { margin: .25em 0 0 1.2em; }
   .unlocked a { color: var(--accent); }
   .unlocked img { max-width: 100%; height: auto; border-radius: 10px; }
   ${imageLayoutProseCss(".unlocked")}
@@ -21750,6 +21751,7 @@ From the author:
   .body img { max-width:100%; height:auto; border-radius:10px; }
   ${imageLayoutProseCss(".body")}
   .body ul,.body ol { padding-left:1.4em; margin:0 0 1em; }
+  .body li > ul,.body li > ol { margin:.25em 0 0; }
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
      their own horizontal scroll rather than pushing the article wider than the viewport. */

@@ -31,8 +31,11 @@
   .prose-gbti a:hover { color: var(--green-600); }
   .prose-gbti ul, .prose-gbti ol { margin: 1.25em 0; padding-left: 1.5em; }
   .prose-gbti li { margin: 0.4em 0; }
-  .prose-gbti ul li { list-style: disc; }
-  .prose-gbti ol li { list-style: decimal; }
+  /* sow-321: an item takes the marker of its OWN list (child combinator), so bullets nested under a numbered item
+     stay bullets (the descendant rule made them numbers); a nested list sits close under its parent item. */
+  .prose-gbti ul > li { list-style: disc; }
+  .prose-gbti ol > li { list-style: decimal; }
+  .prose-gbti li > ul, .prose-gbti li > ol { margin: 0.25em 0 0; }
   .prose-gbti blockquote {
     border-left: 9px solid var(--green);
     margin: 1.5em 0;

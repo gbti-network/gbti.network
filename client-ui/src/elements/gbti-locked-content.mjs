@@ -35,6 +35,7 @@ const PROSE = `
   .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
   .unlocked p { margin: 0 0 1em; line-height: 1.6; }
   .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
+  .unlocked li > ul, .unlocked li > ol { margin: .25em 0 0 1.2em; }
   .unlocked a { color: var(--accent); }
   .unlocked img { max-width: 100%; height: auto; border-radius: 10px; }
   ${imageLayoutProseCss('.unlocked')}
