@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T20:57:38.289Z'
+updatedAt: '2026-09-12T21:06:23.052Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -44,7 +44,7 @@ So I've made the decision to ditch Windows, and on the recommendation of a colle
 
 ## Part 1: Proxmox and the "ProxMoxBox"
 
-Proxmox is a Linux-based platform for running and managing servers. It is built on Debian Linux and gives you one web dashboard where you can create virtual machines and lightweight Linux containers.
+Proxmox is a Linux-based platform for running and managing servers. It is built on Debian Linux and gives you one web dashboard where you can create virtual machines and lightweight Linux containers (aka LXCs).
 
 Instead of treating the computer like a normal desktop PC, Proxmox is designed to divide its resources between different services. Each application can run in its own separate environment, which helps keep one app from interfering with another.
 
@@ -56,23 +56,21 @@ This is where Proxmox feels very different from Windows. Windows is mainly built
 
 ## Part 2: What LXC is, and how it differs from a virtual machine
 
-I used the word LXC earlier, which for me was a brand new term when I started my ProxMox journey. It stands for "Linux Container", plainly.
+I used the word LXC earlier, which for me was a brand new term when I started my ProxMox journey. It stands for "Linux Containers", plainly.
 
 ![pasted-20260911-203944](./images/pasted-20260911-203944.webp "Borrowed meme from: https://www.reddit.com/r/ProgrammerHumor/comments/qq8l3h/dont_shame_me_plz/")
 
 One of the first questions my AI agent proposed to me during my first home server application setup was, "Do you want to install this application as a virtual machine or a LXC?" while simultaneously advising that I choose LXC.
 
-When asking why it recommended an LXC over a virtual machine, I was informed that an LXC container and a virtual machine require different resource commitments. The VM required an upfront delegation of resources that subsequent LXC containers would share resources from. If I delegated 50% machine resources to VM One, then I would have 50% resources for VM two. They would not share the resources. While rather if I only created VM One, and then created several LXC containers within that VM, these sub containers would share.
+When I asked why it recommended an LXC over a virtual machine, the answer came down mostly to overhead. Both VMs and LXC containers can run directly on the Proxmox host, but a virtual machine behaves like a complete computer with its own operating system and kernel. An LXC container shares the host’s Linux kernel and only isolates the applications and services running inside it.
 
-Without a distinct need to create multiple VMs on one computer, I would be better off with just one and then all my sub-linux containers would share the whole of that machines resources (which would be better for my purpouse).
+For the small Linux services I wanted to run, that made LXC a better fit. I could create several lightweight containers and let them share the server’s available CPU and memory rather than running a complete virtual operating system for every application.
 
-A virtual machine emulates a computer. It boots its own kernel, runs its own device drivers through
-QEMU, and holds its own memory. When you give a VM 4 GB, that 4 GB is allocated to it and the host cannot
-use it for anything else, whether the VM is busy or idle.
+A virtual machine emulates a complete computer. It boots its own operating system and kernel and usually requires more memory and storage just to exist. That extra separation can be useful, but it is more than many small self-hosted Linux applications need.
 
-An LXC container shares the host's kernel. There is no guest kernel to boot, no QEMU, no virtio device state. What you get instead is a set of isolated namespaces and cgroup limits around a normal Linux process tree.   
+An LXC container is lighter because it shares the Linux kernel already running on the Proxmox server. It still gets its own files, processes, network settings, and resource limits, so applications can remain separated without each needing a complete operating system.
 
-In practice a bare Debian container idles at something like 30 to 60 MB of RAM before you run anything, where the same services in a VM cost 200 to 400 MB just to exist. A container starts in under a second. A VM takes 15 to 30 seconds to boot.
+In practice, this means containers can use much less memory and start much faster than full virtual machines. For a modest home server like mine, that lets me run more applications with the hardware I already have.
 
 ## Part 3: Using Tailscale with Poxmox
 
