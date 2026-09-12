@@ -25,7 +25,7 @@ layout: editorial
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-08-15T00:00:00.000Z'
-updatedAt: '2026-09-12T17:52:03.507Z'
+updatedAt: '2026-09-12T17:53:23.630Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
