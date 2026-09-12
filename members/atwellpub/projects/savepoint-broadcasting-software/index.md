@@ -67,44 +67,16 @@ author: atwellpub
 publishedAt: '2026-09-12T23:30:51.000Z'
 ---
 
-SavePoint is a desktop application for running an online radio or video station around the clock. You build playlists and segments, arrange them on a weekly schedule, and SavePoint airs that schedule to every channel you have connected. The station runs on your own hardware and storage.
+SavePoint Station Manager is a self-hosted desktop application for Windows, macOS, and Linux that lets communities, DJ collectives, indie podcast networks, and hobbyist broadcasters run their own 24/7 online radio or video station.
 
-## Broadcast control
+Key capabilities:
 
-Start Broadcast, on the Broadcast Control dashboard, puts the station on air on every channel you have switched on. The dashboard also counts the station's playlists, segments, and hours streamed.
+- Weekly programming schedule with automated content playout
+- Live contributor slots delivered over RTMP, so co-hosts can tunnel into their allotted airtime from any studio setup (OBS or any RTMP encoder)
+- Simulcast a single station's output to YouTube, Twitch, Kick, TikTok, Mixcloud, SoundCloud, Substack, X, Discord, and any RTMP endpoint you own
+- Self-hosted by design. Your station runs on your own hardware and storage. No cloud lock-in, no per-listener fees, no shared logins for co-hosts
+- Optional cloud backend for artist relay, permission workflows, scheduling coordination, and multi-user contributor access
+- Pairs with Discord for community-driven station operation and always-on chat around the broadcast
+- License management for community operators running multi-station deployments
 
-## A weekly schedule
-
-The schedule lays out each day of the week on a timeline. You control each slot separately, deciding what airs in it and which contributors may use it. Pre-recorded and live blocks share the same schedule, and the sidebar shows what is on air, what plays next, and the recent session history.
-
-## Streaming channels
-
-SavePoint streams to Discord, YouTube, Twitch, Kick, Mixcloud, and TikTok Live, and to any other service with an RTMP or RTMPS endpoint. You can also connect Restream, which passes the broadcast on to the destinations Restream supports.
-
-Listeners can ask the station what is playing. In Discord voice channel chat and YouTube live chat, `!segment` shows the current segment, `!playlist` lists the tracklist, and `!last` and `!next` show the previous and upcoming tracks. The same commands also work with a `/` prefix.
-
-Chat Explorer gathers chat from Discord, YouTube, Twitch, and Kick into one feed. From that page you can send one message to several platforms, schedule messages ahead of time, and delete messages, time out users, or ban them where a platform allows it. SavePoint logs each moderation action, so co-hosts can see who did what.
-
-## Sub-accounts and live contributors
-
-Co-hosts, DJs, and other contributors sign in with sub-accounts instead of the owner account. You scope each sub-account to specific segments, playlists, and broadcasting capabilities, and each one has a DJ Mode for live talk-overs.
-
-You can hand any scheduled block to a sub-account. The contributor broadcasts live from their own setup over RTMP, every connected channel switches to their feed for that slot, and the station returns to its own programming when the slot ends.
-
-## Pre-rendering
-
-For video broadcasts, SavePoint renders tracks into video before they air. The pre-rendering queue shows each track in progress with its worker count and frame rate, and you can leave the worker count on automatic.
-
-## Deploying to a production server
-
-You can build and test a station on your own machine, then deploy it to a production server over SSH. The Deployment page stores the server connection and uses key-based authentication.
-
-Push to Production sends the parts you choose: application code, the database, the media library, and video pre-renders. It can take a full backup on the server first, and you pick which stations to include. Pull from Production goes the other way. It merges favorites, exclude lists, channel profile settings, and broadcast history from the server into your local copy without removing anything already there. The jobs history records every push and pull.
-
-## Now Playing API
-
-A public Now Playing feed reports what is on air at any moment, including which member is live during a contributor segment. Widgets, embeds, and other integrations can read from it.
-
-## Install
-
-SavePoint runs as a Windows application on Windows 10 and 11 (64-bit). A command-line install runs the same broadcast engine on macOS, Linux, and Windows Subsystem for Linux, and requires Node 22 or newer. Both are on the [download page](https://savepoint.fm/download?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory), and the [documentation](https://savepoint.fm/documentation?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory) covers installation and first setup. The [pricing page](https://savepoint.fm/pricing?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory) lists the current plans.
+Free version and free trial available. Paid tiers unlock a broadcast pass (Year Pass or subscription) for scaling stations. Full brand kit and screenshots at [savepoint.fm/branding](https://savepoint.fm/branding?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory). Development transparency, including AI collaboration tools used, at [savepoint.fm/credits](https://savepoint.fm/credits?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory).
