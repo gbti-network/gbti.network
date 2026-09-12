@@ -16915,6 +16915,7 @@ var BANNER_PRESETS = [
 var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 
 // client/src/schemas.mjs
+var titleText = () => external_exports.string().refine((s) => s.trim().length > 0, "title must not be empty");
 var STATUS = external_exports.enum(["draft", "published"]);
 var VISIBILITY = external_exports.enum(["public", "members"]);
 function normalizeTag(t) {
@@ -16989,7 +16990,7 @@ var socialLinks = external_exports.object({
 }).partial();
 var postSchema = external_exports.object({
   type: external_exports.literal("post").default("post"),
-  title: external_exports.string(),
+  title: titleText(),
   slug: external_exports.string().regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /articles/<slug>/"),
   author: external_exports.string(),
   contributors,
@@ -17018,7 +17019,7 @@ var postSchema = external_exports.object({
 });
 var productSchema = external_exports.object({
   type: external_exports.literal("project").default("project"),
-  title: external_exports.string(),
+  title: titleText(),
   slug: external_exports.string().regex(/^[a-z0-9-]+$/),
   author: external_exports.string(),
   contributors,
@@ -17083,7 +17084,7 @@ var profileSchema = external_exports.object({
 });
 var promptSchema = external_exports.object({
   type: external_exports.literal("prompt").default("prompt"),
-  title: external_exports.string(),
+  title: titleText(),
   slug: external_exports.string().regex(/^[a-z0-9-]+$/),
   shortDescription: external_exports.string(),
   // REQUIRED, mirrors src/content.config.ts (one-line blurb on cards + the feed).
@@ -17125,7 +17126,7 @@ var shareSchema = external_exports.object({
   // SOW-016 consistency
   encryptedBody: external_exports.string().optional(),
   // SOW-016: set by the publish flow (encrypt-on-publish) for a members Share
-  title: external_exports.string().optional(),
+  title: titleText().optional(),
   shortDescription: external_exports.string().max(200).optional(),
   // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: external_exports.string().url().optional(),
