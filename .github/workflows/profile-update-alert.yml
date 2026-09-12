@@ -1,0 +1,43 @@
+name: Profile update alert
+
+# sow-329: email the owner when a member's profile changes on main. A paid member's profile edit is squash-merged
+# by the PR gate with no human review, so this email is the owner's first look at what went public: a check against
+# the community guidelines, and a chance to follow any social accounts the member added.
+#
+# A post-merge observer only. It never touches the PR gate, and a mail problem can never turn this run red: the
+# script always exits zero and the step continues on error. The path filter means it runs only when a profile
+# file changes, not on every content merge.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'members/*/profile.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-update-alert
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the whole push (github.event.before..sha) must be diffable, not only the tip commit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Email the owner about changed profiles
+        continue-on-error: true
+        run: node scripts/notify-profile-updates.mjs --apply
+        env:
+          PROFILE_BEFORE: ${{ github.event.before }}
+          PROFILE_AFTER: ${{ github.sha }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ vars.RESEND_FROM }}
+          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
