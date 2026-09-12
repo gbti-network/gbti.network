@@ -11,7 +11,7 @@ import { defaultSchema } from 'rehype-sanitize';
 import { IMAGE_LAYOUT_CLASS_RE } from '../../client/src/image-attrs.mjs'; // the five image layout classes
 
 /** The only hosts an <iframe> may point at: the shared embedUrl() providers (client/src/video-embed.mjs)
- *  plus the tweet-embed host reserved for sow-152. hast-util-sanitize filters protocols, not hosts, so
+ *  plus the tweet-embed host reserved for sow-261. hast-util-sanitize filters protocols, not hosts, so
  *  rehypeIframeHostAllowlist below enforces this list as a dedicated pass. */
 export const IFRAME_HOSTS = new Set([
   'www.youtube.com',
