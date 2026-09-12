@@ -24,16 +24,16 @@ tags:
 layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
-publishedAt: '2026-09-12T14:40:14.869Z'
-updatedAt: '2026-09-12T14:40:14.869Z'
+publishedAt: '2026-08-15T00:00:00.000Z'
+updatedAt: '2026-09-12T15:34:29.470Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
 ---
 
-12gb ram, 100gb SSD, 1TB external HD. i7-7700 CPU.
+The current hardware specs of my home server is modest;12gb ram, 100gb SSD, 1TB external HD. i7-7700 CPU.
 
-Not much, but these are the specs of my home server and until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sublinux system to run a copy of [SavePoint Station Manager](https://savepoint.fm) for a community radio project.
+Until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sublinux system to run a copy of [SavePoint Station Manager](https://savepoint.fm) for a community radio project.
 
 As a developer neck deep in the AI boom, I am building (and downloading) more self-hosted software than ever. 100GB is a good amount of space, and Windows, even though *Tiny*, takes up too much of it. Not only that, Windows has been a great OS for direct use over the years, but with my home server, my use is more and more remote; which makes the need for a user-first OS less important. What is more important is claiming and delgating resources across linux first applications.
 
