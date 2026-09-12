@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T18:07:20.741Z'
+updatedAt: '2026-09-12T20:35:26.000Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -35,11 +35,10 @@ The current hardware specs of my home server read:12gb DDR4 ram, 100gb SSD, 1TB 
 
 Until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sub Linux system to run a copy of <a href="https://savepoint.fm" rel="noopener" target="_blank">SavePoint Station Manager</a> for a community radio project.
 
-As a developer neck deep in the AI boom, I am building (and downloading) more self-hosted software than ever. 100GB is a good amount of space, and Windows, even though *Tiny*, takes up too much of it. Not only that, Windows has been a great OS for direct use over the years, but with my home server, my use is more and more remote; which makes the need for a user-first OS less important. What is more important is claiming and delegating resources across Linux first applications.
+These days, (thanks to AI), I am building (and downloading) more self-hosted software than ever. 100GB is a good amount of space, and Windows takes up too much of it.  
+Additionally, I consider Windows a great desktop operating operating system, but I'm finding the home server experience I am after is more of a headless/remote one like the VPN I rent on Cloudways.  
 
-On my Windows home server I was frequently using WSL and it is <a href="https://www.xda-developers.com/wsl-great-run-linux-natively-instead/" rel="noopener" target="_blank">not an ideal development environment</a>. Now, I have finally come to the point where I want my home server environment to be more singular purposed, like the VPN I rent on [Cloudways](https://gbti.network/outbound/cloudways) that I can tunnel into (saving 100USD a year) .
-
-So I've ditched Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
+So I've made the decision to ditch Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
 
 ## Part 1: Proxmox and the "ProxMoxBox"
 
