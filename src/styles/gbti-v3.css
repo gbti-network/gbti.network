@@ -1500,9 +1500,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .detail-head-top .detail-edit { position: static; }
 .pd-hero-in { position: relative; width: 100%; display: flex; align-items: flex-end; gap: 16px; padding-bottom: 24px; }
 .pd-mark {
-  width: 62px; height: 62px; flex: none; border-radius: 8px;
-  background: #fff; object-fit: contain; padding: 6px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  width: 96px; height: 96px; flex: none; border-radius: 8px;
 }
 .pd-hero-txt { min-width: 0; flex: 1; }
 .pd-eyebrow { font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--green-mint); }
