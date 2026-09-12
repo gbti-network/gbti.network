@@ -25,13 +25,13 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T20:49:37.712Z'
+updatedAt: '2026-09-12T20:57:38.289Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
 ---
 
-The current hardware specs of my home server read:12gb DDR4 ram, 100gb SSD, 1TB external HD, and an i7-7700 CPU. Modest but for years it's served me well from my office closet.
+Before the migration, the hardware specs of my home server read: 12gb DDR4 ram, 100gb SSD, 1TB external HD, and an i7-7700 CPU. Modest but for years it's served me well from my office closet.
 
 Until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Subsystem for Linux (WSL) to run a copy of <a href="https://savepoint.fm" rel="noopener" target="_blank">SavePoint Station Manager</a> for a community radio project (as well as several other Node based servers).
 
@@ -39,19 +39,20 @@ Until recently I've been running a copy of [Windows Tiny 10](https://archive.org
 
 I also consider Windows a great desktop operating system, but I'm finding the home server experience I am after is more of a headless/remote one like the VPS I rent on Cloudways.  
 
-So I've made the decision to ditch Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/)** as my new home server OS.
+So I've made the decision to ditch Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/)** as my new home server OS.  
+  
 
 ## Part 1: Proxmox and the "ProxMoxBox"
 
-Proxmox is a linux-first OS platform that manages virtual machines and LXC containers from one web interface.
+Proxmox is a Linux-based platform for running and managing servers. It is built on Debian Linux and gives you one web dashboard where you can create virtual machines and lightweight Linux containers.
 
-Proxmox offers a specialized operating system that allows segmentation of machines and containers. Think of it as your own linux container manager; similar to a collection of Docker instances.
+Instead of treating the computer like a normal desktop PC, Proxmox is designed to divide its resources between different services. Each application can run in its own separate environment, which helps keep one app from interfering with another.
 
-Instead of piling every self-hosted application into WSL under Windows, each service can live in its own container environment. This makes applications easier to install, start up, back up, restart, move, upgrade, and occasionally break without taking the rest of the server down with them.
+For me, this is much cleaner than piling every self-hosted application into WSL under Windows. Each service can have its own container, making it easier to install, start, stop, back up, move, upgrade, or even break something without taking the rest of the server down with it.
 
-Proxmox can do this with full virtual machines, but many self-hosted Linux applications can run in much lighter *LXC *containers.  Proxmox OS can even bind multiple machines together under a single cluster/interface. So if you have two home server machines, they can combine into one network accessible singular OS.
+Proxmox can run full virtual machines, but many self-hosted Linux applications can use much lighter *LXC* containers instead. It can also connect multiple Proxmox servers into a cluster, allowing you to manage several physical machines from the same interface. The computers still keep their own hardware and resources, but they become much easier to manage together.
 
-Proxmox OS was built in such a way that home server management is a primary and not a secondary consideration, where as Windows was not created for compartmentalized application management (though it can support it).
+This is where Proxmox feels very different from Windows. Windows is mainly built around using a computer directly, while Proxmox is built around managing servers, applications, virtual machines, and containers remotely. For the kind of home server I want to run, that makes Proxmox a much better fit.
 
 ## Part 2: What LXC is, and how it differs from a virtual machine
 
