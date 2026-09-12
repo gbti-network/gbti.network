@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T20:42:08.016Z'
+updatedAt: '2026-09-12T20:44:29.591Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -33,12 +33,11 @@ encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-t
 
 The current hardware specs of my home server read:12gb DDR4 ram, 100gb SSD, 1TB external HD, and an i7-7700 CPU. Modest but for years it's served me well from my office closet.
 
-Until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sub Linux system to run a copy of <a href="https://savepoint.fm" rel="noopener" target="_blank">SavePoint Station Manager</a> for a community radio project.
+Until recently I've been running a copy of [Windows Tiny 10](https://archive.org/details/tiny-10-NTDEV) on it while leveraging its Windows Sub Linux system to run a copy of <a href="https://savepoint.fm" rel="noopener" target="_blank">SavePoint Station Manager</a> for a community radio project (as well as several other Node based servers).
 
 100GB is a good amount of space for my main SSD, but unfortunately the Windows OS takes up too much of it.   
-  
-  
-I consider Windows a great desktop operating system, but I'm finding the home server experience I am after is more of a headless/remote one like the VPN I rent on Cloudways.  
+
+I also consider Windows a great desktop operating system, but I'm finding the home server experience I am after is more of a headless/remote one like the VPN I rent on Cloudways.  
 
 So I've made the decision to ditch Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
 
