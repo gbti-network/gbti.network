@@ -346,6 +346,40 @@ export async function planPublishImage(ref, { fromSession, fromStore, fromOldFol
  *
  * @returns {Promise<{action:'commit'|'skip'|'refuse', files:Array<object>, message?:string}>}
  */
+/** Content types that carry a publication date. Mirrors the list in client/src/operations-publish.mjs. */
+export const DATED_CONTENT_TYPES = new Set(['post', 'project', 'prompt']);
+
+/**
+ * sow-325: WHICH publishedAt a publish writes, and why the editor's own value is not trusted.
+ *
+ * Two faults met here, and each one alone looks like correct behaviour.
+ *
+ * FIRST PUBLISH OF A DRAFT. The editor deliberately stopped stamping publishedAt (owner ruling 2026-08-07)
+ * because stamping on every edit overwrote real publication dates: a November post edited today claimed to be
+ * from today. The compensating rule was "the publish path fills it in when it is ABSENT". Absent is the wrong
+ * test for a draft: a draft created in the editor ALREADY carries a publishedAt, so it is never absent, and
+ * the draft-creation date survives its own publication. Measured: an article drafted 2026-08-15 and published
+ * 2026-09-12 went live dated August and sorted a month down every feed.
+ *
+ * AN ALREADY-PUBLISHED ITEM. The editor round-trips the frontmatter it loaded, which can be a STALE staged
+ * record, so its publishedAt is not evidence of anything. Trusting it let six consecutive publishes overwrite
+ * a corrected date in the repository with the old one, and no amount of fixing the file could stick. For a
+ * live item the COMMITTED date is the authority, so the repository wins and the editor cannot clobber it.
+ * Nothing is lost: publishedAt is a hidden preserved field with no author-facing control.
+ *
+ * A move is not this function's business; the caller restores the original date for a rename or reassignment
+ * before this runs, because the item is not new and the feeds must stay stable.
+ *
+ * @returns {string|null} the value to write, or null to leave the caller's input untouched.
+ */
+export function resolvePublishedAt({ oldFm, moved, type, now } = {}) {
+  if (!DATED_CONTENT_TYPES.has(String(type ?? ''))) return null;
+  if (moved) return null;
+  const priorLive = oldFm && oldFm.status === 'published' && oldFm.publishedAt;
+  if (priorLive) return typeof oldFm.publishedAt === 'string' ? oldFm.publishedAt : new Date(oldFm.publishedAt).toISOString();
+  return now || new Date().toISOString();
+}
+
 export async function planPublishImageFiles(ref, { fromSession, fromStore, onMain } = {}) {
   const oldPath = ref?.oldPath && ref.oldPath !== ref?.commitPath ? String(ref.oldPath) : null;
   const oldBase64 = ref?.oldBase64 || null;

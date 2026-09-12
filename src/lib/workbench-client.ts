@@ -30,7 +30,7 @@ import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
 import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, resolvePublishedAt, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
 
@@ -292,6 +292,14 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // A move (rename or reassignment) must not re-stamp publishedAt (feeds stay stable; the item is not new).
     // The editor stamps it on every publish, so restore the original for the move case only.
     if (moved && oldFm?.publishedAt) effInput.publishedAt = oldFm.publishedAt;
+    // sow-325: the PUBLISH decides the date, not the editor. resolvePublishedAt carries the reasoning; the
+    // short version is that the editor's own publishedAt is not evidence. A draft already carries one, so the
+    // old "fill it in when absent" rule never fired for a first publish and the draft-creation date went live.
+    // And for an item already live the editor may be round-tripping a STALE staged record, which overwrote a
+    // corrected date in the repository six publishes running. The committed date wins for a live item; a draft
+    // or a new item is stamped now.
+    const stampedPublishedAt = resolvePublishedAt({ oldFm, moved, type, now: new Date().toISOString() });
+    if (stampedPublishedAt) effInput.publishedAt = stampedPublishedAt;
     // sow-165 on the website: every image()-typed value becomes the canonical `./images/<file>` BEFORE the
     // markdown is built. Astro resolves image() relative to the item's own index.md, so the repo-rooted path
     // the stager used to write could not resolve and reddened the site build on main. Normalizing here also
