@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T20:44:29.591Z'
+updatedAt: '2026-09-12T20:45:42.022Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -39,7 +39,7 @@ Until recently I've been running a copy of [Windows Tiny 10](https://archive.org
 
 I also consider Windows a great desktop operating system, but I'm finding the home server experience I am after is more of a headless/remote one like the VPN I rent on Cloudways.  
 
-So I've made the decision to ditch Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/) **as my new home server OS.
+So I've made the decision to ditch Windows, and on the recommendation of a colleague, installed **[Proxmox](https://www.proxmox.com/en/)** as my new home server OS.
 
 ## Part 1: Proxmox and the "ProxMoxBox"
 
