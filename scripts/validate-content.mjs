@@ -53,6 +53,24 @@ function validCategoryPath(arr) {
   return true;
 }
 
+/**
+ * sow-256: a title that is present but blank.
+ *
+ * The schemas refuse it now, but this check exists so the failure arrives with a sentence a member can act
+ * on, at the earliest gate, rather than as a raw zod issue from the site build. It reads the PARSED
+ * frontmatter rather than `field()`, which cannot see the difference: `field`'s pattern needs at least one
+ * non-quote character, so `title: ""` and a missing title both come back null.
+ *
+ * Types only. A share's title is optional (omitting it is correct), so only a PRESENT blank is an error.
+ */
+function checkTitle(fm, rel, type) {
+  if (!fm || !('title' in fm)) return;
+  const t = fm.title;
+  if (typeof t === 'string' && t.trim() !== '') return;
+  if (t === undefined || t === null) return; // absent: the schema's own required rule owns that case
+  errors.push(`${rel}: title must not be blank (got ${JSON.stringify(t)}). A blank title renders as " | GBTI Network" in the page title and the share preview. See sow-256.`);
+}
+
 /** sow-140: a project's newsFeed (the member-owned RSS the admin registry may approve into the news pool)
  *  must be an https URL. RSS VALIDITY is verified by the moderator at approval time (CI stays offline). */
 function checkNewsFeed(fm, rel) {
@@ -227,6 +245,7 @@ function checkContent(file, owner, type) {
   const bodyOf = (t) => t.replace(/^---\n[\s\S]*?\n---/, '');
   if (type === 'post' || type === 'project' || type === 'prompt' || type === 'applet') {
     const fm = frontmatter(txt);
+    checkTitle(fm, rel, type); // sow-256
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
     if (type === 'project') checkNewsFeed(fm, rel); // sow-140
@@ -237,6 +256,7 @@ function checkContent(file, owner, type) {
     // SOW-018: a Share is gated the same way (a members Share encrypts its body); author scoping above
     // already enforces author === folder owner.
     const fmc = frontmatter(txt) || {};
+    checkTitle(fmc, rel, type); // sow-256: a share headline may be omitted, but not left blank
     checkMemberGating(fmc, rel, bodyOf(txt));
     // SOW-087: a share's optional `category` is ONE flat topic key (house/topics.yml), not a taxonomy path; it
     // routes the share's category Discord post, so an unknown key would silently never route.

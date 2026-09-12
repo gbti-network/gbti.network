@@ -3,6 +3,18 @@ import { glob } from 'astro/loaders';
 import { BANNER_PRESET_KEYS } from './lib/banner-presets.mjs';
 
 /**
+ * sow-256: a title that is PRESENT but blank. `z.string()` admits `""`, and a blank title is not caught
+ * anywhere downstream either: BaseLayout's `title = SITE_NAME` is a destructuring default, which fires only
+ * on `undefined`, so the page shipped `<title> | GBTI Network</title>` with a dangling separator, in og:title
+ * too. Whitespace is included deliberately: `"   "` produces the same broken output and the original report
+ * only named the empty string.
+ *
+ * It REFUSES rather than trims, so no committed value is silently rewritten by a validation pass. Measured
+ * before shipping: 0 of 160 committed titles are blank, so this reds nothing already merged.
+ */
+const titleText = () => z.string().refine((s) => s.trim().length > 0, 'title must not be empty');
+
+/**
  * Canonical content schemas — source of truth: .data/schemas/content-schemas.md.
  * These same definitions are reused by SOW-003 (CI validation) and SOW-005 (the gate).
  *
@@ -108,7 +120,7 @@ const post = defineCollection({
   loader: glob({ base: '.', pattern: ['members/*/posts/**/*.md', 'house/posts/**/*.{md,mdx}'] }),
   schema: ({ image }) => z.object({
     type: z.literal('post').default('post'),
-    title: z.string(),
+    title: titleText(),
     slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique → /articles/<slug>/'),
     author: z.string(),
     contributors,
@@ -149,7 +161,7 @@ const post = defineCollection({
 // lists/renders identically to a project (the owner's "treat applets as projects in the frontmatter").
 const projectShape = ({ image }: { image: any }) => ({
   type: z.literal('project').default('project'),
-  title: z.string(),
+  title: titleText(),
   slug: z.string().regex(/^[a-z0-9-]+$/),
   author: z.string(),
   contributors,
@@ -251,7 +263,7 @@ const page = defineCollection({
   loader: glob({ base: '.', pattern: ['house/pages/**/*.{md,mdx}'] }),
   schema: z.object({
     type: z.literal('page').default('page'),
-    title: z.string(),
+    title: titleText(),
     slug: z.string(),
     status: STATUS.default('published'),
     visibility: VISIBILITY.default('public'),
@@ -268,7 +280,7 @@ const prompt = defineCollection({
   loader: glob({ base: '.', pattern: ['members/*/prompts/**/*.md', 'house/prompts/**/*.{md,mdx}'] }),
   schema: ({ image }) => z.object({
     type: z.literal('prompt').default('prompt'),
-    title: z.string(),
+    title: titleText(),
     slug: z.string().regex(/^[a-z0-9-]+$/),
     shortDescription: z.string(), // one-line blurb shown on prompt cards + the activity feed
     author: z.string(),
@@ -349,7 +361,7 @@ const share = defineCollection({
     visibility: VISIBILITY.default('members'), // SOW-018: Shares default to the members-only stream
     publicStub: z.boolean().default(false), // SOW-016 consistency (rarely meaningful for a short status)
     encryptedBody: z.string().optional(), // SOW-016: a members Share encrypts its body to this .enc; renders locked
-    title: z.string().optional(), // optional short headline; the body carries the note
+    title: titleText().optional(), // optional short headline; the body carries the note (sow-256: omitted is fine, blank is not)
     shortDescription: z.string().max(200).optional(), // SOW-032: an optional one-line blurb shown under the title
     url: z.string().url().optional(), // the external content being shared (link, find)
     image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)

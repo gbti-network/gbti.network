@@ -11,6 +11,18 @@
 //
 // The authoritative validator is still the gate / `npm run check:content`; this is the pre-flight copy.
 
+/**
+ * sow-256: a title that is PRESENT but blank. `z.string()` admits `""`, and a blank title is not caught
+ * anywhere downstream either: the site layout's `title = SITE_NAME` is a destructuring default, which fires only
+ * on `undefined`, so the page shipped `<title> | GBTI Network</title>` with a dangling separator, in og:title
+ * too. Whitespace is included deliberately: `"   "` produces the same broken output and the original report
+ * only named the empty string.
+ *
+ * It REFUSES rather than trims, so no committed value is silently rewritten by a validation pass. Measured
+ * before shipping: 0 of 160 committed titles are blank, so this reds nothing already merged.
+ */
+const titleText = () => z.string().refine((s) => s.trim().length > 0, 'title must not be empty');
+
 import { z } from 'zod';
 import { BANNER_PRESET_KEYS } from '../../src/lib/banner-presets.mjs';
 
@@ -103,7 +115,7 @@ const socialLinks = z
 
 export const postSchema = z.object({
   type: z.literal('post').default('post'),
-  title: z.string(),
+  title: titleText(),
   slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique -> /articles/<slug>/'),
   author: z.string(),
   contributors,
@@ -130,7 +142,7 @@ export const postSchema = z.object({
 
 export const productSchema = z.object({
   type: z.literal('project').default('project'),
-  title: z.string(),
+  title: titleText(),
   slug: z.string().regex(/^[a-z0-9-]+$/),
   author: z.string(),
   contributors,
@@ -190,7 +202,7 @@ export const profileSchema = z.object({
 
 export const promptSchema = z.object({
   type: z.literal('prompt').default('prompt'),
-  title: z.string(),
+  title: titleText(),
   slug: z.string().regex(/^[a-z0-9-]+$/),
   shortDescription: z.string(), // REQUIRED, mirrors src/content.config.ts (one-line blurb on cards + the feed).
   // Was missing from this mirror: a prompt published without it passed the client but broke the Astro build (SOW-025).
@@ -236,7 +248,7 @@ export const shareSchema = z.object({
   visibility: VISIBILITY.default('members'), // Shares default to the members-only stream
   publicStub: z.boolean().default(false), // SOW-016 consistency
   encryptedBody: z.string().optional(), // SOW-016: set by the publish flow (encrypt-on-publish) for a members Share
-  title: z.string().optional(),
+  title: titleText().optional(),
   shortDescription: z.string().max(200).optional(), // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: z.string().url().optional(),
   image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
