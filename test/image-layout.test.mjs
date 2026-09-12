@@ -286,12 +286,18 @@ test('the selection toolbar offers the image bar, and the inert stub carries the
 });
 
 test('the doc editor image card carries the same controls and writes the same words', () => {
-  const src = read('client-ui/src/elements/gbti-doc-editor.mjs');
+  // sow-327: the block editor's stylesheet moved to client-ui/src/doc-editor-css.mjs when the element crossed
+  // the 900-line cap. These assertions are about the COMPONENT, which is now two files, so they read both.
+  const src = read('client-ui/src/elements/gbti-doc-editor.mjs') + read('client-ui/src/doc-editor-css.mjs');
   assert.ok(src.includes('<div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div>'), 'the row on the card');
   assert.ok(src.includes('applyImageLayoutAction(b, btn.dataset.il)'), 'a click applies the shared rule');
   assert.ok(src.includes('${IMAGE_LAYOUT_ROW_CSS}'), 'and the row is styled');
-  const lines = src.split('\n').length;
-  assert.ok(lines <= 900, `gbti-doc-editor.mjs is ${lines} lines; the cap is 900`);
+  // The cap is PER FILE, so it is measured per file. Concatenating the two for the content assertions above
+  // and then counting the join would have reported 935 lines for a component whose halves are 775 and 160.
+  for (const f of ['client-ui/src/elements/gbti-doc-editor.mjs', 'client-ui/src/doc-editor-css.mjs']) {
+    const lines = read(f).split('\n').length;
+    assert.ok(lines <= 900, `${f} is ${lines} lines; the cap is 900`);
+  }
 });
 
 test('an image with a layout suffix leaves a bio excerpt whole', () => {

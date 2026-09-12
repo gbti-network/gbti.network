@@ -13,7 +13,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const editor = fs.readFileSync(new URL('../client-ui/src/elements/gbti-doc-editor.mjs', import.meta.url), 'utf8');
+// sow-327: the block editor's stylesheet moved to client-ui/src/doc-editor-css.mjs when the element crossed
+// the 900-line cap. These assertions are about the COMPONENT, which is now two files, so they read both.
+const editor = fs.readFileSync(new URL('../client-ui/src/elements/gbti-doc-editor.mjs', import.meta.url), 'utf8')
+  + fs.readFileSync(new URL('../client-ui/src/doc-editor-css.mjs', import.meta.url), 'utf8');
 const preview = fs.readFileSync(new URL('../src/pages/workbench/preview.astro', import.meta.url), 'utf8');
 
 /** The body of a top-level 2-space-indented method, from its signature to the closing `  }`. */

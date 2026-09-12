@@ -9,7 +9,10 @@ import { readFileSync } from 'node:fs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
-const doc = strip(readFileSync(ROOT + 'client-ui/src/elements/gbti-doc-editor.mjs', 'utf8'));
+// sow-327: the block editor's stylesheet moved to client-ui/src/doc-editor-css.mjs when the element crossed
+// the 900-line cap. These assertions are about the COMPONENT, which is now two files, so they read both.
+const doc = strip(readFileSync(ROOT + 'client-ui/src/elements/gbti-doc-editor.mjs', 'utf8')
+  + readFileSync(ROOT + 'client-ui/src/doc-editor-css.mjs', 'utf8'));
 const editor = strip(readFileSync(ROOT + 'client-ui/src/elements/gbti-content-editor.mjs', 'utf8'));
 
 test('the doc editor is a size container and keeps its measured 142px gutter for wide layouts', () => {

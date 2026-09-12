@@ -6,6 +6,7 @@
 
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { publishChanges, changeLabel, formatValue, snippet } from '../publish-diff.mjs'; // sow-327: what exactly is unpublished
 import { oneClickPublicView, makePublicPatch, makePublicPrompt, audienceControl } from '../one-click-public-core.mjs'; // sow-293, sow-323
 import { editorStatus, mediaSummary } from '../editor-core.mjs';
 import { splitRailSections } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
@@ -714,6 +715,21 @@ class GbtiContentEditor extends GbtiElement {
         .pubinfo.warn svg { color:var(--s-amber, #d9a13c); }
         .pubinfo.danger { background:color-mix(in srgb, var(--s-danger, #e06c6c) 12%, transparent); border-color:var(--s-danger, #e06c6c); }
         .pubinfo.danger svg { color:var(--s-danger, #e06c6c); }
+        /* sow-327: the banner becomes a column (text, then the answer) while keeping its icon at the left. */
+        .pubinfo .pi-body { flex:1; min-width:0; }
+        .pi-link { font:inherit; font-weight:700; color:var(--s-fg); background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+        .pi-link:hover { color:var(--s-green-fg); }
+        .chg { margin-top:9px; border-top:1px solid var(--s-tint-2); padding-top:9px; }
+        .chg[hidden] { display:none; }
+        .chg ol { margin:0; padding-left:20px; }
+        .chg li { margin:0 0 9px; }
+        .chg li:last-child { margin-bottom:0; }
+        .chg .chg-h { font-weight:700; color:var(--s-fg); }
+        .chg .chg-jump { font:inherit; font-weight:700; color:var(--s-fg); background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+        .chg .chg-jump:hover { color:var(--s-green-fg); }
+        .chg .chg-v { display:block; margin-top:2px; color:var(--s-fg-soft); overflow-wrap:anywhere; }
+        .chg .chg-v i { font-style:normal; color:var(--s-fg-mute); }
+        .chg .chg-msg { margin:0; color:var(--s-fg-soft); }
         .doc-slug .meta-local { color:var(--s-fg-mute); }
         .doc-view button { display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border:0; border-radius:7px; background:transparent; font:inherit; font-size:13px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; transition:color .14s ease; }
         .doc-view button svg { width:15px; height:15px; }
@@ -741,8 +757,12 @@ class GbtiContentEditor extends GbtiElement {
         // and the repository had already disproved it: a staged record can be BEHIND main, which is exactly
         // what src/lib/workbench-client-core.mjs records as having let six publishes overwrite a corrected
         // date. Say only what is known. The em dash also went, per the writing conventions.
+        // sow-327: the banner states that something is unpublished; the control answers WHICH. It renders for
+        // every staged draft, including one that has never been published: there is nothing to compare that
+        // against, and the panel says exactly that ("all N blocks of it are new") rather than listing every
+        // block as an addition.
         `${this.staged
-          ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live.</span></div>`
+          ? `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>`
           : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
@@ -839,6 +859,10 @@ class GbtiContentEditor extends GbtiElement {
     // does. A parallel write path here would be a second place for the content rules to be enforced, and the
     // one that gets forgotten. The Worker re-verifies superadmin regardless; this control is the affordance.
     this.on('#makepublic', 'click', () => this._makePublic());
+    // sow-327: compare against the live file on demand. Never on render: it is a network read, and the
+    // answer is only interesting when the author asks for it.
+    this._changesOpen = false;
+    this.on('#whatchanged', 'click', () => this._toggleChanges());
     // SOW-062 P6: the Publish button shows ONLY when there is something to publish -- the item is unpublished (it was
     // rendered visible above) OR it has local edits since load. Reset the dirty flag for the freshly-loaded content,
     // then mark dirty on any edit. The root-level input/change listeners persist (this.root is stable); the element
@@ -878,6 +902,8 @@ class GbtiContentEditor extends GbtiElement {
         this.client?.getComment?.({ id: `intro-${introSlug}`, ...(noteAuthor ? { author: noteAuthor } : {}) }).then((c) => {
           const ta = this.$('#authornote');
           if (ta && !ta.value && c?.body) ta.value = c.body;
+          // sow-327: keep the live note, so the change list can tell an edited note from an untouched one.
+          if (typeof c?.body === 'string') this._liveAuthorNote = c.body;
         }).catch(() => {});
       }
     }
@@ -1810,6 +1836,79 @@ class GbtiContentEditor extends GbtiElement {
     if (stub) stub.hidden = patch.visibility !== 'members';
     this._markDirty();
     await this.doPublish();
+  }
+
+  /**
+   * sow-327: show WHICH changes are unpublished, as an ordered list, and jump to the one you click.
+   *
+   * The comparison is made against the committed file read at click time, not against anything the editor
+   * was loaded with. That is the whole point: this element is filled from the staged draft alone, so it has
+   * never held the live bytes, and the staged flag it shows is a boolean rather than a comparison.
+   */
+  async _toggleChanges() {
+    const box = this.$('#changedlist');
+    const btn = this.$('#whatchanged');
+    if (!box) return;
+    this._changesOpen = !this._changesOpen;
+    box.hidden = !this._changesOpen;
+    if (btn) btn.textContent = this._changesOpen ? 'Hide changes' : 'See what changed';
+    if (!this._changesOpen) return;
+    box.innerHTML = '<p class="chg-msg">Comparing with the live version…</p>';
+    try {
+      // Re-read every time it is opened rather than caching: the author keeps editing with the panel closed,
+      // and a stale list is worse than no list here.
+      const live = this.itemPath ? await this.client?.getContentItem?.({ path: this.itemPath }) : null;
+      const { input, body } = this.gather();
+      const draftNote = this.$('#authornote') ? (this.$('#authornote').value ?? '') : null;
+      // The Author picker's pending move, read exactly as doPublish reads it, because that IS what a publish
+      // would send. Absent for everyone but a superadmin, who is the only one the picker renders for.
+      const to = authorTargetFor(this.$('#ownerSelect')?.value, this._ownerSelInitial);
+      const fromValue = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
+      const from = fromValue === 'house' ? { scope: 'house' } : { scope: 'member', username: fromValue.replace(/^member:/, '') };
+      const res = publishChanges({
+        reassign: to ? { from, to } : null,
+        live: live ? { frontmatter: live.frontmatter || {}, body: live.body || '' } : null,
+        draft: { frontmatter: input, body },
+        liveNote: typeof this._liveAuthorNote === 'string' ? this._liveAuthorNote : null,
+        draftNote,
+      });
+      box.innerHTML = this._changesHtml(res);
+      // Clicking an entry takes you to the block it describes. The body editor owns its own shadow DOM, so
+      // it is asked to highlight rather than reached into.
+      this.$$('[data-jump]').forEach((el) => el.addEventListener('click', () => {
+        const ok = this.$('#body')?.highlightBlock?.(Number(el.dataset.jump));
+        if (ok === false) el.classList.add('chg-gone');
+      }));
+    } catch {
+      box.innerHTML = '<p class="chg-msg">Could not read the live version to compare against. Your changes are still saved.</p>';
+    }
+  }
+
+  /** The ordered list itself. Values are escaped here; nothing in a diff is trusted markup. */
+  _changesHtml(res) {
+    if (res.isNew) {
+      return `<p class="chg-msg">This item has never been published, so all ${res.blockCount} block${res.blockCount === 1 ? '' : 's'} of it are new. Publish to put it live.</p>`;
+    }
+    // The honest half of the metadata guard in publish-diff.mjs: say the fields could not be read, rather
+    // than either listing them as emptied or quietly dropping them from the answer.
+    const unread = res.metaUnread
+      ? '<p class="chg-msg">The settings fields could not be read just now, so only body changes are listed. Reload the editor before publishing.</p>'
+      : '';
+    if (!res.items.length) {
+      return unread || '<p class="chg-msg">Nothing differs from the live version right now. The saved draft matches what is published.</p>';
+    }
+    const row = (was, now) => `<span class="chg-v"><i>was</i> ${esc(was)}</span><span class="chg-v"><i>now</i> ${esc(now)}</span>`;
+    const li = res.items.map((it) => {
+      const head = it.kind === 'block' && Number.isInteger(it.index) && it.op !== 'removed'
+        ? `<button type="button" class="chg-jump" data-jump="${it.index}">${esc(changeLabel(it))}</button>`
+        : `<span class="chg-h">${esc(changeLabel(it))}</span>`;
+      if (it.kind === 'field' || it.kind === 'note') return `<li>${head}${row(formatValue(it.was), formatValue(it.now))}</li>`;
+      if (it.op === 'coarse') return `<li>${head}<span class="chg-v">${esc(it.was)} live, ${esc(it.now)} in this draft</span></li>`;
+      if (it.op === 'added') return `<li>${head}<span class="chg-v">${esc(snippet(it.now))}</span></li>`;
+      if (it.op === 'removed') return `<li>${head}<span class="chg-v"><i>was</i> ${esc(snippet(it.was))}</span></li>`;
+      return `<li>${head}${row(snippet(it.was), snippet(it.now))}</li>`;
+    }).join('');
+    return `${unread}<ol>${li}</ol>`;
   }
 
   async doPublish() {
