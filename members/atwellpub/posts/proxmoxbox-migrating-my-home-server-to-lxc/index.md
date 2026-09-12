@@ -6,7 +6,7 @@ visibility: public
 publicStub: false
 excerpt: >-
   A closet home server running a radio station and a camera system moves off Windows and WSL onto
-  Proxmox VE, with each app in its own unprivileged LXC container and no open ports anywhere.
+  Proxmox VE with Tailscale support.
 categories:
   - devops
   - tooling
@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-08-15T00:00:00.000Z'
-updatedAt: '2026-09-12T17:11:57.944Z'
+updatedAt: '2026-09-12T17:24:48.339Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
