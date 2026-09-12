@@ -424,6 +424,23 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     for (const c of stagedForCleanup) {
       try { await workerPost('/membership/draft-image', { op: 'delete', item: c.item, name: c.name }); } catch { /* see above */ }
     }
+    // sow-326: THE PUBLISHED DRAFT RECORD DIES HERE, and until now nothing ever deleted it. publish() swept the
+    // staged IMAGES and left the KV draft (`drafts:<github_id>`, keyed `<type>:<slug>`) exactly as it was, so a
+    // record outlived its own publication and every later open of the item read it back instead of the file
+    // that had just been committed. That one omission is the root of three separate owner-reported defects:
+    // the "not published yet" banner that no publish could clear, a layout and an author note that reverted on
+    // every refresh of the WorkBench deep link, and two superadmins editing one article overwriting each
+    // other, because the record is per-ACCOUNT and carries no author.
+    //
+    // Same two rules as the image cleanup above, for the same reason stated there: strictly AFTER the author
+    // POST resolves, and never able to throw, or a successful publish is reported to the author as a failure.
+    // Idempotent by design (applyDraftDelete is pinned idempotent), which matters because publishDraft already
+    // deletes on its own path. Every token is swept, so a RENAME clears the pre-rename slug too.
+    for (const token of itemTokens) {
+      const staleSlug = token.startsWith(`${type}:`) ? token.slice(String(type).length + 1) : '';
+      if (!staleSlug) continue;
+      try { await workerPost('/membership/drafts', { op: 'delete', type, slug: staleSlug }); } catch { /* see above */ }
+    }
     return {
       prNumber: res.number, prUrl: res.html_url, branch: res.branch, updated: !!res.already, hosted: true,
       encrypted: Boolean(plan?.encPath),
@@ -515,10 +532,17 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
 
   // Read one of the member's OWN comments (frontmatter + decrypted body), for the edit-form prefill. A members
   // comment stores its body in the .enc, so decrypt it or an edit would start blank and overwrite the gated text.
-  async function getCommentLocal(id: string) {
-    const path = `members/${user}/comments/${id}.md`;
+  // sow-326: `author` is OPTIONAL and defaults to the caller, which is the right scope for the comment box
+  // (it prefills an edit of the caller's OWN comment). An explicit author reads that member's folder instead,
+  // which the content editor needs: a superadmin editing another member's article has to prefill the
+  // from-the-author note from the ITEM's intro comment, and the caller-scoped read found nothing there and
+  // silently left the box empty. Same route, same allow-list and same auth as readOwnFile, which admits any
+  // clean members/ path for a signed-in member on a repo that is public by design, so this widens no access.
+  async function getCommentLocal(id: string, author?: string) {
+    const folder = /^[a-z0-9][a-z0-9-]*$/.test(String(author || '')) ? String(author) : user;
+    const path = `members/${folder}/comments/${id}.md`;
     const text = await readOwnFile(path);
-    if (text == null) throw err('not-found', 'no such comment in your folder');
+    if (text == null) throw err('not-found', 'no such comment in that folder');
     const { frontmatter, body } = parseContentFile(text);
     const enc = (frontmatter as any)?.encryptedBody;
     return { path, frontmatter, body: enc ? await decryptEnc(enc) : body, visibility: (frontmatter as any)?.visibility === 'public' ? 'public' : 'members' };
@@ -976,7 +1000,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // ----- SOW-027/044: comments — read (public + own decrypt) + post/edit (members-encrypted) + own delete -----
     listComments(a: any = {}) { return listCommentsLocal(a); },
     listShareComments({ targetSlug, limit }: any = {}) { return listCommentsLocal({ targetType: 'share', targetSlug, limit }); },
-    getComment({ id }: any) { return getCommentLocal(String(id || '')); },
+    getComment({ id, author }: any) { return getCommentLocal(String(id || ''), author ? String(author) : undefined); },
     // Post a discussion reply (members-only, encrypted) or a from-the-author intro (public). Paid-only, gate-backed.
     async postComment({ targetType, targetSlug, body, authorNote, parentId, visibility }: any) {
       if (!COMMENT_TARGET_TYPES.has(targetType)) throw err('bad-request', 'a valid targetType is required');

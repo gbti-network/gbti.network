@@ -47,7 +47,14 @@ export class GbtiElement extends Base {
   constructor() {
     super();
     if (HAS_DOM) this.root = this.attachShadow({ mode: 'open' });
-    this._onClient = () => this.isConnected && this.render?.();
+    // sow-326: an element may DECLINE a client-broadcast re-render. gbti-content-editor does while it holds
+    // unsaved edits, because render() rebuilds every control from the preset it was loaded with, and the
+    // owner's layout choice lived only in the DOM, so a late broadcast silently reverted it mid-edit. The
+    // /workbench/ page has a second, LATE setClient caller (the header bell, fired from onMemberSignal), so
+    // this lands while an editor is open rather than only at startup. Narrow on purpose: the client-ready
+    // load race (a one-shot connectedCallback load that sticks on "Loading..." and is retried from this
+    // broadcast) is unaffected, because an UNTOUCHED element never declines.
+    this._onClient = () => this.isConnected && this.skipClientRender?.() !== true && this.render?.();
   }
 
   connectedCallback() {

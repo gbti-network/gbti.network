@@ -23,9 +23,10 @@ export const FIELDS = Object.freeze({
     f('excerpt', 'Excerpt', 'textarea'),
     f('categories', 'Categories', 'array'),
     TAGS,
-    // sow-179/sow-183: which of the three article layouts renders this post. Defaults to journal (see
-    // src/content.config.ts); editorial and card are the other two, see src/components/blog/Article*.astro.
-    f('layout', 'Layout', 'enum', { options: ['editorial', 'journal', 'card'], hint: 'How this article page is laid out. Editorial: full-width cover hero. Journal: sticky rail beside a single reading column. Card: a centered card, no rail.' }),
+    // sow-179/sow-183: which article layout renders this post. Defaults to journal (see
+    // src/content.config.ts). sow-326 retired 'editorial' as an option site-wide, so it is not offered here
+    // either; a stored value coerces to journal at the schema.
+    f('layout', 'Layout', 'enum', { options: ['journal', 'card'], hint: 'How this article page is laid out. Journal: sticky rail beside a single reading column. Card: a centered card, no rail.' }),
     f('coverImage', 'Cover image', 'image'),
     f('coverAlt', 'Cover image alt text', 'text', { placeholder: 'Describe the image for screen readers' }),
     f('video', 'Video (YouTube/Vimeo URL)', 'text'),

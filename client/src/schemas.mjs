@@ -116,9 +116,10 @@ export const postSchema = z.object({
   excerpt: z.string().max(200).optional(),
   categories: z.array(z.string()).default([]),
   tags: tagsSchema,
-  // sow-179/sow-183: mirrors src/content.config.ts's layout field exactly, including the 'journal' default
-  // (see that file's comment; every already-published post carries its own explicit layout: 'journal').
-  layout: z.enum(['editorial', 'journal', 'card']).default('journal'),
+  // sow-179/sow-183: mirrors src/content.config.ts's layout field exactly, including sow-326's retirement of
+  // 'editorial' as an option: a stored value is coerced to journal, never rejected, so an agent or a saved
+  // draft written against the old enum still validates. See that file for the reasoning.
+  layout: z.preprocess((v) => (v === 'editorial' || v == null ? 'journal' : v), z.enum(['journal', 'card'])),
   coverImage: z.string().optional(),
   coverAlt: z.string().max(250).optional(), // SOW-062 P3: cover-image alt text (accessibility)
   video: z.string().optional(),

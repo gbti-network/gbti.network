@@ -6,7 +6,6 @@
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ArticleCard from '../../components/blog/ArticleCard.astro';
-import ArticleEditorial from '../../components/blog/ArticleEditorial.astro';
 import ArticleJournal from '../../components/blog/ArticleJournal.astro';
 import RelatedPosts from '../../components/blog/RelatedPosts.astro';
 import { contentFlagsOf } from '../../lib/content-flags'; // sow-189
@@ -49,7 +48,9 @@ const stack = avatarStack({
 // sow-179/sow-183: the ?? fallback means an unrecognized value still renders, never 404s. Matches the
 // schema's own default (src/content.config.ts) so an edge case here can never disagree with what a fresh
 // post gets. Journal is the default (sow-183: "Journal rail should be the default of all articles too").
-const LAYOUTS: Record<string, typeof ArticleCard> = { card: ArticleCard, editorial: ArticleEditorial, journal: ArticleJournal };
+// sow-326: 'editorial' is retired as an option, so it is no longer a key here and an item still carrying it
+// renders as journal. The schema coerces the value too, so this map only ever sees journal or card.
+const LAYOUTS: Record<string, typeof ArticleCard> = { card: ArticleCard, journal: ArticleJournal };
 const Layout = LAYOUTS[d.layout] ?? ArticleJournal;
 // Derived from the RESOLVED Layout, not re-checked against d.layout independently -- two separate
 // derivations of the same value can silently disagree (e.g. an unrecognized d.layout falls back to

@@ -190,9 +190,19 @@ class GbtiContentEditor extends GbtiElement {
     return out;
   }
 
-  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null } = {}) {
+  // sow-326: decline a client-broadcast re-render while there are unsaved edits. See base.mjs for why this
+  // exists; the guard is deliberately no broader than _dirty, which is false at wiring time and true only on
+  // real author input, so a late client still re-renders an editor nobody has touched.
+  skipClientRender() { return this._dirty === true; }
+
+  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null } = {}) {
     this.type = type || this.type;
-    this.preset = { input: input || {}, body: body || '' };
+    // sow-326: `authorNote` travels with the draft now. readDraft has always returned it and BOTH hops between
+    // there and here dropped the field, so this.preset.authorNote was permanently undefined, the prefill below
+    // always fell through to its fallback, and the owner watched a saved note vanish on every refresh. It is
+    // folded into preset rather than held in its own property so one assignment per load stays the whole
+    // contract, exactly as `input` and `body` are.
+    this.preset = { input: input || {}, body: body || '', authorNote: typeof authorNote === 'string' ? authorNote : null };
     this.itemPath = path || null; // SOW-062 P6: the item's index.md path, to resolve a repo-relative cover for preview
     // SOW-145: the content scope. Explicit for a NEW house item (no path yet); inferred from a house/ path when
     // editing an existing house item. House content publishes DIRECTLY (no fork-staged house drafts in v1).
@@ -726,8 +736,13 @@ class GbtiContentEditor extends GbtiElement {
         button.rstat-link { font:inherit; background:none; border:none; padding:0; cursor:pointer; text-align:inherit; }
         button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
       `) +
+        // sow-326: the banner is a FLAG, not a comparison. This element holds no copy of the committed file
+        // (it is filled from readDraft alone), so "ahead of the live edge" was an unearned directional claim,
+        // and the repository had already disproved it: a staged record can be BEHIND main, which is exactly
+        // what src/lib/workbench-client-core.mjs records as having let six publishes overwrite a corrected
+        // date. Say only what is known. The em dash also went, per the writing conventions.
         `${this.staged
-          ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>This staged draft is ahead of the live edge — your changes are not published yet. <b>Publish</b> to make them live.</span></div>`
+          ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live.</span></div>`
           : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
@@ -845,11 +860,22 @@ class GbtiContentEditor extends GbtiElement {
     // SOW-062 P6: prefill the from-the-author note from the existing intro-<slug> comment (existing item).
     const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : '';
     if (introSlug) {
+      // The SAVED draft's note wins whenever the record carries the field. This tests the TYPE and not the
+      // content on purpose: an empty string is a deliberate clear (the store's contract is that an absent
+      // note PRESERVES and '' CLEARS), so it must leave the box empty rather than re-prefill from the
+      // committed comment the author just emptied.
       const staged = typeof this.preset?.authorNote === 'string' ? this.preset.authorNote : null;
       const ta0 = this.$('#authornote');
       if (ta0 && !ta0.value && staged) ta0.value = staged;
       if (staged == null) {
-        this.client?.getComment?.({ id: `intro-${introSlug}` }).then((c) => {
+        // sow-326: read the note out of the ITEM's folder, not the caller's. getComment defaults to the
+        // caller's own folder, which is correct where a member edits their own comment and wrong here: a
+        // superadmin editing another member's article got a not-found, the box stayed empty, and the note
+        // read as lost on every open. The file is public content in a public repo, and the Worker's file
+        // route already admits any clean members/ path for any signed-in member.
+        const noteOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
+        const noteAuthor = noteOwner.startsWith('member:') ? noteOwner.slice(7) : null;
+        this.client?.getComment?.({ id: `intro-${introSlug}`, ...(noteAuthor ? { author: noteAuthor } : {}) }).then((c) => {
           const ta = this.$('#authornote');
           if (ta && !ta.value && c?.body) ta.value = c.body;
         }).catch(() => {});
@@ -905,6 +931,8 @@ class GbtiContentEditor extends GbtiElement {
       row.querySelectorAll('[data-preset]').forEach((btn) => btn.addEventListener('click', () => {
         row.querySelectorAll('[data-preset]').forEach((b) => b.classList.toggle('on', b === btn));
         if (hidden) hidden.value = btn.dataset.preset;
+        // sow-326: mirror the choice into the preset, for the reason given on the [data-gscards] handler.
+        if (hidden?.dataset?.key && this.preset?.input) this.preset.input[hidden.dataset.key] = btn.dataset.preset;
         if (cover) this.clearCover(cover);
       }));
     });
@@ -916,6 +944,12 @@ class GbtiContentEditor extends GbtiElement {
       row.querySelectorAll('[data-gs]').forEach((btn) => btn.addEventListener('click', () => {
         row.querySelectorAll('[data-gs]').forEach((b) => b.classList.toggle('on', b === btn));
         if (hidden) hidden.value = btn.dataset.gs;
+        // sow-326: write the PRESET as well as the DOM. render() rebuilds each control from this.preset, so a
+        // choice that lived only in a hidden input was reverted by any re-render, which is how the owner's
+        // layout kept flipping back to the stale draft's value. Belt and braces with skipClientRender above:
+        // this makes a re-render idempotent for the pickers even if that guard is ever bypassed.
+        const gsKey = hidden?.dataset?.key;
+        if (gsKey && this.preset?.input) this.preset.input[gsKey] = btn.dataset.gs;
       }));
     });
 
@@ -1008,17 +1042,19 @@ class GbtiContentEditor extends GbtiElement {
         <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join('');
       return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
     }
-    // sow-179: article layout -> three illustrated cards (Editorial / Journal / Card), the same pattern as
-    // the galleryStyle picker above (reuses its .gs-* CSS and the generic [data-gscards] click handler
-    // as-is, no new wiring needed). Unlike galleryStyle there is no "Auto" option: the schema default
-    // (editorial) is a real, always-on choice, not a fallback computed from something else.
+    // sow-179: article layout -> illustrated cards, the same pattern as the galleryStyle picker above
+    // (reuses its .gs-* CSS and the generic [data-gscards] click handler as-is, no new wiring needed).
+    // Unlike galleryStyle there is no "Auto" option: the choice is real and always on.
+    //
+    // sow-326: Editorial is GONE as an option (owner, 2026-09-12), and the highlighted fallback is now
+    // journal. The two used to disagree: an item with no layout showed Editorial highlighted while
+    // [slug].astro rendered journal, so publishing an untouched draft silently WROTE layout: editorial.
     if (f.kind === 'enum' && f.key === 'layout') {
       const cards = [
-        { key: 'editorial', name: 'Editorial', desc: 'Full-width cover hero, title on it', shape: '<span class="gs-frame"></span><span class="gs-strip"><i></i><i></i></span>' },
         { key: 'journal', name: 'Journal', desc: 'Sticky rail beside one reading column', shape: '<span class="gs-tile" style="flex:0 0 26%"></span><span class="gs-tile"></span>' },
         { key: 'card', name: 'Card', desc: 'Centered card, no rail', shape: '<span class="gs-tile" style="flex:0 0 62%;margin:0 auto"></span>' },
       ];
-      const cur = v || 'editorial';
+      const cur = v === 'card' ? 'card' : 'journal';
       const cardsHtml = cards.map((c) => `<button type="button" class="gs-card${c.key === cur ? ' on' : ''}" data-gs="${c.key}">
         <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join('');
       return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
@@ -1806,6 +1842,12 @@ class GbtiContentEditor extends GbtiElement {
       const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined, authorTarget });
       this._setChip(`${CHECK} Published`, 'ok');
       this._dirty = false; this.$('#publish')?.setAttribute('hidden', ''); // now live + matches -> nothing to publish
+      // sow-326: this content is no longer a staged draft, and the flag has to say so IN THIS SESSION as well
+      // as in the store. The publish above deletes the KV record, but `staged` is written exactly once, in
+      // load(), and the workspace re-feeds its own copy on every render, so without both halves the banner and
+      // the "Staged draft . not published" label came straight back on the next repaint of an editor that had
+      // just published successfully. The workspace clears its copy on the gbti-published event.
+      this.staged = false;
       // SOW-112 QA (owner-directed): the publish-expectation banner appears only AFTER Publish is pressed.
       this._banner(`Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.`);
       const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : '';

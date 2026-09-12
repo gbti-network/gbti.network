@@ -9,6 +9,7 @@ import { publishContent, publishFiles, branchName } from './publish.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
 import { workerSyncFork } from './fork-sync-client.mjs';
+import { workerDeleteDraft } from './drafts-client.mjs'; // sow-326: a publish clears its own staged record
 import { SIGNUP_BASE, isHostedCtx } from './signup-base.mjs';
 import { hostedAuthor, hostedItemId, hostedPublishFiles } from './hosted-publish.mjs';
 import { NETWORK_CONTENT_PATH_RE, OperationError, isNetworkContentPath, membershipOf, requireIdentity, requireRepo, requireSuperadminForHouse } from './operations-core.mjs';
@@ -388,6 +389,19 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
       token: ctx.store?.get?.('githubToken'), itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
       files, title: ttl, signupBase: SIGNUP_BASE, fetchImpl: ctx.fetch ?? globalThis.fetch,
     });
+    // sow-326: drop the staged draft record, mirroring the website host (src/lib/workbench-client.ts). Without
+    // this the extension and the npm CMS resurrect the very record the website just cleared, and the immortal
+    // "not published yet" banner comes back on the next open. Best-effort and strictly after the author call,
+    // so a failed publish leaves the draft intact and a cleanup miss cannot fail a successful publish; the
+    // delete is idempotent, so the publishDraft path deleting it too is harmless. A rename sweeps both slugs.
+    for (const staleSlug of [...new Set([built.slug, renaming ? origin.oldSlug : null].filter(Boolean))]) {
+      try {
+        await workerDeleteDraft({
+          type, slug: staleSlug, token: ctx.store?.get?.('githubToken'),
+          signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
+        });
+      } catch { /* see above */ }
+    }
     return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
   }
   // SOW-112 v2: a rename rides the item's OWN branch (the staged-draft identity), carries the deletes of the

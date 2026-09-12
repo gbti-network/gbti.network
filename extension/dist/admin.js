@@ -204,7 +204,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     constructor() {
       super();
       if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
-      this._onClient = () => this.isConnected && this.render?.();
+      this._onClient = () => this.isConnected && this.skipClientRender?.() !== true && this.render?.();
     }
     connectedCallback() {
       SUBSCRIBERS.add(this._onClient);
@@ -4814,9 +4814,15 @@ ${String(body ?? "")}`;
       }
       return out;
     }
-    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null } = {}) {
+    // sow-326: decline a client-broadcast re-render while there are unsaved edits. See base.mjs for why this
+    // exists; the guard is deliberately no broader than _dirty, which is false at wiring time and true only on
+    // real author input, so a late client still re-renders an editor nobody has touched.
+    skipClientRender() {
+      return this._dirty === true;
+    }
+    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null } = {}) {
       this.type = type || this.type;
-      this.preset = { input: input || {}, body: body || "" };
+      this.preset = { input: input || {}, body: body || "", authorNote: typeof authorNote === "string" ? authorNote : null };
       this.itemPath = path || null;
       this.itemScope = scope || (path && String(path).startsWith("house/") ? "house" : "member");
       this.itemStore = store2;
@@ -5282,7 +5288,12 @@ ${String(body ?? "")}`;
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
         button.rstat-link { font:inherit; background:none; border:none; padding:0; cursor:pointer; text-align:inherit; }
         button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
-      `) + `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>This staged draft is ahead of the live edge — your changes are not published yet. <b>Publish</b> to make them live.</span></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
+      `) + // sow-326: the banner is a FLAG, not a comparison. This element holds no copy of the committed file
+        // (it is filled from readDraft alone), so "ahead of the live edge" was an unearned directional claim,
+        // and the repository had already disproved it: a staged record can be BEHIND main, which is exactly
+        // what src/lib/workbench-client-core.mjs records as having let six publishes overwrite a corrected
+        // date. Say only what is known. The em dash also went, per the writing conventions.
+        `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live.</span></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
@@ -5394,7 +5405,9 @@ ${String(body ?? "")}`;
         const ta0 = this.$("#authornote");
         if (ta0 && !ta0.value && staged) ta0.value = staged;
         if (staged == null) {
-          this.client?.getComment?.({ id: `intro-${introSlug}` }).then((c) => {
+          const noteOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
+          const noteAuthor = noteOwner.startsWith("member:") ? noteOwner.slice(7) : null;
+          this.client?.getComment?.({ id: `intro-${introSlug}`, ...noteAuthor ? { author: noteAuthor } : {} }).then((c) => {
             const ta = this.$("#authornote");
             if (ta && !ta.value && c?.body) ta.value = c.body;
           }).catch(() => {
@@ -5443,6 +5456,7 @@ ${String(body ?? "")}`;
         row.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
           row.querySelectorAll("[data-preset]").forEach((b) => b.classList.toggle("on", b === btn));
           if (hidden) hidden.value = btn.dataset.preset;
+          if (hidden?.dataset?.key && this.preset?.input) this.preset.input[hidden.dataset.key] = btn.dataset.preset;
           if (cover) this.clearCover(cover);
         }));
       });
@@ -5451,6 +5465,8 @@ ${String(body ?? "")}`;
         row.querySelectorAll("[data-gs]").forEach((btn) => btn.addEventListener("click", () => {
           row.querySelectorAll("[data-gs]").forEach((b) => b.classList.toggle("on", b === btn));
           if (hidden) hidden.value = btn.dataset.gs;
+          const gsKey = hidden?.dataset?.key;
+          if (gsKey && this.preset?.input) this.preset.input[gsKey] = btn.dataset.gs;
         }));
       });
       const be = this.$("#body");
@@ -5522,11 +5538,10 @@ ${String(body ?? "")}`;
       }
       if (f.kind === "enum" && f.key === "layout") {
         const cards = [
-          { key: "editorial", name: "Editorial", desc: "Full-width cover hero, title on it", shape: '<span class="gs-frame"></span><span class="gs-strip"><i></i><i></i></span>' },
           { key: "journal", name: "Journal", desc: "Sticky rail beside one reading column", shape: '<span class="gs-tile" style="flex:0 0 26%"></span><span class="gs-tile"></span>' },
           { key: "card", name: "Card", desc: "Centered card, no rail", shape: '<span class="gs-tile" style="flex:0 0 62%;margin:0 auto"></span>' }
         ];
-        const cur = v || "editorial";
+        const cur = v === "card" ? "card" : "journal";
         const cardsHtml = cards.map((c) => `<button type="button" class="gs-card${c.key === cur ? " on" : ""}" data-gs="${c.key}">
         <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join("");
         return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
@@ -6328,6 +6343,7 @@ ${String(body ?? "")}`;
         this._setChip(`${CHECK} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
+        this.staged = false;
         this._banner(`Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.`);
         const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : "";
         const ownerLabel = (o) => o?.scope === "house" ? "House / GBTI Network" : o?.username || "a member";
@@ -19009,7 +19025,7 @@ ${String(body ?? "")}`;
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null });
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null });
         ed?.addEventListener?.("gbti-renamed", (ev) => {
           const r = ev?.detail || {};
           if (!r.path) return;
@@ -19023,7 +19039,10 @@ ${String(body ?? "")}`;
         if (e.staged) notes.push("You are editing your staged fork draft. It is not live until you Publish.");
         if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
         if (notes.length && ed?.out) ed.out(esc(notes.join(" ")), e.invalidNote ? "danger" : "muted");
-        ed?.addEventListener("gbti-published", () => this._onPublished(e.type));
+        ed?.addEventListener("gbti-published", () => {
+          if (this._editing) this._editing.staged = false;
+          this._onPublished(e.type);
+        });
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
         return;
       }
@@ -19378,7 +19397,7 @@ ${String(body ?? "")}`;
       this._draftMsg = null;
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path });
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null };
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null };
         this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });

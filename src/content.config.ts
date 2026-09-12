@@ -125,12 +125,16 @@ const post = defineCollection({
     excerpt: z.string().max(200).optional(),
     categories: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
-    // sow-179/sow-183: which of the three article layouts renders this post (editorial/journal/card, see
-    // src/components/blog/Article*.astro), all three fully built. Journal is the default (sow-183: "Journal
-    // rail should be the default of all articles too"); every already-published post was backfilled to an
-    // explicit layout: 'journal' when this default flipped, so this default only ever governs a NEW post
-    // going forward, never a silent shape change to something already live.
-    layout: z.enum(['editorial', 'journal', 'card']).default('journal'),
+    // sow-179/sow-183: which article layout renders this post. Journal is the default (sow-183: "Journal
+    // rail should be the default of all articles too") and every published post carries an explicit
+    // layout: 'journal'.
+    //
+    // sow-326: EDITORIAL IS RETIRED as an authoring option (owner, 2026-09-12: "we want to disable editorial
+    // as an option across the whole website"). It is COERCED to journal here rather than rejected, because a
+    // stored 'editorial' can still arrive from a saved KV draft, a member's fork branch or an MCP agent
+    // written against the old enum, and a schema error there fails the entire site build over a value we
+    // already know the answer for. Zero committed items carried it when this landed: 54 of 54 were journal.
+    layout: z.preprocess((v) => (v === 'editorial' || v == null ? 'journal' : v), z.enum(['journal', 'card'])),
     coverImage: image().optional(),
     coverAlt: z.string().max(250).optional(), // SOW-062 P3: cover-image alt text (accessibility)
     video: z.string().optional(), // YouTube/Vimeo URL or ID — embed only

@@ -17061,9 +17061,10 @@ var postSchema = external_exports.object({
   excerpt: external_exports.string().max(200).optional(),
   categories: external_exports.array(external_exports.string()).default([]),
   tags: tagsSchema,
-  // sow-179/sow-183: mirrors src/content.config.ts's layout field exactly, including the 'journal' default
-  // (see that file's comment; every already-published post carries its own explicit layout: 'journal').
-  layout: external_exports.enum(["editorial", "journal", "card"]).default("journal"),
+  // sow-179/sow-183: mirrors src/content.config.ts's layout field exactly, including sow-326's retirement of
+  // 'editorial' as an option: a stored value is coerced to journal, never rejected, so an agent or a saved
+  // draft written against the old enum still validates. See that file for the reasoning.
+  layout: external_exports.preprocess((v) => v === "editorial" || v == null ? "journal" : v, external_exports.enum(["journal", "card"])),
   coverImage: external_exports.string().optional(),
   coverAlt: external_exports.string().max(250).optional(),
   // SOW-062 P3: cover-image alt text (accessibility)
@@ -19190,6 +19191,18 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
       signupBase: SIGNUP_BASE,
       fetchImpl: ctx2.fetch ?? globalThis.fetch
     });
+    for (const staleSlug of [...new Set([built.slug, renaming ? origin.oldSlug : null].filter(Boolean))]) {
+      try {
+        await workerDeleteDraft({
+          type,
+          slug: staleSlug,
+          token: ctx2.store?.get?.("githubToken"),
+          signupBase: SIGNUP_BASE,
+          fetch: ctx2.fetch ?? globalThis.fetch
+        });
+      } catch {
+      }
+    }
     return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
   }
   const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope);

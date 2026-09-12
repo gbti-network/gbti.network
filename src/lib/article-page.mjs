@@ -145,8 +145,16 @@ export const ARTICLE_SHELL = Object.freeze({
   }),
 });
 
-/** The layouts an article may declare. Anything else falls back to journal, matching [slug].astro:52. */
-export const ARTICLE_LAYOUTS = Object.freeze(['journal', 'editorial', 'card']);
+/**
+ * The layouts an article may declare. Anything else falls back to journal, matching [slug].astro.
+ *
+ * sow-326: 'editorial' came OUT of this list when the owner retired it as an option site-wide. The list is
+ * what gates UNPARSED frontmatter (the WorkBench preview reads a draft record, which no Zod schema has
+ * touched), so dropping it here is what makes a stored 'editorial' draft preview as the journal it will
+ * publish as. ARTICLE_SHELL.editorial and ArticleEditorial.astro are deliberately LEFT on disk, dormant and
+ * still covered by their drift tests, so re-offering the layout is a three-line change rather than a revert.
+ */
+export const ARTICLE_LAYOUTS = Object.freeze(['journal', 'card']);
 
 /**
  * Resolve a layout name to its shell contract, defaulting exactly as the published page does: an unknown or
