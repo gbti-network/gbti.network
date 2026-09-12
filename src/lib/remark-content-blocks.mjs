@@ -28,7 +28,10 @@ function renderBlock(node) {
   const url = String(node.value || '').trim();
   const src = embedUrl(url);
   // sow-158: sandbox matches the in-extension reader (client/src/markdown.mjs) so both renderers cage the frame.
-  if (src) return `<div class="embed-wrap"><iframe src="${esc(src)}" loading="lazy" allowfullscreen title="Embedded video" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe></div>`;
+  // 2026-09-12: allow-popups-to-escape-sandbox. The sandbox propagates into any tab the player opens (channel,
+  // "Watch on YouTube"), and Chrome refuses to navigate a sandboxed context to a COOP page such as a youtube.com
+  // watch page: ERR_BLOCKED_BY_RESPONSE. The flag frees the NEW tab only, never the framed player.
+  if (src) return `<div class="embed-wrap"><iframe src="${esc(src)}" loading="lazy" allowfullscreen title="Embedded video" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe></div>`;
   return `<p><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>`;
 }
 
