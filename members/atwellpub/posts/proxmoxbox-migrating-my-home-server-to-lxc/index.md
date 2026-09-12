@@ -9,6 +9,7 @@ publishedAt: 2026-08-15
 excerpt: "A closet home server running a radio station and a camera system moves off Windows and WSL onto Proxmox VE, with each app in its own unprivileged LXC container and no open ports anywhere."
 categories: ["devops", "tooling"]
 tags: ["proxmox", "lxc", "tailscale", "self-hosting", "home-server", "wsl"]
+coverImage: "./images/proxmox-cover.webp"
 ---
 
 I've had an ASRock H110 Pro BTC+ in the closest since Ethereum was POW (Proof of Work).
@@ -92,3 +93,7 @@ All four were waiting to be found. None was caused by the move.
 If you self-host anything, the question worth asking is whether your services come back on their own after the next power cut, not whether they are running today. Mine did not come back, and that is what started this.
 
 For more tutorials, AI skills and member-built products, have a look around [GBTI Network](https://gbti.network/). We are a developer co-op, and this is the sort of thing we spend our time on.
+
+Cover photograph by Daniel Reche on Pexels, with the Proxmox logo added.[^1]
+
+[^1]: Cover photograph by Daniel Reche on Pexels, used under the [Pexels License](https://www.pexels.com/license/): [pexels.com/photo/6570266](https://www.pexels.com/photo/a-mug-of-beer-on-the-table-6570266/). Proxmox is a registered trademark of [Proxmox Server Solutions GmbH](https://www.proxmox.com/); its logo appears here to identify the software this article is about.
