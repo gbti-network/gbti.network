@@ -204,9 +204,11 @@ The gate enforces a few rules:
 
 ### Roles and overrides
 
-Roles (member, moderator, admin, superadmin), bans, and grandfather grants live in git as
-`house/roles.yml`, `house/bans.yml`, and `house/grandfathered.yml`. Effective status follows a fixed
-precedence: a ban overrides everything, then staff, then a grandfather grant (treated as paid with no
+Roles (member, moderator, admin, superadmin) live in git as `house/roles.yml`, which is the reviewable
+root of trust for the anti-escalation model. Bans and grandfather grants do NOT: they are person-keyed
+records, so sow-213 moved them into the edge key-value store, and a pull request that re-creates
+`house/bans.yml` or `house/grandfathered.yml` is rejected by the membership gate. Effective status
+follows a fixed precedence: a ban overrides everything, then staff, then a grandfather grant (treated as paid with no
 subscription), then the Stripe-derived status. Superadmins are a fixed root of trust anchored in
 `CODEOWNERS`.
 
@@ -238,7 +240,7 @@ merges; the client only surfaces what a member may do.
   `products/<slug>/index.md`, and `prompts/<slug>/index.md` folders
 - `house/`: the network's own (non-member) content under `pages/`, `posts/`, `products/`, `applets/`, and
   `comments/`
-- `house/*.yml`: git-native control files, including `roles.yml`, `bans.yml`, `grandfathered.yml`,
+- `house/*.yml`: git-native control files, including `roles.yml`,
   `members-index.yml` (the GitHub-id to username map), `referral-config.yml`, `points-ledger.yml`,
   `taxonomy.yml` (the canonical category tree), and `favorite-counts.yml` (the member-identity-free
   aggregate synced from the edge store)

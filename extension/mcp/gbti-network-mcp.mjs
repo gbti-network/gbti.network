@@ -17258,7 +17258,8 @@ async function encryptViaWorker({ plaintext, assetId, token, signupBase, fetch =
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ plaintext, assetId })
   });
-  if (res.status === 401 || res.status === 403) throw new MemberContentLockedError("cannot encrypt: an active paid membership is required");
+  if (res.status === 401) throw new MemberContentLockedError("cannot encrypt: not signed in");
+  if (res.status === 403) throw new MemberContentLockedError("cannot encrypt: the server refused this account");
   if (!res.ok) throw new Error("encrypt failed (" + res.status + ")");
   const data = await res.json();
   if (!data || data.ok !== true || !data.envelope) throw new Error("encrypt: malformed response");
@@ -19363,7 +19364,7 @@ async function saveDraft(ctx2, { type, input, body, message, path: path4 } = {})
     plan = await planMemberFiles({ built, body, encrypt });
   } catch (err) {
     if (err instanceof MemberContentLockedError) {
-      throw new OperationError("membership-required", "Staging members-only content requires a paid membership. Save it as public, or upgrade to a paid membership.", { membership });
+      throw new OperationError("membership-required", "Staging members-only content needs an active membership. Save it as public, or check your membership status.", { membership });
     }
     throw err;
   }

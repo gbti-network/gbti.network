@@ -96,6 +96,7 @@ test('encrypt: a non-paid author cannot encrypt (403)', async () => {
   assert.equal(r.status, 403);
 });
 
+
 test('encrypt: 400 when plaintext or assetId is missing', async () => {
   assert.equal((await membershipEncrypt(POST('encrypt', 'Bearer g', { assetId: 'a' }), CREATOR_ENV(), deps('1', () => paidCreator))).status, 400);
   assert.equal((await membershipEncrypt(POST('encrypt', 'Bearer g', { plaintext: 'x' }), CREATOR_ENV(), deps('1', () => paidCreator))).status, 400);
@@ -392,8 +393,15 @@ test('authorizeCreator: a non-paid caller gets the paid-required message; a bann
   assert.match(banned.body.message, /not permitted/);
 });
 
-test('encrypt: a $5 Network Member cannot write member content (creator-gated, 403)', async () => {
-  const r = await membershipEncrypt(POST('encrypt', 'Bearer g', { plaintext: 'x', assetId: 'post:z:body' }), ENV(PRICE_ENV), deps('1', () => paidAt('price_m')));
-  assert.equal(r.status, 403);
-  assert.match(r.body.message, /requires Curator status, which is granted by application/);
+// sow-323: THE REGRESSION PIN, and it asserted the OPPOSITE until 2026-09-12 ("a $5 Network Member cannot write
+// member content (creator-gated, 403)"). That was right for sow-185 and went wrong the moment sow-293 opened
+// members-only sharing to every paid member at the AUTHOR route and left this gate creator-only: two gates on one
+// action disagreed, the stricter won, and a PAYING member could neither publish members-only content nor stage a
+// draft, while the client relabelled the 403 as "an active paid membership is required" so the symptom pointed at
+// billing. Publishing is paid now; what may go PUBLIC is decided in membership-author.mjs.
+test('encrypt: a member-priced paid account CAN write member content (sow-323: paid-gated, not creator-gated)', async () => {
+  const r = await membershipEncrypt(POST('encrypt', 'Bearer g', { plaintext: 'members only', assetId: 'post:z:body' }), ENV(PRICE_ENV), deps('1', () => paidAt('price_m')));
+  assert.equal(r.status, 200, 'a paid member must be able to author gated content');
+  assert.equal(r.body.envelope.aad, 'post:z:body');
+  assert.equal(r.body.key, undefined, 'the response must NOT contain the key');
 });

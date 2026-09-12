@@ -67,10 +67,33 @@ test('planMemberFiles: a public intro (no marker) returns null -> the caller com
   assert.equal(await planMemberFiles({ built, body: 'why I built this', encrypt: fakeEncrypt }), null);
 });
 
-test('reassembleMemberBody (Mode A/B): visibility members -> the decrypted memberText is the whole body', () => {
+test('reassembleMemberBody (Mode A): members with no teaser -> the decrypted memberText is the whole body', () => {
   assert.equal(reassembleMemberBody({ visibility: 'members' }, '', 'the whole gated body'), 'the whole gated body');
-  // a Mode B stub may carry a public teaser in index.md, but the whole authoring body is still the members text
-  assert.equal(reassembleMemberBody({ visibility: 'members' }, 'ignored teaser', 'gated'), 'gated');
+});
+
+// sow-323: this case asserted the OPPOSITE until 2026-09-12 ("the whole authoring body is still the members
+// text", discarding indexBody), and that pin is why the data loss survived. planMemberFiles deliberately keeps a
+// pre-marker teaser in index.md for a members item, so discarding it here meant the editor showed only the gated
+// text and the NEXT publish committed the teaser away. Phase 3 makes a teaser the norm on every member item, so
+// the same bug would have fired on every edit.
+test('reassembleMemberBody (Mode B): members WITH a public teaser -> teaser + marker + members part', () => {
+  assert.equal(reassembleMemberBody({ visibility: 'members' }, 'the teaser', 'gated'),
+    'the teaser\n\n<!-- members-only -->\n\ngated');
+});
+
+test('ROUND-TRIP: a Mode B body (members + teaser) splits and reassembles to the original', async () => {
+  const original = 'A teaser a visitor may read.\n\n<!-- members-only -->\n\nThe members-only body.';
+  const plan = await planMemberFiles({
+    built: { slug: 's', path: 'members/u/posts/s/index.md', frontmatter: { visibility: 'members', title: 'T' } },
+    body: original,
+    encrypt: async (plaintext) => ({ v: 1, kid: '1', aad: 'a', ct: plaintext }),
+  });
+  const idx = plan.files.find((f) => f.path.endsWith('index.md'));
+  const enc = plan.files.find((f) => f.path.endsWith('.enc'));
+  const publicPart = parseContentFile(idx.content).body;
+  assert.equal(publicPart.trim(), 'A teaser a visitor may read.', 'the teaser stays in index.md');
+  const rebuilt = reassembleMemberBody(parseContentFile(idx.content).frontmatter, publicPart, JSON.parse(enc.content).ct);
+  assert.equal(rebuilt.trim(), original, 'the author gets back exactly what they wrote');
 });
 
 test('reassembleMemberBody (Mode C): visibility public -> public part + marker + members part', () => {

@@ -41,5 +41,10 @@ jobs:
       - run: node scripts/validate-content.mjs
       # SOW-015: fail the PR if a plaintext is committed beside a .enc, or a .enc is not a valid v1 envelope.
       # Secret-free (the repo-hygiene + envelope checks need no key); safe on pull_request. The dist key-scan
-      # portion runs in the Cloudflare Pages build env with MEMBER_CONTENT_KEY set (see .data/sow/human-todo.md).
-      - run: node scripts/check-build-secrets.mjs
+      # portion runs in the Cloudflare Pages build env with MEMBER_CONTENT_KEY set.
+      # sow-323: --no-dist is REQUIRED here and is not a convenience. This job never builds the site, and
+      # sow-245 (correctly) made the dist guards ERROR rather than pass on nothing, which turned this job red
+      # on every content pull request from 2026-09-09 until 2026-09-12. The flag makes the absence explicit and
+      # the run prints exactly which guards it skipped. Do NOT add it to `npm run verify:dist`, where a missing
+      # dist genuinely means a broken build.
+      - run: node scripts/check-build-secrets.mjs --no-dist

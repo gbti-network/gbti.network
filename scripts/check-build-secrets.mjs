@@ -36,7 +36,7 @@ const BINARY = /\.(png|jpe?g|webp|avif|gif|ico|woff2?|ttf|eot|otf|pdf|wasm|mp4|w
  * Scan a repo root + its dist for leaked member-content key material and .enc hygiene problems. Pure over the
  * passed root/dist/env, so it is unit-testable. Returns { errors, notes }.
  */
-export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env = process.env, buildDrafts = buildRepoDraftsIndex } = {}) {
+export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env = process.env, buildDrafts = buildRepoDraftsIndex, requireDist = true } = {}) {
   const errors = [];
   const notes = [];
   // sow-245: the subject count. This guard returned { errors, notes } with no count, so a caller could not tell
@@ -74,8 +74,16 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       }
     }
     if (checked === 0) errors.push("dist/ carries no HTML page, so this guard had no subjects and proved nothing. Run `npm run build` first; a dist with no page is a partial build. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
-  } else {
+  } else if (requireDist) {
     errors.push("dist/ not found, so this guard had no subjects and proved nothing. Run `npm run build` first. Do not ignore this line: a green tick here would have been a pass on nothing (sow-245).");
+  } else {
+    // sow-323: an EXPLICIT no-dist run, for the pull-request content check, which installs and validates the
+    // repository and never builds the site (its own comment says the dist key-scan runs in the Pages build env
+    // with MEMBER_CONTENT_KEY set). sow-245 made the dist guards error rather than pass on nothing, which was
+    // right, but it turned that workflow red on every content pull request from 2026-09-09 and nobody noticed,
+    // because nothing on main waits for a check. The fix is not to let a missing dist pass silently: this run
+    // must SAY which guards it did not perform, so a green tick here is never read as the full guard.
+    notes.push('dist/ was not scanned (--no-dist). Skipped: the key-value scan, the members-only marker scan, the Mode A absence check, the Mode B locked-body check, the media-index check, the Share leak scan and the draft-index scan. Only the repository-side checks below ran. The dist guards run in the Pages build (npm run verify:dist), where a missing dist is still an error.');
   }
 
   const modeAItemPaths = []; // sow-165: filled by the Mode A walk below, read by the media-index check after it
@@ -471,12 +479,15 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
 // CLI
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-  const { errors, notes, checked } = checkBuildSecrets({ root: ROOT });
+  const requireDist = !process.argv.includes('--no-dist'); // sow-323: see the no-dist note above
+  const { errors, notes, checked } = checkBuildSecrets({ root: ROOT, requireDist });
   for (const n of notes) console.log('· ' + n);
   if (errors.length) {
     console.error(`✗ build-secrets guard failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):`);
     for (const e of errors) console.error('  - ' + e);
     process.exit(1);
   }
-  console.log(`✓ build-secrets guard passed (${checked} page${checked === 1 ? '' : 's'} scanned: no key material in dist, no plaintext beside ciphertext)`);
+  console.log(requireDist
+    ? `✓ build-secrets guard passed (${checked} page${checked === 1 ? '' : 's'} scanned: no key material in dist, no plaintext beside ciphertext)`
+    : '✓ build-secrets repository checks passed (no plaintext beside ciphertext, every .enc a valid envelope). dist/ was NOT scanned: see the note above.');
 }

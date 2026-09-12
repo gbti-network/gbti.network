@@ -52,7 +52,10 @@ export async function encryptViaWorker({ plaintext, assetId, token, signupBase, 
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
     body: JSON.stringify({ plaintext, assetId }),
   });
-  if (res.status === 401 || res.status === 403) throw new MemberContentLockedError('cannot encrypt: an active paid membership is required');
+  // sow-323: say what the server said rather than guessing at billing. This message read "an active paid
+  // membership is required" while the route was creator-gated, so a PAYING member was told to pay.
+  if (res.status === 401) throw new MemberContentLockedError('cannot encrypt: not signed in');
+  if (res.status === 403) throw new MemberContentLockedError('cannot encrypt: the server refused this account');
   if (!res.ok) throw new Error('encrypt failed (' + res.status + ')');
   const data = await res.json();
   if (!data || data.ok !== true || !data.envelope) throw new Error('encrypt: malformed response');

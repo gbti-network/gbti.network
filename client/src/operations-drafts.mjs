@@ -101,7 +101,9 @@ export async function saveDraft(ctx, { type, input, body, message, path } = {}) 
     plan = await planMemberFiles({ built, body, encrypt });
   } catch (err) {
     if (err instanceof MemberContentLockedError) {
-      throw new OperationError('membership-required', 'Staging members-only content requires a paid membership. Save it as public, or upgrade to a paid membership.', { membership });
+      // sow-323: the old copy told a paying member to upgrade, because the encrypt route was creator-gated
+      // and this branch assumed a 403 meant unpaid. The gate is paid now, so this is the genuine unpaid case.
+      throw new OperationError('membership-required', 'Staging members-only content needs an active membership. Save it as public, or check your membership status.', { membership });
     }
     throw err;
   }

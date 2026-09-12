@@ -533,3 +533,28 @@ test('sow-246 control: the Mode A rule is unchanged by the new branch', () => {
   assert.ok(errors.some((e) => /Mode A item .* has a public page/.test(e)), errors.join(' | '));
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// sow-323: the content-check workflow never builds the site, and sow-245 (rightly) made the dist guards ERROR
+// rather than pass on nothing. That combination turned the job red on every content pull request from
+// 2026-09-09 to 2026-09-12, unnoticed because nothing on main waits for a check. `requireDist: false` makes the
+// absence EXPLICIT: the run passes the repository checks and names every guard it did not perform, so a green
+// tick is never mistaken for the full guard. Both directions are asserted, because a flag that cannot fail in
+// the other direction would reintroduce exactly the vacuous pass sow-245 removed.
+test('requireDist: a missing dist is an ERROR by default and a named SKIP when declared', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-nodist-'));
+  const missing = /dist\/ not found, so this guard had no subjects/;
+
+  const strict = checkBuildSecrets({ root, env: {} });
+  assert.ok(strict.errors.some((e) => missing.test(e)), 'the default must still error: ' + strict.errors.join(' | '));
+
+  const declared = checkBuildSecrets({ root, env: {}, requireDist: false });
+  assert.ok(!declared.errors.some((e) => missing.test(e)), 'a declared no-dist run must not error on the absence');
+  const note = declared.notes.find((n) => /dist\/ was not scanned/.test(n));
+  assert.ok(note, 'it must SAY that dist was skipped: ' + declared.notes.join(' | '));
+  for (const guard of ['Mode A absence', 'media-index', 'Share leak', 'draft-index']) {
+    assert.ok(note.includes(guard), `the note must name the ${guard} guard it skipped`);
+  }
+  assert.equal(declared.checked, 0, 'and it must not claim to have scanned any page');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});

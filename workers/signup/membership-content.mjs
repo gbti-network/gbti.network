@@ -262,12 +262,23 @@ export async function membershipDecrypt(request, env, deps = {}) {
 }
 
 /**
- * POST /membership/encrypt — body { plaintext, assetId }. Returns { ok, envelope } for a Content Creator
- * author to commit as <assetId>.enc, encrypted under the CURRENT epoch with the Worker-held key. sow-185:
- * writing member-only content is a Content-Creator action, so this is creator-gated (was authorizePaid).
+ * POST /membership/encrypt — body { plaintext, assetId }. Returns { ok, envelope } for a paid author to
+ * commit as <assetId>.enc, encrypted under the CURRENT epoch with the Worker-held key.
+ *
+ * PAID-GATED, and the history matters because the wrong gate here was invisible for nine days. sow-185
+ * creator-gated this route (commit 65b867e2) on the reasoning that writing member-only content was a
+ * Content-Creator action, which was true while publishing meant Curator. sow-293 then opened members-only
+ * sharing to every paid member at the AUTHOR route and left this one creator-gated, so two gates on the same
+ * action disagreed and the stricter, earlier one won: a paying Network Member could not publish members-only
+ * content OR stage a draft, and the client relabelled the 403 as "an active paid membership is required", so
+ * the symptom pointed at billing. sow-323 restores authorizePaid. EVERY members-only publish and every draft
+ * save routes through here (planMemberFiles encrypts before the author route is called), so this gate decides
+ * whether a paid member can author gated content at all. It is NOT the public-content boundary: what may go
+ * PUBLIC is decided in membership-author.mjs, and the trusted-author check there is the only remaining
+ * creator-tier gate.
  */
 export async function membershipEncrypt(request, env, deps = {}) {
-  const auth = await authorizeCreator(request, env, deps);
+  const auth = await authorizePaid(request, env, deps);
   if (!auth.ok) return { status: auth.status, body: auth.body };
 
   const body = await readJson(request);

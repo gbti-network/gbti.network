@@ -419,15 +419,24 @@ export function favoritedFrom(activity, targetType, targetSlug) {
  * sow-158 Phase 3c: rebuild the FULL authoring body of a members-only item from its committed `index.md` body plus
  * the DECRYPTED members text, so the editor shows everything and a re-publish re-splits identically. The exact
  * inverse of planMemberFiles' split:
- *   - Mode A/B (visibility: members): the whole body was gated, so the decrypted memberText IS the body.
+ *   - Mode A (visibility: members, no teaser): the whole body was gated, so the decrypted memberText IS the body.
+ *   - Mode B (visibility: members WITH a public teaser): index.md keeps the teaser before the marker, so the
+ *     authoring body is the teaser + the marker + the members part, exactly as Mode C.
  *   - Mode C (visibility: public): the public part (the committed index.md body) + the `<!-- members-only -->`
  *     marker + the members part.
  * Pure. Used only when frontmatter.encryptedBody is set (the caller decrypts, then calls this).
+ *
+ * sow-323 fixed a round trip that LOST the author's words. This returned only the gated text for any members
+ * item, while planMemberFiles (above) keeps a pre-marker teaser in index.md for exactly that case, so editing
+ * a Mode B item dropped its teaser and the next publish committed it gone. The rule is the same in all three
+ * modes now: whatever index.md carries is the public part.
  */
 export function reassembleMemberBody(frontmatter, indexBody, memberText) {
   const gated = String(memberText ?? '');
-  if ((frontmatter?.visibility ?? 'public') === 'members') return gated; // whole-item members: memberText is all
   const pub = String(indexBody ?? '').trim();
+  // Mode A: a members item with nothing before the marker was gated whole, so there is no teaser to restore and
+  // the author must not be shown a leading marker they never typed. Only a REAL teaser comes back.
+  if ((frontmatter?.visibility ?? 'public') === 'members' && !pub) return gated;
   return pub ? `${pub}\n\n${MEMBER_MARKER}\n\n${gated}` : `${MEMBER_MARKER}\n\n${gated}`;
 }
 
