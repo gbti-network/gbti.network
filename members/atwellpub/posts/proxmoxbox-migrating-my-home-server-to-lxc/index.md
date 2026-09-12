@@ -25,7 +25,7 @@ layout: journal
 coverImage: ./images/proxmox-cover.webp
 featured: false
 publishedAt: '2026-09-12T14:40:48.000Z'
-updatedAt: '2026-09-12T20:41:11.297Z'
+updatedAt: '2026-09-12T20:42:08.016Z'
 type: post
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/post-proxmoxbox-migrating-my-home-server-to-lxc-body.enc
@@ -46,7 +46,7 @@ So I've made the decision to ditch Windows, and on the recommendation of a colle
 
 Proxmox is a linux-first OS platform that manages virtual machines and LXC containers from one web interface.
 
-Proxmox offers a specialized operating system that allows segmentation of machines and containers. Think of it as your own linux container manager; similar to a collection of Dropbox instances.
+Proxmox offers a specialized operating system that allows segmentation of machines and containers. Think of it as your own linux container manager; similar to a collection of Docker instances.
 
 Instead of piling every self-hosted application into WSL under Windows, each service can live in its own container environment. This makes applications easier to install, start up, back up, restart, move, upgrade, and occasionally break without taking the rest of the server down with them.
 
