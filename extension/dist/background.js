@@ -20369,6 +20369,76 @@ function parseImageLine(line) {
   return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
 }
 
+// client/src/list-items.mjs
+var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+function isListLine(line) {
+  return LIST_ITEM_RE.test(String(line ?? ""));
+}
+function takeListRun(lines, start = 0) {
+  const items = [];
+  const stack = [0];
+  let topOrdered = null;
+  let i = start;
+  while (i < lines.length) {
+    const m = LIST_ITEM_RE.exec(String(lines[i] ?? ""));
+    if (!m) break;
+    const indent = m[1].replace(/\t/g, "    ").length;
+    const ordered = /^\d/.test(m[2]);
+    while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
+    if (indent > stack[stack.length - 1]) stack.push(indent);
+    const depth = stack.length - 1;
+    if (depth === 0) {
+      if (topOrdered === null) topOrdered = ordered;
+      else if (ordered !== topOrdered) break;
+    }
+    items.push({ text: m[3], depth, ordered });
+    i++;
+  }
+  return { items, next: i };
+}
+function normalizeListItems(items, ordered = false) {
+  const out = [];
+  let prevDepth = -1;
+  for (const raw of Array.isArray(items) ? items : []) {
+    const it = raw && typeof raw === "object" ? raw : { text: raw, depth: 0 };
+    let depth = Math.max(0, Math.floor(Number(it.depth) || 0));
+    if (depth > prevDepth + 1) depth = prevDepth + 1;
+    const own = typeof it.ordered === "boolean" ? it.ordered : false;
+    out.push({ text: String(it.text ?? ""), depth, ordered: depth === 0 ? !!ordered : own });
+    prevDepth = depth;
+  }
+  return out;
+}
+function listHtml(items, inline2 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
+  const norm = normalizeListItems(items, ordered);
+  let html = "";
+  const open = [];
+  const openList = (it) => {
+    const tag = it.ordered ? "ol" : "ul";
+    html += `<${tag}${!open.length && rootAttrs ? ` ${rootAttrs}` : ""}>`;
+    open.push({ tag, ordered: it.ordered });
+  };
+  const closeList = () => {
+    html += `</li></${open.pop().tag}>`;
+  };
+  for (const it of norm) {
+    while (open.length > it.depth + 1) closeList();
+    if (open.length === it.depth + 1) {
+      const cur = open[open.length - 1];
+      if (cur.ordered !== it.ordered) {
+        closeList();
+        openList(it);
+        html += `<li>${inline2(it.text)}`;
+      } else html += `</li><li>${inline2(it.text)}`;
+    } else {
+      openList(it);
+      html += `<li>${inline2(it.text)}`;
+    }
+  }
+  while (open.length) closeList();
+  return html;
+}
+
 // client/src/markdown.mjs
 var EMBED_RELAY = "https://gbti.network/embed/";
 function escapeHtml(s) {
@@ -20543,22 +20613,13 @@ function renderDoc(md, ids, opts = {}) {
   };
   let codeFence = 3;
   let fenceStart = 0;
-  let listStart = null;
   let inCode = false;
   let codeBuf = [];
   let codeLang = "";
-  let listType = null;
-  let listBuf = [];
   const footnotes = [];
   const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
   const linkKeep = [];
   const flushList = () => {
-    if (listType) {
-      emit(`<${listType}>${listBuf.join("")}</${listType}>`, listStart, i - 1);
-      listType = null;
-      listBuf = [];
-      listStart = null;
-    }
   };
   let i = 0;
   while (i < lines.length) {
@@ -20620,24 +20681,10 @@ function renderDoc(md, ids, opts = {}) {
       i++;
       continue;
     }
-    if (/^\s*[-*]\s+/.test(line)) {
-      if (listType !== "ul") {
-        flushList();
-        listType = "ul";
-        listStart = i;
-      }
-      listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ""), linkKeep), fn)}</li>`);
-      i++;
-      continue;
-    }
-    if (/^\s*\d+\.\s+/.test(line)) {
-      if (listType !== "ol") {
-        flushList();
-        listType = "ol";
-        listStart = i;
-      }
-      listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ""), linkKeep), fn)}</li>`);
-      i++;
+    if (isListLine(line)) {
+      const run = takeListRun(lines, i);
+      emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+      i = run.next;
       continue;
     }
     if (/^\s*>\s?/.test(line)) {

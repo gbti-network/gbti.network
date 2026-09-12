@@ -674,7 +674,7 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout, planImageCaption } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout, planImageCaption, planListIndent, listItemAtSelection, caretAtEndOfItem } = await import('../../../client-ui/src/block-commit.mjs');
       const { imagePastePlan, pastedImageName, fileToDataUrl, fitImageFile } = await import('../../../client-ui/src/image-paste.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
@@ -1061,6 +1061,27 @@ const labelOf = CATEGORY_LABELS;
           // empty paragraph was to click away and let the blur commit collapse it, which works but gives no
           // feedback at the moment the author presses the key, so the key reads as broken.
           el.addEventListener('keydown', (ev: KeyboardEvent) => {
+            // Tab / Shift+Tab in a list: the item under the caret moves one level in or out, through the same splice
+            // path as the heading control, with any half-typed text folded in first. The re-render replaces the node,
+            // so the caret is put back on the same item afterwards.
+            if (ev.key === 'Tab' && editing && (el.tagName === 'UL' || el.tagName === 'OL')) {
+              const { index } = listItemAtSelection(el, document.getSelection());
+              if (index < 0) return;
+              ev.preventDefault();
+              const idx = Number(el.dataset[doc.attr]);
+              const delta = ev.shiftKey ? -1 : 1;
+              delete el.dataset.pvSnap;
+              void spliceBlock(doc, el, (before: string[]) => {
+                const edited = applyBlockEdit(before.join('\n'), readBlockDom(el));
+                return planListIndent((edited || before).join('\n'), index, delta);
+              }).then(() => {
+                const scope = doc === noteDoc ? $('[data-pv-note-card]') : bodyEl;
+                const again = scope?.querySelector(`[data-${doc.attr}="${idx}"]`) as HTMLElement | null;
+                const li = again ? (again.querySelectorAll('li')[index] as HTMLElement | undefined) : undefined;
+                if (again) { again.focus(); if (li) caretAtEndOfItem(li, document.getSelection()); }
+              });
+              return;
+            }
             if (ev.key !== 'Backspace' || !editing) return;
             const sel = document.getSelection();
             if (!sel || !sel.isCollapsed || sel.focusOffset !== 0) return;

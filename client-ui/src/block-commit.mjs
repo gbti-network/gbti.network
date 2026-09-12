@@ -16,6 +16,7 @@
 // are the doc editor's existing model, reused rather than reimplemented.
 import { parseBlocks, serializeBlocks, inlineHtmlToMd } from './markdown-blocks.mjs';
 import { normalizeImageLayout, cleanCaption } from '../../client/src/image-attrs.mjs';
+import { normalizeListItems, isFlatList, indentListItem, serializeListItems } from '../../client/src/list-items.mjs';
 
 /** Rendered tags the Preview can edit. hr has nothing to edit; a callout/embed renders as a div and is not text. */
 export const EDITABLE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'PRE']);
@@ -62,7 +63,7 @@ export function readBlockDom(el) {
   const md = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).trim();
   const kids = (node, sel) => Array.from(node.querySelectorAll(sel));
 
-  if (tag === 'UL' || tag === 'OL') return { kind: 'list', items: kids(el, 'li').map((li) => md(li.innerHTML)) };
+  if (tag === 'UL' || tag === 'OL') return { kind: 'list', items: readListDom(el, md) };
   if (tag === 'PRE') {
     // Code stays literal: no inline transform, and the trailing newline the renderer adds is not content.
     const code = el.querySelector('code') || el;
@@ -95,7 +96,11 @@ export function applyBlockEdit(sourceText, read) {
   switch (b.type) {
     case 'list': {
       if (!Array.isArray(read.items)) return null;
-      b.items = read.items.slice();
+      // Strings stay strings (a flat list); objects carry depth and marker (a nested one). The block's marker is
+      // the top level's marker.
+      const items = normalizeListItems(read.items, !!b.ordered);
+      b.ordered = items.length ? !!items[0].ordered : !!b.ordered;
+      b.items = isFlatList(items) ? items.map((it) => it.text) : items;
       delete b.text;            // serializeBlock prefers items, but a stale text field is a trap for the next reader
       break;
     }
@@ -206,4 +211,65 @@ export function planImageCaption(sourceText, caption) {
   const c = cleanCaption(caption);
   const { caption: _old, ...rest } = b;
   return [serializeBlocks([{ ...rest, ...(c ? { caption: c } : {}) }])];
+}
+
+/**
+ * Read a rendered list back as { text, depth, ordered } items in document order: each <li>'s OWN inline content
+ * (the nested list that may follow it inside the same <li> is not its text), its depth from the lists between it
+ * and the block, its marker from its parent tag. Shared by the Preview and the block editor so the two cannot
+ * drift. `md(html)` turns inline HTML into markdown.
+ */
+export function readListDom(el, md) {
+  const out = [];
+  const tagOf = (n) => String(n?.tagName || '').toUpperCase();
+  const walk = (list, depth) => {
+    for (const li of Array.from(list.children || [])) {
+      if (tagOf(li) !== 'LI') continue;
+      const own = String(li.innerHTML ?? '').replace(/<(ul|ol)\b[\s\S]*$/i, '');
+      out.push({ text: md(own), depth, ordered: tagOf(list) === 'OL' });
+      for (const sub of Array.from(li.children || [])) if (tagOf(sub) === 'UL' || tagOf(sub) === 'OL') walk(sub, depth + 1);
+    }
+  };
+  walk(el, 0);
+  return out;
+}
+
+/**
+ * Tab / Shift+Tab on ONE list block's item: move it (and its children) one level in or out and return the block's
+ * replacement lines, or null when the range is not a single list, the item is out of range, or nothing changes
+ * (the first item never indents; a depth is clamped to one below the item before it).
+ */
+export function planListIndent(sourceText, itemIndex, delta) {
+  const blocks = parseBlocks(String(sourceText ?? ''));
+  if (blocks.length !== 1 || blocks[0].type !== 'list') return null;
+  const b = blocks[0];
+  const next = indentListItem(b.items, itemIndex, delta, !!b.ordered);
+  if (!next) return null;
+  return serializeListItems(next, !!b.ordered);
+}
+
+/** The <li> of a rendered list block that holds the selection's anchor, and its index in document order. DOM only. */
+export function listItemAtSelection(el, sel) {
+  let n = sel?.anchorNode || null;
+  if (n && n.nodeType !== 1) n = n.parentNode;
+  while (n && n !== el && String(n.tagName || '').toUpperCase() !== 'LI') n = n.parentNode;
+  if (!n || n === el) return { li: null, index: -1 };
+  const all = Array.from(el.querySelectorAll('li'));
+  return { li: n, index: all.indexOf(n) };
+}
+
+/** Put the caret at the end of an <li>'s own text, before any nested list it holds. DOM only. */
+export function caretAtEndOfItem(li, sel) {
+  if (!li || !sel) return;
+  let last = null;
+  for (const c of Array.from(li.childNodes || [])) {
+    const t = String(c.tagName || '').toUpperCase();
+    if (c.nodeType === 1 && (t === 'UL' || t === 'OL')) break;
+    last = c;
+  }
+  try {
+    const r = document.createRange();
+    if (last) { r.selectNodeContents(last); r.collapse(false); } else { r.setStart(li, 0); r.collapse(true); }
+    sel.removeAllRanges(); sel.addRange(r);
+  } catch { /* focus alone is enough */ }
 }

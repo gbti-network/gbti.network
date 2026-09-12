@@ -5,6 +5,7 @@
 // (we model block STRUCTURE, not inline), so it round-trips verbatim.
 
 import { parseImageLine, imageLayoutSuffix, imageTitleSuffix } from '../../client/src/image-attrs.mjs'; // the {full} / {left wrap} layout words; the title is the caption
+import { takeListRun, serializeListItems, isFlatList } from '../../client/src/list-items.mjs'; // nested lists: depth and marker per item
 
 export const MEMBERS_MARKER = '<!-- members-only -->';
 export const BLOCK_TYPES = ['paragraph', 'heading', 'code', 'quote', 'list', 'table', 'image', 'embed', 'callout', 'members'];
@@ -69,8 +70,10 @@ function serializeBlock(b) {
     case 'callout': return '```callout ' + normalizeVariant(b.variant) + '\n' + (b.text ?? '') + '\n```';
     case 'quote': return String(b.text ?? '').split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n');
     case 'list': {
+      // A string item is a top-level item with the list's marker; an object carries its own depth and marker
+      // (client/src/list-items.mjs), so a nested list serializes with CommonMark's child indentation.
       const items = Array.isArray(b.items) ? b.items : String(b.text ?? '').split('\n').filter((x) => x !== '');
-      return items.map((it, i) => (b.ordered ? `${i + 1}. ` : '- ') + it).join('\n');
+      return serializeListItems(items, !!b.ordered).join('\n');
     }
     case 'table': {
       const head = Array.isArray(b.head) ? b.head : [];
@@ -134,10 +137,14 @@ export function parseBlocks(md) {
       continue;
     }
     if (isListItem(line)) {
-      const ordered = /^\s*\d+\.\s+/.test(line);
-      const items = [];
-      while (i < n && isListItem(lines[i])) { items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, '')); i++; }
+      // One run of list lines, nesting read from the indentation (a marker change at the top level ends the run,
+      // as CommonMark starts a new list there). A flat, single-marker list keeps the plain-string shape every
+      // reader has always seen; only nesting or a marker mix needs the { text, depth, ordered } objects.
+      const run = takeListRun(lines, i);
+      const ordered = !!run.items[0]?.ordered;
+      const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o }) => ({ text, depth, ordered: o }));
       blocks.push({ type: 'list', ordered, items });
+      i = run.next;
       continue;
     }
     // SOW-169: a GFM table = a header row with pipes immediately followed by a delimiter row. Body rows continue

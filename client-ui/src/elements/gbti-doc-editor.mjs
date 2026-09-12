@@ -9,6 +9,9 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd } from '../markdown-blocks.mjs';
 import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: the toolbar + link manager, shared with the WorkBench Preview
+import { listHtml, isFlatList } from '../../../client/src/list-items.mjs'; // nested lists: depth and marker per item
+import { readListDom } from '../block-commit.mjs'; // the list read-back, shared with the Preview
+import { listTabKeydown } from '../list-editing.mjs'; // Tab / Shift+Tab in a list block
 import { resolveContentAsset } from '../assets.mjs';
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
@@ -103,6 +106,7 @@ const CSS = `
   .ce-code { font-family:var(--font-mono, ui-monospace, monospace); font-size:13.5px; line-height:1.6; color:#e6e4ee; background:var(--ink); border:1.5px solid var(--s-line-2); border-radius:8px; padding:13px 16px; margin:8px 0; }
   .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
   .ce-list li { padding:1px 0; }
+  .ce-list ul, .ce-list ol { padding-left:22px; margin:2px 0; }
   /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
   .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
   .ce strong, .ce b { font-weight:700; }
@@ -352,9 +356,10 @@ class GbtiDocEditor extends GbtiElement {
         return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
           + `<div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || '')}</div>`;
       case 'list': {
-        const tag = b.ordered ? 'ol' : 'ul';
-        const items = (Array.isArray(b.items) ? b.items : ['']).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join('') || '<li></li>';
-        return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
+        // Nested lists render nested (children inside their parent's <li>); the outermost tag is the editable host.
+        // Tab / Shift+Tab move the item under the caret (see _wire).
+        const items = Array.isArray(b.items) && b.items.length ? b.items : [''];
+        return listHtml(items, inlineMdToHtml, { ordered: !!b.ordered, rootAttrs: `class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}"` });
       }
       case 'table': {
         // SOW-169: a real, editable table (cells are contenteditable; add/remove row+column; per-column align).
@@ -442,7 +447,7 @@ class GbtiDocEditor extends GbtiElement {
           b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, ''); // SOW-062 P6: store the .ce's inline HTML as Markdown
         }
         else if (f === 'code') b.code = el.innerText.replace(/\n$/, ''); // code stays literal
-        else if (f === 'list') b.items = Array.from(el.querySelectorAll('li')).map((li) => inlineHtmlToMd(li.innerHTML));
+        else if (f === 'list') { const items = readListDom(el, (h) => inlineHtmlToMd(h)); b.items = isFlatList(items) ? items.map((it) => it.text) : items; }
         else if (f === 'cell') { // SOW-169: a table cell -> b.head[c] (r=-1) or b.rows[r][c], in place, no re-render
           const r = Number(el.dataset.r); const c = Number(el.dataset.c);
           if (Number.isNaN(r) || Number.isNaN(c) || c < 0) return; // ignore a tampered index; never grow sparse arrays
@@ -582,6 +587,14 @@ class GbtiDocEditor extends GbtiElement {
       this._seltb?.editLink(ce, a);
     }));
     // Enter at the end of a text block inserts a new paragraph after it.
+    // Tab / Shift+Tab inside a list: the item under the caret (and its children) moves one level in or out
+    // (list-editing.mjs); the model is read back first so a half-typed item is not lost.
+    this.$$('.ce[data-edit="list"]').forEach((el) => el.addEventListener('keydown', (e) => {
+      const b = this._byId(el.dataset.id);
+      if (!b) return;
+      listTabKeydown(e, { el, ordered: !!b.ordered, selection: this.root.getSelection ? this.root.getSelection() : document.getSelection(),
+        apply: (items) => { b.items = items; this._render(); this._change(); return this.$(`.ce[data-edit="list"][data-id="${b._id}"]`); } });
+    }));
     this.$$('.ce[data-edit="text"]').forEach((el) => el.addEventListener('keydown', (e) => {
       if (this._slash && this._slash.el === el) { // SOW-062 5c-2: slash-menu keyboard nav
         if (e.key === 'ArrowDown') { e.preventDefault(); return this._moveSlash(1); }

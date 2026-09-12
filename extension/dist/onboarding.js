@@ -388,6 +388,136 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return n;
   }
 
+  // client/src/list-items.mjs
+  var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+  function isListLine(line) {
+    return LIST_ITEM_RE.test(String(line ?? ""));
+  }
+  function takeListRun(lines, start = 0) {
+    const items = [];
+    const stack = [0];
+    let topOrdered = null;
+    let i = start;
+    while (i < lines.length) {
+      const m = LIST_ITEM_RE.exec(String(lines[i] ?? ""));
+      if (!m) break;
+      const indent = m[1].replace(/\t/g, "    ").length;
+      const ordered = /^\d/.test(m[2]);
+      while (stack.length > 1 && indent < stack[stack.length - 1]) stack.pop();
+      if (indent > stack[stack.length - 1]) stack.push(indent);
+      const depth = stack.length - 1;
+      if (depth === 0) {
+        if (topOrdered === null) topOrdered = ordered;
+        else if (ordered !== topOrdered) break;
+      }
+      items.push({ text: m[3], depth, ordered });
+      i++;
+    }
+    return { items, next: i };
+  }
+  function normalizeListItems(items, ordered = false) {
+    const out = [];
+    let prevDepth = -1;
+    for (const raw of Array.isArray(items) ? items : []) {
+      const it = raw && typeof raw === "object" ? raw : { text: raw, depth: 0 };
+      let depth = Math.max(0, Math.floor(Number(it.depth) || 0));
+      if (depth > prevDepth + 1) depth = prevDepth + 1;
+      const own = typeof it.ordered === "boolean" ? it.ordered : false;
+      out.push({ text: String(it.text ?? ""), depth, ordered: depth === 0 ? !!ordered : own });
+      prevDepth = depth;
+    }
+    return out;
+  }
+  function isFlatList(items) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) return true;
+    const first = list[0];
+    const firstOrdered = first && typeof first === "object" ? !!first.ordered : null;
+    return list.every((it) => {
+      if (!it || typeof it !== "object") return firstOrdered === null;
+      return (Number(it.depth) || 0) === 0 && !!it.ordered === firstOrdered;
+    });
+  }
+  function serializeListItems(items, ordered = false) {
+    const norm2 = normalizeListItems(items, ordered);
+    const lines = [];
+    const counters = [];
+    const indents = [];
+    const markerWidth = [];
+    let prevDepth = -1;
+    let prevOrderedAtDepth = [];
+    for (const it of norm2) {
+      if (it.depth > prevDepth) {
+        counters[it.depth] = 0;
+        indents[it.depth] = it.depth === 0 ? "" : indents[it.depth - 1] + " ".repeat(markerWidth[it.depth - 1] || 2);
+        prevOrderedAtDepth[it.depth] = it.ordered;
+      } else if (it.depth < prevDepth) {
+        counters.length = it.depth + 1;
+        prevOrderedAtDepth.length = it.depth + 1;
+      }
+      if (prevOrderedAtDepth[it.depth] !== it.ordered) {
+        counters[it.depth] = 0;
+        prevOrderedAtDepth[it.depth] = it.ordered;
+      }
+      counters[it.depth] = (counters[it.depth] || 0) + 1;
+      const marker = it.ordered ? `${counters[it.depth]}. ` : "- ";
+      markerWidth[it.depth] = marker.length;
+      lines.push(`${indents[it.depth]}${marker}${it.text}`);
+      prevDepth = it.depth;
+    }
+    return lines;
+  }
+  function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
+    const norm2 = normalizeListItems(items, ordered);
+    let html = "";
+    const open = [];
+    const openList = (it) => {
+      const tag = it.ordered ? "ol" : "ul";
+      html += `<${tag}${!open.length && rootAttrs ? ` ${rootAttrs}` : ""}>`;
+      open.push({ tag, ordered: it.ordered });
+    };
+    const closeList = () => {
+      html += `</li></${open.pop().tag}>`;
+    };
+    for (const it of norm2) {
+      while (open.length > it.depth + 1) closeList();
+      if (open.length === it.depth + 1) {
+        const cur = open[open.length - 1];
+        if (cur.ordered !== it.ordered) {
+          closeList();
+          openList(it);
+          html += `<li>${inline4(it.text)}`;
+        } else html += `</li><li>${inline4(it.text)}`;
+      } else {
+        openList(it);
+        html += `<li>${inline4(it.text)}`;
+      }
+    }
+    while (open.length) closeList();
+    return html;
+  }
+  function indentListItem(items, index, delta, ordered = false) {
+    const norm2 = normalizeListItems(items, ordered);
+    const i = Number(index);
+    if (!(i >= 0 && i < norm2.length) || !delta) return null;
+    const oldDepth = norm2[i].depth;
+    const maxDepth = i === 0 ? 0 : norm2[i - 1].depth + 1;
+    const newDepth = Math.max(0, Math.min(maxDepth, oldDepth + (delta > 0 ? 1 : -1)));
+    if (newDepth === oldDepth) return null;
+    const shift = newDepth - oldDepth;
+    const out = norm2.map((it) => ({ ...it }));
+    out[i].depth = newDepth;
+    for (let j = i - 1; j >= 0; j--) {
+      if (out[j].depth < newDepth) break;
+      if (out[j].depth === newDepth) {
+        out[i].ordered = out[j].ordered;
+        break;
+      }
+    }
+    for (let j = i + 1; j < out.length && out[j].depth > oldDepth; j++) out[j].depth = Math.max(0, out[j].depth + shift);
+    return normalizeListItems(out, ordered);
+  }
+
   // client-ui/src/markdown-blocks.mjs
   var MEMBERS_MARKER = "<!-- members-only -->";
   var isTableDelimLine = (l) => /^\s*\|?(\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?\s*$/.test(l) || /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/.test(l);
@@ -436,7 +566,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
       case "list": {
         const items = Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
-        return items.map((it, i) => (b.ordered ? `${i + 1}. ` : "- ") + it).join("\n");
+        return serializeListItems(items, !!b.ordered).join("\n");
       }
       case "table": {
         const head = Array.isArray(b.head) ? b.head : [];
@@ -516,13 +646,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isListItem(line)) {
-        const ordered = /^\s*\d+\.\s+/.test(line);
-        const items = [];
-        while (i < n && isListItem(lines[i])) {
-          items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ""));
-          i++;
-        }
+        const run = takeListRun(lines, i);
+        const ordered = !!run.items[0]?.ordered;
+        const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o }) => ({ text, depth, ordered: o }));
         blocks2.push({ type: "list", ordered, items });
+        i = run.next;
         continue;
       }
       if (isTableStart(lines, i)) {
@@ -1280,6 +1408,69 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
+  // client-ui/src/block-commit.mjs
+  function readListDom(el, md) {
+    const out = [];
+    const tagOf2 = (n) => String(n?.tagName || "").toUpperCase();
+    const walk2 = (list, depth) => {
+      for (const li of Array.from(list.children || [])) {
+        if (tagOf2(li) !== "LI") continue;
+        const own = String(li.innerHTML ?? "").replace(/<(ul|ol)\b[\s\S]*$/i, "");
+        out.push({ text: md(own), depth, ordered: tagOf2(list) === "OL" });
+        for (const sub of Array.from(li.children || [])) if (tagOf2(sub) === "UL" || tagOf2(sub) === "OL") walk2(sub, depth + 1);
+      }
+    };
+    walk2(el, 0);
+    return out;
+  }
+  function listItemAtSelection(el, sel) {
+    let n = sel?.anchorNode || null;
+    if (n && n.nodeType !== 1) n = n.parentNode;
+    while (n && n !== el && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
+    if (!n || n === el) return { li: null, index: -1 };
+    const all = Array.from(el.querySelectorAll("li"));
+    return { li: n, index: all.indexOf(n) };
+  }
+  function caretAtEndOfItem(li, sel) {
+    if (!li || !sel) return;
+    let last = null;
+    for (const c of Array.from(li.childNodes || [])) {
+      const t = String(c.tagName || "").toUpperCase();
+      if (c.nodeType === 1 && (t === "UL" || t === "OL")) break;
+      last = c;
+    }
+    try {
+      const r = document.createRange();
+      if (last) {
+        r.selectNodeContents(last);
+        r.collapse(false);
+      } else {
+        r.setStart(li, 0);
+        r.collapse(true);
+      }
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } catch {
+    }
+  }
+
+  // client-ui/src/list-editing.mjs
+  function listTabKeydown(e, { el, ordered = false, selection, apply }) {
+    if (!e || e.key !== "Tab" || !el) return false;
+    const sel = selection || (typeof document !== "undefined" ? document.getSelection() : null);
+    const { index } = listItemAtSelection(el, sel);
+    if (index < 0) return false;
+    e.preventDefault();
+    const current = readListDom(el, (h) => inlineHtmlToMd(h));
+    const next = indentListItem(current, index, e.shiftKey ? -1 : 1, !!ordered);
+    if (!next) return true;
+    const again = apply(isFlatList(next) ? next.map((it) => it.text) : next);
+    const li = again ? again.querySelectorAll("li")[index] : null;
+    if (again) again.focus();
+    if (li) caretAtEndOfItem(li, sel);
+    return true;
+  }
+
   // client-ui/src/media-picker.mjs
   var MEDIA_INDEX_URL = "https://gbti.network/media-index.json";
   function mediaFor(index, author) {
@@ -1441,6 +1632,7 @@ ${String(body ?? "")}`;
   .ce-code { font-family:var(--font-mono, ui-monospace, monospace); font-size:13.5px; line-height:1.6; color:#e6e4ee; background:var(--ink); border:1.5px solid var(--s-line-2); border-radius:8px; padding:13px 16px; margin:8px 0; }
   .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
   .ce-list li { padding:1px 0; }
+  .ce-list ul, .ce-list ol { padding-left:22px; margin:2px 0; }
   /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
   .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
   .ce strong, .ce b { font-weight:700; }
@@ -1712,9 +1904,8 @@ ${String(body ?? "")}`;
         case "code":
           return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || "")}</div>`;
         case "list": {
-          const tag = b.ordered ? "ol" : "ul";
-          const items = (Array.isArray(b.items) ? b.items : [""]).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join("") || "<li></li>";
-          return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
+          const items = Array.isArray(b.items) && b.items.length ? b.items : [""];
+          return listHtml(items, inlineMdToHtml, { ordered: !!b.ordered, rootAttrs: `class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}"` });
         }
         case "table": {
           const head = Array.isArray(b.head) ? b.head : [];
@@ -1796,8 +1987,10 @@ ${String(body ?? "")}`;
             }
             b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, "");
           } else if (f === "code") b.code = el.innerText.replace(/\n$/, "");
-          else if (f === "list") b.items = Array.from(el.querySelectorAll("li")).map((li) => inlineHtmlToMd(li.innerHTML));
-          else if (f === "cell") {
+          else if (f === "list") {
+            const items = readListDom(el, (h) => inlineHtmlToMd(h));
+            b.items = isFlatList(items) ? items.map((it) => it.text) : items;
+          } else if (f === "cell") {
             const r = Number(el.dataset.r);
             const c = Number(el.dataset.c);
             if (Number.isNaN(r) || Number.isNaN(c) || c < 0) return;
@@ -2025,6 +2218,21 @@ ${String(body ?? "")}`;
         const ce = this._ceOf(a);
         if (!ce) return;
         this._seltb?.editLink(ce, a);
+      }));
+      this.$$('.ce[data-edit="list"]').forEach((el) => el.addEventListener("keydown", (e) => {
+        const b = this._byId(el.dataset.id);
+        if (!b) return;
+        listTabKeydown(e, {
+          el,
+          ordered: !!b.ordered,
+          selection: this.root.getSelection ? this.root.getSelection() : document.getSelection(),
+          apply: (items) => {
+            b.items = items;
+            this._render();
+            this._change();
+            return this.$(`.ce[data-edit="list"][data-id="${b._id}"]`);
+          }
+        });
       }));
       this.$$('.ce[data-edit="text"]').forEach((el) => el.addEventListener("keydown", (e) => {
         if (this._slash && this._slash.el === el) {
@@ -3148,22 +3356,13 @@ ${String(body ?? "")}`;
     };
     let codeFence = 3;
     let fenceStart = 0;
-    let listStart = null;
     let inCode = false;
     let codeBuf = [];
     let codeLang2 = "";
-    let listType = null;
-    let listBuf = [];
     const footnotes = [];
     const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
     const linkKeep = [];
     const flushList = () => {
-      if (listType) {
-        emit(`<${listType}>${listBuf.join("")}</${listType}>`, listStart, i - 1);
-        listType = null;
-        listBuf = [];
-        listStart = null;
-      }
     };
     let i = 0;
     while (i < lines.length) {
@@ -3225,24 +3424,10 @@ ${String(body ?? "")}`;
         i++;
         continue;
       }
-      if (/^\s*[-*]\s+/.test(line)) {
-        if (listType !== "ul") {
-          flushList();
-          listType = "ul";
-          listStart = i;
-        }
-        listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ""), linkKeep), fn)}</li>`);
-        i++;
-        continue;
-      }
-      if (/^\s*\d+\.\s+/.test(line)) {
-        if (listType !== "ol") {
-          flushList();
-          listType = "ol";
-          listStart = i;
-        }
-        listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ""), linkKeep), fn)}</li>`);
-        i++;
+      if (isListLine(line)) {
+        const run = takeListRun(lines, i);
+        emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+        i = run.next;
         continue;
       }
       if (/^\s*>\s?/.test(line)) {
@@ -19896,7 +20081,7 @@ ${String(body ?? "")}`;
       }).join("");
       const follows = this._follows || [];
       const customCount = follows.filter((f) => isCustomFollow(f)).length;
-      const listHtml = follows.length ? follows.map((f) => {
+      const listHtml2 = follows.length ? follows.map((f) => {
         const u = esc(f.username);
         const custom = isCustomFollow(f);
         return `<button type="button" class="frow" data-follow="${u}">
@@ -19918,7 +20103,7 @@ ${String(body ?? "")}`;
       </section>
       <section class="sec">
         <div class="sec-h"><h3>People you follow</h3><p>Fine-tune what any one member sends you. <span class="cnt">${customCount} of ${follows.length} set separately</span></p></div>
-        <div class="rows">${listHtml}</div>
+        <div class="rows">${listHtml2}</div>
       </section>`);
       this._wire();
     }

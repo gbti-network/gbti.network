@@ -6,6 +6,7 @@
 // SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
 import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
+import { takeListRun, listHtml, isListLine } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
@@ -259,23 +260,15 @@ function renderDoc(md, ids, opts = {}) {
   const emit = (html, start, end) => { out.push(stamp(html, out.length)); ranges.push(start == null ? null : { start, end }); };
   let codeFence = 3;
   let fenceStart = 0;   // sow-235: first line of the open fence, for its source range
-  let listStart = null; // first line of the run of list items being gathered
   let inCode = false;
   let codeBuf = [];
   let codeLang = '';
-  let listType = null;
-  let listBuf = [];
   const footnotes = []; // GFM footnote definitions, rendered as one section at the end (like the site build)
   const fn = { ids: collectFootnoteIds(lines), counts: new Map() }; // known def ids + per-id reference counts
   const linkKeep = []; // attributed <a> tags extracted by escapeKeepingLinks, restored in one pass at the end
-  const flushList = () => {
-    if (listType) {
-      emit(`<${listType}>${listBuf.join('')}</${listType}>`, listStart, i - 1);
-      listType = null;
-      listBuf = [];
-      listStart = null;
-    }
-  };
+  // Lists are taken as whole runs where they start (see the list branch below), so there is nothing left to flush
+  // at a block boundary; the calls stay as the seams they mark.
+  const flushList = () => {};
 
   let i = 0;
   while (i < lines.length) {
@@ -312,8 +305,14 @@ function renderDoc(md, ids, opts = {}) {
     const esc = escapeKeepingLinks(line, linkKeep);
     let m;
     if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i); i++; continue; }
-    if (/^\s*[-*]\s+/.test(line)) { if (listType !== 'ul') { flushList(); listType = 'ul'; listStart = i; } listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ''), linkKeep), fn)}</li>`); i++; continue; }
-    if (/^\s*\d+\.\s+/.test(line)) { if (listType !== 'ol') { flushList(); listType = 'ol'; listStart = i; } listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ''), linkKeep), fn)}</li>`); i++; continue; }
+    // A list is one block for the whole run, nested by indentation (client/src/list-items.mjs): children render inside
+    // their parent's <li>, bullets under a numbered item stay bullets, and a marker change at the top level starts
+    // a new list. The run's source range is the block's range, as the Preview's stamps expect.
+    if (isListLine(line)) {
+      const run = takeListRun(lines, i);
+      emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+      i = run.next; continue;
+    }
     if (/^\s*>\s?/.test(line)) { flushList(); emit(`<blockquote>${inline(escapeKeepingLinks(line.replace(/^\s*>\s?/, ''), linkKeep), fn)}</blockquote>`, i, i); i++; continue; }
     if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushList(); emit('<hr/>', i, i); i++; continue; }
     // GFM table: a header row followed by a delimiter row, then body rows until a blank line or a row with
