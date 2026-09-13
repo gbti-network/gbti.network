@@ -2,7 +2,7 @@
 id: intro-savepoint-broadcasting-software
 targetType: project
 targetSlug: savepoint-broadcasting-software
-createdAt: '2026-09-13T00:51:33.917Z'
+createdAt: '2026-09-13T00:57:44.858Z'
 status: published
 visibility: public
 authorNote: true
