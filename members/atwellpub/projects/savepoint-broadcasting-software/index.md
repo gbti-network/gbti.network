@@ -79,4 +79,4 @@ Key capabilities:
 - Pairs with Discord for community-driven station operation and always-on chat around the broadcast
 - License management for community operators running multi-station deployments
 
-Free version and free trial available. Paid tiers unlock a broadcast pass (Year Pass or subscription) for scaling stations. Full brand kit and screenshots at [savepoint.fm/branding](https://savepoint.fm/branding?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory). Development transparency, including AI collaboration tools used, at [savepoint.fm/credits](https://savepoint.fm/credits?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory).
+Free version and free trial available. Paid tiers unlock a broadcast pass (Year Pass or subscription) for scaling stations.
