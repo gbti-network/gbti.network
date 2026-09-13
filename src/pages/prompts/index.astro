@@ -429,7 +429,29 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
       var chipEl = document.getElementById('prompt-catfilter');
       var catLabelMap = {}; try { catLabelMap = JSON.parse((chipEl && chipEl.getAttribute('data-cat-labels')) || '{}'); } catch (e) { catLabelMap = {}; }
       var chipKey = '';
-      function hideCatChip() { chipKey = ''; if (chipEl) { chipEl.hidden = true; chipEl.textContent = ''; } }
+      function hideCatChip() { chipKey = ''; if (chipEl) { chipEl.hidden = true; chipEl.textContent = ''; chipEl.removeAttribute('data-missing'); } }
+      // sow-250 (owner decision 2026-09-12): a ?cat= that matches nothing in the data used to be ignored without
+      // a word, so a stale or mistyped link rendered every prompt and read as a filter that matched everything.
+      // The feed pages already say when nothing matches; this page keeps showing everything, because a reader
+      // who followed a dead link is better served by content than by an empty page, but it now SAYS so.
+      // Dismissing drops `cat` from the URL, so a reload does not bring the notice back.
+      function dropCatParam() {
+        try {
+          var u = new URLSearchParams(location.search); u.delete('cat');
+          var q = u.toString();
+          history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+        } catch (e) { /* no history API: the notice still hides */ }
+      }
+      function showMissingCat() {
+        if (!chipEl) return;
+        chipKey = '';
+        chipEl.setAttribute('data-missing', '');
+        chipEl.textContent = 'That category was not found. Showing all prompts.  ';
+        var x = document.createElement('button');
+        x.type = 'button'; x.className = 'pf-x'; x.setAttribute('aria-label', 'Dismiss this notice'); x.textContent = '✕';
+        x.addEventListener('click', function () { hideCatChip(); dropCatParam(); });
+        chipEl.appendChild(x); chipEl.hidden = false;
+      }
       function showCatChip(key) {
         if (!chipEl) return;
         chipKey = key;
@@ -442,6 +464,8 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
       if (cat && allCatKeys[cat]) {
         cats[cat] = true;
         if (!catItems.some(function (b) { return b.getAttribute('data-val') === cat; })) showCatChip(cat);
+      } else if (cat) {
+        showMissingCat(); // an unknown category: everything stays visible, and the page says why
       }
       if (target && targetItems.some(function (b) { return b.getAttribute('data-val') === target; })) targets[target] = true;
       // 'all' never enters the store (the All button works by EMPTYING it; a stored 'all' matches no card).

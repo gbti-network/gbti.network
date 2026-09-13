@@ -27,6 +27,8 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
         {posts.map((post) => <ArticleTeaser post={post} />)}
       </div>
       <p id="post-empty" class="body muted" style="text-align:center;padding:28px 0" hidden>No articles match that search.</p>
+      {/* sow-250: said when a ?cat= deep link names a category this page does not have. Mirrors #post-empty. */}
+      <p id="post-catmissing" class="body-sm muted" style="text-align:center;margin:10px 0 0" hidden>That category was not found. Showing all articles. <button type="button" id="post-catmissing-clear" class="chip filter">Dismiss</button></p>
     </div>
   </section>
 
@@ -72,5 +74,21 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
     const params = new URLSearchParams(location.search);
     const catParam = params.get('cat');
     if (catParam && Array.from(pills).some((p) => p.dataset.cat === catParam)) applyFilter(catParam);
+    else if (catParam) {
+      // sow-250 (owner decision 2026-09-12): an unknown category used to be ignored silently, so a stale link
+      // showed every article and read as a filter that matched everything. Keep showing everything, and say so.
+      // Dismissing drops `cat` from the URL so a reload does not bring the notice back.
+      const missing = document.getElementById('post-catmissing');
+      if (missing) {
+        missing.hidden = false;
+        document.getElementById('post-catmissing-clear')?.addEventListener('click', () => {
+          missing.hidden = true;
+          const u = new URLSearchParams(location.search);
+          u.delete('cat');
+          const q = u.toString();
+          history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash);
+        });
+      }
+    }
   </script>
 </BaseLayout>
