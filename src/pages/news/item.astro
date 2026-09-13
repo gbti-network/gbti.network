@@ -9,6 +9,7 @@
 // per the owner directive: extension present + signed in -> the gbti:open relay into the extension's
 // news tab (follow-channel is an extension pref); otherwise the shared join/extension CTA dialog.
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-202: the weekly-digest sidebar CTA
 import { SIGNUP_BASE } from '../../lib/membership';
 ---
 <BaseLayout title="News" description="A story from the curated GBTI Network news stream." noindex={true}>
@@ -18,8 +19,15 @@ import { SIGNUP_BASE } from '../../lib/membership';
       <div class="detail-main" data-news-target>
         <p class="feed-empty" style="margin-top:60px">Loading the story…</p>
       </div>
-      {/* The extension-style right sidebar: the source/publication card (filled by the script). */}
-      <aside class="detail-side" data-news-side hidden></aside>
+      {/* The extension-style right sidebar: the source/publication card (filled by the script, placed first).
+          sow-202: the weekly-digest capture sits at its foot, matching the article, project, prompt and share
+          sidebars. It is static, so the sidebar is no longer hidden while the story loads, and a reader who lands
+          on a story that has left the stream still gets it. Shown to every state, like its siblings. */}
+      <aside class="detail-side" data-news-side>
+        <div class="card side-card">
+          <DigestSubscribe variant="rail" heading="The weekly digest" />
+        </div>
+      </aside>
     </div>
 
     <dialog class="subscribe-modal" data-follow-modal aria-label="Follow this source">
@@ -215,7 +223,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
         follow.setAttribute('type', 'button');
         follow.setAttribute('data-follow-source', String(it.source || ''));
         card.append(fav, info, follow);
-        if (side) { side.append(card); side.hidden = false; } else { target.append(card); }
+        if (side) side.prepend(card); else target.append(card); // above the static digest card
 
         // the gated discussion from the public comments index (members bodies are stripped at build)
         const slug = newsTargetSlug(guid);
