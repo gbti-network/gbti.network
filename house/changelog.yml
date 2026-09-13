@@ -15,6 +15,21 @@
 # The deployment SOP (.data/ops/deployment-ops/README.md) tells the agent to APPEND one entry here on every
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
+  - version: 0.4.0
+    build: 36
+    date: 2026-09-12
+    type: release
+    title: Version 0.4.0, the extension becomes a reader
+    notes:
+      - Writing and publishing now happen in the WorkBench on gbti.network. The extension no longer hosts the authoring screens or the profile editor, and its rail follows the website feeds, including Network.
+      - Signing in to the extension also signs you in to gbti.network, and signing out of the extension ends that website session too.
+      - Products are now called projects. Earlier versions of the extension do not recognise the new name and show no projects at all, which this release fixes.
+      - Upvoting is gone from the extension, as it is from the website.
+      - The admin page now checks your role on every panel, not only on its menu link.
+      - Superadmins can generate, list, note and revoke invite links from the admin tools, and flag content as stale or unindexed.
+      - You can disconnect Discord from your account, and the connection is revoked before it is forgotten.
+      - Editing a piece of content no longer changes the date it was first published.
+      - A video link pasted into a comment now plays, and you see your own comment straight away.
   - version: 0.1.0
     build: 35
     date: 2026-07-19
