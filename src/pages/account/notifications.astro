@@ -129,7 +129,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           const r = await client.setDigest(next);
           on = r?.on === true;
           paint(on);
-          say(on ? 'The weekly digest is on.' : 'The weekly digest is off.');
+          // Off cannot stop a copy the same address signed up for through the public form (the switch never takes a
+          // form subscription over), so the page says how to stop that one. Said every time, so it reveals nothing.
+          say(on ? 'The weekly digest is on.' : 'The weekly digest is off. If this address also signed up through the form on the site, the unsubscribe link in any issue stops that copy.');
         } catch (e) {
           paint(on);
           say(reason(e, 'The digest setting could not be changed. Try again in a moment.'));

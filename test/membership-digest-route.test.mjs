@@ -128,27 +128,44 @@ test('ON on the member\'s own switched-off or bounced record reactivates it in p
   assert.equal(d.notices.length, 0, 'not a new subscriber');
 });
 
-test('ON with a public-form record under the same address claims it under its OWN key (no move, no second record)', async () => {
+test('ON NEVER CLAIMS A FORM SUBSCRIPTION (SowMaster review): it stays anonymous, and a bounced one resumes', async () => {
+  // The account email is not proven. Claiming would let an account holding a stranger's address take over the
+  // stranger's form subscription and then silence it, with no way back through the form.
   const h = await hashOf(EMAIL);
-  const kv = fakeKv();
-  put(kv, buildSubscriber({ hash: h, source: 'anon', emailEnc: 'enc' }, { now: () => 1 }));
-  const { d } = await call('POST', { on: true }, kv);
-  const rec = read(kv, h);
-  assert.equal(rec.source, 'member');
-  assert.equal(rec.githubId, '42');
-  assert.equal(rec.emailEnc, null);
-  assert.deepEqual([...kv.map.keys()].filter((k) => k.startsWith('mail:subscriber:')), [subscriberKey(h)]);
+  const active = fakeKv();
+  const form = buildSubscriber({ hash: h, source: 'anon', emailEnc: 'enc' }, { now: () => 1 });
+  put(active, form);
+  const { r, d } = await call('POST', { on: true }, active);
+  assert.deepEqual(r.body, { ok: true, on: true, address: EMAIL }, 'the same answer as creating a record');
+  assert.deepEqual(read(active, h), JSON.parse(JSON.stringify(form)), 'the form record is untouched');
   assert.equal(d.notices.length, 0);
-});
 
-test('ON never takes over another member account\'s record under the same address', async () => {
+  const bounced = fakeKv({ [suppressKey(h)]: SUPPRESS_VALUE });
+  put(bounced, { ...form, status: 'unsubscribed' });
+  await call('POST', { on: true }, bounced);
+  assert.equal(read(bounced, h).source, 'anon', 'still not claimed');
+  assert.equal(read(bounced, h).status, 'active', 'the lift the owner chose: it resumes');
+  assert.equal(bounced.map.has(suppressKey(h)), false);
+});
+test('ON never touches another member account\'s record under the same address, its unsubscribe block included', async () => {
   const h = await hashOf(EMAIL);
-  const kv = fakeKv();
-  const theirs = buildSubscriber({ hash: h, source: 'member', githubId: '99' }, { now: () => 1 });
+  const kv = fakeKv({ [suppressKey(h)]: SUPPRESS_VALUE });
+  const theirs = { ...buildSubscriber({ hash: h, source: 'member', githubId: '99' }, { now: () => 1 }), status: 'unsubscribed' };
   put(kv, theirs);
   const { r } = await call('POST', { on: true }, kv);
   assert.equal(r.status, 409);
   assert.deepEqual(read(kv, h), JSON.parse(JSON.stringify(theirs)));
+  assert.equal(kv.map.get(suppressKey(h)), SUPPRESS_VALUE, 'the block is checked for ownership before anything is deleted');
+  assert.equal(kv.writes.length, 0);
+});
+
+test('a store write that fails answers 503, never an unhandled throw', async () => {
+  for (const on of [true, false]) {
+    const kv = fakeKv();
+    kv.put = async () => { throw new Error('kv write failed'); };
+    const { r } = await call('POST', { on }, kv);
+    assert.equal(r.status, 503, `on=${on}`);
+  }
 });
 
 test('OFF on the member\'s own record sets the flag, keeps it receivable, and writes NO suppression marker', async () => {
@@ -163,25 +180,31 @@ test('OFF on the member\'s own record sets the flag, keeps it receivable, and wr
   assert.equal(kv.map.has(suppressKey(h)), false, 'a suppression marker would also stop follow alerts');
 });
 
-test('OFF with nothing on file records the choice; with a public-form record it claims it off; with a block it writes nothing', async () => {
+test('OFF with nothing on file records the choice; a form subscription, another account and a block are left alone', async () => {
   const h = await hashOf(EMAIL);
   const empty = fakeKv();
   await call('POST', { on: false }, empty);
   assert.equal(read(empty, h).digestOff, true);
   assert.equal(read(empty, h).githubId, '42');
 
+  const form = buildSubscriber({ hash: h, source: 'anon', emailEnc: 'enc' }, { now: () => 1 });
   const anon = fakeKv();
-  put(anon, buildSubscriber({ hash: h, source: 'anon', emailEnc: 'enc' }, { now: () => 1 }));
-  await call('POST', { on: false }, anon);
-  assert.equal(read(anon, h).source, 'member');
-  assert.equal(read(anon, h).digestOff, true, 'otherwise the switch would read off while the form record kept mailing');
+  put(anon, form);
+  const { r } = await call('POST', { on: false }, anon);
+  assert.deepEqual(read(anon, h), JSON.parse(JSON.stringify(form)), 'OFF never claims or silences a form subscription');
+  assert.deepEqual(r.body, { ok: true, on: false, address: EMAIL }, 'and says nothing about it');
+
+  const theirs = buildSubscriber({ hash: h, source: 'member', githubId: '99' }, { now: () => 1 });
+  const other = fakeKv();
+  put(other, theirs);
+  await call('POST', { on: false }, other);
+  assert.deepEqual(read(other, h), JSON.parse(JSON.stringify(theirs)));
 
   const blocked = fakeKv({ [suppressKey(h)]: SUPPRESS_VALUE });
   await call('POST', { on: false }, blocked);
   assert.equal(read(blocked, h), null);
   assert.equal(blocked.map.get(suppressKey(h)), SUPPRESS_VALUE, 'OFF never lifts a block');
 });
-
 test('A RECORD UNDER AN OLDER ADDRESS is found by the scan on POST and changed in place: no duplicate, no move', async () => {
   const oldHash = await hashOf('old@example.com');
   const newHash = await hashOf(EMAIL);

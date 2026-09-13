@@ -25,9 +25,17 @@
 //   4. OFF IS THE `digestOff` FLAG, NEVER A SUPPRESSION MARKER. The drain's send-time suppression gate also stops
 //      follow alerts, and the owner's rule is that switching the digest off stops the digest only.
 //
-// A RECORD FROM THE PUBLIC FORM under the member's own address is claimed (becomes their member record, same key)
-// when they switch either way; otherwise "off" would read true while that record kept mailing them. Another member
-// account's record under the address is never touched.
+// A SUBSCRIPTION FROM THE PUBLIC FORM under the account's address is NEVER CLAIMED, in either direction. The first
+// version claimed it into the member's record (28d3493a) and SowMaster's review showed why that was wrong: the account
+// email is not proven, so an account holding a stranger's address could take over that stranger's form subscription
+// and switch it off, and the stranger could not get it back (the form treats an active record as already subscribed).
+// claimForMember's own contract requires a GitHub-verified primary email, which this route does not have. So the
+// switch acts only on the member's own record: ON leaves the form subscription sending (it resumes if a bounce
+// stopped it), and OFF cannot stop it, which the page says, pointing at the unsubscribe link in any issue. Residual,
+// accepted: after ON, the page reads "on" if the member's own record was created and "off" if a form subscription
+// was already there, so an account holding a stranger's address learns whether that address had one. That account
+// can already mail the address (the owner's trade-off), and learning it takes a payment and an account per address.
+// Another member account's record under the address is never touched, its unsubscribe block included.
 //
 // SWITCHING ON LIFTS AN EARLIER UNSUBSCRIBE AT ONCE, with no confirmation email (owner, 2026-09-13, choosing it over
 // a confirmation link with both costs shown): an account can hold an address its owner never verified, and a
@@ -40,7 +48,7 @@ import { rateLimit } from './abuse.mjs';
 import { getSubscriber, putSubscriber } from './mail-store.mjs';
 import { sendNewSubscriberAlert } from './subscriber-alert.mjs';
 import { mailHash, normalizeEmail, suppressKey, MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress.mjs';
-import { buildSubscriber, normalizeSubscriber, claimForMember, wantsDigest } from '../../membership/mail-subscriber.mjs';
+import { buildSubscriber, normalizeSubscriber, markActive, wantsDigest } from '../../membership/mail-subscriber.mjs';
 
 /** The most subscriber records one POST will read while looking for the caller's record under an older hash. */
 export const DIGEST_SCAN_BUDGET = 500;
@@ -135,51 +143,50 @@ export async function handleDigestSwitch(request, env, {
     own = found.rec;
   }
   const t = Number(now());
+  const answer = { status: 200, body: { ok: true, on, address: email } };
 
-  if (on) {
-    if (own) {
-      await kv.delete(suppressKey(own.hash));
-      await putSubscriber(kv, { ...own, status: 'active', digestOff: false, updatedAt: t });
-      return { status: 200, body: { ok: true, on: true, address: email } };
-    }
-    await kv.delete(suppressKey(hash));
-    let existing;
-    try { existing = await getSubscriber(kv, hash); } catch { return unavailable(); }
-    if (existing && existing.source === 'member') {
-      // Another GBTI account's record already uses this address. Never take it over.
-      return { status: 409, body: { error: 'unavailable', message: 'The digest could not be turned on for this account. Contact us and we will sort it out.' } };
-    }
-    if (existing) {
-      // The same address subscribed through the public form. It becomes this member's record under its own key.
-      const claimed = claimForMember(existing, { githubId, customerId, now: () => t });
-      await putSubscriber(kv, { ...claimed, status: 'active', digestOff: false, updatedAt: t });
-      return { status: 200, body: { ok: true, on: true, address: email } };
-    }
-    await putSubscriber(kv, buildSubscriber({ hash, source: 'member', githubId, customerId }, { now: () => t }));
-    await notify({ email, source: 'member', at: new Date(t).toISOString() }); // fail-soft by contract
-    return { status: 200, body: { ok: true, on: true, address: email } };
-  }
-
-  // OFF: only the digest. The record stays active so any follow alerts the member chose keep arriving.
-  if (own) {
-    await putSubscriber(kv, { ...own, digestOff: true, updatedAt: t });
-    return { status: 200, body: { ok: true, on: false, address: email } };
-  }
-  let existing;
-  let blocked;
+  // Every store write below is inside this try: a KV failure answers the same 503 as a failed read, with CORS
+  // headers, rather than escaping to the router's bare 500 (which the page cannot even read).
   try {
-    existing = await getSubscriber(kv, hash);
-    blocked = await kv.get(suppressKey(hash));
-  } catch { return unavailable(); }
-  if (existing && existing.source === 'anon') {
-    // The same address subscribed through the public form. Leaving that record alone would show this member "off"
-    // while the digest kept arriving, so it becomes their record, under its own key, with the digest off.
-    const claimed = claimForMember(existing, { githubId, customerId, now: () => t });
-    await putSubscriber(kv, { ...claimed, digestOff: true, updatedAt: t });
-  } else if (!existing && !blocked) {
-    // Nothing under this address yet: record the choice, so a later enrollment backfill cannot quietly turn it on.
-    await putSubscriber(kv, buildSubscriber({ hash, source: 'member', githubId, customerId, digestOff: true }, { now: () => t }));
+    if (on) {
+      if (own) {
+        await kv.delete(suppressKey(own.hash));
+        await putSubscriber(kv, { ...own, status: 'active', digestOff: false, updatedAt: t });
+        return answer;
+      }
+      const existing = await getSubscriber(kv, hash);
+      if (existing && existing.source === 'member') {
+        // Another GBTI account's record already uses this address. Nothing of theirs is touched, its block included,
+        // so this check comes before the delete below.
+        return { status: 409, body: { error: 'unavailable', message: 'The digest could not be turned on for this account. Contact us and we will sort it out.' } };
+      }
+      await kv.delete(suppressKey(hash));
+      if (existing) {
+        // A subscription from the public form under this address. It is NOT claimed (see the header): the address
+        // already gets the digest through it, and one stopped by a bounce resumes, which is the lift the owner chose.
+        if (existing.status !== 'active') await putSubscriber(kv, markActive(existing, { now: () => t }));
+        return answer;
+      }
+      await putSubscriber(kv, buildSubscriber({ hash, source: 'member', githubId, customerId }, { now: () => t }));
+      await notify({ email, source: 'member', at: new Date(t).toISOString() }); // fail-soft by contract
+      return answer;
+    }
+
+    // OFF: only the digest. The record stays active so any follow alerts the member chose keep arriving.
+    if (own) {
+      await putSubscriber(kv, { ...own, digestOff: true, updatedAt: t });
+      return answer;
+    }
+    const existing = await getSubscriber(kv, hash);
+    const blocked = await kv.get(suppressKey(hash));
+    if (!existing && !blocked) {
+      // Nothing under this address yet: record the choice, so a later enrollment backfill cannot quietly turn it on.
+      await putSubscriber(kv, buildSubscriber({ hash, source: 'member', githubId, customerId, digestOff: true }, { now: () => t }));
+    }
+    // A form subscription, another account's record, or an unsubscribe: none of them is this member's to change.
+    return answer;
+  } catch (err) {
+    console.warn(`membership-digest: the change could not be stored: ${err?.message || err}`);
+    return unavailable();
   }
-  // Another account's member record, or an unsubscribe with no record: nothing of this member's to change.
-  return { status: 200, body: { ok: true, on: false, address: email } };
 }
