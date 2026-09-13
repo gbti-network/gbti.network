@@ -135,15 +135,19 @@ async function readSubscribeInput(request) {
  *  which case a submit activates immediately and there is no confirmation email to check for. */
 function neutralResult(request, { direct = false } = {}) {
   if (wantsJson(request)) {
-    return new Response(JSON.stringify({ ok: true }), {
+    // sow-202: `direct` tells the site's sign-up box which copy is true (subscribed now, or check your inbox). It is
+    // configuration only, identical for every address within a mode, so it carries no enumeration signal.
+    return new Response(JSON.stringify({ ok: true, direct: Boolean(direct) }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS },
     });
   }
   if (direct) {
+    // One page for a new, an existing and an opted-out address, so it must be true for all three (sow-202).
     return page('Subscribed',
-      '<h1>You are subscribed.</h1>'
-      + '<p>You will receive the GBTI Network weekly digest. You can unsubscribe from any issue.</p>');
+      '<h1>Thanks for subscribing.</h1>'
+      + '<p>This address now gets the GBTI Network weekly digest, unless it unsubscribed before. '
+      + 'You can unsubscribe from any issue.</p>');
   }
   return page('Almost done',
     '<h1>Almost done. Please check your inbox.</h1>'

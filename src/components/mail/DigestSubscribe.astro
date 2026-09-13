@@ -3,11 +3,17 @@
 // route (`POST /mail/subscribe`) and no front door: nothing in the site, client-ui or the extension pointed
 // at it, so the compile would enqueue 0 recipients forever. This is that front door.
 //
-// DOUBLE OPT-IN, and the copy says so. Submitting writes a PENDING record and sends a confirmation email;
-// it enrols nobody. The owner reaffirmed double opt-in on 2026-08-23 over the earlier 2026-08-16 "single
-// opt-in, add on submit" ruling, because the route had already shipped this way and the confirm click is
-// itself the end-to-end proof that the mail pipeline works. Do not soften this copy to imply the address is
-// subscribed on submit; it is not, until the link in the email is clicked.
+// THE COPY FOLLOWS THE WORKER'S MODE, NOT A FIXED PROMISE (sow-202). The route runs double opt-in by default
+// (a PENDING record and a confirmation email, nobody enrolled until the link is clicked), but production turned
+// it off on 2026-08-26 (MAIL_DOUBLE_OPTIN "false": the address is active at submit and no confirmation email is
+// sent). The small print therefore promises neither, and the success message reads the JSON `direct` flag
+// through src/lib/digest-subscribe-copy.mjs. Never state one mode's outcome in static copy: the old small print
+// promised a confirmation email to every visitor for over two weeks after production stopped sending one.
+//
+// SIGNED-IN MEMBERS SEE THE SAME FORM, plus a link to their notification settings (sow-202, owner decision
+// 2026-09-13). A one-click member join that showed "you already get it" was built and dropped: reporting whether
+// an account's address is on the list can reveal whether someone else's address is, and doing it safely needs a
+// larger build. The link is revealed by CSS on html.is-gbti-member, so it needs no script and no Worker call.
 //
 // WORKS WITH NO JAVASCRIPT, on purpose. The Worker content-negotiates: a plain form navigation gets a real
 // HTML page back, a fetch with `Accept: application/json` gets JSON. Turnstile is loaded with IMPLICIT
@@ -68,9 +74,9 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
       <div class="cf-turnstile dsub-ts" data-sitekey={TURNSTILE_SITE_KEY} data-theme="auto" data-size="flexible" data-appearance={quiet ? 'interaction-only' : undefined}></div>
 
       <p class="dsub-fine">
-        We send a confirmation email first. You are not subscribed until you click the link in it.
-        Read the <a href="/privacy/">privacy policy</a>.
+        Unsubscribe in one click from any issue. Read the <a href="/privacy/">privacy policy</a>.
       </p>
+      <p class="dsub-fine dsub-mlink"><a href="/account/notifications/">Choose what people you follow email you</a></p>
       <p class="dsub-msg" data-dsub-msg role="status" aria-live="polite" hidden></p>
     </form>
   </div>
@@ -92,6 +98,8 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
 </script>
 
 <script>
+  import { subscribeSuccessMessage } from '../../lib/digest-subscribe-copy.mjs';
+
   // Progressive enhancement only. Everything here is optional: with scripting off, the form is a plain POST
   // and the Worker answers with a real HTML page. Querying ALL instances rather than one, because Astro
   // bundles this script once per page no matter how many times the component renders.
@@ -147,7 +155,7 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
           // The Worker answers identically whether or not this address was already known (anti-enumeration),
           // so this copy must not claim a NEW subscription was created.
           form.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
-          say('Check your inbox. If this address is new to the digest, a confirmation email is on its way. You are not subscribed until you click the link in it.', 'ok');
+          say(subscribeSuccessMessage(body), 'ok');
           return;
         }
 
@@ -261,6 +269,11 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
   /* An explicit display on a flex/grid element beats the user-agent [hidden] rule, so state it outright.
      Cheap here, and it is the exact failure that has bitten the shadow-DOM components. */
   .dsub-msg[hidden] { display: none !important; }
+
+  /* sow-202: the notification-settings link is for signed-in members only. The member signal stamps
+     html.is-gbti-member; the class sits outside this component, so it is matched through :global. */
+  .dsub-mlink { display: none; }
+  :global(html.is-gbti-member) .dsub-mlink { display: block; }
 
   @media (min-width: 720px) {
     .dsub-band .dsub-in { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: center; gap: 24px; }

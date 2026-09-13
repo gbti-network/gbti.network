@@ -89,7 +89,7 @@ test('subscribe: a new address writes a pending opt-in under mail:optin:, sends 
   const { sent, send } = sink();
   const res = await handleSubscribe(jsonReq({ email: 'Reader@Example.com' }), { ...ENV, SIGNUP_KV: kv }, { send, rateLimitFn: allow });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true });
+  assert.deepEqual(await res.json(), { ok: true, direct: false });
 
   const hash = await mailHash(SUPPRESS_KEY, 'Reader@Example.com');
   // a pending opt-in exists with a TTL; NO active subscriber yet
@@ -125,7 +125,7 @@ test('subscribe: a FAILED confirmation send stays NEUTRAL (anti-enumeration) but
     console.warn = origWarn;
   }
   assert.equal(res.status, 200, 'the response is byte-identical to the happy path: a failed provider is not an enumeration oracle');
-  assert.deepEqual(await res.json(), { ok: true });
+  assert.deepEqual(await res.json(), { ok: true, direct: false });
   const hash = await mailHash(SUPPRESS_KEY, 'reader@example.com');
   assert.ok(kv.m.get(optinKey(hash)), 'the pending opt-in is still written (the send failure is downstream of the write)');
   assert.ok(warnings.some((w) => /confirmation send did not complete/.test(w)), 'the failed confirmation send is LOGGED, not swallowed');
@@ -148,7 +148,7 @@ test('subscribe: a SUPPRESSED address is not re-contacted (no send) and returns 
   await kv.put(suppressKey(hash), SUPPRESS_VALUE);
   const res = await handleSubscribe(jsonReq({ email: 'gone@example.com' }), { ...ENV, SIGNUP_KV: kv }, { send, rateLimitFn: allow });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true }, 'identical to a new subscribe: no enumeration signal');
+  assert.deepEqual(await res.json(), { ok: true, direct: false }, 'identical to a new subscribe: no enumeration signal');
   assert.equal(sent.length, 0, 'a prior opt-out is honored: no confirmation email');
   assert.equal(kv.m.get(optinKey(hash)), undefined, 'no pending opt-in for a suppressed address');
 });
@@ -188,7 +188,7 @@ test('subscribe: unprovisioned (no MAIL_SUPPRESS_KEY) is inert - neutral respons
   const env = { ...ENV, SIGNUP_KV: kv, MAIL_SUPPRESS_KEY: '' };
   const res = await handleSubscribe(jsonReq({ email: 'a@b.co' }), env, { send, rateLimitFn: allow });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true });
+  assert.deepEqual(await res.json(), { ok: true, direct: false });
   assert.equal(sent.length, 0);
   assert.equal([...kv.m.keys()].filter((k) => k.startsWith(MAIL_OPTIN_PREFIX)).length, 0);
 });
@@ -285,7 +285,7 @@ test('subscribe (opt-in OFF): a new address is ACTIVE immediately, sends NO conf
   const res = await handleSubscribe(jsonReq({ email: 'Reader@Example.com' }),
     { ...DIRECT_ENV, SIGNUP_KV: kv }, { send, sendAdminAlert: sendAlert, rateLimitFn: allow });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true });
+  assert.deepEqual(await res.json(), { ok: true, direct: true });
 
   const hash = await mailHash(SUPPRESS_KEY, 'Reader@Example.com');
   // active subscriber written straight away; NO pending opt-in
@@ -326,12 +326,12 @@ test('subscribe (opt-in OFF): a SUPPRESSED address is still refused, no subscrib
   const res = await handleSubscribe(jsonReq({ email: 'gone@example.com' }),
     { ...DIRECT_ENV, SIGNUP_KV: kv }, { send, sendAdminAlert: sendAlert, rateLimitFn: allow });
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true }, 'same neutral response, no enumeration signal');
+  assert.deepEqual(await res.json(), { ok: true, direct: true }, 'same neutral response, no enumeration signal');
   assert.equal(kv.m.get(subscriberKey(hash)), undefined, 'suppression fail-close holds in direct mode');
   assert.equal(alerts.length, 0);
 });
 
-test('subscribe (opt-in OFF): the no-JS neutral page says "subscribed", not "check your inbox"', async () => {
+test('subscribe (opt-in OFF): the no-JS neutral page says "subscribed" in words true for every address, not "check your inbox"', async () => {
   const kv = makeKV();
   const { send } = sink();
   const { sendAlert } = alertSink();
@@ -343,8 +343,10 @@ test('subscribe (opt-in OFF): the no-JS neutral page says "subscribed", not "che
   const res = await handleSubscribe(formReq, { ...DIRECT_ENV, SIGNUP_KV: kv }, { send, sendAdminAlert: sendAlert, rateLimitFn: allow });
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.match(html, /You are subscribed/i);
+  assert.match(html, /Thanks for subscribing\./);
+  assert.match(html, /unless it unsubscribed before/, 'a suppressed address gets this same page, so it must not claim delivery outright');
   assert.doesNotMatch(html, /check your inbox/i);
+  assert.doesNotMatch(html, /You are subscribed\./);
 });
 
 test('confirm POST (opt-in ON): notifies the admin once with the decrypted address', async () => {

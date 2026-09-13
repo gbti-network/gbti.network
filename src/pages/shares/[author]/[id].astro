@@ -137,9 +137,10 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
         </div>
       )}
 
-      {/* sow-202: the weekly-digest capture, matching the article/project/prompt sidebars. Shown to
-          every state (the member-aware routing is the queued half of sow-202). variant="rail" is
-          chromeless, so the .card.side-card wrapper supplies the chrome like the other side cards. */}
+      {/* sow-202: the weekly-digest capture, matching the article/project/prompt sidebars. Everyone gets the
+          address form; a signed-in member also sees a link to their notification settings (the component
+          decides). variant="rail" is chromeless, so the .card.side-card wrapper supplies the chrome like the
+          other side cards. */}
       <div class="card side-card">
         <DigestSubscribe variant="rail" heading="The weekly digest" />
       </div>

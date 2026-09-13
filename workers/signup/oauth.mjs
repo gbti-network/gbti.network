@@ -124,6 +124,11 @@ export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch,
  * Fetch the GitHub user's PRIMARY verified email (needs the `user:email` scope). Best-effort: returns '' if the
  * scope was not granted or no verified email exists, so a GitHub-only signup still succeeds (the email only powers
  * the Stripe Customer + the day-87 reminder, which degrade gracefully). NEVER throws.
+ *
+ * VERIFIED ONLY (sow-202). This used to fall back to an UNVERIFIED address, contradicting the sentence above, and
+ * that address is written onto the Stripe Customer, where the digest mails members and the digest join hashes it.
+ * An unverified address there lets an account point its mail, and the join's answer about list membership, at a
+ * mailbox it does not control. No verified address means no email, which every consumer already handles.
  */
 export async function githubFetchPrimaryEmail(accessToken, fetchImpl = globalThis.fetch) {
   try {
@@ -133,9 +138,8 @@ export async function githubFetchPrimaryEmail(accessToken, fetchImpl = globalThi
     if (!res.ok) return '';
     const list = JSON.parse(await res.text());
     if (!Array.isArray(list)) return '';
-    const pick = list.find((e) => e && e.primary && e.verified)
-      || list.find((e) => e && e.verified)
-      || list.find((e) => e && e.email);
+    const pick = list.find((e) => e && e.primary && e.verified === true)
+      || list.find((e) => e && e.verified === true);
     return pick && pick.email ? String(pick.email) : '';
   } catch {
     return '';
@@ -174,6 +178,10 @@ export async function discordExchangeCode({ clientId, clientSecret, code, redire
  * Fetch the Discord user with the OAuth access token (the user's token, not the bot token).
  * Returns { discordUserId, email, accessToken } so the caller can both store the id/email and pass
  * the access token to addGuildMember (guilds.join).
+ *
+ * The email is returned only when Discord reports it VERIFIED (sow-202). The link callback writes it onto the
+ * member's Stripe Customer, and a Discord account can carry an address its owner never confirmed, so an unverified
+ * one would let any member retarget their account's mail at someone else's mailbox. Unverified reads as no email.
  */
 export async function discordFetchUser(accessToken, fetchImpl = globalThis.fetch) {
   const res = await fetchImpl(DISCORD_USER, {
@@ -183,5 +191,5 @@ export async function discordFetchUser(accessToken, fetchImpl = globalThis.fetch
   if (!res.ok) throw new Error(`discord user fetch failed ${res.status}: ${text}`);
   const u = JSON.parse(text);
   if (!u.id) throw new Error('discord user fetch: missing id');
-  return { discordUserId: String(u.id), email: u.email ? String(u.email) : '', accessToken };
+  return { discordUserId: String(u.id), email: u.email && u.verified === true ? String(u.email) : '', accessToken };
 }
