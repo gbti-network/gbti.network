@@ -1508,7 +1508,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
   margin: 5px 0 6px; font-family: var(--f-display); font-weight: 600;
   font-size: clamp(23px, 3.4vw, 31px); line-height: 1.15; letter-spacing: -.015em; color: #fff;
 }
-.pd-pitch { margin: 0; font-size: 15px; line-height: 1.5; color: rgba(255,255,255,.85); max-width: 60ch; }
+.pd-pitch { margin: 0; font-size: 15px; line-height: 1.5; color: #ffffffd9; max-width: 67ch; }
 @media (max-width: 560px) {
   .pd-hero { height: 200px; }
   .pd-mark { width: 48px; height: 48px; }
