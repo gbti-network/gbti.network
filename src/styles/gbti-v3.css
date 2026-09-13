@@ -885,9 +885,7 @@ a.who:hover { color: var(--fg); }
 /* Card view is a tight grid: the save/collect/follow pills go icon-only so three actions + the comment
    count fit a column without wrapping into a ragged second line. Detailed/list views keep the labels. */
 .feed-page[data-view="card"] .feed-foot .col-label,
-.feed-page[data-view="card"] .feed-foot .follow-t { display: none; }
 .feed-page[data-view="card"] .feed-foot .col-pill,
-.feed-page[data-view="card"] .feed-foot .follow-pill { padding: 4px 7px; }
 /* No right-push in the card grid: the spacer would force the comment count onto a ragged second line. */
 .feed-page[data-view="card"] .feed-foot .fsp { display: none; }
 .feed-cover { width: 196px; height: 128px; border-radius: 10px; flex: none; overflow: hidden; display: block; background: linear-gradient(150deg, #ecebe7, #dbd9d4); }
@@ -1261,10 +1259,14 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 /* the in-feed join CTA spans the full row in the card grid (its min-content width would otherwise
    stretch whichever column it lands in) */
 .feed-page[data-view="card"] .feed-cta { grid-column: 1 / -1; margin: 4px 0; }
+/* No overflow: hidden on the card (owner report, 2026-09-13): it clipped the Save to collection popover, which
+   opens below the pill and runs past the card, so its list and Create field could not be seen or clicked. The
+   clip existed only to round the cover image, so the cover rounds its own top corners instead (below). */
 .feed-page[data-view="card"] .feed-item { display: flex; flex-direction: column; gap: 0; padding: 0;
-  border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); overflow: hidden; }
+  border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); }
 .feed-page[data-view="card"] .feed-item:hover { border-color: var(--line-2); }
-.feed-page[data-view="card"] .feed-cover { order: -1; width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; }
+.feed-page[data-view="card"] .feed-cover { order: -1; width: 100%; height: auto; aspect-ratio: 16 / 10;
+  border-radius: calc(var(--r-lg) - 1.5px) calc(var(--r-lg) - 1.5px) 0 0; }
 .feed-page[data-view="card"] .feed-cover-fb { display: block; }
 .feed-page[data-view="card"] .feed-main { display: flex; flex-direction: column; flex: 1; min-width: 0; padding: 12px 14px 14px; }
 .feed-page[data-view="card"] .feed-meta { margin-bottom: 8px; gap: 7px; }

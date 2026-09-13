@@ -69,7 +69,6 @@ export function shareCardHtml(share, {
     <div class="feed-foot">
       <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${e(slug)}" data-gbti-count="0" data-gbti-size="sm" data-gbti-region="favorite" class="gbti-favorite fav-sm"><button type="button" class="fav-pill" data-signin data-tooltip="Favorite" aria-label="Favorite this share"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-heart" /></svg></button></gbti-favorite>
       <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${e(slug)}" data-gbti-size="sm" data-gbti-region="collection" class="gbti-collection col-sm"><button type="button" class="col-pill" data-signin data-tooltip="Save to a collection" aria-label="Save this share to a collection"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-folder" /></svg><span class="col-label">Save</span></button></gbti-collection>
-      <span class="feed-follow" data-follow-user="${e(author)}"><button type="button" class="follow-pill" data-signin data-tooltip="Follow" aria-label="Follow ${e(authorDisplay(author))}"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-mega"/></svg><span class="follow-t">Follow</span></button></span>
       ${comments != null ? `<span class="rx rx-static"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> ${comments}<span class="sr-only"> comments</span></span>` : ''}
       <span class="fsp"></span>
     </div>

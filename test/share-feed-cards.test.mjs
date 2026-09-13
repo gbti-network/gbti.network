@@ -43,7 +43,7 @@ test('drift census: every class and data-* hook the client card emits exists in 
   hooks.delete('data-live-share'); // the one hook the client adds, so a style or a test can tell a live card apart
   for (const h of hooks) assert.ok(astro.includes(h), `hook "${h}" is not one the Astro card emits`);
   // the hooks the view's filters and the favorites bootstrap read must be present on every client card
-  for (const must of ['data-fi', 'data-kind="share"', 'data-visibility=', 'data-tags=', 'data-share-slug=', 'data-ts=', 'data-gbti-target-type="share"', 'data-gbti-target-slug=', 'data-signin', 'data-follow-user=']) assert.ok(html.includes(must), must);
+  for (const must of ['data-fi', 'data-kind="share"', 'data-visibility=', 'data-tags=', 'data-share-slug=', 'data-ts=', 'data-gbti-target-type="share"', 'data-gbti-target-slug=', 'data-signin']) assert.ok(html.includes(must), must);
   assert.match(read('src/components/feeds/FeedList.astro'), /data-ts=\{it\.date\}/, 'the built card carries the timestamp the merge orders by');
 });
 
