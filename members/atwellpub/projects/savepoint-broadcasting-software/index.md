@@ -28,8 +28,8 @@ platforms:
   - macOS
   - Linux
   - WSL
-icon: ./images/savepoint-icon-128x128.webp
-iconLarge: ./images/savepoint-icon-256x256.webp
+icon: ./images/savepoint-icon-signal-128x128.webp
+iconLarge: ./images/savepoint-icon-signal-256x256.webp
 banner: ./images/savepoint-banner.webp
 featuredImage: ./images/savepoint-featured.webp
 gallery:
