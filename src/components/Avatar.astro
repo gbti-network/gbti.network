@@ -35,7 +35,10 @@ function withFallback404(url?: string): string | undefined {
   }
 }
 const src = withFallback404(item?.avatar);
-const dim = size ? `width:${size}px;height:${size}px;` : '';
+// flex-shrink:0 with the size (owner report, 2026-09-13): a sized avatar placed in a flex row beside text that wraps
+// gave up WIDTH to the text while keeping its height, so the circle rendered as a tall oval (52px measured at 43x52
+// in the share page's sidebar author card, beside a two-line headline). A fixed size is never negotiable.
+const dim = size ? `width:${size}px;height:${size}px;flex-shrink:0;` : '';
 const fontSize = size ? `font-size:${Math.round(size * 0.42)}px;` : '';
 ---
 <span

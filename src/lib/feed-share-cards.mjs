@@ -60,7 +60,7 @@ export function shareCardHtml(share, {
   return `<article class="feed-item${cover ? '' : ' nocover'}" data-fi data-kind="share" data-author="${e(author)}" data-comments="${comments ?? 0}" data-visibility="${members ? 'members' : 'public'}" data-tags="${e(tags)}" data-cats="" data-share-slug="${e(slug)}" data-ts="${ts}" data-live-share>
   <div class="feed-main">
     <div class="feed-meta">
-      <span class="av" style="position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:var(--fg-mute);color:#fff;font-family:var(--f-display);font-weight:700;width:26px;height:26px;font-size:11px;border-radius:999px"><span aria-hidden="true">${initial}</span>${av ? `<img src="${e(av)}" alt="" loading="lazy" decoding="async" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0" />` : ''}</span>
+      <span class="av" style="position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:var(--fg-mute);color:#fff;font-family:var(--f-display);font-weight:700;width:26px;height:26px;flex-shrink:0;font-size:11px;border-radius:999px"><span aria-hidden="true">${initial}</span>${av ? `<img src="${e(av)}" alt="" loading="lazy" decoding="async" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0" />` : ''}</span>
       <span class="tmeta"><a class="who" href="${e(authorHref(author))}">${e(authorDisplay(author))}</a><span class="dotsep"></span>${e(relativeTime(ts, now))}</span>
       <span class="kind-tag kt-share">shared${domain ? ` · ${e(domain)}` : ''}</span>${members ? '<span class="kind-tag kt-members">members</span>' : ''}
     </div>
