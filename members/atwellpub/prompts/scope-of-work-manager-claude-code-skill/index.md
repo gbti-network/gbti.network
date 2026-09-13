@@ -3,7 +3,7 @@ title: '/SOW : An Agent Skill for Scopes of Work'
 slug: scope-of-work-manager-claude-code-skill
 shortDescription: >-
   A drop-in /sow skill for Claude Code: lane-based Scope of Work management (queue, progressing,
-  waiting review, completed) with authoring rules that stop duplicate plans, force a real code
+  completed) with authoring rules that stop duplicate plans, force a real code
   audit, and keep owner decisions in plan mode.
 targets:
   - Claude Code
@@ -51,9 +51,13 @@ description: >
 # Managing Scopes of Work
 
 SOWs are local planning documents in `.data/sow/` (kept OUT of version control), organized into
-lanes a work item moves through: `0_queue` -> `1_progressing` -> `2_waiting_review` ->
-`3_completed`, plus a `_staging` side-lane for items parked on an external blocker. One canonical
-markdown file per SOW; move the same file between lanes as the work advances.
+lanes a work item moves through: `0_queue` -> `1_progressing` -> `2_completed`, plus a `_staging`
+side-lane for items parked on an external blocker. One canonical markdown file per SOW; move the same
+file between lanes as the work advances.
+
+There is no review lane, and nothing waits on a human test. An item moves to the completed lane when it
+is built, tested and shipped. It is assumed correct; defects are flagged later and become their own
+SOWs. Do not create a review lane, route work into one, or describe an item as awaiting sign-off.
 
 ## Initialize (/sow init)
 
@@ -61,7 +65,7 @@ When invoked as /sow init (or when the lane folders do not exist yet), scaffold 
 stop (this command only builds folders, it never authors a SOW):
 
 ```bash
-mkdir -p .data/sow/{_staging,0_queue,1_progressing,2_waiting_review,3_completed}
+mkdir -p .data/sow/{_staging,0_queue,1_progressing,2_completed}
 [ -f .data/sow/todo.md ] || printf '# SOW todo\n' > .data/sow/todo.md
 grep -qxF '.data/' .gitignore 2>/dev/null || echo '.data/' >> .gitignore
 ```
@@ -71,9 +75,10 @@ It creates only what is missing and never overwrites an existing todo.md.
 ## Authoring a SOW: do these steps IN ORDER
 
 1. **Improve an existing SOW first (never duplicate).** Search the open lanes for a SOW this work
-   belongs in and extend it (a decision, a phase, an open-question resolution). An item in
-   2_waiting_review is code-complete, so additions there are dated review-feedback notes. Only
-   create a new SOW when no open SOW is a reasonable home, and say that you checked.
+   belongs in and extend it (a decision, a phase, an open-question resolution). A completed item
+   is shipped: a defect found in it later gets its own SOW that cites it, and only scope that was
+   never delivered moves the item back to `1_progressing`. Only create a new SOW when no open SOW is
+   a reasonable home, and say that you checked.
 2. **Ground it in a code audit (no guessing).** Read the real code so the SOW cites file and line
    and the true root cause, not assumptions. For a bug, name the root cause; for a feature, name
    the surfaces and the pattern to reuse. Prefer reusing existing infrastructure.
