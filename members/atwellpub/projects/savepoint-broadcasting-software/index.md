@@ -9,8 +9,8 @@ categories:
 status: published
 visibility: public
 publicStub: false
+pricing: free
 pricingUrl: https://savepoint.fm/pricing?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
-version: 1.57.1
 requires: Windows 10+ or Node 22+
 tags:
   - broadcasting
@@ -30,41 +30,58 @@ platforms:
   - WSL
 icon: ./images/savepoint-icon-signal-128x128.webp
 iconLarge: ./images/savepoint-icon-signal-256x256.webp
-banner: ./images/savepoint-banner.webp
 featuredImage: ./images/savepoint-featured.webp
+banner: ./images/savepoint-banner.webp
 gallery:
   - src: ./images/savepoint-dashboard.webp
-    caption: Broadcast Control, with Start Broadcast, a toggle for each connected channel, and station totals.
+    caption: >-
+      Broadcast Control, with Start Broadcast, a toggle for each connected channel, and station
+      totals.
   - src: ./images/savepoint-schedule.webp
-    caption: The weekly schedule as a timeline, with the live broadcast summary and session history in the sidebar.
+    caption: >-
+      The weekly schedule as a timeline, with the live broadcast summary and session history in the
+      sidebar.
   - src: ./images/savepoint-channels.webp
-    caption: Channel setup for Discord, YouTube, Mixcloud, Restream, custom RTMP, Twitch, TikTok Live, and Kick, plus the listener chat commands.
+    caption: >-
+      Channel setup for Discord, YouTube, Mixcloud, Restream, custom RTMP, Twitch, TikTok Live, and
+      Kick, plus the listener chat commands.
   - src: ./images/savepoint-pre-rendering.webp
-    caption: The pre-rendering queue, showing each track in progress with its workers, frame rate, and completion.
+    caption: >-
+      The pre-rendering queue, showing each track in progress with its workers, frame rate, and
+      completion.
   - src: ./images/savepoint-deploy-connection.webp
-    caption: The Deployment connection tab, where a production server is configured over SSH with key-based authentication.
+    caption: >-
+      The Deployment connection tab, where a production server is configured over SSH with key-based
+      authentication.
   - src: ./images/savepoint-deploy-push.webp
-    caption: Push to Production, choosing the deployment type, what to deploy, and which stations to include.
+    caption: >-
+      Push to Production, choosing the deployment type, what to deploy, and which stations to
+      include.
   - src: ./images/savepoint-deploy-pull.webp
-    caption: Pull from Production, merging favorites, exclude lists, channel settings, and broadcast history into the local copy.
+    caption: >-
+      Pull from Production, merging favorites, exclude lists, channel settings, and broadcast
+      history into the local copy.
   - src: ./images/savepoint-deploy-jobs.webp
     caption: The deployment jobs history, listing each completed push and what it included.
-video: https://www.youtube.com/watch?v=_Sli3U6wb8w
 sidebarPosition: right
+video: https://www.youtube.com/watch?v=_Sli3U6wb8w
 links:
   - type: download
-    url: https://savepoint.fm/download?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
+    url: >-
+      https://savepoint.fm/download?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
     label: Download SavePoint
     primary: true
   - type: homepage
     url: https://savepoint.fm/?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
     label: savepoint.fm
   - type: documentation
-    url: https://savepoint.fm/documentation?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
+    url: >-
+      https://savepoint.fm/documentation?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
     label: Documentation
+publishedAt: '2026-09-12T23:30:51.000Z'
+updatedAt: '2026-09-13T00:51:33.558Z'
 type: project
 author: atwellpub
-publishedAt: '2026-09-12T23:30:51.000Z'
 ---
 
 SavePoint Station Manager is a self-hosted desktop application for Windows, macOS, and Linux that lets communities, DJ collectives, indie podcast networks, and hobbyist broadcasters run their own 24/7 online radio or video station.
