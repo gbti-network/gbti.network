@@ -1,0 +1,39 @@
+---
+// Footnotes last (owner report, 2026-09-13): wraps a rendered markdown body that is followed by a members-only
+// section, and renders the body, then the "between" slot (the members-only section), then the body's footnotes.
+// Without it the footnotes sit between the public body and the locked box. See src/lib/footnotes-last.mjs.
+//
+// `wrap` matches the markup each page already uses around its body, so moving the footnotes changes no styling:
+//   none    the caller already wraps everything in <Prose> (the article layouts)
+//   prose   the body and the footnotes each get their own <Prose> (the project page, whose locked tail is outside it)
+//   prompt  the same, inside the Visual view the prompt page toggles, so Markdown view still hides them
+import Prose from './blog/Prose.astro';
+import { splitTrailingFootnotes } from '../lib/footnotes-last.mjs';
+
+interface Props {
+  wrap?: 'none' | 'prose' | 'prompt';
+}
+const { wrap = 'none' } = Astro.props;
+const { body, footnotes } = splitTrailingFootnotes(await Astro.slots.render('default'));
+---
+{wrap === 'none' && (
+  <>
+    <Fragment set:html={body} />
+    <slot name="between" />
+    {footnotes && <Fragment set:html={footnotes} />}
+  </>
+)}
+{wrap === 'prose' && (
+  <>
+    <Prose><Fragment set:html={body} /></Prose>
+    <slot name="between" />
+    {footnotes && <Prose><Fragment set:html={footnotes} /></Prose>}
+  </>
+)}
+{wrap === 'prompt' && (
+  <>
+    <div class="prompt-view" data-view="visual"><Prose><Fragment set:html={body} /></Prose></div>
+    <slot name="between" />
+    {footnotes && <div class="prompt-view" data-view="visual"><Prose><Fragment set:html={footnotes} /></Prose></div>}
+  </>
+)}

@@ -7,6 +7,7 @@
 // + article-only components ([slug].astro composes and slots both in, this component never re-implements them).
 import { Image } from 'astro:assets';
 import Prose from './Prose.astro';
+import FootnotesLast from '../FootnotesLast.astro';
 import VideoEmbed from '../VideoEmbed.astro';
 import LockedBody from '../LockedBody.astro';
 import ContentMeta from '../ContentMeta.astro';
@@ -75,8 +76,13 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
 
       <div class="mt-32" data-gbti-region="body">
         <Prose>
-          {isStub ? <LockedBody encPath={d.encryptedBody} kind="body" readerPath={postId} readerType="post" /> : <slot name="body" />}
-          {!isStub && d.encryptedBody && <LockedBody encPath={d.encryptedBody} kind="section" readerPath={postId} readerType="post" />}
+          {/* Footnotes last (owner, 2026-09-13): a members-only section goes BETWEEN the body and its footnotes. */}
+          {isStub ? <LockedBody encPath={d.encryptedBody} kind="body" readerPath={postId} readerType="post" /> : d.encryptedBody ? (
+            <FootnotesLast>
+              <slot name="body" />
+              <LockedBody slot="between" encPath={d.encryptedBody} kind="section" readerPath={postId} readerType="post" />
+            </FootnotesLast>
+          ) : <slot name="body" />}
         </Prose>
       </div>
     </article>

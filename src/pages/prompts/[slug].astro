@@ -3,6 +3,7 @@ import { getCollection, render } from 'astro:content';
 import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Prose from '../../components/blog/Prose.astro';
+import FootnotesLast from '../../components/FootnotesLast.astro';
 import DeployStatusNotice from '../../components/DeployStatusNotice.astro';
 import EditHooks from '../../components/EditHooks.astro';
 import TouchSignal from '../../components/TouchSignal.astro';
@@ -127,13 +128,21 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
               </div>
             </div>
             <div class="prompt-body" data-gbti-region="body">
-              {isStub(prompt) ? <LockedBody encPath={d.encryptedBody} kind="body" /> : (
+              {/* Footnotes last (owner, 2026-09-13): a members-only section goes BETWEEN the body and its footnotes. */}
+              {isStub(prompt) ? <LockedBody encPath={d.encryptedBody} kind="body" /> : d.encryptedBody ? (
+                <FootnotesLast wrap="prompt">
+                  <Content />
+                  <Fragment slot="between">
+                    <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
+                    <LockedBody encPath={d.encryptedBody} kind="section" />
+                  </Fragment>
+                </FootnotesLast>
+              ) : (
                 <>
                   <div class="prompt-view" data-view="visual"><Prose><Content /></Prose></div>
                   <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
                 </>
               )}
-              {!isStub(prompt) && d.encryptedBody && <LockedBody encPath={d.encryptedBody} kind="section" />}
             </div>
           </div>
           <!-- The author note + discussion live in the MAIN column, full-width to match the prompt block (the
