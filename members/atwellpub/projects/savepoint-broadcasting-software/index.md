@@ -9,7 +9,7 @@ categories:
 status: published
 visibility: public
 publicStub: false
-pricing: free
+pricing: freemium
 pricingUrl: https://savepoint.fm/pricing?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
 requires: Windows 10+ or Node 22+
 tags:
@@ -79,7 +79,7 @@ links:
       https://savepoint.fm/documentation?utm_source=gbti-network&utm_medium=referral&utm_campaign=directory
     label: Documentation
 publishedAt: '2026-09-12T23:30:51.000Z'
-updatedAt: '2026-09-13T00:51:33.558Z'
+updatedAt: '2026-09-13T00:57:44.500Z'
 type: project
 author: atwellpub
 ---
