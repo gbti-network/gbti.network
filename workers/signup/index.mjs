@@ -84,6 +84,7 @@ import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1
 import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
 import { handleShoptalk } from './membership-shoptalk.mjs'; // sow-314: the Shop Talk call guest list
+import { handleDigestSwitch } from './membership-digest.mjs'; // sow-202: the member's weekly digest switch
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 
 /**
@@ -1429,6 +1430,17 @@ export default {
         }
       }
 
+      // sow-202: the signed-in member's weekly digest on/off switch (/account/notifications/). Credentialed cookie
+      // route, so a POST passes the CSRF gate in resolveIdentity like /membership/prefs below.
+      if (pathname === '/membership/digest') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET' || method === 'POST') {
+          const r = await handleDigestSwitch(request, env, { stripe: createStripeClient({ apiKey: env.STRIPE_SECRET_KEY }) });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
       if (pathname === '/membership/prefs') {
         const cors = corsHeaders(request, env, { credentials: true }); // sow-158 Phase 1b: credentialed cookie route (POST -> CSRF gate in resolveIdentity)
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -1816,8 +1828,9 @@ export default {
         return await handleUnsubscribe(request, env);
       }
 
-      // SOW-166: anonymous digest capture. subscribe writes a pending double-opt-in and sends a confirmation
-      // email (it enrolls nobody); confirm promotes the pending opt-in into an active subscriber. Both are
+      // SOW-166: anonymous digest capture. With MAIL_DOUBLE_OPTIN on (the default), subscribe writes a pending opt-in
+      // and sends a confirmation email, and confirm promotes it into an active subscriber. Production runs it OFF
+      // (since 2026-08-26): subscribe activates the address at once and sends no confirmation email. Both routes are
       // anonymous (no cookie/bearer) and fail-closed: unprovisioned dependencies enroll nobody.
       if (pathname === '/mail/subscribe') {
         return await handleSubscribe(request, env);

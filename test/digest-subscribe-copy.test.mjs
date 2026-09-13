@@ -44,8 +44,14 @@ test('box: the success message comes from the helper, not a hard-coded promise',
   assert.doesNotMatch(COMPONENT, /say\('Check your inbox\./);
 });
 
-test('box: the notification settings link is in the form and shown only when the page is signed in', () => {
-  assert.match(COMPONENT, /<p class="dsub-fine dsub-mlink"><a href="\/account\/notifications\/">Choose what people you follow email you<\/a><\/p>/);
-  assert.match(COMPONENT, /\n  \.dsub-mlink \{ display: none; \}\n/);
-  assert.match(COMPONENT, /\n  :global\(html\.is-gbti-member\) \.dsub-mlink \{ display: block; \}\n/);
+test('box: a signed-in member gets a link to the digest switch INSTEAD of the form (sow-202, owner 2026-09-13)', () => {
+  // The switch on /account/notifications/ acts on the account's own address, so the form would ask a member for an
+  // email the account already has. Both halves are CSS on the member signal's class: no script, no Worker call.
+  assert.match(COMPONENT, /<p class="dsub-member" data-dsub-member>[^<]*<a href="\/account\/notifications\/">Turn the weekly digest on or off in your notification settings<\/a>\.<\/p>/);
+  assert.match(COMPONENT, /\n  \.dsub-member \{ display: none;/);
+  assert.match(COMPONENT, /\n  :global\(html\.is-gbti-member\) \.dsub-member \{ display: block; \}\n/);
+  assert.match(COMPONENT, /\n  :global\(html\.is-gbti-member\) \.dsub-form \{ display: none; \}\n/);
+  assert.doesNotMatch(COMPONENT, /dsub-mlink/, 'the old form-plus-link is gone');
+  const member = COMPONENT.match(/<p class="dsub-member"[^>]*>([\s\S]*?)<\/p>/)[1];
+  assert.doesNotMatch(member.replace(/<[^>]+>/g, ''), /[\u2013\u2014]|\b\w+'(t|re|s|ll|ve|d)\b/i, 'writing rules');
 });

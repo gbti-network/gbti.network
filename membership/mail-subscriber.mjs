@@ -16,7 +16,11 @@
 // could hold a raw address, so a compiled record can never serialize an '@' from the address (leak-guard test).
 //
 // Shape (mail:subscriber:<hash>):
-//   { hash, source, status, emailEnc, customerId, githubId, createdAt, updatedAt }
+//   { hash, source, status, emailEnc, customerId, githubId, createdAt, updatedAt, welcomedAt, digestOff }
+//
+// `digestOff` (sow-202, owner 2026-09-13) is the member's own "no weekly digest" choice, set from the switch on
+// /account/notifications/. It is NOT an unsubscribe: the record stays active, so follow-alert mail (which needs this
+// record, scripts/enqueue-notifications.mjs) keeps working, and only the digest compile skips it (wantsDigest).
 //
 // Unsubscribe/erasure HARD-DELETES the record (the Worker) and writes the mail-suppress marker, which outlives
 // it. `status: 'unsubscribed'` exists for a caller that prefers a soft transition, but the approved design is
@@ -91,6 +95,8 @@ export function buildSubscriber(input = {}, { now = Date.now } = {}) {
     // backfill creates 22 at once. All three produce an active record with welcomedAt null, and none of
     // them needs to know the welcome exists.
     welcomedAt: null,
+    // sow-202: the member switched the weekly digest off. Only a literal true counts.
+    digestOff: input.digestOff === true,
   };
 }
 
@@ -127,12 +133,21 @@ export function normalizeSubscriber(raw) {
     // Absent reads as null, i.e. NOT yet welcomed. That is the intended migration for every record written
     // before this field existed: they receive one welcome issue and then join the weekly cadence.
     welcomedAt: num(raw.welcomedAt) ?? null,
+    // sow-202: kept through every read and write. Without this line the flag is dropped on the next read, and a
+    // member who switched the digest off would silently start receiving it again.
+    digestOff: raw.digestOff === true,
   };
 }
 
 /** Is this subscriber currently eligible to receive a send? Only an 'active' record is. */
 export function canReceive(rec) {
   return Boolean(rec) && rec.status === 'active';
+}
+
+/** Does this subscriber get the weekly digest (and its welcome issue)? Active, and not switched off by the member.
+ *  canReceive stays the gate for every OTHER send, so a digest-off member still gets the follow alerts they chose. */
+export function wantsDigest(rec) {
+  return canReceive(rec) && rec.digestOff !== true;
 }
 
 /** How the drain resolves this subscriber's address: from Stripe (a member) or by decrypting emailEnc (anon).

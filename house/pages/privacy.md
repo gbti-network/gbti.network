@@ -5,13 +5,13 @@ slug: privacy
 status: published
 visibility: public
 description: "How the GBTI Network collects, uses, and protects your data. Covers the public content repository, the membership registry (Stripe), the weekly email digest, the processors we rely on, your rights including erasure, and the honest limits of deleting content from a public repository."
-updatedAt: 2026-08-25
+updatedAt: 2026-09-13
 redirectFrom: ["/privacy/"]
 ---
 
 # Privacy Policy
 
-_Last updated: August 25th 2026_
+_Last updated: September 13th 2026_
 
 ## 1. Who we are
 
@@ -52,14 +52,14 @@ The optional GBTI Network browser extension lets members author and read their g
 
 We publish a weekly digest by email. There are two ways an address ends up on it, they have different lawful bases, and they store different things.
 
-- **If you are a member, we enrolled you without asking.** The digest is how the co-op tells its own members what happened that week, so we treat it as part of the membership rather than as marketing. Our lawful basis is our legitimate interest in keeping members informed about the network they belong to. **Your subscriber record holds no email address at all.** It holds your GitHub user id, and your address is read from Stripe at the moment an issue is sent and is not retained afterwards. You can unsubscribe at any time, from any issue, and remain a member.
-- **If you are a visitor who submitted the form, we asked first and waited.** Our lawful basis is your consent. Submitting the form does not subscribe you: we write a pending record that expires after 48 hours and send you one confirmation email. **You are not a recipient until you click the link in it**, so an address typed in by somebody else is never enrolled. That confirmation email is the only message we send before you confirm, and if you never confirm, the pending record expires and nothing remains.
+- **If you are a member, we enrolled you without asking.** The digest is how the co-op tells its own members what happened that week, so we treat it as part of the membership rather than as marketing. Our lawful basis is our legitimate interest in keeping members informed about the network they belong to. **Your subscriber record holds no email address at all.** It holds your GitHub user id, and your address is read from Stripe at the moment an issue is sent and is not retained afterwards. You can unsubscribe at any time, from any issue, and remain a member. While signed in, you can also turn the digest off and back on from your notification settings; turning it off stops the digest and nothing else.
+- **If you are a visitor who submitted the form, submitting it is what subscribed you.** Our lawful basis is your consent, which you give by submitting the form. **The address is added straight away and we do not send a confirmation email first**, so the digest starts with the next issue. Every issue carries a one-click unsubscribe link.
 
 **What we store, and how.** Your address is encrypted before it is written, under a key bound to that specific address, and no part of the system stores it in readable form. Every other record about you is keyed to a one-way hash of your address rather than to the address itself.
 
-**What we deliberately do not do.** We do not track opens: there is no tracking pixel in any issue, and we have not enabled our email provider's open or click tracking. We do count how many times each link in an issue was clicked, so we can tell which sections are worth keeping, but that counter records nothing about the reader. Not your address, not a hash of it, not your IP, not your browser. It can answer "how many people clicked this link" and it is structurally unable to answer "did this person click".
+**What we count, and what we do not.** Each issue carries a one-pixel image, and when a mail app loads it, that issue's open count goes up by one. We also count how many times each link in an issue was clicked, so we can tell which sections are worth keeping. Neither counter records anything about the reader. Not your address, not a hash of it, not your IP, not your browser. They can answer "how many times was this issue opened, or this link clicked" and they are structurally unable to answer "did this person open it or click it". We have not enabled our email provider's own open or click tracking.
 
-**Unsubscribing, and what survives it.** Every issue carries an unsubscribe link. When you use it we record that your address has opted out, and **that opt-out record deliberately outlives everything else, including a full erasure request.** It has to: it is a one-way hash with no address in it, and it is the only thing that stops a future import or a well-meant edit from adding you back. If you ask us to erase your data, we delete your subscriber record and keep the opt-out, so the result is that we hold nothing about you except the fact that you asked not to be contacted. We also do not re-subscribe an address that has previously opted out, even if the form is submitted again.
+**Unsubscribing, and what survives it.** Every issue carries an unsubscribe link. When you use it we record that your address has opted out, and **that opt-out record deliberately outlives everything else, including a full erasure request.** It has to: it is a one-way hash with no address in it, and it is the only thing that stops a future import or a well-meant edit from adding you back. If you ask us to erase your data, we delete your subscriber record and keep the opt-out, so the result is that we hold nothing about you except the fact that you asked not to be contacted. We also do not re-subscribe an address that has previously opted out, even if the form is submitted again. The one way back is your own choice while signed in: turning the digest on in your notification settings removes the opt-out record for the email address on your account, and the digest resumes.
 
 ## 4. How we use your data, and our lawful bases
 

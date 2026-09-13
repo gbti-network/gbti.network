@@ -648,3 +648,25 @@ test('a subscriber welcomed DURING this cycle skips this weekly and joins at the
   const r = await compileWeeklyIssue({ SIGNUP_KV: kv, NEWS_KV: {} }, deps(kv));
   assert.deepEqual(await readPendingIndex(kv, r.issueId), ['earlier'], 'only the earlier-welcomed subscriber gets this weekly');
 });
+
+// sow-202: the member's digest switch. A digest-off record is skipped by BOTH digest sends (weekly and welcome), and
+// only by them: it stays in the receivable base every other send (the follow alerts) is drawn from.
+test('DIGEST OFF: a member who switched the digest off gets no weekly and no welcome, but stays receivable', async () => {
+  const kv = makeKV();
+  seedSubscribers(kv, ['on1']);
+  seedSubscribers(kv, ['newOn'], { welcomedAt: null });
+  const offWelcomed = { ...buildSubscriber({ hash: 'off1', source: 'member', githubId: '11', digestOff: true }, { now: at(0) }), welcomedAt: 1 };
+  const offNew = buildSubscriber({ hash: 'off2', source: 'member', githubId: '12', digestOff: true }, { now: at(0) });
+  kv.m.set(subscriberKey('off1'), { value: JSON.stringify(offWelcomed), opts: null });
+  kv.m.set(subscriberKey('off2'), { value: JSON.stringify(offNew), opts: null });
+  const env = { SIGNUP_KV: kv, NEWS_KV: {} };
+
+  const weekly = await compileWeeklyIssue(env, deps(kv));
+  assert.deepEqual(await readPendingIndex(kv, weekly.issueId), ['on1'], 'the weekly skips the digest-off member');
+
+  const welcome = await compileWelcomeIssue(env, deps(kv));
+  assert.deepEqual(await readPendingIndex(kv, welcome.issueId), ['newOn'], 'the welcome skips the never-welcomed digest-off member');
+
+  const all = await listRecipientHashes(kv);
+  assert.deepEqual([...all.hashes].sort(), ['newOn', 'off1', 'off2', 'on1'], 'digest off is not an unsubscribe: both records stay receivable');
+});

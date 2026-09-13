@@ -3,6 +3,11 @@
 // (what arrives when someone they follow publishes) and fine-tunes any one follow. Reuses the client-ui
 // <gbti-notifications-settings> element wired to the cookie-session adapter (no GitHub token in the page).
 // A stable, linkable URL: the weekly digest footer "notification preferences" link lands here (sow-267). noindex.
+//
+// sow-202 (owner, 2026-09-13): the WEEKLY DIGEST SWITCH sits above the follow settings. It reads and writes
+// /membership/digest over the same cookie session, about this account's own subscriber record only. Off stops the
+// digest and nothing else; on also lifts an earlier unsubscribe. Signed-in members are sent here from the digest
+// sign-up box instead of being asked for an email the account already has.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 <BaseLayout title="Notifications" description="Choose what the people you follow send you." noindex={true}>
@@ -26,6 +31,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <h1 class="h1">Notifications</h1>
           <p class="lead">What the people you follow send you. Set one default for everyone, then fine-tune any follow.</p>
         </div>
+        <section class="card digest-card" data-digest-card aria-labelledby="digest-h">
+          <div class="dg-row">
+            <div class="dg-copy">
+              <h2 class="dg-h" id="digest-h">The weekly digest</h2>
+              <p class="dg-sub">One email a week: new member articles, projects and prompts, plus the developer news worth reading. Turning it off does not stop the follow alerts you choose below.</p>
+              <p class="dg-addr" data-digest-addr hidden></p>
+            </div>
+            <button type="button" class="dg-tgl" data-digest-toggle role="switch" aria-checked="false" aria-labelledby="digest-h" disabled></button>
+          </div>
+          <p class="dg-msg" data-digest-msg role="status" aria-live="polite">Loading your digest setting.</p>
+        </section>
         <gbti-notifications-settings></gbti-notifications-settings>
       </div>
     </div>
@@ -53,8 +69,77 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const signupBase = document.documentElement.dataset.signupBase || '';
       const { createWorkbenchClient } = await import('../../lib/workbench-client');
       const { setClient } = await import('../../../client-ui/src/base.mjs');
-      setClient(createWorkbenchClient({ signupBase, login: String(s.login), githubId: s.githubId != null ? String(s.githubId) : null }));
+      const client = createWorkbenchClient({ signupBase, login: String(s.login), githubId: s.githubId != null ? String(s.githubId) : null });
+      setClient(client);
+      initDigest(client);
       await import('../../../client-ui/src/elements/gbti-notifications-settings.mjs');
+    }
+
+    // sow-202: the weekly digest switch. Every value from the Worker is written with textContent.
+    function initDigest(client: any) {
+      const toggle = document.querySelector('[data-digest-toggle]') as HTMLButtonElement | null;
+      const msg = document.querySelector('[data-digest-msg]') as HTMLElement | null;
+      const addr = document.querySelector('[data-digest-addr]') as HTMLElement | null;
+      if (!toggle || !msg || !addr || typeof client?.getDigest !== 'function') return;
+      let on = false;
+      let busy = false;
+      const paint = (value: boolean) => { toggle.setAttribute('aria-checked', String(value)); toggle.classList.toggle('on', value); };
+      const say = (text: string, retry = false) => {
+        msg.replaceChildren(document.createTextNode(text));
+        if (retry) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'dg-retry'; b.textContent = 'Try again';
+          b.addEventListener('click', load);
+          msg.append(' ', b);
+        }
+        msg.hidden = !text;
+      };
+      const reason = (e: any, fallback: string) => (['rate_limited', 'no_address', 'unavailable'].includes(e?.code) && e?.message ? e.message : fallback);
+
+      async function load() {
+        toggle.disabled = true;
+        say('Loading your digest setting.');
+        try {
+          const r = await client.getDigest();
+          if (!r || !r.address) {
+            paint(false);
+            addr.hidden = true;
+            say('There is no email address on your account, so the digest cannot be sent.');
+            return;
+          }
+          on = r.on === true;
+          paint(on);
+          addr.textContent = `Sent to ${r.address}`;
+          addr.hidden = false;
+          say('');
+          toggle.disabled = false;
+        } catch (e: any) {
+          if (e?.code === 'forbidden') { say('The digest switch is not available for this account.'); return; }
+          say(reason(e, 'Your digest setting could not be loaded.'), true);
+        }
+      }
+
+      toggle.addEventListener('click', async () => {
+        if (busy || toggle.disabled) return;
+        busy = true;
+        const next = !on;
+        paint(next); // shown at once, put back if the change is refused
+        toggle.disabled = true;
+        try {
+          const r = await client.setDigest(next);
+          on = r?.on === true;
+          paint(on);
+          say(on ? 'The weekly digest is on.' : 'The weekly digest is off.');
+        } catch (e) {
+          paint(on);
+          say(reason(e, 'The digest setting could not be changed. Try again in a moment.'));
+        } finally {
+          busy = false;
+          toggle.disabled = false;
+        }
+      });
+
+      load();
     }
 
     render(currentIdentity(readMemberSignal()));
@@ -69,5 +154,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     .notif-back { display: inline-flex; align-items: center; gap: 5px; color: var(--fg-mute); font-size: 13.5px; font-weight: 600; text-decoration: none; }
     .notif-back:hover { color: var(--brand); }
     [data-notif-signedin][hidden] { display: none; }
+    /* sow-202: the weekly digest switch card */
+    .digest-card { padding: 20px 24px; margin: 0 0 22px; }
+    .dg-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .dg-copy { min-width: 0; }
+    .dg-h { font-family: var(--f-display); font-weight: 700; font-size: 20px; line-height: 1.24; margin: 0; }
+    .dg-sub { margin: 5px 0 0; color: var(--fg-mute); font-size: 14px; line-height: 1.5; max-width: 60ch; }
+    .dg-addr { margin: 10px 0 0; font-size: 13.5px; color: var(--fg-soft); overflow-wrap: anywhere; }
+    .dg-addr[hidden], .dg-msg[hidden] { display: none; }
+    .dg-msg { margin: 12px 0 0; font-size: 13.5px; color: var(--fg-mute); }
+    .dg-retry { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--green-700); text-decoration: underline; cursor: pointer; }
+    .dg-tgl { flex: none; width: 46px; height: 26px; margin-top: 2px; border-radius: 999px; border: 0; background: var(--line-2); position: relative; cursor: pointer; transition: background .18s; }
+    .dg-tgl::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .18s cubic-bezier(.3,.7,.4,1); }
+    .dg-tgl.on { background: var(--green-600); }
+    .dg-tgl.on::after { left: 23px; }
+    .dg-tgl:disabled { cursor: default; opacity: .6; }
+    .dg-tgl:focus-visible { outline: 2px solid var(--green-600); outline-offset: 3px; }
   </style>
 </BaseLayout>

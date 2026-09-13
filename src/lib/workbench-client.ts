@@ -983,6 +983,10 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // POST { action: 'leave' | 'rejoin' } records the choice and, when the calendar is reachable, applies it at once.
     async getShoptalk() { return workerGet('/membership/shoptalk'); },
     async setShoptalk(action: 'leave' | 'rejoin') { return workerPost('/membership/shoptalk', { action }); },
+    // sow-202: the weekly digest switch on /account/notifications/. GET answers { on, address, reason? } about this
+    // account's own record only; POST { on } turns the digest on (lifting an earlier unsubscribe) or off (digest only).
+    async getDigest() { return workerGet('/membership/digest'); },
+    async setDigest(on: boolean) { return workerPost('/membership/digest', { on: on === true }); },
     async setPrefs(patch: any) { const r: any = await workerPost('/membership/prefs', patch); return r?.prefs ?? r; },
 
     // ----- sow-207: the welcome flow's Discord step, over the cookie session -----

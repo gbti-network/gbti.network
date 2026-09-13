@@ -21,7 +21,7 @@
 import { getIssue, putIssue, enqueueIssue, getSubscriber } from './mail-store.mjs';
 import { composeIssue, shouldSend, WELCOME_NOTE } from '../../membership/mail-digest.mjs';
 import { normalizeContent, normalizeNews, weeklyIssueId, membersIssueId, memberShareEntry, welcomeIssueId, weeklyEligible, isWelcomed } from '../../membership/mail-compile-core.mjs';
-import { canReceive } from '../../membership/mail-subscriber.mjs';
+import { canReceive, wantsDigest } from '../../membership/mail-subscriber.mjs';
 import { MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress.mjs';
 import { queryItems as kvQueryItems } from './news/src/store.mjs';
 import { enumerateShares } from './membership-shares.mjs'; // sow-312: the gated member-shares reader (sow-158 Part 3)
@@ -489,7 +489,8 @@ export async function compileWeeklyIssue(env, {
   const filterRegime = regimeForFilter
     || (await resolveWindow(kv, { nowMs, currentIssueId: issueId, historyDepth }));
   const { hashes, truncated, readErrors } = await listRecipientHashes(kv, {
-    filter: (sub) => weeklyEligible(sub, filterRegime?.previousGeneratedAt, filterRegime?.since),
+    // sow-202: a member who switched the digest off is skipped here and nowhere else (their follow alerts go on).
+    filter: (sub) => wantsDigest(sub) && weeklyEligible(sub, filterRegime?.previousGeneratedAt, filterRegime?.since),
     // sow-312: the record itself is needed for the members/public split below, not just the hash.
     withRecord: true,
   });
@@ -599,7 +600,8 @@ export async function compileWelcomeIssue(env, {
   // is nobody. Composing first would fetch both site indexes and query the news store 288 times a day, and
   // would mint a welcome issue in KV for every calendar day whether or not anyone joined. The subscriber walk
   // is a single prefix list, so the common path is cheap and writes nothing.
-  const { hashes, truncated, readErrors } = await listRecipientHashes(kv, { filter: (sub) => !isWelcomed(sub) });
+  // sow-202: the welcome issue is part of the digest, so a member who switched the digest off gets no welcome either.
+  const { hashes, truncated, readErrors } = await listRecipientHashes(kv, { filter: (sub) => wantsDigest(sub) && !isWelcomed(sub) });
   if (hashes.length === 0) {
     return { ok: true, issueId, composed: false, skipped: true, reason: 'nobody to welcome', recipients: 0, enqueued: 0, pending: 0 };
   }

@@ -10,10 +10,10 @@
 // through src/lib/digest-subscribe-copy.mjs. Never state one mode's outcome in static copy: the old small print
 // promised a confirmation email to every visitor for over two weeks after production stopped sending one.
 //
-// SIGNED-IN MEMBERS SEE THE SAME FORM, plus a link to their notification settings (sow-202, owner decision
-// 2026-09-13). A one-click member join that showed "you already get it" was built and dropped: reporting whether
-// an account's address is on the list can reveal whether someone else's address is, and doing it safely needs a
-// larger build. The link is revealed by CSS on html.is-gbti-member, so it needs no script and no Worker call.
+// SIGNED-IN MEMBERS GET A LINK TO THEIR DIGEST SWITCH INSTEAD OF THE FORM (sow-202, owner 2026-09-13, superseding
+// the same-day "form plus a link" decision). The switch on /account/notifications/ turns the digest on or off for
+// the account's own address, so asking a signed-in member to type an email is asking for one we already have. The
+// swap is CSS on html.is-gbti-member, so it needs no script and no Worker call here; the switch page does the rest.
 //
 // WORKS WITH NO JAVASCRIPT, on purpose. The Worker content-negotiates: a plain form navigation gets a real
 // HTML page back, a fetch with `Accept: application/json` gets JSON. Turnstile is loaded with IMPLICIT
@@ -76,9 +76,10 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
       <p class="dsub-fine">
         Unsubscribe in one click from any issue. Read the <a href="/privacy/">privacy policy</a>.
       </p>
-      <p class="dsub-fine dsub-mlink"><a href="/account/notifications/">Choose what people you follow email you</a></p>
       <p class="dsub-msg" data-dsub-msg role="status" aria-live="polite" hidden></p>
     </form>
+
+    <p class="dsub-member" data-dsub-member>You are signed in, so there is nothing to type. <a href="/account/notifications/">Turn the weekly digest on or off in your notification settings</a>.</p>
   </div>
 </section>
 
@@ -270,10 +271,12 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
      Cheap here, and it is the exact failure that has bitten the shadow-DOM components. */
   .dsub-msg[hidden] { display: none !important; }
 
-  /* sow-202: the notification-settings link is for signed-in members only. The member signal stamps
+  /* sow-202: a signed-in member gets the link to their digest switch in place of the form. The member signal stamps
      html.is-gbti-member; the class sits outside this component, so it is matched through :global. */
-  .dsub-mlink { display: none; }
-  :global(html.is-gbti-member) .dsub-mlink { display: block; }
+  .dsub-member { display: none; margin: 0; font-size: 14px; line-height: 1.5; color: var(--fg-soft); }
+  .dsub-member a { color: inherit; font-weight: 600; text-decoration: underline; }
+  :global(html.is-gbti-member) .dsub-member { display: block; }
+  :global(html.is-gbti-member) .dsub-form { display: none; }
 
   @media (min-width: 720px) {
     .dsub-band .dsub-in { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: center; gap: 24px; }

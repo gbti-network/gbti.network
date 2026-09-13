@@ -130,3 +130,23 @@ test('the reader stays permissive where the writer is strict, on purpose', () =>
   assert.ok(stray, 'still readable, so it can still be found and removed');
   assert.equal(stray.customerId, 'cus_123');
 });
+
+// sow-202: the member's own "no weekly digest" choice. It must survive every read (normalizeSubscriber drops unknown
+// fields, so a flag it does not know is erased on the next read and the digest silently resumes), and it must not
+// stop the record receiving other mail.
+test('digestOff: defaults to false, only a literal true sets it, and it survives normalize and a claim', async () => {
+  const { wantsDigest } = await import('../membership/mail-subscriber.mjs');
+  const member = buildSubscriber({ hash: 'h1', source: 'member', githubId: '7' }, { now: () => 1 });
+  assert.equal(member.digestOff, false);
+  assert.equal(buildSubscriber({ hash: 'h1', source: 'member', githubId: '7', digestOff: 'true' }, { now: () => 1 }).digestOff, false);
+  const off = buildSubscriber({ hash: 'h1', source: 'member', githubId: '7', digestOff: true }, { now: () => 1 });
+  assert.equal(off.digestOff, true);
+  assert.equal(normalizeSubscriber(JSON.parse(JSON.stringify(off))).digestOff, true, 'a stored digest-off record reads back off');
+  assert.equal(normalizeSubscriber({ ...member, digestOff: 1 }).digestOff, false);
+  const anon = buildSubscriber({ hash: 'h2', source: 'anon', emailEnc: 'enc' }, { now: () => 1 });
+  assert.equal(claimForMember({ ...anon, digestOff: true }, { githubId: '7' }).digestOff, true, 'a claim keeps the choice');
+  assert.equal(wantsDigest(member), true);
+  assert.equal(wantsDigest(off), false);
+  assert.equal(canReceive(off), true, 'digest off is not an unsubscribe: follow alerts still reach the record');
+  assert.equal(wantsDigest({ ...member, status: 'unsubscribed' }), false);
+});
