@@ -92,7 +92,7 @@ With **Tailscale**, I can type `http://homesurveillance` into a browser on any d
 
 Access to these host endpoints are controlled by policies I define, so only approved devices and users can connect.  
 
-Under the hood, Tailscale creates an encrypted WireGuard connection between my devices and gives each one a stable private address and hostname. On an iPhone, the Tailscale app uses iOS's built-in VPN interface to route that private traffic securely back to the home server.  
+Under the hood, Tailscale creates an encrypted WireGuard[^wireguard] connection between my devices and gives each one a stable private address and hostname. On an iPhone, the Tailscale app uses iOS's built-in VPN interface to route that private traffic securely back to the home server.  
 
 The best part about the Tailscale solution has been their extremely generous free tier offering that covers nearly all personal usage. I already have several devices connected and host addresses for almost 8 different home server applications (this number seems to keep growing as I add more containers to my PoxMoxBox).
 
@@ -109,3 +109,5 @@ So what are we running?
 I've created a members-only breakdown of the current contents of my home server, with links to the open-source software that helps me run these apps.   
 
 Happy to discuss any of these applications or my setup in the comments or on Discord. Thanks for reading, and good luck with your home server build 🙌
+
+[^wireguard]: WireGuard is a type of VPN (virtual private network): software that builds a private, encrypted tunnel between devices over the internet. Anything sent through that tunnel is scrambled, so no one in between can read it. More at [wireguard.com](https://www.wireguard.com/).
