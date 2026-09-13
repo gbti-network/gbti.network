@@ -69,6 +69,15 @@ let cookieResolved = false;
 let cookieSignal: MemberSignal | null = null;
 let hydrateStarted = false;
 
+// sow-330: a promise that settles once the cookie session is KNOWN: the signal when signed in, null when signed out
+// or unconfirmed. The listeners above only ever hear a signed-in result, so without this a consumer holding a click
+// cannot tell "still resolving" from "resolved signed out" and would have to guess.
+let settleCookie: (s: MemberSignal | null) => void = () => {};
+const cookieSettled: Promise<MemberSignal | null> = new Promise((resolve) => { settleCookie = resolve; });
+
+/** Resolves once the website cookie session is known: the member signal, or null when signed out or unconfirmed. */
+export function whenCookieResolved(): Promise<MemberSignal | null> { return cookieSettled; }
+
 /** The effective identity given the resolved cookie session and an incoming extension signal (cookie wins). */
 export function currentIdentity(extSignal: MemberSignal | null): MemberSignal | null {
   return selectIdentity({ cookieResolved, cookieSignal, extSignal }) as MemberSignal | null;
@@ -146,7 +155,7 @@ export async function hydrateMemberSignal(base: string = readSignupBase()): Prom
   if (typeof document === 'undefined' || hydrateStarted) return;
   hydrateStarted = true;
   const csrf = readCookie('gbti_csrf');
-  if (!base || !csrf) { cookieResolved = true; cookieSignal = null; return; } // no web session -> no network at all
+  if (!base || !csrf) { cookieResolved = true; cookieSignal = null; settleCookie(null); return; } // no web session -> no network at all
   // sessionStorage coalesces the Stripe-backed /membership/status fetch across same-session navigations (the
   // response is no-store and hits Stripe per call). Keyed by the csrf value so a re-login misses the old cache.
   let signal: MemberSignal | null | undefined = readStatusCache(csrf);
@@ -163,6 +172,7 @@ export async function hydrateMemberSignal(base: string = readSignupBase()): Prom
   }
   cookieResolved = true;
   cookieSignal = signal;
+  settleCookie(signal); // sow-330: before the listeners run, so a held click can wait on this and on the upgrade in order
   if (signal) {
     applyMemberSignalClasses(signal);
     // sow-271 Phase 4: STAMP THE ATTRIBUTE TOO, not only the classes.

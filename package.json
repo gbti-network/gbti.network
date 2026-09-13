@@ -24,6 +24,7 @@
     "check:media": "node scripts/check-media.mjs",
     "check:overflow": "node scripts/check-overflow.mjs",
     "check:redirects": "node scripts/check-redirects.mjs",
+    "check:save-controls": "node scripts/check-save-controls.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs",
     "deploy:worker": "cd workers/signup && npx wrangler deploy --env production && curl -s -o /dev/null -w 'signup.gbti.network -> %{http_code} (401 = healthy)\\n' https://signup.gbti.network/membership/status",
     "dev": "node scripts/dev-server.mjs dev",

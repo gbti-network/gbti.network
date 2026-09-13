@@ -11,7 +11,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { shouldUpgradeSaveControls, shouldDeepLinkSaveToExtension, websiteClientArgs, cookieValue } from '../src/lib/save-controls-core.mjs';
+import * as core from '../src/lib/save-controls-core.mjs';
+const { shouldUpgradeSaveControls, websiteClientArgs, cookieValue } = core;
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -40,11 +41,10 @@ test('website first: an installed extension does not stop a website session from
   assert.doesNotMatch(src, /gbtiExtension/, 'the browser half does not read the extension marker');
 });
 
-test('the content page deep-links Favorite/Save into the extension only with no website session', () => {
-  assert.equal(shouldDeepLinkSaveToExtension({ extension: true, csrf: null }), true, 'extension, nobody signed in on the website');
-  assert.equal(shouldDeepLinkSaveToExtension({ extension: true, csrf: 'tok' }), false, 'a website session saves on the page');
-  assert.equal(shouldDeepLinkSaveToExtension({ extension: false, csrf: null }), false, 'no extension: the sign-in dialog');
-  assert.equal(shouldDeepLinkSaveToExtension({ extension: false, csrf: 'tok' }), false);
+// sow-330, owner rule 2026-09-12: "All save and collection behavior initiated from the website will stay on the
+// website." The deep-link decision is retired rather than left returning false, so nothing can re-wire it quietly.
+test('the save deep-link into the extension is retired', () => {
+  assert.equal(core.shouldDeepLinkSaveToExtension, undefined, 'shouldDeepLinkSaveToExtension no longer exists');
 });
 
 test('the client is built from the same three fields whoever asks for it', () => {
@@ -87,16 +87,30 @@ test('no surface keeps a private copy of the upgrade; the feed takes the page cl
   assert.doesNotMatch(ca, /upgradeForWebsiteSession|createWorkbenchClient\(/, 'the content page has no private upgrade either');
 });
 
-test('the content page keeps the extension deep-link, gated on the shared decision', () => {
+test('sow-330: the content page never hands a heart or Save to the extension, and keeps the explicit button', () => {
   const ca = code(read('src/components/ContentActions.astro'));
-  assert.match(ca, /if \(!installed\(\)\) return;/, 'the capture-phase handler still yields without the extension');
-  assert.match(ca, /if \(!shouldDeepLinkSaveToExtension\(\{ extension: installed\(\), csrf: cookieValue\(document\.cookie, 'gbti_csrf'\) \}\)\) return;/,
-    'a website session is not sent to the extension');
-  const gateAt = ca.indexOf('shouldDeepLinkSaveToExtension({');
-  const openAt = ca.indexOf("openInExtension(signin.closest('gbti-collection') ? 'collect' : 'favorite')");
-  assert.ok(gateAt > 0 && openAt > gateAt, 'the gate runs before the deep-link');
+  assert.doesNotMatch(ca, /gbti-favorite|gbti-collection/, 'the content page script takes no heart or Save click');
+  assert.doesNotMatch(ca, /do=|doAction|shouldDeepLinkSaveToExtension/, 'no save force-action is ever built');
   assert.match(ca, /if \(t\?\.closest\('\[data-ext-open\]'\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); openInExtension\(\); return; \}/,
     'the explicit Open in extension button still opens the extension');
+});
+
+test('sow-330: the sign-in dialog opened by a heart or Save is website-only', () => {
+  const modal = code(read('src/components/SigninModal.astro'));
+  assert.match(modal, /saveOpen = !!trigger\.closest\('gbti-favorite, gbti-collection'\);/, 'the dialog knows a save opened it');
+  assert.match(modal, /openBtn\.hidden = saveOpen \|\|/, 'no open-in-extension action for a save');
+  assert.match(modal, /if \(installed && !saveOpen\) document\.dispatchEvent\(new CustomEvent\('gbti:request-signin'\)\);/,
+    'no sign-in request relayed into the extension for a save');
+  assert.match(modal, /const extensionState = installed && !saveOpen;/, 'a save shows the plain website state');
+});
+
+test('sow-330: the save controller holds and remembers through the pure decisions', () => {
+  const src = code(read('src/lib/save-controls.ts'));
+  assert.match(src, /holdDecision\(\{/, 'the hold decision is the shared one');
+  assert.match(src, /takePendingSave\(/, 'a remembered save is taken one-shot');
+  assert.match(src, /replayAction\(\{/, 'the replay goes through the decision that never removes a favorite');
+  assert.match(src, /document\.addEventListener\('click', [\s\S]*?, true\);/, 'a capture-phase listener, ahead of the sign-in dialog');
+  assert.doesNotMatch(src, /URLSearchParams|location\.search/, 'a remembered save is never read from the URL');
 });
 
 test('coverage: every page that could render a save control goes through BaseLayout', () => {

@@ -3,9 +3,8 @@
 // Collection (the existing inert <gbti-favorite>/<gbti-collection> the client upgrades) + the shared ShareRow
 // icons rendered directly (sow-179: no more a <details> disclosure behind a "Share" toggle, the four targets
 // are visible immediately, matching the design handoff). One row, one look everywhere.
-// SOW-114: with the GBTI extension installed, an "Open in extension" control appears beside Share. Favorite/Save
-// deep-link into the in-extension reader (via the SOW-036 gbti:open relay) ONLY when there is no website session;
-// a signed-in website member saves on the page (website first, 2026-09-12).
+// SOW-114: with the GBTI extension installed, an "Open in extension" control appears beside Share (via the SOW-036
+// gbti:open relay). sow-330: Favorite and Save never leave the website; see the script below.
 import FavoriteButton from './FavoriteButton.astro';
 import CollectionButton from './CollectionButton.astro';
 import ShareRow from './ShareRow.astro';
@@ -41,24 +40,18 @@ const railSize = variant === 'rail' ? 'rail' : 'md';
 
 <script>
   // SOW-114: progressive enhancement, active ONLY when the extension content script has stamped
-  // dataset.gbtiExtension. A CAPTURE-phase listener wins over SigninModal's bubble-phase [data-signin]
-  // handler, so with the extension present a Favorite/Save click deep-links into the in-extension reader
-  // (newtab.html#tab=<type>&read=<path>&do=favorite|collect) instead of opening the modal.
+  // dataset.gbtiExtension: the explicit "Open in extension" button opens this item in the in-extension reader.
   //
-  // sow-316: A WEBSITE SESSION CAN SAVE AND HEART TOO. Until 2026-09-08 these two controls worked through the
-  // extension and through nothing else: with no extension installed, every click fell to the sign-in modal
-  // regardless of whether the visitor was signed in on the website. The upgrade for a website session is NOT
-  // here: it runs site-wide from BaseLayout (src/lib/save-controls.ts), because a first version placed it here
-  // and on the feed, and an audit of the built site found five other surfaces (the prompt and project
-  // directories, member profiles, share pages, two utilities) still inert.
+  // sow-316: A WEBSITE SESSION CAN SAVE AND HEART. The upgrade is NOT here: it runs site-wide from BaseLayout
+  // (src/lib/save-controls.ts), because a first version placed it here and on the feed, and an audit of the built
+  // site found five other surfaces (the prompt and project directories, member profiles, share pages, two
+  // utilities) still inert.
   //
-  // WEBSITE FIRST, 2026-09-12: a signed-in website member is upgraded by the layout WHETHER OR NOT the extension is
-  // installed, and this handler no longer takes their click. It used to deep-link every Favorite/Save click into the
-  // extension whenever the extension was present, which sent a member signed in on the website away from the page
-  // for an action the page could do. The deep-link now serves only a visitor with the extension and no website
-  // session. Signed out with no extension keeps the modal. The decision is shouldDeepLinkSaveToExtension.
-
-  import { cookieValue, shouldDeepLinkSaveToExtension } from '../lib/save-controls-core.mjs';
+  // sow-330, owner rule 2026-09-12: "All save and collection behavior initiated from the website will stay on the
+  // website." This handler used to deep-link a Favorite/Save click into the extension (do=favorite|collect) for a
+  // visitor with the extension and no website session. It no longer touches a heart or Save click at all: that
+  // visitor meets the same website sign-in dialog as anyone else, and the save completes after sign-in
+  // (src/lib/save-controls.ts). The only extension action left here is the button the visitor explicitly chooses.
 
   (() => {
     const region = document.querySelector('[data-gbti-region="actions"]') as HTMLElement | null;
@@ -73,21 +66,15 @@ const railSize = variant === 'rail' ? 'rail' : 'md';
     sync();
     document.addEventListener('gbti:extension-ready', sync);
 
-    const openInExtension = (doAction?: string) => {
-      const hash = `tab=${type}&read=${encodeURIComponent(path)}` + (doAction ? `&do=${doAction}` : '');
+    const openInExtension = () => {
+      const hash = `tab=${type}&read=${encodeURIComponent(path)}`;
       document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash } }));
     };
 
     document.addEventListener('click', (e) => {
-      if (!installed()) return; // no extension: leave every click to the sign-in modal path
+      if (!installed()) return; // no extension: there is no Open in extension button to act on
       const t = e.target as HTMLElement | null;
       if (t?.closest('[data-ext-open]')) { e.preventDefault(); e.stopPropagation(); openInExtension(); return; }
-      const signin = t?.closest('gbti-favorite [data-signin], gbti-collection [data-signin]');
-      if (!signin || !region.contains(signin)) return;
-      if (!shouldDeepLinkSaveToExtension({ extension: installed(), csrf: cookieValue(document.cookie, 'gbti_csrf') })) return;
-      e.preventDefault();
-      e.stopPropagation();
-      openInExtension(signin.closest('gbti-collection') ? 'collect' : 'favorite');
     }, true);
   })();
 </script>

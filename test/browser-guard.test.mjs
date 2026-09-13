@@ -49,7 +49,7 @@ test('skipOrDie: exit 0 with a note without the gate, exit 1 with the reason und
 });
 
 // The real scripts, against a build dir that does not exist. Neither reaches Playwright, so this is hermetic.
-for (const script of ['check-csp', 'check-overflow']) {
+for (const script of ['check-csp', 'check-overflow', 'check-save-controls']) {
   test(`${script}: the real script skips green without the gate and fails red under it (empty build dir)`, () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-guard-empty-'));
     const run = (env) => spawnSync(process.execPath, [path.join(ROOT, 'scripts', `${script}.mjs`)], { env: { ...process.env, REQUIRE_BROWSER: '', GUARD_DIST: path.join(empty, 'dist'), ...env }, encoding: 'utf8' });
@@ -68,4 +68,5 @@ test('the weekly layout-guards job sets the gate on both guards and runs the CSP
   const yml = fs.readFileSync(path.join(ROOT, '.github/workflows/layout-guards.yml'), 'utf8');
   assert.match(yml, /npm run check:overflow\n\s+env:\n\s+REQUIRE_BROWSER: '1'/);
   assert.match(yml, /npm run check:csp\n\s+env:\n\s+REQUIRE_BROWSER: '1'/);
+  assert.match(yml, /npm run check:save-controls\n\s+env:\n\s+REQUIRE_BROWSER: '1'/, 'sow-330: the driven save-controls guard runs under the gate');
 });

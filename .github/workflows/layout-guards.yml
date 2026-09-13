@@ -48,6 +48,14 @@ jobs:
         run: npm run check:csp
         env:
           REQUIRE_BROWSER: '1'
+      # sow-330: hearts and Save pills clicked on the website stay on the website. This guard CLICKS them (signed in
+      # and signed out, with the extension marker stamped, during the upgrade window, and after sign-in) because a
+      # source audit is exactly what shipped every control inert for extension users in sow-316.
+      - name: Save-controls guard (hearts and Save stay on the website, driven)
+        if: always()
+        run: npm run check:save-controls
+        env:
+          REQUIRE_BROWSER: '1'
       # sow-298: a SCHEDULED failure has nobody watching it (GitHub emails the automation account that last
       # touched this file, and the per-commit board stays green). This step never fails the job: if: failure()
       # and the script always exits zero.

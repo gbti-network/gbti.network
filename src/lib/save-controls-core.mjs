@@ -37,14 +37,10 @@ export function shouldUpgradeSaveControls({ signal, csrf, hasControls, wired }) 
   return true;
 }
 
-/**
- * Whether a content page's Favorite/Save click should deep-link into the extension instead of acting on the page.
- * Only when the extension is installed AND there is no website session to act for; a signed-in website member is
- * served on the page (the upgrade above).
- */
-export function shouldDeepLinkSaveToExtension({ extension, csrf }) {
-  return !!extension && !csrf;
-}
+// sow-330 (2026-09-12): shouldDeepLinkSaveToExtension is GONE. It sent a heart or Save click from a visitor with the
+// extension and no website session into the extension. The owner rule "All save and collection behavior initiated
+// from the website will stay on the website" retires that path entirely; that visitor now meets the same website
+// sign-in dialog as anyone else, and their save completes after sign-in (save-intent-core.mjs).
 
 /** The arguments the website client is built from, in one shape, so every caller builds the same client. */
 export function websiteClientArgs(signal, signupBase) {

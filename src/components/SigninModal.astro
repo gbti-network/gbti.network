@@ -45,8 +45,8 @@ const benefitsUrl = '/membership/';
       <div class="signin-actions mt20">
         <a class="btn btn-primary" href="/login/" data-web-signin>Sign in on the web</a>
         {/* owner QA 2026-07-22: pages that declare a reader hash (data-gbti-reader-hash on their shell)
-            get a direct open-in-the-extension action, so likes/saves route the member to the page's
-            in-extension view instead of a dead end. Hidden when the page declares none. */}
+            get a direct open-in-the-extension action. Hidden when the page declares none. sow-330: NEVER shown
+            when a heart or Save opened this dialog; saves and collections stay on the website. */}
         <button type="button" class="btn btn-ghost" data-open-in-extension hidden>Open this page in the extension</button>
         <a class="btn btn-ghost" href={benefitsUrl}>Member benefits</a>
       </div>
@@ -62,21 +62,28 @@ const benefitsUrl = '/membership/';
     const present = dialog.querySelector('[data-state="present"]') as HTMLElement;
 
     let installed = !!document.documentElement.dataset.gbtiExtension;
+    // sow-330, owner rule 2026-09-12: "All save and collection behavior initiated from the website will stay on the
+    // website." When a heart or Save opens this dialog it is the PLAIN website sign-in: the state a visitor without
+    // the extension sees, no open-in-extension action, and no sign-in request relayed into the extension.
+    let saveOpen = false;
     const sync = () => {
       installed = !!document.documentElement.dataset.gbtiExtension;
       if (installed) document.documentElement.classList.add('has-gbti-ext');
-      if (absent) absent.hidden = installed;
-      if (present) present.hidden = !installed;
+      const extensionState = installed && !saveOpen;
+      if (absent) absent.hidden = extensionState;
+      if (present) present.hidden = !extensionState;
     };
     sync();
     // The content script sets the marker at document_idle; catch it if it lands after this runs.
     document.addEventListener('gbti:extension-ready', sync);
+    dialog.addEventListener('close', () => { saveOpen = false; sync(); });
 
     document.addEventListener('click', (e) => {
       const trigger = (e.target as HTMLElement)?.closest('[data-signin]');
       if (trigger) {
         if (typeof dialog.showModal !== 'function') return; // no <dialog> support: follow the href fallback
         e.preventDefault();
+        saveOpen = !!trigger.closest('gbti-favorite, gbti-collection');
         sync();
         // sow-158 Phase 2: carry the current path into the web sign-in link so login returns the member here (the
         // Worker re-validates return_to to a same-site path). Omit it when already on /login. Both the absent AND
@@ -87,9 +94,9 @@ const benefitsUrl = '/membership/';
         // owner QA 2026-07-22: surface the open-in-extension action when the page declares a reader hash.
         const openBtn = dialog.querySelector('[data-open-in-extension]') as HTMLElement | null;
         const readerHash = document.querySelector('[data-gbti-reader-hash]')?.getAttribute('data-gbti-reader-hash') || '';
-        if (openBtn) openBtn.hidden = !(installed && readerHash);
+        if (openBtn) openBtn.hidden = saveOpen || !(installed && readerHash);
         dialog.showModal();
-        if (installed) document.dispatchEvent(new CustomEvent('gbti:request-signin'));
+        if (installed && !saveOpen) document.dispatchEvent(new CustomEvent('gbti:request-signin'));
         return;
       }
       if ((e.target as HTMLElement)?.closest('[data-open-in-extension]')) {
