@@ -158,6 +158,9 @@ export const productSchema = z.object({
   platforms: z.array(z.string()).default([]),
   pricing: z.enum(['free', 'freemium', 'paid']).optional(),
   version: z.string().optional(),
+  // sow-172: mirrors src/content.config.ts. The minimum host/runtime ("WordPress 6.0+"). It has to be a key here to
+  // be a form field, and the editor submits only form fields, so without it a WorkBench save dropped the value.
+  requires: z.string().optional(),
   pricingUrl: z.string().url().optional(),
   icon: z.string(), // REQUIRED, 1:1. The SMALL icon: the directory card renders it at 64 (shown 56).
   // Optional 1:1 LARGE icon for the detail page's 96px slot, which a 128px source cannot serve crisply at

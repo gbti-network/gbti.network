@@ -43,7 +43,8 @@ export const FIELDS = Object.freeze({
     f('publicStub', 'Public stub (when members-only)', 'boolean'), // SOW-016
     f('pricing', 'Pricing', 'enum', { options: ['free', 'freemium', 'paid'] }),
     f('pricingUrl', 'Pricing/upgrade URL', 'text'),
-    f('version', 'Version', 'text'),
+    f('version', 'Version', 'text', { placeholder: '1.0.0' }),
+    f('requires', 'Requires', 'text', { placeholder: 'WordPress 6.0+', hint: 'The minimum host or runtime it needs. Shown as Requires on the project page.' }),
     TAGS,
     f('platforms', 'Platforms', 'array'),
     // Per-field aspect ratios, taken from what each render surface actually asks for rather than one shared

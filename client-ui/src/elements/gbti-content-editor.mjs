@@ -95,6 +95,11 @@ const RAIL_SCHEMA = {
   ],
   project: [
     { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'categories', 'tags'] },
+    // The three values the project page prints in its rail spec block (Version, Requires, Works with). version and
+    // platforms were form fields listed in no section, so they were hidden-submitted with no control to see or
+    // change them, the same gap sow-174 closed for the gallery. requires was not a form field at all, so a save
+    // dropped it outright.
+    { title: 'Specs', open: true, keys: ['version', 'requires', 'platforms'] },
     { title: 'Layout', open: true, keys: ['sidebarPosition'] },
     { title: 'Pricing', open: true, keys: ['pricing', 'pricingUrl'] },
     { title: 'Links', open: true, keys: ['links'] },

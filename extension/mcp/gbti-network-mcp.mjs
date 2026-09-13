@@ -17094,6 +17094,9 @@ var productSchema = external_exports.object({
   platforms: external_exports.array(external_exports.string()).default([]),
   pricing: external_exports.enum(["free", "freemium", "paid"]).optional(),
   version: external_exports.string().optional(),
+  // sow-172: mirrors src/content.config.ts. The minimum host/runtime ("WordPress 6.0+"). It has to be a key here to
+  // be a form field, and the editor submits only form fields, so without it a WorkBench save dropped the value.
+  requires: external_exports.string().optional(),
   pricingUrl: external_exports.string().url().optional(),
   icon: external_exports.string(),
   // REQUIRED, 1:1. The SMALL icon: the directory card renders it at 64 (shown 56).

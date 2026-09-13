@@ -19,6 +19,7 @@ const SCHEMAS = {
   ],
   project: [
     { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'categories', 'tags'] },
+    { title: 'Specs', open: true, keys: ['version', 'requires', 'platforms'] },
     { title: 'Layout', open: true, keys: ['sidebarPosition'] },
     { title: 'Pricing', open: true, keys: ['pricing', 'pricingUrl'] },
     { title: 'Links', open: true, keys: ['links'] },
