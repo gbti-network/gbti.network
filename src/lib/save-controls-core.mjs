@@ -8,22 +8,42 @@
 // inert: a signed-in member clicked a heart there and met the sign-in dialog. Each surface that copied the
 // wiring was right; each that did not was wrong; nothing made the next surface copy it. The upgrade now runs
 // from the layout every page uses, and this helper says whether it should.
+//
+// WEBSITE FIRST, 2026-09-12 (owner report): the upgrade used to stand down whenever the browser extension was
+// installed, on the stated grounds that the extension "upgrades them itself". It does not and cannot. Its content
+// script runs in Chrome's isolated world, where it has no access to the page's custom elements registry, so with
+// the extension installed every heart and Save pill on the site stayed inert. A content page deep-linked the click
+// into the extension; the feeds, directories, profiles and share pages opened the sign-in dialog for a member who
+// was already signed in. Reproduced by driving the built site with the extension marker stamped and a website
+// session present, then controlled by the same drive with the marker removed, which saved on every page. The
+// extension is now irrelevant here: a website session is what upgrades the controls.
 
 /**
  * @param signal      the member signal, or null when nobody is signed in
  * @param csrf        the gbti_csrf cookie value, or null (a session that cannot write must not be upgraded
  *                    into a control that fails on every press)
- * @param extension   truthy when the browser extension owns the page's controls (it upgrades them itself)
  * @param hasControls whether the page renders any save control at all
  * @param wired       whether this page already upgraded (the signal can fire more than once)
+ *
+ * The signal must come from the website cookie session. With the extension installed its display-only signal can
+ * arrive first, possibly for a different account, and the client is built once from whichever signal upgrades it.
  */
-export function shouldUpgradeSaveControls({ signal, csrf, extension, hasControls, wired }) {
+export function shouldUpgradeSaveControls({ signal, csrf, hasControls, wired }) {
   if (wired) return false;
-  if (extension) return false;
   if (!hasControls) return false;
   if (!signal || !signal.login) return false;
+  if (signal.source !== 'cookie') return false;
   if (!csrf) return false;
   return true;
+}
+
+/**
+ * Whether a content page's Favorite/Save click should deep-link into the extension instead of acting on the page.
+ * Only when the extension is installed AND there is no website session to act for; a signed-in website member is
+ * served on the page (the upgrade above).
+ */
+export function shouldDeepLinkSaveToExtension({ extension, csrf }) {
+  return !!extension && !csrf;
 }
 
 /** The arguments the website client is built from, in one shape, so every caller builds the same client. */

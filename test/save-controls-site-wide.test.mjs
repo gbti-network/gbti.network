@@ -11,23 +11,40 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { shouldUpgradeSaveControls, websiteClientArgs, cookieValue } from '../src/lib/save-controls-core.mjs';
+import { shouldUpgradeSaveControls, shouldDeepLinkSaveToExtension, websiteClientArgs, cookieValue } from '../src/lib/save-controls-core.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''); // strip comments before matching
 
-const SIGNAL = { login: 'stefanoginella', githubId: 123 };
-const BASE = { signal: SIGNAL, csrf: 'tok', extension: undefined, hasControls: true, wired: false };
+const SIGNAL = { login: 'stefanoginella', githubId: 123, source: 'cookie' };
+const BASE = { signal: SIGNAL, csrf: 'tok', hasControls: true, wired: false };
 
-test('the decision: upgrade exactly when a website session can write, controls exist, and nothing else owns them', () => {
+test('the decision: upgrade exactly when a website session can write and controls exist', () => {
   assert.equal(shouldUpgradeSaveControls(BASE), true);
   assert.equal(shouldUpgradeSaveControls({ ...BASE, signal: null }), false, 'signed out keeps the sign-in dialog');
-  assert.equal(shouldUpgradeSaveControls({ ...BASE, signal: { githubId: 1 } }), false, 'a signal with no login is not a session');
+  assert.equal(shouldUpgradeSaveControls({ ...BASE, signal: { githubId: 1, source: 'cookie' } }), false, 'a signal with no login is not a session');
   assert.equal(shouldUpgradeSaveControls({ ...BASE, csrf: null }), false, 'no CSRF cookie: the control would fail on every press');
-  assert.equal(shouldUpgradeSaveControls({ ...BASE, extension: '1' }), false, 'the extension owns the controls');
   assert.equal(shouldUpgradeSaveControls({ ...BASE, hasControls: false }), false, 'nothing to upgrade');
   assert.equal(shouldUpgradeSaveControls({ ...BASE, wired: true }), false, 'once per page');
+});
+
+// Website first, 2026-09-12. The decision used to stand down whenever the extension was installed, and with it
+// installed every heart and Save pill on the site stayed inert for a member signed in on the website.
+test('website first: an installed extension does not stop a website session from saving on the page', () => {
+  assert.equal(shouldUpgradeSaveControls({ ...BASE, extension: '0.3.0' }), true, 'the extension marker is not an input any more');
+  assert.equal(shouldUpgradeSaveControls({ ...BASE, signal: { ...SIGNAL, source: 'extension' } }), false,
+    "the extension's display-only signal (possibly another account) never builds the page's client");
+  assert.equal(shouldUpgradeSaveControls({ ...BASE, signal: { login: 'x' } }), false, 'an unlabeled signal is not the cookie session');
+  const src = code(read('src/lib/save-controls.ts'));
+  assert.doesNotMatch(src, /gbtiExtension/, 'the browser half does not read the extension marker');
+});
+
+test('the content page deep-links Favorite/Save into the extension only with no website session', () => {
+  assert.equal(shouldDeepLinkSaveToExtension({ extension: true, csrf: null }), true, 'extension, nobody signed in on the website');
+  assert.equal(shouldDeepLinkSaveToExtension({ extension: true, csrf: 'tok' }), false, 'a website session saves on the page');
+  assert.equal(shouldDeepLinkSaveToExtension({ extension: false, csrf: null }), false, 'no extension: the sign-in dialog');
+  assert.equal(shouldDeepLinkSaveToExtension({ extension: false, csrf: 'tok' }), false);
 });
 
 test('the client is built from the same three fields whoever asks for it', () => {
@@ -70,10 +87,16 @@ test('no surface keeps a private copy of the upgrade; the feed takes the page cl
   assert.doesNotMatch(ca, /upgradeForWebsiteSession|createWorkbenchClient\(/, 'the content page has no private upgrade either');
 });
 
-test('the extension deep-link path on content pages is untouched', () => {
+test('the content page keeps the extension deep-link, gated on the shared decision', () => {
   const ca = code(read('src/components/ContentActions.astro'));
   assert.match(ca, /if \(!installed\(\)\) return;/, 'the capture-phase handler still yields without the extension');
-  assert.match(ca, /openInExtension\(signin\.closest\('gbti-collection'\) \? 'collect' : 'favorite'\)/);
+  assert.match(ca, /if \(!shouldDeepLinkSaveToExtension\(\{ extension: installed\(\), csrf: cookieValue\(document\.cookie, 'gbti_csrf'\) \}\)\) return;/,
+    'a website session is not sent to the extension');
+  const gateAt = ca.indexOf('shouldDeepLinkSaveToExtension({');
+  const openAt = ca.indexOf("openInExtension(signin.closest('gbti-collection') ? 'collect' : 'favorite')");
+  assert.ok(gateAt > 0 && openAt > gateAt, 'the gate runs before the deep-link');
+  assert.match(ca, /if \(t\?\.closest\('\[data-ext-open\]'\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); openInExtension\(\); return; \}/,
+    'the explicit Open in extension button still opens the extension');
 });
 
 test('coverage: every page that could render a save control goes through BaseLayout', () => {

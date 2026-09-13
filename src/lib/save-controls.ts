@@ -25,7 +25,6 @@ export async function upgradeSaveControls(signal: any): Promise<void> {
   const go = shouldUpgradeSaveControls({
     signal,
     csrf: cookieValue(document.cookie, 'gbti_csrf'),
-    extension: document.documentElement.dataset.gbtiExtension,
     hasControls: !!document.querySelector('gbti-favorite, gbti-collection'),
     wired,
   });

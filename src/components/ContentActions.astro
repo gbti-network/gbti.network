@@ -3,9 +3,9 @@
 // Collection (the existing inert <gbti-favorite>/<gbti-collection> the client upgrades) + the shared ShareRow
 // icons rendered directly (sow-179: no more a <details> disclosure behind a "Share" toggle, the four targets
 // are visible immediately, matching the design handoff). One row, one look everywhere.
-// SOW-114: with the GBTI extension installed, Favorite/Save deep-link into the in-extension reader (via the
-// SOW-036 gbti:open relay) instead of the sign-in modal, and an "Open in extension" control appears beside
-// Share. Without the extension nothing changes (the inert [data-signin] modal path stands).
+// SOW-114: with the GBTI extension installed, an "Open in extension" control appears beside Share. Favorite/Save
+// deep-link into the in-extension reader (via the SOW-036 gbti:open relay) ONLY when there is no website session;
+// a signed-in website member saves on the page (website first, 2026-09-12).
 import FavoriteButton from './FavoriteButton.astro';
 import CollectionButton from './CollectionButton.astro';
 import ShareRow from './ShareRow.astro';
@@ -50,8 +50,15 @@ const railSize = variant === 'rail' ? 'rail' : 'md';
   // regardless of whether the visitor was signed in on the website. The upgrade for a website session is NOT
   // here: it runs site-wide from BaseLayout (src/lib/save-controls.ts), because a first version placed it here
   // and on the feed, and an audit of the built site found five other surfaces (the prompt and project
-  // directories, member profiles, share pages, two utilities) still inert. Signed out keeps the modal; signed in
-  // with no extension is upgraded by the layout; signed in WITH the extension keeps the deep-link path below.
+  // directories, member profiles, share pages, two utilities) still inert.
+  //
+  // WEBSITE FIRST, 2026-09-12: a signed-in website member is upgraded by the layout WHETHER OR NOT the extension is
+  // installed, and this handler no longer takes their click. It used to deep-link every Favorite/Save click into the
+  // extension whenever the extension was present, which sent a member signed in on the website away from the page
+  // for an action the page could do. The deep-link now serves only a visitor with the extension and no website
+  // session. Signed out with no extension keeps the modal. The decision is shouldDeepLinkSaveToExtension.
+
+  import { cookieValue, shouldDeepLinkSaveToExtension } from '../lib/save-controls-core.mjs';
 
   (() => {
     const region = document.querySelector('[data-gbti-region="actions"]') as HTMLElement | null;
@@ -77,6 +84,7 @@ const railSize = variant === 'rail' ? 'rail' : 'md';
       if (t?.closest('[data-ext-open]')) { e.preventDefault(); e.stopPropagation(); openInExtension(); return; }
       const signin = t?.closest('gbti-favorite [data-signin], gbti-collection [data-signin]');
       if (!signin || !region.contains(signin)) return;
+      if (!shouldDeepLinkSaveToExtension({ extension: installed(), csrf: cookieValue(document.cookie, 'gbti_csrf') })) return;
       e.preventDefault();
       e.stopPropagation();
       openInExtension(signin.closest('gbti-collection') ? 'collect' : 'favorite');
