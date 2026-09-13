@@ -110,4 +110,8 @@ I've created a members-only breakdown of the current contents of my home server,
 
 Happy to discuss any of these applications or my setup in the comments or on Discord. Thanks for reading, and good luck with your home server build 🙌
 
+Cover image credit[^cover]
+
 [^wireguard]: WireGuard is a type of VPN (virtual private network): software that builds a private, encrypted tunnel between devices over the internet. Anything sent through that tunnel is scrambled, so no one in between can read it. More at [wireguard.com](https://www.wireguard.com/).
+
+[^cover]: Cover photo by Daniel Reche on [Pexels](https://www.pexels.com/photo/a-mug-of-beer-on-the-table-6570266/), free to use under the [Pexels License](https://www.pexels.com/license/), with the Proxmox logo added. Proxmox is a registered trademark of Proxmox Server Solutions GmbH.
