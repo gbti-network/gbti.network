@@ -82,6 +82,58 @@ async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50, family =
 }
 
 /**
+ * sow-312 defect (owner report, 2026-09-14): the history an EDITION's recipients actually received.
+ *
+ * Its own family's issues, plus the public weekly for every earlier week that had no edition of its own, since
+ * a members recipient gets exactly one email a week and on those weeks it was the public one. Reading the
+ * members family alone was the defect, twice over:
+ *   - The FIRST members edition found no history and was composed as the newsletter's launch issue. Live on
+ *     14 September: a 90-day window, 27 items, articles the reader had already had, under "This is the first
+ *     issue". The public issue composed in the same run was one week, 12 items.
+ *   - After a week with no edition (the owner's quiet-week fallback), the next edition measured its week from
+ *     the edition before that, so it covered two weeks and repeated the public issue members had just received.
+ *
+ * The public family is unchanged and never reads this: it keeps its own history exactly, which is what the
+ * family split exists to protect. Only the members edition borrows, and only the weeks its recipients got the
+ * public issue instead. The same-day public issue is never counted, because this week members get the edition.
+ */
+async function listReceivedIssueIds(kv, { currentIssueId, pageBudget, family }) {
+  const own = await listPriorIssueIds(kv, { currentIssueId, pageBudget, family });
+  const day = issueDay(currentIssueId);
+  if (!day) return own;
+  const ownDays = new Set(own.map(issueDay));
+  const publicIds = await listPriorIssueIds(kv, { currentIssueId: `${WEEKLY_FAMILY}${day}`, pageBudget, family: WEEKLY_FAMILY });
+  return [...own, ...publicIds.filter((id) => !ownDays.has(issueDay(id)))];
+}
+
+/** The YYYY-MM-DD an issue id carries, or null. */
+function issueDay(issueId) {
+  const m = /(\d{4}-\d{2}-\d{2})$/.exec(String(issueId ?? ''));
+  return m ? m[1] : null;
+}
+
+const byIssueDay = (a, b) => String(issueDay(a) ?? a).localeCompare(String(issueDay(b) ?? b));
+
+/**
+ * sow-312 defect, the second half: a public issue's pool holds only public urls, so when the week is measured
+ * from one, every member-only share would look new. A share is visible to members the moment it is created, so
+ * one dated at or before the previous compile was already visible then and is not this week's. Items carry
+ * their normalized `date`; urls are trimmed exactly as composeIssue projects them.
+ */
+function withEarlierMemberOnlyItems(regime, items) {
+  const prev = Number(regime?.previousGeneratedAt);
+  if (!(regime?.seen instanceof Set) || !Number.isFinite(prev)) return regime?.seen ?? null;
+  const seen = new Set(regime.seen);
+  for (const it of Array.isArray(items) ? items : []) {
+    if (!it || it.visibility === 'public') continue;
+    const url = typeof it.url === 'string' ? it.url.trim() : '';
+    const date = Number(it.date);
+    if (url && date > 0 && date <= prev) seen.add(url);
+  }
+  return seen;
+}
+
+/**
  * Resolve the composeIssue window for a NEW issue. `since` and `exclude` are a FILTER and a FLOOR applied
  * TOGETHER, not alternatives (SowMaster ruling + PublicationMaster correction, 2026-08-21; composeIssue chains
  * both filters):
@@ -129,12 +181,16 @@ async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50, family =
  * issues themselves.
  */
 export async function resolveWindow(kv, { nowMs, currentIssueId, bootstrapMs = BOOTSTRAP_MS, historyDepth = 26, pageBudget = 50, family = WEEKLY_FAMILY } = {}) {
-  const priorIds = await listPriorIssueIds(kv, { currentIssueId, pageBudget, family });
+  const priorIds = family === WEEKLY_FAMILY
+    ? await listPriorIssueIds(kv, { currentIssueId, pageBudget, family })
+    : await listReceivedIssueIds(kv, { currentIssueId, pageBudget, family });
   if (priorIds.length === 0) {
     return { firstIssue: true, since: Number(nowMs) - bootstrapMs, exclude: null, seen: null, previousGeneratedAt: null };
   }
   const depth = Math.max(1, historyDepth);
-  const sorted = priorIds.slice().sort();          // chronological ascending (a family prefix + date sorts as dates)
+  // Chronological ascending. Inside one family a prefix + date sorts as dates; the received history of the
+  // members edition mixes two prefixes, so it sorts on the date alone.
+  const sorted = family === WEEKLY_FAMILY ? priorIds.slice().sort() : priorIds.slice().sort(byIssueDay);
   const windowIds = sorted.slice(-depth);          // the newest `depth` prior issues (all of them, if fewer)
   const agedOut = sorted.length > depth;           // has any issue fallen OUT of the exclude window?
 
@@ -202,7 +258,7 @@ async function resolveEpoch(kv, oldestId, { nowMs, bootstrapMs }) {
   const first = await getIssue(kv, oldestId);
   const recorded = Number(first?.window?.since);
   if (Number.isFinite(recorded)) return recorded;
-  const parsed = Date.parse(`${String(oldestId).slice('weekly-'.length)}T00:00:00Z`);
+  const parsed = Date.parse(`${issueDay(oldestId)}T00:00:00Z`);
   return Number.isFinite(parsed) ? parsed : Number(nowMs) - bootstrapMs;
 }
 
@@ -387,14 +443,16 @@ async function composeMembersEdition(env, {
   const [contentEntries, newsEntries, regime] = await Promise.all([
     gatherContentEntries(env, { fetchImpl, siteUrl, audience: 'members', readMemberShares }),
     gatherNewsEntries(env, { kv }),
-    // ITS OWN FAMILY. Sharing the public family's history would make each edition count the other's contents
-    // as already mailed, and both would start silently dropping items. See listPriorIssueIds.
+    // ITS OWN FAMILY, so the public edition never counts member shares as mailed. Its week is measured from
+    // what its recipients RECEIVED, which borrows the public issue for weeks without an edition. See
+    // listReceivedIssueIds.
     resolveWindow(kv, { nowMs, currentIssueId: membersId, historyDepth, family: MEMBERS_FAMILY }),
   ]);
 
+  const memberItems = normalizeContent(contentEntries, { displayName });
   const issue = composeIssue(
-    { issueId: membersId, items: normalizeContent(contentEntries, { displayName }), news: normalizeNews(newsEntries), now },
-    { perSection, maxNews, since: regime.since, exclude: regime.exclude, seen: regime.seen, firstIssue: regime.firstIssue, audience: 'members' },
+    { issueId: membersId, items: memberItems, news: normalizeNews(newsEntries), now },
+    { perSection, maxNews, since: regime.since, exclude: regime.exclude, seen: withEarlierMemberOnlyItems(regime, memberItems), firstIssue: regime.firstIssue, audience: 'members' },
   );
 
   // OWNER RULING 2026-09-04: a week with no member-only item falls back to the public issue. There is nothing
