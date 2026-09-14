@@ -44,6 +44,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # sow-295: a manual run from a branch other than main would run that branch's code against live systems. Refuse
+      # it before anything else. This stops accidents, not a malicious branch (a branch's own copy of this file can drop
+      # the step). test/workflow-main-only.test.mjs requires it as the first step of every job.
+      - name: Refuse a manual run from a branch other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "::error title=Run refused::This workflow writes to live systems and runs from main only. It was started from '${REF_NAME}', so nothing ran. Merge the change to main, then run it again."
+          exit 1
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -68,6 +78,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # sow-295: a manual run from a branch other than main would run that branch's code against live systems. Refuse
+      # it before anything else. This stops accidents, not a malicious branch (a branch's own copy of this file can drop
+      # the step). test/workflow-main-only.test.mjs requires it as the first step of every job.
+      - name: Refuse a manual run from a branch other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "::error title=Run refused::This workflow writes to live systems and runs from main only. It was started from '${REF_NAME}', so nothing ran. Merge the change to main, then run it again."
+          exit 1
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -112,6 +132,16 @@ jobs:
     if: failure()
     runs-on: ubuntu-latest
     steps:
+      # sow-295: a manual run from a branch other than main would run that branch's code against live systems. Refuse
+      # it before anything else. This stops accidents, not a malicious branch (a branch's own copy of this file can drop
+      # the step). test/workflow-main-only.test.mjs requires it as the first step of every job.
+      - name: Refuse a manual run from a branch other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "::error title=Run refused::This workflow writes to live systems and runs from main only. It was started from '${REF_NAME}', so nothing ran. Merge the change to main, then run it again."
+          exit 1
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
