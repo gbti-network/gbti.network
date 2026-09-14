@@ -16,15 +16,31 @@ name: Deploy to Cloudflare Pages
 # checkout this needs (see fetch-depth below) grows with the repo over time (committed images are never pruned
 # per this project's media-handling policy); revisit if checkout time ever competes with this job's 20-minute
 # budget.
+#
+# sow-295: WHAT A RUN MAY DEPLOY. A manual dispatch used to send ANY branch to production. Now (owner decision
+# 2026-09-14, scripts/deploy-target.mjs): a push to main and a dispatch from main deploy production as before; a
+# dispatch with target "preview" deploys the branch to the Pages `preview` alias (preview.gbti.network) and never
+# touches production; a dispatch from any other branch to production runs only when confirm_branch repeats the branch
+# name, and is announced in #github-events. Every build writes dist/build.json, so anyone can read what is live.
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'production = gbti.network. preview = preview.gbti.network (any branch, production untouched).'
+        type: choice
+        options: [production, preview]
+        default: production
+      confirm_branch:
+        description: 'Only to send a branch OTHER than main to production: type that branch name exactly. Leave empty otherwise.'
+        type: string
+        default: ''
 
-# One production deploy at a time; never cancel an in-flight upload mid-flight.
+# One deploy per target at a time; never cancel an in-flight upload mid-flight. A preview never queues behind production.
 concurrency:
-  group: pages-production-deploy
+  group: pages-${{ inputs.target == 'preview' && 'preview' || 'production' }}-deploy
   cancel-in-progress: false
 
 jobs:
@@ -45,13 +61,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # sow-295: decide what this run may deploy BEFORE installing or building anything. A refused run fails here, red,
+      # with the reason and the way to do it on purpose. Inputs go through env: a branch name may legally contain `$(`.
+      - name: Decide what this run may deploy
+        id: target
+        run: node scripts/deploy-target.mjs guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          TARGET: ${{ inputs.target }}
+          CONFIRM_BRANCH: ${{ inputs.confirm_branch }}
+      # sow-295: which branch production serves right now, so a return to main after a branch deploy is announced.
+      - name: Read which branch production serves now
+        id: live
+        if: steps.target.outputs.mode != 'preview'
+        continue-on-error: true
+        run: node scripts/notify-deploy.mjs read-live
       # Full install (not --ignore-scripts): the astro build needs sharp's native binary for image optimization.
       - run: npm ci
       # sow-185: mark whichever content items changed as "still deploying" BEFORE the build starts, so a
       # visitor who lands on the public page during the build/deploy window sees a notice instead of silent
       # stale content. Informational only -- always exits 0 (see scripts/deploy-status.mjs's own header), and
       # continue-on-error here is belt-and-suspenders on top of that.
+      # sow-295: only a main deploy moves the content watermark. A branch or preview build must not mark main's
+      # content as deploying, or advance the watermark past commits that never reached production.
       - name: Mark changed content as still deploying
+        if: steps.target.outputs.mode == 'production'
         continue-on-error: true
         run: node scripts/deploy-status.mjs mark
         env:
@@ -72,22 +107,50 @@ jobs:
           # creates it. It was missing entirely until 2026-08-24: the component read the value and the build was
           # never given it, so setting the variable alone would have changed nothing and looked like a broken beacon.
           GBTI_CF_ANALYTICS_TOKEN: ${{ vars.GBTI_CF_ANALYTICS_TOKEN }}
-      - name: Deploy dist to Cloudflare Pages (production)
+      # sow-295: the public record of what this deploy serves (dist/build.json), plus a noindex rule on a preview build.
+      - name: Stamp the build
+        run: node scripts/deploy-target.mjs stamp
+        env:
+          SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          MODE: ${{ steps.target.outputs.mode }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # The Pages branch comes from the guard, which only ever emits "main" or "preview".
+      - name: Deploy dist to Cloudflare Pages
         id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: d42b12e969229c5187ad0f7289536487
-          command: pages deploy dist --project-name=gbti-network --branch=main
+          command: pages deploy dist --project-name=gbti-network --branch=${{ steps.target.outputs.deploy_branch }}
       # sow-185: clear the markers this run set above -- the deploy that just succeeded now reflects them live.
       # Only when the deploy step itself actually succeeded (steps.deploy.outcome is undefined/'skipped' if an
       # earlier step failed first, and 'failure' if wrangler itself failed -- neither should clear a marker for
       # content that never actually went live). The 10-minute TTL is the backstop either way.
       - name: Clear the still-deploying markers
-        if: always() && steps.deploy.outcome == 'success'
+        if: always() && steps.deploy.outcome == 'success' && steps.target.outputs.mode == 'production'
         continue-on-error: true
         run: node scripts/deploy-status.mjs clear
         env:
           CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
           CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      # sow-295: announce a branch on production, a return to main, or a preview. Never fails the run.
+      - name: Announce a branch or preview deploy
+        if: always() && steps.deploy.outcome == 'success'
+        continue-on-error: true
+        run: node scripts/notify-deploy.mjs announce
+        env:
+          MODE: ${{ steps.target.outputs.mode }}
+          REF_NAME: ${{ github.ref_name }}
+          PREV_REF: ${{ steps.live.outputs.ref }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      - name: Summary
+        if: always()
+        run: node scripts/deploy-target.mjs summary
+        env:
+          MODE: ${{ steps.target.outputs.mode }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}

@@ -22,7 +22,14 @@ name: Deploy signup Worker
 # and nothing else. Nothing here can read or print one.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      # sow-295: a dispatch from a branch other than main deploys that branch to the LIVE Worker only when this repeats
+      # the branch name exactly, and the deploy is then announced in #github-events. Leave it empty for main.
+      confirm_branch:
+        description: 'Only to deploy a branch OTHER than main to the live Worker: type that branch name exactly. Leave empty otherwise.'
+        type: string
+        default: ''
 
 # Read-only against this repository: the deploy writes to Cloudflare, never back to git.
 permissions:
@@ -41,6 +48,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # sow-295: refuse a branch other than main unless confirm_branch repeats it, before installing anything. Inputs go
+      # through env (a branch name may legally contain `$(`).
+      - name: Decide what this run may deploy
+        id: target
+        run: node scripts/deploy-target.mjs guard --worker
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          CONFIRM_BRANCH: ${{ inputs.confirm_branch }}
       - run: npm ci
 
       # The unit suite before the upload, not after. This Worker gates membership and sends mail, so a red
@@ -67,6 +83,16 @@ jobs:
           workingDirectory: workers/signup
           command: deploy --env production
 
+      # sow-295: a confirmed branch on the live Worker is announced in #github-events (main deploys post nothing).
+      - name: Announce a branch deploy
+        if: success()
+        continue-on-error: true
+        run: node scripts/notify-deploy.mjs announce --worker
+        env:
+          MODE: ${{ steps.target.outputs.mode }}
+          REF_NAME: ${{ github.ref_name }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+
       # Prove it by BEHAVIOUR, not by the deploy step's exit code. 401 means the route exists and refused an
       # unauthenticated caller, which is the healthy answer; 404 would mean the upload did not take. A 401 and a
       # 404 cannot be read the wrong way round, unlike a timestamp comparison.
@@ -78,11 +104,16 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          MODE: ${{ steps.target.outputs.mode }}
         run: |
           {
             echo "## Signup Worker deploy"
             echo
             echo "Commit: \`${{ github.sha }}\`"
+            echo
+            echo "Branch: \`${REF_NAME}\` (${MODE:-refused before deploying})"
             echo
             echo "The Worker does NOT deploy on push. If Worker code changed on main, it is not live until this"
             echo "workflow runs."

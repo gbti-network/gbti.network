@@ -249,7 +249,7 @@ MAIL_DOUBLE_OPTIN = "false"
 # uncapped free-year codes. Plain var, not a secret: the address is already public and this way it can be read
 # back and proven to point somewhere. Fail-soft, so a bad value degrades to no alert rather than a failed signup.
 COUPON_ALERT_EMAIL = "opportunities@gbti.network"
-CORS_ALLOWED_ORIGINS = "https://gbti.network"   # sow-158 Phase 1b: credentialed-CORS + CSRF Origin allow-list (never a wildcard)
+CORS_ALLOWED_ORIGINS = "https://gbti.network,https://preview.gbti.network"   # sow-158 Phase 1b: credentialed-CORS + CSRF Origin allow-list (never a wildcard). sow-295 (owner decision 2026-09-14): + the preview address, a gbti.network subdomain, so the SameSite=Lax session cookie and the Domain=gbti.network csrf cookie both reach it. A pages.dev preview is a different site and stays refused. test/cors-production-origins.test.mjs pins the exact pair.
 COOKIE_DOMAIN = "gbti.network"   # sow-158 web-login fix: scope the readable gbti_csrf cookie to the registrable domain so the static site (gbti.network) can read it while the Worker serves the OAuth callback from signup.gbti.network. Unset in dev = host-only.
 GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
 REFERRAL_ENABLED = "true"            # SOW-059 ARMED: the Connect onboarding routes are live (mirrors referral-config.yml enabled)
