@@ -2,10 +2,7 @@
 status: published
 visibility: members
 title: '[Updated] Namecheap.com Website and Services: Emergency Maintenance - Namecheap'
-shortDescription: >-
-  Dear Customers, We&#8217;re currently responding to an emergency caused by a failure of cooling
-  systems at our Phoenix datacenter. As a result, the following services may be affected:
-  We&#8217;re also
+shortDescription: 'Dear Customers, We’re currently responding to an emergency caused by a failure of cooling systems at our Phoenix datacenter. As a result, the following services may be affected: We’re also'
 url: >-
   https://www.namecheap.com/status-updates/namecheap-com-and-hosting-services-emergency-maintenance-2/
 category: business

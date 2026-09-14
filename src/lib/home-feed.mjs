@@ -2,6 +2,8 @@
 // trending tags, relative time). Node-testable, no Astro imports; src/pages/index.astro maps the
 // content collections to plain items and delegates the ordering decisions here.
 
+import { decodeHtmlEntities } from '../../membership/html-entities.mjs';
+
 /** The sort timestamp for a feed item: content uses publishedAt, shares use createdAt. 0 when undated. */
 export function feedTime(data) {
   const d = data?.publishedAt ?? data?.createdAt ?? data?.updatedAt;
@@ -48,20 +50,12 @@ export function rankNewAndPopular(items, n = 6, maxPerKind = 2) {
 }
 
 /**
- * Decode the HTML entities that ride in on scraped share metadata (OG titles like "A &#8211; B" or
- * "Q&amp;A"). Numeric forms first, then the common named set; ampersand last so "&amp;" itself does
- * not spawn new matches for the earlier rules.
+ * Decode the HTML entities that ride in on scraped share metadata (OG titles like "A &#8211; B" or "Q&amp;A").
+ * sow-277: one shared decoder (membership/html-entities.mjs), also used by the link-preview scraper at intake.
+ * This copy threw a RangeError on an out-of-range numeric entity, which a share title could carry into the build.
  */
 export function decodeEntities(s) {
-  return String(s ?? '')
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;|&#039;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+  return decodeHtmlEntities(s);
 }
 
 /**

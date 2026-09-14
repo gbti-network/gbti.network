@@ -3,6 +3,8 @@
 // worker (workers/news/src/og-image.mjs) re-exports scrapeOgImage from here; the signup Worker's OG-preview
 // endpoint (workers/signup/membership-og.mjs) uses scrapeOgPreview.
 
+import { decodeHtmlEntities } from '../../membership/html-entities.mjs';
+
 const HEAD_SCAN = 200000; // these tags live in <head>; bound the scan for CPU
 
 /** Read one attribute's value from a single tag string (quotes required). '' when absent. */
@@ -25,16 +27,11 @@ export function absolutize(u, baseUrl) {
   return url;
 }
 
-/** Decode the handful of HTML entities that commonly appear in og:title/description content. */
+/** sow-277: decode entities in og:title/description content with the shared decoder, then trim. It used to decode
+ *  only &amp; &lt; &gt; &quot; and the apostrophe, and &amp; FIRST, so numeric codes (&#8211;, &#8217;) reached the
+ *  composer raw and "&amp;lt;" was decoded twice into "<". */
 function decodeEntities(s) {
-  return String(s || '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;|&apos;/g, "'")
-    .replace(/&#x27;/gi, "'")
-    .trim();
+  return decodeHtmlEntities(s || '').trim();
 }
 
 /** Collect the og:/twitter: meta values (and the og:title / <title>, og:description / meta description) from HTML. */

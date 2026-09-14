@@ -1,7 +1,7 @@
 ---
 status: published
 visibility: public
-title: WordPress Down with Cloudflare 522? How I Traced It to SQL Injection &#8211; Ali
+title: WordPress Down with Cloudflare 522? How I Traced It to SQL Injection – Ali
 url: https://alikhallad.com/wordpress-cloudflare-522-sql-injection-php-fpm/
 category: wordpress
 id: 20260719202520-wordpress-down-with-cloudflare-522-how-i-traced-
