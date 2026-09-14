@@ -37,7 +37,7 @@ test('mark: nothing changed -> watermark still advances (nothing to lose)', asyn
   let saved;
   await mark({
     env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
-    fetchImpl: fn, now: NOW, gitDiff: () => [], writeState: (items) => { saved = items; },
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => [], writeState: (items) => { saved = items; },
   });
   assert.deepEqual(saved, []);
   const watermarkPut = calls.find((c) => c.method === 'PUT' && watermarkUrlRe.test(c.url));
@@ -48,7 +48,7 @@ test('mark: items present + mark succeeds -> watermark advances', async () => {
   const { fn, calls } = fakeFetch({ watermark: 'old-sha' });
   await mark({
     env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
-    fetchImpl: fn, now: NOW, gitDiff: () => ['house/posts/a/index.md'], writeState: () => {},
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => ['house/posts/a/index.md'], writeState: () => {},
   });
   const markPut = calls.find((c) => c.method === 'PUT' && /pendingdeploy%3Apost%3Aa/.test(c.url));
   const watermarkPut = calls.find((c) => c.method === 'PUT' && watermarkUrlRe.test(c.url));
@@ -62,7 +62,7 @@ test('THE BUG THIS FILE EXISTS TO PREVENT: mark fails -> watermark must NOT adva
   const { fn, calls } = fakeFetch({ watermark: 'old-sha', failKeyRe: /pendingdeploy%3Apost%3Aa/ });
   await mark({
     env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
-    fetchImpl: fn, now: NOW, gitDiff: () => ['house/posts/a/index.md'], writeState: () => {},
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => ['house/posts/a/index.md'], writeState: () => {},
   });
   const watermarkPut = calls.find((c) => c.method === 'PUT' && watermarkUrlRe.test(c.url));
   assert.equal(watermarkPut, undefined, 'a failed mark must leave the watermark untouched, not advance past the lost item');
@@ -72,7 +72,7 @@ test('mark: missing CF credentials (mark not written) -> watermark must NOT adva
   const { fn, calls } = fakeFetch({ watermark: 'old-sha' });
   await mark({
     env: { EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' }, // no CF creds
-    fetchImpl: fn, now: NOW, gitDiff: () => ['house/posts/a/index.md'], writeState: () => {},
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => ['house/posts/a/index.md'], writeState: () => {},
   });
   const watermarkPut = calls.find((c) => c.method === 'PUT' && watermarkUrlRe.test(c.url));
   assert.equal(watermarkPut, undefined);
@@ -99,7 +99,7 @@ test('mark: gitDiff failure (null, distinct from an empty array) does not advanc
   let writeStateCalled = false;
   await mark({
     env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
-    fetchImpl: fn, now: NOW, gitDiff: () => null, writeState: () => { writeStateCalled = true; },
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => null, writeState: () => { writeStateCalled = true; },
   });
   assert.equal(writeStateCalled, false, 'a failed diff must not overwrite the state file for clear() to act on');
   const anyPut = calls.find((c) => c.method === 'PUT');
@@ -111,7 +111,7 @@ test('mark: a genuinely empty diff ([], not null) still advances the watermark',
   let saved;
   await mark({
     env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
-    fetchImpl: fn, now: NOW, gitDiff: () => [], writeState: (items) => { saved = items; },
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => [], writeState: (items) => { saved = items; },
   });
   assert.deepEqual(saved, []);
   const watermarkPut = calls.find((c) => c.method === 'PUT' && watermarkUrlRe.test(c.url));
@@ -148,4 +148,48 @@ test('clear: a malformed state (readState throwing or returning junk) is treated
 test('clear: a clear failure is caught (never throws), the TTL backstop is the fallback', async () => {
   const { fn } = fakeFetch({ failKeyRe: /pendingdeploy/ });
   await assert.doesNotReject(clear({ env: CREDS, fetchImpl: fn, readState: () => [{ type: 'post', slug: 'a' }] }));
+});
+
+// sow-333: a watermark outside the pushed commit's history can never diff, so it is discarded rather than retried.
+test('mark: a watermark that is not in this commit\'s history is discarded; the diff runs from the push\'s before, marks, and advances', async () => {
+  const { fn, calls } = fakeFetch({ watermark: '82ae5060adea762120861a1046d79b428aa1764a' });
+  const asked = [];
+  let saved;
+  await mark({
+    env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
+    fetchImpl: fn, now: NOW,
+    isAncestor: (a, d) => { asked.push([a, d]); return false; },
+    gitDiff: (from, to) => { assert.equal(from, 'before-sha', 'the dead watermark is not used as the diff start'); assert.equal(to, 'after-sha'); return ['house/posts/a/index.md']; },
+    writeState: (items) => { saved = items; },
+  });
+  assert.deepEqual(asked, [['82ae5060adea762120861a1046d79b428aa1764a', 'after-sha']]);
+  assert.deepEqual(saved, [{ type: 'post', slug: 'a' }]);
+  const wm = calls.find((c) => c.method === 'PUT' && watermarkUrlRe.test(c.url));
+  assert.ok(wm, 'the watermark is written again, now a real commit, so the store repairs itself');
+});
+
+test('mark: a watermark in this commit\'s history is still the diff start (control)', async () => {
+  const { fn } = fakeFetch({ watermark: 'old-sha' });
+  let from;
+  await mark({
+    env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
+    fetchImpl: fn, now: NOW, isAncestor: () => true,
+    gitDiff: (f) => { from = f; return []; }, writeState: () => {},
+  });
+  assert.equal(from, 'old-sha');
+});
+
+test('mark: a watermark in history whose diff fails transiently still does not advance', async () => {
+  const { fn, calls } = fakeFetch({ watermark: 'old-sha' });
+  await mark({
+    env: { ...CREDS, EVENT_BEFORE: 'before-sha', GITHUB_SHA: 'after-sha' },
+    fetchImpl: fn, now: NOW, isAncestor: () => true, gitDiff: () => null, writeState: () => {},
+  });
+  assert.equal(calls.find((c) => c.method === 'PUT'), undefined, 'a transient failure on a real range is retried, not skipped past');
+});
+
+test('defaultIsAncestor: an unknown commit is not an ancestor, and a commit is its own ancestor', async () => {
+  const { defaultIsAncestor } = await import('../scripts/deploy-status.mjs');
+  assert.equal(defaultIsAncestor('0000000000000000000000000000000000000001', 'HEAD'), false);
+  assert.equal(defaultIsAncestor('HEAD', 'HEAD'), true);
 });

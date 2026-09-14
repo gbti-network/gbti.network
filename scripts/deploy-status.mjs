@@ -30,9 +30,11 @@ import {
 
 export const STATE_FILE = path.join(os.tmpdir(), 'gbti-deploy-status-marked-items.json');
 
-// Returns the changed paths, or null if the diff itself could not be computed (e.g. the watermark SHA no
-// longer resolves after a history rewrite, or a corrupted KV value) -- null is deliberately DISTINCT from a
-// genuinely empty array, so mark() never confuses "we could not tell what changed" with "nothing changed".
+// Returns the changed paths, or null if the diff itself could not be computed (a transient git failure) -- null is
+// deliberately DISTINCT from a genuinely empty array, so mark() never confuses "we could not tell what changed" with
+// "nothing changed". A watermark that no longer resolves (a history rewrite, a commit main never got, a corrupted
+// KV value) does NOT reach here: mark() discards it first via isAncestor, because retrying a range whose start does
+// not exist can never succeed (sow-333).
 export function defaultGitDiff(fromSha, toSha) {
   try {
     const out = fromSha
@@ -45,8 +47,18 @@ export function defaultGitDiff(fromSha, toSha) {
   }
 }
 
+/** Is `ancestor` a commit in the history of `descendant`? Any git error (an unknown object included) is false. */
+export function defaultIsAncestor(ancestor, descendant) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function mark({
-  env = process.env, fetchImpl = globalThis.fetch, now = new Date(), gitDiff = defaultGitDiff,
+  env = process.env, fetchImpl = globalThis.fetch, now = new Date(), gitDiff = defaultGitDiff, isAncestor = defaultIsAncestor,
   writeState = (items) => fs.writeFileSync(STATE_FILE, JSON.stringify(items)),
 } = {}) {
   const before = env.EVENT_BEFORE || '';
@@ -56,6 +68,15 @@ export async function mark({
   let watermark = null;
   try { watermark = await readWatermark({ env, fetchImpl }); }
   catch (e) { console.warn(`deploy-status: watermark read failed, falling back to this push's own before: ${e?.message ?? e}`); }
+  // sow-333: a watermark outside this commit's history can never diff. The "skip and retry the same range" path
+  // below is right for a TRANSIENT failure and permanent for this one: from 2026-09-03 (at least) to 2026-09-14 the
+  // watermark was 82ae5060, a commit the repository does not have, and every deploy skipped the notice. Discard it
+  // and diff from this push's own before, exactly as when no watermark exists; the next successful mark writes a
+  // real main commit back, so the store repairs itself.
+  if (watermark && !isAncestor(watermark, after)) {
+    console.warn(`deploy-status: discarding the watermark ${watermark}: it is not in the history of ${after} (a commit main never got, or rewritten history), so it can never diff. Falling back to this push's own before.`);
+    watermark = null;
+  }
   const from = resolveDiffFrom(watermark, before);
 
   const paths = gitDiff(from, after);
