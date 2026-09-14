@@ -11,6 +11,11 @@
 /** The branded default card shipped at /og-image.png. */
 const DEFAULT_OG = { width: 1200, height: 630 };
 
+/** sow-294: the per-type default banners under /brand/feature/ (src/lib/feature-image.ts). Every one is 1200x630;
+ *  test/og-image-size.test.mjs MEASURES each file, so this entry cannot drift from the bytes it describes. */
+const FEATURE_BANNER = { width: 1200, height: 630 };
+const FEATURE_BANNER_PATH = /^\/brand\/feature\/feature-[a-z]+\.png$/;
+
 /** YouTube serves every video's thumbnail at a fixed set of names, each a fixed size. `maxresdefault` only
  *  exists for videos uploaded at 720p or above, so its presence is confirmed by a fetch elsewhere, never
  *  assumed here; this map only says how big each one IS when it exists. */
@@ -34,6 +39,7 @@ export function knownImageSize(rawUrl) {
   const host = u.hostname.toLowerCase().replace(/^www\./, '');
 
   if (host === 'gbti.network' && u.pathname === '/og-image.png') return { ...DEFAULT_OG };
+  if (host === 'gbti.network' && FEATURE_BANNER_PATH.test(u.pathname)) return { ...FEATURE_BANNER };
 
   // i.ytimg.com/vi/<id>/<name>.jpg, and the WebP mirror at /vi_webp/<id>/<name>.webp.
   if (host === 'i.ytimg.com' || host === 'img.youtube.com' || host === 'i9.ytimg.com') {
@@ -43,4 +49,15 @@ export function knownImageSize(rawUrl) {
   }
 
   return null;
+}
+
+/**
+ * sow-294: the size of an Astro `image()` field, which the build already knows (ImageMetadata carries width and
+ * height; `.src` is the original file the page's og:image points at). Undefined for anything else, so the layout
+ * falls back to knownImageSize and a value it cannot vouch for declares no size at all.
+ */
+export function imageFieldSize(img) {
+  const w = img && typeof img === 'object' ? img.width : undefined;
+  const h = img && typeof img === 'object' ? img.height : undefined;
+  return Number.isInteger(w) && w > 0 && Number.isInteger(h) && h > 0 ? { width: w, height: h } : undefined;
 }

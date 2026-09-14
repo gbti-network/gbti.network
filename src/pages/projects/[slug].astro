@@ -13,6 +13,7 @@
 //
 // The layout CSS lives in src/styles/gbti-v3.css (.pd-*), not here, because the WorkBench draft preview
 // renders the same structure and must not drift from it.
+import { imageFieldSize } from '../../lib/og-image-size.mjs'; // sow-294: declare the preview image's size
 import { getCollection, render } from 'astro:content';
 import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -118,7 +119,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
     ? 'Encrypted member content. Open in the GBTI client to unlock.'
     : 'Members only. Open in the GBTI client to unlock.';
 ---
-<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')}>
+<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')} ogImageSize={imageFieldSize(d.featuredImage ?? d.banner ?? d.icon)}>
   <DeployStatusNotice type="project" slug={d.slug} updatedAt={d.updatedAt} />
   <div class="pd-shell">
     <!-- Hero: the banner, scrimmed, with the project mark and the one-line pitch sitting on it. -->
