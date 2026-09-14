@@ -8,7 +8,8 @@ shortDescription: >-
   advantage of
 url: https://x.com/unclebobmartin/status/2080257779395154409
 category: leadership
-image: https://pbs.twimg.com/profile_images/2037262183751704577/54AiU968_200x200.jpg
+image: https://gbti.network/media/shares/atwellpub/20260725154654-boomer-does-not-shy-on-his-approach-to-agentic-p-fbd697b8.webp
+imageSource: https://pbs.twimg.com/profile_images/2037262183751704577/54AiU968_200x200.jpg
 id: 20260725154654-boomer-does-not-shy-on-his-approach-to-agentic-p
 createdAt: '2026-07-25T15:46:54.087Z'
 type: share

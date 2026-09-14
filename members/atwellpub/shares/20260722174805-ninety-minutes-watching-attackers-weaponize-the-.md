@@ -8,7 +8,8 @@ shortDescription: >-
 url: >-
   https://patchstack.com/articles/ninety-minutes-watching-attackers-weaponize-the-wordpress-core-rce/
 category: wordpress
-image: https://wp.patchstack.com/wp-content/uploads/2026/06/supply-chain.png
+image: https://gbti.network/media/shares/atwellpub/20260722174805-ninety-minutes-watching-attackers-weaponize-the--ae069736.webp
+imageSource: https://wp.patchstack.com/wp-content/uploads/2026/06/supply-chain.png
 id: 20260722174805-ninety-minutes-watching-attackers-weaponize-the-
 createdAt: '2026-07-22T17:48:05.565Z'
 type: share

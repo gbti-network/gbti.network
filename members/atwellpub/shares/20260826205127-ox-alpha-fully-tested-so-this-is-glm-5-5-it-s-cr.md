@@ -4,7 +4,8 @@ url: https://youtu.be/_IZMECHru6o
 visibility: public
 title: 'Ox Alpha (Fully Tested) : So, This is GLM-5.5?! IT''S CRAZY!'
 shortDescription: A video by AICodeKing on YouTube
-image: https://i.ytimg.com/vi/_IZMECHru6o/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260826205127-ox-alpha-fully-tested-so-this-is-glm-5-5-it-s-cr-c33bddf0.webp
+imageSource: https://i.ytimg.com/vi/_IZMECHru6o/maxresdefault.jpg
 category: ai
 tags:
   - ai

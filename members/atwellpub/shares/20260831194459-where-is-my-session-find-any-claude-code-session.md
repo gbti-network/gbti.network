@@ -7,7 +7,8 @@ shortDescription: >-
   machine and resumes it in the right one.
 url: https://marcelschmitz.com/posts/where-is-my-session-claude-code/
 category: devops
-image: https://marcelschmitz.com/posts/where-is-my-session-claude-code/og.png
+image: https://gbti.network/media/shares/atwellpub/20260831194459-where-is-my-session-find-any-claude-code-session-cafefcb5.webp
+imageSource: https://marcelschmitz.com/posts/where-is-my-session-claude-code/og.png
 id: 20260831194459-where-is-my-session-find-any-claude-code-session
 createdAt: '2026-08-31T19:44:59.644Z'
 type: share

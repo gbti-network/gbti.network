@@ -9,7 +9,8 @@ tags:
   - paul-mccartney
   - studio-session
   - beatles
-image: https://i.ytimg.com/vi/npZZgHcfHqM/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260902164520-paul-mccartney-the-backyard-full-audio-tape-30th-165e5e31.webp
+imageSource: https://i.ytimg.com/vi/npZZgHcfHqM/maxresdefault.jpg
 id: 20260902164520-paul-mccartney-the-backyard-full-audio-tape-30th
 createdAt: '2026-09-02T16:45:20.992Z'
 type: share

@@ -8,7 +8,8 @@ shortDescription: >-
   AI M
 url: https://promptwatch.com/data/reddit-citations-are-dropping-in-chatgpt
 category: llm
-image: https://promptwatch.com/meta.png
+image: https://gbti.network/media/shares/gbtilabs/20260825214934-reddit-citations-are-dropping-in-chatgpt-promptw-b81ab3c6.webp
+imageSource: https://promptwatch.com/meta.png
 id: 20260825214934-reddit-citations-are-dropping-in-chatgpt-promptw
 createdAt: '2026-08-25T21:49:34.432Z'
 type: share

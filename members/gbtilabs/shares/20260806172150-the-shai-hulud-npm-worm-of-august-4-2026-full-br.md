@@ -9,8 +9,8 @@ shortDescription: >-
   attacks in history.
 url: >-
   https://www.studioglobal.ai/discover/answers/what-happened-during-the-shai-hulud-worm-attack-6a72f00ac4b1e0057435cc25
-image: >-
-  https://production-storage-studioglobal.s3.ap-southeast-1.amazonaws.com/chat/EORaotpyJOhXQrnzEaHzxW1xXhD2/images/B26D0E09BBC7E9C44AF3/AE52497A233F14D18F85.png
+image: https://gbti.network/media/shares/gbtilabs/20260806172150-the-shai-hulud-npm-worm-of-august-4-2026-full-br-3809df7d.webp
+imageSource: https://production-storage-studioglobal.s3.ap-southeast-1.amazonaws.com/chat/EORaotpyJOhXQrnzEaHzxW1xXhD2/images/B26D0E09BBC7E9C44AF3/AE52497A233F14D18F85.png
 category: security
 tags:
   - npm

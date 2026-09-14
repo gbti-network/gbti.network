@@ -8,7 +8,8 @@ shortDescription: >-
   becoming a veri
 url: https://joost.blog/future-of-the-website/
 category: ai
-image: https://joost.blog/og/future-of-the-website.webp
+image: https://gbti.network/media/shares/atwellpub/20260727145151-the-future-of-the-website-joost-blog-51b501a6.webp
+imageSource: https://joost.blog/og/future-of-the-website.webp
 id: 20260727145151-the-future-of-the-website-joost-blog
 createdAt: '2026-07-27T14:51:51.369Z'
 type: share

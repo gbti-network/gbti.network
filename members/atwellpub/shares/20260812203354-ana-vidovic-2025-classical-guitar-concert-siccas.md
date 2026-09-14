@@ -5,7 +5,8 @@ title: ANA VIDOVIC - 2025 Classical Guitar Concert | Siccas Guitars | BACH, Piaz
 shortDescription: A classical guitar performance by Ana Vidovic
 url: https://www.youtube.com/watch?v=lL9Mabl1Hzo
 category: music
-image: https://i.ytimg.com/vi/lL9Mabl1Hzo/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260812203354-ana-vidovic-2025-classical-guitar-concert-siccas-3acf130a.webp
+imageSource: https://i.ytimg.com/vi/lL9Mabl1Hzo/maxresdefault.jpg
 id: 20260812203354-ana-vidovic-2025-classical-guitar-concert-siccas
 createdAt: '2026-08-12T20:33:54.917Z'
 type: share
