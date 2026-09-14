@@ -93,13 +93,14 @@ Loading it unpacked (Build + load, above) is for working on the extension itself
 ## The `mcp/` folder (SOW-025): a Claude Code MCP server that ships in this folder
 
 `extension/mcp/gbti-network-mcp.mjs` is a self-contained NODE bundle of the GBTI stdio MCP server. It ships in
-the extension folder so a member who installs the extension already has it on disk. Key points:
+the extension package, which the MCP guide at `/workbench/mcp/` offers as a download, so a member unzips the
+package and runs the file from there. Key points:
 
 - **Chrome never loads or runs it.** It is NOT in `manifest.json`, NOT in `web_accessible_resources`, and not
   referenced by any extension page. It is inert to the browser, exactly like a README that happens to sit in
   the folder. It adds no browser attack surface.
 - **Claude Code runs it from disk**, as a normal local stdio MCP server: `node extension/mcp/gbti-network-mcp.mjs`.
-  See the install guide at `/prompts/install-gbti-network-from-extension/`.
+  See the MCP guide at `/workbench/mcp/`.
 - **Auth is the SAME shared GitHub device-flow app** the extension uses (one OAuth app, no second login). The
   `login` + `login_confirm` MCP tools sign in and write the token to the local config store
   (`~/.config/gbti-network/`); the server reads it on every run. So once signed in, the member can publish
