@@ -8,7 +8,7 @@
 // host-agnostic; V3 tokens only, both themes (the mockup is dark-only). Lazy load on first render with a
 // client (the SOW-070 upgrade race).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck } from '../workspace-core.mjs';
+import { houseEditAck } from '../workspace-core.mjs'; // sow-275: the ack reports whether the edit merges on its own
 import { DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES, CHANNEL_CAPABILITY, channelCapability, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES } from '../../../membership/syndication-config-core.mjs'; // SOW-088 stub defaults + SOW-125 capability/matrix
 import './gbti-syndication-tracker.mjs'; // SOW-088: the Publishing Activity datatable nests inside this workspace
 
@@ -769,14 +769,14 @@ class GbtiChannelMapManager extends GbtiElement {
     }
     this._tmplDirty = new Set();
     this._msg = (r && !r.noop)
-      ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? '' : 's'} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ''}`
+      ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? '' : 's'} saved${r.prNumber ? `; ${houseEditAck(r)}` : ''}`
       : 'No changes.';
     this.render();
   }
 
   _ackMsg(r) {
     return r?.noop ? 'No change (already in that state).'
-      : (r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : 'Done.');
+      : (r?.prNumber ? houseEditAck(r) : 'Done.');
   }
 
   // SOW-132: save a settings card WITHOUT a git reload. On success `apply(r)` reflects the saved values into the

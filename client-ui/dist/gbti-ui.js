@@ -2774,6 +2774,9 @@ ${String(body ?? "")}`;
     const pr = prNumber ? ` (PR #${prNumber})` : "";
     return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
   }
+  function houseEditAck(r) {
+    return submitAck({ prNumber: r?.prNumber ?? null, autoMerge: r?.autoMerge === true });
+  }
   function failHint(err) {
     const code = err?.code || "";
     const msg = err?.message || "";
@@ -8622,7 +8625,7 @@ ${String(body ?? "")}`;
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
       } catch (err) {
         this._msg = err?.message || "The edit failed.";
       }
@@ -9893,7 +9896,7 @@ ${String(body ?? "")}`;
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
       } catch (e) {
         this._msg = e?.message || "That edit failed.";
       }
@@ -10010,7 +10013,7 @@ ${String(body ?? "")}`;
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
       } catch (e) {
         this._msg = e?.message || "That edit failed.";
       }
@@ -10476,7 +10479,7 @@ ${String(body ?? "")}`;
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
       } catch (e) {
         this._msg = e?.message || "That change failed.";
       }
@@ -11644,11 +11647,11 @@ ${String(body ?? "")}`;
         if (this._base[wk]) this._base[wk][e.type] = eff;
       }
       this._tmplDirty = /* @__PURE__ */ new Set();
-      this._msg = r && !r.noop ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? "" : "s"} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ""}` : "No changes.";
+      this._msg = r && !r.noop ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? "" : "s"} saved${r.prNumber ? `; ${houseEditAck(r)}` : ""}` : "No changes.";
       this.render();
     }
     _ackMsg(r) {
-      return r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+      return r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
     }
     // SOW-132: save a settings card WITHOUT a git reload. On success `apply(r)` reflects the saved values into the
     // local state so they stay visible; a full reload (readYaml) reads the file BEFORE the superadmin auto-merge PR

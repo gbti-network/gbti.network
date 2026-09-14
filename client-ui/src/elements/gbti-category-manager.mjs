@@ -5,7 +5,7 @@
 // PR (client.adminOp('category-migrate', ...), with orphan protection). MOVE uses an inline parent PICKER (no path
 // typing). Admin-only by where it is mounted + the server-side gate; inert without a client.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { houseEditAck } from '../workspace-core.mjs'; // SOW-072 P2 + sow-275: the one consistent ack, reporting whether the edit merges on its own
 
 const CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
 
@@ -179,7 +179,7 @@ class GbtiCategoryManager extends GbtiElement {
     this._busy = true; this._msg = ''; this.render();
     try {
       const r = await fn();
-      this._msg = r?.noop ? 'No change (already in that state).' : (r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : 'Done.'); // SOW-072 P2: consistent ack (house edit -> code-owner review)
+      this._msg = r?.noop ? 'No change (already in that state).' : (r?.prNumber ? houseEditAck(r) : 'Done.');
     } catch (err) {
       this._msg = err?.message || 'The edit failed.';
     }

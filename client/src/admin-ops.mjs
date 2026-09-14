@@ -37,7 +37,10 @@ import { publishFiles } from './publish.mjs';
 // EVERY admin write goes through here so none is skipped.
 async function adminPublish(ctx, opts) {
   await syncForkIfCreatingBranch(ctx, opts.repo, opts.branch);
-  return publishFiles(opts);
+  const pr = await publishFiles(opts);
+  // sow-275: the PR is opened with the editor's own token, so the gate rules on the editor's role: a superadmin's
+  // edit auto-merges (sow-108), an admin's house edit waits for code-owner review. The managers read this.
+  return { ...pr, autoMerge: ctx.role?.() === 'superadmin' };
 }
 
 function requireRole(ctx, check, need) {

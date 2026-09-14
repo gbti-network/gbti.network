@@ -650,9 +650,13 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
   });
   const prData = await pr.json().catch(() => ({}));
   const post = await refreshMirror(env, govRefresh, fetchImpl); // sow-213: only a role change (git-native) reaches here with a KV concern; it refreshes the mirror from git
-  if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true, ...post } };
+  // sow-275: whether this PR merges on its own, so the manager can say so. It mirrors the gate
+  // (membership/classify-pr.mjs rule 5): a superadmin auto-merges any path; an admin or moderator auto-merges only
+  // inside their own folder, and every path this endpoint writes is house config or another member's content.
+  const autoMerge = (ROLE_RANK[staff.role] ?? 0) >= ROLE_RANK.superadmin;
+  if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true, autoMerge, ...post } };
   if (!pr.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${pr.status}` } };
-  return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url, ...post } };
+  return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url, autoMerge, ...post } };
 }
 
 /**

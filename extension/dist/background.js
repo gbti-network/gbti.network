@@ -21776,7 +21776,8 @@ function setSiteToggle(doc, { key, enabled } = {}, ctx = {}) {
 // client/src/admin-ops.mjs
 async function adminPublish(ctx, opts) {
   await syncForkIfCreatingBranch(ctx, opts.repo, opts.branch);
-  return publishFiles(opts);
+  const pr = await publishFiles(opts);
+  return { ...pr, autoMerge: ctx.role?.() === "superadmin" };
 }
 function requireRole(ctx, check2, need) {
   const role = ctx.role?.() ?? "member";

@@ -196,6 +196,17 @@ export function submitAck({ prNumber = null, autoMerge = true } = {}) {
     : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
 }
 
+// sow-275: the acknowledgement for a HOUSE CONFIG edit (quotes, news sources, categories, the channel map, site
+// settings). Every one of those managers used to pass a hardcoded `autoMerge: false`, so a superadmin, whose edit
+// merges on its own (sow-108 superadmin-automerge), was told to wait for a review nobody would perform. The side
+// that opened the PR now reports the outcome from the editor's role: the Worker's /membership/admin/author
+// response and the extension's admin-ops both return `autoMerge`. Only an explicit true says "merges
+// automatically", so a response that does not carry the field (an older Worker) keeps the review wording rather
+// than promising a merge nobody reported.
+export function houseEditAck(r) {
+  return submitAck({ prNumber: r?.prNumber ?? null, autoMerge: r?.autoMerge === true });
+}
+
 // SOW-072 P3: map a publish/comment FAILURE to consistent author-facing guidance, so every composer reports a
 // failure the same accurate way (and points a non-paid member at the upgrade) instead of each surface inventing its
 // own copy. Returns { text, upgrade, retryable }. Pure; node-testable.
