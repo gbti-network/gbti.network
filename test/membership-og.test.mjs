@@ -33,6 +33,17 @@ test('safeFetchTarget blocks loopback, private, link-local, metadata, credential
   assert.equal(safeFetchTarget('ftp://ex.com/x').ok, false);
   assert.equal(safeFetchTarget('https://user:pass@ex.com/x').ok, false);
   assert.equal(safeFetchTarget('not a url').ok, false);
+  // IPv6: unique-local, link-local, unspecified, and an IPv4-mapped private address (URL rewrites it to hex)
+  for (const h of ['[fd00::1]', '[fc12:3456::1]', '[fe80::1]', '[febf::1]', '[::]', '[::ffff:127.0.0.1]', '[::ffff:169.254.169.254]', '[::ffff:10.0.0.1]']) {
+    assert.equal(safeFetchTarget(`http://${h}/x`).ok, false, h);
+  }
+  assert.equal(safeFetchTarget('http://[2606:4700:4700::1111]/').ok, true, 'a public IPv6 address passes');
+  assert.equal(safeFetchTarget('http://[::ffff:8.8.8.8]/').ok, true, 'a mapped PUBLIC IPv4 passes');
+  // The IPv6 range tests used to run on every hostname, refusing any NAME that begins "fc" or "fd". The bare domain is
+  // the case that failed; the www form always passed, so it is not a control for this.
+  for (const u of ['https://fcc.gov/', 'https://fda.gov/', 'https://fdic.gov/', 'https://fcbarcelona.com/', 'https://fe80.example.com/']) {
+    assert.equal(safeFetchTarget(u).ok, true, u);
+  }
   // a normal public URL passes
   const ok = safeFetchTarget('https://example.com/article');
   assert.equal(ok.ok, true);

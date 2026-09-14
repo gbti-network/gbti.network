@@ -126,30 +126,48 @@ function withoutImageLines(text) {
   return out.join('\n') + rest;
 }
 
-test('switch and restore change ONLY the image lines, on every real share file, folded values included', () => {
+// The real files are in BOTH states once the workflow has run: most public shares already point at their copy
+// (image + imageSource), the rest still carry an outside image. So each file is exercised from whichever state it is
+// in, and the assertion that the edit is lossless is a round trip back to the file's own bytes. The floor counts
+// files with an image in either state, so it does not decay as the workflow switches shares. (It did: this test
+// counted only unswitched files, and went red on main the moment the backfill switched 50 of them.)
+test('switch and restore change ONLY the image lines, on every real share file, in either state', () => {
   const files = execFileSync('git', ['ls-files', 'members/*/shares/*.md'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  let withImage = 0;
-  let folded = 0;
+  const fmOf = (t) => yaml.load(/^---\n([\s\S]*?)\n---/.exec(t)[1]);
+  let exercised = 0;
   for (const f of files) {
     const text = fs.readFileSync(f, 'utf8');
-    const fm = yaml.load(/^---\n([\s\S]*?)\n---/.exec(text)[1]);
-    if (typeof fm.image !== 'string' || fm.imageSource) continue;
-    withImage++;
-    if (/^image: [>|]/m.test(text)) folded++;
-    const url = shareCoverUrl(fm.author || 'ann', copy('s1'));
-    const switched = switchToCopy(text, { url, source: fm.image });
-    const fm2 = yaml.load(/^---\n([\s\S]*?)\n---/.exec(switched)[1]);
-    assert.equal(fm2.image, url, f);
-    assert.equal(fm2.imageSource, fm.image, `${f}: the original survives exactly`);
-    assert.equal(withoutImageLines(switched), withoutImageLines(text), `${f}: nothing else changed`);
-    const restored = restoreOriginal(switched, { image: fm.image });
-    const fm3 = yaml.load(/^---\n([\s\S]*?)\n---/.exec(restored)[1]);
-    assert.equal(fm3.image, fm.image, f);
-    assert.equal('imageSource' in fm3, false, f);
-    assert.equal(withoutImageLines(restored), withoutImageLines(text), f);
+    const fm = fmOf(text);
+    if (typeof fm.image !== 'string') continue;
+    exercised++;
+    if (typeof fm.imageSource === 'string') {
+      // Already switched: restore, then switch back, and land on the identical bytes.
+      const restored = restoreOriginal(text, { image: fm.imageSource });
+      assert.equal(fmOf(restored).image, fm.imageSource, f);
+      assert.equal('imageSource' in fmOf(restored), false, f);
+      assert.equal(withoutImageLines(restored), withoutImageLines(text), `${f}: nothing else changed`);
+      assert.equal(switchToCopy(restored, { url: fm.image, source: fm.imageSource }), text, `${f}: the round trip is byte-identical`);
+    } else {
+      const url = shareCoverUrl(fm.author || 'ann', copy('s1'));
+      const switched = switchToCopy(text, { url, source: fm.image });
+      assert.equal(fmOf(switched).image, url, f);
+      assert.equal(fmOf(switched).imageSource, fm.image, `${f}: the original survives exactly`);
+      assert.equal(withoutImageLines(switched), withoutImageLines(text), `${f}: nothing else changed`);
+      const restored = restoreOriginal(switched, { image: fm.image });
+      assert.equal(fmOf(restored).image, fm.image, f);
+      assert.equal('imageSource' in fmOf(restored), false, f);
+      assert.equal(withoutImageLines(restored), withoutImageLines(text), f);
+    }
   }
-  assert.ok(withImage >= 40, `real share files with an image were exercised (${withImage})`);
-  assert.ok(folded >= 1, `a folded image value was exercised (${folded})`);
+  assert.ok(exercised >= 40, `real share files with an image were exercised (${exercised})`);
+});
+
+test('a folded image value (the client writes one for a long URL) is replaced whole, continuation lines included', () => {
+  const text = '---\nid: s1\nurl: https://example.com/a\nimage: >-\n  https://cdn.example.com/images/a-very-long-path/that-the-client-folded.jpg?fit=max&amp;auto=format\ncategory: hardware\n---\n\nnote\n';
+  const url = shareCoverUrl('ann', copy('s1'));
+  const switched = switchToCopy(text, { url, source: 'https://cdn.example.com/images/a-very-long-path/that-the-client-folded.jpg?fit=max&amp;auto=format' });
+  assert.equal(switched, `---\nid: s1\nurl: https://example.com/a\nimage: ${url}\nimageSource: https://cdn.example.com/images/a-very-long-path/that-the-client-folded.jpg?fit=max&amp;auto=format\ncategory: hardware\n---\n\nnote\n`);
+  assert.equal(withoutImageLines(switched), withoutImageLines(text));
 });
 
 test('editFrontmatter: inserts after the named key, removes cleanly, keeps CRLF, refuses a file without frontmatter', () => {

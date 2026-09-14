@@ -40,7 +40,22 @@ function isBlockedHost(host) {
   if (!h) return true;
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
   if (h === 'metadata.google.internal') return true;
-  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true; // IPv6 loopback/link-local/ULA
+  if (h.includes(':')) {
+    // An IPv6 literal: a host NAME can never contain ':'. The range tests below apply ONLY here. They used to run on
+    // every hostname, so any name beginning "fc" or "fd" (fcc.gov, fda.gov, fdic.gov, fcbarcelona.com) was refused as
+    // if it were a unique-local address and its link preview came back "that host is not allowed".
+    if (h === '::' || h === '::1') return true; // unspecified, loopback
+    if (/^fe[89ab]/.test(h)) return true; // link-local fe80::/10
+    if (/^f[cd]/.test(h)) return true; // unique local fc00::/7
+    // IPv4-mapped, in the hex form WHATWG URL normalizes it to ([::ffff:127.0.0.1] -> ::ffff:7f00:1): judge the IPv4.
+    const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(h);
+    if (mapped) {
+      const hi = parseInt(mapped[1], 16);
+      const lo = parseInt(mapped[2], 16);
+      return isBlockedIpv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+    }
+    return false;
+  }
   if (isBlockedIpv4(h)) return true;
   return false;
 }
