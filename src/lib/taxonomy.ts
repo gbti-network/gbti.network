@@ -64,6 +64,16 @@ export function topKey(pathArr: string[] | undefined): string {
   return pathArr?.[0] ?? '';
 }
 
+/**
+ * The most specific (leaf) key of a path, or '' if uncategorized: the key `leafLabel` names.
+ *
+ * sow-287: a link that DISPLAYS `leafLabel` must filter by this, not by `topKey`, or the reader is shown one
+ * category and given another. scripts/check-category-links.mjs holds the built pages to that.
+ */
+export function leafKey(pathArr: string[] | undefined): string {
+  return pathArr?.length ? pathArr[pathArr.length - 1] : '';
+}
+
 /** Distinct top-level categories present across a set of paths, as {key,label}, sorted by label. */
 export function topLevelCategories(paths: (string[] | undefined)[]): { key: string; label: string }[] {
   const keys = [...new Set(paths.map((p) => p?.[0]).filter((k): k is string => !!k))];

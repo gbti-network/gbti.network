@@ -17,7 +17,7 @@ import ArticleContents from './ArticleContents.astro';
 import DigestSubscribe from '../mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
 import { favoriteCount } from '../../lib/favorites';
 import { aliasSlugsOf } from '../../lib/content-index.mjs';
-import { breadcrumb, leafLabel, topKey } from '../../lib/taxonomy';
+import { breadcrumb, leafKey, leafLabel } from '../../lib/taxonomy';
 import { ART_OVERVIEW_ID, coverDimensions } from '../../lib/article-page.mjs';
 import { contentRepoPath } from '../../lib/content';
 
@@ -56,7 +56,9 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
         <div>
           <span class="art-rail-lab">Category</span>
           <div class="art-tags">
-            <a class="art-tag" href={`/articles/?cat=${encodeURIComponent(topKey(d.categories))}`}>{category}</a>
+            {/* sow-287 (owner decision 2026-09-14): the link filters to the category it shows. The articles list filters
+                by top-level only, so the leaf goes to the cross-type feed, which matches any depth (sow-174). */}
+            <a class="art-tag" href={`/feeds/?cat=${encodeURIComponent(leafKey(d.categories))}`}>{category}</a>
           </div>
         </div>
       )}

@@ -70,7 +70,9 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
       pill.addEventListener('click', () => applyFilter(pill.dataset.cat || 'all'));
     });
     searchEl?.addEventListener('input', () => { query = searchEl.value.trim().toLowerCase(); applyFilter(cat); });
-    // Deep link: /articles/?cat=<key> (from an article's category link) preselects that pill on load.
+    // Deep link: /articles/?cat=<key> (from a related-article card's category eyebrow) preselects that pill on load.
+    // The article page's own category link goes to /feeds/?cat=<leaf> instead (sow-287), because this list filters by
+    // top-level category only.
     const params = new URLSearchParams(location.search);
     const catParam = params.get('cat');
     if (catParam && Array.from(pills).some((p) => p.dataset.cat === catParam)) applyFilter(catParam);

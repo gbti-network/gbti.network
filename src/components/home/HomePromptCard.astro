@@ -6,7 +6,7 @@
 // untouched.
 import type { CollectionEntry } from 'astro:content';
 import { authorDisplay, authorAvatar } from '../../lib/authors';
-import { leafLabel, topKey } from '../../lib/taxonomy';
+import { leafKey, leafLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
@@ -49,7 +49,7 @@ const avatar = authorAvatar(d.author, profile?.avatar);
   </a>
   <div class="hp-main">
     <div class="hp-metarow">
-      <a class="hp-kind" href={`/prompts/?cat=${topKey(d.categories)}`}>{leafLabel(d.categories)}</a>
+      <a class="hp-kind" href={`/prompts/?cat=${encodeURIComponent(leafKey(d.categories))}`}>{leafLabel(d.categories)}</a>
       {models.length > 0 && (
         <span class="hp-runs">
           <span class="hp-runs-l">Runs on</span>
