@@ -7,7 +7,8 @@ shortDescription: >-
   Discord broadcasting.
 url: https://savepoint.fm/blog/discord-music-bot-alternatives
 category: music
-image: https://savepoint.fm/blog-images/discord-music-bot-alternatives/hero-animated.webp
+image: https://gbti.network/media/shares/atwellpub/20260811145524-discord-music-bot-alternatives-for-self-hosted-s-cb84b613.webp
+imageSource: https://savepoint.fm/blog-images/discord-music-bot-alternatives/hero-animated.webp
 id: 20260811145524-discord-music-bot-alternatives-for-self-hosted-s
 createdAt: '2026-08-11T14:55:24.280Z'
 type: share

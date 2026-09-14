@@ -7,6 +7,8 @@ shortDescription: >-
   digital payment applications. Users can send funds instantly to other X accounts without paying a
   transfer
 url: https://crypto.news/x-money-launches-us-payments-with-yields-up-to-6/
+image: https://gbti.network/media/shares/gbtilabs/20260728024925-x-money-launches-us-payments-with-yields-up-to-6-f38f084c.webp
+imageSource: https://media.crypto.news/2024/01/crypto-news-Elon-Musk-option06.webp
 category: finance
 id: 20260728024925-x-money-launches-us-payments-with-yields-up-to-6
 createdAt: '2026-07-28T02:49:25.329Z'

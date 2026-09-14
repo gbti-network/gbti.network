@@ -7,7 +7,8 @@ shortDescription: >-
   Glass," here's all the music (so far)
 url: https://kotaku.com/every-song-and-radio-station-weve-spotted-in-the-gta-6-leaks-2000727661
 category: music
-image: https://kotaku.com/app/uploads/2025/05/0f109d881f799bde51423dbbea7fa909-1200x675.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260826131343-every-song-and-radio-station-we-ve-spotted-in-th-7126247b.webp
+imageSource: https://kotaku.com/app/uploads/2025/05/0f109d881f799bde51423dbbea7fa909-1200x675.jpg
 id: 20260826131343-every-song-and-radio-station-we-ve-spotted-in-th
 createdAt: '2026-08-26T13:13:43.565Z'
 type: share

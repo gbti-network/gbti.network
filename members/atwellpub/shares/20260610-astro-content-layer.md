@@ -6,6 +6,8 @@ status: published
 visibility: public
 title: The Astro content layer is quietly excellent
 url: https://docs.astro.build/en/guides/content-collections/
+image: https://gbti.network/media/shares/atwellpub/20260610-astro-content-layer-158eedff.webp
+imageSource: https://docs.astro.build/open-graph/en/guides/content-collections.webp
 tags:
   - astro
   - devtools

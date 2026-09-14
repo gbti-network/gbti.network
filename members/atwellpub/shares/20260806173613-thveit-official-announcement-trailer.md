@@ -6,7 +6,8 @@ title: 'Thveit: Official Announcement Trailer'
 shortDescription: >-
   A storybook Norse city builder where every season leaves its mark and the old myths still walk the
   land.
-image: https://i.ytimg.com/vi/c5uI80Nevhk/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260806173613-thveit-official-announcement-trailer-021266fb.webp
+imageSource: https://i.ytimg.com/vi/c5uI80Nevhk/maxresdefault.jpg
 category: gaming
 tags:
   - gaming

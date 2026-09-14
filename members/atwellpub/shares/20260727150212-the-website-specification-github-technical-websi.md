@@ -7,7 +7,8 @@ shortDescription: >-
   Built in the open under an MIT licence.
 url: https://specification.website/
 category: open-source
-image: https://specification.website/og-default.png
+image: https://gbti.network/media/shares/atwellpub/20260727150212-the-website-specification-github-technical-websi-82919011.webp
+imageSource: https://specification.website/og-default.png
 id: 20260727150212-the-website-specification-github-technical-websi
 createdAt: '2026-07-27T15:02:12.767Z'
 type: share

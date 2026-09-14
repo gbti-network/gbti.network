@@ -14,7 +14,8 @@ tags:
   - spying
   - home-network
   - infosec
-image: https://www.malwarebytes.com/wp-content/uploads/sites/2/2026/09/LG_logo.png
+image: https://gbti.network/media/shares/gbtilabs/20260911163712-lg-tv-flaws-could-let-attackers-listen-in-even-i-4bcc3a7b.webp
+imageSource: https://www.malwarebytes.com/wp-content/uploads/sites/2/2026/09/LG_logo.png
 id: 20260911163712-lg-tv-flaws-could-let-attackers-listen-in-even-i
 createdAt: '2026-09-11T16:37:12.480Z'
 type: share

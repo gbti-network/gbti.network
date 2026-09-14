@@ -9,7 +9,8 @@ tags:
   - guidedbyvoices
   - music
   - covers
-image: https://i.ytimg.com/vi/xqGjfMLInBE/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260913033508-guided-by-voices-medley-recorded-on-4-track-d089179c.webp
+imageSource: https://i.ytimg.com/vi/xqGjfMLInBE/maxresdefault.jpg
 id: 20260913033508-guided-by-voices-medley-recorded-on-4-track
 createdAt: '2026-09-13T03:35:08.108Z'
 type: share

@@ -7,8 +7,8 @@ shortDescription: >-
   plane, with no Tailscale control plane or accounts.
 url: https://tailscale.com/blog/tailcat
 category: open-source
-image: >-
-  https://cdn.sanity.io/images/w77i7m8x/production/eba95bf72cac81675e8f0bd6fc62e757eac2dac4-2304x1188.png
+image: https://gbti.network/media/shares/atwellpub/20260831172148-tailcat-an-open-source-cli-for-tailscale-s-wireg-e7623de6.webp
+imageSource: https://cdn.sanity.io/images/w77i7m8x/production/eba95bf72cac81675e8f0bd6fc62e757eac2dac4-2304x1188.png
 id: 20260831172148-tailcat-an-open-source-cli-for-tailscale-s-wireg
 createdAt: '2026-08-31T17:21:48.104Z'
 type: share

@@ -5,6 +5,8 @@ title: Microsoft Open-Sources AI Video Codec with Major Bandwidth Savings
 shortDescription: The Video Conferencing Dataset (VCD) to evaluate video codecs for video conferencing.
 url: >-
   https://techcommunity.microsoft.com/blog/linuxandopensourceblog/announcing-the-open-source-release-of-ml-video-codec-mlvc/4539875
+image: https://gbti.network/media/shares/atwellpub/20260730140524-microsoft-open-sources-ai-video-codec-with-major-4cdfb620.webp
+imageSource: https://techcommunity.microsoft.com/t5/s/gxcuf89792/images/bS00NTM5ODc1LURtMmdZUQ?revision=11
 category: production
 id: 20260730140524-microsoft-open-sources-ai-video-codec-with-major
 createdAt: '2026-07-30T14:05:24.218Z'

@@ -8,8 +8,8 @@ shortDescription: >-
   suppor
 url: https://www.theusableai.com/whatsapp-n8n-integration-the-ultimate-guide/
 category: ai
-image: >-
-  https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
+image: https://gbti.network/media/shares/nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
+imageSource: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
 id: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide
 createdAt: '2026-07-25T17:48:58.271Z'
 type: share

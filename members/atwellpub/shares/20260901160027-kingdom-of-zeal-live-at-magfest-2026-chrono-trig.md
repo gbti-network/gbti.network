@@ -5,7 +5,8 @@ title: Kingdom of Zeal Live at MAGFest 2026 [Chrono Trigger Set]
 shortDescription: Chronotrigger set by Kingdom of Zeal
 url: https://www.youtube.com/watch?v=XquRhzxpw1M
 category: music
-image: https://i.ytimg.com/vi/XquRhzxpw1M/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260901160027-kingdom-of-zeal-live-at-magfest-2026-chrono-trig-d7ead01f.webp
+imageSource: https://i.ytimg.com/vi/XquRhzxpw1M/maxresdefault.jpg
 id: 20260901160027-kingdom-of-zeal-live-at-magfest-2026-chrono-trig
 createdAt: '2026-09-01T16:00:27.267Z'
 type: share
