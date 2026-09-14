@@ -166,6 +166,14 @@ export function editInputFor({ share, fields = {}, now = null, status = null } =
     const v = fields[k];
     if (typeof v === 'string' && v.trim()) input[k] = v.trim();
   }
+  // sow-283: the edit rebuilds the file from this list, so a field it does not name is DROPPED on save. An
+  // unchanged image that points at our hosted copy keeps the original it was copied from, or the share could
+  // never be given that original back if it later goes members-only.
+  if (input.image && input.image === share.image && typeof share.imageSource === 'string' && share.imageSource) {
+    input.imageSource = share.imageSource;
+  }
+  // sow-272: a removed preview stays removed across edits, so the share-covers workflow never looks one up.
+  if (!input.image && fields.imageRemoved === true) input.imageRemoved = true;
   if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
   const vis = fields.visibility ?? share.visibility;
   input.visibility = vis === 'public' ? 'public' : 'members';

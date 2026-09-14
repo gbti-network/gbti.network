@@ -10,6 +10,7 @@ import { commentThreadCount } from './comments';
 import { resolveThumb } from './index-thumb';
 import { imageFieldOf } from './content-index.mjs';
 import { defaultFeatureImage } from './feature-image';
+import { shareImageForSite } from '../../membership/share-cover-url.mjs';
 import { feedTime, isPublicShare, readMinutes, decodeEntities } from './home-feed.mjs';
 
 export type FeedItem = {
@@ -84,8 +85,10 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     categories: d.categories ?? [],
     // thumb keeps a branded fallback (the card grid needs every tile imaged); cover stays real-only
     // so detailed rows without an image keep their text-only layout.
-    thumb: typeof d.image === 'string' && d.image ? d.image : defaultFeatureImage('share'),
-    cover: typeof d.image === 'string' && d.image ? d.image : null,
+    // sow-283: a share pointing at our hosted copy renders it root-relative, so no visitor's browser contacts the
+    // original host (and a local preview serves it too).
+    thumb: typeof d.image === 'string' && d.image ? shareImageForSite(d.image) : defaultFeatureImage('share'),
+    cover: typeof d.image === 'string' && d.image ? shareImageForSite(d.image) : null,
     srcDomain,
   };
 }

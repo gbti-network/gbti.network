@@ -11,6 +11,8 @@
 // It carries NO body or ciphertext: it copies kind/title/url/author/authorName/date/visibility only, so there
 // is no field here that could move gated content into the compiled issue.
 
+import { isShareCoverUrl } from './share-cover-url.mjs';
+
 // activity-index.json uses `type` (post/product/prompt); shares-index.json uses `type: 'share'`. composeIssue
 // groups on `kind` (article/product/prompt/share). An unknown type maps to null and the entry is dropped (it
 // would land in no section). `post -> article` because the blog's public kind is "article".
@@ -280,6 +282,9 @@ export function memberShareEntry(summary) {
     url: `/shares/${slug}/`,
     publishedAt: Date.parse(str(s.createdAt)) || null,
     visibility: s.visibility,
+    // sow-283: our hosted copy only, matching buildSharesIndex. A members share never has one (a static site
+    // cannot hide a file), so in practice this is a public share read through the members edition.
+    ...(isShareCoverUrl(s.image) ? { thumb: str(s.image) } : {}),
   };
 }
 

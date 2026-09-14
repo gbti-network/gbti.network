@@ -301,6 +301,9 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
     shortDescription: fm.shortDescription ?? null, // SOW-032
     url: fm.url ?? null,
     image: typeof fm.image === 'string' && fm.image.trim() ? fm.image.trim() : null, // SOW-057: featured image
+    // sow-283/sow-272: carried so an edit can keep them (see editInputFor in client-ui/src/share-post-core.mjs).
+    imageSource: typeof fm.imageSource === 'string' && fm.imageSource.trim() ? fm.imageSource.trim() : null,
+    imageRemoved: fm.imageRemoved === true,
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? 'members',
     status: fm.status ?? null,

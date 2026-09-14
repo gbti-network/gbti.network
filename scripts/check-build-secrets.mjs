@@ -241,6 +241,25 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
         }
       }
     }
+    // d) sow-283: a hosted share cover (dist/media/shares/<author>/<id>-<hash>.webp) must belong to a published +
+    // public share. A static site cannot hide a file, so a members or draft share never gets one; this is the
+    // backstop for the route's own isPublicShare filter (src/pages/media/shares/[author]/[file].ts). Anything in
+    // that directory that is not a cover name fails too, so the check cannot be sidestepped by a different name.
+    const distCovers = path.join(distDir, 'media', 'shares');
+    if (fs.existsSync(distCovers)) {
+      for (const author of fs.readdirSync(distCovers, { withFileTypes: true })) {
+        if (!author.isDirectory()) {
+          errors.push(`unexpected file in dist/media/shares/: ${author.name}. See sow-283.`);
+          continue;
+        }
+        for (const f of fs.readdirSync(path.join(distCovers, author.name))) {
+          const m = /^([a-z0-9][a-z0-9-]*)-[0-9a-f]{8}\.webp$/.exec(f);
+          if (!m || !publicShares.has(`${author.name}/${m[1]}`)) {
+            errors.push(`a share cover that is not a published + public share's reached dist: dist/media/shares/${author.name}/${f}. Only public shares may have a hosted copy. See sow-283.`);
+          }
+        }
+      }
+    }
     if (shareNeedles.length) {
       for (const f of walk(distDir)) {
         if (BINARY.test(f)) continue;

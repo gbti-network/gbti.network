@@ -18,6 +18,9 @@ import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, formatDate, authorAvatar } from '../../../lib/authors';
 import { isPublicShare, decodeEntities, utmUrl } from '../../../lib/home-feed.mjs';
 import { favoriteCount } from '../../../lib/favorites';
+import { parseShareCoverUrl, shareImageForSite } from '../../../../membership/share-cover-url.mjs';
+import sharp from 'sharp';
+import path from 'node:path';
 
 export async function getStaticPaths() {
   const shares = (await getCollection('share')).filter((s) => isPublicShare(s.data));
@@ -48,8 +51,19 @@ const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
 // (embedUrl fails closed to null). No relay needed here: unlike a chrome-extension:// page, this site sends
 // a valid Referer, so it frames the provider directly. CSP frame-src already allows all four providers.
 const videoSrc = d.url ? embedUrl(d.url) : null;
+// sow-283: when the share points at our hosted copy, declare its real pixel size to link-preview scrapers, read
+// from the committed file (a measurement, never a guess; see src/lib/og-image-size.mjs for why a wrong size is
+// worse than none). Any read failure declares nothing.
+let ogImageSize: { width: number; height: number } | undefined;
+const cover = parseShareCoverUrl(d.image);
+if (cover && cover.author === d.author && cover.id === d.id) {
+  try {
+    const meta = await sharp(path.join(process.cwd(), 'members', d.author, 'shares', 'images', cover.file)).metadata();
+    if (meta.width && meta.height) ogImageSize = { width: meta.width, height: meta.height };
+  } catch { ogImageSize = undefined; }
+}
 ---
-<BaseLayout preconnectMedia title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
+<BaseLayout ogImageSize={ogImageSize} title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
   <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
     <nav class="share-crumb"><a href="/feeds/shares/" class="link">&larr; Shares feed</a></nav>
     <div class="detail-grid">
@@ -78,7 +92,7 @@ const videoSrc = d.url ? embedUrl(d.url) : null;
       {videoSrc
         ? <div class="share-player"><VideoEmbed video={d.url!} title={title} /></div>
         : typeof d.image === 'string' && d.image && (
-            <a href={outUrl} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={d.image} alt="" loading="lazy" decoding="async" /></a>
+            <a href={outUrl} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={shareImageForSite(d.image)} alt="" loading="lazy" decoding="async" /></a>
           )}
 
       {body && (

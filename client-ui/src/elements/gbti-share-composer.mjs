@@ -352,6 +352,7 @@ class GbtiShareComposer extends GbtiElement {
         </div>
       </div>`);
     this._image = null;
+    this._imageRemoved = false; // sow-272: the author pressed "Remove preview"; saved so no image is looked up later
     this._suggested = null; // SOW-087: the Worker's category suggestion, applied once topics are loaded
     this._suggestedTags = []; // sow-303: the Worker's free-form tag suggestion, applied to the tags input
     // One delegated handler for the wizard controls (rail dots, Back/Next, note tabs, audience cards); base
@@ -504,9 +505,19 @@ class GbtiShareComposer extends GbtiElement {
     const cat = this.$('select.cat'); if (cat) cat.value = item.category || '';
     this._suggested = item.category || null;
     this._image = item.image || null;
+    this._imageRemoved = item.imageRemoved === true;
     this._lastOgUrl = item.url || null; // never re-fetch the preview for a frozen link
     const box = this.$('[data-og]');
-    if (box) { box.hidden = !this._image; box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : ''; }
+    if (box) {
+      box.hidden = !this._image;
+      // sow-272: an edit can remove the image too. Before the share-covers workflow a share's image was always one
+      // the author saw at compose time; a looked-up image was not, so the author needs a way to take it off.
+      box.innerHTML = this._image
+        ? `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove preview</button>`
+        : '';
+      const clr = box.querySelector('[data-ogclear]');
+      if (clr) clr.addEventListener('click', () => { this._image = null; this._imageRemoved = true; box.hidden = true; box.innerHTML = ''; });
+    }
     this._selectAudience(item.visibility === 'public' ? 'public' : 'members');
     this._applyEditChrome(decryptNote);
     this._paintAuthorRow(); // sow-183 for shares: the picker starts on this share's own author
@@ -692,6 +703,7 @@ class GbtiShareComposer extends GbtiElement {
     if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) { this._lastOgUrl = null; this._image = null; box.hidden = true; box.innerHTML = ''; return; }
     if (url === this._lastOgUrl) return; // already fetched (or in flight) for this exact URL
     this._lastOgUrl = url;
+    if (url !== this._removedUrl) this._imageRemoved = false; // a different link: a removal belonged to the previous one
     box.hidden = false;
     box.innerHTML = `<span class="ogmsg">Fetching preview…</span>`;
     let og = null;
@@ -714,6 +726,7 @@ class GbtiShareComposer extends GbtiElement {
       this._suggestedTags = Array.isArray(og?.suggestedTags) ? og.suggestedTags : [];
       this._applySuggested();
       this._image = og?.image || null;
+      if (this._image) this._imageRemoved = false; // the preview is showing again, so it is no longer removed
       let domain = '';
       try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch { /* leave empty */ }
       box.innerHTML = `<div class="ogcard">`
@@ -725,7 +738,7 @@ class GbtiShareComposer extends GbtiElement {
         + `</div></div>`
         + `<button class="ogclear" type="button" data-ogclear>Remove preview</button>`;
       const clr = box.querySelector('[data-ogclear]');
-      if (clr) clr.addEventListener('click', () => { this._image = null; this._lastOgUrl = null; box.hidden = true; box.innerHTML = ''; });
+      if (clr) clr.addEventListener('click', () => { this._image = null; this._imageRemoved = true; this._removedUrl = url; this._lastOgUrl = null; box.hidden = true; box.innerHTML = ''; });
       return;
     }
     // Empty or failed. The box STAYS VISIBLE and says which. A preview is optional metadata, so neither state
@@ -770,7 +783,7 @@ class GbtiShareComposer extends GbtiElement {
         // on a members-to-public flip. `status` flips the share off or back on through this same path.
         const edited = this._edit;
         const now = new Date().toISOString();
-        const input = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, visibility, removeUrl: edited.removeUrl === true } });
+        const input = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, imageRemoved: this._imageRemoved, visibility, removeUrl: edited.removeUrl === true } });
         if (!input) throw new Error('this share cannot be edited');
         const removeEnc = encRemovalFor({ share: edited, visibility: input.visibility, username: edited.author || null });
         // sow-183 for shares: a changed Author pick moves the share; the old stub + ciphertext leave in the same PR.
@@ -794,6 +807,7 @@ class GbtiShareComposer extends GbtiElement {
       if (category) input.category = category; // SOW-087: routes the share's category Discord post
       if (tags.length) input.tags = tags; // sow-303: feeds {tags-hashtags} / {hashtags} on syndication
       if (this._image) input.image = this._image; // SOW-057: the featured image (OG-fetched, author-clearable)
+      else if (this._imageRemoved) input.imageRemoved = true; // sow-272: never look an image up for it later
       const authorTarget = this._authorTarget(); // sow-183 for shares: post AS another member (superadmin only)
       const res = await this.client.postShare({ input, body, ...(authorTarget ? { authorTarget } : {}) });
       this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ''}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, 'ok'); // SOW-072 P2: consistent ack
@@ -803,6 +817,8 @@ class GbtiShareComposer extends GbtiElement {
       this._paintAuthorRow(); // back to "You"
       const postedImage = this._image;
       this._image = null;
+      this._imageRemoved = false;
+      this._removedUrl = null;
       this._suggested = null;
       this._suggestedTags = [];
       this._lastOgUrl = null;

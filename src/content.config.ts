@@ -365,6 +365,11 @@ const share = defineCollection({
     shortDescription: z.string().max(200).optional(), // SOW-032: an optional one-line blurb shown under the title
     url: z.string().url().optional(), // the external content being shared (link, find)
     image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
+    // sow-283: set by the share-covers workflow when `image` is switched to our hosted copy; the URL it was copied
+    // from, so a share that stops being public can be given its original image back.
+    imageSource: z.string().optional(),
+    // sow-272: the author removed the link preview. The share-covers workflow never looks one up for this share.
+    imageRemoved: z.boolean().optional(),
     category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
     tags: z.array(z.string()).default([]),
     createdAt: z.coerce.date(),

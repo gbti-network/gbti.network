@@ -2,6 +2,7 @@
 // public-only leak guard is unit-tested with fixtures rather than only at build time, matching the
 // buildActivityIndex pattern. Node-free: no astro imports, so a test drives it with plain { data } objects.
 import { isPublicShare, feedTime, decodeEntities } from './home-feed.mjs';
+import { isShareCoverUrl, shareCoverUrl, parseShareCoverUrl } from '../../membership/share-cover-url.mjs';
 
 /**
  * Project a list of share collection entries (each `{ data }`) into the newest-first public-shares index.
@@ -11,8 +12,15 @@ import { isPublicShare, feedTime, decodeEntities } from './home-feed.mjs';
  * any item whose visibility is not 'public' as well, so a leak would have to defeat both.
  *
  * @param {Array<{ data: any }>} entries  the `share` collection entries
- * @returns {Array<{ type:'share', slug, title, author, description, url, publishedAt, visibility:'public' }>}
+ * @returns {Array<{ type:'share', slug, title, author, description, url, publishedAt, visibility:'public', thumb? }>}
  */
+/** Our hosted copy as an absolute URL, or null for anything else (an outside URL, nothing). */
+function shareThumb(image) {
+  if (!isShareCoverUrl(image)) return null;
+  const p = parseShareCoverUrl(image);
+  return shareCoverUrl(p.author, p.file);
+}
+
 export function buildSharesIndex(entries) {
   const list = Array.isArray(entries) ? entries : [];
   return list
@@ -34,6 +42,10 @@ export function buildSharesIndex(entries) {
         url: `/shares/${slug}/`,
         publishedAt: feedTime(d) || null,
         visibility: 'public',
+        // sow-272/sow-283: the digest's share rows get an image, but ONLY our hosted copy. An outside image URL
+        // in an email makes the reader's mail client contact that host, so a share still pointing at one ships
+        // no thumb at all (the row renders text-only, as every share row did before).
+        ...(shareThumb(d.image) ? { thumb: shareThumb(d.image) } : {}),
       };
     })
     .sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));

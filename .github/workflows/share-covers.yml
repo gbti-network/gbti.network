@@ -1,0 +1,125 @@
+name: Share covers
+
+# sow-283 / sow-272: host public share cover images on gbti.network instead of making every visitor's browser
+# contact the site each image came from. Two stages; the pure planner is scripts/lib/share-covers.mjs and its
+# header explains the lifecycle.
+#
+#   fetch   NO CREDENTIALS. Downloads due images (and, for a share with no image whose preview was never removed,
+#           reads the link's page for a preview image) under scripts/lib/safe-fetch.mjs, converts each to a WebP,
+#           and uploads the files as an artifact. This is the only job that touches member-supplied URLs or
+#           decodes untrusted image bytes, so it never runs next to the bot token.
+#   commit  Re-validates that artifact (paths, WebP signature, size, sha256 against the file name), copies it in,
+#           then switches shares whose copy is ALREADY LIVE on gbti.network, restores shares that stopped being
+#           public, and deletes stale copies. Any change goes to a bot PR, which the PR gate auto-merges.
+#
+# Triggers: a push that changes a share file (a new or edited share), every finished Pages deploy (a copy merged
+# by the previous run is now live, so its share can be switched), a daily run (retries), and by hand. The loop
+# ends by itself: a run that switches shares triggers another run, which finds nothing to copy, and its deploy
+# triggers one more, which finds nothing to switch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'members/*/shares/*.md'
+  workflow_run:
+    workflows: ['Deploy to Cloudflare Pages']
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: '43 6 * * *' # daily at 06:43 UTC, off the hour
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run at a time, never cancelled: two overlapping runs would open competing PRs against the same manifest.
+  group: share-covers
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Copy due share covers (no credentials)
+        run: node scripts/share-covers.mjs fetch --out "$RUNNER_TEMP/share-covers"
+      - name: Keep the output even when empty
+        run: mkdir -p "$RUNNER_TEMP/share-covers" && touch "$RUNNER_TEMP/share-covers/.keep"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: share-covers
+          path: ${{ runner.temp }}/share-covers
+          include-hidden-files: true
+          retention-days: 3
+
+  commit:
+    needs: fetch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: share-covers
+          path: ${{ runner.temp }}/share-covers
+      - name: Validate and copy in the fetched covers
+        run: |
+          rm -f "$RUNNER_TEMP/share-covers/.keep"
+          node scripts/share-covers.mjs ingest "$RUNNER_TEMP/share-covers"
+      - name: Switch live copies, restore, clean up
+        run: node scripts/share-covers.mjs switch --apply
+      - name: Open the bot PR
+        env:
+          # GH_BOT_TOKEN: GitHub forbids a GITHUB_-prefixed secret name, so the gbtilabs PAT is stored as GH_BOT_TOKEN
+          # (the same credential reconcile.yml uses) and read here as GITHUB_BOT_TOKEN.
+          GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network
+        run: |
+          git add --all -- ':(glob)members/*/shares/**' house/share-covers.yml
+          if git diff --cached --quiet; then
+            echo "share-covers: nothing to commit"
+            exit 0
+          fi
+          git diff --cached --stat
+          branch="share-covers/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git -c user.name=gbtilabs -c user.email=125175036+gbtilabs@users.noreply.github.com \
+            commit -q -m "share-covers: host public share cover images on gbti.network"
+          git push -q "https://x-access-token:${GITHUB_BOT_TOKEN}@github.com/${GITHUB_CONTENT_REPO}.git" "HEAD:refs/heads/${branch}"
+          node scripts/share-covers.mjs open-pr "$branch"
+
+  # sow-298: a scheduled or deploy-triggered failure has nobody watching it. A separate job, so a failed fetch
+  # (which skips commit) is reported too, and so the fetch job never has to hold a credential to report itself.
+  report:
+    needs: [fetch, commit]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: "Report failure to #github-events"
+        run: node scripts/notify-workflow-failure.mjs
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}

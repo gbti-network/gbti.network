@@ -17194,6 +17194,10 @@ var shareSchema = external_exports.object({
   url: external_exports.string().url().optional(),
   image: external_exports.string().optional(),
   // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
+  imageSource: external_exports.string().optional(),
+  // sow-283: the original image URL, kept when `image` points at our hosted copy
+  imageRemoved: external_exports.boolean().optional(),
+  // sow-272: the author removed the link preview; never look one up
   category: external_exports.string().optional(),
   // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
   tags: tagsSchema,
@@ -17448,6 +17452,9 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     url: fm.url ?? null,
     image: typeof fm.image === "string" && fm.image.trim() ? fm.image.trim() : null,
     // SOW-057: featured image
+    // sow-283/sow-272: carried so an edit can keep them (see editInputFor in client-ui/src/share-post-core.mjs).
+    imageSource: typeof fm.imageSource === "string" && fm.imageSource.trim() ? fm.imageSource.trim() : null,
+    imageRemoved: fm.imageRemoved === true,
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",
     status: fm.status ?? null,

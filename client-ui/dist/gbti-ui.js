@@ -12782,6 +12782,10 @@ ${String(body ?? "")}`;
       const v = fields[k];
       if (typeof v === "string" && v.trim()) input[k] = v.trim();
     }
+    if (input.image && input.image === share.image && typeof share.imageSource === "string" && share.imageSource) {
+      input.imageSource = share.imageSource;
+    }
+    if (!input.image && fields.imageRemoved === true) input.imageRemoved = true;
     if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
     const vis = fields.visibility ?? share.visibility;
     input.visibility = vis === "public" ? "public" : "members";
@@ -13118,6 +13122,7 @@ ${String(body ?? "")}`;
         </div>
       </div>`);
       this._image = null;
+      this._imageRemoved = false;
       this._suggested = null;
       this._suggestedTags = [];
       this.$(".card")?.addEventListener("click", (e) => this._onCardClick(e));
@@ -13283,11 +13288,19 @@ ${String(body ?? "")}`;
       if (cat) cat.value = item.category || "";
       this._suggested = item.category || null;
       this._image = item.image || null;
+      this._imageRemoved = item.imageRemoved === true;
       this._lastOgUrl = item.url || null;
       const box = this.$("[data-og]");
       if (box) {
         box.hidden = !this._image;
-        box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : "";
+        box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove preview</button>` : "";
+        const clr = box.querySelector("[data-ogclear]");
+        if (clr) clr.addEventListener("click", () => {
+          this._image = null;
+          this._imageRemoved = true;
+          box.hidden = true;
+          box.innerHTML = "";
+        });
       }
       this._selectAudience(item.visibility === "public" ? "public" : "members");
       this._applyEditChrome(decryptNote);
@@ -13514,6 +13527,7 @@ ${String(body ?? "")}`;
       }
       if (url === this._lastOgUrl) return;
       this._lastOgUrl = url;
+      if (url !== this._removedUrl) this._imageRemoved = false;
       box.hidden = false;
       box.innerHTML = `<span class="ogmsg">Fetching preview…</span>`;
       let og = null;
@@ -13534,6 +13548,7 @@ ${String(body ?? "")}`;
         this._suggestedTags = Array.isArray(og?.suggestedTags) ? og.suggestedTags : [];
         this._applySuggested();
         this._image = og?.image || null;
+        if (this._image) this._imageRemoved = false;
         let domain = "";
         try {
           domain = new URL(url).hostname.replace(/^www\./, "");
@@ -13543,6 +13558,8 @@ ${String(body ?? "")}`;
         const clr = box.querySelector("[data-ogclear]");
         if (clr) clr.addEventListener("click", () => {
           this._image = null;
+          this._imageRemoved = true;
+          this._removedUrl = url;
           this._lastOgUrl = null;
           box.hidden = true;
           box.innerHTML = "";
@@ -13587,7 +13604,7 @@ ${String(body ?? "")}`;
         if (this._edit) {
           const edited = this._edit;
           const now = (/* @__PURE__ */ new Date()).toISOString();
-          const input2 = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, visibility, removeUrl: edited.removeUrl === true } });
+          const input2 = editInputFor({ share: edited, now, status, fields: { title, shortDescription, category, tags, image: this._image, imageRemoved: this._imageRemoved, visibility, removeUrl: edited.removeUrl === true } });
           if (!input2) throw new Error("this share cannot be edited");
           const removeEnc = encRemovalFor({ share: edited, visibility: input2.visibility, username: edited.author || null });
           const owner = this._editOwner();
@@ -13610,6 +13627,7 @@ ${String(body ?? "")}`;
         if (category) input.category = category;
         if (tags.length) input.tags = tags;
         if (this._image) input.image = this._image;
+        else if (this._imageRemoved) input.imageRemoved = true;
         const authorTarget = this._authorTarget();
         const res = await this.client.postShare({ input, body, ...authorTarget ? { authorTarget } : {} });
         this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ""}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, "ok");
@@ -13624,6 +13642,8 @@ ${String(body ?? "")}`;
         this._paintAuthorRow();
         const postedImage = this._image;
         this._image = null;
+        this._imageRemoved = false;
+        this._removedUrl = null;
         this._suggested = null;
         this._suggestedTags = [];
         this._lastOgUrl = null;
