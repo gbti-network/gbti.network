@@ -32,18 +32,20 @@ The SOW-005 gate remains the only authority on what merges; the extension only s
 
 ## Distribution (SOW-019)
 
-The site distributes the extension itself, so a visitor can install it without the Chrome Web Store, and the
-site can tell whether they already have it.
+The Chrome Web Store is the only public install (owner, 2026-08-16; sow-244). The site links the store listing
+and can tell whether a visitor already has the extension. The package below is still built and served, because
+it carries the MCP server and the WorkBench MCP guide offers it for that, and because the drift guards check it.
+Loading it unpacked (Build + load, above) is for working on the extension itself, not a supported install.
 
 - **Package:** `npm run build:extension` bundles the extension (it runs `extension/build.mjs` first) and writes
   two committed artifacts under `public/extension/`:
   - `gbti-network-extension.zip`. The loadable file set is DISCOVERED from disk (the manifest, every top-level
     `*.html` page, and every built `dist/*.js` bundle), so a page or bundle added by a later SOW is packaged
-    automatically and never hand-listed. The `mcp/` folder is excluded (it is a node bundle, not a browser file).
-  - `latest.json` (`{ version, name, zip, webStoreUrl, bytes }`) that the site reads.
+    automatically and never hand-listed. The MCP server rides along under `mcp/` (sow-225), outside the loadable set.
+  - `latest.json` (`{ version, name, zip, webStoreUrl, bytes, mcp }`), served beside the zip. `webStoreUrl` comes
+    from `src/lib/extension-store.mjs`, the one copy of the listing URL, and `check:extension` fails if they differ.
   The static build serves both verbatim. The homepage "Add the extension" call to action and the install-aware
-  Sign-in modal read the install config from `src/lib/extension.ts` (the Web Store URL when published, else the
-  direct zip).
+  Sign-in modal read the install config from `src/lib/extension.ts`, which always points at the Web Store.
 - **Install detection (no extra permission, no extension id):** the content script sets
   `document.documentElement.dataset.gbtiExtension = <manifest version>` and dispatches a `gbti:extension-ready`
   event at `document_idle`. The site reads the attribute; absent means "not installed", which routes the visitor
@@ -58,8 +60,9 @@ site can tell whether they already have it.
   - `npm run check:extension` (a read-only consistency guard, part of `verify:dist`) fails if `latest.json` or
     the zip disagrees with `extension/manifest.json`, and the "Extension build drift" CI job rebuilds from source
     and fails on a stale commit.
-- **Web Store:** once the listing is live, set `EXTENSION.webStoreUrl` in `src/lib/extension.ts`. The install
-  links and the Sign-in modal then switch from the direct zip to the one-click store install.
+- **Web Store:** the listing is live (since 2026-07-20). Its URL has one copy, `src/lib/extension-store.mjs`, read by
+  the site and by the packager. `check:extension` also fails the build if the install page offers the unpacked
+  route again, or if any page but the MCP guide links the package zip.
 
 ## HUMAN-TODO before publishing
 - Set `GITHUB_CLIENT_ID` in `src/background.mjs` to the real device-flow OAuth app client id

@@ -1,22 +1,23 @@
-// SOW-019: Chrome extension distribution config, single-sourced for the site. The Web Store URL is the
-// primary install path once the M0 store submission lands; until then the site falls back to the direct zip
-// built by `npm run build:extension` (committed under public/extension/). The site detects an installed
-// extension via the content-script marker (document.documentElement.dataset.gbtiExtension); see SOW-019.
+// SOW-019: Chrome extension distribution config, single-sourced for the site. sow-244: the Chrome Web Store is the
+// ONLY public install (owner, 2026-08-16), so there is no fallback path and no "is it listed yet" switch. The
+// package zip built by `npm run build:extension` is still served, for one reason: it carries the MCP server, and the
+// WorkBench MCP guide (/workbench/mcp/) offers it for that. The site detects an installed extension via the
+// content-script marker (document.documentElement.dataset.gbtiExtension); see SOW-019.
+import { WEB_STORE_URL } from './extension-store.mjs';
+
 export const EXTENSION = {
   name: 'GBTI Network',
   /** Mirrors public/extension/latest.json (written by `npm run build:extension`). */
   version: '0.4.0',
-  /** Set to the Chrome Web Store listing URL after the M0 submission. Empty = fall back to the install page. */
-  webStoreUrl: 'https://chromewebstore.google.com/detail/gbti-network-extension/iffjdmifgnjgkdjoodapjciddibmifka',
-  /** The install/download page that hosts the download button + the unpacked-install guide. */
+  /** The Chrome Web Store listing, from src/lib/extension-store.mjs (shared with the packager). */
+  webStoreUrl: WEB_STORE_URL,
+  /** The install page: what the extension does, and the store button. */
   pageUrl: '/extension/',
-  /** Direct download of the current build (served from the static site). */
+  /** The extension PACKAGE, offered only by the MCP guide, for the MCP server inside it. Not an install path. */
   zipUrl: '/extension/gbti-network-extension.zip',
 } as const;
 
-/** Primary "get the extension" link: the Web Store if published, else the install page (zip + how-to). */
-export const extensionInstallUrl: string = EXTENSION.webStoreUrl || EXTENSION.pageUrl;
-/** Direct zip download, used by the install page's download button. */
+/** The "get the extension" link: the Chrome Web Store listing. */
+export const extensionInstallUrl: string = EXTENSION.webStoreUrl;
+/** The package zip, for the MCP guide's "download the extension package" step (the MCP server ships inside it). */
 export const extensionZipUrl: string = EXTENSION.zipUrl;
-/** True once the extension is on the Chrome Web Store (a one-click install); false while only the zip exists. */
-export const extensionIsListed: boolean = Boolean(EXTENSION.webStoreUrl);

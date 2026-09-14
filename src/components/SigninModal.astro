@@ -4,12 +4,12 @@
 // right path: install + member benefits when absent, or "open the extension" guidance when present. No-JS
 // falls back to the control's own href (the /membership/ benefits + registration page). Rendered once per
 // page via BaseLayout.
-import { extensionInstallUrl, extensionIsListed } from '../lib/extension';
+import { extensionInstallUrl } from '../lib/extension';
 import { extensionCtaEnabled } from '../lib/site-settings';
 const extensionCtaShown = extensionCtaEnabled();
 const benefitsUrl = '/membership/';
 ---
-<dialog id="gbti-signin-dialog" data-signin-dialog class="signin-dialog" data-install={extensionInstallUrl} data-listed={String(extensionIsListed)} aria-labelledby="signin-title">
+<dialog id="gbti-signin-dialog" data-signin-dialog class="signin-dialog" data-install={extensionInstallUrl} aria-labelledby="signin-title">
   <div class="signin-card">
     <button type="button" class="signin-x" data-close aria-label="Close">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
@@ -31,7 +31,7 @@ const benefitsUrl = '/membership/';
       {/* sow-271: an extension advert, governed by the superadmin site setting. The Sign in + See membership
           options actions above are the real paths and are untouched, so switching this off removes a suggestion
           rather than a capability. */}
-      {extensionCtaShown && <p class="body-sm muted mt12" style="font-size:12.5px"><a href={extensionInstallUrl} data-install-link rel={extensionIsListed ? null : 'nofollow'}>Get the extension</a> to edit and publish your work in place.</p>}
+      {extensionCtaShown && <p class="body-sm muted mt12" style="font-size:12.5px"><a href={extensionInstallUrl} data-install-link>Get the extension</a> to edit and publish your work in place.</p>}
     </div>
 
     {/* Extension installed. sow-158 Phase 2 residual fix: web sign-in stays the PRIMARY path even here (it sets the

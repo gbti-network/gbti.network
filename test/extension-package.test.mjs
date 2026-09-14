@@ -1,6 +1,7 @@
 // SOW-019: the dependency-free ZIP writer used to package the extension. Validates CRC32 against the standard
 // IEEE test vector and that zip() emits a structurally valid archive (signatures + entry count + inflatable
 // entries), so a regression in the hand-rolled zip cannot silently ship a corrupt download.
+import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
@@ -70,7 +71,7 @@ const fileSet = (manifestObj = M) => [
   ...BUNDLES.map((n) => ({ name: n, data: Buffer.from(`// ${n}`) })),
 ];
 const fullZip = (manifestObj = M, drop = []) => zip(fileSet(manifestObj).filter((e) => !drop.includes(e.name)));
-const latestFor = (zipBuf, manifestObj = M) => ({ version: manifestObj.version, name: manifestObj.name, zip: '/extension/gbti-network-extension.zip', bytes: zipBuf.length });
+const latestFor = (zipBuf, manifestObj = M) => ({ version: manifestObj.version, name: manifestObj.name, zip: '/extension/gbti-network-extension.zip', webStoreUrl: WEB_STORE_URL, bytes: zipBuf.length });
 
 test('requiredFiles: derives the manifest refs + each page bundle (incl. the newtab override + dist/shares.js)', () => {
   const req = requiredFiles(M, HTML);

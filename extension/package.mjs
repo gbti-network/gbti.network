@@ -3,6 +3,7 @@
 // Dependency-free ZIP writer (CRC32 + zlib DEFLATE) so it works in any build/CI environment without a zip
 // binary. Output is committed under public/extension/ so the Cloudflare Pages build serves it verbatim.
 //   node extension/package.mjs
+import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -146,13 +147,13 @@ export function packageExtension({ root = ROOT, write = true } = {}) {
 
   const buf = zip(entries);
   const zipName = 'gbti-network-extension.zip';
-  // Version manifest the site reads. webStoreUrl stays empty until the M0 store submission; the site falls
-  // back to the direct zip while it is empty.
+  // The version manifest served beside the zip. sow-244: webStoreUrl is the store listing, from the one shared copy.
+  // It was hardcoded to '' pending a store submission that happened on 2026-07-20, so every build re-blanked it.
   const latest = {
     version: manifest.version,
     name: manifest.name,
     zip: `/extension/${zipName}`,
-    webStoreUrl: '',
+    webStoreUrl: WEB_STORE_URL,
     bytes: buf.length,
     mcp: MCP_FILE, // sow-225: where the MCP server sits inside the zip
   };

@@ -1,23 +1,24 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { EXTENSION, extensionZipUrl, extensionIsListed } from '../../lib/extension';
+import { EXTENSION } from '../../lib/extension';
 
-// SOW-019: the extension install/download page (design "GBTI Extension Install — Guided", claude.ai/design
-// handoff). A guided walkthrough: hero + download, a what-it-does trio, the five unpacked-install steps as a
-// vertical timeline each paired with a faithful chrome://extensions mockup, a trust note, and an FAQ. Numbers
-// single-sourced from lib/extension. Reuses the V3 globals (band/wrap/eyebrow/card/itile); the chrome mockups
-// are pinned light in both themes for recognizability. The "Get the extension" CTAs site-wide point here.
+// SOW-019: the extension install page (design "GBTI Extension Install — Guided", claude.ai/design handoff): hero with
+// the store button, a new-tab mockup, a trust note, a what-it-does trio, the MCP section and an FAQ. Numbers
+// single-sourced from lib/extension. The "Get the extension" CTAs site-wide point here.
+// sow-244: STORE-ONLY. The owner retired unpacked distribution on 2026-08-16 ("no one is using unpacked but me; lets
+// offer no backward support for unpacked anywhere"), so the "Download unpacked" button, the five-step Developer mode
+// walkthrough and its FAQ answers are gone. scripts/check-extension.mjs fails the build if they come back. The
+// package zip is still built and served for the MCP guide, which is the only page that links it.
 const feats = [
   { icon: 'i-gh', title: 'Sign in with GitHub', body: 'Click the GBTI icon in your toolbar and sign in. Your GitHub credentials stay on your own machine, not on our servers.' },
   { icon: 'i-pencil', title: 'Edit in place', body: 'Open any page you can edit and change it where it lives. No separate dashboard, no copy-paste between tabs.' },
   { icon: 'i-publish', title: 'Publish through the network', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
 ];
 const faqs = [
-  { q: 'How do I update it?', a: 'If you installed from the Chrome Web Store, updates happen on their own, there is nothing to do. If you loaded the unpacked ZIP, download the latest ZIP, unzip it over the old folder, and click Reload on the extensions page.' },
+  { q: 'How do I update it?', a: 'You do not have to. The Chrome Web Store updates the extension on its own.' },
   { q: 'Is my GitHub sign-in safe?', a: 'Yes. Sign-in happens between your browser and GitHub. Your token is stored locally by the extension and never sent to GBTI servers.' },
-  { q: 'It did not load, what went wrong?', a: 'Two things to check: Developer mode needs to be on, and you need to select the unzipped folder, not the ZIP file itself. If the folder has a manifest.json at its top level, you picked the right one.' },
   { q: 'Do I need to be a member?', a: 'The extension is free to install, and anyone can browse. But active GBTI membership is required to participate: publishing articles, projects, and prompts, sharing URLs that earn referral revenue, commenting, joining the member directory, reading member-only content, and the other network benefits all require it. Without the right privileges, the gate blocks those actions. A free account lets you read the community; a paid membership unlocks publishing and the rest.' },
-  { q: 'Can my AI agent publish for me?', a: 'Yes. The extension folder ships a GBTI MCP server, so an agent like Claude Code can draft, publish, and maintain your content through the same gated flow. Publishing still requires an active paid membership.' },
+  { q: 'Can my AI agent publish for me?', a: 'Yes. Paid members can run the GBTI MCP server, so an agent like Claude Code can draft, publish, and maintain your content through the same gated flow. The MCP guide in the WorkBench has the download and the setup steps.' },
 ];
 
 // sow-225: the prompt is single-sourced in src/lib/mcp-guide.ts, shared with the WorkBench guide page, and no
@@ -26,7 +27,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
 ---
 <BaseLayout
   title="Install the GBTI extension"
-  description="Install the GBTI Network browser extension from the Chrome Web Store in one click, or download the ZIP and load it unpacked. Sign in, edit your work in place, and publish through the network."
+  description="Install the GBTI Network browser extension from the Chrome Web Store in one click. Sign in, edit your work in place, and publish through the network."
 >
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
     <g id="i-dl"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
@@ -88,12 +89,9 @@ import { mcpPrompt } from '../../lib/mcp-guide';
       <h1 class="h1 mt20">Install the GBTI extension</h1>
       <p class="lead">The extension is how you sign in, edit your work in place, and publish through the network. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
       <div class="dl-btns">
-        {extensionIsListed && (
-          <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="blogo blogo-chrome"></span> Add to Chrome</a>
-        )}
-        <a class={`btn btn-lg ${extensionIsListed ? 'btn-ghost' : 'btn-primary'}`} href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="19" height="19"><use href="#i-dl"/></svg> Download unpacked</a>
+        <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="blogo blogo-chrome"></span> Add to Chrome</a>
       </div>
-      <p class="dl-sub">{extensionIsListed ? 'The Chrome Web Store install is one click and updates on its own. The unpacked ZIP is for developers or browsers without the store.' : 'ZIP · load unpacked'}</p>
+      <p class="dl-sub">One click from the Chrome Web Store, and it updates on its own.</p>
       <div class="browsers hero-browsers">
         <span class="bchip"><span class="blogo blogo-chrome"></span> Chrome</span>
         <span class="bchip">
@@ -111,9 +109,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
             <path fill="#fff" d="M24 13l5.5 2.6-1.2 7.4 3 3-7.3 5-7.3-5 3-3-1.2-7.4z" opacity=".96"/>
             <path fill="#f8521e" d="M24 22l2.2 3.2-2.2 1.6-2.2-1.6z"/>
           </svg></span> Brave</span>
-        {extensionIsListed
-          ? <a class="bchip bchip-live" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="d"></span> On the Chrome Web Store</a>
-          : <span class="bchip soon"><span class="d"></span> Chrome Web Store soon</span>}
+        <a class="bchip bchip-live" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="d"></span> On the Chrome Web Store</a>
       </div>
     </div>
   </section>
@@ -178,109 +174,18 @@ import { mcpPrompt } from '../../lib/mcp-guide';
     </div>
   </section>
 
-  <!-- ============ INSTALL WALKTHROUGH ============ -->
+  <!-- ============ TRUST ============ -->
   <section class="band tint" id="install">
     <div class="wrap">
-      <div class="sec-head center">
-        <p class="eyebrow">Advanced · unpacked install</p>
-        <h2 class="h2 mt12">Load it as an unpacked extension</h2>
-        <p class="lead">Most people should use the Add to Chrome button above: it installs in one click and updates on its own. These manual steps are for developers, or for browsers without the Chrome Web Store. You download the ZIP and load it as an unpacked extension.</p>
-      </div>
-
-      <div class="steps mt40">
-        <!-- step 1 -->
-        <div class="step">
-          <div class="step-rail"><span class="step-num">1</span><span class="step-line"></span></div>
-          <div class="step-body">
-            <h3>Download and unzip</h3>
-            <p>Download the ZIP, then unzip it. Keep the unzipped folder somewhere you will not delete it. The browser loads the extension from that folder.</p>
-            <div class="step-shot">
-              <a class="btn btn-primary" href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="18" height="18"><use href="#i-dl"/></svg> Download the extension</a>
-            </div>
-          </div>
-        </div>
-        <!-- step 2 -->
-        <div class="step">
-          <div class="step-rail"><span class="step-num">2</span><span class="step-line"></span></div>
-          <div class="step-body">
-            <h3>Open the extensions page</h3>
-            <p>In the address bar, type <span class="kbd">chrome://extensions</span> and press Enter. On Edge it is <span class="kbd">edge://extensions</span>; on Brave, <span class="kbd">brave://extensions</span>.</p>
-            <div class="step-shot bw">
-              <div class="bw-bar">
-                <span class="bw-dots"><i></i><i></i><i></i></span>
-                <span class="bw-url"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> chrome://extensions</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- step 3 -->
-        <div class="step">
-          <div class="step-rail"><span class="step-num">3</span><span class="step-line"></span></div>
-          <div class="step-body">
-            <h3>Turn on Developer mode</h3>
-            <p>Flip the <b>Developer mode</b> toggle in the top-right corner. This is what lets you load an extension from a folder.</p>
-            <div class="step-shot bw">
-              <div class="bw-page">
-                <div class="xp-head">
-                  <span class="xp-title"><span class="xp-burger"><i></i><i></i><i></i></span> Extensions</span>
-                  <span class="xp-dev">Developer mode <span class="xp-toggle"></span></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- step 4 -->
-        <div class="step">
-          <div class="step-rail"><span class="step-num">4</span><span class="step-line"></span></div>
-          <div class="step-body">
-            <h3>Click Load unpacked</h3>
-            <p>A row of buttons appears under the header. Click <b>Load unpacked</b>.</p>
-            <div class="step-shot bw">
-              <div class="bw-page">
-                <div class="xp-head">
-                  <span class="xp-title"><span class="xp-burger"><i></i><i></i><i></i></span> Extensions</span>
-                  <span class="xp-dev">Developer mode <span class="xp-toggle"></span></span>
-                </div>
-                <div class="xp-tools">
-                  <span class="xp-btn primary"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><use href="#i-plus"/></svg> Load unpacked</span>
-                  <span class="xp-btn">Pack extension</span>
-                  <span class="xp-btn">Update</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- step 5 -->
-        <div class="step">
-          <div class="step-rail"><span class="step-num">5</span><span class="step-line"></span></div>
-          <div class="step-body">
-            <h3>Select the unzipped folder</h3>
-            <p>Pick the folder you unzipped in step 1. The GBTI Network extension shows up in your list and its icon appears in the toolbar. That is it.</p>
-            <div class="step-shot bw">
-              <div class="bw-page">
-                <div class="xp-card">
-                  <span class="xp-ico">G</span>
-                  <span class="xp-meta">
-                    <span class="xp-name">GBTI Network</span>
-                    <span class="xp-desc">Edit and publish your work in place.</span>
-                    <span class="xp-ver">v{EXTENSION.version}</span>
-                  </span>
-                  <span class="xp-on">● On</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- trust -->
-      <div class="trust mt40">
+      <div class="trust">
         <span class="itile"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg></span>
         <div class="t">
           <h3>Your GitHub sign-in stays on your machine</h3>
           <p>The extension talks to GitHub directly from your browser. We never see or store your token, and you can sign out or remove the extension at any time.</p>
         </div>
       </div>
+      <p class="dev-note">Building the extension from source? The steps are in the <a class="link" href="https://github.com/gbti-network/gbti.network/blob/main/extension/README.md" target="_blank" rel="noopener">extension README</a>.</p>
     </div>
   </section>
 
@@ -309,7 +214,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
       <div class="sec-head center">
         <p class="eyebrow">Publish with your AI agent</p>
         <h2 class="h2 mt12">It ships with a GBTI MCP server</h2>
-        <p class="lead">The extension folder also carries a GBTI MCP server. Connect it to Claude Code or any MCP client and your agent can publish new content and maintain what you have already shipped, through the same gated flow you use in the browser.</p>
+        <p class="lead">Paid members can also run the GBTI MCP server. Connect it to Claude Code or any MCP client and your agent can publish new content and maintain what you have already shipped, through the same gated flow you use in the browser. The <a class="link" href="/workbench/mcp/">MCP guide</a> has the download and the setup steps.</p>
       </div>
 
       <div class="mcp-grid mt40">
@@ -366,9 +271,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
       <h2 class="h2" style="color:#fff">Edit and publish your work in place</h2>
       <p class="lead" style="max-width:560px;margin:16px auto 0">Install the free extension, then sign in to start drafting and publishing through the GBTI Network.</p>
       <div class="hero-c-cta">
-        {extensionIsListed
-          ? <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener">Add to Chrome</a>
-          : <a class="btn btn-primary btn-lg" href={extensionZipUrl} download>Download the extension</a>}
+        <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener">Add to Chrome</a>
         <a class="btn btn-ghost btn-lg" href="/membership/">See membership</a>
       </div>
     </div>
@@ -467,18 +370,6 @@ import { mcpPrompt } from '../../lib/mcp-guide';
     .feat-card p { color: var(--fg-soft); margin-top: 9px; font-size: 15.5px; line-height: 1.55; }
 
     /* ---- vertical step walkthrough ---- */
-    .steps { max-width: 920px; margin-left: auto; margin-right: auto; }
-    .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; position: relative; padding-bottom: 40px; }
-    .step:last-child { padding-bottom: 0; }
-    .step-rail { display: flex; flex-direction: column; align-items: center; }
-    .step-num { width: 46px; height: 46px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; background: var(--paper); border: 1.5px solid var(--line-2); font-family: var(--f-display); font-weight: 800; font-size: 19px; color: var(--green-700); box-shadow: var(--sh-sm); position: relative; z-index: 2; }
-    .step-line { flex: 1; width: 2px; background: var(--line); margin-top: 6px; }
-    .step:last-child .step-line { display: none; }
-    .step-body { padding-top: 6px; min-width: 0; }
-    .step-body h3 { font-family: var(--f-display); font-weight: 700; font-size: 20px; }
-    .step-body p { color: var(--fg-soft); margin-top: 8px; font-size: 16px; line-height: 1.55; }
-    .kbd { font-family: var(--f-mono); font-size: 13.5px; background: var(--tint); border: 1.5px solid var(--line-2); border-radius: var(--r-xs); padding: 2px 8px; color: var(--fg); white-space: nowrap; }
-    .step-shot { margin-top: 18px; }
 
     /* ---- realistic browser/chrome mockup (pinned light in both themes) ---- */
     .bw { border-radius: var(--r-lg); overflow: hidden; border: 1.5px solid #dadce0; box-shadow: var(--sh-lg); background: #fff; color: #202124; text-align: left; }
@@ -488,26 +379,9 @@ import { mcpPrompt } from '../../lib/mcp-guide';
     .bw-dots i:nth-child(1) { background: #ed6a5e; } .bw-dots i:nth-child(2) { background: #f4be4f; } .bw-dots i:nth-child(3) { background: #61c454; }
     .bw-url { margin-left: 8px; flex: 1 1 auto; min-width: 0; background: #fff; border: 1px solid #e3e5e8; border-radius: 999px; padding: 6px 14px; font-family: var(--f-mono); font-size: 12.5px; color: #3c4043; display: inline-flex; align-items: center; gap: 9px; }
     .bw-url svg { width: 13px; height: 13px; flex: none; color: #5f6368; }
-    .bw-page { padding: 18px 20px 22px; background: #fff; }
-    .xp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid #e8eaed; }
-    .xp-title { font-size: 17px; font-weight: 600; color: #202124; display: flex; align-items: center; gap: 12px; }
-    .xp-burger { display: inline-flex; flex-direction: column; gap: 3px; }
-    .xp-burger i { width: 15px; height: 2px; background: #5f6368; border-radius: 2px; display: block; }
-    .xp-dev { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: #3c4043; }
-    .xp-toggle { width: 34px; height: 18px; border-radius: 999px; background: #1a73e8; position: relative; flex: none; }
-    .xp-toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
-    .xp-tools { display: flex; gap: 10px; padding: 14px 0 4px; flex-wrap: wrap; }
-    .xp-btn { font-size: 13px; font-weight: 600; color: #1a73e8; border: 1px solid #dadce0; border-radius: 999px; padding: 7px 16px; background: #fff; display: inline-flex; align-items: center; gap: 8px; }
-    .xp-btn.primary { background: #e8f0fe; border-color: #d2e3fc; }
-    .xp-card { display: flex; align-items: center; gap: 16px; border: 1px solid #e8eaed; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(60,64,67,.1); }
-    .xp-ico { width: 44px; height: 44px; border-radius: 9px; background: var(--green); color: #fff; flex: none; display: flex; align-items: center; justify-content: center; font-family: var(--f-display); font-weight: 800; font-size: 24px; }
-    .xp-meta { flex: 1; min-width: 0; }
-    .xp-name { font-size: 15px; font-weight: 600; color: #202124; display: block; }
-    .xp-desc { font-size: 12.5px; color: #5f6368; margin-top: 2px; display: block; }
-    .xp-ver { font-family: var(--f-mono); font-size: 11px; color: #80868b; margin-top: 4px; display: block; }
-    .xp-on { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #1e8e3e; font-weight: 600; flex: none; }
 
     /* ---- trust callout (tokens adapt to dark theme) ---- */
+    .dev-note { text-align: center; font-size: 14px; color: var(--fg-mute); margin-top: 18px; }
     .trust { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; max-width: 920px; margin-left: auto; margin-right: auto; padding: 26px 30px; border-radius: var(--r-lg); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); }
     .trust .itile { background: var(--paper); border-color: var(--green-tint-2); width: 52px; height: 52px; flex: none; }
     .trust .t { flex: 1; min-width: 240px; }
@@ -526,8 +400,6 @@ import { mcpPrompt } from '../../lib/mcp-guide';
     @media (max-width: 1080px) { .feat-grid { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 760px) {
       .feat-grid { grid-template-columns: 1fr; }
-      .step { grid-template-columns: 42px 1fr; gap: 16px; }
-      .step-num { width: 38px; height: 38px; font-size: 16px; }
     }
   </style>
 </BaseLayout>
