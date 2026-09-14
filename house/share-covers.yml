@@ -1,0 +1,285 @@
+# Share cover copies (sow-283). WRITTEN BY THE share-covers WORKFLOW (scripts/share-covers.mjs); do not hand-edit.
+#
+# One entry per public share whose cover we host, keyed <author>/<share id>:
+#   source    the outside image URL the copy was made from (for a lookup, the preview image the page named)
+#   lookup    present when the share had no image and its link's page was read for a preview image
+#   file      the copy under members/<author>/shares/images/, named <id>-<first 8 of sha256>.webp
+#   sha256    of that file; the switch compares it with what gbti.network serves before pointing the share at it
+#   failed    why the last attempt failed; triedAt is when. Only timeouts, unreachable hosts and 5xx are retried,
+#             after 7 days. A changed image or link is a new source and is always tried.
+covers:
+  atwellpub/20260610-astro-content-layer:
+    lookup: https://docs.astro.build/en/guides/content-collections/
+    source: https://docs.astro.build/open-graph/en/guides/content-collections.webp
+    file: 20260610-astro-content-layer-158eedff.webp
+    sha256: 158eedffd55fb063a45c81bbd5c5f5afc6042c450e53e8be8b2d9330d8ec186a
+    copiedAt: '2026-09-14'
+  atwellpub/20260701192642-github-juliusbrussee-caveman-why-use-many-token-:
+    source: https://opengraph.githubassets.com/a295e4c19d9bc8e4101f4975102e743be795e12d1f615db4386e8c3af04d5a4e/JuliusBrussee/caveman
+    file: 20260701192642-github-juliusbrussee-caveman-why-use-many-token--03f40dd3.webp
+    sha256: 03f40dd3f47ea994cb815fa4a574c8dcb99e071bf6f9c3dc50f25e936997a7cf
+    copiedAt: '2026-09-14'
+  atwellpub/20260709164536-lane-8-summer-2026-mixtape-live-from-the-mishawa:
+    source: https://i.ytimg.com/vi/N_GfH09iP9c/maxresdefault.jpg
+    file: 20260709164536-lane-8-summer-2026-mixtape-live-from-the-mishawa-b4e28e64.webp
+    sha256: b4e28e64807ed6bafc4ed151fef30bf5e3b21768061f83526700e6d435ba35c4
+    copiedAt: '2026-09-14'
+  atwellpub/20260709194309-neo-s-hands-an-api-to-the-physical-world:
+    source: https://cdn.sanity.io/images/qka6yvsc/production/dda3401c63234b7b18047dbbb610c6b2ace0b2c1-1800x945.jpg?fit=max&amp;auto=format
+    file: 20260709194309-neo-s-hands-an-api-to-the-physical-world-6c74f1ba.webp
+    sha256: 6c74f1ba725dae7653b4d834bf05c9cbf001484b5eec26a23db91535d65eeac1
+    copiedAt: '2026-09-14'
+  atwellpub/20260716214203-my-dad-beat-dark-souls-as-his-first-game-it-chan:
+    source: https://i.ytimg.com/vi/t76sOtfvgNk/maxresdefault.jpg
+    file: 20260716214203-my-dad-beat-dark-souls-as-his-first-game-it-chan-39974a9c.webp
+    sha256: 39974a9cf23866c9102cc9acdda6527329cee9471a7e552a2a8943abdab8dcf3
+    copiedAt: '2026-09-14'
+  atwellpub/20260719202520-wordpress-down-with-cloudflare-522-how-i-traced-:
+    lookup: https://alikhallad.com/wordpress-cloudflare-522-sql-injection-php-fpm/
+    failed: no-preview
+    triedAt: '2026-09-14'
+  atwellpub/20260722174805-ninety-minutes-watching-attackers-weaponize-the-:
+    source: https://wp.patchstack.com/wp-content/uploads/2026/06/supply-chain.png
+    file: 20260722174805-ninety-minutes-watching-attackers-weaponize-the--ae069736.webp
+    sha256: ae06973609519d02e4929c28f322f3c5049ebd4b9da062442b8abed454cdd9a9
+    copiedAt: '2026-09-14'
+  atwellpub/20260724161542-protecting-our-floss-commons-from-llms-codeberg-:
+    lookup: https://blog.codeberg.org/protecting-our-floss-commons-from-llms.html
+    failed: no-preview
+    triedAt: '2026-09-14'
+  atwellpub/20260725154654-boomer-does-not-shy-on-his-approach-to-agentic-p:
+    source: https://pbs.twimg.com/profile_images/2037262183751704577/54AiU968_200x200.jpg
+    file: 20260725154654-boomer-does-not-shy-on-his-approach-to-agentic-p-fbd697b8.webp
+    sha256: fbd697b86b0f7424fc3003afa4b2475b16e57fd0ff1aaded0849a55a29c59290
+    copiedAt: '2026-09-14'
+  atwellpub/20260727145151-the-future-of-the-website-joost-blog:
+    source: https://joost.blog/og/future-of-the-website.webp
+    file: 20260727145151-the-future-of-the-website-joost-blog-51b501a6.webp
+    sha256: 51b501a68098dd01613d5c19beed855df38ae00a579621e8296c8b663fd126e1
+    copiedAt: '2026-09-14'
+  atwellpub/20260727150212-the-website-specification-github-technical-websi:
+    source: https://specification.website/og-default.png
+    file: 20260727150212-the-website-specification-github-technical-websi-82919011.webp
+    sha256: 82919011ac7df30ff9e247833c9ce1abd0e04fb6f3a4424d21e5b1a51d0fefbb
+    copiedAt: '2026-09-14'
+  atwellpub/20260727185959-stravinsky-the-rite-of-spring-london-symphony-or:
+    source: https://i.ytimg.com/vi/EkwqPJZe8ms/maxresdefault.jpg
+    file: 20260727185959-stravinsky-the-rite-of-spring-london-symphony-or-23c6b293.webp
+    sha256: 23c6b29343c257b5e89d576e39c8a465c2193c6de551e48ff669c39920de3f86
+    copiedAt: '2026-09-14'
+  atwellpub/20260728175434-attention-is-all-you-need-wikipedia:
+    source: https://upload.wikimedia.org/wikipedia/commons/8/8f/The-Transformer-model-architecture.png
+    file: 20260728175434-attention-is-all-you-need-wikipedia-a42957ba.webp
+    sha256: a42957ba14d10c906e05b17ddbe7918375fd642d45737ccbd4293e306d4ec9fc
+    copiedAt: '2026-09-14'
+  atwellpub/20260729172829-fiverr-shares-plunge-after-earnings-miss-and-sha:
+    lookup: https://finviz.com/news/374108/fiverr-shares-plunge-after-earnings-miss-and-sharp-cut-to-full-year-outlook
+    failed: no-preview
+    triedAt: '2026-09-14'
+  atwellpub/20260730140524-microsoft-open-sources-ai-video-codec-with-major:
+    lookup: https://techcommunity.microsoft.com/blog/linuxandopensourceblog/announcing-the-open-source-release-of-ml-video-codec-mlvc/4539875
+    source: https://techcommunity.microsoft.com/t5/s/gxcuf89792/images/bS00NTM5ODc1LURtMmdZUQ?revision=11
+    file: 20260730140524-microsoft-open-sources-ai-video-codec-with-major-4cdfb620.webp
+    sha256: 4cdfb620c38964507e15f3278ed09e1dc97bc11ce715977cce3e25f269871472
+    copiedAt: '2026-09-14'
+  atwellpub/20260731234802-octane-react:
+    source: https://octanejs.dev/og-image.png
+    file: 20260731234802-octane-react-9ce82130.webp
+    sha256: 9ce821300dbedf4ba954f3030d8883510dd30a5699b5698aaf13691876fe9635
+    copiedAt: '2026-09-14'
+  atwellpub/20260804235654-meinl-cymbals-the-adrian-belew-power-trio-b:
+    source: https://i.ytimg.com/vi/V4WW3urYrlg/maxresdefault.jpg
+    file: 20260804235654-meinl-cymbals-the-adrian-belew-power-trio-b-59e87158.webp
+    sha256: 59e87158493ad06b93333c5aefa6cad4968bdf89f33c0b8704fe3dc7f7eb8aaa
+    copiedAt: '2026-09-14'
+  atwellpub/20260806035138-share:
+    source: https://i.ytimg.com/vi/MBxhzARQNeo/maxresdefault.jpg
+    file: 20260806035138-share-fab2b763.webp
+    sha256: fab2b763291fadfc7771ff7489597adf7c02c11a8f081f10bc10503aa93d6291
+    copiedAt: '2026-09-14'
+  atwellpub/20260806144002-what-s-even-graph-and-loop-engineering:
+    source: https://i.ytimg.com/vi/w2HL2RauMwE/maxresdefault.jpg
+    file: 20260806144002-what-s-even-graph-and-loop-engineering-04aa68f4.webp
+    sha256: 04aa68f481e41650620056f7751c44ac6a9f2de37d66a1811f2494037d3f4695
+    copiedAt: '2026-09-14'
+  atwellpub/20260806173613-thveit-official-announcement-trailer:
+    source: https://i.ytimg.com/vi/c5uI80Nevhk/maxresdefault.jpg
+    file: 20260806173613-thveit-official-announcement-trailer-021266fb.webp
+    sha256: 021266fbb65e8149b67d0b000be7dc852ddea0f6d94139c5151cccdfb5e44d6d
+    copiedAt: '2026-09-14'
+  atwellpub/20260807183652-can-qwen-3-8-max-beat-fable-5:
+    source: https://i.ytimg.com/vi/yzNl4SLoSDI/maxresdefault.jpg
+    file: 20260807183652-can-qwen-3-8-max-beat-fable-5-92a2ef61.webp
+    sha256: 92a2ef6177aa49dd3aafddd517ea47b054ba4f04859ea53f0ea49a80276f85d6
+    copiedAt: '2026-09-14'
+  atwellpub/20260810211238-the-new-impossible-engine:
+    source: https://i.ytimg.com/vi/JPS2bAx80rk/maxresdefault.jpg
+    file: 20260810211238-the-new-impossible-engine-0b42e32b.webp
+    sha256: 0b42e32b6e213d764de597df9fe2193bfd458d9fafc9870a3f3cd741710b71ed
+    copiedAt: '2026-09-14'
+  atwellpub/20260811145524-discord-music-bot-alternatives-for-self-hosted-s:
+    source: https://savepoint.fm/blog-images/discord-music-bot-alternatives/hero-animated.webp
+    file: 20260811145524-discord-music-bot-alternatives-for-self-hosted-s-cb84b613.webp
+    sha256: cb84b613fac2da6f2ca5cad660d574c85f6dc267eac095e3709f1dc8b4187103
+    copiedAt: '2026-09-14'
+  atwellpub/20260811152736-wanna-get-feat-m4ni4:
+    source: https://i.ytimg.com/vi/7CMoq5KUMY4/maxresdefault.jpg
+    file: 20260811152736-wanna-get-feat-m4ni4-76191207.webp
+    sha256: 76191207f04880720e2e2795023588622386b94d13ee32eb4cfcf1568dfe070e
+    copiedAt: '2026-09-14'
+  atwellpub/20260812033745-how-i-host-800k-free-minecraft-servers:
+    source: https://i.ytimg.com/vi/yc0rwKXB1fo/maxresdefault.jpg
+    file: 20260812033745-how-i-host-800k-free-minecraft-servers-8e56662a.webp
+    sha256: 8e56662aa25fa54390f7503cb4a3e67e0c104862cdcf3bad0a861ad50f945fb7
+    copiedAt: '2026-09-14'
+  atwellpub/20260812155206-the-most-powerful-laser-you-ve-never-heard-of:
+    source: https://i.ytimg.com/vi/fp-jHYiTUVY/maxresdefault.jpg
+    file: 20260812155206-the-most-powerful-laser-you-ve-never-heard-of-20fe6648.webp
+    sha256: 20fe66486e9349dd81ba23be7c1ab6766d51dc4820bbfbcf0bb1156eba8553eb
+    copiedAt: '2026-09-14'
+  atwellpub/20260812203354-ana-vidovic-2025-classical-guitar-concert-siccas:
+    source: https://i.ytimg.com/vi/lL9Mabl1Hzo/maxresdefault.jpg
+    file: 20260812203354-ana-vidovic-2025-classical-guitar-concert-siccas-3acf130a.webp
+    sha256: 3acf130ab65d37c8df1cbb0d75da141964e95cf6b077c10fc6b25194c9a76699
+    copiedAt: '2026-09-14'
+  atwellpub/20260814155751-the-legend-of-zelda-a-link-to-the-past-musical-p:
+    source: https://i.ytimg.com/vi/tDBVo59Od30/maxresdefault.jpg
+    file: 20260814155751-the-legend-of-zelda-a-link-to-the-past-musical-p-5f23bb4d.webp
+    sha256: 5f23bb4d43f08b5d4e9ea6d9d6440a29efc8dabd0ec7508c933705f04b35b994
+    copiedAt: '2026-09-14'
+  atwellpub/20260815180104-ai-plays-age-of-empires-ii:
+    source: https://i.ytimg.com/vi/ZBdAe3ZwKds/maxresdefault.jpg
+    file: 20260815180104-ai-plays-age-of-empires-ii-a04a6429.webp
+    sha256: a04a6429538534244cfedd4a6eb976ca700eb1120cb1a831a0b8754a633a3bb8
+    copiedAt: '2026-09-14'
+  atwellpub/20260820180352-real-world-assets-arrive-on-coinmarketcap-pro-ap:
+    lookup: https://coinmarketcap.com/academy/article/real-world-assets-rwas-arrive-coinmarketcap-pro-api
+    source: https://academy-public.coinmarketcap.com/optimized-uploads/90c37abeb70f4f678e56636c18763071.jpg
+    file: 20260820180352-real-world-assets-arrive-on-coinmarketcap-pro-ap-a2ece3a8.webp
+    sha256: a2ece3a8c31ffa70bb5ae28b9112d04a0139e5153d3fdca5d161344e596091a0
+    copiedAt: '2026-09-14'
+  atwellpub/20260824204257-this-small-ai-will-change-everything:
+    source: https://i.ytimg.com/vi/wMl6c_r0ubw/maxresdefault.jpg
+    file: 20260824204257-this-small-ai-will-change-everything-68b1e2ef.webp
+    sha256: 68b1e2ef21814bafb3848ce63a05b1041dd968c5a9b1d5d548bc5ed230371b0c
+    copiedAt: '2026-09-14'
+  atwellpub/20260825172553-wordpress-studio-is-now-agentic-try-the-beta:
+    lookup: https://wordpress.com/blog/2026/08/24/studio-agentic-beta/
+    source: https://en-blog.files.wordpress.com/2026/08/studio-agentic-beta.png?fit=1200%2C756
+    file: 20260825172553-wordpress-studio-is-now-agentic-try-the-beta-2cd6e9a6.webp
+    sha256: 2cd6e9a607bf9f1dfa9460f6fd6d61a5018fec5b34638da671d767394ca01a4a
+    copiedAt: '2026-09-14'
+  atwellpub/20260826205127-ox-alpha-fully-tested-so-this-is-glm-5-5-it-s-cr:
+    source: https://i.ytimg.com/vi/_IZMECHru6o/maxresdefault.jpg
+    file: 20260826205127-ox-alpha-fully-tested-so-this-is-glm-5-5-it-s-cr-c33bddf0.webp
+    sha256: c33bddf02b3323770803b11f62ee0317f57874e3983fc20eebb9f1e87be5288d
+    copiedAt: '2026-09-14'
+  atwellpub/20260829044327-how-one-programmer-created-the-most-complex-zomb:
+    source: https://i.ytimg.com/vi/FL2cCHJtiDk/maxresdefault.jpg
+    file: 20260829044327-how-one-programmer-created-the-most-complex-zomb-f0f48fdc.webp
+    sha256: f0f48fdc50824cce36bc27c6d2256c5ba4fe693e653c67d7b11f05ffcbb27ce3
+    copiedAt: '2026-09-14'
+  atwellpub/20260829045601-claude-opus-5-took-7-hours-to-build-this-game:
+    source: https://i.ytimg.com/vi/MsFYd8EdAXw/maxresdefault.jpg
+    file: 20260829045601-claude-opus-5-took-7-hours-to-build-this-game-1c5717f8.webp
+    sha256: 1c5717f824ca58ab75e1b198ee0f1f2e913c59b51e65b328739854f5ee291c49
+    copiedAt: '2026-09-14'
+  atwellpub/20260831172148-tailcat-an-open-source-cli-for-tailscale-s-wireg:
+    source: https://cdn.sanity.io/images/w77i7m8x/production/eba95bf72cac81675e8f0bd6fc62e757eac2dac4-2304x1188.png
+    file: 20260831172148-tailcat-an-open-source-cli-for-tailscale-s-wireg-e7623de6.webp
+    sha256: e7623de603171bbf3c92c812fa89a2af0f561d7b1ceca4680814fd949cabbf45
+    copiedAt: '2026-09-14'
+  atwellpub/20260831194459-where-is-my-session-find-any-claude-code-session:
+    source: https://marcelschmitz.com/posts/where-is-my-session-claude-code/og.png
+    file: 20260831194459-where-is-my-session-find-any-claude-code-session-cafefcb5.webp
+    sha256: cafefcb596ac145ca1b01c077b38f4d880478f8ccfb23214cb5f6ecd2f3087dd
+    copiedAt: '2026-09-14'
+  atwellpub/20260901160027-kingdom-of-zeal-live-at-magfest-2026-chrono-trig:
+    source: https://i.ytimg.com/vi/XquRhzxpw1M/maxresdefault.jpg
+    file: 20260901160027-kingdom-of-zeal-live-at-magfest-2026-chrono-trig-d7ead01f.webp
+    sha256: d7ead01f2222304dcd8658e64c2c259adebca52a19d595c326d943ea2bdc256c
+    copiedAt: '2026-09-14'
+  atwellpub/20260902164520-paul-mccartney-the-backyard-full-audio-tape-30th:
+    source: https://i.ytimg.com/vi/npZZgHcfHqM/maxresdefault.jpg
+    file: 20260902164520-paul-mccartney-the-backyard-full-audio-tape-30th-165e5e31.webp
+    sha256: 165e5e316a06924b91d8737a6e79f903e0ccb39cb62c5901194f9dd5434d00c2
+    copiedAt: '2026-09-14'
+  gbtilabs/20260718172929-introducing-the-voice-agent-builder:
+    source: https://x.ai/images/news/grok-voice-agent-builder.webp
+    file: 20260718172929-introducing-the-voice-agent-builder-a7502643.webp
+    sha256: a7502643cc3932dd178a868fd4f31422ba38ddceaa3093a4f7905391c56ce1e8
+    copiedAt: '2026-09-14'
+  gbtilabs/20260725175210-don-t-become-a-content-creator-build-a-content-b:
+    source: https://i.ytimg.com/vi/ZvAwqGH_79Q/maxresdefault.jpg
+    file: 20260725175210-don-t-become-a-content-creator-build-a-content-b-31c8b6a1.webp
+    sha256: 31c8b6a1143e89f53908f936f5da7490ecf5f888878daab5eb870eb8b85a1669
+    copiedAt: '2026-09-14'
+  gbtilabs/20260728024925-x-money-launches-us-payments-with-yields-up-to-6:
+    lookup: https://crypto.news/x-money-launches-us-payments-with-yields-up-to-6/
+    source: https://media.crypto.news/2024/01/crypto-news-Elon-Musk-option06.webp
+    file: 20260728024925-x-money-launches-us-payments-with-yields-up-to-6-f38f084c.webp
+    sha256: f38f084c924de17417f77f39a355598919378c9c9900e14d38ad1c98ea5fdad4
+    copiedAt: '2026-09-14'
+  gbtilabs/20260731205656-national-system-administrator-appreciation-day-d:
+    source: https://www.daysoftheyear.com/cdn-cgi/image/dpr=1%2Cf=jpeg%2Cfit=cover%2Cheight=675%2Cq=85%2Cwidth=1200/wp-content/uploads/system-administrator-appreciation-day1-scaled.jpg
+    file: 20260731205656-national-system-administrator-appreciation-day-d-64e48376.webp
+    sha256: 64e4837671633953b53c092013324ba681cb38a29349c8f260ab1b07f1dfb0b6
+    copiedAt: '2026-09-14'
+  gbtilabs/20260804170617-announcing-topcoat-a-framework-for-building-full:
+    lookup: https://tokio.rs/blog/2026-07-22-announcing-topcoat
+    failed: no-preview
+    triedAt: '2026-09-14'
+  gbtilabs/20260806172150-the-shai-hulud-npm-worm-of-august-4-2026-full-br:
+    source: https://production-storage-studioglobal.s3.ap-southeast-1.amazonaws.com/chat/EORaotpyJOhXQrnzEaHzxW1xXhD2/images/B26D0E09BBC7E9C44AF3/AE52497A233F14D18F85.png
+    file: 20260806172150-the-shai-hulud-npm-worm-of-august-4-2026-full-br-3809df7d.webp
+    sha256: 3809df7db2ace316db9b29b1a0a3e6eedc44d81883bcf18975ef0aa4f4ff4db7
+    copiedAt: '2026-09-14'
+  gbtilabs/20260818223500-why-i-run-2-4-gb-ai-models-24-7:
+    source: https://i.ytimg.com/vi/9LkxI2H3gI0/maxresdefault.jpg
+    file: 20260818223500-why-i-run-2-4-gb-ai-models-24-7-21871f8e.webp
+    sha256: 21871f8e86948e538afd68a8c96a63b770842ccc83b4783bc71ad1281e28d9c2
+    copiedAt: '2026-09-14'
+  gbtilabs/20260824034822-old-tvs-were-particle-accelerators:
+    source: https://i.ytimg.com/vi/20ZhzyT2HR0/maxresdefault.jpg
+    file: 20260824034822-old-tvs-were-particle-accelerators-56b5ed96.webp
+    sha256: 56b5ed966501541d73fb5e899b8721fe63ba5b61142c1b1bca494c3cbb4f58b8
+    copiedAt: '2026-09-14'
+  gbtilabs/20260825182308-dolly-parton-everything-s-beautiful-in-its-own-w:
+    source: https://i.ytimg.com/vi/QAwKI_buYuo/maxresdefault.jpg
+    file: 20260825182308-dolly-parton-everything-s-beautiful-in-its-own-w-22522e92.webp
+    sha256: 22522e92ca1f8afbb7fe75bc646f89cadae68421e6edaafad61a221a8b7afae6
+    copiedAt: '2026-09-14'
+  gbtilabs/20260825214934-reddit-citations-are-dropping-in-chatgpt-promptw:
+    source: https://promptwatch.com/meta.png
+    file: 20260825214934-reddit-citations-are-dropping-in-chatgpt-promptw-b81ab3c6.webp
+    sha256: b81ab3c66e80180a3a2a4e6a98177d52c0403a10a276fcbc10a4e3001cdb0b8e
+    copiedAt: '2026-09-14'
+  gbtilabs/20260826131343-every-song-and-radio-station-we-ve-spotted-in-th:
+    source: https://kotaku.com/app/uploads/2025/05/0f109d881f799bde51423dbbea7fa909-1200x675.jpg
+    file: 20260826131343-every-song-and-radio-station-we-ve-spotted-in-th-7126247b.webp
+    sha256: 7126247b215023469d8f9b4eb7a2a5e2182fc537ed918625ba4907be511f973c
+    copiedAt: '2026-09-14'
+  gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi:
+    source: https://mlq.ai/static/mlq/og-default.png
+    failed: http-403
+    triedAt: '2026-09-14'
+  gbtilabs/20260911163712-lg-tv-flaws-could-let-attackers-listen-in-even-i:
+    source: https://www.malwarebytes.com/wp-content/uploads/sites/2/2026/09/LG_logo.png
+    file: 20260911163712-lg-tv-flaws-could-let-attackers-listen-in-even-i-4bcc3a7b.webp
+    sha256: 4bcc3a7bf75591258ab6a117d43ba5008b77626ff7794c16dc14e86895319f52
+    copiedAt: '2026-09-14'
+  gbtilabs/20260911175150-gigi-d-agostino-l-amour-toujours-kirche-lichtens:
+    source: https://i.ytimg.com/vi/iLlZz_DMa4U/hqdefault.jpg
+    file: 20260911175150-gigi-d-agostino-l-amour-toujours-kirche-lichtens-68f5b3c0.webp
+    sha256: 68f5b3c0a1553ed214b6d733d6f77ed08a9ff8b6147a1e75b41abe924df9574e
+    copiedAt: '2026-09-14'
+  gbtilabs/20260913033508-guided-by-voices-medley-recorded-on-4-track:
+    source: https://i.ytimg.com/vi/xqGjfMLInBE/maxresdefault.jpg
+    file: 20260913033508-guided-by-voices-medley-recorded-on-4-track-d089179c.webp
+    sha256: d089179c8818e1909eece7d2fc88428db42af25e536d2d5ca9d5bb1bbd789b55
+    copiedAt: '2026-09-14'
+  nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
+    source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
+    file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
+    sha256: 8c3d2e0a6c525f88d1c1f12658238bc8e2501ba737d557ec49753620b923d9ca
+    copiedAt: '2026-09-14'
