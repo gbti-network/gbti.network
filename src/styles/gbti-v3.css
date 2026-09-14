@@ -1438,7 +1438,8 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 /* sow-174: a color preset the author chose instead of uploading a banner image. `data-preset` is only ever
    present when there is no hero image (resolveHero() in project-page.mjs makes the two mutually exclusive),
    so these never compete with a real banner. The hex values mirror src/lib/banner-presets.mjs, the one JS
-   source of truth for the six options (see that file for why they cannot instead be a shared CSS variable).
+   source of truth for the eight options (see that file for why they cannot instead be a shared CSS variable;
+   test/project-categories.test.mjs fails when a key here and a key there disagree).
    "ink" restates the base rule above verbatim: it is today's existing default look, reachable both as the
    implicit no-choice fallback and as an explicit pick. */
 .pd-hero[data-preset="green"] { background: linear-gradient(150deg, #1f9e5f, #25232b); }
@@ -1447,6 +1448,8 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .pd-hero[data-preset="wordpress"] { background: linear-gradient(150deg, #5a8de0, #25232b); }
 .pd-hero[data-preset="ide-plugins"] { background: linear-gradient(150deg, #9277d4, #25232b); }
 .pd-hero[data-preset="mods"] { background: linear-gradient(150deg, #d8a847, #25232b); }
+.pd-hero[data-preset="utilities"] { background: linear-gradient(150deg, #3bb0a4, #25232b); }
+.pd-hero[data-preset="chrome-extensions"] { background: linear-gradient(150deg, #e0584a, #25232b); }
 /* Anchored to the TOP of the frame, not the middle. The existing project banners are 3:1 strips with their
    artwork in the lower-left, and the hero crops to roughly 5.7:1; a centred crop slices that artwork in half,
    while a top crop drops it cleanly. The scrim is near-opaque over the lower third anyway, so nothing that

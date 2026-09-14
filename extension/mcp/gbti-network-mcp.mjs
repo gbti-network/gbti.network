@@ -16967,7 +16967,9 @@ var BANNER_PRESETS = [
   // today's existing default hero, unchanged
   { key: "wordpress", label: "WordPress", from: "#5a8de0", to: "#25232b" },
   { key: "ide-plugins", label: "IDE Plugins", from: "#9277d4", to: "#25232b" },
-  { key: "mods", label: "Mods", from: "#d8a847", to: "#25232b" }
+  { key: "mods", label: "Mods", from: "#d8a847", to: "#25232b" },
+  { key: "utilities", label: "Utilities", from: "#3bb0a4", to: "#25232b" },
+  { key: "chrome-extensions", label: "Chrome Extensions", from: "#e0584a", to: "#25232b" }
 ];
 var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 

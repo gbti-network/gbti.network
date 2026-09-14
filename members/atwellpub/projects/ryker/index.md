@@ -26,7 +26,7 @@ platforms:
 icon: ./images/ryker-icon-128x128.webp
 iconLarge: ./images/ryker-icon-256x256.webp
 featuredImage: ./images/thumbnail.jpg
-bannerPreset: green
+bannerPreset: chrome-extensions
 gallery:
   - ./images/ryker-shot-1.webp
   - ./images/ryker-shot-2.webp

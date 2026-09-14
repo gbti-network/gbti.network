@@ -8,6 +8,7 @@ import { Image } from 'astro:assets';
 import Avatar from '../Avatar.astro';
 import { isStub, catalogHref } from '../../lib/content';
 import { leafLabel } from '../../lib/taxonomy';
+import { PROJECT_CATEGORIES, categoryOf, categoryStyle } from '../../lib/project-categories.mjs';
 import { authorDisplay, authorHref, authorAvatar, formatDate } from '../../lib/authors';
 import FavoriteButton from '../FavoriteButton.astro';
 import { favoriteCount } from '../../lib/favorites';
@@ -24,24 +25,15 @@ const projects = typeof limit === 'number' ? allProducts.slice(0, limit) : allPr
 // Author profiles, so attribution shows the real avatar and links only when a profile page exists.
 const profileByUser = new Map((await getCollection('profile')).map((p) => [p.data.username, p.data]));
 
-// Map a project's taxonomy LEAF to the design's four directory categories (colour + glyph + chip).
-const DESIGN_CAT: Record<string, { key: string; label: string; cls: string; g: string }> = {
-  wordpress: { key: 'wp', label: 'WordPress', cls: 'c-wp', g: 'g-wp' },
-  'ide-plugins': { key: 'ide', label: 'IDE Plugins', cls: 'c-ide', g: 'g-ide' },
-  mods: { key: 'mod', label: 'Mods', cls: 'c-mod', g: 'g-mod' },
-  utilities: { key: 'util', label: 'Utilities', cls: 'c-util', g: 'g-util' },
-};
-const leafKeyOf = (p: any) => p.data.categories?.[p.data.categories.length - 1] ?? '';
-const catOf = (p: any) =>
-  DESIGN_CAT[leafKeyOf(p)] ?? { key: 'other', label: leafLabel(p.data.categories) || 'Project', cls: 'c-util', g: 'g-util' };
+// sow-269: a project's family (colour + glyph + chip) comes from the one shared list, so the directory, the
+// "Recently created" row and the featured spotlight cannot name different sets again.
+const catOf = (p: any) => categoryOf(p.data.categories, leafLabel(p.data.categories));
 
-// Toolbar filters: only the design categories actually present (in the shown set), in a stable order.
-const ORDER = ['wp', 'ide', 'mod', 'util'];
+// Toolbar filters: only the families actually present (in the shown set), in the shared list's order.
 const present = new Set(projects.map((p) => catOf(p).key));
-const filters = [{ key: 'all', label: 'All', g: 'g-grid' }, ...ORDER.filter((k) => present.has(k)).map((k) => {
-  const c = Object.values(DESIGN_CAT).find((d) => d.key === k)!;
-  return { key: k, label: c.label, g: c.g };
-})];
+const filters = [{ key: 'all', label: 'All', g: 'g-grid' }, ...PROJECT_CATEGORIES.filter((c) => present.has(c.key)).map((c) => (
+  { key: c.key, label: c.label, g: c.glyph }
+))];
 
 const paidOf = (p: any) => p.data.pricing && p.data.pricing !== 'free';
 const desc = (p: any) => p.data.shortDescription ?? '';
@@ -52,6 +44,8 @@ const desc = (p: any) => p.data.shortDescription ?? '';
   <g id="g-ide"><path d="M6 8l4 4-4 4M13 16h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
   <g id="g-mod"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 3v9m0 0l8-4.5M12 12l-8-4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></g>
   <g id="g-util"><path d="M12 3l2.1 6.6L21 12l-6.9 2.4L12 21l-2.1-6.6L3 12l6.9-2.4z" fill="currentColor"/></g>
+  <g id="g-chrome"><path d="M5.5 7.5h3.5a2 2 0 1 1 4 0h3.5v3.5a2 2 0 1 1 0 4v3.5h-11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></g>
+  <g id="g-other"><rect x="5.5" y="5.5" width="13" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="2"/></g>
   <g id="g-arrow"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
   <g id="g-search"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20.5 20.5l-4.2-4.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
   <g id="g-grid"><rect x="4" y="4" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="currentColor"/></g>
@@ -80,13 +74,13 @@ const desc = (p: any) => p.data.shortDescription ?? '';
       return (
         <article class="prow card card-hover" data-cat={c.key} data-name={`${p.data.title} ${desc(p)}`.toLowerCase()}>
           <div class="prow-icons">
-            <span class:list={['pico', c.cls]} aria-hidden="true"><svg viewBox="0 0 24 24"><use href={`#${c.g}`}/></svg></span>
+            <span class="pico" style={categoryStyle(c)} aria-hidden="true"><svg viewBox="0 0 24 24"><use href={`#${c.glyph}`}/></svg></span>
             <Image class="prow-icon" src={p.data.icon} width={50} height={50} alt={`${p.data.title} icon`} />
           </div>
           <div class="prow-main">
             <div class="prow-head">
               <h3 class="prow-name"><a href={catalogHref(p)}>{p.data.title}</a></h3>
-              <span class:list={['pchip', c.cls]}>{c.label}</span>
+              <span class="pchip" style={categoryStyle(c)}>{c.label}</span>
               {paidOf(p) && <span class="pchip-paid">Paid</span>}
               {isStub(p) && (
                 <span class="pchip-paid" style="display:inline-flex;align-items:center;gap:4px">
@@ -129,11 +123,7 @@ const desc = (p: any) => p.data.shortDescription ?? '';
 
 <style>
   /* ---- project directory (ported from the /projects/ page; shared by home + projects) ---- */
-  .c-wp   { --ca:#2f63c0; --cb:#5a8de0; --ct:#eef3fc; --cl:#bcd0f0; }
-  .c-ide  { --ca:#6b4fb0; --cb:#9277d4; --ct:#f2eefb; --cl:#d6c9ee; }
-  .c-mod  { --ca:#b3791f; --cb:#d8a847; --ct:#fbf3e3; --cl:#ecd9ad; }
-  .c-util { --ca:#138178; --cb:#3bb0a4; --ct:#e7f5f3; --cl:#b6e0da; }
-
+  /* sow-269: the family shades (--ca/--cb/--ct/--cl) arrive inline from src/lib/project-categories.mjs. */
   .pico { border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center; color: #fff;
     background: linear-gradient(145deg, var(--cb), var(--ca)); box-shadow: 0 4px 12px rgba(37,35,43,.14); }
   .pico svg { width: 52%; height: 52%; }

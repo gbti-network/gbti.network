@@ -7,6 +7,7 @@ import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
 import Avatar from '../Avatar.astro';
 import { leafLabel } from '../../lib/taxonomy';
+import { categoryOf, categoryStyle } from '../../lib/project-categories.mjs';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
 
 interface Props {
@@ -19,14 +20,8 @@ const { projects, project, eyebrow = "Editor's pick", heading = 'Featured projec
 const items = (projects ?? (project ? [project] : [])).filter(Boolean);
 const profileByUser = new Map((await getCollection('profile')).map((p) => [p.data.username, p.data]));
 
-const DESIGN_CAT: Record<string, { label: string; cls: string }> = {
-  wordpress: { label: 'WordPress', cls: 'c-wp' },
-  'ide-plugins': { label: 'IDE Plugins', cls: 'c-ide' },
-  mods: { label: 'Mods', cls: 'c-mod' },
-  utilities: { label: 'Utilities', cls: 'c-util' },
-};
-const leafKeyOf = (p: any) => p.data.categories?.[p.data.categories.length - 1] ?? '';
-const catOf = (p: any) => DESIGN_CAT[leafKeyOf(p)] ?? { label: leafLabel(p.data.categories) || 'Project', cls: 'c-util' };
+// sow-269: the family colour comes from the one shared list (see ProjectDirectory.astro).
+const catOf = (p: any) => categoryOf(p.data.categories, leafLabel(p.data.categories));
 const isSlider = items.length > 1;
 ---
 {items.length > 0 && (
@@ -54,7 +49,7 @@ const isSlider = items.length > 1;
           const author = p.data.author;
           return (
             <div class="pfeat-slide">
-              <article class:list={['pfeat', 'card', c.cls]}>
+              <article class="pfeat card" style={categoryStyle(c)}>
                 <div class="pfeat-media">
                   <span class="pfeat-flag"><span class="chip-dot" style="background:#fff"></span> Featured</span>
                   {cover
@@ -62,7 +57,7 @@ const isSlider = items.length > 1;
                     : <Image class="pfeat-icon" src={p.data.icon} width={120} height={120} alt={`${p.data.title} icon`} />}
                 </div>
                 <div class="pfeat-body">
-                  <span class:list={['pchip', c.cls]}>{c.label}</span>
+                  <span class="pchip">{c.label}</span>
                   <h2 class="h2">{p.data.title}</h2>
                   <p class="lead">{p.data.shortDescription ?? ''}</p>
                   <div class="pfeat-cta">
@@ -87,10 +82,6 @@ const isSlider = items.length > 1;
 )}
 
 <style>
-  .c-wp   { --ca:#2f63c0; --cb:#5a8de0; --ct:#eef3fc; --cl:#bcd0f0; }
-  .c-ide  { --ca:#6b4fb0; --cb:#9277d4; --ct:#f2eefb; --cl:#d6c9ee; }
-  .c-mod  { --ca:#b3791f; --cb:#d8a847; --ct:#fbf3e3; --cl:#ecd9ad; }
-  .c-util { --ca:#138178; --cb:#3bb0a4; --ct:#e7f5f3; --cl:#b6e0da; }
   .pchip { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: 11px; font-weight: 500; letter-spacing: .02em;
     padding: 4px 9px; border-radius: 4px; border: 1.5px solid var(--cl); color: var(--ca); background: var(--ct); white-space: nowrap; }
   .prow-author { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--fg-mute); white-space: nowrap; }

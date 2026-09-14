@@ -7,6 +7,7 @@ import ProjectDirectory from '../../components/projects/ProjectDirectory.astro';
 import FeaturedProject from '../../components/projects/FeaturedProject.astro';
 import { isPublic, isListed, catalogHref } from '../../lib/content';
 import { leafLabel } from '../../lib/taxonomy';
+import { categoryOf, categoryStyle } from '../../lib/project-categories.mjs';
 import { authorDisplay, authorAvatar } from '../../lib/authors';
 
 // GBTI Projects directory (V3 "GBTI Projects" design). Server-rendered from the real project collection.
@@ -18,16 +19,8 @@ const productEntries = (await getCollection('project')).filter(isListed);
 const applets = (await getCollection('applet')).filter(isListed);
 const projects = [...productEntries, ...applets];
 
-// Map a project's taxonomy LEAF to the design's four directory categories (colour + glyph + chip).
-const DESIGN_CAT: Record<string, { key: string; label: string; cls: string; g: string }> = {
-  wordpress: { key: 'wp', label: 'WordPress', cls: 'c-wp', g: 'g-wp' },
-  'ide-plugins': { key: 'ide', label: 'IDE Plugins', cls: 'c-ide', g: 'g-ide' },
-  mods: { key: 'mod', label: 'Mods', cls: 'c-mod', g: 'g-mod' },
-  utilities: { key: 'util', label: 'Utilities', cls: 'c-util', g: 'g-util' },
-};
-const leafKeyOf = (p: any) => p.data.categories?.[p.data.categories.length - 1] ?? '';
-const catOf = (p: any) =>
-  DESIGN_CAT[leafKeyOf(p)] ?? { key: 'other', label: leafLabel(p.data.categories) || 'Project', cls: 'c-util', g: 'g-util' };
+// sow-269: the family colour + glyph come from the one shared list (see ProjectDirectory.astro).
+const catOf = (p: any) => categoryOf(p.data.categories, leafLabel(p.data.categories));
 
 const byNewest = [...projects].sort(
   (a, b) => (b.data.publishedAt?.valueOf() ?? 0) - (a.data.publishedAt?.valueOf() ?? 0),
@@ -90,7 +83,7 @@ import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177
           {recent.map((p) => {
             const c = catOf(p);
             return (
-              <article class:list={['scard', 'card', 'card-hover', c.cls]}>
+              <article class="scard card card-hover" style={categoryStyle(c)}>
                 <div class="scard-media">
                   <span class="scard-new">New</span>
                   {p.data.banner
@@ -98,7 +91,7 @@ import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177
                     : <Image class="scard-icon" src={p.data.icon} width={64} height={64} alt={`${p.data.title} icon`} />}
                 </div>
                 <div class="scard-body">
-                  <div class="flex items-center justify-between g12"><span class:list={['pchip', c.cls]}>{c.label}</span><span class="scard-when">{relTime(p.data.publishedAt)}</span></div>
+                  <div class="flex items-center justify-between g12"><span class="pchip">{c.label}</span><span class="scard-when">{relTime(p.data.publishedAt)}</span></div>
                   <h3 class="scard-name mt12"><a href={catalogHref(p)}>{p.data.title}</a></h3>
                   <p class="scard-desc">{desc(p)}</p>
                   <div class="scard-foot"><a class="link" href={catalogHref(p)}>View details <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#g-arrow"/></svg></a></div>
@@ -131,7 +124,7 @@ import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177
                     <div class="cmt-meta"><span class="on">commented on</span> <a href={catalogHref(p)}>{p.data.title}</a></div></div>
                 </div>
                 <p class="cmt-body" set:html={cm.rendered?.html ?? ''} />
-                <div class="cmt-prod"><span class:list={['pico', c.cls]}><svg viewBox="0 0 24 24"><use href={`#${c.g}`}/></svg></span><span class="nm">{c.label}</span></div>
+                <div class="cmt-prod"><span class="pico" style={categoryStyle(c)}><svg viewBox="0 0 24 24"><use href={`#${c.glyph}`}/></svg></span><span class="nm">{c.label}</span></div>
               </article>
             );
           })}
@@ -146,11 +139,7 @@ import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177
     .phero .lead { max-width: 580px; margin: 16px auto 0; }
     .browse-band { padding: 40px 0 64px; }
 
-    /* category palettes (used by the recently-created cards + comments chips) */
-    .c-wp   { --ca:#2f63c0; --cb:#5a8de0; --ct:#eef3fc; --cl:#bcd0f0; }
-    .c-ide  { --ca:#6b4fb0; --cb:#9277d4; --ct:#f2eefb; --cl:#d6c9ee; }
-    .c-mod  { --ca:#b3791f; --cb:#d8a847; --ct:#fbf3e3; --cl:#ecd9ad; }
-    .c-util { --ca:#138178; --cb:#3bb0a4; --ct:#e7f5f3; --cl:#b6e0da; }
+    /* sow-269: the family shades (--ca/--cb/--ct/--cl) arrive inline from src/lib/project-categories.mjs. */
 
     .pico { border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center; color: #fff;
       background: linear-gradient(145deg, var(--cb), var(--ca)); box-shadow: 0 4px 12px rgba(37,35,43,.14); }
