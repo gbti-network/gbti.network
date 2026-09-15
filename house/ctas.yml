@@ -22,7 +22,7 @@ ctas:
     button: Get the book on Amazon
     destination: https://www.amazon.com/dp/0441788386?tag=jakolorbbookc-20
     partner: amazon
-    enabled: false
+    enabled: true
     note: >-
       The standard Ace paperback, ISBN 0441788386, on the GBTI Amazon Associates tag jakolorbbookc-20. Direct
       link by the Amazon rule above. Owner decision 2026-09-15.
