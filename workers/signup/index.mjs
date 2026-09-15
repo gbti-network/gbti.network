@@ -45,7 +45,8 @@ import {
   discordExchangeCode,
   discordFetchUser,
 } from './oauth.mjs';
-import { verifyTurnstile, rateLimit } from './abuse.mjs';
+import { verifyTurnstileDetailed, rateLimit } from './abuse.mjs';
+import { wantsHtml, turnstileRejectedPage } from './turnstile-page.mjs'; // the page a browser gets for a spent token
 import { runSignup } from './signup.mjs';
 import { resolveCustomerId, createCheckout } from './checkout.mjs';
 import { buildCheckoutPriceMap, resolveCheckoutPrice } from '../../membership/checkout-prices.mjs'; // sow-185 3b: multi-price allowlist
@@ -310,13 +311,22 @@ async function handleStart(request, env) {
 
   // Abuse checks FIRST, before any OAuth or registry work.
   const turnstileToken = url.searchParams.get('cf-turnstile-response') || '';
-  const ok = await verifyTurnstile({ token: turnstileToken, secret: env.TURNSTILE_SECRET_KEY, remoteIp: ip });
+  const ts = await verifyTurnstileDetailed({ token: turnstileToken, secret: env.TURNSTILE_SECRET_KEY, remoteIp: ip });
+  const ok = ts.ok;
   // `hadResponse` separates a bot or an expired widget (a solution was sent, it did not verify) from a client that
   // never solved at all, which is what a broken or blocked Turnstile widget on our OWN page looks like. The second
   // is our fault and the first is not, and they are the same 403 to the caller.
   // NOT named hadToken: devlog-core redacts any key matching /token|secret|.../i, so that name would have logged
   // "<redacted>" forever and the distinction this line exists to draw would never have appeared.
-  if (!ok) { funnel('start rejected', { reason: 'turnstile', hadResponse: Boolean(turnstileToken) }); return json({ error: 'turnstile_failed' }, 403); }
+  // `codes` is Cloudflare's reason (timeout-or-duplicate for a spent or expired token), so the log answers the
+  // question on its own. A BROWSER landing here has just spent its token (a second tap, Back and tap again, a reload
+  // of this page: measured 2026-09-15, first tap accepted, two more with the same token seconds later) and gets a
+  // page saying so; a script caller keeps the JSON it always had.
+  if (!ok) {
+    funnel('start rejected', { reason: 'turnstile', hadResponse: Boolean(turnstileToken), codes: ts.codes });
+    if (wantsHtml(request)) return new Response(turnstileRejectedPage(request, env), { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+    return json({ error: 'turnstile_failed' }, 403);
+  }
 
   const rl = await rateLimit({ kv: env.SIGNUP_KV, ip });
   if (!rl.allowed) { funnel('start rejected', { reason: 'rate_limited' }); return json({ error: 'rate_limited' }, 429); }

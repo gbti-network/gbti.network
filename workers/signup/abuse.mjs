@@ -6,17 +6,23 @@
 const TURNSTILE_VERIFY = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 /**
- * Verify a Cloudflare Turnstile token against siteverify. Returns true only when Cloudflare reports
- * success. Any network error, non-2xx response, or success:false returns false (fail closed).
+ * Verify a Cloudflare Turnstile token against siteverify and say WHY when it fails: `{ ok, codes }`, where codes
+ * are Cloudflare's own error-codes (timeout-or-duplicate, invalid-input-response, ...) or one of ours for a failure
+ * before Cloudflare answered (missing-input-response, missing-input-secret, siteverify-http-<status>,
+ * siteverify-unreachable). Fails closed exactly as verifyTurnstile: any doubt is `ok: false`. The codes are for the
+ * LOG, never the caller: a visitor sees the same 403 whatever the reason. 2026-09-15: a colleague's repeat tap read
+ * as "signup is broken in Ireland" because the log said only "turnstile"; the answer was timeout-or-duplicate.
  *
  * @param {object} a
  * @param {string} a.token      the cf-turnstile-response token from the client.
  * @param {string} a.secret     TURNSTILE_SECRET_KEY.
  * @param {string} [a.remoteIp] the connecting IP (CF-Connecting-IP), optional but recommended.
  * @param {typeof fetch} [fetchImpl]
+ * @returns {Promise<{ ok: boolean, codes: string[] }>}
  */
-export async function verifyTurnstile({ token, secret, remoteIp }, fetchImpl = globalThis.fetch) {
-  if (!token || !secret) return false;
+export async function verifyTurnstileDetailed({ token, secret, remoteIp }, fetchImpl = globalThis.fetch) {
+  if (!token) return { ok: false, codes: ['missing-input-response'] };
+  if (!secret) return { ok: false, codes: ['missing-input-secret'] };
   const body = new URLSearchParams({ secret, response: token });
   if (remoteIp) body.set('remoteip', remoteIp);
   let data;
@@ -26,12 +32,23 @@ export async function verifyTurnstile({ token, secret, remoteIp }, fetchImpl = g
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
     });
-    if (!res.ok) return false;
+    if (!res.ok) return { ok: false, codes: [`siteverify-http-${res.status}`] };
     data = JSON.parse(await res.text());
   } catch {
-    return false; // fail closed
+    return { ok: false, codes: ['siteverify-unreachable'] }; // fail closed
   }
-  return data?.success === true;
+  if (data?.success === true) return { ok: true, codes: [] };
+  const codes = Array.isArray(data?.['error-codes']) ? data['error-codes'].map((c) => String(c).slice(0, 40)).slice(0, 5) : [];
+  return { ok: false, codes: codes.length ? codes : ['success-false'] };
+}
+
+/**
+ * Verify a Cloudflare Turnstile token against siteverify. Returns true only when Cloudflare reports
+ * success. Any network error, non-2xx response, or success:false returns false (fail closed).
+ * The boolean face of verifyTurnstileDetailed, kept for the callers that only need the answer.
+ */
+export async function verifyTurnstile(args, fetchImpl = globalThis.fetch) {
+  return (await verifyTurnstileDetailed(args, fetchImpl)).ok;
 }
 
 /**

@@ -378,9 +378,14 @@ const year = new Date().getFullYear();
     setTimeout(function () {
       if (!window.turnstile && tsNote && btn && btn.disabled) tsNote.hidden = false;
     }, 8000);
+    // A Turnstile token is SINGLE USE and the Worker verifies it before anything else. Spend it and drop it in the
+    // same tap, so a second tap while the phone is still navigating, or Back and another tap, can never send a
+    // redeemed token to /signup/start again (2026-09-15: a colleague's first tap was accepted and the next two,
+    // seconds later, carried the same token and read as a broken signup). The sign-in page already did this.
     if (btn) btn.addEventListener('click', function () {
       var token = btn.dataset.token;
       if (!token) return;
+      window.gbtiTurnstileReset();
       var u = new URL(signupBase + '/signup/start');
       u.searchParams.set('cf-turnstile-response', token);
       var code = input && input.value ? input.value.trim() : '';
@@ -389,6 +394,13 @@ const year = new Date().getFullYear();
       var via = cookie(viaCookie); if (via) u.searchParams.set('via', via);
       if (touchEnabled) { var sid = cookie(sidCookie); if (sid) u.searchParams.set('sid', sid); }
       window.location.href = u.toString();
+    });
+    // Back/forward cache restores this page whole: enabled button, stale token, and no expiry callback (the page
+    // was frozen, not running), so the normal way back from GitHub would replay a spent token. Force a fresh check.
+    window.addEventListener('pageshow', function (e) {
+      if (!e.persisted) return;
+      window.gbtiTurnstileReset();
+      try { if (window.turnstile) window.turnstile.reset(); } catch (err) { /* widget not mounted yet */ }
     });
 
     // The design's theme toggle, wired to the site's html[data-theme] + the persisted gbti-theme key.
