@@ -47,7 +47,8 @@ test('box: the success message comes from the helper, not a hard-coded promise',
 test('box: a signed-in member gets a link to the digest switch INSTEAD of the form (sow-202, owner 2026-09-13)', () => {
   // The switch on /account/notifications/ acts on the account's own address, so the form would ask a member for an
   // email the account already has. Both halves are CSS on the member signal's class: no script, no Worker call.
-  assert.match(COMPONENT, /<p class="dsub-member" data-dsub-member>[^<]*<a href="\/account\/notifications\/">Turn the weekly digest on or off in your notification settings<\/a>\.<\/p>/);
+  // Copy per owner, 2026-09-15: the sentence is just "You are signed in." and the link reads "Edit Notification Settings".
+  assert.match(COMPONENT, /<p class="dsub-member" data-dsub-member>You are signed in\. <a href="\/account\/notifications\/">Edit Notification Settings<\/a><\/p>/);
   assert.match(COMPONENT, /\n  \.dsub-member \{ display: none;/);
   assert.match(COMPONENT, /\n  :global\(html\.is-gbti-member\) \.dsub-member \{ display: block; \}\n/);
   assert.match(COMPONENT, /\n  :global\(html\.is-gbti-member\) \.dsub-form \{ display: none; \}\n/);
