@@ -21,6 +21,7 @@ import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
+import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { promptImageFraming } from '../../lib/prompt-page.mjs';
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 
@@ -228,6 +229,9 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
           )}
 
           <FavoritedBy type="prompt" slug={d.slug} aliases={aliasSlugsOf(d)} />
+
+          {/* sow-281: the partner CTA, its own card above the digest. Renders nothing unless an enabled CTA is assigned. */}
+          <CtaCard type="prompt" ref={d.slug} wrap="card" pad />
 
           <div class="card" style="padding:22px">
             <DigestSubscribe variant="rail" heading="The weekly digest" />

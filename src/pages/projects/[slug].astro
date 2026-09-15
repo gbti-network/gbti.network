@@ -34,6 +34,7 @@ import CategoryCrumbs from '../../components/CategoryCrumbs.astro'; // sow-174: 
 import { favoriteCount } from '../../lib/favorites';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
+import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import {
   normalizeGallery,
@@ -229,6 +230,9 @@ const lockedHint = (l: { encrypted?: boolean }) =>
           <div class="pd-block">
             <FavoritedBy type="project" slug={d.slug} aliases={aliasSlugsOf(d)} />
           </div>
+
+          {/* sow-281: the partner CTA above the digest block; nothing renders unless an enabled CTA is assigned. */}
+          <CtaCard type="project" ref={d.slug} wrap="pd-block" />
 
           <div class="pd-block">
             <DigestSubscribe variant="rail" heading="The weekly digest" />

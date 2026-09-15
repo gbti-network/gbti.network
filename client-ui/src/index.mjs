@@ -29,6 +29,8 @@ import './elements/gbti-coupon-manager.mjs'; // SOW-119: superadmin coupon manag
 import './elements/gbti-applications-manager.mjs'; // sow-293: superadmin creator-application review lane
 import './elements/gbti-site-settings-manager.mjs'; // sow-271: superadmin site-wide presentation toggles
 import './elements/gbti-outbound-link-manager.mjs'; // sow-289: the read-only outbound partner link board
+import './elements/gbti-cta-manager.mjs'; // sow-281: the superadmin CTA registry manager
+import './elements/gbti-cta-assignment.mjs'; // sow-281: the editor's read-only CTA line
 import './elements/gbti-syndication-tracker.mjs'; // SOW-058: superadmin syndication tracker
 import './elements/gbti-channel-map-manager.mjs'; // SOW-087: superadmin category-channel map + template + flag-word editor
 import './elements/gbti-edit-panel.mjs';

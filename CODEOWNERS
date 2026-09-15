@@ -38,6 +38,12 @@
 # tightening it. membership/path-rank.mjs carries the matching row and a test holds the two in lockstep.
 /house/syndication-config.yml  @atwellpub @gbtilabs
 
+# sow-281: the registered content CTAs (which partner links ride on which content, on whose affiliate tag) are
+# superadmin-tier. The CTA write ops are superadmin at the endpoint and this pin is the second authority, so an
+# admin cannot attach a paid link to any member's item by pull request. membership/path-rank.mjs carries the
+# matching row and test/path-rank.test.mjs holds the two in lockstep.
+/house/ctas.yml              @atwellpub @gbtilabs
+
 # SOW-022: applets are a SUPERADMIN-only content type (GBTI does not host member code). Explicit so the rule
 # holds even if /house/ is later delegated to an admin team. The collection glob also excludes member folders,
 # and validate-content rejects any members/*/applets/.

@@ -14,6 +14,7 @@ import { gatherInput } from '../form.mjs';
 import { resolveContentAsset } from '../assets.mjs'; // SOW-062 P3 + sow-165: resolve a cover/body image path to a loadable preview URL
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
 import './gbti-discussion.mjs'; // SOW-062 P6: the shared discussion thread, embedded in the editor for published items
+import './gbti-cta-assignment.mjs'; // sow-281: the read-only "which CTA does this item carry" line in the Links section
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174: the curated banner-color swatches
 import { detectLinkSource } from '../../../src/lib/project-page.mjs'; // sow-175: wordpress.org/github.com URL detection
@@ -353,6 +354,7 @@ class GbtiContentEditor extends GbtiElement {
         return html;
       }).join('');
       if (!inner) return '';
+      if (sec.title === 'Links') inner += `<gbti-cta-assignment type="${esc(this.type)}" ref="${esc(this.presetStr(p.slug) || '')}"></gbti-cta-assignment>`; // sow-281
       // sow-184 (design 3a): an at-a-glance hint on a section header, so a collapsed section still tells you what
       // it holds. Media only for now ("1 cover" / "2 images"); every other section carries no hint.
       const hint = sec.title === 'Media' ? mediaSummary(this.type, p) : '';

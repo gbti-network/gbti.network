@@ -32,6 +32,7 @@ const CORPUS = [
   'house/moderation-flags.yml',
   'house/site-settings.yml',
   'house/syndication-config.yml',
+  'house/ctas.yml', // sow-281
   'house/applets/hue/index.md',
   // Ordinary admin-tier house config and content.
   'house/taxonomy.yml',
@@ -83,6 +84,7 @@ test('the CODEOWNERS-pinned house files are Tier S, which is the behaviour that 
     'house/moderation-flags.yml',
     'house/site-settings.yml',
     'house/syndication-config.yml',
+    'house/ctas.yml', // sow-281
     'house/applets/hue/index.md',
   ]) {
     assert.equal(isTierS(p), true, `${p} must be Tier S: CODEOWNERS pins it to the two superadmins`);

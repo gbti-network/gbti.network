@@ -894,6 +894,14 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // "false" cannot switch a toggle ON (the Worker's siteToggleInput rejects a non-boolean regardless).
     siteSettings() { return workerGet('/membership/admin/site-settings'); }, // { ok, settings, toggles }
     async setSiteToggle(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'site-setting-set', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-281: the CTA registry (superadmin). ctaPool reads house/ctas.yml in full; the five writes land as
+    // auto-merged house PRs. `enabled` is coerced to a real boolean on the wire, as setSiteToggle does.
+    ctaPool() { return workerGet('/membership/admin/cta-pool'); }, // { ok, ctas, types }
+    async addCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-add', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async updateCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-update', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setCtaEnabled(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-toggle', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async assignCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-assign', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async unassignCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-unassign', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     // sow-161 increment 4: the news-source config manager (full pool read + the three write actions).
     newsSourcePool() { return workerGet('/membership/admin/news-source-pool'); }, // { ok, sources }
     async addNewsSource(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },

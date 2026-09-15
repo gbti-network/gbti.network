@@ -17,6 +17,9 @@ import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the
 import { validateTierDisplay } from '../membership/tiers-display.mjs'; // sow-185: the membership tier display data
 import { PAID_GRANT_TIERS } from '../membership/tier-gate.mjs'; // sow-185: the paid tiers a grandfather grant may name
 import { CATEGORY_NAMES } from '../workers/signup/news/config/categories.mjs'; // SOW-054: the canonical news category labels
+import { validateCtas } from '../membership/cta-edits.mjs'; // sow-281: the CTA registry rules
+import { assignmentsOf } from '../src/lib/ctas.mjs'; // sow-281
+import { ctaItemExists } from './lib/ctas-store.mjs'; // sow-281
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
@@ -623,6 +626,28 @@ function validateTiersConfig() {
   if (!r.ok) errors.push(`${rel}: ${r.error}`);
 }
 validateTiersConfig();
+
+// sow-281: the CTA registry (house/ctas.yml). Every CTA must pass the shared rules (the Amazon rule included) and
+// every assignment must name a content item that exists, so a superadmin's PR with a wrong slug fails HERE, at PR
+// time, with the slug in the message. The build itself does not refuse a wrong slug (it marks the assignment
+// unresolved so the manager can show it), which is why this check has to. A missing file is a fork with no CTAs.
+function validateCtaRegistry() {
+  const rel = 'house/ctas.yml';
+  if (!has(path.join(ROOT, rel))) return;
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  if (parsed === null || parsed === undefined) parsed = { ctas: [] };
+  const problems = validateCtas(parsed);
+  for (const p of problems) errors.push(`${rel}: ${p}`);
+  if (problems.length) return;
+  for (const a of assignmentsOf(parsed)) {
+    if (!ctaItemExists(ROOT, a.type, a.ref)) {
+      errors.push(`${rel}: CTA "${a.ctaId}" is assigned to ${a.type}:${a.ref}, which names no content item (a ${a.type === 'share' ? 'members/<author>/shares/<id>.md' : `members/*/${a.type}s/<slug>/index.md or house/${a.type}s/<slug>/index.md`} file). Fix the ref or unassign it in Admin, CTAs.`);
+    }
+  }
+}
+validateCtaRegistry();
 
 // sow-207 QA (2026-08-11): a taxonomy PRIMARY with no matching follow topic.
 //

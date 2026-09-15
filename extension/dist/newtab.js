@@ -11674,6 +11674,82 @@ ${String(body ?? "")}`;
   };
   define("gbti-discussion", GbtiDiscussion);
 
+  // client-ui/src/elements/gbti-cta-assignment.mjs
+  var SITE7 = "https://gbti.network";
+  var ADMIN = `${SITE7}/admin/`;
+  var CSS10 = `
+  :host { display:block; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); line-height:1.5; }
+  b { color:var(--fg); font-weight:600; }
+  a { color:var(--accent); }
+  .off { color:var(--warn, #c98a12); }
+  .lk { border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12px; font-weight:600; padding:3px 9px; cursor:pointer; margin-left:6px; }
+`;
+  var GbtiCtaAssignment = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["type", "ref"];
+    }
+    attributeChangedCallback() {
+      this._ctas = null;
+      this._failed = false;
+      if (this.isConnected) this.render();
+    }
+    connectedCallback() {
+      super.connectedCallback?.();
+      this.render();
+    }
+    async load() {
+      this._loading = true;
+      this._failed = false;
+      try {
+        const r = await fetch(`${SITE7}/ctas.json`, { cache: "no-cache" });
+        if (!r.ok) throw new Error(`ctas.json ${r.status}`);
+        const j = await r.json();
+        this._ctas = Array.isArray(j?.ctas) ? j.ctas : [];
+      } catch (e) {
+        this._ctas = null;
+        this._failed = true;
+        this._msg = `Could not read the CTA registry (${e?.message || "unknown error"}).`;
+      }
+      this._loading = false;
+      this.render();
+    }
+    /** The CTAs assigned to this item, enabled first. Exported logic for the tests via matchesFor. */
+    get matches() {
+      return matchesFor(this._ctas, this.getAttribute("type"), this.getAttribute("ref"));
+    }
+    render() {
+      const type = this.getAttribute("type") || "";
+      const ref = (this.getAttribute("ref") || "").trim();
+      if (!type || !ref) {
+        this.set(this.css(CSS10) + `<span>CTA: none yet. Save the item with a permalink first; a superadmin assigns a CTA in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+        return;
+      }
+      if (this._failed) {
+        this.set(this.css(CSS10) + `<span>${esc(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
+        this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
+        return;
+      }
+      if (!this._ctas) {
+        if (!this._loading) this.load();
+        this.set(this.css(CSS10) + `<span>CTA: checking...</span>`);
+        return;
+      }
+      const m = this.matches;
+      if (!m.length) {
+        this.set(this.css(CSS10) + `<span>CTA: <b>none</b>. A superadmin assigns one in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+        return;
+      }
+      const parts = m.map((c) => `<b>${esc(c.label || c.id)}</b>${c.enabled ? "" : ' <span class="off">(disabled, so it does not render)</span>'}`);
+      this.set(this.css(CSS10) + `<span>CTA: ${parts.join(", ")}. Managed by a superadmin in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+    }
+  };
+  function matchesFor(ctas, type, ref) {
+    const r = String(ref || "").trim();
+    if (!Array.isArray(ctas) || !type || !r) return [];
+    return ctas.filter((c) => Array.isArray(c?.items) && c.items.some((it) => it && it.type === type && it.ref === r)).sort((a, b) => (b.enabled === true) - (a.enabled === true));
+  }
+  define("gbti-cta-assignment", GbtiCtaAssignment);
+
   // src/lib/banner-presets.mjs
   var BANNER_PRESETS = [
     { key: "green", label: "Green", from: "#1f9e5f", to: "#25232b" },
@@ -12077,6 +12153,7 @@ ${String(body ?? "")}`;
           return html;
         }).join("");
         if (!inner) return "";
+        if (sec.title === "Links") inner += `<gbti-cta-assignment type="${esc(this.type)}" ref="${esc(this.presetStr(p.slug) || "")}"></gbti-cta-assignment>`;
         const hint = sec.title === "Media" ? mediaSummary(this.type, p) : "";
         const hintHtml = hint ? `<span class="rsec-sum">${esc(hint)}</span>` : "";
         return `<details ${open ? "open" : ""} class="rsec${cls ? " " + cls : ""}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
@@ -13917,7 +13994,7 @@ ${String(body ?? "")}`;
     }
     return "just now";
   }
-  var CSS10 = `
+  var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .count { display:inline-block; min-width:20px; text-align:center; margin-left:6px; padding:1px 7px; border-radius:999px;
     background:var(--accent); color:#fff; font-size:12px; font-weight:800; vertical-align:middle; }
@@ -13954,7 +14031,7 @@ ${String(body ?? "")}`;
       } catch {
         errored = true;
       }
-      this.set(this.css(CSS10) + this._html(list, errored));
+      this.set(this.css(CSS11) + this._html(list, errored));
       this.$$("[data-review]").forEach((b) => b.addEventListener("click", () => {
         this.dispatchEvent(new CustomEvent("contrib-open", { detail: { number: Number(b.dataset.review) }, bubbles: true, composed: true }));
       }));
@@ -14003,7 +14080,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-contrib-review.mjs
-  var CSS11 = `
+  var CSS12 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   h2 { font-size:18px; margin:0 0 4px; }
   .sub { color:var(--muted); font-size:13px; margin:0 0 14px; }
@@ -14102,17 +14179,17 @@ ${String(body ?? "")}`;
     render() {
       if (!this.client) return;
       if (this._error && !this._data) {
-        this.set(this.css(CSS11) + `<p class="err">${esc(this._error)}</p>`);
+        this.set(this.css(CSS12) + `<p class="err">${esc(this._error)}</p>`);
         return;
       }
       if (!this._data) {
-        this.set(this.css(CSS11) + `<p class="muted">Loading the contribution...</p>`);
+        this.set(this.css(CSS12) + `<p class="muted">Loading the contribution...</p>`);
         return;
       }
       const d = this._data;
       const body = this._tab === "preview" ? this._previewHtml() : this._diffHtml();
       this.set(
-        this.css(CSS11) + `<h2>${esc(d.title || "Contribution #" + d.number)}</h2>
+        this.css(CSS12) + `<h2>${esc(d.title || "Contribution #" + d.number)}</h2>
          <p class="sub">From ${d.author?.login ? "@" + esc(d.author.login) : "a member"} &middot;
            <a href="${esc(d.html_url || "#")}" target="_blank" rel="noopener">#${esc(d.number)} on GitHub</a></p>
          <div class="tabs" role="tablist">
@@ -14354,7 +14431,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-account.mjs
-  var SITE7 = "https://gbti.network";
+  var SITE8 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
   var STATUS_LABEL = {
@@ -14366,7 +14443,7 @@ ${String(body ?? "")}`;
     banned: "Suspended",
     unknown: "Unknown"
   };
-  var CSS12 = `
+  var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -14478,7 +14555,7 @@ ${String(body ?? "")}`;
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS12) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
+        this.set(this.css(CSS13) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
         return;
       }
       let appearance = "";
@@ -14487,12 +14564,12 @@ ${String(body ?? "")}`;
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS12) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
+        this.set(this.css(CSS13) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
         this._wire();
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS12) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE7}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS13) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE8}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -14502,7 +14579,7 @@ ${String(body ?? "")}`;
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS12) + sections);
+      this.set(this.css(CSS13) + sections);
       this._wire();
     }
     _account() {
@@ -14587,7 +14664,7 @@ ${String(body ?? "")}`;
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE7}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE8}/join?ref=${r.code}` : null);
       const invite = this._invite?.url || null;
       const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
@@ -14709,7 +14786,7 @@ ${String(body ?? "")}`;
     unindex: "Unindex this item? Its page asks search engines not to index it and it leaves the sitemap; the site still points at it (reversible).",
     reindex: "Reindex this item? Search engines are allowed to index it again."
   };
-  var CSS13 = `
+  var CSS14 = `
   :host { display:inline-flex; }
   .mod { display:inline-flex; gap:6px; align-items:center; }
   .ma { font:inherit; font-size:12px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
@@ -14743,7 +14820,7 @@ ${String(body ?? "")}`;
         return;
       }
       const btns = actions.map((a) => `<button class="ma ma-${a}" type="button" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
-      this.set(this.css(CSS13) + `<span class="mod">${btns}</span>`);
+      this.set(this.css(CSS14) + `<span class="mod">${btns}</span>`);
       this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._do(b.dataset.act)));
     }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
@@ -14797,7 +14874,7 @@ ${String(body ?? "")}`;
   // client-ui/src/elements/gbti-admin.mjs
   var RANK5 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS14 = `
+  var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .rolebar { display:flex; align-items:center; gap:8px; margin:0 0 2px; }
   .rolebar .lbl { font-size:13px; color:var(--muted); }
@@ -14832,7 +14909,7 @@ ${String(body ?? "")}`;
   var GbtiAdmin = class extends GbtiElement {
     async render() {
       if (!this.client) {
-        this.set(this.css(CSS14) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
+        this.set(this.css(CSS15) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
         return;
       }
       let role = "member";
@@ -14842,13 +14919,13 @@ ${String(body ?? "")}`;
       }
       const rank = RANK5[role] ?? 0;
       if (rank < RANK5.moderator) {
-        this.set(this.css(CSS14) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
+        this.set(this.css(CSS15) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
         return;
       }
       const caps = this.hasAttribute("caps") ? this.getAttribute("caps").split(",").map((s) => s.trim()).filter(Boolean) : null;
       const capOn = (g) => !caps || caps.includes(g);
       this.set(
-        this.css(CSS14) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
+        this.css(CSS15) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
 
          <div class="grp">
            <h4>Content moderation</h4>
@@ -14988,8 +15065,8 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
-  var SITE8 = "https://gbti.network";
-  var CSS15 = `
+  var SITE9 = "https://gbti.network";
+  var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
   .chip { font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; }
@@ -15071,7 +15148,7 @@ ${String(body ?? "")}`;
       const counts = {};
       await Promise.all(SAVED_TYPES.map(async (t) => {
         try {
-          const res = await fetch(`${SITE8}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE9}/${indexFileFor(t)}`, { cache: "no-cache" });
           const items = res.ok ? (await res.json()).items || [] : [];
           for (const it of items) {
             const a = String(it?.author || "").toLowerCase();
@@ -15184,19 +15261,19 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
         return;
       }
       if (this._error === "forbidden") {
-        this.set(this.css(CSS15) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
         return;
       }
       if (this._error === "auth") {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in to view the member roster.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Sign in to view the member roster.</p>`);
         return;
       }
       if (this._error) {
-        this.set(this.css(CSS15) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
         return;
       }
       if (!this._data) {
@@ -15204,7 +15281,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this._load();
         }
-        this.set(this.css(CSS15) + `<p class="muted">Loading the member roster...</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading the member roster...</p>`);
         return;
       }
       const s = this._data.summary || {};
@@ -15245,7 +15322,7 @@ ${String(body ?? "")}`;
         const panel = canManage && this._managing === m.githubId ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : "";
         return main + panel;
       }).join("");
-      this.set(this.css(CSS15) + `${chips}
+      this.set(this.css(CSS16) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Tier &amp; flags</th><th>Content</th><th>github_id</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status and tier follow ban &gt; staff &gt; grandfather &gt; Stripe. The override tiers (ban / staff / grandfather) are always authoritative from the public repo; the live Stripe tier shows when the admin Stripe endpoint is reachable. A <b>pending</b> (dashed) tag is a coupon grant a member has redeemed but reconcile has not yet folded into the repo: it is an annotation, not effective access yet, and it clears once the grant is recorded. Member actions open a house PR and take effect once it merges.</p>
       ${this._pullsSection()}
@@ -15267,7 +15344,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-category-manager.mjs
   var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS16 = `
+  var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; line-height:1.5; }
   .muted { color:var(--muted); font-size:13.5px; }
@@ -15318,7 +15395,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -15326,11 +15403,11 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS16) + `<p class="muted">Loading categories...</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Loading categories...</p>`);
         return;
       }
       this._paths = this._flatten(this._tree);
-      this.set(this.css(CSS16) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS17) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add-top">
         <input class="key" data-newtop-key type="text" placeholder="new-key (kebab-case)" />
@@ -15598,11 +15675,11 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
-  var SITE9 = "https://gbti.network";
+  var SITE10 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; --r7:7px; } /* default border radius is 7px (owner) */
   .muted { color:var(--muted); font-size:13.5px; }
   button { font:inherit; cursor:pointer; }
@@ -15798,7 +15875,7 @@ ${String(body ?? "")}`;
       const items = {};
       await Promise.all(Object.entries(INDEXES).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE9}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE10}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           items[type] = Array.isArray(data) ? data : data?.items || [];
         } catch {
@@ -15845,7 +15922,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS17) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -15853,7 +15930,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS17) + `<p class="muted">Loading the taxonomy…</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Loading the taxonomy…</p>`);
         return;
       }
       const plan = batchPlan(this._pending);
@@ -15866,7 +15943,7 @@ ${String(body ?? "")}`;
       </div>`;
       const body = `${this._newOpen ? this._newCatHtml() : ""}<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
       ${this._msg ? `<p class="msg">${this._msg}</p>` : ""}`;
-      this.set(this.css(CSS17) + header + body);
+      this.set(this.css(CSS18) + header + body);
       this._wire();
     }
     // SOW-100 QA (owner): a real add-category form — key, label, and a PARENT picker over the whole tree —
@@ -16017,7 +16094,7 @@ ${String(body ?? "")}`;
         return `<button class="cbtab${t === this._cbType ? " on" : ""}" type="button" data-cbtab="${t}">${TYPE_LABEL3[t]}<span class="n">${n}</span></button>`;
       }).join("");
       const rows = pg.items.map((it) => `<div class="cbrow">
-        <div style="min-width:0"><a href="${SITE9}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
+        <div style="min-width:0"><a href="${SITE10}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
         <div class="sub">@${esc(it.author || "")}${it.publishedAt ? ` · ${esc(relAge(Number(it.publishedAt), now))}` : ""}</div></div>
       </div>`).join("");
       const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
@@ -16252,7 +16329,7 @@ ${String(body ?? "")}`;
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
-  var SITE10 = "https://gbti.network";
+  var SITE11 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
@@ -16264,7 +16341,7 @@ ${String(body ?? "")}`;
     archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>'
   };
   var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     --panel2:color-mix(in srgb, var(--fg) 5%, var(--panel));
     --raise:color-mix(in srgb, var(--fg) 8%, var(--panel));
@@ -16430,7 +16507,7 @@ ${String(body ?? "")}`;
       const byTag = /* @__PURE__ */ new Map();
       await Promise.all(Object.entries(INDEXES2).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE10}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE11}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           for (const it of Array.isArray(data) ? data : data?.items || []) {
             for (const raw of it.tags || []) {
@@ -16485,7 +16562,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS18) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
         return;
       }
       const list = this._filtered();
@@ -16523,12 +16600,12 @@ ${String(body ?? "")}`;
           <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
         </div>
         ${this._actionUi(sel)}
-        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE10}${esc(i.url || "")}" target="_blank" rel="noopener">
+        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE11}${esc(i.url || "")}" target="_blank" rel="noopener">
           <div class="ititle">${esc(i.title)}</div>
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
         </a>`).join("")}</div>
       </div>` : `<div class="detail empty"><div><div class="ico">${TAG_ICO}</div><p>Select a tag to see the content carrying it.</p></div></div>`;
-      this.set(this.css(CSS18) + `
+      this.set(this.css(CSS19) + `
       <div class="top"><div><div class="eyebrow">Admin · Tags</div><div class="title">Tag manager</div></div>
         <div class="count"><b>${list.length}</b> of <b>${this._rows.length}</b> tags · <b>${uses}</b> uses</div></div>
       <div class="toolbar">
@@ -16605,7 +16682,7 @@ ${String(body ?? "")}`;
       return url || "";
     }
   };
-  var CSS19 = `
+  var CSS20 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -16653,7 +16730,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
         return;
       }
       if (!this._sources) {
@@ -16661,7 +16738,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS19) + `<p class="muted">Loading news sources...</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Loading news sources...</p>`);
         return;
       }
       const enabled = this._sources.filter((s) => s && s.enabled !== false).length;
@@ -16669,7 +16746,7 @@ ${String(body ?? "")}`;
         const on = s && s.enabled !== false;
         return `<li class="src ${on ? "" : "off"}"><div class="row"><code class="id">${esc(s.id || "")}</code><span class="nm">${esc(s.name || "")}</span><a class="url" href="${esc(s.url || "")}" target="_blank" rel="noopener nofollow">${esc(hostOf2(s.url))}</a><span class="sp"></span><button class="lk" type="button" data-toggle="${esc(s.id)}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(s.id)}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS20) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._sources.length} sources, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -16730,7 +16807,7 @@ ${String(body ?? "")}`;
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
   // client-ui/src/elements/gbti-quote-manager.mjs
-  var CSS20 = `
+  var CSS21 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -16776,7 +16853,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
+        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
         return;
       }
       if (!this._quotes) {
@@ -16784,7 +16861,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS20) + `<p class="muted">Loading quotes...</p>`);
+        this.set(this.css(CSS21) + `<p class="muted">Loading quotes...</p>`);
         return;
       }
       const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
@@ -16792,7 +16869,7 @@ ${String(body ?? "")}`;
         const on = q && q.enabled !== false;
         return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc(q.text || "")}</span><span class="by">${esc(q.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc(q.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(q.text || "")}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS20) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS21) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._quotes.length} quotes, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -16883,7 +16960,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var CSS21 = `
+  var CSS22 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -16965,7 +17042,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
         return;
       }
       if (!this._coupons) {
@@ -16973,7 +17050,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS21) + `<p class="muted">Loading coupons...</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Loading coupons...</p>`);
         return;
       }
       const rows = this._coupons.map((c) => {
@@ -16994,7 +17071,7 @@ ${String(body ?? "")}`;
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS21) + `
+      this.set(this.css(CSS22) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -17116,7 +17193,7 @@ ${String(body ?? "")}`;
   define("gbti-coupon-manager", GbtiCouponManager);
 
   // client-ui/src/elements/gbti-applications-manager.mjs
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -17164,7 +17241,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (admin) to review creator applications.</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (admin) to review creator applications.</p>`);
         return;
       }
       if (!this._apps) {
@@ -17172,12 +17249,12 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS22) + `<p class="muted">Loading applications...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading applications...</p>`);
         return;
       }
       const pending = this._apps.filter((a) => a.state === "pending").length;
       const rows = this._apps.map((a) => this._appHtml(a)).join("");
-      this.set(this.css(CSS22) + `
+      this.set(this.css(CSS23) + `
       <div class="head">
         <h3>Creator applications</h3>
         <span class="hint">${pending} awaiting a decision. Approving grants the ${tierLabel(TIER.creator)} plan immediately; there is no payment step.</span>
@@ -17226,7 +17303,7 @@ ${String(body ?? "")}`;
   define("gbti-applications-manager", GbtiApplicationsManager);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
-  var CSS23 = `
+  var CSS24 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
@@ -17271,7 +17348,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
         return;
       }
       if (!this._toggles) {
@@ -17279,14 +17356,14 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS23) + `<p class="muted">Loading site settings...</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Loading site settings...</p>`);
         return;
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
         return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc(t.label || t.key)}</span><span class="desc">${esc(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
@@ -17313,9 +17390,9 @@ ${String(body ?? "")}`;
   define("gbti-site-settings-manager", GbtiSiteSettingsManager);
 
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
-  var SITE11 = "https://gbti.network";
+  var SITE12 = "https://gbti.network";
   var WINDOWS = Object.freeze([7, 30]);
-  var CSS24 = `
+  var CSS25 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .hint { font-size:12.5px; color:var(--muted); }
@@ -17380,11 +17457,11 @@ ${String(body ?? "")}`;
       this.render();
       try {
         const [links, clicks] = await Promise.all([
-          fetch(`${SITE11}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE12}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`links ${r.status}`);
             return r.json();
           }),
-          fetch(`${SITE11}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE12}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`clicks ${r.status}`);
             return r.json();
           })
@@ -17402,12 +17479,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (this._failed) {
-        this.set(this.css(CSS24) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS25) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._links) {
-        this.set(this.css(CSS24) + `<p class="muted">Loading the outbound links...</p>`);
+        this.set(this.css(CSS25) + `<p class="muted">Loading the outbound links...</p>`);
         return;
       }
       const now = /* @__PURE__ */ new Date();
@@ -17429,7 +17506,7 @@ ${String(body ?? "")}`;
         <details><summary>Last 30 days, by day</summary><table><thead><tr><th>Day</th><th>Clicks</th><th>Crawlers</th><th>Other</th></tr></thead><tbody>${history2}</tbody></table></details>
       </li>`;
       }).join("");
-      this.set(this.css(CSS24) + `
+      this.set(this.css(CSS25) + `
       <div class="head"><span class="hint">${this._links.length} links. Clicks are estimates from Cloudflare zone analytics: 301 answers only, rolled up daily by reconcile. ${latest ? `Measured through ${esc(latest)}.` : "Nothing measured yet: the first rollup lands with the next daily reconcile."}</span></div>
       <ul class="list">${rows || '<li class="muted">No outbound links in the store.</li>'}</ul>
     `);
@@ -17437,8 +17514,239 @@ ${String(body ?? "")}`;
   };
   define("gbti-outbound-link-manager", GbtiOutboundLinkManager);
 
+  // client-ui/src/elements/gbti-cta-manager.mjs
+  var SITE13 = "https://gbti.network";
+  var TYPES = ["prompt", "post", "project", "share"];
+  var FIELDS = [
+    ["label", "Label", "The card eyebrow, e.g. the book title"],
+    ["line", "Line", "The one sentence on the card"],
+    ["button", "Button", "Names the partner, e.g. Get the book on Amazon"],
+    ["destination", "Destination", "https://... (an amazon CTA links straight to amazon with tag=)"],
+    ["partner", "Partner", "amazon, codeable, ..."],
+    ["note", "Note", "Where the URL came from, whose tag it carries"]
+  ];
+  var CSS26 = `
+  :host { display:block; }
+  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
+  .hint { font-size:12.5px; color:var(--muted); }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .busy { opacity:.55; pointer-events:none; }
+  .btn { flex:none; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:7px; font:inherit; font-weight:700; font-size:13px; padding:7px 14px; cursor:pointer; }
+  .lk { flex:none; border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; }
+  .lk:hover { border-color:var(--accent); color:var(--accent); }
+  .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
+  .form { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px 12px; margin:0 0 14px; padding:12px; border:1px solid var(--line); border-radius:9px; }
+  .form label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); min-width:0; }
+  .form input, .form select, .form textarea { font:inherit; font-size:13.5px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:6px 9px; min-width:0; }
+  .form textarea { resize:vertical; min-height:36px; }
+  .form .acts { grid-column:1 / -1; display:flex; gap:8px; flex-wrap:wrap; }
+  .list { list-style:none; margin:0; padding:0; }
+  .c { border-top:1px solid var(--line); padding:12px 2px; }
+  .c:first-child { border-top:0; }
+  .c.off { opacity:.6; }
+  .top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .label { font-size:14.5px; font-weight:700; color:var(--fg); }
+  .badge { font-size:11px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; border-radius:999px; padding:2px 8px; border:1px solid var(--line); color:var(--muted); }
+  .state.on { color:var(--accent); border-color:var(--accent); }
+  .acts-r { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .line { margin:6px 0 0; font-size:13.5px; color:var(--fg); }
+  .dest { display:block; font-size:12.5px; margin-top:3px; overflow-wrap:anywhere; }
+  .dest a { color:var(--accent); }
+  details { margin-top:6px; }
+  summary { cursor:pointer; font-size:12.5px; color:var(--muted); }
+  .note { font-size:13px; line-height:1.5; margin:6px 0 0; white-space:pre-line; }
+  .items { list-style:none; margin:8px 0 0; padding:0; }
+  .it { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0; font-size:13px; }
+  .it .ty { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); }
+  .it a { color:var(--accent); }
+  .it .bad { color:var(--danger, #e06c6c); font-weight:600; }
+  .it .pending, .it .draft { color:var(--muted); }
+  .assign { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .assign select, .assign input { font:inherit; font-size:13px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:5px 8px; min-width:0; }
+  .assign input { flex:1 1 200px; }
+  .muted { color:var(--muted); }
+  [hidden] { display:none !important; }
+`;
+  var GbtiCtaManager = class extends GbtiElement {
+    // The client-ready race (see gbti-quote-manager): the element sits in static admin markup and upgrades before the
+    // client is injected, so render() starts the load when the client arrives, never connectedCallback.
+    connectedCallback() {
+      super.connectedCallback?.();
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      this._loading = true;
+      this._failed = false;
+      this.render();
+      try {
+        const [pool, built] = await Promise.all([
+          this.client.ctaPool(),
+          fetch(`${SITE13}/ctas.json`, { cache: "no-cache" }).then((r) => {
+            if (!r.ok) throw new Error(`ctas.json ${r.status}`);
+            return r.json();
+          })
+        ]);
+        this._ctas = Array.isArray(pool?.ctas) ? pool.ctas : [];
+        this._types = Array.isArray(pool?.types) && pool.types.length ? pool.types : TYPES;
+        this._built = new Map((Array.isArray(built?.ctas) ? built.ctas : []).map((c) => [c.id, c]));
+      } catch (e) {
+        this._ctas = null;
+        this._built = null;
+        this._failed = true;
+        this._msg = `Could not load the CTAs (${e?.message || "unknown error"}).`;
+      }
+      this._loading = false;
+      this.render();
+    }
+    /** The built artifact's view of one assignment: resolved / unresolved / not yet built. */
+    _resolution(ctaId, it) {
+      const b = this._built?.get(ctaId);
+      if (!b) return { state: "pending" };
+      const hit = (b.items || []).find((x) => x.type === it.type && x.ref === it.ref);
+      if (!hit) return { state: "pending" };
+      if (!hit.resolved) return { state: "missing" };
+      return { state: hit.live ? "live" : "draft", title: hit.title, url: hit.url };
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (superadmin) to manage CTAs.</p>`);
+        return;
+      }
+      if (this._failed) {
+        this.set(this.css(CSS26) + `<p class="msg">${esc(this._msg)}</p><button class="lk" type="button" data-retry-load>Try again</button>`);
+        this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
+        return;
+      }
+      if (!this._ctas) {
+        if (!this._loading) this.load();
+        this.set(this.css(CSS26) + `<p class="muted">Loading CTAs...</p>`);
+        return;
+      }
+      const enabled = this._ctas.filter((c) => c && c.enabled === true).length;
+      const rows = this._ctas.map((c) => this._row(c)).join("");
+      this.set(this.css(CSS26) + `<div class="${this._busy ? "busy" : ""}">
+      <div class="head"><span class="hint">${this._ctas.length} CTA${this._ctas.length === 1 ? "" : "s"}, ${enabled} enabled</span>
+        <button class="lk" type="button" data-show-add>${this._adding ? "Cancel" : "Add a CTA"}</button></div>
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._adding ? this._form("add", {}) : ""}
+      <p class="hint" style="margin:0 0 12px">A CTA renders as its own sidebar card on every item it is assigned to, above the weekly digest, only while it is enabled. Edits open a house PR and go live on the next site deploy. Disable a CTA to retire it; the history stays.</p>
+      <ul class="list">${rows || '<li class="muted">No CTAs yet.</li>'}</ul>
+    </div>`);
+      this._wire();
+    }
+    _form(mode, c) {
+      const v = (k) => esc(c?.[k] ?? "");
+      const fields = FIELDS.map(([k, label, hint]) => k === "note" ? `<label style="grid-column:1 / -1">${label}<textarea data-f="${k}" placeholder="${esc(hint)}">${v(k)}</textarea></label>` : `<label>${label}<input data-f="${k}" type="text" value="${v(k)}" placeholder="${esc(hint)}" /></label>`).join("");
+      const idField = mode === "add" ? `<label>Id (kebab-case)<input data-f="id" type="text" placeholder="stranger-in-a-strange-land" /></label>` : "";
+      return `<div class="form" data-form="${mode}" data-id="${esc(c?.id || "")}">${idField}${fields}
+      <div class="acts"><button class="btn" type="button" data-submit>${mode === "add" ? "Add CTA" : "Save"}</button>${mode === "edit" ? `<button class="lk" type="button" data-cancel-edit>Cancel</button>` : ""}</div></div>`;
+    }
+    _row(c) {
+      const on = c.enabled === true;
+      const id = esc(c.id || "");
+      const items = (Array.isArray(c.items) ? c.items : []).map((it) => {
+        const r = this._resolution(c.id, it);
+        const key = `${esc(it.type)}:${esc(it.ref)}`;
+        let body;
+        if (r.state === "live") body = `<a href="${esc(SITE13 + r.url)}" target="_blank" rel="noopener">${esc(r.title || it.ref)}</a>`;
+        else if (r.state === "draft") body = `<span>${esc(r.title || it.ref)}</span> <span class="draft">(no public page yet)</span>`;
+        else if (r.state === "missing") body = `<span class="bad">No such item: ${key}</span>`;
+        else body = `<span>${esc(it.ref)}</span> <span class="pending">(resolving on the next deploy)</span>`;
+        return `<li class="it" data-item="${key}"><span class="ty">${esc(it.type)}</span>${body}<button class="lk danger" type="button" data-unassign="${id}" data-type="${esc(it.type)}" data-ref="${esc(it.ref)}">Unassign</button></li>`;
+      }).join("");
+      const typeOpts = (this._types || TYPES).map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+      return `<li class="c ${on ? "" : "off"}" data-cta="${id}">
+      <div class="top"><span class="label">${esc(c.label || c.id)}</span><span class="badge">${esc(c.partner || "")}</span><span class="badge state ${on ? "on" : ""}">${on ? "Enabled" : "Disabled"}</span>
+        <span class="acts-r"><button class="lk" type="button" data-edit="${id}">${this._editing === c.id ? "Close" : "Edit"}</button><button class="lk" type="button" data-toggle="${id}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button></span></div>
+      <p class="line">${esc(c.line || "")}</p>
+      <span class="dest"><a href="${esc(c.destination || "#")}" target="_blank" rel="noopener">${esc(c.destination || "")}</a> <span class="muted">(button: ${esc(c.button || "")})</span></span>
+      ${c.note ? `<details><summary>Note</summary><p class="note">${esc(c.note)}</p></details>` : ""}
+      ${this._editing === c.id ? this._form("edit", c) : ""}
+      <ul class="items">${items || '<li class="it muted">Assigned to nothing yet.</li>'}</ul>
+      <div class="assign"><select data-assign-type="${id}">${typeOpts}</select><input data-assign-ref="${id}" type="text" placeholder="the item slug, or author/id for a share" /><button class="lk" type="button" data-assign="${id}">Assign</button></div>
+    </li>`;
+    }
+    _read(form) {
+      const out = {};
+      form.querySelectorAll("[data-f]").forEach((el) => {
+        out[el.dataset.f] = String(el.value || "").trim();
+      });
+      return out;
+    }
+    _wire() {
+      this.on("[data-show-add]", "click", () => {
+        this._adding = !this._adding;
+        this._msg = "";
+        this.render();
+      });
+      this.$$("[data-form] [data-submit]").forEach((b) => b.addEventListener("click", () => {
+        const form = b.closest("[data-form]");
+        const fields = this._read(form);
+        if (form.dataset.form === "add") {
+          if (!fields.id) {
+            this._msg = "An id is required.";
+            this.render();
+            return;
+          }
+          this._run(() => this.client.addCta(fields), () => {
+            this._adding = false;
+          });
+        } else {
+          this._run(() => this.client.updateCta({ id: form.dataset.id, ...fields }), () => {
+            this._editing = null;
+          });
+        }
+      }));
+      this.$$("[data-cancel-edit]").forEach((b) => b.addEventListener("click", () => {
+        this._editing = null;
+        this.render();
+      }));
+      this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
+        this._editing = this._editing === b.dataset.edit ? null : b.dataset.edit;
+        this._msg = "";
+        this.render();
+      }));
+      this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.setCtaEnabled({ id: b.dataset.toggle, enabled: b.dataset.on !== "1" }))));
+      this.$$("[data-assign]").forEach((b) => b.addEventListener("click", () => {
+        const id = b.dataset.assign;
+        const type = this.$(`[data-assign-type="${CSS_ESC(id)}"]`)?.value || "";
+        const ref = (this.$(`[data-assign-ref="${CSS_ESC(id)}"]`)?.value || "").trim();
+        if (!ref) {
+          this._msg = "A ref is required (the item slug, or author/id for a share).";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.assignCta({ id, type, ref }));
+      }));
+      this.$$("[data-unassign]").forEach((b) => b.addEventListener("click", () => {
+        const { unassign: id, type, ref } = b.dataset;
+        if (typeof confirm === "function" && !confirm(`Unassign this CTA from ${type}:${ref}?`)) return;
+        this._run(() => this.client.unassignCta({ id, type, ref }));
+      }));
+    }
+    async _run(fn, after) {
+      this._busy = true;
+      this._msg = "";
+      this.render();
+      try {
+        const r = await fn();
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
+        after?.();
+      } catch (e) {
+        this._msg = e?.message || "That edit failed.";
+      }
+      this._busy = false;
+      await this.load();
+    }
+  };
+  var CSS_ESC = (s) => String(s || "").replace(/["\\]/g, "\\$&");
+  define("gbti-cta-manager", GbtiCtaManager);
+
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS25 = `
+  var CSS27 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -17544,11 +17852,11 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS25) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS27) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -17557,7 +17865,7 @@ ${String(body ?? "")}`;
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS25) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS27) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -17567,7 +17875,7 @@ ${String(body ?? "")}`;
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS27) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
@@ -17664,7 +17972,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS26 = `
+  var CSS28 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -18163,7 +18471,7 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -18172,7 +18480,7 @@ ${String(body ?? "")}`;
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS26) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS28) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -18185,7 +18493,7 @@ ${String(body ?? "")}`;
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS26) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS28) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -18198,7 +18506,7 @@ ${String(body ?? "")}`;
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS26) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS28) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -18805,7 +19113,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS27 = `
+  var CSS29 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -18841,7 +19149,7 @@ ${String(body ?? "")}`;
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS27) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS29) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -18878,7 +19186,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS28 = `
+  var CSS30 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -18918,7 +19226,7 @@ ${String(body ?? "")}`;
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS28) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS30) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -19135,7 +19443,7 @@ ${String(body ?? "")}`;
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS29 = `
+  var CSS31 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -19197,7 +19505,7 @@ ${String(body ?? "")}`;
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS29));
+      this.set(this.css(CSS31));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -19270,13 +19578,13 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS29));
+        this.set(this.css(CSS31));
         return;
       }
       const u = esc(this._username || "");
       const av = `https://github.com/${u}.png?size=80`;
       if (!this._loaded) {
-        this.set(this.css(CSS29) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS31) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -19288,7 +19596,7 @@ ${String(body ?? "")}`;
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS29) + `
+      this.set(this.css(CSS31) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -19376,7 +19684,7 @@ ${String(body ?? "")}`;
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS30 = `
+  var CSS32 = `
   .wrap { display:inline-flex; align-items:center; gap:8px; }
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
@@ -19414,7 +19722,7 @@ ${String(body ?? "")}`;
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS30) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS32) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -19555,7 +19863,7 @@ ${String(body ?? "")}`;
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS31 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -19732,11 +20040,11 @@ ${String(body ?? "")}`;
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS31) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS33) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS31) + body);
+      this.set(this.css(CSS33) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -19847,7 +20155,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS32 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -19969,10 +20277,10 @@ ${String(body ?? "")}`;
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -19989,7 +20297,7 @@ ${String(body ?? "")}`;
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS34) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -20015,12 +20323,12 @@ ${String(body ?? "")}`;
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS32) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS34) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS32) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS34) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -20092,7 +20400,7 @@ ${String(body ?? "")}`;
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS32) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS34) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -20135,21 +20443,21 @@ ${String(body ?? "")}`;
       }
     }
     _splash() {
-      this.set(this.css(CSS32) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS34) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS33 = `
+  var CSS35 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS33) + `<div class="stack">
+      this.set(this.css(CSS35) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -20159,7 +20467,7 @@ ${String(body ?? "")}`;
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS34 = `
+  var CSS36 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -20175,7 +20483,7 @@ ${String(body ?? "")}`;
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS34) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS36) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -20183,7 +20491,7 @@ ${String(body ?? "")}`;
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS34) + `<div class="splash">
+        this.set(this.css(CSS36) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -20192,7 +20500,7 @@ ${String(body ?? "")}`;
       </div>`);
         return;
       }
-      this.set(this.css(CSS34) + `<slot></slot>`);
+      this.set(this.css(CSS36) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -20200,7 +20508,7 @@ ${String(body ?? "")}`;
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS2 = 15e3;
   var POLL_MAX = 20;
-  var CSS35 = `
+  var CSS37 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -20271,7 +20579,7 @@ ${String(body ?? "")}`;
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS35) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS37) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -20372,7 +20680,7 @@ ${String(body ?? "")}`;
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS36 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -20480,13 +20788,13 @@ ${String(body ?? "")}`;
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS36) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS38) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       const hostedLike = Boolean(s.mode && s.mode !== "app");
       if (s.ready) {
         const note = hostedLike ? "Sign-in is all it takes: your drafts save privately, and the network publishes for you." : "Your drafts save to your copy, and we open the review request for you.";
-        this.set(this.css(CSS36) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS38) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
         <p class="note">${note}</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -20504,7 +20812,7 @@ ${String(body ?? "")}`;
         return `<li class="row"><span class="ic">${check2(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS36) + `
+      this.set(this.css(CSS38) + `
       <div class="head"><h2>${hostedLike ? "Sign in to publish" : "Set up publishing"}</h2><span class="count">${nDone} of ${stepIds.length}</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / stepIds.length * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -20639,8 +20947,8 @@ ${String(body ?? "")}`;
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE12 = "https://gbti.network";
-  var CSS37 = `
+  var SITE14 = "https://gbti.network";
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -20692,7 +21000,7 @@ ${String(body ?? "")}`;
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE12}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE14}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -20712,15 +21020,15 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS37) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS37) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -20736,7 +21044,7 @@ ${String(body ?? "")}`;
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS39) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -20746,7 +21054,7 @@ ${String(body ?? "")}`;
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
-      const t = item.url ? `<a class="t" href="${SITE12}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE14}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
@@ -20791,10 +21099,10 @@ ${String(body ?? "")}`;
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE13 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS38 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -20877,11 +21185,11 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS38) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS40) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS40) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -20890,7 +21198,7 @@ ${String(body ?? "")}`;
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS38) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS40) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -20902,20 +21210,20 @@ ${String(body ?? "")}`;
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
         const u = esc(f.username);
         return `<li class="row">
         <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
-        <a class="nm" href="${SITE13}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <a class="nm" href="${SITE15}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -20974,7 +21282,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-workspace.mjs
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
-  var SITE14 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
@@ -20996,7 +21304,7 @@ ${String(body ?? "")}`;
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS39 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -21579,7 +21887,7 @@ ${String(body ?? "")}`;
       }
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS39) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS41) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -21609,7 +21917,7 @@ ${String(body ?? "")}`;
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS39) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS41) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -21628,7 +21936,7 @@ ${String(body ?? "")}`;
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS39) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS41) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
@@ -21780,7 +22088,7 @@ ${String(body ?? "")}`;
       const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it.status === "published" ? publicPathFor({ type: it.type, path: it.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE14 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE16 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : "";
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
@@ -22082,7 +22390,7 @@ ${String(body ?? "")}`;
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS40 = `
+  var CSS42 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -22214,7 +22522,7 @@ ${String(body ?? "")}`;
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS40) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS42) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -22264,12 +22572,12 @@ ${String(body ?? "")}`;
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
-  var SITE15 = "https://gbti.network";
+  var SITE17 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS41 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -22370,11 +22678,11 @@ ${String(body ?? "")}`;
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE15}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS43) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE17}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS43) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global);
@@ -22394,10 +22702,10 @@ ${String(body ?? "")}`;
             <span class="tag${custom ? " custom" : ""}">${custom ? "Custom" : "Default"}</span>
             ${CHEV2}
           </button>`;
-      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE15}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
+      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE17}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS41) + `
+      this.set(this.css(CSS43) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -22467,8 +22775,8 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE16 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE16}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE18 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE18}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc5 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -22480,7 +22788,7 @@ ${String(body ?? "")}`;
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS42 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -22573,7 +22881,7 @@ ${String(body ?? "")}`;
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE16}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE18}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -22640,12 +22948,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS42) + head + `<div data-body></div>`);
+      this.set(this.css(CSS44) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -22756,7 +23064,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS43 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -22869,12 +23177,12 @@ ${String(body ?? "")}`;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS43) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -22892,7 +23200,7 @@ ${String(body ?? "")}`;
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -22907,7 +23215,7 @@ ${String(body ?? "")}`;
   define("gbti-news-reader", GbtiNewsReader);
 
   // client-ui/src/members-index.mjs
-  var SITE17 = "https://gbti.network";
+  var SITE19 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
@@ -22916,7 +23224,7 @@ ${String(body ?? "")}`;
   var _directory = null;
   function loadMembersDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE17}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE19}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
 
@@ -23160,7 +23468,7 @@ From the author:
     } catch {
     }
   };
-  var CSS44 = `
+  var CSS46 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -23205,7 +23513,7 @@ From the author:
         this.set("");
         return;
       }
-      this.set(this.css(CSS44) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS46) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -23690,7 +23998,7 @@ From the author:
   define("gbti-syndicate-now", GbtiSyndicateNow);
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE18 = "https://gbti.network";
+  var SITE20 = "https://gbti.network";
   var lc9 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc9(a);
@@ -23713,7 +24021,7 @@ From the author:
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE18}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE20}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var loadDirectory = loadMembersDirectory;
   var SOCIALS = [
@@ -23757,7 +24065,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS45 = `
+  var CSS47 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -24067,7 +24375,7 @@ From the author:
       const wsBase = typeof location !== "undefined" && location.protocol === "chrome-extension:" ? "workspace.html" : "/workbench/";
       if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE18}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE20}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
@@ -24089,17 +24397,17 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS45));
+        this.set(this.css(CSS47));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE18 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE20 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
       const copyAll = it.type === "prompt" && this._rawBody ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE18}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE20}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
@@ -24117,7 +24425,7 @@ From the author:
       const sideLink = it.type === "share" && it.url ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName4(it.author))} shared this from.</p><a class="side-open" href="${esc(utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Visit</a></div>` : "";
       const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
-      const syndUrl = it.url ? it.type === "share" ? it.url : SITE18 + it.url : "";
+      const syndUrl = it.url ? it.type === "share" ? it.url : SITE20 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
       const authorX = this._author?.entry?.links?.x || "";
       const authorDevto = this._author?.entry?.links?.devto || "";
@@ -24128,7 +24436,7 @@ From the author:
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
       const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(CSS47) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -24247,12 +24555,12 @@ From the author:
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
-  var SITE19 = "https://gbti.network";
+  var SITE21 = "https://gbti.network";
   var lc11 = (s) => String(s || "").toLowerCase();
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS46 = `
+  var CSS48 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -24321,7 +24629,7 @@ From the author:
         const [dir, status, ...idx] = await Promise.all([
           guard(loadMembersDirectory()),
           guard(this.client.status?.()),
-          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE19}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
+          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE21}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
         const me = lc11(status?.identity?.username || status?.identity?.login || "");
@@ -24352,8 +24660,8 @@ From the author:
           since = "";
         }
       }
-      const action = this._isSelf ? `<a class="edit" href="${SITE19}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
-      const siteLink = utmLink(`${SITE19}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
+      const action = this._isSelf ? `<a class="edit" href="${SITE21}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
+      const siteLink = utmLink(`${SITE21}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
       const actions = `<div class="actions">${action}<a class="site" href="${esc(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
       const tagPills = [];
       for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole2(r))}</span>`);
@@ -24378,7 +24686,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS48) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -24386,7 +24694,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS48) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -24411,7 +24719,7 @@ From the author:
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE20 = "https://gbti.network";
+  var SITE22 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -24430,7 +24738,7 @@ From the author:
     } catch {
     }
   }
-  var CSS47 = `
+  var CSS49 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -24524,7 +24832,7 @@ From the author:
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE20}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE22}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -24564,7 +24872,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS49) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -24577,7 +24885,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS49) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -24890,6 +25198,18 @@ From the author:
       // sow-271: the site-wide presentation toggles { settings, toggles } for the manager
       setSiteToggle: ({ key, enabled }) => request("POST", "/api/admin", { action: "site-setting-set", key, enabled: enabled === true }),
       // sow-271
+      ctaPool: () => request("GET", "/api/cta-pool"),
+      // sow-281: the CTA registry { ctas, types } for the manager
+      addCta: (fields) => request("POST", "/api/admin", { action: "cta-add", ...fields, enabled: fields?.enabled === true }),
+      // sow-281
+      updateCta: (fields) => request("POST", "/api/admin", { action: "cta-update", ...fields }),
+      // sow-281
+      setCtaEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "cta-toggle", id, enabled: enabled === true }),
+      // sow-281
+      assignCta: ({ id, type, ref }) => request("POST", "/api/admin", { action: "cta-assign", id, type, ref }),
+      // sow-281
+      unassignCta: ({ id, type, ref }) => request("POST", "/api/admin", { action: "cta-unassign", id, type, ref }),
+      // sow-281
       contentChannelPool: () => request("GET", "/api/content-channel-pool"),
       // SOW-087: the category -> Discord-channel map { channels }
       setContentChannel: ({ category, channelId }) => request("POST", "/api/admin", { action: "content-channel-set", category, channelId }),
@@ -24975,7 +25295,7 @@ From the author:
   }
 
   // extension/src/newtab.mjs
-  var SITE21 = "https://gbti.network";
+  var SITE23 = "https://gbti.network";
   var $ = (sel) => document.querySelector(sel);
   var authorName5 = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
   function greeting() {
@@ -25002,7 +25322,7 @@ From the author:
     };
     paint(0);
     try {
-      const res = await fetch(`${SITE21}/changelog.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE23}/changelog.json`, { cache: "no-cache" });
       if (res.ok) {
         const data = await res.json();
         const build = Number(data?.build);
@@ -25316,7 +25636,7 @@ From the author:
       reRenderQuoteIfVisible();
     }
     try {
-      const res = await fetch(`${SITE21}/quotes.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE23}/quotes.json`, { cache: "no-cache" });
       if (!res.ok) return;
       const data = await res.json();
       const quotes = Array.isArray(data?.quotes) ? data.quotes : null;
@@ -25418,7 +25738,7 @@ From the author:
     if (!(t in DIRECTORY) || DIRECTORY[t] || DIRECTORY_LOADING.has(t)) return;
     DIRECTORY_LOADING.add(t);
     try {
-      const res = await fetch(`${SITE21}/${DIRECTORY_URL[t]}`, { cache: "no-cache" });
+      const res = await fetch(`${SITE23}/${DIRECTORY_URL[t]}`, { cache: "no-cache" });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       DIRECTORY[t] = Array.isArray(data?.items) ? data.items : [];
@@ -25513,13 +25833,13 @@ From the author:
   async function loadActivity() {
     const status = $("[data-feed-status]");
     try {
-      const res = await fetch(`${SITE21}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE23}/activity-index.json`, { cache: "no-cache" });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       ENTRIES = Array.isArray(data?.entries) ? data.entries : [];
       renderFeed($("[data-filter]")?.value || "");
     } catch {
-      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE21}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
+      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE23}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
     }
   }
   async function api2(pathname) {

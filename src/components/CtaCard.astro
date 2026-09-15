@@ -1,0 +1,31 @@
+---
+// sow-281: the per-item partner CTA. A superadmin registers a CTA in house/ctas.yml and assigns it to items there;
+// this card renders the ENABLED CTA assigned to the item it is mounted on, and nothing at all otherwise (no CTA,
+// a disabled CTA, or an assignment the registry carries for some other item). It is its own sidebar card, above
+// the weekly-digest card, and its button is never the page's primary button: on a prompt, Copy stays the one
+// primary action. The link is DIRECT (the destination as registered, the Amazon rule in house/ctas.yml), opens in
+// a new tab, and carries rel="sponsored nofollow noopener" because it is a paid placement.
+//
+// `wrap` is the chrome the mounting page wants (each rail has its own: the prompt aside uses .card, the project
+// rail .pd-block, the share aside .card.side-card, the article rail a bare div), because an empty wrapper on a
+// page with no CTA would be a visible blank card.
+import { readCtas } from '../../scripts/lib/ctas-store.mjs';
+import { ctaFor } from '../lib/ctas.mjs';
+
+interface Props { type: 'prompt' | 'post' | 'project' | 'share'; ref: string; wrap?: string; pad?: boolean }
+const { type, ref, wrap = 'card', pad = false } = Astro.props;
+const cta = ctaFor(readCtas(process.cwd()), type, ref);
+---
+{cta && (
+  <div class:list={['cta-card', wrap]} style={pad ? 'padding:22px' : undefined} data-cta={cta.id} data-cta-partner={cta.partner}>
+    <p class="eyebrow">{cta.label}</p>
+    <p class="cta-line">{cta.line}</p>
+    <a class="btn btn-ghost cta-btn" href={cta.destination} target="_blank" rel="sponsored nofollow noopener">{cta.button} <svg class="ar" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
+  </div>
+)}
+
+<style>
+  .cta-line { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--fg); }
+  .cta-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 13.5px; white-space: normal; text-align: left; }
+  .cta-btn .ar { flex: none; }
+</style>

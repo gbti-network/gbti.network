@@ -73,6 +73,7 @@ import {
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
   getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings,
   getCouponPool, getSiteSettings, // sow-291 Phase 2: addCoupon/updateCoupon retired (coupon writes -> the Worker via WORKER_CONFIG_ACTIONS)
+  getCtaPool, addCta, updateCta, setCtaEnabled, assignCta, unassignCta, // sow-281: the CTA registry (superadmin)
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
@@ -103,6 +104,7 @@ const ADMIN_ACTIONS = {
   'syndication-templates-set': setSyndicationTemplates, // SOW-088: the admin card batch (one PR per Save)
   'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
   'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
+  'cta-add': addCta, 'cta-update': updateCta, 'cta-toggle': setCtaEnabled, 'cta-assign': assignCta, 'cta-unassign': unassignCta, // sow-281: the CTA registry (superadmin at editHouseYaml)
   // sow-291 Phase 2: coupon-add / coupon-update are in WORKER_CONFIG_ACTIONS above (served by the Worker).
 };
 
@@ -218,6 +220,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/syndicate-now') return run(() => syndicateNow(ctx, body)); // SOW-088: post one item to one destination now
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
   if (method === 'GET' && pathname === '/api/site-settings') return run(() => getSiteSettings(ctx)); // sow-271: site-wide presentation toggles
+  if (method === 'GET' && pathname === '/api/cta-pool') return run(() => getCtaPool(ctx)); // sow-281: the CTA registry
   if (method === 'GET' && pathname === '/api/coupon-pool') return run(() => getCouponPool(ctx)); // SOW-119: the coupon registry
   if (method === 'GET' && pathname === '/api/coupon-usage') return run(() => getCouponUsageOp(ctx)); // SOW-119: KV usage (Worker-gated)
   // sow-231 Phase 3: issued invites. One path, three verbs, matching the Worker route it forwards to.

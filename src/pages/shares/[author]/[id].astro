@@ -13,6 +13,7 @@ import SubscribeButton from '../../../components/SubscribeButton.astro';
 import Comments from '../../../components/blog/Comments.astro';
 import VideoEmbed from '../../../components/VideoEmbed.astro';
 import DigestSubscribe from '../../../components/mail/DigestSubscribe.astro'; // sow-166/sow-202: the weekly-digest sidebar CTA
+import CtaCard from '../../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { embedUrl } from '../../../../client/src/video-embed.mjs';
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, formatDate, authorAvatar } from '../../../lib/authors';
@@ -155,6 +156,9 @@ if (cover && cover.author === d.author && cover.id === d.id) {
           address form; a signed-in member also sees a link to their notification settings (the component
           decides). variant="rail" is chromeless, so the .card.side-card wrapper supplies the chrome like the
           other side cards. */}
+      {/* sow-281: the partner CTA above the digest card (ref is author/id for a share); nothing unless assigned + enabled. */}
+      <CtaCard type="share" ref={slug} wrap="card side-card" />
+
       <div class="card side-card">
         <DigestSubscribe variant="rail" heading="The weekly digest" />
       </div>

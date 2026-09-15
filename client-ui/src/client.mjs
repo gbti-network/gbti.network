@@ -154,6 +154,12 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
     siteSettings: () => request('GET', '/api/site-settings'), // sow-271: the site-wide presentation toggles { settings, toggles } for the manager
     setSiteToggle: ({ key, enabled }) => request('POST', '/api/admin', { action: 'site-setting-set', key, enabled: enabled === true }), // sow-271
+    ctaPool: () => request('GET', '/api/cta-pool'), // sow-281: the CTA registry { ctas, types } for the manager
+    addCta: (fields) => request('POST', '/api/admin', { action: 'cta-add', ...fields, enabled: fields?.enabled === true }), // sow-281
+    updateCta: (fields) => request('POST', '/api/admin', { action: 'cta-update', ...fields }), // sow-281
+    setCtaEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'cta-toggle', id, enabled: enabled === true }), // sow-281
+    assignCta: ({ id, type, ref }) => request('POST', '/api/admin', { action: 'cta-assign', id, type, ref }), // sow-281
+    unassignCta: ({ id, type, ref }) => request('POST', '/api/admin', { action: 'cta-unassign', id, type, ref }), // sow-281
     contentChannelPool: () => request('GET', '/api/content-channel-pool'), // SOW-087: the category -> Discord-channel map { channels }
     setContentChannel: ({ category, channelId }) => request('POST', '/api/admin', { action: 'content-channel-set', category, channelId }), // SOW-087
     removeContentChannel: ({ category }) => request('POST', '/api/admin', { action: 'content-channel-remove', category }), // SOW-087

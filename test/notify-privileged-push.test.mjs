@@ -43,6 +43,7 @@ test('the explicitly pinned governance paths are recognised', () => {
     'house/moderation-flags.yml',
     'house/site-settings.yml',
     'house/syndication-config.yml',
+    'house/ctas.yml', // sow-281
     'house/applets/hue/index.md',
     'CODEOWNERS',
     '.github/workflows/tests.yml',

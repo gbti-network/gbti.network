@@ -115,6 +115,7 @@ import { listSharesFeed, listMyShares } from './membership-shares.mjs';
 import { listNetworkContent, listNetworkShares } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
+import { membershipAdminCtaPool } from './membership-admin-ctas.mjs'; // sow-281: the CTA registry pool read (superadmin)
 import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy, membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool, membershipAdminNewsEngagement, membershipAdminSyndicationSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool; sow-161 B: the channel-map manager pool reads (superadmin)
 import { handleUnsubscribe } from './membership-unsubscribe.mjs'; // SOW-166: one-click digest unsubscribe (RFC 8058)
 import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: the digest click counter
@@ -1547,6 +1548,15 @@ export default {
       }
 
       // sow-161 increment 4: the config-manager pool reads (admin-gated, cookie-enabled). A GET carries no CSRF.
+      // sow-281: the CTA registry pool read for the CTAs manager. SUPERADMIN-gated inside, read-only, no-store.
+      if (pathname === '/membership/admin/cta-pool') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await membershipAdminCtaPool(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
       if (pathname === '/membership/admin/quote-pool') {
         const cors = corsHeaders(request, env, { credentials: true });
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });

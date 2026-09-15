@@ -33,6 +33,8 @@ import { addSource, removeSource, setSourceEnabled } from '../../membership/news
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
+import { addCta, updateCta, setCtaEnabled, assignCta, unassignCta } from '../../membership/cta-edits.mjs'; // sow-281
+import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput } from './membership-admin-ctas.mjs'; // sow-281: the validators (this file is at the size cap)
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
 import { rankForPath, maxRankForPaths } from '../../membership/path-rank.mjs'; // sow-161 A: the multi-file max-rank gate (matches CODEOWNERS, unlike classify-pr)
@@ -208,6 +210,7 @@ const CONFIG_ACTIONS = new Set([
   'news-source-add', 'news-source-remove', 'news-source-toggle',
   'coupon-add', 'coupon-update',
   'site-setting-set',
+  'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign', // sow-281
   // sow-161 B (channel-map manager, superadmin): moderation flag terms + the syndication config surfaces.
   'flag-term-add', 'flag-term-remove',
   'syndication-templates-set', 'news-engagement-set', 'syndication-settings-set',
@@ -231,6 +234,12 @@ const CONFIG_OP = {
   // lives in the WORKER table (not extension-relay only, the way content-channels does) specifically so the
   // WEBSITE admin page can flip it, which is the direction sow-271 is moving the site.
   'site-setting-set': { path: 'house/site-settings.yml', rank: ROLE_RANK.superadmin, fn: setSiteToggle, input: siteToggleInput, slug: (a) => idSlug(a.key) },
+  // sow-281: the CTA registry. SUPERADMIN like site-settings, and house/ctas.yml is pinned in CODEOWNERS + SUPERADMIN_HOUSE_FILES.
+  'cta-add': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: addCta, input: ctaAddInput, slug: (a) => idSlug(a.id) },
+  'cta-update': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: updateCta, input: ctaUpdateInput, slug: (a) => idSlug(a.id) },
+  'cta-toggle': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: setCtaEnabled, input: ctaToggleInput, slug: (a) => idSlug(a.id) },
+  'cta-assign': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: assignCta, input: ctaAssignInput, slug: (a) => idSlug(`${a.id}-${a.type}-${a.ref}`) },
+  'cta-unassign': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: unassignCta, input: ctaAssignInput, slug: (a) => idSlug(`${a.id}-${a.type}-${a.ref}`) },
   // sow-161 B: the channel-map manager's config writes. moderation-flags.yml + syndication-config.yml are both
   // superadmin-pinned in CODEOWNERS + SUPERADMIN_HOUSE_FILES, so rankForPath returns superadmin for each and the
   // DRIFT guard (test/path-rank.test.mjs) requires this hardcode to say superadmin too. A fixed per-surface slug
@@ -277,7 +286,7 @@ function leadingComment(raw) {
 // Read + parse a house YAML file from canonical main, FAIL CLOSED. Shared by the governance + config branches so
 // they cannot disagree about "malformed = 502, not a silent reset". Returns { ok:true, parsed, raw } (raw kept for
 // the config leading-comment preserve), or { ok:false, status, body }. A 404 is a legitimate empty fresh start.
-async function loadHouseYaml(fetchImpl, instToken, upstream, path) {
+export async function loadHouseYaml(fetchImpl, instToken, upstream, path) {
   const cur = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=main`, { headers: GH_HEADERS(instToken) });
   if (cur.status === 404) return { ok: true, parsed: {}, raw: '' };
   if (!cur.ok) return { ok: false, status: 502, body: { error: 'read_failed', message: `GitHub returned ${cur.status}` } };

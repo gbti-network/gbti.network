@@ -19,6 +19,7 @@ import TouchSignal from '../../components/TouchSignal.astro';
 import { refCodeForAuthor } from '../../lib/referral';
 import { defaultFeatureImage } from '../../lib/feature-image';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
+import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import { hasPublicPage, isStub as isStubFn } from '../../lib/content';
 import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
@@ -79,6 +80,10 @@ const unindexed = contentFlagsOf('post', d.slug).unindexed;
         the rest. */}
     {isJournal && <FavoritedBy slot="rail" type="post" slug={d.slug} aliases={aliasSlugsOf(d)} />}
     {!isJournal && <FavoritedBy slot="closing" type="post" slug={d.slug} aliases={aliasSlugsOf(d)} />}
+    {/* sow-281: the partner CTA. The Journal rail slot sits directly above the digest card; the other layouts have
+        no rail, so it joins the closing stack. Same literal-slot rule as FavoritedBy above. */}
+    {isJournal && <CtaCard slot="rail" type="post" ref={d.slug} wrap="" />}
+    {!isJournal && <CtaCard slot="closing" type="post" ref={d.slug} wrap="card" pad />}
   </Layout>
   <EditHooks type="post" owner={d.author} slug={d.slug} />
   <TouchSignal type="post" ownerId={refCodeForAuthor(d.author)} slug={d.slug} />

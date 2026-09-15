@@ -1,0 +1,31 @@
+# sow-281: the registered content CTAs. A CTA is one reusable partner call to action (a label, the one sentence the
+# card shows, the button text, the direct destination, the partner it belongs to) plus the list of content items it
+# is assigned to. Only a superadmin edits this file (it is pinned in CODEOWNERS and membership/path-rank.mjs, the
+# same way house/site-settings.yml is), and the assignment lives HERE beside its CTA, never in the item's
+# frontmatter, so assigning never rewrites a member's file and a member cannot attach a partner link to their own
+# work. Disable a CTA to retire it (the quotes convention); do not delete it.
+#
+# Fields: id (kebab, unique), label, line (the sentence on the card), button (the button text, naming the partner),
+# destination (an absolute https URL), partner (a short kebab label), enabled, note (free text: where the URL came
+# from, whose tag it carries), items (a list of { type, ref }; type is prompt, post, project or share; ref is the
+# slug, or author/id for a share).
+#
+# THE AMAZON RULE (Associates Program Policies, read 2026-09-15): a purchase reached "by a link that sends users
+# indirectly to an Amazon Site via an intermediate site" is disqualified, and a placement must not make it unclear
+# that the link leads to Amazon. So an amazon CTA links STRAIGHT to an amazon domain with the Associates tag in
+# the URL, never through /outbound/ or any other redirect, and its button names Amazon. The edit core refuses
+# anything else. The sow-289 click board therefore does not count these clicks.
+ctas:
+  - id: stranger-in-a-strange-land
+    label: Stranger in a Strange Land
+    line: The skill takes its name from Heinlein's novel.
+    button: Get the book on Amazon
+    destination: https://www.amazon.com/dp/0441788386?tag=jakolorbbookc-20
+    partner: amazon
+    enabled: false
+    note: >-
+      The standard Ace paperback, ISBN 0441788386, on the GBTI Amazon Associates tag jakolorbbookc-20. Direct
+      link by the Amazon rule above. Owner decision 2026-09-15.
+    items:
+      - type: prompt
+        ref: grok-skill-for-claude-code

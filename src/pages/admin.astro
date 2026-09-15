@@ -34,6 +34,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="applications" data-min="superadmin" aria-selected="false" hidden>Creator applications</button>{/* sow-293 */}
           <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
           <button type="button" role="tab" data-tab="outbound-links" data-min="superadmin" aria-selected="false" hidden>Outbound links</button>{/* sow-289 */}
+          <button type="button" role="tab" data-tab="ctas" data-min="superadmin" aria-selected="false" hidden>CTAs</button>{/* sow-281 */}
         </nav>
 
         <div class="adm-card" data-panel="admin">
@@ -99,6 +100,13 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <h2 class="h2">Outbound links</h2>
           <gbti-outbound-link-manager></gbti-outbound-link-manager>
         </div>
+        {/* sow-281: SUPERADMIN. The registered content CTAs (house/ctas.yml): add, edit, enable, and assign each to any
+            content item. The Worker ops carry ROLE_RANK.superadmin and the file is superadmin-CODEOWNED; the module
+            is imported for superadmin only, so an admin never upgrades the tag. */}
+        <div class="adm-card" data-panel="ctas" hidden>
+          <h2 class="h2">CTAs</h2>
+          <gbti-cta-manager></gbti-cta-manager>
+        </div>
       </div>
     </div>
   </section>
@@ -151,6 +159,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         await import('../../client-ui/src/elements/gbti-site-settings-manager.mjs');
         await import('../../client-ui/src/elements/gbti-channel-map-manager.mjs'); // sow-161 B: the superadmin Channels workspace
         await import('../../client-ui/src/elements/gbti-outbound-link-manager.mjs'); // sow-289: the read-only outbound link board
+        await import('../../client-ui/src/elements/gbti-cta-manager.mjs'); // sow-281: the CTA registry manager
       }
       setupTabs(rank);
     }

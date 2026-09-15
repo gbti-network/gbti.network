@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import yaml from 'js-yaml';
 import { contentFlagsFromParsed, sitemapExcludes } from './membership/content-flags.mjs'; // sow-189: unindexed articles leave the sitemap
 import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety } from './src/lib/markdown-sanitize.mjs';
+import { rehypeSponsoredLinks } from './src/lib/rehype-sponsored-links.mjs'; // sow-281: partner redirect links in bodies are rel=sponsored
+import { outboundRows } from './scripts/lib/outbound-links-store.mjs'; // sow-289: the partner redirect paths
 
 // SOW-001: static site for gbti.network, deployed on Cloudflare Pages.
 // Output is the default `static` — Pages serves `dist/` directly; no adapter needed.
@@ -54,7 +56,9 @@ export default defineConfig({
   // sink (Content + rendered.html) flows through this one config.
   markdown: {
     remarkPlugins: [remarkContentBlocks],
-    rehypePlugins: [rehypeDemoteBodyH1, rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety],
+    // sow-281: LAST, after the sanitizer, because the sanitizer's rel allowlist does not know `sponsored`. Bounded to
+    // the exact partner redirect paths in house/outbound-links.yml, so no other link is ever marked.
+    rehypePlugins: [rehypeDemoteBodyH1, rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety, [rehypeSponsoredLinks, { paths: outboundRows(process.cwd()).map(([p]) => p) }]],
   },
   // Dev-only Astro toolbar — hidden so local testing matches the published view.
   devToolbar: { enabled: false },

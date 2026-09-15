@@ -17,7 +17,7 @@ test('rankForPath: the CODEOWNERS-pinned house files are superadmin', () => {
   // house/syndication-config.yml joined this list on 2026-09-01 by owner ruling (sow-298 OQ3). It was in the
   // admin list below until then, which matched CODEOWNERS but NOT the op-level gate that already refused an
   // admin. The ruling ratified the enforcement and added the CODEOWNERS pin.
-  for (const p of ['house/roles.yml', 'house/content-channels.yml', 'house/moderation-flags.yml', 'house/site-settings.yml', 'house/syndication-config.yml']) {
+  for (const p of ['house/roles.yml', 'house/content-channels.yml', 'house/moderation-flags.yml', 'house/site-settings.yml', 'house/syndication-config.yml', 'house/ctas.yml']) {
     assert.equal(rankForPath(p), SUPERADMIN, p);
   }
   assert.equal(rankForPath('house/applets/hue/index.md'), SUPERADMIN);

@@ -86,6 +86,7 @@
         <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
         <button class="admin-tab" type="button" data-tab="outbound-links">Outbound links</button>
+        <button class="admin-tab" type="button" data-tab="ctas">CTAs</button>
       </div>
       <div class="admin-col">
         <section class="admin-card on" data-panel="members">
@@ -147,6 +148,12 @@
                clicks (house/outbound-clicks.yml, rolled up by reconcile). Editing links is a later phase. -->
           <div class="admin-card-h"><h2>Outbound links</h2><p>The partner redirect paths and their estimated click history. Read only.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-outbound-link-manager></gbti-outbound-link-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="ctas">
+          <!-- sow-281: the registered content CTAs (house/ctas.yml). SUPERADMIN: the Worker ops carry ROLE_RANK.superadmin
+               and the file is superadmin-CODEOWNED, so an admin opening this tab gets a 403 from the endpoint. -->
+          <div class="admin-card-h"><h2>CTAs</h2><p>Partner calls to action, each assigned to any content item. Superadmin only. Edits open a house PR and go live on the next site deploy.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-cta-manager></gbti-cta-manager></div></div>
         </section>
       </div>
       </template>

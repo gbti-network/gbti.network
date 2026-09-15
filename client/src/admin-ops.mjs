@@ -25,6 +25,7 @@ import { SIGNUP_BASE } from './signup-base.mjs'; // sow-291 Phase 2: the coupon 
 import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'; // sow-291 Phase 2
 import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
 import { setSiteToggle as setSiteToggleEdit, readAllToggles, SITE_TOGGLES, SiteSettingsEditError } from '../../membership/site-settings-edits.mjs'; // sow-271
+import { addCta as addCtaEdit, updateCta as updateCtaEdit, setCtaEnabled as setCtaEnabledEdit, assignCta as assignCtaEdit, unassignCta as unassignCtaEdit, ctasOf, CTA_ITEM_TYPES, CtaEditError } from '../../membership/cta-edits.mjs'; // sow-281
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
@@ -429,6 +430,40 @@ export async function setSiteToggle(ctx, { key, enabled } = {}) {
     noopMsg: `site setting already ${on ? 'on' : 'off'}: ${k}`,
     errType: SiteSettingsEditError,
   });
+}
+
+// sow-281: the CTA registry (house/ctas.yml). SUPERADMIN, enforced the same three ways as the site toggles above:
+// editHouseYaml's requireRole(canManageRoles, 'superadmin'), ROLE_RANK.superadmin on the Worker ops, and the
+// CODEOWNERS pin on the file. The read is public git data (the built site publishes the same registry as /ctas.json).
+const CTAS_PATH = 'house/ctas.yml';
+const ctaSlug = (a) => slugOf(String(a || '').slice(0, 60)) || 'cta';
+async function editCtas(ctx, edit, { branch, message, title, noopMsg }) {
+  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError });
+}
+export async function getCtaPool(ctx) {
+  const parsed = await readYaml(ctx, CTAS_PATH);
+  return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
+}
+export async function addCta(ctx, fields = {}) {
+  return editCtas(ctx, (parsed) => addCtaEdit(parsed, fields, actionCtx(ctx)),
+    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: 'no change' });
+}
+export async function updateCta(ctx, fields = {}) {
+  return editCtas(ctx, (parsed) => updateCtaEdit(parsed, fields, actionCtx(ctx)),
+    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: 'no change' });
+}
+export async function setCtaEnabled(ctx, { id, enabled } = {}) {
+  const on = enabled === true;
+  return editCtas(ctx, (parsed) => setCtaEnabledEdit(parsed, { id, enabled: on }, actionCtx(ctx)),
+    { branch: `gbti/cta-toggle-${ctaSlug(id)}`, message: `${on ? 'Enable' : 'Disable'} CTA ${id}`, title: `${on ? 'Enable' : 'Disable'} CTA: ${id}`, noopMsg: `CTA already ${on ? 'enabled' : 'disabled'}` });
+}
+export async function assignCta(ctx, { id, type, ref } = {}) {
+  return editCtas(ctx, (parsed) => assignCtaEdit(parsed, { id, type, ref }, actionCtx(ctx)),
+    { branch: `gbti/cta-assign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Assign CTA ${id} to ${type}:${ref}`, title: `Assign CTA: ${id} to ${type}:${ref}`, noopMsg: 'already assigned' });
+}
+export async function unassignCta(ctx, { id, type, ref } = {}) {
+  return editCtas(ctx, (parsed) => unassignCtaEdit(parsed, { id, type, ref }, actionCtx(ctx)),
+    { branch: `gbti/cta-unassign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Unassign CTA ${id} from ${type}:${ref}`, title: `Unassign CTA: ${id} from ${type}:${ref}`, noopMsg: 'not assigned' });
 }
 
 /** Read the per-type templates (+ SOW-088 per-channel overrides) for the manager UI. Read-only. */

@@ -1993,8 +1993,8 @@ var require_dumper = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   function generateNextLine(state, level) {
     return "\n" + common.repeat(" ", state.indent * level);
   }
-  function testImplicitResolving(state, str) {
-    for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str)) return true;
+  function testImplicitResolving(state, str2) {
+    for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str2)) return true;
     return false;
   }
   function isWhitespace(c) {
@@ -3172,14 +3172,14 @@ function promiseAllObject(promisesObj) {
 }
 function randomString(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str = "";
+  let str2 = "";
   for (let i = 0; i < length; i++) {
-    str += chars[Math.floor(Math.random() * chars.length)];
+    str2 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str;
+  return str2;
 }
-function esc(str) {
-  return JSON.stringify(str);
+function esc(str2) {
+  return JSON.stringify(str2);
 }
 function slugify(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -3293,8 +3293,8 @@ var primitiveTypes = /* @__PURE__ */ new Set([
   "symbol",
   "undefined"
 ]);
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(str2) {
+  return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -17508,8 +17508,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean6 = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean6), (c) => c.charCodeAt(0));
+  const clean7 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean7), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -17747,9 +17747,9 @@ function toBase64(text) {
   return btoa(bin);
 }
 function fromBase64(b64) {
-  const clean6 = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean6, "base64").toString("utf8");
-  const bin = atob(clean6);
+  const clean7 = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean7, "base64").toString("utf8");
+  const bin = atob(clean7);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -18167,8 +18167,8 @@ var SECRET_KEY = /token|secret|authorization|bearer|password|refresh|api[_-]?key
 var MAX_STRING = 200;
 var MAX_DEPTH = 3;
 function clip(s) {
-  const str = String(s);
-  return str.length > MAX_STRING ? `${str.slice(0, MAX_STRING)}…(${str.length})` : str;
+  const str2 = String(s);
+  return str2.length > MAX_STRING ? `${str2.slice(0, MAX_STRING)}…(${str2.length})` : str2;
 }
 function redactDeep(value, depth = 0) {
   if (value == null) return value;
@@ -18964,8 +18964,8 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, mess
   const id_ = input.id ?? shareId(createdAt, input.title);
   let built;
   try {
-    const { encryptedBody: _stale, ...clean6 } = input;
-    built = buildShareFile({ username: id.username, input: { ...clean6, id: id_, createdAt }, body });
+    const { encryptedBody: _stale, ...clean7 } = input;
+    built = buildShareFile({ username: id.username, input: { ...clean7, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -21773,6 +21773,197 @@ function setSiteToggle(doc, { key, enabled } = {}, ctx = {}) {
   return { next: d, changed: true, audit: auditEntry7(ctx, "site-setting.set", k, { enabled, was: current }) };
 }
 
+// membership/cta-edits.mjs
+var CtaEditError = class extends Error {
+};
+var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
+var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160 });
+var ID_RE2 = /^[a-z0-9][a-z0-9-]*$/;
+var SLUG_RE2 = /^[a-z0-9][a-z0-9-]*$/;
+var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
+var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
+var str = (v) => typeof v === "string" ? v.trim() : "";
+function isoOf10(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new CtaEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry8(ctx, action, id, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf10(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { id },
+    detail: detail ?? null
+  };
+}
+function clean6(doc) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!Array.isArray(d.ctas)) d.ctas = [];
+  return d;
+}
+function ctasOf(parsed) {
+  return Array.isArray(parsed?.ctas) ? parsed.ctas : [];
+}
+function validRef(type, ref) {
+  const r = str(ref);
+  if (!r || r.length > CTA_LIMITS.ref) return false;
+  return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE2.test(r);
+}
+function amazonDestinationProblem(destination) {
+  let u;
+  try {
+    u = new URL(String(destination || ""));
+  } catch {
+    return "an amazon destination must be an absolute URL";
+  }
+  if (!AMAZON_HOST_RE.test(u.hostname)) return "an amazon CTA must link straight to an amazon domain (no /outbound/ path or other intermediate site: a redirected purchase earns nothing)";
+  if (!u.searchParams.get("tag")) return "an amazon destination must carry the Associates tag= parameter (without it the purchase earns nothing)";
+  return null;
+}
+function validateCta(e, where = "cta") {
+  const problems = [];
+  if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
+  const id = str(e.id);
+  if (!id || !ID_RE2.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
+  for (const [k, max] of [["label", CTA_LIMITS.label], ["line", CTA_LIMITS.line], ["button", CTA_LIMITS.button]]) {
+    const v = str(e[k]);
+    if (!v) problems.push(`${where}: ${k} is required`);
+    else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
+  }
+  const dest = str(e.destination);
+  let u = null;
+  try {
+    u = new URL(dest);
+  } catch {
+    u = null;
+  }
+  if (!u || u.protocol !== "https:" || !u.hostname) problems.push(`${where}: destination must be an absolute https URL, got ${JSON.stringify(e.destination ?? null)}`);
+  else if (dest.length > CTA_LIMITS.destination) problems.push(`${where}: destination is too long (max ${CTA_LIMITS.destination} chars)`);
+  const partner = str(e.partner);
+  if (!partner || !ID_RE2.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
+  if (partner === "amazon" && u) {
+    const why = amazonDestinationProblem(dest);
+    if (why) problems.push(`${where}: ${why}`);
+  }
+  if (e.enabled !== void 0 && typeof e.enabled !== "boolean") problems.push(`${where}: enabled must be true or false`);
+  if (e.note !== void 0 && e.note !== null && (typeof e.note !== "string" || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
+  if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
+  const seen = /* @__PURE__ */ new Set();
+  for (const [i, it] of (Array.isArray(e.items) ? e.items : []).entries()) {
+    const at = `${where}.items[${i}]`;
+    if (!it || typeof it !== "object") {
+      problems.push(`${at}: must be a map of { type, ref }`);
+      continue;
+    }
+    if (!CTA_ITEM_TYPES.includes(it.type)) {
+      problems.push(`${at}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it.type ?? null)}`);
+      continue;
+    }
+    if (!validRef(it.type, it.ref)) {
+      problems.push(`${at}: ref must be a ${it.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it.ref ?? null)}`);
+      continue;
+    }
+    const key = `${it.type}:${str(it.ref)}`;
+    if (seen.has(key)) problems.push(`${at}: ${key} is assigned to this CTA twice`);
+    seen.add(key);
+  }
+  return problems;
+}
+function validateCtas(parsed) {
+  if (parsed === null || parsed === void 0) return ["the registry is empty (expected a ctas: list)"];
+  if (typeof parsed !== "object" || Array.isArray(parsed)) return ["the registry must be a map with a ctas: list"];
+  if (parsed.ctas !== void 0 && !Array.isArray(parsed.ctas)) return ["ctas must be a list"];
+  const problems = [];
+  const ids = /* @__PURE__ */ new Map();
+  ctasOf(parsed).forEach((e, i) => {
+    const where = `ctas[${i}]`;
+    problems.push(...validateCta(e, where));
+    const id = str(e?.id);
+    if (id) {
+      if (ids.has(id)) problems.push(`${where}: duplicate id "${id}" (also ${ids.get(id)})`);
+      else ids.set(id, where);
+    }
+  });
+  return problems;
+}
+function findCta(d, id) {
+  const k = str(id);
+  const e = d.ctas.find((x) => x && typeof x === "object" && str(x.id) === k);
+  if (!e) throw new CtaEditError(`no CTA with id "${k}"`);
+  return e;
+}
+function assertValid(d, where) {
+  const problems = validateCtas(d);
+  if (problems.length) throw new CtaEditError(`${where}: ${problems[0]}`);
+}
+var EDITABLE = ["label", "line", "button", "destination", "partner", "note"];
+function addCta(doc, fields = {}, ctx = {}) {
+  const d = clean6(doc);
+  const id = str(fields.id);
+  if (!id) throw new CtaEditError("a CTA needs an id");
+  if (d.ctas.some((x) => x && str(x.id) === id)) throw new CtaEditError(`a CTA with id "${id}" already exists`);
+  const entry = { id };
+  for (const k of EDITABLE) if (fields[k] !== void 0 && fields[k] !== null) entry[k] = String(fields[k]).trim();
+  entry.enabled = fields.enabled === true;
+  entry.items = [];
+  d.ctas.push(entry);
+  assertValid(d, "add");
+  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.add", id, { partner: entry.partner, destination: entry.destination }) };
+}
+function updateCta(doc, fields = {}, ctx = {}) {
+  const d = clean6(doc);
+  const e = findCta(d, fields.id);
+  const changed = [];
+  for (const k of EDITABLE) {
+    if (fields[k] === void 0) continue;
+    const v = fields[k] === null ? "" : String(fields[k]).trim();
+    if (k === "note" && !v) {
+      if (e.note !== void 0) {
+        delete e.note;
+        changed.push(k);
+      }
+      continue;
+    }
+    if (str(e[k]) === v) continue;
+    e[k] = v;
+    changed.push(k);
+  }
+  if (!changed.length) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.update", e.id, { noop: true }) };
+  assertValid(d, "update");
+  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.update", e.id, { fields: changed }) };
+}
+function setCtaEnabled(doc, { id, enabled } = {}, ctx = {}) {
+  const d = clean6(doc);
+  const e = findCta(d, id);
+  const want = enabled === true;
+  if (e.enabled === true === want) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.enable", e.id, { enabled: want, noop: true }) };
+  e.enabled = want;
+  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.enable", e.id, { enabled: want }) };
+}
+function assignCta(doc, { id, type, ref } = {}, ctx = {}) {
+  const d = clean6(doc);
+  const e = findCta(d, id);
+  if (!CTA_ITEM_TYPES.includes(type)) throw new CtaEditError(`type must be one of ${CTA_ITEM_TYPES.join(", ")}`);
+  const r = str(ref);
+  if (!validRef(type, r)) throw new CtaEditError(`ref must be a ${type === "share" ? "author/id pair" : "slug"}`);
+  if (!Array.isArray(e.items)) e.items = [];
+  if (e.items.some((it) => it && it.type === type && str(it.ref) === r)) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.assign", e.id, { type, ref: r, noop: true }) };
+  e.items.push({ type, ref: r });
+  assertValid(d, "assign");
+  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.assign", e.id, { type, ref: r }) };
+}
+function unassignCta(doc, { id, type, ref } = {}, ctx = {}) {
+  const d = clean6(doc);
+  const e = findCta(d, id);
+  const r = str(ref);
+  const i = Array.isArray(e.items) ? e.items.findIndex((it) => it && it.type === type && str(it.ref) === r) : -1;
+  if (i < 0) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.unassign", e.id, { type, ref: r, noop: true }) };
+  e.items.splice(i, 1);
+  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.unassign", e.id, { type, ref: r }) };
+}
+
 // client/src/admin-ops.mjs
 async function adminPublish(ctx, opts) {
   await syncForkIfCreatingBranch(ctx, opts.repo, opts.branch);
@@ -21806,13 +21997,13 @@ function actionCtx(ctx) {
     now: ctx.now ? ctx.now() : void 0
   };
 }
-function prBody(reason, auditEntry8) {
+function prBody(reason, auditEntry9) {
   const head = reason ? `Reason: ${reason}
 
 ` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry8)} -->`;
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry9)} -->`;
 }
-var noop = (message, auditEntry8) => ({ changed: false, noop: true, message, audit: auditEntry8 });
+var noop = (message, auditEntry9) => ({ changed: false, noop: true, message, audit: auditEntry9 });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -22120,6 +22311,51 @@ async function setSiteToggle2(ctx, { key, enabled } = {}) {
     errType: SiteSettingsEditError
   });
 }
+var CTAS_PATH = "house/ctas.yml";
+var ctaSlug = (a) => slugOf(String(a || "").slice(0, 60)) || "cta";
+async function editCtas(ctx, edit, { branch, message, title, noopMsg }) {
+  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError });
+}
+async function getCtaPool(ctx) {
+  const parsed = await readYaml(ctx, CTAS_PATH);
+  return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
+}
+async function addCta2(ctx, fields = {}) {
+  return editCtas(
+    ctx,
+    (parsed) => addCta(parsed, fields, actionCtx(ctx)),
+    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: "no change" }
+  );
+}
+async function updateCta2(ctx, fields = {}) {
+  return editCtas(
+    ctx,
+    (parsed) => updateCta(parsed, fields, actionCtx(ctx)),
+    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: "no change" }
+  );
+}
+async function setCtaEnabled2(ctx, { id, enabled } = {}) {
+  const on = enabled === true;
+  return editCtas(
+    ctx,
+    (parsed) => setCtaEnabled(parsed, { id, enabled: on }, actionCtx(ctx)),
+    { branch: `gbti/cta-toggle-${ctaSlug(id)}`, message: `${on ? "Enable" : "Disable"} CTA ${id}`, title: `${on ? "Enable" : "Disable"} CTA: ${id}`, noopMsg: `CTA already ${on ? "enabled" : "disabled"}` }
+  );
+}
+async function assignCta2(ctx, { id, type, ref } = {}) {
+  return editCtas(
+    ctx,
+    (parsed) => assignCta(parsed, { id, type, ref }, actionCtx(ctx)),
+    { branch: `gbti/cta-assign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Assign CTA ${id} to ${type}:${ref}`, title: `Assign CTA: ${id} to ${type}:${ref}`, noopMsg: "already assigned" }
+  );
+}
+async function unassignCta2(ctx, { id, type, ref } = {}) {
+  return editCtas(
+    ctx,
+    (parsed) => unassignCta(parsed, { id, type, ref }, actionCtx(ctx)),
+    { branch: `gbti/cta-unassign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Unassign CTA ${id} from ${type}:${ref}`, title: `Unassign CTA: ${id} from ${type}:${ref}`, noopMsg: "not assigned" }
+  );
+}
 async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   const cfg = syndicationConfigFromParsed(parsed);
@@ -22372,7 +22608,7 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
 
 // extension/src/ext-dispatch.mjs
 var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
-var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
+var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2, "cta-add": addCta2, "cta-update": updateCta2, "cta-toggle": setCtaEnabled2, "cta-assign": assignCta2, "cta-unassign": unassignCta2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -22441,6 +22677,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === "/api/coupon-pool") return ok(await getCouponPool2(ctx));
     if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
+    if (pathname === "/api/cta-pool") return ok(await getCtaPool(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
     if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));
     const username = id?.username;
