@@ -2,24 +2,29 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PromptCard from '../../components/prompts/PromptCard.astro';
-import { isListed } from '../../lib/content';
+import { isPubliclyListed, isMembersOnlyListed } from '../../lib/content';
+import MembersOnlyCards from '../../components/MembersOnlyCards.astro'; // sow-323 Phase 3
 import { topLevelCategories, categoryLabel } from '../../lib/taxonomy';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
 import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: the one search field, in the hero
 import SubscribeButton from '../../components/SubscribeButton.astro';
 
-const prompts = (await getCollection('prompt')).filter(isListed).sort((a, b) => a.data.title.localeCompare(b.data.title));
-const categories = topLevelCategories(prompts.map((p) => p.data.categories));
-const targets = [...new Set(prompts.flatMap((p) => p.data.targets ?? []))].sort((a, b) => a.localeCompare(b));
+const prompts = (await getCollection('prompt')).filter(isPubliclyListed).sort((a, b) => a.data.title.localeCompare(b.data.title));
+// sow-323 Phase 3: members-only prompts leave the public grid; a paying member sees them after sign-in, in title order.
+// The facets and banner lookups include them, so a revealed card is filterable like any other.
+const membersPrompts = (await getCollection('prompt')).filter(isMembersOnlyListed).sort((a, b) => a.data.title.localeCompare(b.data.title));
+const allPrompts = [...prompts, ...membersPrompts];
+const categories = topLevelCategories(allPrompts.map((p) => p.data.categories));
+const targets = [...new Set(allPrompts.flatMap((p) => p.data.targets ?? []))].sort((a, b) => a.localeCompare(b));
 
 // Label lookups for the deep-link filter banner (?cat= / ?tag= / ?author=), so the banner reads nicely.
 const profiles = await getCollection('profile');
 const profByUser = new Map(profiles.map((p) => [p.data.username, p.data]));
 const profileName = new Map(profiles.map((p) => [p.data.username, p.data.displayName]));
-const catLabels = Object.fromEntries([...new Set(prompts.flatMap((p) => p.data.categories))].map((k) => [k, categoryLabel(k)]));
-const authorNames = Object.fromEntries(prompts.map((p) => [p.data.author, profileName.get(p.data.author) ?? authorDisplay(p.data.author)]));
+const catLabels = Object.fromEntries([...new Set(allPrompts.flatMap((p) => p.data.categories))].map((k) => [k, categoryLabel(k)]));
+const authorNames = Object.fromEntries(allPrompts.map((p) => [p.data.author, profileName.get(p.data.author) ?? authorDisplay(p.data.author)]));
 // Per-author meta for the featured header shown when ?author= is active (filled client-side from this map).
-const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.author))].map((u) => {
+const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.author))].map((u) => {
   const pr = profByUser.get(u);
   return [u, { name: pr?.displayName ?? authorDisplay(u), avatar: authorAvatar(u, pr?.avatar) ?? '', headline: pr?.headline ?? '', href: authorHref(u) }];
 }));
@@ -111,6 +116,7 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
 
             <div id="prompt-grid" class="rworks-grid" data-view="compact">
               {prompts.map((p) => <PromptCard prompt={p} />)}
+              <MembersOnlyCards items="[data-category]" order="title" key="data-title">{membersPrompts.map((p) => <PromptCard prompt={p} />)}</MembersOnlyCards>
             </div>
             <nav id="prompt-pages" class="ppage" aria-label="Prompt directory pages" hidden></nav>
             <p id="prompt-empty" class="body muted tcenter" hidden style="margin-top:24px">No prompts match this filter yet.</p>
@@ -277,6 +283,8 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
     (function () {
       var grid = document.getElementById('prompt-grid');
       var cards = Array.prototype.slice.call(grid.querySelectorAll('[data-category]'));
+      // sow-323 Phase 3: members-only cards arrive after a paying member signs in; collect them and re-apply.
+      grid.addEventListener('members-only-revealed', function () { cards = Array.prototype.slice.call(grid.querySelectorAll('[data-category]')); apply(); });
       var searchEl = document.getElementById('prompt-search');
       var countEl = document.getElementById('prompt-count');
       var emptyEl = document.getElementById('prompt-empty');

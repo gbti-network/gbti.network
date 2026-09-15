@@ -54,6 +54,10 @@ export function buildSyndicationItem(path, frontmatter = {}) {
   if (!cls) return null;
   const fm = frontmatter || {};
   if (fm.status !== 'published') return null; // only a published add announces
+  // sow-323 Phase 3: a members-only article, project or prompt is never announced. It is announced when a superadmin
+  // approves it, which makes it public and is the publish transition the runner selects (publish-transitions.mjs).
+  // A SHARE is exempt: a members-only share is not reviewable and goes to the members' Discord with its own template.
+  if (cls.type !== 'share' && fm.visibility === 'members') return null;
   // Defensive: the file's declared type must match the path subtree (a stray type field cannot retarget a channel).
   if (fm.type && fm.type !== cls.type) return null;
   const title = (fm.title != null ? String(fm.title) : '').trim();

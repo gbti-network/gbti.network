@@ -3,7 +3,7 @@
 // selection against a FAKE git (no network, no real repo).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isContentPath, statusOf, isPublishTransition, selectPublishedTransitions } from '../scripts/lib/publish-transitions.mjs';
+import { isContentPath, statusOf, visibilityOf, isAnnounceable, isPublishTransition, selectPublishedTransitions } from '../scripts/lib/publish-transitions.mjs';
 
 test('statusOf: a missing status defaults to published (matches the enqueue guard)', () => {
   assert.equal(statusOf({ status: 'draft' }), 'draft');
@@ -82,4 +82,29 @@ test('selectPublishedTransitions: fail-closed on a missing baseline or a git err
   assert.deepEqual(selectPublishedTransitions({ before: '0'.repeat(40), after: 'b'.repeat(40), runGit: () => 'M\tx', parseFm }), []); // zero baseline
   assert.deepEqual(selectPublishedTransitions({ before: '', after: 'b'.repeat(40), parseFm }), []); // no before
   assert.deepEqual(selectPublishedTransitions({ before: 'a'.repeat(40), after: 'b'.repeat(40) }), []); // no parseFm
+});
+
+test('sow-323: announcing follows the AUDIENCE, so an approval announces and a members-only item never does', () => {
+  const post = 'members/alice/posts/x/index.md';
+  const share = 'members/alice/shares/20260915-x.md';
+  const pub = { status: 'published', visibility: 'public' };
+  const members = { status: 'published', visibility: 'members' };
+  // the schema defaults, which decide what silence means
+  assert.equal(visibilityOf({ status: 'published' }, post), 'public', 'silence on an article is public');
+  assert.equal(visibilityOf({ status: 'published' }, share), 'members', 'silence on a share is members-only');
+  assert.equal(isAnnounceable(members, post), false);
+  assert.equal(isAnnounceable(pub, post), true);
+  assert.equal(isAnnounceable({ status: 'draft', visibility: 'public' }, post), false);
+  // THE CASE THIS EXISTS FOR: a superadmin approving a waiting item is members -> public, an announcement.
+  assert.equal(isPublishTransition(members, pub, post), true);
+  // and publishing it members-only, or editing it while it waits, is not
+  assert.equal(isPublishTransition(null, members, post), false);
+  assert.equal(isPublishTransition(members, members, post), false);
+  assert.equal(isPublishTransition({ status: 'draft', visibility: 'members' }, members, post), false);
+  // a public item stays announced once, not again on every edit
+  assert.equal(isPublishTransition(pub, pub, post), false);
+  // SHARES are exempt: a members-only share is not reviewable, and it announces to the members' Discord as before
+  assert.equal(isAnnounceable({ status: 'published' }, share), true);
+  assert.equal(isPublishTransition(null, { status: 'published' }, share), true);
+  assert.equal(isPublishTransition({ status: 'draft' }, { status: 'published', visibility: 'members' }, share), true);
 });

@@ -20,16 +20,19 @@ import { catKey } from '../../lib/feed-filter.mjs';
 interface Props {
   narrow: 'all' | 'news' | 'network' | 'articles' | 'projects' | 'prompts' | 'shares';
   items: FeedItem[]; // the full normalized set; this component narrows it
+  // sow-323 Phase 3: published members-only content items, narrowed the same way and revealed only to a paying member
+  membersItems?: FeedItem[];
   avatarIndex: AvatarIndex;
   membersShareCount: number;
 }
-const { narrow, items, avatarIndex, membersShareCount } = Astro.props;
+const { narrow, items, membersItems = [], avatarIndex, membersShareCount } = Astro.props;
 
 // sow-205: the lab caption + the tab nav moved into the shared <FeedChrome>; FeedView keeps only the
 // current narrow's href, for the tag-clear "Clear" link. FEED_NAV stays the one consolidated source.
 const currentHref = FEED_NAV.find((i) => i.key === narrow)?.href ?? '/feeds/';
 const isNews = narrow === 'news';
 const narrowed = sortByNewest(items.filter((it) => matchesNarrow(it, narrow))) as FeedItem[];
+const membersNarrowed = sortByNewest(membersItems.filter((it) => matchesNarrow(it, narrow))) as FeedItem[];
 const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersShareCount > 0;
 // sow-312: the live member stream mounts on the SHARES view only. On /feeds/ (all) the count card stays,
 // because that view is a cross-type digest and a second live list there is a separate design question.
@@ -145,7 +148,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       </section>
     </>
   ) : (
-    <FeedList items={narrowed} avatarIndex={avatarIndex} ctaAfter={4}>
+    <FeedList items={narrowed} membersItems={membersNarrowed} avatarIndex={avatarIndex} ctaAfter={4}>
       <div slot="cta" class="feed-cta-inner">
         <div>
           <div class="fc-t">Join the co-op</div>

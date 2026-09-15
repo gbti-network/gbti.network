@@ -21,7 +21,7 @@ const markup = (src) => src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\
 const FOLLOW = /follow-pill|feed-follow|data-follow-user|ico-mega/;
 
 test('the server-rendered feed card carries no follow control', () => {
-  const list = markup(read('src/components/feeds/FeedList.astro'));
+  const list = markup(read('src/components/feeds/FeedList.astro') + read('src/components/feeds/FeedCard.astro')); // sow-323 Phase 3: the card moved into FeedCard
   assert.match(list, /<FavoriteButton /, 'control: the read found the card markup (it still renders the heart)');
   assert.doesNotMatch(list, FOLLOW);
   assert.doesNotMatch(list, /setFollow|getFollows/, 'and no follow wiring is left behind');

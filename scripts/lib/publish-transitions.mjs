@@ -1,4 +1,4 @@
-// sow-208: select the content paths that TRANSITIONED to published in a push, instead of the paths merely
+// sow-208: select the content paths that TRANSITIONED to announceable in a push, instead of the paths merely
 // ADDED. Publishing is a status flip now (sow-194 made committed drafts first-class), so an article added as a
 // draft and later published by modifying its status line never appears as an ADD, and the old diff-filter=A
 // selection silently missed it. A transition = the file is published in AFTER and was NOT published in BEFORE
@@ -27,13 +27,36 @@ export function statusOf(fm) {
   return fm && fm.status != null ? String(fm.status) : 'published';
 }
 
-/** A publish transition: published in AFTER, and NOT published in BEFORE. `beforeFm === null` means the file
- *  did not exist at the before ref (a genuine add). `afterFm === null` (deleted/unreadable) is never a publish. */
-export function isPublishTransition(beforeFm, afterFm) {
-  if (afterFm == null) return false;
-  if (statusOf(afterFm) !== 'published') return false;
-  if (beforeFm == null) return true; // added (or renamed from nothing) and published now
-  return statusOf(beforeFm) !== 'published'; // draft -> published; published -> published is NOT a transition
+/** The effective visibility of parsed frontmatter, per the schema defaults: a share is members-only unless it says
+ *  public; every other content type is public unless it says members. */
+export function visibilityOf(fm, path) {
+  const stated = fm && fm.visibility != null ? String(fm.visibility) : null;
+  if (stated === 'members' || stated === 'public') return stated;
+  return SHARE_RE.test(String(path || '')) ? 'members' : 'public';
+}
+
+/**
+ * sow-323 Phase 3: is this file ANNOUNCEABLE at this ref, meaning published AND public?
+ *
+ * A members-only item is not announced at all: the owner ruled on 2026-09-12 that it stays out of public feeds
+ * until a superadmin approves it, and approval is what makes it public. Shares are exempt, because a members-only
+ * share is not reviewable and its announcement goes to the members' Discord with its own members-only template.
+ */
+export function isAnnounceable(fm, path) {
+  if (fm == null) return false;
+  if (statusOf(fm) !== 'published') return false;
+  if (SHARE_RE.test(String(path || ''))) return true;
+  return visibilityOf(fm, path) === 'public';
+}
+
+/** A publish transition: announceable in AFTER, and NOT announceable in BEFORE. `beforeFm === null` means the file
+ *  did not exist at the before ref (a genuine add). `afterFm === null` (deleted/unreadable) is never a publish.
+ *  sow-323 Phase 3: an APPROVAL (members -> public) is such a transition, which is when an approved item is
+ *  announced; a published members-only item never is. */
+export function isPublishTransition(beforeFm, afterFm, path) {
+  if (!isAnnounceable(afterFm, path)) return false;
+  if (beforeFm == null) return true; // added (or renamed from nothing) and announceable now
+  return !isAnnounceable(beforeFm, path); // draft or members-only -> public; already public is NOT a transition
 }
 
 const defaultRunGit = (args, root) => execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -71,7 +94,7 @@ export function selectPublishedTransitions({ before, after, root = '.', runGit, 
     if (!newPath || !isContentPath(newPath)) continue;
     const afterFm = readFm(git, after, newPath, parseFm);
     const beforeFm = oldPath ? readFm(git, before, oldPath, parseFm) : null;
-    if (isPublishTransition(beforeFm, afterFm)) out.push(newPath);
+    if (isPublishTransition(beforeFm, afterFm, newPath)) out.push(newPath);
   }
   return out;
 }

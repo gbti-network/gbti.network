@@ -2,11 +2,14 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ArticleTeaser from '../../components/blog/ArticleTeaser.astro';
-import { isDiscoverable, byNewest } from '../../lib/content'; // sow-189: a stale article leaves the directory
+import { isDiscoverable, isMembersDiscoverable, byNewest } from '../../lib/content'; // sow-189: a stale article leaves the directory
+import MembersOnlyCards from '../../components/MembersOnlyCards.astro'; // sow-323 Phase 3
 
 import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: search in the hero
 const posts = (await getCollection('post')).filter(isDiscoverable).sort(byNewest);
-const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(Boolean))].sort();
+// sow-323 Phase 3: members-only articles are not in the public directory; a paying member sees them after sign-in.
+const membersPosts = (await getCollection('post')).filter(isMembersDiscoverable).sort(byNewest);
+const categories = [...new Set([...posts, ...membersPosts].map((p) => p.data.categories?.[0]).filter(Boolean))].sort();
 ---
 <BaseLayout title="News" description="Articles from the GBTI Network.">
   <section class="band tint">
@@ -25,6 +28,7 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
 
       <div id="post-grid" class="works-grid blog-grid">
         {posts.map((post) => <ArticleTeaser post={post} />)}
+        <MembersOnlyCards items=".archive-card" order="newest" key="data-ts">{membersPosts.map((post) => <ArticleTeaser post={post} />)}</MembersOnlyCards>
       </div>
       <p id="post-empty" class="body muted" style="text-align:center;padding:28px 0" hidden>No articles match that search.</p>
       {/* sow-250: said when a ?cat= deep link names a category this page does not have. Mirrors #post-empty. */}
@@ -42,13 +46,14 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
 
   <script>
     const pills = document.querySelectorAll<HTMLButtonElement>('.cat-pill');
-    const cards = document.querySelectorAll<HTMLElement>('#post-grid .archive-card');
+    let cards = Array.from(document.querySelectorAll<HTMLElement>('#post-grid .archive-card'));
     // sow-177: the hero search composes with the category chips. A card's searchable text is read once from
     // the card itself (title, excerpt, author), so no data attribute has to be kept in step with the teaser.
     const searchEl = document.getElementById('article-search') as HTMLInputElement | null;
     const emptyEl = document.getElementById('post-empty');
     const text = new Map<HTMLElement, string>();
-    cards.forEach((card) => text.set(card, (card.textContent || '').replace(/\s+/g, ' ').toLowerCase()));
+    const readText = () => cards.forEach((card) => text.set(card, (card.textContent || '').replace(/\s+/g, ' ').toLowerCase()));
+    readText();
     let cat = 'all';
     let query = '';
     function applyFilter(nextCat: string) {
@@ -68,6 +73,12 @@ const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(B
     }
     pills.forEach((pill) => {
       pill.addEventListener('click', () => applyFilter(pill.dataset.cat || 'all'));
+    });
+    // sow-323 Phase 3: members-only cards arrive after a paying member signs in; collect them and re-apply the filter.
+    document.getElementById('post-grid')?.addEventListener('members-only-revealed', () => {
+      cards = Array.from(document.querySelectorAll<HTMLElement>('#post-grid .archive-card'));
+      readText();
+      applyFilter(cat);
     });
     searchEl?.addEventListener('input', () => { query = searchEl.value.trim().toLowerCase(); applyFilter(cat); });
     // Deep link: /articles/?cat=<key> (from a related-article card's category eyebrow) preselects that pill on load.

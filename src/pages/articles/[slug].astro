@@ -62,7 +62,7 @@ const isJournal = Layout === ArticleJournal;
 // sow-189: an unindexed article asks search engines to forget it while the network still points at it.
 const unindexed = contentFlagsOf('post', d.slug).unindexed;
 ---
-<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src ?? defaultFeatureImage('post')} ogImageSize={imageFieldSize(d.coverImage)} ogType="article" noindex={unindexed ? 'noindex, follow' : false}>
+<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src ?? defaultFeatureImage('post')} ogImageSize={imageFieldSize(d.coverImage)} ogType="article" noindex={unindexed ? 'noindex, follow' : stub ? 'noindex' : false}>
   <DeployStatusNotice type="post" slug={d.slug} updatedAt={d.updatedAt} />
   <Layout d={d} isStub={stub} postId={post.id} postUrl={postUrl} stack={stack} toc={toc}>
     <Content slot="body" />

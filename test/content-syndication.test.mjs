@@ -51,10 +51,14 @@ test('buildSyndicationItem: published only; title required (non-share); type-mis
   assert.equal(buildSyndicationItem('members/a/posts/x/index.md', { status: 'published' }), null);
   // a frontmatter type that disagrees with the path subtree -> null (cannot retarget a channel)
   assert.equal(buildSyndicationItem('members/a/posts/x/index.md', { type: 'project', title: 'X', status: 'published' }), null);
-  // members-only Mode A post -> built, hasPublicPage false
-  const a = buildSyndicationItem('members/a/posts/secret/index.md', { type: 'post', title: 'Secret', author: 'a', status: 'published', visibility: 'members', publicStub: false });
-  assert.equal(a.hasPublicPage, false);
-  // share with a link
+  // sow-323 Phase 3: a members-only article, project or prompt is NOT announced at all. It used to be built (and a
+  // Mode B stub carried a link), which is what put an unreviewed item on Discord and Bluesky an hour after publish.
+  // It is announced when a superadmin approves it, because that is the publish transition the runner selects.
+  for (const stub of [true, false]) {
+    assert.equal(buildSyndicationItem('members/a/posts/secret/index.md', { type: 'post', title: 'Secret', author: 'a', status: 'published', visibility: 'members', publicStub: stub }), null, `publicStub: ${stub}`);
+  }
+  assert.equal(buildSyndicationItem('members/a/prompts/secret/index.md', { type: 'prompt', title: 'Secret', author: 'a', status: 'published', visibility: 'members' }), null);
+  // a members-only SHARE is exempt and still announces (the members' Discord, with its members-only template)
   const sh = buildSyndicationItem('members/a/shares/20260616-x.md', { type: 'share', title: 'Cool tool', author: 'a', status: 'published', visibility: 'members', url: 'https://example.com' });
   assert.equal(sh.type, 'share'); assert.equal(sh.shareUrl, 'https://example.com');
 });

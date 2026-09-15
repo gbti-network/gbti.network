@@ -31,7 +31,7 @@ import { commitsByDate, commitCount } from '../lib/git-history';
 import { loadShoptalk, shoptalkWhen, shoptalkTimeShort } from '../lib/shoptalk';
 import { FIRST_TOUCH_PCT, SIGNUP_BASE } from '../lib/membership';
 
-const { contentItems, shareItems, profiles, avatarIndex } = await loadFeedItems();
+const { contentItems, membersItems, shareItems, profiles, avatarIndex } = await loadFeedItems();
 
 // sow-192: Popular moved into the right rail (it was a standalone New & Popular grid at the top). Ranked by
 // favorites + comments, degrading to recency pre-launch. Member content only (no shares).
@@ -200,7 +200,7 @@ const SHOPTALK = {
         </div>
       </div>
 
-      <FeedList items={feed} avatarIndex={avatarIndex} />
+      <FeedList items={feed} membersItems={sortByNewest(membersItems)} avatarIndex={avatarIndex} />
     </main>
 
     <aside class="side">

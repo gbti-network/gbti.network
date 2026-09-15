@@ -40,7 +40,7 @@ test('projects: the field in the hero, the directory told to skip its own, the s
   const p = read('src/pages/projects/index.astro');
   const d = read('src/components/projects/ProjectDirectory.astro');
   assert.equal(count(p, /<DirectorySearch id="project-search"[^>]*attr="data-search"/g), 1);
-  assert.match(p, /<ProjectDirectory projects=\{projects\} heroSearch=\{true\} \/>/);
+  assert.match(p, /<ProjectDirectory projects=\{projects\} membersProjects=\{membersProjects\} heroSearch=\{true\} \/>/); // sow-323 Phase 3
   assert.match(d, /\{!heroSearch && <div class="tsearch">/, 'the toolbar search renders only without a hero field');
   assert.match(d, /scope\.querySelector<HTMLInputElement>\('\[data-search\]'\) \|\| document\.querySelector<HTMLInputElement>\('\[data-search\]'\)/, 'the toolbar field wins when present, else the hero field');
   assert.match(d, /heroSearch = false/, 'default off, so any other embedding keeps its toolbar search');

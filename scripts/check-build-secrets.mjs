@@ -13,10 +13,13 @@
 // sow-194 also folds in a no-draft-in-a-public-index check: a `status: draft` item is the UNPUBLISH state, so
 // isListed excludes it from every public listing. This guard asserts that invariant against the built dist as a
 // fail-closed backstop, so a future regression that re-lists drafts reds the build instead of publishing them.
+import { membersOnlyPagePaths } from '../membership/members-only-pages.mjs'; // sow-323 Phase 3
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildRepoDraftsIndex } from './lib/repo-drafts-index.mjs';
+
+const SITE_ORIGIN = 'https://gbti.network';
 
 function* walk(dir) {
   if (!fs.existsSync(dir)) return;
@@ -95,7 +98,11 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       const m = new RegExp('^' + key + ':\\s*"?([^"\\n]+?)"?\\s*$', 'm').exec(txt);
       return m ? m[1].trim() : null;
     };
-    const SUBS = [['posts', 'blog'], ['projects', 'projects'], ['prompts', 'prompts']];
+    // sow-323 Phase 3: `posts` build to dist/articles/, not dist/blog/. Both page checks below looked in a folder
+    // that has not existed since the /blog -> /articles move, so for ARTICLES the Mode A absence check passed on a
+    // path that could never exist and the Mode B check would have reported every stub as missing its page. The
+    // retired `products` directory builds as a project and is checked too.
+    const SUBS = [['posts', 'articles'], ['projects', 'projects'], ['products', 'projects'], ['prompts', 'prompts']];
     const baseDirs = [path.join(root, 'house')];
     const membersDir = path.join(root, 'members');
     if (fs.existsSync(membersDir)) {
@@ -126,8 +133,16 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
             const rel = path.relative(root, page);
             if (!fs.existsSync(page)) {
               errors.push(`Mode B item (members + publicStub) has NO public page in dist: ${rel}. A stub must render its teaser and locked body. See SOW-016 / sow-246.`);
-            } else if (!fs.readFileSync(page, 'utf8').includes('data-gbti-region="locked"')) {
-              errors.push(`Mode B item (members + publicStub) built a page WITHOUT the locked body: ${rel}. The gate stopped presenting; the item's members text may be shown in the clear. See SOW-016 / sow-246.`);
+            } else {
+              const html = fs.readFileSync(page, 'utf8');
+              if (!html.includes('data-gbti-region="locked"')) {
+                errors.push(`Mode B item (members + publicStub) built a page WITHOUT the locked body: ${rel}. The gate stopped presenting; the item's members text may be shown in the clear. See SOW-016 / sow-246.`);
+              }
+              // sow-323 Phase 3: a members-only page asks search engines to skip it (the owner's rule that it is not
+              // publicly indexed until approved). The sitemap drop below is the other half.
+              if (!/<meta name="robots" content="[^"]*noindex/.test(html)) {
+                errors.push(`members-only page without a robots noindex: ${rel}. A waiting item keeps its page but must not be indexed. See sow-323.`);
+              }
             }
             modeBChecked += 1;
             continue;
@@ -145,7 +160,42 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
 
   // sow-246: say how many Mode B pages were verified. Zero is the current truth (no stub item exists yet), and
   // it is printed rather than silent so the first real one is visibly the first one checked.
-  if (fs.existsSync(distDir)) notes.push(`Mode B: ${modeBChecked} stub item(s) checked for a locked body in dist`);
+  if (fs.existsSync(distDir)) notes.push(`Mode B: ${modeBChecked} stub item(s) checked for a locked body + noindex in dist`);
+
+  // sow-323 Phase 3: a members-only item is not publicly indexed and not in a public listing until a superadmin
+  // approves it (owner, 2026-09-12). Two checks, on the built site rather than on the source that produced it:
+  //   1. no members-only page URL appears in the sitemap;
+  //   2. no page LINKS to one, except the item's own page (its canonical) and inside a <template>, which is how a
+  //      listing carries the cards it reveals to a paying member (src/lib/members-only-reveal.ts).
+  if (fs.existsSync(distDir)) {
+    const membersPaths = [...membersOnlyPagePaths(root)];
+    let sitemapFiles = 0;
+    for (const f of walk(distDir)) {
+      if (!/sitemap.*\.xml$/i.test(f)) continue;
+      sitemapFiles += 1;
+      const xml = fs.readFileSync(f, 'utf8');
+      for (const p of membersPaths) {
+        if (xml.includes(`${SITE_ORIGIN}${p}`)) errors.push(`members-only page in the sitemap: ${p} (${path.relative(root, f)}). It must not be advertised until a superadmin approves it. See sow-323.`);
+      }
+    }
+    notes.push(`sow-323: ${membersPaths.length} members-only page(s), checked against ${sitemapFiles} sitemap file(s) and every built page's links`);
+    if (membersPaths.length) {
+      for (const f of walk(distDir)) {
+        if (!f.endsWith('.html')) continue;
+        const rel = path.relative(root, f).split(path.sep).join('/');
+        const own = membersPaths.find((p) => rel === `dist${p}index.html`);
+        // A listing's members-only cards live inside <template data-members-only>, which a browser does not render
+        // and a crawler does not follow, so links there are not a public listing.
+        const html = fs.readFileSync(f, 'utf8').replace(/<template[\s\S]*?<\/template>/gi, '');
+        for (const p of membersPaths) {
+          if (p === own) continue;
+          if (new RegExp(`href="(?:${SITE_ORIGIN})?${p.replace(/[/-]/g, '\\$&')}"`).test(html)) {
+            errors.push(`a built page links to the members-only item ${p} outside a <template>: ${rel}. A waiting item is not listed publicly. See sow-323.`);
+          }
+        }
+      }
+    }
+  }
 
   // sow-165: /media-index.json backs the editor's image reuse picker and SHIPS IN DIST, so a Mode A item's
   // path in it would disclose that the item exists. The endpoint filters with isListed, and this is the guard

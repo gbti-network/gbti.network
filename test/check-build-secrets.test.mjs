@@ -115,8 +115,8 @@ test('SOW-016: a Mode A item with a public page in dist fails the build', () => 
   const root = tmpRoot();
   fs.mkdirSync(path.join(root, 'house/posts/secret'), { recursive: true });
   fs.writeFileSync(path.join(root, 'house/posts/secret/index.md'), '---\ntype: post\nslug: secret\nvisibility: members\npublicStub: false\n---\n');
-  fs.mkdirSync(path.join(root, 'dist/blog/secret'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'dist/blog/secret/index.html'), '<html>oops a Mode A page got built</html>');
+  fs.mkdirSync(path.join(root, 'dist/articles/secret'), { recursive: true }); // sow-323: posts build to dist/articles/
+  fs.writeFileSync(path.join(root, 'dist/articles/secret/index.html'), '<html>oops a Mode A page got built</html>');
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.ok(errors.some((e) => /Mode A item .* has a public page in dist/.test(e)));
   fs.rmSync(root, { recursive: true, force: true });
@@ -126,7 +126,7 @@ test('SOW-016: a Mode A item with NO dist page passes (the normal case)', () => 
   const root = tmpRoot();
   fs.mkdirSync(path.join(root, 'house/posts/secret'), { recursive: true });
   fs.writeFileSync(path.join(root, 'house/posts/secret/index.md'), '---\ntype: post\nslug: secret\nvisibility: members\npublicStub: false\n---\n');
-  // no dist/blog/secret/ page
+  // no dist/articles/secret/ page
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors, []);
   fs.rmSync(root, { recursive: true, force: true });
@@ -198,8 +198,8 @@ test('SOW-016: a Mode B item authored `publicStub: True` (capital) is NOT miscla
   const root = tmpRoot();
   fs.mkdirSync(path.join(root, 'house/posts/stub'), { recursive: true });
   fs.writeFileSync(path.join(root, 'house/posts/stub/index.md'), '---\ntype: post\nslug: stub\nvisibility: members\npublicStub: True\n---\n');
-  fs.mkdirSync(path.join(root, 'dist/blog/stub'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'dist/blog/stub/index.html'), '<html><gbti-locked-content data-gbti-region="locked"></gbti-locked-content></html>') // sow-246: a stub page carries the locked body, and the guard now checks it;
+  fs.mkdirSync(path.join(root, 'dist/articles/stub'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/articles/stub/index.html'), '<html><meta name="robots" content="noindex"><gbti-locked-content data-gbti-region="locked"></gbti-locked-content></html>') // sow-246: a stub page carries the locked body, and the guard now checks it; sow-323: and a noindex;
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors, [], 'publicStub: True is a stub (Mode B), so its page is allowed');
   fs.rmSync(root, { recursive: true, force: true });
@@ -486,14 +486,14 @@ function modeBRoot({ page = null } = {}) {
   fs.mkdirSync(path.join(root, 'members/stef/posts/gated'), { recursive: true });
   fs.writeFileSync(path.join(root, 'members/stef/posts/gated/index.md'), '---\ntitle: Gated\nstatus: published\nvisibility: members\npublicStub: true\nslug: gated\n---\nteaser\n');
   if (page !== null) {
-    fs.mkdirSync(path.join(root, 'dist/blog/gated'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'dist/blog/gated/index.html'), page);
+    fs.mkdirSync(path.join(root, 'dist/articles/gated'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'dist/articles/gated/index.html'), page);
   }
   return root;
 }
 
 test('sow-246: a Mode B item whose built page carries the locked body passes, and is counted', () => {
-  const root = modeBRoot({ page: '<html><gbti-locked-content data-gbti-enc="x" data-gbti-region="locked"></gbti-locked-content></html>' });
+  const root = modeBRoot({ page: '<html><meta name="robots" content="noindex"><gbti-locked-content data-gbti-enc="x" data-gbti-region="locked"></gbti-locked-content></html>' });
   const { errors, notes } = checkBuildSecrets({ root, env: {} });
   assert.deepEqual(errors.filter((e) => /Mode B/.test(e)), []);
   assert.ok(notes.some((n) => /Mode B: 1 stub item\(s\) checked/.test(n)), notes.join(' | '));
@@ -503,7 +503,7 @@ test('sow-246: a Mode B item whose built page carries the locked body passes, an
 test('sow-246: a Mode B item with NO built page is an error naming the item', () => {
   const root = modeBRoot({ page: null });
   const { errors } = checkBuildSecrets({ root, env: {} });
-  assert.ok(errors.some((e) => /Mode B item .* NO public page .*blog\/gated/.test(e)), errors.join(' | '));
+  assert.ok(errors.some((e) => /Mode B item .* NO public page .*articles\/gated/.test(e)), errors.join(' | '));
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -527,8 +527,8 @@ test('sow-246 control: the Mode A rule is unchanged by the new branch', () => {
   const root = tmpRoot();
   fs.mkdirSync(path.join(root, 'members/stef/posts/secret'), { recursive: true });
   fs.writeFileSync(path.join(root, 'members/stef/posts/secret/index.md'), '---\ntitle: Secret\nstatus: published\nvisibility: members\nslug: secret\n---\nbody\n');
-  fs.mkdirSync(path.join(root, 'dist/blog/secret'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'dist/blog/secret/index.html'), '<html>leak</html>');
+  fs.mkdirSync(path.join(root, 'dist/articles/secret'), { recursive: true }); // sow-323: posts build to dist/articles/
+  fs.writeFileSync(path.join(root, 'dist/articles/secret/index.html'), '<html>leak</html>');
   const { errors } = checkBuildSecrets({ root, env: {} });
   assert.ok(errors.some((e) => /Mode A item .* has a public page/.test(e)), errors.join(' | '));
   fs.rmSync(root, { recursive: true, force: true });
@@ -557,4 +557,66 @@ test('requireDist: a missing dist is an ERROR by default and a named SKIP when d
   assert.equal(declared.checked, 0, 'and it must not claim to have scanned any page');
 
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-323 Phase 3: a members-only item keeps its page and leaves public discovery. The guard proves it on the
+// BUILT site: the page says noindex, the sitemap does not advertise it, and no other page links to it outside
+// the <template> a listing uses for the cards it reveals to a paying member.
+// ---------------------------------------------------------------------------------------------------------
+function membersOnlyRoot({ page = '<html><meta name="robots" content="noindex"><gbti-locked-content data-gbti-region="locked"></gbti-locked-content></html>', sitemap = '<urlset><url><loc>https://gbti.network/articles/other/</loc></url></urlset>', listing = null } = {}) {
+  const root = tmpRoot();
+  fs.mkdirSync(path.join(root, 'members/stef/posts/gated'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'members/stef/posts/gated/index.md'), '---\ntitle: Gated\nstatus: published\nvisibility: members\npublicStub: true\nslug: gated\n---\nteaser\n');
+  fs.mkdirSync(path.join(root, 'dist/articles/gated'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/articles/gated/index.html'), page);
+  fs.writeFileSync(path.join(root, 'dist/sitemap-0.xml'), sitemap);
+  if (listing !== null) {
+    fs.mkdirSync(path.join(root, 'dist/articles'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'dist/articles/index.html'), listing);
+  }
+  return root;
+}
+const sow323 = (errors) => errors.filter((e) => /sow-323|noindex/.test(e));
+
+test('sow-323: the ordinary case passes and says what it checked', () => {
+  const root = membersOnlyRoot();
+  const { errors, notes } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(sow323(errors), []);
+  assert.ok(notes.some((n) => /sow-323: 1 members-only page\(s\), checked against 1 sitemap file\(s\)/.test(n)), notes.join(' | '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-323: a members-only page without a robots noindex fails', () => {
+  const root = membersOnlyRoot({ page: '<html><gbti-locked-content data-gbti-region="locked"></gbti-locked-content></html>' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /members-only page without a robots noindex: dist\/articles\/gated/.test(e)), errors.join(' | '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-323: a members-only page advertised in the sitemap fails', () => {
+  const root = membersOnlyRoot({ sitemap: '<urlset><url><loc>https://gbti.network/articles/gated/</loc></url></urlset>' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /members-only page in the sitemap: \/articles\/gated\//.test(e)), errors.join(' | '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-323: a listing that LINKS to a members-only item fails, unless the link is inside a template', () => {
+  const linked = membersOnlyRoot({ listing: '<html><a href="/articles/gated/">Gated</a></html>' });
+  const { errors } = checkBuildSecrets({ root: linked, env: {} });
+  assert.ok(errors.some((e) => /links to the members-only item \/articles\/gated\/ outside a <template>: dist\/articles\/index\.html/.test(e)), errors.join(' | '));
+  fs.rmSync(linked, { recursive: true, force: true });
+
+  // the same link inside the template a listing reveals to a paying member is not a public listing
+  const templated = membersOnlyRoot({ listing: '<html><div class="grid"><template data-members-only data-items=".archive-card"><article class="archive-card"><a href="/articles/gated/">Gated</a></article></template></div></html>' });
+  assert.deepEqual(sow323(checkBuildSecrets({ root: templated, env: {} }).errors), []);
+  fs.rmSync(templated, { recursive: true, force: true });
+
+  // and the item's own page may link to itself (its canonical), with the absolute form caught too
+  const own = membersOnlyRoot({ page: '<html><meta name="robots" content="noindex"><link rel="canonical" href="https://gbti.network/articles/gated/"><gbti-locked-content data-gbti-region="locked"></gbti-locked-content></html>' });
+  assert.deepEqual(sow323(checkBuildSecrets({ root: own, env: {} }).errors), []);
+  fs.rmSync(own, { recursive: true, force: true });
+  const absolute = membersOnlyRoot({ listing: '<html><a href="https://gbti.network/articles/gated/">Gated</a></html>' });
+  assert.ok(checkBuildSecrets({ root: absolute, env: {} }).errors.some((e) => /links to the members-only item/.test(e)));
+  fs.rmSync(absolute, { recursive: true, force: true });
 });

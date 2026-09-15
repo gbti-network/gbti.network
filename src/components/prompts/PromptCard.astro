@@ -49,6 +49,8 @@ const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.tar
 ---
 <article
   data-category={topSeg}
+  data-ts={(d.publishedAt ?? d.updatedAt)?.valueOf() ?? 0}
+  data-title={d.title}
   data-cats={d.categories.join(' ')}
   data-tags={`|${d.tags.join('|')}|`}
   data-targets={`|${(d.targets ?? []).join('|')}|`}

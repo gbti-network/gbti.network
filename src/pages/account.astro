@@ -33,7 +33,7 @@ const GRID = [
 // sow-218: Latest Activity reuses the SHARED feed component (sow-131), the same one behind the homepage and every
 // /feeds/ narrow, so the hub shows the same cards, tabs, filters and ladder pager rather than a second bespoke list.
 // Loaded exactly as src/pages/feeds/index.astro loads it.
-const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
+const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
 ---
 <BaseLayout title="Account" description="Your GBTI Network account." noindex={true}>
   <section class="band">
@@ -121,7 +121,7 @@ const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadF
           <div class="hub-card hub-card-feed">
             <h2 class="hub-h">Latest Activity</h2>
             <p class="hub-sub">Everything the network is shipping and sharing. Filter by kind, or narrow to member content.</p>
-            <FeedView narrow="all" items={[...contentItems, ...shareItems]} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
+            <FeedView narrow="all" items={[...contentItems, ...shareItems]} membersItems={membersItems} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
           </div>
           {/* sow-218: the LIVE co-op stream, kept alongside Latest Activity rather than replaced by it.
               FeedView is rendered at build time from repository content, so on its own it shows public items,

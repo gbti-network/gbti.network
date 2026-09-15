@@ -4,8 +4,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import FeedView from '../../components/feeds/FeedView.astro';
 import { loadFeedItems } from '../../lib/feed-items';
 
-const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
+const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
 ---
 <BaseLayout title="The Feed" description="Everything the GBTI Network is shipping and sharing: member articles, projects, prompts, and public shares, newest first.">
-  <FeedView narrow="all" items={[...contentItems, ...shareItems]} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
+  <FeedView narrow="all" items={[...contentItems, ...shareItems]} membersItems={membersItems} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
 </BaseLayout>

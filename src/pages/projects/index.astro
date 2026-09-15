@@ -5,7 +5,7 @@ import { Image } from 'astro:assets';
 import Avatar from '../../components/Avatar.astro';
 import ProjectDirectory from '../../components/projects/ProjectDirectory.astro';
 import FeaturedProject from '../../components/projects/FeaturedProject.astro';
-import { isPublic, isListed, catalogHref } from '../../lib/content';
+import { isPublic, isPubliclyListed, isMembersOnlyListed, catalogHref } from '../../lib/content';
 import { leafLabel } from '../../lib/taxonomy';
 import { categoryOf, categoryStyle } from '../../lib/project-categories.mjs';
 import { authorDisplay, authorAvatar } from '../../lib/authors';
@@ -14,10 +14,12 @@ import { authorDisplay, authorAvatar } from '../../lib/authors';
 // Per the owner: NO repo links in the directory (not all projects have a repo, and we want clicks to land
 // on the project page), so every action drives to /projects/<slug>/.
 // SOW-022: applets list AMONG projects (their cards link via catalogHref to the running tool at /utilities/<slug>/).
-// Mode B stubs show as locked cards (SOW-016).
-const productEntries = (await getCollection('project')).filter(isListed);
-const applets = (await getCollection('applet')).filter(isListed);
+// sow-323 Phase 3: a members-only project (a Mode B stub) is no longer listed publicly; the directory reveals it to a
+// paying member after sign-in, and the carousel, spotlight and discussion stay public-only.
+const productEntries = (await getCollection('project')).filter(isPubliclyListed);
+const applets = (await getCollection('applet')).filter(isPubliclyListed);
 const projects = [...productEntries, ...applets];
+const membersProjects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isMembersOnlyListed);
 
 // sow-269: the family colour + glyph come from the one shared list (see ProjectDirectory.astro).
 const catOf = (p: any) => categoryOf(p.data.categories, leafLabel(p.data.categories));
@@ -65,7 +67,7 @@ import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177
 
   <!-- ============ DIRECTORY ============ -->
   <section class="browse-band">
-    <ProjectDirectory projects={projects} heroSearch={true} />
+    <ProjectDirectory projects={projects} membersProjects={membersProjects} heroSearch={true} />
   </section>
 
   <!-- ============ RECENTLY CREATED ============ -->

@@ -120,7 +120,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
     ? 'Encrypted member content. Open in the GBTI client to unlock.'
     : 'Members only. Open in the GBTI client to unlock.';
 ---
-<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')} ogImageSize={imageFieldSize(d.featuredImage ?? d.banner ?? d.icon)}>
+<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('project')} ogImageSize={imageFieldSize(d.featuredImage ?? d.banner ?? d.icon)} noindex={stub ? 'noindex' : false}>
   <DeployStatusNotice type="project" slug={d.slug} updatedAt={d.updatedAt} />
   <div class="pd-shell">
     <!-- Hero: the banner, scrimmed, with the project mark and the one-line pitch sitting on it. -->

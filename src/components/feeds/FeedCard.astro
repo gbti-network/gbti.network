@@ -1,0 +1,83 @@
+---
+// sow-323 Phase 3: one feed card, moved out of FeedList.astro unchanged so the list renders the SAME card for its public
+// items and for the members-only items it reveals to a paying member (MembersOnlyCards). The markup, the classes and
+// the data-* hooks the feed view's filters, the share merge (src/lib/feed-share-cards.mjs) and the favorites bootstrap
+// read are exactly what FeedList used to emit inline; the drift tests read this file now.
+import Avatar from '../Avatar.astro';
+import FavoriteButton from '../FavoriteButton.astro';
+import CollectionButton from '../CollectionButton.astro';
+import { authorDisplay, authorHref } from '../../lib/authors';
+import { authorItem } from '../../lib/avatars';
+import type { AvatarIndex } from '../../lib/avatars';
+import type { FeedItem } from '../../lib/feed-items';
+import { relativeTime } from '../../lib/home-feed.mjs';
+import { catsAttr } from '../../lib/feed-filter.mjs';
+
+interface Props {
+  it: FeedItem;
+  avatarIndex: AvatarIndex;
+  now: number;
+  /** The one card whose cover is the page's LCP element (sow-278): eager + high priority. */
+  eager?: boolean;
+}
+const { it, avatarIndex, now: NOW, eager = false } = Astro.props;
+const kindLabel: Record<string, string> = { article: 'article', project: 'project', prompt: 'prompt' };
+const tagsAttr = (x: FeedItem) => (x.tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
+// sow-174: every segment of the category path, so a breadcrumb at any depth can drill down here.
+const catsOf = (x: FeedItem) => catsAttr(x.categories);
+---
+  <article
+    class:list={['feed-item', !it.cover && 'nocover']}
+    data-fi
+    data-kind={it.kind}
+    data-author={it.author}
+    data-comments={it.comments ?? 0}
+    data-visibility={it.stub ? 'members' : 'public'}
+    data-tags={tagsAttr(it)}
+    data-cats={catsOf(it)}
+    data-share-slug={it.kind === 'share' ? it.slug : undefined}
+    data-ts={it.date}
+  >
+    <div class="feed-main">
+      <div class="feed-meta">
+        <Avatar item={authorItem(it.author, avatarIndex)} class="av" size={26} />
+        <span class="tmeta"><a class="who" href={authorHref(it.author)}>{authorDisplay(it.author)}</a><span class="dotsep"></span>{relativeTime(it.date, NOW)}</span>
+        {it.kind === 'share'
+          ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
+          : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}
+        {it.stub && <span class="kind-tag kt-members">members</span>}
+      </div>
+      <h2 class="feed-title">
+        {it.href
+          ? <a href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener nofollow' : undefined}>{it.title}</a>
+          : it.title}
+      </h2>
+      {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
+      <div class="feed-foot">
+        {/* Save and collect are free member perks (sow-060): they act for any signed-in member and
+            drive sign-up for a signed-out visitor (the light-DOM [data-signin] pills open the SigninModal
+            until BaseLayout upgrades them for a member, src/lib/save-controls.ts).
+            NO FOLLOW HERE (owner, 2026-09-13): "follow actions should be on content pages not feed entity
+            entries". A feed card used to carry a Follow pill for its author; following the author lives on
+            the content page itself (ContentFooter -> AuthorBox -> SubscribeButton). */}
+        {!it.stub && <FavoriteButton targetType={it.targetType} targetSlug={it.slug} count={it.favorites} size="sm" />}
+        {!it.stub && <CollectionButton targetType={it.targetType} targetSlug={it.slug} size="sm" />}
+        <span class="rx rx-static"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> {it.comments}<span class="sr-only"> comments</span></span>
+        <span class="fsp"></span>
+      </div>
+    </div>
+    {/* A real cover renders in every density; the branded thumb fallback (feed-cover-fb)
+        exists only for the card grid, where an imageless tile would break the rhythm. */}
+    {/* sow-278: THE FIRST CARD'S COVER IS THE LCP ELEMENT and it is the slowest thing the site
+        measures, p75 2,840ms in Cloudflare RUM, because it was lazy like the other 290 images on
+        the page. Astro defaults to lazy and nothing had ever overridden it, so a hero inherited a
+        default meant for thumbnails. Field data across the whole site showed lcpFetchPriority was
+        only ever `n/a` or `auto`, never `high`.
+        EXACTLY ONE IMAGE IS PROMOTED, and the narrowness IS the optimisation: telling the browser
+        that everything matters is identical to telling it that nothing does. Widening this past
+        the first card would undo it, which is what the guard test in test/feed-lcp-priority.test.mjs
+        exists to prevent. */}
+    {(it.cover || it.thumb) && (it.href
+      ? <a class:list={['feed-cover', !it.cover && 'feed-cover-fb']} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener nofollow' : undefined} aria-hidden="true" tabindex="-1"><img src={it.cover ?? it.thumb} alt="" loading={eager ? 'eager' : 'lazy'} fetchpriority={eager ? 'high' : undefined} decoding="async" /></a>
+      : <span class:list={['feed-cover', !it.cover && 'feed-cover-fb']}><img src={it.cover ?? it.thumb} alt="" loading={eager ? 'eager' : 'lazy'} fetchpriority={eager ? 'high' : undefined} decoding="async" /></span>)}
+  </article>

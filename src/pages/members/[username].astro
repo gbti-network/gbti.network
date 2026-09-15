@@ -9,7 +9,8 @@ import ArticleTeaser from '../../components/blog/ArticleTeaser.astro';
 import ProjectCard from '../../components/projects/ProjectCard.astro';
 import PromptCard from '../../components/prompts/PromptCard.astro';
 import SubscribeButton from '../../components/SubscribeButton.astro';
-import { isPublic, isListed, byNewest } from '../../lib/content';
+import { isPublic, isPubliclyListed, isMembersOnlyListed, byNewest } from '../../lib/content';
+import MembersOnlyCards from '../../components/MembersOnlyCards.astro'; // sow-323 Phase 3
 
 export async function getStaticPaths() {
   const profiles = (await getCollection('profile')).filter(isPublic);
@@ -20,9 +21,16 @@ const { profile } = Astro.props;
 const d = profile.data;
 const { Content } = await render(profile);
 
-const posts = (await getCollection('post')).filter(isListed).filter((p) => p.data.author === d.username).sort(byNewest);
-const projects = (await getCollection('project')).filter(isListed).filter((p) => p.data.author === d.username).sort(byNewest);
-const prompts = (await getCollection('prompt')).filter(isListed).filter((p) => p.data.author === d.username).sort(byNewest);
+// sow-323 Phase 3: a member's members-only items are not listed on their public profile; a paying member sees them
+// after sign-in. A section with ONLY members-only items renders hidden (header, no cards) and is shown when its
+// cards are revealed.
+const mine = (e: any) => e.data.author === d.username;
+const posts = (await getCollection('post')).filter(isPubliclyListed).filter(mine).sort(byNewest);
+const projects = (await getCollection('project')).filter(isPubliclyListed).filter(mine).sort(byNewest);
+const prompts = (await getCollection('prompt')).filter(isPubliclyListed).filter(mine).sort(byNewest);
+const membersPosts = (await getCollection('post')).filter(isMembersOnlyListed).filter(mine).sort(byNewest);
+const membersProjects = (await getCollection('project')).filter(isMembersOnlyListed).filter(mine).sort(byNewest);
+const membersPrompts = (await getCollection('prompt')).filter(isMembersOnlyListed).filter(mine).sort(byNewest);
 const isOrg = d.username === 'gbti';
 const total = posts.length + projects.length + prompts.length;
 ---
@@ -48,35 +56,38 @@ const total = posts.length + projects.length + prompts.length;
         <p class="muted">No public content yet.</p>
       )}
 
-      {posts.length > 0 && (
-        <div id="articles" style="scroll-margin-top:90px">
+      {(posts.length > 0 || membersPosts.length > 0) && (
+        <div id="articles" style="scroll-margin-top:90px" hidden={posts.length === 0} data-members-section>
           <div class="sec-head">
             <h2 class="h2">{isOrg ? 'Articles' : `Articles by ${d.displayName}`}</h2>
           </div>
           <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {posts.map((p) => <ArticleTeaser post={p} />)}
+            <MembersOnlyCards items=".archive-card" order="newest" key="data-ts">{membersPosts.map((p) => <ArticleTeaser post={p} />)}</MembersOnlyCards>
           </div>
         </div>
       )}
 
-      {projects.length > 0 && (
-        <div id="projects" class={posts.length > 0 ? 'mt32' : ''} style="scroll-margin-top:90px">
+      {(projects.length > 0 || membersProjects.length > 0) && (
+        <div id="projects" class={posts.length > 0 ? 'mt32' : ''} style="scroll-margin-top:90px" hidden={projects.length === 0} data-members-section>
           <div class="sec-head">
             <h2 class="h2">{isOrg ? 'Projects' : `Projects by ${d.displayName}`}</h2>
           </div>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => <ProjectCard project={p} />)}
+            <MembersOnlyCards items="[data-category]" order="newest" key="data-ts">{membersProjects.map((p) => <ProjectCard project={p} />)}</MembersOnlyCards>
           </div>
         </div>
       )}
 
-      {prompts.length > 0 && (
-        <div id="prompts" class={posts.length > 0 || projects.length > 0 ? 'mt32' : ''} style="scroll-margin-top:90px">
+      {(prompts.length > 0 || membersPrompts.length > 0) && (
+        <div id="prompts" class={posts.length > 0 || projects.length > 0 ? 'mt32' : ''} style="scroll-margin-top:90px" hidden={prompts.length === 0} data-members-section>
           <div class="sec-head">
             <h2 class="h2">{isOrg ? 'AI Prompts' : `AI Prompts by ${d.displayName}`}</h2>
           </div>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {prompts.map((p) => <PromptCard prompt={p} />)}
+            <MembersOnlyCards items="[data-category]" order="newest" key="data-ts">{membersPrompts.map((p) => <PromptCard prompt={p} />)}</MembersOnlyCards>
           </div>
         </div>
       )}

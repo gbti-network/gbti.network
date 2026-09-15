@@ -80,7 +80,7 @@ test('no surface keeps a private copy of the upgrade', () => {
   const walk = (dir, out = []) => { for (const n of readdirSync(dir)) { const p = join(dir, n); if (statSync(p).isDirectory()) walk(p, out); else if (/\.(astro|ts|mjs)$/.test(n)) out.push(p); } return out; };
   const importers = walk(join(ROOT, 'src')).filter((p) => /elements\/gbti-(favorite|collection)\.mjs/.test(code(readFileSync(p, 'utf8')))).map((p) => p.replace(ROOT, ''));
   assert.deepEqual(importers, ['src/lib/save-controls.ts'], 'exactly one importer of the two element modules');
-  const feed = code(read('src/components/feeds/FeedList.astro'));
+  const feed = code(read('src/components/feeds/FeedList.astro') + read('src/components/feeds/FeedCard.astro')); // sow-323 Phase 3: the card moved into FeedCard
   assert.doesNotMatch(feed, /websiteClient\(/, 'the feed builds no client of its own: its follow pills are gone (owner, 2026-09-13)');
   assert.doesNotMatch(feed, /createWorkbenchClient\(/, 'and no longer builds its own');
   const ca = code(read('src/components/ContentActions.astro'));

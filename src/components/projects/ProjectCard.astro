@@ -26,6 +26,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
 ---
 <article
   data-category={topKey(d.categories)}
+  data-ts={(d.publishedAt ?? d.updatedAt)?.valueOf() ?? 0}
   class="card card-hover"
   style="padding:22px;display:flex;flex-direction:column"
 >

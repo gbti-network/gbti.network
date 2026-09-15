@@ -51,6 +51,7 @@ const authorCount = byAuthor.length;
 const authorPublic = byAuthor.filter(isPublic).length;
 const authorStubs = byAuthor.filter(isStub).length;
 const crumbs = breadcrumb(d.categories);
+const stub = isStub(prompt); // sow-323 Phase 3: a members-only prompt page asks search engines to skip it
 
 // SOW-014: pricing badge + Resources links (public live, member-only inert/locked).
 const paid = d.pricing && d.pricing !== 'free';
@@ -69,7 +70,7 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
 const editPath = contentRepoPath('prompt', d.author, d.slug);
 const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(editPath)}` : null;
 ---
-<BaseLayout title={d.title} description={d.exampleOutput} ogImage={d.image?.src ?? defaultFeatureImage('prompt')} ogImageSize={imageFieldSize(d.image)}>
+<BaseLayout title={d.title} description={d.exampleOutput} ogImage={d.image?.src ?? defaultFeatureImage('prompt')} ogImageSize={imageFieldSize(d.image)} noindex={stub ? 'noindex' : false}>
   <DeployStatusNotice type="prompt" slug={d.slug} updatedAt={d.updatedAt} />
   <section class="band tint">
     <div class="wrap">

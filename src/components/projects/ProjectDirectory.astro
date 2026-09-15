@@ -3,6 +3,7 @@
 // list view as the default ("compact mode"). Used full on /projects/ and limited (e.g. 12) on the
 // home page so both render the exact same directory experience. Glyph defs are emitted here so any
 // later section on the same page (recently-created, featured) can reference them.
+import MembersOnlyCards from '../MembersOnlyCards.astro'; // sow-323 Phase 3
 import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
 import Avatar from '../Avatar.astro';
@@ -18,8 +19,9 @@ interface Props {
   limit?: number;
   pageSize?: number; // when set, the compact list paginates client-side (page 2+ loads the rest)
   heroSearch?: boolean; // sow-177: the page renders the search field in its hero (a [data-search] outside this root), so the toolbar omits its own
+  membersProjects?: any[]; // sow-323 Phase 3: members-only projects, revealed to a paying member after sign-in
 }
-const { projects: allProducts, limit, pageSize, heroSearch = false } = Astro.props;
+const { projects: allProducts, membersProjects = [], limit, pageSize, heroSearch = false } = Astro.props;
 const projects = typeof limit === 'number' ? allProducts.slice(0, limit) : allProducts;
 
 // Author profiles, so attribution shows the real avatar and links only when a profile page exists.
@@ -30,7 +32,7 @@ const profileByUser = new Map((await getCollection('profile')).map((p) => [p.dat
 const catOf = (p: any) => categoryOf(p.data.categories, leafLabel(p.data.categories));
 
 // Toolbar filters: only the families actually present (in the shown set), in the shared list's order.
-const present = new Set(projects.map((p) => catOf(p).key));
+const present = new Set([...projects, ...membersProjects].map((p) => catOf(p).key));
 const filters = [{ key: 'all', label: 'All', g: 'g-grid' }, ...PROJECT_CATEGORIES.filter((c) => present.has(c.key)).map((c) => (
   { key: c.key, label: c.label, g: c.glyph }
 ))];
@@ -69,7 +71,9 @@ const desc = (p: any) => p.data.shortDescription ?? '';
   </div>
 
   <div class="plist" data-items>
-    {projects.map((p) => {
+    {[projects, membersProjects].map((list, li) => {
+      // sow-323 Phase 3: ONE row markup for both lists; the second (members-only) renders inside MembersOnlyCards.
+      const rows = list.map((p) => {
       const c = catOf(p);
       return (
         <article class="prow card card-hover" data-cat={c.key} data-name={`${p.data.title} ${desc(p)}`.toLowerCase()}>
@@ -116,6 +120,8 @@ const desc = (p: any) => p.data.shortDescription ?? '';
           </div>
         </article>
       );
+    });
+      return li === 0 ? rows : (rows.length > 0 && <MembersOnlyCards items="[data-cat]" order="end">{rows}</MembersOnlyCards>);
     })}
   </div>
   {pageSize && <nav class="ppage" data-ppage aria-label="Project directory pages" hidden></nav>}
@@ -225,7 +231,7 @@ const desc = (p: any) => p.data.shortDescription ?? '';
     // sow-177: the field may live in the page hero, outside this root; the toolbar's own field wins when present.
     const search = scope.querySelector<HTMLInputElement>('[data-search]') || document.querySelector<HTMLInputElement>('[data-search]');
     const count = scope.querySelector('[data-count]') as HTMLElement;
-    const cards = Array.from(items.querySelectorAll<HTMLElement>('[data-cat]'));
+    let cards = Array.from(items.querySelectorAll<HTMLElement>('[data-cat]'));
     const pageSize = parseInt(scope.getAttribute('data-page-size') || '', 10) || 0; // 0 => no pagination
     const pageNav = scope.querySelector<HTMLElement>('[data-ppage]');
     let page = 0;
@@ -273,6 +279,8 @@ const desc = (p: any) => p.data.shortDescription ?? '';
     };
 
     const reset = () => { page = 0; apply(); };
+    // sow-323 Phase 3: members-only rows arrive after a paying member signs in; collect them and re-apply.
+    items.addEventListener('members-only-revealed', () => { cards = Array.from(items.querySelectorAll<HTMLElement>('[data-cat]')); apply(); });
     btns.forEach((b) => b.addEventListener('click', () => { btns.forEach((x) => x.classList.remove('on')); b.classList.add('on'); reset(); }));
     search?.addEventListener('input', reset);
     scope.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((v) => v.addEventListener('click', () => {

@@ -14,6 +14,8 @@ import {
   hasPublicPage as hasPublicPageCore,
   isStub as isStubCore,
   isListed as isListedCore,
+  isPubliclyListed as isPubliclyListedCore,
+  isMembersOnlyListed as isMembersOnlyListedCore,
 } from './content-gating.mjs';
 
 /** Public static build shows only published + public entries (full body readable). */
@@ -22,8 +24,12 @@ export function isPublic(entry: Gatable): boolean { return isPublicCore(entry); 
 export function hasPublicPage(entry: Gatable): boolean { return hasPublicPageCore(entry); }
 /** SOW-016: a members item that renders a public STUB (header + locked body), i.e. Mode B. */
 export function isStub(entry: Gatable): boolean { return isStubCore(entry); }
-/** SOW-016: appears in public listings/indexes (a Mode B stub as a locked card; a Mode A item absent). */
+/** SOW-016: appears in the member ecosystem's index data (a Mode B stub included; a Mode A item absent). */
 export function isListed(entry: Gatable): boolean { return isListedCore(entry); }
+/** sow-323 Phase 3: appears in a PUBLIC listing: published and public. */
+export function isPubliclyListed(entry: Gatable): boolean { return isPubliclyListedCore(entry); }
+/** sow-323 Phase 3: a published members-only item with its own page, listed only for a paying member. */
+export function isMembersOnlyListed(entry: Gatable): boolean { return isMembersOnlyListedCore(entry); }
 
 type Keyed = Gatable & { collection?: string; data: Gatable['data'] & { slug?: string } };
 const FLAG_TYPE: Record<string, 'post' | 'project' | 'prompt'> = { post: 'post', project: 'project', applet: 'project', prompt: 'prompt' };
@@ -40,12 +46,21 @@ export function notStale(entry: Keyed): boolean {
 }
 
 /**
- * sow-189: appears in PUBLIC discovery: listed AND not stale. Use this in the article directory, the site
+ * sow-189: appears in PUBLIC discovery: publicly listed AND not stale. Use this in the article directory, the site
  * feeds, the homepage and related posts; keep isListed for the member ecosystem (the extension's activity
  * feed and in-app browse), which a stale item does not leave.
+ *
+ * sow-323 Phase 3: a members-only item is no longer discoverable (it used to be, as a locked card). The listings
+ * that show it to a paying member after sign-in take it from isMembersDiscoverable instead.
  */
 export function isDiscoverable(entry: Keyed): boolean {
-  return isListed(entry) && notStale(entry);
+  return isPubliclyListed(entry) && notStale(entry);
+}
+
+/** sow-323 Phase 3: the members-only counterpart of isDiscoverable, for the cards a listing reveals after a paying
+ *  member signs in (src/lib/members-only-reveal.ts). */
+export function isMembersDiscoverable(entry: Keyed): boolean {
+  return isMembersOnlyListed(entry) && notStale(entry);
 }
 
 /**

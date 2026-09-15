@@ -1,0 +1,18 @@
+---
+// sow-323 Phase 3: the members-only cards of a listing, for a paying member only. Place it as the LAST child of the
+// element that holds the listing's cards, with the cards as its children. It renders a <template>: a visitor's
+// browser never shows it and a crawler does not read it, so the item stays out of public listings as the owner
+// ruled, while src/lib/members-only-reveal.ts moves the cards into the list after a paying member signs in.
+//   items: a selector matching ONE card of the list (the reveal orders against these)
+//   order: 'newest' (numeric key, descending), 'title' (text key, ascending) or 'end'
+//   key:   the attribute each card carries its order key in (e.g. data-ts), unused for 'end'
+interface Props { items: string; order?: 'newest' | 'title' | 'end'; key?: string }
+const { items, order = 'end', key } = Astro.props;
+// Rendered to a string first so an empty list emits no template at all (a listing with no members-only items).
+const cards = Astro.slots.has('default') ? (await Astro.slots.render('default')).trim() : '';
+---
+{cards && <template data-members-only data-items={items} data-order={order} data-key={key} set:html={cards} />}
+<script>
+  import { initMembersOnlyReveal } from '../lib/members-only-reveal';
+  initMembersOnlyReveal();
+</script>

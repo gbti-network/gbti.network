@@ -3,7 +3,7 @@
 // `targetType` keys favorites/comments, `kind` labels the card.
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
-import { isPublic, isListed, isDiscoverable, isStub, catalogHref } from './content'; // sow-189: isDiscoverable = listed and not stale
+import { isPublic, isDiscoverable, isMembersDiscoverable, isStub, catalogHref } from './content'; // sow-189 + sow-323: public discovery, and the members-only cards a paying member sees
 import { buildAvatarIndex, type AvatarIndex } from './avatars';
 import { favoriteCount } from './favorites';
 import { commentThreadCount } from './comments';
@@ -94,7 +94,10 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
 }
 
 export interface FeedData {
-  contentItems: FeedItem[]; // articles + projects/applets + prompts (isListed; Mode B stubs included)
+  contentItems: FeedItem[]; // articles + projects/applets + prompts, PUBLIC only (sow-323 Phase 3: isDiscoverable)
+  // sow-323 Phase 3: the published members-only items with their own page (Mode B stubs, not stale). Never rendered
+  // for a visitor: a list puts them inside <template data-members-only>, revealed after a paying member signs in.
+  membersItems: FeedItem[];
   shareItems: FeedItem[]; // PUBLIC shares only (the scoped SOW-018 reversal, fail closed)
   membersShareCount: number; // published members-only shares (for the aggregate locked card; no titles)
   profiles: CollectionEntry<'profile'>[]; // public member profiles (gbti excluded)
@@ -108,6 +111,9 @@ export async function loadFeedItems(): Promise<FeedData> {
   // SOW-022: applets list among projects; their cards link to the running tool via catalogHref.
   const projects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isDiscoverable);
   const prompts = (await getCollection('prompt')).filter(isDiscoverable);
+  const membersPosts = (await getCollection('post')).filter(isMembersDiscoverable);
+  const membersProjects = [...(await getCollection('project')), ...(await getCollection('applet'))].filter(isMembersDiscoverable);
+  const membersPrompts = (await getCollection('prompt')).filter(isMembersDiscoverable);
   const allShares = await getCollection('share');
   const shares = allShares.filter((s) => isPublicShare(s.data));
   const membersShareCount = allShares.filter((s) => s.data.status === 'published' && !isPublicShare(s.data)).length;
@@ -119,6 +125,11 @@ export async function loadFeedItems(): Promise<FeedData> {
     ...(await Promise.all(prompts.map((p) => contentItem(p, 'prompt', comments)))),
   ];
   const shareItems = shares.map((s) => shareItem(s, comments));
+  const membersItems: FeedItem[] = [
+    ...(await Promise.all(membersPosts.map((p) => contentItem(p, 'article', comments)))),
+    ...(await Promise.all(membersProjects.map((p) => contentItem(p, 'project', comments)))),
+    ...(await Promise.all(membersPrompts.map((p) => contentItem(p, 'prompt', comments)))),
+  ];
 
-  return { contentItems, shareItems, membersShareCount, profiles, avatarIndex: buildAvatarIndex(profiles) };
+  return { contentItems, membersItems, shareItems, membersShareCount, profiles, avatarIndex: buildAvatarIndex(profiles) };
 }

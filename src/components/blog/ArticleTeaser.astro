@@ -28,6 +28,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
 ---
 <article
   data-category={categoryKey}
+  data-ts={(d.publishedAt ?? d.updatedAt)?.valueOf() ?? 0}
   class="archive-card card card-hover group flex h-full flex-col overflow-hidden"
 >
   <a href={`/articles/${d.slug}/`} class="relative block overflow-hidden pb-[56.25%]" style="background:var(--tint)">

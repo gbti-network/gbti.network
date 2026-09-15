@@ -10,7 +10,9 @@
 // The modes (SOW-016):
 //   public          published + visibility public                     -> full page, listed
 //   Mode A          published + members, no public stub               -> NO page, not listed
-//   Mode B (stub)   published + members + publicStub: true            -> a page with the teaser + locked body
+//   Mode B (stub)   published + members + publicStub: true            -> a page with the teaser + locked body,
+//                                                                         noindex, listed only for a paying member
+//                                                                         (sow-323 Phase 3)
 //   draft           status draft, any visibility                       -> nothing public
 
 /**
@@ -39,9 +41,26 @@ export function isStub(entry) {
 }
 
 /**
- * SOW-016: appears in public listings/indexes. Same predicate as hasPublicPage: a Mode B stub shows as a
- * LOCKED card; a Mode A item is absent. Use this in index pages; keep `isPublic` where a locked card is noise.
+ * SOW-016: appears in the MEMBER ecosystem's data: the build-time index JSON the extension, the bells and the
+ * members digest read. Same predicate as hasPublicPage (a Mode B stub included; a Mode A item absent).
+ *
+ * sow-323 Phase 3: NOT the predicate for a public listing any more. The owner ruled on 2026-09-12 that a
+ * members-only item keeps its own page but is "not publicly indexed [or] included in public feeds" until a
+ * superadmin approves it. Public listings use isPubliclyListed; the members-only cards they reveal after a paying
+ * member signs in use isMembersOnlyListed.
  */
 export function isListed(entry) {
   return hasPublicPage(entry);
+}
+
+/** sow-323 Phase 3: appears in a PUBLIC listing (a feed, a directory, a profile list, the sitemap): published and
+ *  public. Approval is what flips an item to public, so this is exactly "approved or never needed review". */
+export function isPubliclyListed(entry) {
+  return isPublic(entry);
+}
+
+/** sow-323 Phase 3: a published members-only item WITH its own page (a Mode B stub). It is left out of public
+ *  listings and the sitemap, carries noindex, and appears in a listing only after a paying member signs in. */
+export function isMembersOnlyListed(entry) {
+  return hasPublicPage(entry) && !isPublic(entry);
 }

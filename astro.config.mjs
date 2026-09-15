@@ -9,6 +9,7 @@ import { remarkContentBlocks } from './src/lib/remark-content-blocks.mjs';
 import fs from 'node:fs';
 import yaml from 'js-yaml';
 import { contentFlagsFromParsed, sitemapExcludes } from './membership/content-flags.mjs'; // sow-189: unindexed articles leave the sitemap
+import { membersOnlyPagePaths } from './membership/members-only-pages.mjs'; // sow-323 Phase 3
 import { sanitizeSchema, rehypeIframeHostAllowlist, rehypeStyleAllowlist, rehypeIdSafety } from './src/lib/markdown-sanitize.mjs';
 import { rehypeSponsoredLinks } from './src/lib/rehype-sponsored-links.mjs'; // sow-281: partner redirect links in bodies are rel=sponsored
 import { outboundRows } from './scripts/lib/outbound-links-store.mjs'; // sow-289: the partner redirect paths
@@ -30,6 +31,8 @@ function rehypeDemoteBodyH1() {
 }
 
 const UNINDEXED = (() => { try { return sitemapExcludes(contentFlagsFromParsed(yaml.load(fs.readFileSync('house/content-flags.yml', 'utf8')))); } catch { return new Set(); } })();
+// sow-323 Phase 3: a published members-only item keeps its page but leaves the sitemap until a superadmin approves it.
+const MEMBERS_ONLY = membersOnlyPagePaths(process.cwd());
 
 export default defineConfig({
   site: 'https://gbti.network',
@@ -72,7 +75,8 @@ export default defineConfig({
     // redundant (the meta asks a crawler, the sitemap stops advertising the URL in the first place).
     // sow-189: an unindexed article (house/content-flags.yml) emits noindex, follow AND leaves the sitemap; the
     // two halves are not redundant (the meta asks a crawler, the sitemap stops advertising the URL).
-    sitemap({ filter: (page) => !/\/(account|welcome|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) }),
+    // sow-323 Phase 3: a members-only item (it also sends robots noindex from its own page).
+    sitemap({ filter: (page) => !/\/(account|welcome|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname) }),
   ],
   image: {
     // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let

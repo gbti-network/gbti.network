@@ -20,8 +20,8 @@ export function getStaticPaths() {
 const { narrow } = Astro.params as { narrow: 'news' | 'network' | 'articles' | 'projects' | 'prompts' | 'shares' };
 const { title, description } = Astro.props;
 
-const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
+const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
 ---
 <BaseLayout title={title} description={description}>
-  <FeedView narrow={narrow} items={[...contentItems, ...shareItems]} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
+  <FeedView narrow={narrow} items={[...contentItems, ...shareItems]} membersItems={membersItems} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
 </BaseLayout>

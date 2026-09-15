@@ -36,7 +36,7 @@ test('shareCardHtml: the card carries the feed hooks, the members tag, the escap
 
 test('drift census: every class and data-* hook the client card emits exists in the Astro card, the favorite pill and the collection pill', () => {
   const html = shareCardHtml(members, { now: NOW, avatarUrl: (u) => `https://github.com/${u}.png`, fallbackImage: '/fb.png' }) + shareCardHtml(pub, { now: NOW, fallbackImage: '/fb.png' });
-  const astro = read('src/components/feeds/FeedList.astro') + read('src/components/FavoriteButton.astro') + read('src/components/CollectionButton.astro');
+  const astro = read('src/components/feeds/FeedCard.astro') + read('src/components/FavoriteButton.astro') + read('src/components/CollectionButton.astro'); // sow-323 Phase 3: the card moved out of FeedList
   const classes = new Set([...html.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)));
   for (const c of classes) assert.ok(astro.includes(c), `class "${c}" is not one the Astro card emits`);
   const hooks = new Set([...html.matchAll(/\s(data-[a-z-]+)(?:=|\s|>)/g)].map((m) => m[1]));
@@ -44,7 +44,7 @@ test('drift census: every class and data-* hook the client card emits exists in 
   for (const h of hooks) assert.ok(astro.includes(h), `hook "${h}" is not one the Astro card emits`);
   // the hooks the view's filters and the favorites bootstrap read must be present on every client card
   for (const must of ['data-fi', 'data-kind="share"', 'data-visibility=', 'data-tags=', 'data-share-slug=', 'data-ts=', 'data-gbti-target-type="share"', 'data-gbti-target-slug=', 'data-signin']) assert.ok(html.includes(must), must);
-  assert.match(read('src/components/feeds/FeedList.astro'), /data-ts=\{it\.date\}/, 'the built card carries the timestamp the merge orders by');
+  assert.match(read('src/components/feeds/FeedCard.astro'), /data-ts=\{it\.date\}/, 'the built card carries the timestamp the merge orders by');
 });
 
 test('planShareMerge: drops what the build already has, dedupes, sorts newest first, names the built card each one sits before', () => {
