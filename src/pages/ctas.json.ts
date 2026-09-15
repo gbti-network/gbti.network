@@ -7,7 +7,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { readCtas } from '../../scripts/lib/ctas-store.mjs';
-import { resolveAssignments } from '../lib/ctas.mjs';
+import { resolveAssignments, ctaPages } from '../lib/ctas.mjs';
 import { hasPublicPage } from '../lib/content';
 import { isPublicShare } from '../lib/home-feed.mjs';
 
@@ -25,6 +25,7 @@ export const GET: APIRoute = async () => {
     items.push({ type: 'share', ref: `${d.author}/${d.id}`, title: String(d.title ?? d.shortDescription ?? 'A member share'), live: isPublicShare(d) });
   }
   const ctas = resolveAssignments(readCtas(process.cwd()), items);
-  const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: ctas.length, types: ['prompt', 'post', 'project', 'share'], ctas });
+  const pages = ctaPages(items); // sow-337: the manager's "Add a page" search, public pages only
+  const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: ctas.length, types: ['prompt', 'post', 'project', 'share'], ctas, pages });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 };

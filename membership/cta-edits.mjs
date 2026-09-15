@@ -224,6 +224,10 @@ function canonical(e) {
   return out;
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// sow-337: the editor saves a whole card at once, its pages included, so one save is one PR rather than an
+// update plus an assign per page (separate PRs on one file, which conflict). A list replaces the assignments; the
+// entries are copied as { type, ref } and the registry rules below judge them.
+const itemsOf = (items) => (Array.isArray(items) ? items.map((it) => ({ type: it?.type, ref: typeof it?.ref === 'string' ? it.ref.trim() : it?.ref })) : undefined);
 
 /** ADD a CTA. A second CTA with the same id is refused (update it instead). New CTAs default to disabled. */
 export function addCta(doc, fields = {}, ctx = {}) {
@@ -239,14 +243,14 @@ export function addCta(doc, fields = {}, ctx = {}) {
   }
   for (const k of STRUCTURED) if (fields[k] !== undefined && fields[k] !== null) entry[k] = structuredClone(fields[k]);
   entry.enabled = fields.enabled === true;
-  entry.items = [];
+  entry.items = itemsOf(fields.items) ?? [];
   entry = canonical(entry);
   d.ctas.push(entry);
   assertValid(d, 'add');
   return { next: d, changed: true, audit: auditEntry(ctx, 'cta.add', id, { partner: entry.partner, destination: entry.destination }) };
 }
 
-/** UPDATE the editable fields of a CTA (CTA_FIELDS). Omitted fields are left alone; an empty text field that a card
+/** UPDATE the editable fields of a CTA (CTA_FIELDS, plus `enabled` and a replacement `items` list). Omitted fields are left alone; an empty text field that a card
  *  may leave out (a note, a sentence on an image-only card) and a null structured part are removed. Idempotent:
  *  identical values are a no-op. */
 export function updateCta(doc, fields = {}, ctx = {}) {
@@ -267,6 +271,9 @@ export function updateCta(doc, fields = {}, ctx = {}) {
     if (same(e[k], fields[k])) continue;
     e[k] = structuredClone(fields[k]); changed.push(k);
   }
+  if (typeof fields.enabled === 'boolean' && (e.enabled === true) !== fields.enabled) { e.enabled = fields.enabled; changed.push('enabled'); }
+  const items = itemsOf(fields.items);
+  if (items && !same(Array.isArray(e.items) ? e.items : [], items)) { e.items = items; changed.push('items'); }
   if (!changed.length) return { next: d, changed: false, audit: auditEntry(ctx, 'cta.update', e.id, { noop: true }) };
   d.ctas[i] = canonical(e);
   assertValid(d, 'update');

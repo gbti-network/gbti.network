@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { webpInfo, bytesFromBase64, ctaImagePath, ctaImageFile, ctaImageUpload, ctaImageFileChanges, CTA_IMAGE_DIR, CTA_IMAGE_MAX_BYTES } from '../membership/cta-image.mjs';
+import { webpInfo, stripWebpMetadata, bytesFromBase64, ctaImagePath, ctaImageFile, ctaImageUpload, ctaImageFileChanges, CTA_IMAGE_DIR, CTA_IMAGE_MAX_BYTES } from '../membership/cta-image.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const b64 = (s) => new Uint8Array(Buffer.from(s, 'base64'));
@@ -15,6 +15,8 @@ const LOSSY = b64('UklGRjIAAABXRUJQVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8
 const LOSSLESS = b64('UklGRh4AAABXRUJQVlA4TBEAAAAvCIABAAdQz370q/+BiOh/AAA=');
 const EXIF = b64('UklGRjABAABXRUJQVlA4WAoAAAAIAAAACAAABgAAVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAEVYSUbkAAAARXhpZgAASUkqAAgAAAAIAA8BAgARAAAAfgAAABABAgADAAAAVDEAABIBAwABAAAAAQAAABoBBQABAAAAbgAAABsBBQABAAAAdgAAACgBAwABAAAAAgAAABMCAwABAAAAAQAAAGmHBAABAAAAkAAAAAAAAAA4YwAA6AMAADhjAADoAwAAR0JUSSB0ZXN0IGNhbWVyYQAABgAAkAcABAAAADAyMTABkQcABAAAAAECAwAAoAcABAAAADAxMDABoAMAAQAAAP//AAACoAQAAQAAAAkAAAADoAQAAQAAAAcAAAAAAAAA');
 const XMP = b64('UklGRr4AAABXRUJQVlA4WAoAAAAEAAAACAAABgAAVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAFhNUCByAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyI+PHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIi8+PC94OnhtcG1ldGE+');
+// Chrome 148's own canvas.toBlob('image/webp') output for a 9x7 canvas: VP8X, then an sRGB ICCP chunk, then VP8.
+const CHROME = b64('UklGRiwCAABXRUJQVlA4WAoAAAAgAAAACAAABgAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggPgAAALABAJ0BKgkABwABQCYlqAJ0APH0wAAA/vvvfhuQrUDjt15xA4s5Ipjf/5378NX+JR+6FNf/5lf//Mr/ZSAA');
 const PNG = b64('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=');
 
 /** A copy with the VP8X flags byte replaced, so a chunk the header no longer announces is still in the file. */
@@ -105,4 +107,32 @@ test('ctaImageFileChanges: the upload, plus a delete for each image no card name
   assert.deepEqual(ctaImageFileChanges(reg('a.webp'), reg('a.webp'), up), [up], 'a replacement is the upload alone, never also a delete');
   assert.deepEqual(ctaImageFileChanges(reg('../roles.yml'), reg()), [], 'a malformed name in the registry is never turned into a path');
   assert.deepEqual(ctaImageFileChanges(null, null), []);
+});
+
+test('stripping removes camera data and the colour profile, clears the header flags, and keeps the picture', () => {
+  const parts = (b) => { const out = []; for (let at = 12; at + 8 <= b.length;) { const n = new DataView(b.buffer, b.byteOffset).getUint32(at + 4, true); out.push([Buffer.from(b.slice(at, at + 4)).toString('latin1'), Buffer.from(b.slice(at, at + 8 + n))]); at += 8 + n + (n % 2); } return out; };
+  const chunks = (b) => parts(b).map(([id]) => id);
+  const vp8 = (b) => parts(b).find(([id]) => id === 'VP8 ')[1];
+  assert.deepEqual(chunks(CHROME), ['VP8X', 'ICCP', 'VP8 '], 'the Chrome sample really carries a profile');
+  assert.match(webpInfo(CHROME).problem, /announces metadata|colour profile/);
+  for (const [name, bytes] of [['Chrome', CHROME], ['EXIF', EXIF], ['XMP', XMP]]) {
+    const out = stripWebpMetadata(bytes);
+    assert.deepEqual(webpInfo(out), { ok: true, width: 9, height: 7 }, name);
+    assert.deepEqual(chunks(out), ['VP8X', 'VP8 '], name);
+    assert.equal(out[20] & 0x2c, 0, `${name}: the header no longer announces metadata`);
+    assert.equal(new DataView(out.buffer).getUint32(4, true), out.length - 8, `${name}: the RIFF size is rewritten`);
+    assert.ok(vp8(out).equals(vp8(bytes)), `${name}: the image data is copied unchanged`);
+  }
+  assert.equal(Buffer.from(stripWebpMetadata(EXIF)).includes('GBTI test camera'), false);
+  assert.ok(Buffer.from(stripWebpMetadata(LOSSY)).equals(Buffer.from(LOSSY)), 'a clean file comes back byte for byte');
+});
+
+test('stripping refuses what is not a well-formed WebP container rather than guessing', () => {
+  assert.equal(stripWebpMetadata(PNG), null);
+  assert.equal(stripWebpMetadata(LOSSY.slice(0, LOSSY.length - 4)), null, 'truncated');
+  const lying = LOSSY.slice(); new DataView(lying.buffer).setUint32(16, 9999, true);
+  assert.equal(stripWebpMetadata(lying), null, 'a chunk longer than the file');
+  assert.equal(stripWebpMetadata('RIFF'), null);
+  const animated = stripWebpMetadata(withFlags(EXIF, 0x0a));
+  assert.match(webpInfo(animated).problem, /animated/, 'animation is not metadata: it stays, and the check still refuses it');
 });

@@ -22251,6 +22251,7 @@ function canonical(e) {
   return out;
 }
 var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var itemsOf = (items) => Array.isArray(items) ? items.map((it) => ({ type: it?.type, ref: typeof it?.ref === "string" ? it.ref.trim() : it?.ref })) : void 0;
 function addCta(doc, fields = {}, ctx = {}) {
   const d = clean6(doc);
   const id = str(fields.id);
@@ -22264,7 +22265,7 @@ function addCta(doc, fields = {}, ctx = {}) {
   }
   for (const k of STRUCTURED) if (fields[k] !== void 0 && fields[k] !== null) entry[k] = structuredClone(fields[k]);
   entry.enabled = fields.enabled === true;
-  entry.items = [];
+  entry.items = itemsOf(fields.items) ?? [];
   entry = canonical(entry);
   d.ctas.push(entry);
   assertValid(d, "add");
@@ -22301,6 +22302,15 @@ function updateCta(doc, fields = {}, ctx = {}) {
     if (same(e[k], fields[k])) continue;
     e[k] = structuredClone(fields[k]);
     changed.push(k);
+  }
+  if (typeof fields.enabled === "boolean" && e.enabled === true !== fields.enabled) {
+    e.enabled = fields.enabled;
+    changed.push("enabled");
+  }
+  const items = itemsOf(fields.items);
+  if (items && !same(Array.isArray(e.items) ? e.items : [], items)) {
+    e.items = items;
+    changed.push("items");
   }
   if (!changed.length) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.update", e.id, { noop: true }) };
   d.ctas[i] = canonical(e);

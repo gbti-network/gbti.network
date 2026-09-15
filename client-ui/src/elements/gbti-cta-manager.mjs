@@ -1,217 +1,387 @@
-// <gbti-cta-manager> (sow-281): the SUPERADMIN manager of the registered content CTAs (house/ctas.yml). Lists every
-// CTA with its enabled state, lets a superadmin add one, edit its text and destination, enable or disable it, and
-// assign it to (or unassign it from) any content item by type and ref. Every write is an admin op that lands as an
-// auto-merged house PR (houseEditAck says so); the registry is superadmin-pinned in CODEOWNERS and the Worker ops
-// carry ROLE_RANK.superadmin, so this surface is UX, not the boundary. A sibling of <gbti-quote-manager>.
+// <gbti-cta-manager> (sow-281, redesigned in sow-337): the SUPERADMIN manager of the call-to-action cards
+// (house/ctas.yml), built to the approved design. A list with a thumbnail of each card, and an editor with the layout
+// picker, the words and link, the image (re-encoded in the browser, cta-image-encode.mjs), the button icon (searched
+// from the site's icon library, cta-icon-library.mjs), the HTML block with its outside addresses, the pages the card
+// shows on, and a live preview in light and dark, sidebar and phone. The registry is superadmin-pinned in CODEOWNERS
+// and the Worker ops carry ROLE_RANK.superadmin, so this surface is UX, not the boundary.
 //
-// It reads TWO things: the live registry through the client (client.ctaPool, the Worker or the host's git read) so
-// an edit shows at once, and the built /ctas.json artifact for the RESOLUTION of each assignment (title, link, and
-// whether the ref names a real item). The artifact lags a deploy by a few minutes, so an assignment the artifact has
-// not seen yet is shown as "resolving on the next deploy", never as broken. An assignment the artifact resolved to
-// nothing is shown in red: the three states the SOW demands (no CTA, a disabled CTA, an assignment to nothing) are
-// all distinct here. A failed load is its own state (sow-334): it shows the failure and a Try again button and does
-// NOT retry on its own.
-import { GbtiElement, define, esc } from '../base.mjs';
-import { houseEditAck } from '../workspace-core.mjs';
+// One save is one pull request: the editor sends every changed field (items and enabled included) in a single add
+// or update, so two open edits never race each other on the same file. The list's Enable and Disable are their own
+// small edit.
+//
+// It reads the live registry through the client (client.ctaPool) and the built /ctas.json for the pages a card can go
+// on and the titles of the ones it is on. A failed load is its own state (sow-334): it shows the failure and a Try
+// again button and does NOT retry on its own. Pure logic lives in cta-manager-core.mjs and markup in
+// cta-manager-view.mjs; this file holds state and events.
+import { GbtiElement, define } from '../base.mjs';
+import { CTA_CARD_CSS } from '../../../membership/cta-card-render.mjs';
+import { ctaImageUrl } from '../../../src/lib/ctas.mjs';
+import { draftFromCta, blankDraft, cardFromDraft, validateDraft, savePayload, normalizeHost, foundHosts, pagesFromBuilt, pageCandidates, previewNote, plural } from '../cta-manager-core.mjs';
+import { loadingView, failedView, listView, editorView, editTitle, shownError, imageBody, iconResults, foundLine, candidateList, previewCard } from '../cta-manager-view.mjs';
+import { encodeCtaImage } from '../cta-image-encode.mjs';
+import { createIconLibrary } from '../cta-icon-library.mjs';
+import { CTA_MANAGER_CSS } from './cta-manager-css.mjs';
 
 const SITE = 'https://gbti.network';
-const TYPES = ['prompt', 'post', 'project', 'share'];
-const FIELDS = [
-  ['label', 'Label', 'The card eyebrow, e.g. the book title'],
-  ['line', 'Line', 'The one sentence on the card'],
-  ['button', 'Button', 'Names the partner, e.g. Get the book on Amazon'],
-  ['destination', 'Destination', 'https://... (an amazon CTA links straight to amazon with tag=)'],
-  ['partner', 'Partner', 'amazon, codeable, ...'],
-  ['note', 'Note', 'Where the URL came from, whose tag it carries'],
-];
-
-const CSS = `
-  :host { display:block; }
-  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
-  .hint { font-size:12.5px; color:var(--muted); }
-  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
-  .busy { opacity:.55; pointer-events:none; }
-  .btn { flex:none; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:7px; font:inherit; font-weight:700; font-size:13px; padding:7px 14px; cursor:pointer; }
-  .lk { flex:none; border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; }
-  .lk:hover { border-color:var(--accent); color:var(--accent); }
-  .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
-  .form { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px 12px; margin:0 0 14px; padding:12px; border:1px solid var(--line); border-radius:9px; }
-  .form label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); min-width:0; }
-  .form input, .form select, .form textarea { font:inherit; font-size:13.5px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:6px 9px; min-width:0; }
-  .form textarea { resize:vertical; min-height:36px; }
-  .form .acts { grid-column:1 / -1; display:flex; gap:8px; flex-wrap:wrap; }
-  .list { list-style:none; margin:0; padding:0; }
-  .c { border-top:1px solid var(--line); padding:12px 2px; }
-  .c:first-child { border-top:0; }
-  .c.off { opacity:.6; }
-  .top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .label { font-size:14.5px; font-weight:700; color:var(--fg); }
-  .badge { font-size:11px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; border-radius:999px; padding:2px 8px; border:1px solid var(--line); color:var(--muted); }
-  .state.on { color:var(--accent); border-color:var(--accent); }
-  .acts-r { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
-  .line { margin:6px 0 0; font-size:13.5px; color:var(--fg); }
-  .dest { display:block; font-size:12.5px; margin-top:3px; overflow-wrap:anywhere; }
-  .dest a { color:var(--accent); }
-  details { margin-top:6px; }
-  summary { cursor:pointer; font-size:12.5px; color:var(--muted); }
-  .note { font-size:13px; line-height:1.5; margin:6px 0 0; white-space:pre-line; }
-  .items { list-style:none; margin:8px 0 0; padding:0; }
-  .it { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0; font-size:13px; }
-  .it .ty { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); }
-  .it a { color:var(--accent); }
-  .it .bad { color:var(--danger, #e06c6c); font-weight:600; }
-  .it .pending, .it .draft { color:var(--muted); }
-  .assign { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-  .assign select, .assign input { font:inherit; font-size:13px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:5px 8px; min-width:0; }
-  .assign input { flex:1 1 200px; }
-  .muted { color:var(--muted); }
-  [hidden] { display:none !important; }
-`;
+const SUBMITTED = 'Submitted. It merges automatically and appears shortly. Track it in your WorkBench.';
+const FIELD_KEYS = ['id', 'label', 'partner', 'line', 'button', 'destination', 'image', 'html'];
 
 class GbtiCtaManager extends GbtiElement {
+  constructor() {
+    super();
+    this._status = 'idle'; // idle | loading | failed | ready
+    this._view = 'list';
+    this._st = null;
+    if (this.root) this._listen();
+  }
+
   // The client-ready race (see gbti-quote-manager): the element sits in static admin markup and upgrades before the
   // client is injected, so render() starts the load when the client arrives, never connectedCallback.
   connectedCallback() { super.connectedCallback?.(); }
 
+  /** Where the site's files are read from: the page's own origin when the page says so, else production. */
+  get site() {
+    const o = this.dataset?.siteOrigin;
+    if (o === 'page' && typeof location !== 'undefined') return location.origin;
+    return SITE;
+  }
+
+  get icons() {
+    if (!this._icons) this._icons = createIconLibrary({ base: this.site });
+    return this._icons;
+  }
+
+  // An open editor with unsaved typing declines the client-broadcast re-render (sow-326), which would rebuild it.
+  skipClientRender() { return this._view === 'edit' && this._status === 'ready'; }
+
   async load() {
     if (!this.client) { this.render(); return; }
-    this._loading = true; this._failed = false;
+    this._status = 'loading';
     this.render();
     try {
       const [pool, built] = await Promise.all([
         this.client.ctaPool(),
-        fetch(`${SITE}/ctas.json`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`ctas.json ${r.status}`); return r.json(); }),
+        fetch(`${this.site}/ctas.json`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`ctas.json ${r.status}`); return r.json(); }),
       ]);
       this._ctas = Array.isArray(pool?.ctas) ? pool.ctas : [];
-      this._types = Array.isArray(pool?.types) && pool.types.length ? pool.types : TYPES;
       this._built = new Map((Array.isArray(built?.ctas) ? built.ctas : []).map((c) => [c.id, c]));
+      this._pages = pagesFromBuilt(built);
+      this._status = 'ready';
     } catch (e) {
-      this._ctas = null; this._built = null; this._failed = true;
-      this._msg = `Could not load the CTAs (${e?.message || 'unknown error'}).`;
+      this._status = 'failed';
+      this._problem = e?.message || 'unknown error';
     }
-    this._loading = false;
     this.render();
   }
 
-  /** The built artifact's view of one assignment: resolved / unresolved / not yet built. */
-  _resolution(ctaId, it) {
-    const b = this._built?.get(ctaId);
-    if (!b) return { state: 'pending' };
-    const hit = (b.items || []).find((x) => x.type === it.type && x.ref === it.ref);
-    if (!hit) return { state: 'pending' };
-    if (!hit.resolved) return { state: 'missing' };
-    return { state: hit.live ? 'live' : 'draft', title: hit.title, url: hit.url };
+  _imageUrl(file) {
+    const path = ctaImageUrl(file);
+    return path ? `${this.site}${path}` : null;
+  }
+
+  /** A card's page title: the public page list, then the built registry's resolution, then the reference itself. */
+  _titleOf(ctaId, it) {
+    const page = (this._pages || []).find((p) => p.type === it.type && p.ref === it.ref);
+    if (page) return page.title;
+    const hit = (this._built?.get(ctaId)?.items || []).find((x) => x.type === it.type && x.ref === it.ref);
+    return hit?.title || it.ref;
   }
 
   render() {
-    if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (superadmin) to manage CTAs.</p>`); return; }
-    if (this._failed) {
-      this.set(this.css(CSS) + `<p class="msg">${esc(this._msg)}</p><button class="lk" type="button" data-retry-load>Try again</button>`);
-      this.$('[data-retry-load]')?.addEventListener('click', () => this.load());
+    if (!this.client) { this.set(this.css(CTA_MANAGER_CSS) + '<p class="muted">Open in the GBTI client (superadmin) to manage call-to-actions.</p>'); return; }
+    if (this._status === 'failed') { this._paint(failedView(this._problem)); return; }
+    if (this._status !== 'ready') { if (this._status === 'idle') this.load(); else this._paint(loadingView()); return; }
+    if (this._view === 'edit' && this._st) { this._paint(editorView(this._st, foundHosts(this._st.d.html, this._st.d.hosts))); this._afterEditorPaint(); return; }
+    const rows = this._ctas.map((c) => ({ cta: c, image: typeof c.image === 'string' ? { url: this._imageUrl(c.image) } : null, busy: this._busyId === c.id }));
+    this._paint(listView({ rows, msg: this._listMsg, msgBad: this._listBad }));
+  }
+
+  _paint(markup) { this.set(this.css(CTA_MANAGER_CSS + CTA_CARD_CSS) + markup); }
+
+  // ---- list -------------------------------------------------------------------------------------------------------
+
+  async _toggle(id) {
+    const c = this._ctas.find((x) => x.id === id);
+    if (!c || this._busyId) return;
+    const enabled = c.enabled !== true;
+    this._busyId = id; this._listMsg = ''; this.render();
+    try {
+      const r = await this.client.setCtaEnabled({ id, enabled });
+      c.enabled = enabled;
+      this._listMsg = r?.noop ? `${c.label} is already ${enabled ? 'enabled' : 'disabled'}.` : `${enabled ? 'Enabled' : 'Disabled'} ${c.label}. Submitted. It merges automatically and appears shortly.`;
+      this._listBad = false;
+    } catch (e) {
+      this._listMsg = e?.message || 'That change failed.'; this._listBad = true;
+    }
+    this._busyId = null;
+    this.render();
+  }
+
+  // ---- editor state -----------------------------------------------------------------------------------------------
+
+  _open(c) {
+    const isNew = !c;
+    const d = isNew ? blankDraft() : draftFromCta(c, { imageUrl: typeof c.image === 'string' ? this._imageUrl(c.image) : null });
+    this._st = {
+      d, isNew, original: isNew ? null : structuredClone(c), tried: false, saving: false, msg: '', msgKind: '',
+      pickerOpen: false, iconQuery: '', iconSet: '', icons: { status: 'idle', total: 0, results: [], sets: [] },
+      hostDraft: '', hostErr: '', pageQuery: '', cands: [], drag: false, imageMsg: '', imageWork: false, pvDark: false, pvPhone: false,
+      titleOf: (it) => this._titleOf(d.id, it),
+    };
+    this._revalidate();
+    this._view = 'edit'; this._listMsg = '';
+    this.render();
+  }
+
+  _back() { this._view = 'list'; this._st = null; this.render(); }
+
+  _revalidate() {
+    const st = this._st;
+    st.v = validateDraft(st.d, { isNew: st.isNew, taken: new Set(this._ctas.map((c) => c.id)) });
+    // A refused save's banner follows the fields: it names what is still wrong, and goes once nothing is.
+    if (st.msgKind === 'err' && st.tried && !st.saving) {
+      st.msg = st.v.ok ? '' : Object.keys(st.v.errors).length ? 'Fix the highlighted fields to save.' : st.v.banner;
+      if (!st.msg) st.msgKind = '';
+    }
+  }
+
+  /** Any edit clears a sent or failed save's message (the draft now differs from what was sent), then revalidates. */
+  _touched() {
+    const st = this._st;
+    if (st.msg && st.msgKind !== 'err') { st.msg = ''; st.msgKind = ''; }
+    this._revalidate();
+  }
+
+  /** Redraw only what a keystroke changes, so the field under the cursor keeps its focus and selection. */
+  _refreshLive({ found = false } = {}) {
+    const st = this._st;
+    const title = this.$('[data-region="title"]');
+    if (title) title.textContent = editTitle(st);
+    for (const k of FIELD_KEYS) {
+      const msg = shownError(st, k);
+      this.$$(`[data-err="${k}"]`).forEach((el) => { el.textContent = msg; el.hidden = !msg; });
+      this.$(`[data-fld="${k}"]`)?.classList.toggle('err', !!msg);
+    }
+    const banner = this.$('[data-region="banner"]');
+    if (banner) { banner.textContent = st.msg; banner.hidden = !st.msg; banner.className = st.msgKind === 'err' || st.msgKind === 'server' ? 'msg bad' : 'msg'; }
+    const stage = this.$('[data-region="stage"]');
+    if (stage) stage.innerHTML = previewCard(st);
+    const note = this.$('[data-region="pvnote"]');
+    if (note) note.textContent = previewNote(st.d);
+    this.$$('[data-count]').forEach((el) => { el.textContent = plural(st.d.items.length); });
+    if (found) { const f = this.$('[data-region="found"]'); if (f) f.innerHTML = foundLine(foundHosts(st.d.html, st.d.hosts)); }
+  }
+
+  _afterEditorPaint() {
+    // A stored image's size is read from the picture itself once it loads; a missing one (not deployed yet) says so.
+    const img = this.$('[data-stored-img]');
+    const img0 = this._st?.d.image;
+    if (img && img0?.kind === 'stored') {
+      const info = this.$('[data-region="imginfo"]');
+      img.addEventListener('load', () => { if (info && img.naturalWidth) info.textContent = `WebP · ${img.naturalWidth} × ${img.naturalHeight}`; }, { once: true });
+      img.addEventListener('error', () => { img.hidden = true; if (info) info.textContent = 'WebP · shows on the site after the next deploy'; }, { once: true });
+    }
+  }
+
+  async _setImage(file) {
+    const st = this._st;
+    st.imageWork = true; st.imageMsg = ''; st.drag = false;
+    this._redrawImage();
+    const r = await encodeCtaImage(file);
+    if (this._st !== st) return;
+    st.imageWork = false;
+    if (r.ok) {
+      st.d.image = { kind: 'upload', base64: r.base64, url: r.dataUrl, width: r.width, height: r.height, bytes: r.bytes };
+      this._touched();
+    } else {
+      st.imageMsg = r.problem;
+    }
+    this.render();
+  }
+
+  _redrawImage() {
+    const el = this.$('[data-region="image"]');
+    if (el) { el.innerHTML = imageBody(this._st); this._afterEditorPaint(); }
+  }
+
+  _addHost(raw) {
+    const st = this._st;
+    const n = normalizeHost(raw ?? st.hostDraft);
+    if (!n.ok) { st.hostErr = n.problem; const el = this.$('[data-region="hosterr"]'); if (el) { el.textContent = n.problem; el.hidden = false; } return; }
+    if (!st.d.hosts.includes(n.host)) st.d.hosts = [...st.d.hosts, n.host];
+    if (raw === undefined) st.hostDraft = '';
+    st.hostErr = '';
+    this._touched();
+    this.render();
+  }
+
+  // ---- icons ------------------------------------------------------------------------------------------------------
+
+  async _searchIcons() {
+    const st = this._st;
+    const token = (this._iconToken = (this._iconToken || 0) + 1);
+    try {
+      if (st.icons.status !== 'ready') st.icons.sets = await this.icons.sets();
+      const { total, icons } = await this.icons.search(st.iconQuery, { setId: st.iconSet });
+      if (this._st !== st || token !== this._iconToken) return;
+      const first = st.icons.status !== 'ready';
+      st.icons = { ...st.icons, status: 'ready', total, results: icons };
+      if (first) this.render(); // the set chips arrive with the first answer
+      else { const el = this.$('[data-region="icons"]'); if (el) el.innerHTML = iconResults(st); }
+    } catch (e) {
+      if (this._st !== st || token !== this._iconToken) return;
+      st.icons = { ...st.icons, status: 'failed', problem: e?.message || 'unknown error' };
+      const el = this.$('[data-region="icons"]');
+      if (el) el.innerHTML = iconResults(st); else this.render();
+    }
+  }
+
+  // ---- save -------------------------------------------------------------------------------------------------------
+
+  async _save() {
+    const st = this._st;
+    if (st.saving) return;
+    st.tried = true;
+    this._revalidate();
+    if (!st.v.ok) {
+      st.msg = Object.keys(st.v.errors).length ? 'Fix the highlighted fields to save.' : st.v.banner;
+      st.msgKind = 'err';
+      this.render();
       return;
     }
-    if (!this._ctas) { if (!this._loading) this.load(); this.set(this.css(CSS) + `<p class="muted">Loading CTAs...</p>`); return; }
-    const enabled = this._ctas.filter((c) => c && c.enabled === true).length;
-    const rows = this._ctas.map((c) => this._row(c)).join('');
-    this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
-      <div class="head"><span class="hint">${this._ctas.length} CTA${this._ctas.length === 1 ? '' : 's'}, ${enabled} enabled</span>
-        <button class="lk" type="button" data-show-add>${this._adding ? 'Cancel' : 'Add a CTA'}</button></div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
-      ${this._adding ? this._form('add', {}) : ''}
-      <p class="hint" style="margin:0 0 12px">A CTA renders as its own sidebar card on every item it is assigned to, above the weekly digest, only while it is enabled. Edits open a house PR and go live on the next site deploy. Disable a CTA to retire it; the history stays.</p>
-      <ul class="list">${rows || '<li class="muted">No CTAs yet.</li>'}</ul>
-    </div>`);
-    this._wire();
-  }
-
-  _form(mode, c) {
-    const v = (k) => esc(c?.[k] ?? '');
-    const fields = FIELDS.map(([k, label, hint]) => k === 'note'
-      ? `<label style="grid-column:1 / -1">${label}<textarea data-f="${k}" placeholder="${esc(hint)}">${v(k)}</textarea></label>`
-      : `<label>${label}<input data-f="${k}" type="text" value="${v(k)}" placeholder="${esc(hint)}" /></label>`).join('');
-    const idField = mode === 'add' ? `<label>Id (kebab-case)<input data-f="id" type="text" placeholder="stranger-in-a-strange-land" /></label>` : '';
-    return `<div class="form" data-form="${mode}" data-id="${esc(c?.id || '')}">${idField}${fields}
-      <div class="acts"><button class="btn" type="button" data-submit>${mode === 'add' ? 'Add CTA' : 'Save'}</button>${mode === 'edit' ? `<button class="lk" type="button" data-cancel-edit>Cancel</button>` : ''}</div></div>`;
-  }
-
-  _row(c) {
-    const on = c.enabled === true;
-    const id = esc(c.id || '');
-    const items = (Array.isArray(c.items) ? c.items : []).map((it) => {
-      const r = this._resolution(c.id, it);
-      const key = `${esc(it.type)}:${esc(it.ref)}`;
-      let body;
-      if (r.state === 'live') body = `<a href="${esc(SITE + r.url)}" target="_blank" rel="noopener">${esc(r.title || it.ref)}</a>`;
-      else if (r.state === 'draft') body = `<span>${esc(r.title || it.ref)}</span> <span class="draft">(no public page yet)</span>`;
-      else if (r.state === 'missing') body = `<span class="bad">No such item: ${key}</span>`;
-      else body = `<span>${esc(it.ref)}</span> <span class="pending">(resolving on the next deploy)</span>`;
-      return `<li class="it" data-item="${key}"><span class="ty">${esc(it.type)}</span>${body}<button class="lk danger" type="button" data-unassign="${id}" data-type="${esc(it.type)}" data-ref="${esc(it.ref)}">Unassign</button></li>`;
-    }).join('');
-    const typeOpts = (this._types || TYPES).map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-    return `<li class="c ${on ? '' : 'off'}" data-cta="${id}">
-      <div class="top"><span class="label">${esc(c.label || c.id)}</span><span class="badge">${esc(c.partner || '')}</span><span class="badge state ${on ? 'on' : ''}">${on ? 'Enabled' : 'Disabled'}</span>
-        <span class="acts-r"><button class="lk" type="button" data-edit="${id}">${this._editing === c.id ? 'Close' : 'Edit'}</button><button class="lk" type="button" data-toggle="${id}" data-on="${on ? '1' : '0'}">${on ? 'Disable' : 'Enable'}</button></span></div>
-      <p class="line">${esc(c.line || '')}</p>
-      <span class="dest"><a href="${esc(c.destination || '#')}" target="_blank" rel="noopener">${esc(c.destination || '')}</a> <span class="muted">(button: ${esc(c.button || '')})</span></span>
-      ${c.note ? `<details><summary>Note</summary><p class="note">${esc(c.note)}</p></details>` : ''}
-      ${this._editing === c.id ? this._form('edit', c) : ''}
-      <ul class="items">${items || '<li class="it muted">Assigned to nothing yet.</li>'}</ul>
-      <div class="assign"><select data-assign-type="${id}">${typeOpts}</select><input data-assign-ref="${id}" type="text" placeholder="the item slug, or author/id for a share" /><button class="lk" type="button" data-assign="${id}">Assign</button></div>
-    </li>`;
-  }
-
-  _read(form) {
-    const out = {};
-    form.querySelectorAll('[data-f]').forEach((el) => { out[el.dataset.f] = String(el.value || '').trim(); });
-    return out;
-  }
-
-  _wire() {
-    this.on('[data-show-add]', 'click', () => { this._adding = !this._adding; this._msg = ''; this.render(); });
-    this.$$('[data-form] [data-submit]').forEach((b) => b.addEventListener('click', () => {
-      const form = b.closest('[data-form]');
-      const fields = this._read(form);
-      if (form.dataset.form === 'add') {
-        if (!fields.id) { this._msg = 'An id is required.'; this.render(); return; }
-        this._run(() => this.client.addCta(fields), () => { this._adding = false; });
-      } else {
-        this._run(() => this.client.updateCta({ id: form.dataset.id, ...fields }), () => { this._editing = null; });
-      }
-    }));
-    this.$$('[data-cancel-edit]').forEach((b) => b.addEventListener('click', () => { this._editing = null; this.render(); }));
-    this.$$('[data-edit]').forEach((b) => b.addEventListener('click', () => { this._editing = this._editing === b.dataset.edit ? null : b.dataset.edit; this._msg = ''; this.render(); }));
-    this.$$('[data-toggle]').forEach((b) => b.addEventListener('click', () =>
-      this._run(() => this.client.setCtaEnabled({ id: b.dataset.toggle, enabled: b.dataset.on !== '1' }))));
-    this.$$('[data-assign]').forEach((b) => b.addEventListener('click', () => {
-      const id = b.dataset.assign;
-      const type = this.$(`[data-assign-type="${CSS_ESC(id)}"]`)?.value || '';
-      const ref = (this.$(`[data-assign-ref="${CSS_ESC(id)}"]`)?.value || '').trim();
-      if (!ref) { this._msg = 'A ref is required (the item slug, or author/id for a share).'; this.render(); return; }
-      this._run(() => this.client.assignCta({ id, type, ref }));
-    }));
-    this.$$('[data-unassign]').forEach((b) => b.addEventListener('click', () => {
-      const { unassign: id, type, ref } = b.dataset;
-      if (typeof confirm === 'function' && !confirm(`Unassign this CTA from ${type}:${ref}?`)) return;
-      this._run(() => this.client.unassignCta({ id, type, ref }));
-    }));
-  }
-
-  async _run(fn, after) {
-    this._busy = true; this._msg = ''; this.render();
+    const { fields, changed } = savePayload(st.d, st.original, { isNew: st.isNew });
+    if (!st.isNew && !changed.length) { st.msg = 'Nothing to save: this card already reads this way.'; st.msgKind = ''; this.render(); return; }
+    st.saving = true; st.msg = ''; st.msgKind = '';
+    this.render();
     try {
-      const r = await fn();
-      this._msg = r?.noop ? 'No change (already in that state).' : (r?.prNumber ? houseEditAck(r) : 'Done.');
-      after?.();
+      const r = st.isNew ? await this.client.addCta(fields) : await this.client.updateCta(fields);
+      // What was sent becomes the new starting point, so a second save sends only what changes after this one.
+      const saved = cardFromDraft(st.d);
+      if (st.d.image.kind === 'upload') {
+        saved.image = `${saved.id}.webp`;
+        st.d.image = { kind: 'stored', file: saved.image, url: st.d.image.url, width: st.d.image.width, height: st.d.image.height };
+      }
+      const at = this._ctas.findIndex((c) => c.id === saved.id);
+      if (at >= 0) this._ctas[at] = saved; else this._ctas.push(saved);
+      st.original = structuredClone(saved);
+      st.isNew = false;
+      st.msg = r?.noop ? 'Nothing to save: this card already reads this way.' : SUBMITTED;
+      st.msgKind = 'ok';
     } catch (e) {
-      this._msg = e?.message || 'That edit failed.';
+      st.msg = e?.message || 'That save failed.';
+      st.msgKind = 'server';
     }
-    this._busy = false;
-    await this.load();
+    st.saving = false;
+    this._revalidate();
+    this.render();
+  }
+
+  // ---- events (delegated once on the shadow root, so a redraw never needs rewiring) ----------------------------------
+
+  _listen() {
+    const root = this.root;
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest?.('[data-act]');
+      if (!b || b.disabled) return;
+      this._act(b.dataset.act, b);
+    });
+    root.addEventListener('input', (e) => this._input(e.target));
+    root.addEventListener('change', (e) => {
+      const t = e.target;
+      if (t.matches?.('[data-file]')) { const f = t.files?.[0]; t.value = ''; if (f && this._st) this._setImage(f); return; }
+      if (t.type === 'checkbox') this._input(t);
+    });
+    root.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.matches?.('[data-q="host"]')) { e.preventDefault(); this._addHost(); }
+    });
+    const onDrag = (on) => (e) => {
+      const zone = e.target.closest?.('[data-drop]');
+      if (!zone || !this._st) return;
+      e.preventDefault();
+      if (this._st.drag !== on) { this._st.drag = on; zone.classList.toggle('on', on); }
+    };
+    root.addEventListener('dragover', onDrag(true));
+    root.addEventListener('dragleave', onDrag(false));
+    root.addEventListener('drop', (e) => {
+      const zone = e.target.closest?.('[data-drop]');
+      if (!zone || !this._st) return;
+      e.preventDefault();
+      const f = e.dataTransfer?.files?.[0];
+      if (f) this._setImage(f); else { this._st.drag = false; zone.classList.remove('on'); }
+    });
+  }
+
+  _input(t) {
+    const st = this._st;
+    if (!st) return;
+    if (t.dataset.f) {
+      const k = t.dataset.f;
+      st.d[k] = t.type === 'checkbox' ? t.checked : t.value;
+      this._touched();
+      this._refreshLive({ found: k === 'html' });
+      return;
+    }
+    const q = t.dataset.q;
+    if (q === 'icons') {
+      st.iconQuery = t.value;
+      clearTimeout(this._iconTimer);
+      this._iconTimer = setTimeout(() => this._searchIcons(), 160);
+    } else if (q === 'pages') {
+      st.pageQuery = t.value;
+      st.cands = pageCandidates(this._pages, st.pageQuery, st.d.items);
+      const el = this.$('[data-region="cands"]');
+      if (el) el.innerHTML = candidateList(st);
+    } else if (q === 'host') {
+      st.hostDraft = t.value;
+      if (st.hostErr) { st.hostErr = ''; const el = this.$('[data-region="hosterr"]'); if (el) el.hidden = true; }
+    }
+  }
+
+  _act(act, b) {
+    const st = this._st;
+    switch (act) {
+      case 'retry': this.load(); return;
+      case 'new': this._open(null); return;
+      case 'edit': { const c = this._ctas.find((x) => x.id === b.dataset.id); if (c) this._open(c); return; }
+      case 'toggle': this._toggle(b.dataset.id); return;
+      default: break;
+    }
+    if (!st) return;
+    switch (act) {
+      case 'back': this._back(); return;
+      case 'save': this._save(); return;
+      case 'layout': st.d.layout = b.dataset.layout; st.pickerOpen = false; break;
+      case 'remove-image': st.d.image = { kind: 'none' }; st.imageMsg = ''; break;
+      case 'picker':
+        st.pickerOpen = !st.pickerOpen;
+        if (st.pickerOpen && st.icons.status !== 'ready') { st.icons = { ...st.icons, status: 'loading' }; this._searchIcons(); }
+        this.render();
+        return;
+      case 'icons-retry': st.icons = { ...st.icons, status: 'loading' }; this.render(); this._searchIcons(); return;
+      case 'icon-set': st.iconSet = b.dataset.set || ''; this.render(); this._searchIcons(); return;
+      case 'icon': { const icon = st.icons.results[Number(b.dataset.i)]; if (!icon) return; st.d.icon = icon; st.pickerOpen = false; break; }
+      case 'clear-icon': st.d.icon = null; st.pickerOpen = false; break;
+      case 'host-add': this._addHost(); return;
+      case 'host-allow': this._addHost(b.dataset.host); return;
+      case 'host-remove': st.d.hosts = st.d.hosts.filter((h) => h !== b.dataset.host); break;
+      case 'page-add': {
+        const c = st.cands[Number(b.dataset.i)];
+        if (!c) return;
+        st.d.items = [...st.d.items, { type: c.type, ref: c.ref }];
+        st.pageQuery = ''; st.cands = [];
+        break;
+      }
+      case 'page-remove': st.d.items = st.d.items.filter((_, n) => n !== Number(b.dataset.i)); break;
+      case 'pv-light': st.pvDark = false; this.render(); return;
+      case 'pv-dark': st.pvDark = true; this.render(); return;
+      case 'pv-side': st.pvPhone = false; this.render(); return;
+      case 'pv-phone': st.pvPhone = true; this.render(); return;
+      default: return;
+    }
+    this._touched();
+    this.render();
   }
 }
-
-// Ids are kebab-case by the core's rule, so a plain attribute selector is safe; this guards the quote regardless.
-const CSS_ESC = (s) => String(s || '').replace(/["\\]/g, '\\$&');
 
 define('gbti-cta-manager', GbtiCtaManager);
 export { GbtiCtaManager };

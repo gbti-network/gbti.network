@@ -109,12 +109,18 @@ export function iconSvg(icon, className = '') {
 
 const kebab = (k) => k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
+// The label some sets put on their shapes (six sets in React Icons 5.7.0, Circum Icons among them, name groups with
+// id="Zoom_Out" and the like). It changes nothing in the drawing, and everything that could refer to one (url(#...),
+// href) is refused anyway, so the converter drops it rather than refusing the icon. The stored-icon rule above still
+// refuses an id.
+const DROPPED_LABELS = new Set(['id']);
+
 function reactChildren(children) {
   const out = [];
   for (const c of Array.isArray(children) ? children : []) {
     if (!isMap(c) || !ICON_TAGS.includes(c.tag)) return null;
     const attrs = {};
-    for (const [k, v] of Object.entries(isMap(c.attr) ? c.attr : {})) attrs[kebab(k)] = v;
+    for (const [k, v] of Object.entries(isMap(c.attr) ? c.attr : {})) if (!DROPPED_LABELS.has(kebab(k))) attrs[kebab(k)] = v;
     const node = { tag: c.tag, attrs };
     if (Array.isArray(c.child) && c.child.length) {
       if (c.tag !== 'g') return null;

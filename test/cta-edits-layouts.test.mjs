@@ -103,3 +103,20 @@ test('updateCta: sets and clears the new parts, keeps the key order, and is a no
   assert.throws(() => updateCta(r.next, { id: 'book', hosts: ['https://x.example.com;'] }, ctx), /must be a bare https origin/);
   assert.equal(start.ctas[0].layout, undefined, 'the input document is never mutated');
 });
+
+// sow-337 part 3: the editor saves a whole card at once, its pages and on/off state included, as one PR.
+test('addCta and updateCta take a replacement items list and an enabled state, judged by the registry rules', () => {
+  const add = addCta({ ctas: [] }, { ...book(), enabled: true, items: [{ type: 'prompt', ref: ' grok ' }, { type: 'share', ref: 'atwellpub/20260610-x' }] }, ctx);
+  assert.deepEqual(add.next.ctas[0].items, [{ type: 'prompt', ref: 'grok' }, { type: 'share', ref: 'atwellpub/20260610-x' }]);
+  assert.equal(add.next.ctas[0].enabled, true);
+  const start = add.next;
+  const r = updateCta(start, { id: 'book', enabled: false, items: [{ type: 'post', ref: 'an-article' }] }, ctx);
+  assert.deepEqual(r.audit.detail, { fields: ['enabled', 'items'] });
+  assert.deepEqual(r.next.ctas[0].items, [{ type: 'post', ref: 'an-article' }]);
+  assert.equal(r.next.ctas[0].enabled, false);
+  assert.equal(updateCta(start, { id: 'book', enabled: true, items: [{ type: 'prompt', ref: 'grok' }, { type: 'share', ref: 'atwellpub/20260610-x' }] }, ctx).changed, false, 'the same pages and state are no change');
+  assert.equal(updateCta(start, { id: 'book', enabled: 'no' }, ctx).changed, false, 'a non-boolean enabled is ignored by the core (the Worker refuses it)');
+  assert.throws(() => updateCta(start, { id: 'book', items: [{ type: 'page', ref: 'x' }] }, ctx), /type must be one of/);
+  assert.throws(() => updateCta(start, { id: 'book', items: [{ type: 'post', ref: 'x' }, { type: 'post', ref: 'x' }] }, ctx), /assigned to this CTA twice/);
+  assert.deepEqual(updateCta(start, { id: 'book', items: [] }, ctx).next.ctas[0].items, [], 'an empty list takes the card off every page');
+});

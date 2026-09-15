@@ -154,3 +154,25 @@ test('the validators carry the parts through and never take a file name from the
   assert.equal(img.upload.path, 'house/images/ctas/x.webp');
   assert.equal(ctaUpdateInput({ id: 'x', image: 'x.webp' }).ok, false, 'a bare file name is not an update');
 });
+
+test('an update carries the pages and the enabled state in the same one-file PR', async () => {
+  const record = [];
+  const r = await run({ action: 'cta-update', id: 'book', enabled: false, items: [{ type: 'post', ref: 'an-article' }, { type: 'share', ref: 'atwellpub/20260610-x' }] }, ghFetch(record));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const w = writes(record);
+  assert.deepEqual(w.map((x) => `${x.method} ${x.path}`), ['PUT house/ctas.yml']);
+  const card = yaml.load(Buffer.from(w[0].body.content, 'base64').toString('utf8')).ctas[0];
+  assert.equal(card.enabled, false);
+  assert.deepEqual(card.items, [{ type: 'post', ref: 'an-article' }, { type: 'share', ref: 'atwellpub/20260610-x' }]);
+  for (const [body, re] of [
+    [{ action: 'cta-update', id: 'book', items: 'post:x' }, /items must be a list/],
+    [{ action: 'cta-update', id: 'book', items: [{ type: 'post', ref: '../x' }] }, /well-formed ref/],
+    [{ action: 'cta-update', id: 'book', enabled: 'yes' }, /enabled must be true or false/],
+  ]) {
+    const rec = [];
+    const bad = await run(body, ghFetch(rec));
+    assert.equal(bad.status, 400, JSON.stringify(bad.body));
+    assert.match(bad.body.message, re);
+    assert.equal(githubReads(rec).length, 0);
+  }
+});

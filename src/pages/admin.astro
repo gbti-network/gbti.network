@@ -102,10 +102,12 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         </div>
         {/* sow-281: SUPERADMIN. The registered content CTAs (house/ctas.yml): add, edit, enable, and assign each to any
             content item. The Worker ops carry ROLE_RANK.superadmin and the file is superadmin-CODEOWNED; the module
-            is imported for superadmin only, so an admin never upgrades the tag. */}
+            is imported for superadmin only, so an admin never upgrades the tag. sow-337: data-site-origin="page" reads the
+            card list, the card images and the icon library from this page's own site (the policy here allows only
+            that), so the preview site shows its own build. */}
         <div class="adm-card" data-panel="ctas" hidden>
           <h2 class="h2">CTAs</h2>
-          <gbti-cta-manager></gbti-cta-manager>
+          <gbti-cta-manager data-site-origin="page"></gbti-cta-manager>
         </div>
       </div>
     </div>

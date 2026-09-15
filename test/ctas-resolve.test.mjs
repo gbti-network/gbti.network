@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ctaFor, resolveAssignments, itemUrl, assignmentsOf, itemKey, ctaImageUrl } from '../src/lib/ctas.mjs';
+import { ctaFor, resolveAssignments, itemUrl, assignmentsOf, itemKey, ctaImageUrl, ctaPages } from '../src/lib/ctas.mjs';
 import { readCtas, ctaItemExists, ctaImageInfo, CTAS_PATH } from '../scripts/lib/ctas-store.mjs';
 import { rehypeSponsoredLinks, sitePathOf } from '../src/lib/rehype-sponsored-links.mjs';
 import { outboundRows } from '../scripts/lib/outbound-links-store.mjs';
@@ -150,4 +150,16 @@ test('ctaImageInfo: the committed cover passes with its size; a missing file, a 
   fs.writeFileSync(path.join(tmp, 'house/images/ctas/x.webp'), Buffer.from('UklGRjABAABXRUJQVlA4WAoAAAAIAAAACAAABgAAVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAEVYSUbkAAAARXhpZgAASUkqAAgAAAAIAA8BAgARAAAAfgAAABABAgADAAAAVDEAABIBAwABAAAAAQAAABoBBQABAAAAbgAAABsBBQABAAAAdgAAACgBAwABAAAAAgAAABMCAwABAAAAAQAAAGmHBAABAAAAkAAAAAAAAAA4YwAA6AMAADhjAADoAwAAR0JUSSB0ZXN0IGNhbWVyYQAABgAAkAcABAAAADAyMTABkQcABAAAAAECAwAAoAcABAAAADAxMDABoAMAAQAAAP//AAACoAQAAQAAAAkAAAADoAQAAQAAAAcAAAAAAAAA', 'base64'));
   assert.match(ctaImageInfo(tmp, 'x.webp').problem, /metadata/);
   fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('ctaPages: the manager\'s page search lists only items with a public page, so a members-only title never ships', () => {
+  const items = [
+    { type: 'post', ref: 'a-post', title: 'A post', live: true },
+    { type: 'share', ref: 'atwellpub/abc', title: 'A members-only share', live: false },
+    { type: 'prompt', ref: 'draft-prompt', title: 'A draft', live: false },
+    { type: 'share', ref: 'atwellpub/pub', title: 'A public share', live: true },
+  ];
+  assert.deepEqual(ctaPages(items), [{ type: 'post', ref: 'a-post', title: 'A post' }, { type: 'share', ref: 'atwellpub/pub', title: 'A public share' }]);
+  assert.equal(JSON.stringify(ctaPages(items)).includes('members-only'), false);
+  assert.deepEqual(ctaPages(null), []);
 });

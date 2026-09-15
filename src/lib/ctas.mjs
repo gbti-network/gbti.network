@@ -29,6 +29,13 @@ export function itemUrl(type, ref) {
 /** sow-337: where the site serves a card image (src/pages/media/ctas/[file].ts), or null for a malformed name. */
 export const ctaImageUrl = (file) => (CTA_IMAGE_FILE_RE.test(String(file || '')) ? `/media/ctas/${file}` : null);
 
+/**
+ * sow-337: the pages a card can be put on, for the manager's "Add a page" search: every item with a public page, in
+ * the reference form the registry stores. Only live items, so a members-only share's title never reaches the public
+ * card list.
+ */
+export const ctaPages = (items) => (Array.isArray(items) ? items : []).filter((it) => it && it.live === true).map(({ type, ref, title }) => ({ type, ref, title }));
+
 /** Every assignment in the registry, flattened: [{ ctaId, type, ref, enabled }]. */
 export function assignmentsOf(registry) {
   const out = [];

@@ -73,6 +73,39 @@ export function webpInfo(bytes) {
   return { ok: true, width, height };
 }
 
+/**
+ * The same WebP with its EXIF, XMP and ICC colour profile chunks removed and its VP8X header no longer announcing
+ * them, or null when the bytes are not a well-formed WebP container. The browser's own encoder is why this exists:
+ * Chrome writes an sRGB ICC profile into every canvas WebP (measured on Chrome 148: VP8X, then ICCP of 456 bytes, then
+ * VP8), which holds no personal data but which the check above refuses, so the admin removes it before sending. The
+ * picture data is copied untouched, and a viewer with no profile assumes sRGB, which is what the canvas drew.
+ */
+export function stripWebpMetadata(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : null;
+  if (!b || b.length < 20 || fourcc(b, 0) !== 'RIFF' || fourcc(b, 8) !== 'WEBP') return null;
+  const end = u32(b, 4) + 8;
+  if (end > b.length) return null;
+  const keep = [];
+  let at = 12;
+  while (at + 8 <= end) {
+    const size = u32(b, at + 4);
+    if (at + 8 + size > end) return null;
+    const next = Math.min(at + 8 + size + (size % 2), end);
+    if (!METADATA_CHUNKS[fourcc(b, at)]) keep.push([at, next]);
+    at = next;
+  }
+  const out = new Uint8Array(12 + keep.reduce((n, [s, e]) => n + e - s, 0));
+  out.set(b.subarray(0, 12));
+  let w = 12;
+  for (const [s, e] of keep) {
+    out.set(b.subarray(s, e), w);
+    if (fourcc(out, w) === 'VP8X') out[w + 8] &= ~0x2c;
+    w += e - s;
+  }
+  new DataView(out.buffer).setUint32(4, out.length - 8, true);
+  return out;
+}
+
 /** Decode standard base64 to bytes, or null when it is not base64. Uses atob, which Node, browsers and Workers share. */
 export function bytesFromBase64(b64) {
   const s = String(b64 || '').replace(/\s+/g, '');

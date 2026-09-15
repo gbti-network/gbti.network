@@ -69,16 +69,29 @@ function partFields(p, { required }) {
   }
   return { ok: true, fields: out };
 }
-/** The text, parts and image of an add or update, merged into one { args, upload } or a 400. */
+// sow-337: the editor saves the card's pages with it (a replacement list), so one save is one PR. Shape only here;
+// the core's validRef judges each ref and refuses a duplicate.
+const MAX_ITEMS = 500;
+function itemsField(p) {
+  if (p?.items === undefined) return { ok: true, fields: {} };
+  if (!Array.isArray(p.items) || p.items.length > MAX_ITEMS) return bad(`items must be a list of at most ${MAX_ITEMS} { type, ref }`);
+  for (const it of p.items) {
+    if (!it || typeof it !== 'object' || !CTA_ITEM_TYPES.includes(it.type) || typeof it.ref !== 'string' || !validRef(it.type, it.ref)) return bad('each item must be a known type and a well-formed ref');
+  }
+  return { ok: true, fields: { items: p.items.map((it) => ({ type: it.type, ref: it.ref.trim() })) } };
+}
+/** The text, parts, pages and image of an add or update, merged into one { args, upload } or a 400. */
 function cardFields(p, id, { required }) {
   const t = textFields(p, { required });
   if (!t.ok) return t;
   const parts = partFields(p, { required });
   if (!parts.ok) return parts;
+  const items = itemsField(p);
+  if (!items.ok) return items;
   const img = ctaImageUpload({ id, imageBase64: p?.imageBase64, removeImage: p?.removeImage });
   if (!img.ok) return bad(img.problem);
   if (required && img.fields.image === null) return bad('a new CTA has no image to remove');
-  return { ok: true, fields: { ...t.fields, ...parts.fields, ...img.fields }, upload: img.upload };
+  return { ok: true, fields: { ...t.fields, ...parts.fields, ...items.fields, ...img.fields }, upload: img.upload };
 }
 
 /** cta-add: the id, label and partner, any other field or part, an optional image, an optional boolean enabled. */
@@ -90,14 +103,16 @@ export function ctaAddInput(p) {
   if (p?.enabled !== undefined && typeof p.enabled !== 'boolean') return bad('enabled must be true or false');
   return { ok: true, args: { id, ...c.fields, enabled: p?.enabled === true }, upload: c.upload };
 }
-/** cta-update: the id plus any field, part or image change. */
+/** cta-update: the id plus any field, part, page list, enabled state or image change. */
 export function ctaUpdateInput(p) {
   const id = idOf(p);
   if (!id) return bad('a CTA id is required');
   const c = cardFields(p, id, { required: false });
   if (!c.ok) return c;
-  if (!Object.keys(c.fields).length && !c.upload) return bad('nothing to update');
-  return { ok: true, args: { id, ...c.fields }, upload: c.upload };
+  if (p?.enabled !== undefined && typeof p.enabled !== 'boolean') return bad('enabled must be true or false');
+  const enabled = typeof p?.enabled === 'boolean' ? { enabled: p.enabled } : {};
+  if (!Object.keys(c.fields).length && !c.upload && !('enabled' in enabled)) return bad('nothing to update');
+  return { ok: true, args: { id, ...c.fields, ...enabled }, upload: c.upload };
 }
 /** The files an add or update commits beside house/ctas.yml: the uploaded image, and the delete of an image no
  *  card names after the edit. The route rank-checks every path before it writes. */

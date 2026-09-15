@@ -3343,8 +3343,8 @@ ${listStyleProseCss(".doc-blocks")}
     return s ? truncate(s, max) : empty;
   }
   function truncate(s, max = 120) {
-    const str = String(s ?? "");
-    return str.length > max ? `${str.slice(0, max - 1).trimEnd()}…` : str;
+    const str3 = String(s ?? "");
+    return str3.length > max ? `${str3.slice(0, max - 1).trimEnd()}…` : str3;
   }
   function snippet(md, max = 120) {
     const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
@@ -4027,9 +4027,9 @@ ${listStyleProseCss(".doc-blocks")}
           continue;
         }
       }
-      const esc4 = escapeKeepingLinks(line, linkKeep);
+      const esc6 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc4)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc6)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i);
         i++;
@@ -4085,7 +4085,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc4, line)];
+      const para = [hardBreak(esc6, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -8694,10 +8694,10 @@ ${listStyleProseCss(".doc-blocks")}
     }
     // The effective-status cell: the resolved status badge + the override source when it overrode Stripe.
     _statusCell(m) {
-      const LABEL = { paid: "paid", trialing: "trial", expired: "expired", cancelled: "cancelled", none: "none", banned: "banned", unknown: "unknown" };
+      const LABEL2 = { paid: "paid", trialing: "trial", expired: "expired", cancelled: "cancelled", none: "none", banned: "banned", unknown: "unknown" };
       const cls = m.status === "paid" ? "ok" : m.status === "banned" ? "ban" : m.status === "trialing" ? "tr" : "";
       const src = m.source && m.source !== "stripe" ? `<span class="src">via ${esc(m.source)}</span>` : "";
-      return `<span class="stat ${cls}">${esc(LABEL[m.status] || m.status)}</span>${src}`;
+      return `<span class="stat ${cls}">${esc(LABEL2[m.status] || m.status)}</span>${src}`;
     }
     // SOW-070: the inline per-member action panel (contextual ban / grandfather / role), keyed by the row's immutable
     // github_id -- no typing. The buttons toggle on the member's current state; role assignment is superadmin-only.
@@ -10984,239 +10984,1644 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-outbound-link-manager", GbtiOutboundLinkManager);
 
+  // membership/cta-icon.mjs
+  var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
+  var ICON_LIMITS = Object.freeze({ name: 64, set: 40, nodes: 200, depth: 4, value: 2e4, total: 6e4 });
+  var NUM = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?$/i;
+  var LEN = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?(px|%)?$/i;
+  var PATH_DATA = /^[0-9eE.,\s+\-MmLlHhVvCcSsQqTtAaZz]*$/;
+  var POINTS = /^[0-9eE.,\s+\-]*$/;
+  var PAINT = /^(none|currentColor|inherit|#[0-9a-fA-F]{3,8})$/;
+  var TRANSFORM = /^(\s*(translate|scale|rotate|matrix|skewX|skewY)\(\s*[0-9eE.,\s+\-]*\)\s*)+$/;
+  var VIEWBOX = /^\s*-?[\d.]+([\s,]+-?[\d.]+){3}\s*$/;
+  var NAME_RE = /^[A-Z][A-Za-z0-9]*$/;
+  var SET_RE = /^[A-Za-z0-9 .\-]+$/;
+  var ATTRS = Object.freeze({
+    d: PATH_DATA,
+    points: POINTS,
+    cx: LEN,
+    cy: LEN,
+    r: LEN,
+    rx: LEN,
+    ry: LEN,
+    x: LEN,
+    y: LEN,
+    x1: LEN,
+    y1: LEN,
+    x2: LEN,
+    y2: LEN,
+    width: LEN,
+    height: LEN,
+    fill: PAINT,
+    stroke: PAINT,
+    "stroke-width": LEN,
+    "stroke-linecap": /^(butt|round|square)$/,
+    "stroke-linejoin": /^(miter|round|bevel|arcs|miter-clip)$/,
+    "stroke-miterlimit": NUM,
+    "fill-rule": /^(nonzero|evenodd)$/,
+    "clip-rule": /^(nonzero|evenodd)$/,
+    opacity: NUM,
+    "fill-opacity": NUM,
+    "stroke-opacity": NUM,
+    transform: TRANSFORM
+  });
+  var ROOT_ATTRS = Object.freeze(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "clip-rule", "opacity"]);
+  var isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  function attrProblems(attrs, allowed, at, budget) {
+    const problems = [];
+    if (attrs === void 0) return problems;
+    if (!isMap(attrs)) return [`${at}: attrs must be a map`];
+    for (const [k, raw] of Object.entries(attrs)) {
+      if (!allowed.includes(k)) {
+        problems.push(`${at}: attribute "${k}" is not allowed in an icon`);
+        continue;
+      }
+      if (typeof raw !== "string" && typeof raw !== "number") {
+        problems.push(`${at}: attribute "${k}" must be a string or number`);
+        continue;
+      }
+      const v = String(raw);
+      budget.total += v.length;
+      if (v.length > ICON_LIMITS.value) problems.push(`${at}: attribute "${k}" is too long`);
+      else if (!ATTRS[k].test(v)) problems.push(`${at}: attribute "${k}" has a value an icon may not carry`);
+    }
+    return problems;
+  }
+  function shapeProblems(shapes, at, depth, budget) {
+    if (!Array.isArray(shapes)) return [`${at}: shapes must be a list`];
+    if (depth > ICON_LIMITS.depth) return [`${at}: shapes are nested too deeply`];
+    const problems = [];
+    shapes.forEach((s, i) => {
+      const here = `${at}[${i}]`;
+      budget.nodes += 1;
+      if (!isMap(s)) {
+        problems.push(`${here}: must be a map of { tag, attrs }`);
+        return;
+      }
+      for (const k of Object.keys(s)) if (!["tag", "attrs", "children"].includes(k)) problems.push(`${here}: key "${k}" is not allowed`);
+      if (!ICON_TAGS.includes(s.tag)) {
+        problems.push(`${here}: element "${s.tag}" is not allowed in an icon`);
+        return;
+      }
+      problems.push(...attrProblems(s.attrs, Object.keys(ATTRS), here, budget));
+      if (s.children !== void 0) {
+        if (s.tag !== "g") problems.push(`${here}: only a group (g) may have children`);
+        else problems.push(...shapeProblems(s.children, `${here}.children`, depth + 1, budget));
+      }
+    });
+    return problems;
+  }
+  function iconProblems(icon2, where = "icon") {
+    if (!isMap(icon2)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
+    const problems = [];
+    for (const k of Object.keys(icon2)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
+    if (typeof icon2.name !== "string" || !NAME_RE.test(icon2.name) || icon2.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
+    if (typeof icon2.set !== "string" || !SET_RE.test(icon2.set) || icon2.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
+    if (typeof icon2.viewBox !== "string" || !VIEWBOX.test(icon2.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
+    const budget = { nodes: 0, total: 0 };
+    problems.push(...attrProblems(icon2.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
+    if (!Array.isArray(icon2.shapes) || icon2.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
+    else problems.push(...shapeProblems(icon2.shapes, `${where}.shapes`, 1, budget));
+    if (budget.nodes > ICON_LIMITS.nodes) problems.push(`${where}: too many shapes (max ${ICON_LIMITS.nodes})`);
+    if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
+    return problems;
+  }
+  var escAttr4 = (v) => String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  var attrString = (attrs) => Object.entries(isMap(attrs) ? attrs : {}).map(([k, v]) => ` ${k}="${escAttr4(v)}"`).join("");
+  function shapesSvg(shapes) {
+    return (Array.isArray(shapes) ? shapes : []).map((s) => {
+      if (!isMap(s) || !ICON_TAGS.includes(s.tag)) return "";
+      const inner = s.tag === "g" ? shapesSvg(s.children) : "";
+      return `<${s.tag}${attrString(s.attrs)}>${inner}</${s.tag}>`;
+    }).join("");
+  }
+  function iconSvg(icon2, className = "") {
+    if (iconProblems(icon2).length) return "";
+    const cls = className ? ` class="${escAttr4(className)}"` : "";
+    return `<svg${cls} viewBox="${escAttr4(icon2.viewBox)}"${attrString(icon2.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon2.shapes)}</svg>`;
+  }
+
+  // membership/cta-card-render.mjs
+  var CTA_LAYOUTS = Object.freeze(["below", "first", "compact", "image", "html", "text"]);
+  var CTA_LAYOUT_NAMES = Object.freeze({ below: "Image below", first: "Image first", compact: "Compact", image: "Image only", html: "HTML block", text: "Text only" });
+  var ctaLayoutOf = (cta) => CTA_LAYOUTS.includes(cta?.layout) ? cta.layout : "text";
+  function layoutUses(layout) {
+    const L = CTA_LAYOUTS.includes(layout) ? layout : "text";
+    const words = L === "below" || L === "first" || L === "compact" || L === "text";
+    return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
+  }
+  var esc2 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function destinationHost(destination) {
+    try {
+      return new URL(String(destination || "")).hostname.replace(/^www\./, "");
+    } catch {
+      return String(destination || "");
+    }
+  }
+  function renderCtaCard(cta, { image = null, preview = false } = {}) {
+    const L = ctaLayoutOf(cta);
+    const uses = layoutUses(L);
+    const href = esc2(cta?.destination);
+    const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
+    const linkClose = preview ? "</span>" : "</a>";
+    const dim = (k, v) => Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : "";
+    const img = (alt) => image && image.url ? `<img src="${esc2(image.url)}" alt="${esc2(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    if (L === "image") {
+      return `${linkOpen("pcta-io", ` aria-label="${esc2(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc2(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+    }
+    const parts = [];
+    if (L === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
+    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc2(cta?.label)}</p><p class="pcta-line">${esc2(cta?.line)}</p></div></div>`);
+    const showTitle = L === "below" || L === "first" || L === "text" || L === "html" && cta?.showTitle !== false;
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc2(cta?.label)}</p>`);
+    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc2(cta?.line)}</p>`);
+    if (L === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
+    if (L === "html") {
+      const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
+      if (preview) {
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc2(h)}</span>`).join("");
+        parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
+      } else {
+        parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
+      }
+    }
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc2(cta?.button)}</span>${ARROW}${linkClose}`);
+    return parts.join("");
+  }
+  var CTA_CARD_CSS = `
+.pcta .pcta-eyebrow{margin:0;font-family:var(--f-mono,'JetBrains Mono',ui-monospace,monospace);font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;line-height:1.6;color:var(--green-600,#178a51)}
+.pcta .pcta-line{margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--fg,#24222a);text-wrap:pretty}
+.pcta .pcta-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:14px;padding:14px 26px;border-radius:var(--r,8px);border:1.5px solid var(--line-2,#ddd9d4);background:transparent;color:var(--fg,#24222a);font-family:var(--f-sans,'Hanken Grotesk',system-ui,sans-serif);font-weight:600;font-size:13.5px;line-height:1;white-space:normal;text-align:left;text-decoration:none;cursor:pointer;transition:background .2s ease,border-color .2s ease}
+.pcta .pcta-btn:hover{border-color:var(--ink,#25232b);background:var(--pcta-btn-hover,#fff)}
+[data-theme="dark"] .pcta .pcta-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.4)}
+.pcta .pcta-btn .pcta-ic,.pcta .pcta-btn .pcta-ar{flex:none;width:16px;height:16px}
+.pcta .pcta-ar{transition:transform .2s ease}
+.pcta .pcta-btn:hover .pcta-ar{transform:translateX(3px)}
+.pcta .pcta-media{display:flex;justify-content:center;align-items:center;margin-top:14px;padding:14px 0;border-radius:var(--r,8px);background:var(--tint-warm,#f3f1ee)}
+.pcta .pcta-media img{display:block;width:auto;height:auto;max-width:100%;max-height:252px;border-radius:3px;box-shadow:0 6px 18px rgba(20,18,24,.22)}
+.pcta .pcta-media.pcta-top{margin:calc(-1 * var(--pcta-pad,0px)) calc(-1 * var(--pcta-pad,0px)) 18px;padding:18px 0;border-radius:var(--pcta-top-radius,8px)}
+.pcta .pcta-media.pcta-top img{max-height:220px}
+.pcta .pcta-cmp{display:grid;grid-template-columns:64px minmax(0,1fr);gap:14px;align-items:start}
+.pcta .pcta-cmp-img img{display:block;width:64px;height:auto;border-radius:3px;box-shadow:0 4px 12px rgba(20,18,24,.22)}
+.pcta .pcta-cmp .pcta-line{margin-top:6px;font-size:13.5px}
+.pcta .pcta-ph{display:flex;align-items:center;justify-content:center;width:100%;min-height:120px;font-size:12.5px;color:var(--fg-mute,#6c6976)}
+.pcta .pcta-cmp .pcta-ph{width:64px;min-height:96px;border-radius:4px;font-size:11px;background:var(--tint-warm,#f3f1ee)}
+.pcta .pcta-io{display:block;color:inherit;text-decoration:none;cursor:pointer}
+.pcta.pcta-boxless .pcta-io{border:1.5px solid var(--line,#e7e4e0);border-radius:var(--r-lg,12px);overflow:hidden}
+.pcta .pcta-io-img{display:flex;justify-content:center;padding:20px 0;background:var(--tint-warm,#f3f1ee)}
+.pcta .pcta-io-img img{display:block;width:auto;height:auto;max-width:100%;max-height:340px;border-radius:3px;box-shadow:0 8px 22px rgba(20,18,24,.25)}
+.pcta .pcta-io-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1.5px solid var(--line,#e7e4e0);font-family:var(--f-mono,'JetBrains Mono',ui-monospace,monospace);font-size:12px;color:var(--fg-mute,#6c6976)}
+.pcta .pcta-io-foot svg{width:14px;height:14px}
+.pcta .pcta-html{margin-top:14px}
+.pcta .pcta-html.pcta-flush{margin-top:0}
+.pcta .pcta-notice{display:flex;flex-direction:column;gap:6px;padding:14px;border:1.5px dashed var(--line-2,#ddd9d4);border-radius:var(--r,8px);font-size:13px;line-height:1.45;color:var(--fg-soft,#57545e)}
+.pcta .pcta-notice strong{font-weight:600;color:var(--fg,#24222a)}
+.pcta .pcta-host{font-family:var(--f-mono,'JetBrains Mono',ui-monospace,monospace);font-size:11.5px;color:var(--fg-mute,#6c6976);overflow-wrap:anywhere}
+`;
+  var CTA_TOKENS = Object.freeze({
+    light: "--paper:#ffffff;--paper-2:#faf9f8;--fg:#24222a;--fg-soft:#57545e;--fg-mute:#6c6976;--line:#e7e4e0;--line-2:#ddd9d4;--green-600:#178a51;--tint-warm:#f3f1ee;--ink:#25232b;--pcta-btn-hover:#ffffff",
+    dark: "--paper:#2d2a34;--paper-2:#1c1a21;--fg:#f3f2f0;--fg-soft:rgba(243,242,240,.72);--fg-mute:rgba(243,242,240,.50);--line:rgba(255,255,255,.12);--line-2:rgba(255,255,255,.20);--green-600:#46c089;--tint-warm:#25232b;--ink:rgba(255,255,255,.4);--pcta-btn-hover:rgba(255,255,255,.06)"
+  });
+
+  // membership/cta-image.mjs
+  var CTA_IMAGE_MAX_BYTES = 4e5;
+  var CTA_IMAGE_FILE_RE = /^[a-z0-9][a-z0-9-]*\.webp$/;
+  var METADATA_CHUNKS = { EXIF: "EXIF (camera) data", "XMP ": "XMP metadata", ICCP: "an ICC colour profile" };
+  var fourcc = (b, at) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+  var u32 = (b, at) => (b[at] | b[at + 1] << 8 | b[at + 2] << 16 | b[at + 3] << 24) >>> 0;
+  var u24 = (b, at) => b[at] | b[at + 1] << 8 | b[at + 2] << 16;
+  function webpInfo(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : null;
+    if (!b) return { ok: false, problem: "the image is not binary data" };
+    if (b.length > CTA_IMAGE_MAX_BYTES) return { ok: false, problem: `the image is ${Math.ceil(b.length / 1024)} KB; the limit is ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB` };
+    if (b.length < 20 || fourcc(b, 0) !== "RIFF" || fourcc(b, 8) !== "WEBP") return { ok: false, problem: "the image is not a WebP file" };
+    if (u32(b, 4) + 8 > b.length) return { ok: false, problem: "the WebP file is truncated" };
+    let at = 12, width = 0, height = 0, image = false;
+    while (at + 8 <= b.length) {
+      const id = fourcc(b, at);
+      const size = u32(b, at + 4);
+      const body = at + 8;
+      if (body + size > b.length) return { ok: false, problem: `the WebP ${id.trim()} chunk is truncated` };
+      if (METADATA_CHUNKS[id]) return { ok: false, problem: `the image still carries ${METADATA_CHUNKS[id]}; re-encode it so it is removed` };
+      if (id === "ANIM" || id === "ANMF") return { ok: false, problem: "animated images are not supported on a card" };
+      if (id === "VP8X") {
+        if (size < 10) return { ok: false, problem: "the WebP header is malformed" };
+        const flags = b[body];
+        if (flags & 2) return { ok: false, problem: "animated images are not supported on a card" };
+        if (flags & 44) return { ok: false, problem: "the image still announces metadata (EXIF, XMP or a colour profile); re-encode it so it is removed" };
+        width = u24(b, body + 4) + 1;
+        height = u24(b, body + 7) + 1;
+      } else if (id === "VP8 ") {
+        if (size < 10 || b[body + 3] !== 157 || b[body + 4] !== 1 || b[body + 5] !== 42) return { ok: false, problem: "the WebP image data is malformed" };
+        if (!width) {
+          width = (b[body + 6] | b[body + 7] << 8) & 16383;
+          height = (b[body + 8] | b[body + 9] << 8) & 16383;
+        }
+        image = true;
+      } else if (id === "VP8L") {
+        if (size < 5 || b[body] !== 47) return { ok: false, problem: "the WebP image data is malformed" };
+        if (!width) {
+          const bits = u32(b, body + 1);
+          width = (bits & 16383) + 1;
+          height = (bits >>> 14 & 16383) + 1;
+        }
+        image = true;
+      }
+      at = body + size + size % 2;
+    }
+    if (!image) return { ok: false, problem: "the WebP file has no image data" };
+    if (!width || !height) return { ok: false, problem: "the WebP file has no dimensions" };
+    return { ok: true, width, height };
+  }
+  function stripWebpMetadata(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : null;
+    if (!b || b.length < 20 || fourcc(b, 0) !== "RIFF" || fourcc(b, 8) !== "WEBP") return null;
+    const end = u32(b, 4) + 8;
+    if (end > b.length) return null;
+    const keep = [];
+    let at = 12;
+    while (at + 8 <= end) {
+      const size = u32(b, at + 4);
+      if (at + 8 + size > end) return null;
+      const next = Math.min(at + 8 + size + size % 2, end);
+      if (!METADATA_CHUNKS[fourcc(b, at)]) keep.push([at, next]);
+      at = next;
+    }
+    const out = new Uint8Array(12 + keep.reduce((n, [s, e]) => n + e - s, 0));
+    out.set(b.subarray(0, 12));
+    let w = 12;
+    for (const [s, e] of keep) {
+      out.set(b.subarray(s, e), w);
+      if (fourcc(out, w) === "VP8X") out[w + 8] &= ~44;
+      w += e - s;
+    }
+    new DataView(out.buffer).setUint32(4, out.length - 8, true);
+    return out;
+  }
+  var MAX_BASE64 = Math.ceil(CTA_IMAGE_MAX_BYTES / 3) * 4 + 4;
+
+  // membership/cta-edits.mjs
+  var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
+  var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200 });
+  var ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+  var SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+  var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
+  var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
+  var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+  var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
+  var str = (v) => typeof v === "string" ? v.trim() : "";
+  function validRef(type, ref) {
+    const r = str(ref);
+    if (!r || r.length > CTA_LIMITS.ref) return false;
+    return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE.test(r);
+  }
+  function amazonDestinationProblem(destination) {
+    let u;
+    try {
+      u = new URL(String(destination || ""));
+    } catch {
+      return "an amazon destination must be an absolute URL";
+    }
+    if (!AMAZON_HOST_RE.test(u.hostname)) return "an amazon CTA must link straight to an amazon domain (no /outbound/ path or other intermediate site: a redirected purchase earns nothing)";
+    if (!u.searchParams.get("tag")) return "an amazon destination must carry the Associates tag= parameter (without it the purchase earns nothing)";
+    return null;
+  }
+  function htmlHrefs(html) {
+    const out = [];
+    const re = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+    let m;
+    while (m = re.exec(String(html || ""))) out.push((m[1] ?? m[2] ?? m[3] ?? "").replace(/&amp;/g, "&").trim());
+    return out;
+  }
+  function amazonHtmlProblems(html) {
+    const problems = [];
+    for (const href of htmlHrefs(html)) {
+      let u = null;
+      try {
+        u = new URL(href, "https://gbti.network");
+      } catch {
+        continue;
+      }
+      if (/(^|\/)outbound\//.test(u.pathname) && (u.hostname === "gbti.network" || u.hostname.endsWith(".gbti.network"))) {
+        problems.push(`the HTML links through /outbound/ (${href}); an amazon link must go straight to amazon`);
+      } else if (AMAZON_HOST_RE.test(u.hostname) && !u.searchParams.get("tag")) {
+        problems.push(`the HTML links to amazon without the Associates tag= parameter (${href})`);
+      }
+    }
+    return problems;
+  }
+  function validateCta(e, where = "cta") {
+    const problems = [];
+    if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
+    const id = str(e.id);
+    if (!id || !ID_RE.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
+    if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
+    const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
+    const uses = layoutUses(layout);
+    for (const [k, max, need] of [["label", CTA_LIMITS.label, true], ["line", CTA_LIMITS.line, uses.line], ["button", CTA_LIMITS.button, uses.button]]) {
+      if (e[k] !== void 0 && e[k] !== null && typeof e[k] !== "string") {
+        problems.push(`${where}: ${k} must be text`);
+        continue;
+      }
+      const v = str(e[k]);
+      if (!v) {
+        if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
+      } else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
+    }
+    const dest = str(e.destination);
+    let u = null;
+    if (dest || uses.link) {
+      try {
+        u = new URL(dest);
+      } catch {
+        u = null;
+      }
+      if (!u || u.protocol !== "https:" || !u.hostname) {
+        u = null;
+        problems.push(`${where}: destination must be an absolute https URL, got ${JSON.stringify(e.destination ?? null)}`);
+      } else if (dest.length > CTA_LIMITS.destination) problems.push(`${where}: destination is too long (max ${CTA_LIMITS.destination} chars)`);
+    }
+    if (e.image !== void 0) {
+      if (typeof e.image !== "string" || !CTA_IMAGE_FILE_RE.test(e.image) || e.image.length > CTA_LIMITS.image) problems.push(`${where}: image must be a WebP file name in house/images/ctas/ (like ${id || "my-card"}.webp), got ${JSON.stringify(e.image)}`);
+    } else if (uses.image) problems.push(`${where}: image is required for the ${layout} layout`);
+    if (e.icon !== void 0) problems.push(...iconProblems(e.icon, `${where}.icon`));
+    if (e.html !== void 0) {
+      if (typeof e.html !== "string") problems.push(`${where}: html must be text`);
+      else if (e.html.length > CTA_LIMITS.html) problems.push(`${where}: html is too long (max ${CTA_LIMITS.html} chars)`);
+    }
+    if (uses.html && !str(e.html)) problems.push(`${where}: html is required for the html layout`);
+    if (e.showTitle !== void 0 && typeof e.showTitle !== "boolean") problems.push(`${where}: showTitle must be true or false`);
+    if (e.hosts !== void 0) {
+      if (!Array.isArray(e.hosts)) problems.push(`${where}: hosts must be a list of https origins`);
+      else {
+        if (e.hosts.length > CTA_LIMITS.hosts) problems.push(`${where}: at most ${CTA_LIMITS.hosts} hosts`);
+        const seenHost = /* @__PURE__ */ new Set();
+        e.hosts.forEach((h, i) => {
+          if (typeof h !== "string" || h.length > CTA_LIMITS.host || !CTA_HOST_RE.test(h)) problems.push(`${where}.hosts[${i}]: must be a bare https origin like https://widgets.example.com (no path, quotes, spaces or semicolons), got ${JSON.stringify(h)}`);
+          else if (seenHost.has(h)) problems.push(`${where}.hosts[${i}]: ${h} is listed twice`);
+          else seenHost.add(h);
+        });
+      }
+    }
+    const partner = str(e.partner);
+    if (!partner || !ID_RE.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
+    if (partner === "amazon" && u) {
+      const why = amazonDestinationProblem(dest);
+      if (why) problems.push(`${where}: ${why}`);
+    }
+    if (partner === "amazon" && typeof e.html === "string") for (const why of amazonHtmlProblems(e.html)) problems.push(`${where}: ${why}`);
+    if (e.enabled !== void 0 && typeof e.enabled !== "boolean") problems.push(`${where}: enabled must be true or false`);
+    if (e.note !== void 0 && e.note !== null && (typeof e.note !== "string" || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
+    if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
+    const seen = /* @__PURE__ */ new Set();
+    for (const [i, it] of (Array.isArray(e.items) ? e.items : []).entries()) {
+      const at = `${where}.items[${i}]`;
+      if (!it || typeof it !== "object") {
+        problems.push(`${at}: must be a map of { type, ref }`);
+        continue;
+      }
+      if (!CTA_ITEM_TYPES.includes(it.type)) {
+        problems.push(`${at}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it.type ?? null)}`);
+        continue;
+      }
+      if (!validRef(it.type, it.ref)) {
+        problems.push(`${at}: ref must be a ${it.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it.ref ?? null)}`);
+        continue;
+      }
+      const key = `${it.type}:${str(it.ref)}`;
+      if (seen.has(key)) problems.push(`${at}: ${key} is assigned to this CTA twice`);
+      seen.add(key);
+    }
+    return problems;
+  }
+  var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
+  var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
+  var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
+
+  // src/lib/ctas.mjs
+  var ctaImageUrl = (file) => CTA_IMAGE_FILE_RE.test(String(file || "")) ? `/media/ctas/${file}` : null;
+
+  // client-ui/src/cta-manager-core.mjs
+  var LAYOUT_HINT = Object.freeze({
+    below: "Title, sentence, image, then the button.",
+    first: "The image leads, then the words and the button.",
+    compact: "A small image beside the words. Uses the least height.",
+    image: "The whole card is the image and links to the partner.",
+    html: "Your partner code, with the title above it if you want.",
+    text: "Title, sentence and button, with no image."
+  });
+  var LAYOUT_TILE_TEXT = Object.freeze({
+    below: "Title, sentence, image, button",
+    first: "Image, title, sentence, button",
+    compact: "Small image beside the words",
+    image: "The image is the link",
+    html: "Partner code, optional title",
+    text: "Title, sentence, button"
+  });
+  var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
+  var ID_RE2 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  var str2 = (v) => typeof v === "string" ? v : "";
+  var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
+  function draftFromCta(c, { imageUrl = null } = {}) {
+    return {
+      id: str2(c?.id),
+      label: str2(c?.label),
+      line: str2(c?.line),
+      button: str2(c?.button),
+      destination: str2(c?.destination),
+      partner: str2(c?.partner),
+      note: str2(c?.note),
+      enabled: c?.enabled === true,
+      layout: CTA_LAYOUTS.includes(c?.layout) ? c.layout : "text",
+      icon: c?.icon && typeof c.icon === "object" ? structuredClone(c.icon) : null,
+      html: str2(c?.html),
+      showTitle: c?.showTitle !== false,
+      hosts: Array.isArray(c?.hosts) ? c.hosts.filter((h) => typeof h === "string") : [],
+      items: (Array.isArray(c?.items) ? c.items : []).filter((it) => it && typeof it === "object").map((it) => ({ type: it.type, ref: str2(it.ref) })),
+      image: typeof c?.image === "string" ? { kind: "stored", file: c.image, url: imageUrl } : { kind: "none" }
+    };
+  }
+  function blankDraft() {
+    return { ...draftFromCta({ enabled: true, layout: "below" }), enabled: true };
+  }
+  function cardFromDraft(d) {
+    const card = { id: d.id.trim(), label: d.label.trim(), layout: d.layout, partner: d.partner.trim(), enabled: d.enabled, items: d.items };
+    if (d.line.trim()) card.line = d.line.trim();
+    if (d.button.trim()) card.button = d.button.trim();
+    if (d.destination.trim()) card.destination = d.destination.trim();
+    if (d.note.trim()) card.note = d.note.trim();
+    if (d.image.kind === "stored") card.image = d.image.file;
+    else if (d.image.kind === "upload") card.image = `${card.id || "new-card"}.webp`;
+    if (d.icon) card.icon = d.icon;
+    if (d.html.trim()) card.html = d.html.trim();
+    if (d.showTitle === false) card.showTitle = false;
+    if (d.hosts.length) card.hosts = d.hosts;
+    return card;
+  }
+  function validateDraft(d, { isNew = false, taken = /* @__PURE__ */ new Set() } = {}) {
+    const errors = {};
+    const live = {};
+    const uses = layoutUses(d.layout);
+    if (isNew) {
+      if (!ID_RE2.test(d.id.trim()) || d.id.trim().length > CTA_LIMITS.id) errors.id = "Use lowercase words joined by hyphens.";
+      else if (taken.has(d.id.trim())) errors.id = "Another call-to-action already uses this id.";
+    }
+    if (!d.label.trim()) errors.label = d.layout === "image" ? "A title is required. It becomes the image description." : "A title is required.";
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(d.partner.trim())) errors.partner = "Name the partner in one lowercase word, like amazon.";
+    if (uses.line && !d.line.trim()) errors.line = "Add the sentence the card shows.";
+    if (uses.button && !d.button.trim()) errors.button = "Add the button text, naming the partner.";
+    if (uses.link) {
+      const dest = d.destination.trim();
+      let u = null;
+      try {
+        u = new URL(dest);
+      } catch {
+        u = null;
+      }
+      if (!u || u.protocol !== "https:") {
+        errors.destination = "Use a full link starting with https://.";
+        if (dest) live.destination = true;
+      } else if (d.partner.trim() === "amazon") {
+        const why = amazonDestinationProblem(dest);
+        if (why && /tag=/.test(why)) errors.destination = "This Amazon link has no tag=, so a purchase through it earns nothing.";
+        else if (why) errors.destination = "An Amazon link must go straight to amazon.com. A redirect, including a gbti.network/outbound/ link, loses the purchase credit.";
+        if (why) live.destination = true;
+      }
+    }
+    if (uses.image && d.image.kind === "none") errors.image = "This layout needs an image.";
+    if (uses.html && !d.html.trim()) errors.html = "Paste the partner code.";
+    const problems = validateCta(cardFromDraft(d), "card");
+    const covered = (p) => Object.keys(errors).some((k) => new RegExp(`\\b${k === "destination" ? "destination|amazon" : k}\\b`).test(p));
+    const rest = problems.filter((p) => !covered(p));
+    const banner = rest.length ? rest[0].replace(/^card(\.[a-z]+(\[\d+\])?)*: /, "").replace(/^./, (ch) => ch.toUpperCase()) : "";
+    return { errors, live, banner, ok: !Object.keys(errors).length && !banner };
+  }
+  var sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  function savePayload(d, original, { isNew = false } = {}) {
+    const card = cardFromDraft(d);
+    if (isNew) {
+      const fields2 = { ...card };
+      delete fields2.image;
+      if (d.image.kind === "upload") fields2.imageBase64 = d.image.base64;
+      return { fields: fields2, changed: Object.keys(fields2) };
+    }
+    const o = original || {};
+    const fields = { id: o.id };
+    const changed = [];
+    const set = (k, v) => {
+      fields[k] = v;
+      changed.push(k);
+    };
+    for (const k of ["label", "line", "button", "destination", "partner", "note", "html"]) {
+      if (str2(card[k]) !== str2(o[k]).trim()) set(k, str2(card[k]));
+    }
+    const oLayout = CTA_LAYOUTS.includes(o.layout) ? o.layout : "text";
+    if (card.layout !== oLayout) set("layout", card.layout);
+    if (!sameJson(card.icon ?? null, o.icon ?? null)) set("icon", card.icon ?? null);
+    if (o.showTitle !== false !== (d.showTitle !== false)) set("showTitle", d.showTitle === false ? false : null);
+    const oHosts = Array.isArray(o.hosts) ? o.hosts : [];
+    if (!sameJson(d.hosts, oHosts)) set("hosts", d.hosts.length ? d.hosts : null);
+    const oItems = (Array.isArray(o.items) ? o.items : []).map((it) => ({ type: it.type, ref: str2(it.ref) }));
+    if (!sameJson(d.items, oItems)) set("items", d.items);
+    if (o.enabled === true !== (d.enabled === true)) set("enabled", d.enabled === true);
+    if (d.image.kind === "upload") set("imageBase64", d.image.base64);
+    else if (d.image.kind === "none" && typeof o.image === "string") set("removeImage", true);
+    return { fields, changed };
+  }
+  function normalizeHost(raw) {
+    const v = String(raw ?? "").trim().replace(/\/+$/, "").toLowerCase();
+    if (!CTA_HOST_RE.test(v)) return { ok: false, problem: "Enter an address like https://widgets.partner.com, with no path." };
+    return { ok: true, host: v };
+  }
+  function foundHosts(html, hosts = []) {
+    const found = [];
+    const re = /(?:src|href)\s*=\s*["']?(https:\/\/[^/"'\s>?#]+)/gi;
+    let m;
+    while (m = re.exec(String(html || ""))) {
+      const n = normalizeHost(m[1]);
+      if (n.ok && !found.includes(n.host) && !hosts.includes(n.host)) found.push(n.host);
+    }
+    return found;
+  }
+  function pagesFromBuilt(built) {
+    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str2(p.ref)).map((p) => ({ type: p.type, ref: str2(p.ref), title: str2(p.title) || str2(p.ref) }));
+  }
+  function pageCandidates(pages, query, items = [], limit = 6) {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q) return [];
+    const taken = new Set(items.map((it) => `${it.type}:${it.ref}`));
+    return (Array.isArray(pages) ? pages : []).filter((p) => !taken.has(`${p.type}:${p.ref}`) && (p.title.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q))).slice(0, limit);
+  }
+  function rowSummary(c) {
+    if (c?.layout === "html") {
+      const hosts = Array.isArray(c.hosts) ? c.hosts : [];
+      return `Partner code${hosts.length ? `, loads from ${hosts.map((h) => h.replace(/^https:\/\//, "")).join(", ")}` : ""}`;
+    }
+    return str2(c?.line);
+  }
+  function previewNote(d) {
+    if (!d.enabled) return "Disabled: this card shows on no page.";
+    return d.items.length ? `Shows on ${plural(d.items.length)} once saved.` : "Not on any page yet.";
+  }
+
+  // client-ui/src/cta-manager-view.mjs
+  var esc3 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var SVG = {
+    back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
+    upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
+    shield: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
+    search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>',
+    warn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9.5 17h-19L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M12 10v4M12 17.5v.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>',
+    chev: '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>'
+  };
+  var ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/avif";
+  var SKETCH = {
+    below: '<div class="sk"><div class="ey"></div><div class="ln"></div><div class="im"><i></i></div><div class="bt"></div></div>',
+    first: '<div class="sk"><div class="im top-im"><i></i></div><div class="ey"></div><div class="ln"></div><div class="bt"></div></div>',
+    compact: '<div class="sk"><div class="row"><div class="im"><i></i></div><div class="col"><div class="ey"></div><div class="ln"></div><div class="ln s"></div></div></div><div class="bt"></div></div>',
+    image: '<div class="sk io"><div class="im"><i></i></div><div class="ft"></div></div>',
+    html: '<div class="sk"><div class="ey"></div><div class="code">&lt;/&gt;</div></div>',
+    text: '<div class="sk"><div class="ey"></div><div class="ln"></div><div class="ln s"></div><div style="flex: 1"></div><div class="bt"></div></div>'
+  };
+  function cardPreview(card, { image = null, dark = false, phone = false } = {}) {
+    const cls = `pcta pv-card${phone ? " phone" : ""}${card?.layout === "image" ? " io" : ""}`;
+    return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
+  }
+  var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc3(problem)}).</p>
+  <button class="lk" type="button" data-act="retry">Try again</button></div>`;
+  function listView({ rows, msg = "", msgBad = false, dark = false }) {
+    const items = rows.map(({ cta: c, image, busy }) => {
+      const on = c.enabled === true;
+      const n = Array.isArray(c.items) ? c.items.length : 0;
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc3(c.id)}">
+      <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
+      <div class="meta">
+        <div class="top"><span class="label">${esc3(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc3(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc3(rowSummary(c))}</p>
+        <p class="sub mono">${esc3(c.partner || "no partner")} · on ${plural(n)}</p>
+      </div>
+      <div class="acts-r">
+        <button class="lk" type="button" data-act="edit" data-id="${esc3(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc3(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+      </div>
+    </li>`;
+    }).join("");
+    return `<div class="mgr">
+    <div class="head">
+      <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
+      <button class="btn" type="button" data-act="new">New call-to-action</button>
+    </div>
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc3(msg)}</p>` : ""}
+    <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
+  </div>`;
+  }
+  var editTitle = (st) => st.isNew ? "New call-to-action" : `Edit: ${st.d.label.trim() || "call-to-action"}`;
+  var shownError = (st, k) => st.v.errors[k] && (st.tried || st.v.live[k]) ? st.v.errors[k] : "";
+  function field(st, k, label, { wide = false, area = false, placeholder = "" } = {}) {
+    const err = shownError(st, k);
+    const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
+    const control = area ? `<textarea data-f="${k}" placeholder="${esc3(placeholder)}">${esc3(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc3(st.d[k])}" placeholder="${esc3(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc3(err)}</span></label>`;
+  }
+  function layoutSection(st) {
+    const tiles = CTA_LAYOUTS.map((k) => `<button class="${st.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st.d.layout === k}">
+    ${SKETCH[k]}<div><p class="tile-n">${esc3(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc3(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc3(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+  }
+  function wordsSection(st) {
+    const u = layoutUses(st.d.layout);
+    return `<div class="sec"><div class="sec-h"><h4>Words and link</h4></div><div class="form">
+    ${st.isNew ? field(st, "id", "Id, set once", { placeholder: "stranger-in-a-strange-land" }) : ""}
+    ${field(st, "label", "Title", { placeholder: "Stranger in a Strange Land" })}
+    ${field(st, "partner", "Partner", { placeholder: "amazon" })}
+    ${u.line ? field(st, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
+    ${u.button ? field(st, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
+    ${u.link ? field(st, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc3(st.d.note)}</textarea></label>
+    <label class="check fld wide"><input type="checkbox" data-f="enabled"${st.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
+  </div></div>`;
+  }
+  function imageBody(st) {
+    const img = st.d.image;
+    const err = shownError(st, "image");
+    let body;
+    if (img.kind === "none") {
+      body = `<div class="${st.drag ? "drop on" : err ? "drop err" : "drop"}" data-drop>
+      <span class="drop-ic">${SVG.upload}</span>
+      <div class="imgmeta"><p class="drop-t">Drop an image here, or choose one</p>
+        <p class="imginfo">JPEG, PNG, WebP, GIF or AVIF. Saved as WebP, with camera and location data removed before it leaves your browser.</p></div>
+      <label class="lk pick-file">Choose image<input type="file" accept="${ACCEPT}" data-file></label>
+    </div>`;
+    } else {
+      const name = img.kind === "upload" ? `${st.d.id.trim() || "new-call-to-action"}.webp` : img.file;
+      const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
+      const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
+      body = `<div class="imgrow">
+      ${img.url ? `<img src="${esc3(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc3(name)}</p>
+        <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
+        <p class="imginfo"><span class="shield">${SVG.shield}Camera and location data removed</span></p></div>
+      <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
+        <button class="lk danger" type="button" data-act="remove-image">Remove</button></div>
+    </div>`;
+    }
+    return `${body}${st.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc3(err)}</p>
+    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc3(st.imageMsg)}</p>` : ""}`;
+  }
+  function iconResults(st) {
+    const ic3 = st.icons;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc3(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+    if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
+    const q = st.iconQuery.trim();
+    const count = !q ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
+    const sel = st.d.icon;
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc3(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc3(i.name)}</span></button>`).join("");
+    return `<p class="ip-count">${count}</p><div class="ip-grid">${cells}</div>`;
+  }
+  function iconSection(st) {
+    const sel = st.d.icon;
+    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc3(s.id)}">${esc3(s.name)}</button>`).join("") : "";
+    const pop = st.pickerOpen ? `<div class="ip-pop">
+      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc3(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <div class="chips">${chips}</div>
+      <div data-region="icons">${iconResults(st)}</div>
+    </div>` : "";
+    return `<div class="sec"><div class="sec-h"><h4>Button icon</h4><span class="hint">Optional. Shown left of the button text.</span></div>
+    <div class="ip-row">
+      <button class="${st.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st.pickerOpen}">
+        <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
+        <span class="ip-name"><b>${esc3(sel ? sel.name : "Choose an icon")}</b><span>${esc3(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
+      </button>
+      ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
+    </div>${pop}</div>`;
+  }
+  function foundLine(found) {
+    if (!found.length) return "";
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc3(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc3(h)}">Allow</button>`).join("")}</div>`;
+  }
+  function htmlSection(st, found) {
+    const d = st.d;
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc3(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc3(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const err = shownError(st, "html");
+    return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
+    <div class="warnbox">${SVG.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
+    <div class="form" style="margin-top: 14px">
+      <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
+      <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc3(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc3(err)}</span></label>
+    </div>
+    <div style="margin-top: 16px">
+      <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
+      ${hosts}
+      <div data-region="found">${foundLine(found)}</div>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc3(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc3(st.hostErr)}</p>
+    </div></div>`;
+  }
+  function candidateList(st) {
+    if (!st.pageQuery.trim()) return "";
+    if (!st.cands.length) return '<p class="empty">No pages match.</p>';
+    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc3(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc3(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+  }
+  function pagesSection(st) {
+    const d = st.d;
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc3(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc3(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+    return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
+    ${assigned}
+    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc3(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <div data-region="cands">${candidateList(st)}</div></div>`;
+  }
+  function previewCard(st) {
+    const d = st.d;
+    const u = layoutUses(d.layout);
+    const card = {
+      id: d.id,
+      layout: d.layout,
+      partner: d.partner,
+      destination: d.destination,
+      showTitle: d.showTitle,
+      hosts: d.hosts,
+      icon: d.icon,
+      label: d.label.trim() || "Title",
+      line: d.line.trim() || "The sentence the card shows.",
+      button: d.button.trim() || "Button text"
+    };
+    const img = d.image;
+    const image = u.image && img.kind !== "none" && img.url ? { url: img.url, width: img.width, height: img.height } : null;
+    return cardPreview(card, { image, dark: st.pvDark, phone: st.pvPhone });
+  }
+  function previewAside(st) {
+    const seg = (on, act, text) => `<button class="${on ? "seg on" : "seg"}" type="button" data-act="${act}" aria-pressed="${on}">${text}</button>`;
+    return `<aside class="ed-prev">
+    <div class="pv-bar"><h4>Preview</h4>
+      <div class="segs">${seg(!st.pvDark, "pv-light", "Light")}${seg(st.pvDark, "pv-dark", "Dark")}</div>
+      <div class="segs">${seg(!st.pvPhone, "pv-side", "Sidebar")}${seg(st.pvPhone, "pv-phone", "Phone")}</div>
+    </div>
+    <div class="${st.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st)}</div>
+    <p class="pv-note" data-region="pvnote">${esc3(previewNote(st.d))}</p>
+  </aside>`;
+  }
+  function editorView(st, found = []) {
+    const u = layoutUses(st.d.layout);
+    return `<div class="mgr">
+    <div class="ed-head">
+      <button class="lk" type="button" data-act="back">${SVG.back}All call-to-actions</button>
+      <h3 class="ed-title" data-region="title">${esc3(editTitle(st))}</h3>
+      <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
+        <button class="btn" type="button" data-act="save"${st.saving ? " disabled" : ""}>${st.saving ? "Saving…" : st.isNew ? "Add call-to-action" : "Save"}</button></div>
+    </div>
+    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc3(st.msg)}</p>
+    <div class="ed-grid">
+      <div class="ed-form">
+        ${layoutSection(st)}
+        ${wordsSection(st)}
+        ${u.image ? `<div class="sec"><div class="sec-h"><h4>Image</h4><span class="hint">Tall images are capped in height on the card.</span></div><div data-region="image">${imageBody(st)}</div></div>` : ""}
+        ${u.icon ? iconSection(st) : ""}
+        ${u.html ? htmlSection(st, found) : ""}
+        ${pagesSection(st)}
+      </div>
+      ${previewAside(st)}
+    </div>
+  </div>`;
+  }
+
+  // client-ui/src/cta-image-encode.mjs
+  var CTA_IMAGE_TYPES = Object.freeze(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+  var CTA_IMAGE_LADDER = Object.freeze([[1200, 0.82], [1200, 0.72], [1e3, 0.7], [800, 0.68], [640, 0.65]]);
+  async function encodeCtaImage(file, { encode = encodeWebp, ladder = CTA_IMAGE_LADDER } = {}) {
+    const unreadable = { ok: false, problem: "That image could not be read. Try another file." };
+    if (!file || !CTA_IMAGE_TYPES.includes(String(file.type || "").toLowerCase())) return { ok: false, problem: "Choose a JPEG, PNG, WebP, GIF or AVIF image." };
+    let tooBig = false;
+    for (const [edge, quality] of ladder) {
+      let blob;
+      try {
+        blob = await encode(file, edge, quality);
+      } catch {
+        return unreadable;
+      }
+      if (!blob) return unreadable;
+      if (String(blob.type || "") !== "image/webp") return { ok: false, problem: "This browser cannot save images as WebP. Use Chrome, Edge or Firefox to add an image." };
+      const bytes = stripWebpMetadata(new Uint8Array(await blob.arrayBuffer()));
+      if (!bytes) return unreadable;
+      if (bytes.length > CTA_IMAGE_MAX_BYTES) {
+        tooBig = true;
+        continue;
+      }
+      const info = webpInfo(bytes);
+      if (!info.ok) return { ok: false, problem: `The re-encoded image was refused: ${info.problem}.` };
+      const base64 = toBase64(bytes);
+      return { ok: true, base64, dataUrl: `data:image/webp;base64,${base64}`, width: info.width, height: info.height, bytes: bytes.length };
+    }
+    return tooBig ? { ok: false, problem: `That image is over ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB even after shrinking it. Try a smaller image.` } : unreadable;
+  }
+  async function encodeWebp(file, edge, quality) {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, edge / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    try {
+      bmp.close?.();
+    } catch {
+    }
+    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/webp", quality));
+  }
+  function toBase64(bytes) {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+    return btoa(bin);
+  }
+
+  // membership/icon-catalog.mjs
+  var ICON_SHARD_SIZE = 250;
+  var DEFAULT_ICON_ATTRS = Object.freeze({ fill: "currentColor", stroke: "currentColor", "stroke-width": "0" });
+  function unpackIcon(name, setName, packed) {
+    return { name, set: setName, viewBox: packed?.v, attrs: packed?.a ? { ...packed.a } : { ...DEFAULT_ICON_ATTRS }, shapes: packed?.s };
+  }
+  var iconShardKey = (setId, index) => `${setId}-${Math.floor(index / ICON_SHARD_SIZE)}`;
+  function iconWords(name) {
+    const parts = String(name || "").match(/[A-Z][a-z]*|[0-9]+[a-z]*/g) || [];
+    return parts.slice(1).join(" ").toLowerCase();
+  }
+  function searchIcons(index, query, { setId = "", limit = 48 } = {}) {
+    const q = String(query || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const sets = (Array.isArray(index?.sets) ? index.sets : []).filter((s) => !setId || s.id === setId);
+    const ranked = [];
+    sets.forEach((s, si) => {
+      (Array.isArray(s.names) ? s.names : []).forEach((name, i) => {
+        let rank = 4;
+        if (q) {
+          const words = iconWords(name);
+          const flat2 = words.replace(/ /g, "");
+          const qFlat = q.replace(/ /g, "");
+          if (words === q) rank = 0;
+          else if (words.split(" ").includes(q) || ` ${words} `.includes(` ${q} `)) rank = 1;
+          else if (words.startsWith(q) || words.split(" ").some((w) => w.startsWith(q))) rank = 2;
+          else if (flat2.includes(qFlat) || name.toLowerCase().includes(qFlat)) rank = 3;
+          else return;
+        }
+        ranked.push({ rank, si, i, name, setId: s.id, setName: s.name, shard: iconShardKey(s.id, i) });
+      });
+    });
+    ranked.sort((a, b) => a.rank - b.rank || a.si - b.si || a.i - b.i);
+    return { total: ranked.length, results: ranked.slice(0, limit).map(({ name, i, setId: id, setName, shard }) => ({ name, index: i, setId: id, setName, shard })) };
+  }
+
+  // client-ui/src/cta-icon-library.mjs
+  function createIconLibrary({ base = "https://gbti.network", fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
+    let index = null;
+    let indexLoad = null;
+    const shards = /* @__PURE__ */ new Map();
+    async function loadIndex() {
+      if (index) return index;
+      if (!indexLoad) {
+        indexLoad = (async () => {
+          const r = await fetchImpl(`${base}/icons/index.json`);
+          if (!r.ok) throw new Error(`the icon library returned ${r.status}`);
+          const body = await r.json();
+          if (!body?.available) throw new Error(body?.problem || "the icon library is not available");
+          index = body;
+          return body;
+        })().catch((e) => {
+          indexLoad = null;
+          throw e;
+        });
+      }
+      return indexLoad;
+    }
+    function loadShard(key) {
+      if (!shards.has(key)) {
+        shards.set(key, (async () => {
+          const r = await fetchImpl(`${base}/icons/${encodeURIComponent(key)}.json`);
+          if (!r.ok) throw new Error(`icon shard ${key} returned ${r.status}`);
+          const body = await r.json();
+          return Array.isArray(body?.icons) ? body.icons : [];
+        })().catch((e) => {
+          shards.delete(key);
+          throw e;
+        }));
+      }
+      return shards.get(key);
+    }
+    return {
+      loadIndex,
+      /** The sets for the filter chips: [{ id, name, count }]. */
+      async sets() {
+        const idx = await loadIndex();
+        return idx.sets.map((s) => ({ id: s.id, name: s.name, count: s.names.length }));
+      },
+      /** Search, then resolve each visible result to its stored icon. { total, icons: [icon] } in result order. */
+      async search(query, { setId = "", limit = 48 } = {}) {
+        const idx = await loadIndex();
+        const { total, results } = searchIcons(idx, query, { setId, limit });
+        const icons = await Promise.all(results.map(async (r) => {
+          const packed = (await loadShard(r.shard))[r.index % idx.shardSize];
+          return packed ? unpackIcon(r.name, r.setName, packed) : null;
+        }));
+        return { total, icons: icons.filter(Boolean) };
+      }
+    };
+  }
+
+  // client-ui/src/elements/cta-manager-css.mjs
+  var CTA_MANAGER_CSS = `
+:host { display:block; --tint:#e9f6ef; --btn-fg:#ffffff; --warn:#8a5500; --danger-bg:rgba(192,57,43,.06); --danger-line:rgba(192,57,43,.32);
+  --pop:0 12px 30px rgba(37,35,43,.10), 0 3px 8px rgba(37,35,43,.06); }
+:host-context([data-theme="dark"]) { --tint:rgba(31,158,95,.13); --btn-fg:#08231a; --warn:#e6b45c; --danger-bg:rgba(224,108,108,.10);
+  --danger-line:rgba(224,108,108,.40); --pop:0 18px 50px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.4); }
+[hidden] { display:none !important; }
+.mgr { color:var(--fg); font:15px/1.5 var(--font-body); container-type:inline-size; box-sizing:border-box; }
+.mgr label { margin:0; font-size:inherit; }
+.mgr button { font-weight:inherit; }
+.mgr .c { border-bottom:0; }
+.mgr .pv-card { flex:none; width:320px; max-width:100%; background:var(--paper); border:1.5px solid var(--line); border-radius:12px; box-shadow:0 1px 2px rgba(37,35,43,.06), 0 1px 1px rgba(37,35,43,.04); padding:22px; overflow:hidden; color:var(--fg); font-family:var(--font-body); text-align:left; --pcta-pad:22px; --pcta-top-radius:0; }
+.mgr .pv-card.phone { width:358px; max-width:none; }
+.mgr .pv-card.io { padding:0; }
+/* The design drew a handful of set chips; the real library has 31 sets, so the chip area holds two rows and scrolls. */
+.mgr .imgwork { font-size:12.5px; color:var(--muted); margin-top:6px; }
+.mgr .ed-form { min-width:0; }
+.mgr *, .mgr *::before, .mgr *::after { box-sizing: border-box; }
+.mgr p { margin: 0; }
+.mgr .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.mgr .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+.mgr .hint { font-size: 12.5px; color: var(--muted); max-width: 620px; }
+.mgr .msg { font-size: 13px; color: var(--accent); margin: 0 0 12px; }
+.mgr .msg.bad { color: var(--danger); }
+.mgr .btn { flex: none; border: 1px solid var(--accent); background: var(--accent); color: var(--btn-fg); border-radius: 7px; font: inherit; font-weight: 700; font-size: 13px; line-height: 1.4; padding: 7px 14px; cursor: pointer; }
+.mgr .btn[disabled] { opacity: .6; cursor: default; }
+.mgr .lk { flex: none; border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 7px; font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.4; padding: 5px 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.mgr .lk:hover { border-color: var(--accent); color: var(--accent); }
+.mgr .lk.danger:hover { border-color: var(--danger); color: var(--danger); }
+.mgr .badge { font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.mgr .badge.on { color: var(--accent); border-color: var(--accent); }
+
+.mgr .list { list-style: none; margin: 0; padding: 0; }
+.mgr .c { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 18px; align-items: center; border-top: 1px solid var(--line); padding: 14px 2px; }
+.mgr .c:first-child { border-top: 0; }
+.mgr .c.off .meta, .mgr .c.off .thumb { opacity: .6; }
+.mgr .thumb { width: 112px; height: 132px; overflow: hidden; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); position: relative; }
+.mgr .thumb-in { position: absolute; left: 6px; top: 6px; width: 320px; transform: scale(.3125); transform-origin: top left; }
+.mgr .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mgr .label { font-size: 14.5px; font-weight: 700; color: var(--fg); }
+.mgr .line { margin-top: 5px !important; font-size: 13.5px; color: var(--fg); }
+.mgr .sub { margin-top: 4px !important; font-size: 12px; color: var(--muted); }
+.mgr .acts-r { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.mgr .ed-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; }
+.mgr .ed-title { margin: 0; font: 700 20px/1.2 var(--font-display); }
+.mgr .ed-head .acts-r { margin-left: auto; }
+.mgr .ed-grid { display: grid; grid-template-columns: minmax(0, 1fr) 392px; gap: 28px; align-items: start; margin-top: 10px; }
+.mgr .sec { border-top: 1px solid var(--line); padding: 18px 0; }
+.mgr .sec:first-child { border-top: 0; padding-top: 6px; }
+.mgr .sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+.mgr .sec-h h4 { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.mgr .sec-h .hint { font-size: 12px; }
+
+.mgr .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mgr .tile { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 10px; border: 1.5px solid var(--line); border-radius: 9px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.mgr .tile:hover { border-color: var(--accent); }
+.mgr .tile.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--tint); }
+.mgr .sk { height: 84px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); padding: 8px 9px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.mgr .sk .ey { height: 4px; width: 46%; border-radius: 2px; background: var(--brand); flex: none; }
+.mgr .sk .ln { height: 4px; width: 88%; border-radius: 2px; background: var(--muted); opacity: .32; flex: none; }
+.mgr .sk .ln.s { width: 60%; }
+.mgr .sk .im { flex: 1; min-height: 14px; border-radius: 3px; background: var(--tint); display: flex; justify-content: center; align-items: center; }
+.mgr .sk .im i { display: block; width: 14px; height: 80%; border-radius: 1px; background: var(--brand); opacity: .55; }
+.mgr .sk .bt { height: 10px; width: 58%; border-radius: 3px; border: 1.5px solid var(--muted); opacity: .55; flex: none; }
+.mgr .sk .top-im { margin: -8px -9px 2px; border-radius: 0; flex: 1; }
+.mgr .sk .row { display: flex; gap: 6px; flex: none; }
+.mgr .sk .row .im { flex: none; width: 18px; height: 28px; }
+.mgr .sk .row .col { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+.mgr .sk .code { flex: 1; border-radius: 3px; border: 1.5px dashed var(--muted); opacity: .5; display: flex; align-items: center; justify-content: center; font: 600 10px/1 'JetBrains Mono', ui-monospace, monospace; color: var(--fg); }
+.mgr .sk.io { padding: 0; gap: 0; }
+.mgr .sk.io .im { border-radius: 0; flex: none; height: 70px; }
+.mgr .sk.io .im i { height: 48px; }
+.mgr .sk.io .ft { height: 13px; border-top: 1px solid var(--line); flex: none; background: var(--panel); }
+.mgr .tile-n { font-size: 13px; font-weight: 700; line-height: 1.2; }
+.mgr .tile-d { font-size: 11.5px; color: var(--muted); line-height: 1.3; margin-top: 2px !important; }
+
+.mgr .form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.mgr .fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.mgr .fld.wide { grid-column: 1 / -1; }
+.mgr .fld input, .mgr .fld textarea, .mgr .srch input, .mgr .hostadd input { font: inherit; font-size: 13.5px; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; min-width: 0; width: 100%; }
+.mgr .fld input:focus, .mgr .fld textarea:focus, .mgr .srch input:focus, .mgr .hostadd input:focus { outline: none; border-color: var(--brand); }
+.mgr .fld textarea { resize: vertical; min-height: 58px; line-height: 1.45; }
+.mgr .fld.err input, .mgr .fld.err textarea { border-color: var(--danger); }
+.mgr .et { font-size: 12px; color: var(--danger); line-height: 1.4; }
+.mgr .wt { font-size: 12px; color: var(--warn); line-height: 1.4; }
+.mgr .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--fg); cursor: pointer; }
+.mgr .check input { width: 16px; height: 16px; accent-color: var(--brand); margin: 0; }
+.mgr .fld.check { flex-direction: row; align-items: center; gap: 8px; font-size: 13.5px; color: var(--fg); }
+.mgr .fld.check input { width: 16px; flex: none; padding: 0; }
+
+.mgr .drop { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 9px; }
+.mgr .drop.on { border-color: var(--accent); background: var(--tint); }
+.mgr .drop.err { border-color: var(--danger); }
+.mgr .drop-ic { flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--tint); color: var(--accent); display: grid; place-items: center; }
+.mgr .drop-ic svg { width: 20px; height: 20px; }
+.mgr .drop-t { font-size: 13.5px; font-weight: 600; }
+.mgr .imgrow { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; }
+.mgr .imgrow img { flex: none; width: 52px; height: auto; max-height: 86px; object-fit: contain; border-radius: 3px; box-shadow: 0 3px 10px rgba(20,18,24,.2); }
+.mgr .imgmeta { min-width: 0; flex: 1; }
+.mgr .imgname { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.mgr .imginfo { font-size: 12px; color: var(--muted); margin-top: 2px !important; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mgr .shield { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 600; }
+.mgr .shield svg { width: 13px; height: 13px; }
+.mgr .pick-file { position: relative; overflow: hidden; }
+.mgr .pick-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.mgr .ip-trig { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 440px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--fg); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
+.mgr .ip-trig:hover, .mgr .ip-trig.open { border-color: var(--brand); }
+.mgr .ip-sw { flex: none; width: 30px; height: 30px; border-radius: 7px; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; }
+.mgr .ip-sw svg { width: 16px; height: 16px; }
+.mgr .ip-name { flex: 1; min-width: 0; }
+.mgr .ip-name b { font-weight: 600; }
+.mgr .ip-name span { display: block; font-size: 11.5px; color: var(--muted); }
+.mgr .chev { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.mgr .ip-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mgr .ip-pop { margin-top: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); box-shadow: var(--pop); padding: 12px; max-width: 600px; }
+.mgr .srch { position: relative; }
+.mgr .srch svg { position: absolute; left: 10px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); color: var(--muted); }
+.mgr .srch input { padding-left: 32px; }
+.mgr .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 8px; max-height: 60px; overflow-y: auto; padding: 1px 2px; }
+.mgr .chip { border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; padding: 3px 10px; cursor: pointer; }
+.mgr .chip:hover { border-color: var(--accent); }
+.mgr .chip.on { background: var(--accent); border-color: var(--accent); color: var(--btn-fg); }
+.mgr .ip-count { font-size: 12px; color: var(--muted); margin: 0 0 8px !important; }
+.mgr .ip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 248px; overflow: auto; padding: 2px; }
+.mgr .ic-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; min-width: 0; }
+.mgr .ic-cell:hover { border-color: var(--accent); }
+.mgr .ic-cell.on { border-color: var(--accent); background: var(--tint); }
+.mgr .ic-cell svg { width: 22px; height: 22px; }
+.mgr .ic-cell span { font: 500 10px/1.2 'JetBrains Mono', ui-monospace, monospace; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mgr textarea.code { font: 12.5px/1.55 'JetBrains Mono', ui-monospace, monospace !important; min-height: 150px !important; background: var(--bg) !important; white-space: pre; }
+.mgr .warnbox { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--danger-line); background: var(--danger-bg); border-radius: 9px; font-size: 13px; line-height: 1.45; }
+.mgr .warnbox svg { flex: none; width: 18px; height: 18px; color: var(--danger); margin-top: 1px; }
+.mgr .warnbox b { font-weight: 700; }
+.mgr .hosts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mgr .host { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 7px; font-size: 12.5px; }
+.mgr .host .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mgr .hostadd { display: flex; gap: 6px; margin-top: 8px; }
+.mgr .found { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.mgr .found .mono { color: var(--fg); }
+
+.mgr .items { list-style: none; margin: 0 0 10px; padding: 0; }
+.mgr .it { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.mgr .it:first-child { border-top: 0; }
+.mgr .ty { flex: none; font: 500 11px/1 'JetBrains Mono', ui-monospace, monospace; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; width: 62px; }
+.mgr .it .t { flex: 1; min-width: 0; color: var(--accent); overflow-wrap: anywhere; }
+.mgr .results { list-style: none; margin: 6px 0 0; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); box-shadow: var(--pop); }
+.mgr .res { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.mgr .res:hover { background: var(--hover); }
+.mgr .res .add { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--accent); }
+.mgr .empty { font-size: 13px; color: var(--muted); padding: 6px 0; }
+
+.mgr .ed-prev { position: sticky; top: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.mgr .pv-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.mgr .pv-bar h4 { margin: 0 auto 0 0; font-size: 12.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.mgr .segs { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.mgr .seg { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
+.mgr .seg + .seg { border-left: 1px solid var(--line); }
+.mgr .seg.on { background: var(--accent); color: var(--btn-fg); }
+.mgr .pv-stage { padding: 22px; display: flex; justify-content: safe center; overflow-x: auto; background: #faf9f8; }
+.mgr .pv-stage.dk { background: #1c1a21; }
+.mgr .pv-note { padding: 10px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); background: var(--panel); }
+
+@container (max-width: 760px) {
+.mgr .ed-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.mgr .ed-prev { position: static; order: -1; }
+.mgr .pv-stage { overflow-x: auto; justify-content: flex-start; }
+.mgr .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mgr .form { grid-template-columns: minmax(0, 1fr); }
+.mgr .c { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: start; }
+.mgr .c .acts-r { grid-column: 1 / -1; justify-content: flex-start; }
+.mgr .thumb { width: 76px; height: 92px; }
+.mgr .thumb-in { transform: scale(.2125); left: 4px; top: 4px; }
+.mgr .ed-head .acts-r { margin-left: 0; width: 100%; }
+.mgr .imgrow { flex-wrap: wrap; }
+.mgr .imgrow .acts-r { width: 100%; justify-content: flex-start; }
+.mgr .drop { flex-wrap: wrap; }
+}
+`;
+
   // client-ui/src/elements/gbti-cta-manager.mjs
   var SITE8 = "https://gbti.network";
-  var TYPES = ["prompt", "post", "project", "share"];
-  var FIELDS = [
-    ["label", "Label", "The card eyebrow, e.g. the book title"],
-    ["line", "Line", "The one sentence on the card"],
-    ["button", "Button", "Names the partner, e.g. Get the book on Amazon"],
-    ["destination", "Destination", "https://... (an amazon CTA links straight to amazon with tag=)"],
-    ["partner", "Partner", "amazon, codeable, ..."],
-    ["note", "Note", "Where the URL came from, whose tag it carries"]
-  ];
-  var CSS20 = `
-  :host { display:block; }
-  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
-  .hint { font-size:12.5px; color:var(--muted); }
-  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
-  .busy { opacity:.55; pointer-events:none; }
-  .btn { flex:none; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:7px; font:inherit; font-weight:700; font-size:13px; padding:7px 14px; cursor:pointer; }
-  .lk { flex:none; border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; }
-  .lk:hover { border-color:var(--accent); color:var(--accent); }
-  .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
-  .form { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px 12px; margin:0 0 14px; padding:12px; border:1px solid var(--line); border-radius:9px; }
-  .form label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); min-width:0; }
-  .form input, .form select, .form textarea { font:inherit; font-size:13.5px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:6px 9px; min-width:0; }
-  .form textarea { resize:vertical; min-height:36px; }
-  .form .acts { grid-column:1 / -1; display:flex; gap:8px; flex-wrap:wrap; }
-  .list { list-style:none; margin:0; padding:0; }
-  .c { border-top:1px solid var(--line); padding:12px 2px; }
-  .c:first-child { border-top:0; }
-  .c.off { opacity:.6; }
-  .top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .label { font-size:14.5px; font-weight:700; color:var(--fg); }
-  .badge { font-size:11px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; border-radius:999px; padding:2px 8px; border:1px solid var(--line); color:var(--muted); }
-  .state.on { color:var(--accent); border-color:var(--accent); }
-  .acts-r { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
-  .line { margin:6px 0 0; font-size:13.5px; color:var(--fg); }
-  .dest { display:block; font-size:12.5px; margin-top:3px; overflow-wrap:anywhere; }
-  .dest a { color:var(--accent); }
-  details { margin-top:6px; }
-  summary { cursor:pointer; font-size:12.5px; color:var(--muted); }
-  .note { font-size:13px; line-height:1.5; margin:6px 0 0; white-space:pre-line; }
-  .items { list-style:none; margin:8px 0 0; padding:0; }
-  .it { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0; font-size:13px; }
-  .it .ty { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); }
-  .it a { color:var(--accent); }
-  .it .bad { color:var(--danger, #e06c6c); font-weight:600; }
-  .it .pending, .it .draft { color:var(--muted); }
-  .assign { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-  .assign select, .assign input { font:inherit; font-size:13px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:5px 8px; min-width:0; }
-  .assign input { flex:1 1 200px; }
-  .muted { color:var(--muted); }
-  [hidden] { display:none !important; }
-`;
+  var SUBMITTED = "Submitted. It merges automatically and appears shortly. Track it in your WorkBench.";
+  var FIELD_KEYS = ["id", "label", "partner", "line", "button", "destination", "image", "html"];
   var GbtiCtaManager = class extends GbtiElement {
+    constructor() {
+      super();
+      this._status = "idle";
+      this._view = "list";
+      this._st = null;
+      if (this.root) this._listen();
+    }
     // The client-ready race (see gbti-quote-manager): the element sits in static admin markup and upgrades before the
     // client is injected, so render() starts the load when the client arrives, never connectedCallback.
     connectedCallback() {
       super.connectedCallback?.();
+    }
+    /** Where the site's files are read from: the page's own origin when the page says so, else production. */
+    get site() {
+      const o = this.dataset?.siteOrigin;
+      if (o === "page" && typeof location !== "undefined") return location.origin;
+      return SITE8;
+    }
+    get icons() {
+      if (!this._icons) this._icons = createIconLibrary({ base: this.site });
+      return this._icons;
+    }
+    // An open editor with unsaved typing declines the client-broadcast re-render (sow-326), which would rebuild it.
+    skipClientRender() {
+      return this._view === "edit" && this._status === "ready";
     }
     async load() {
       if (!this.client) {
         this.render();
         return;
       }
-      this._loading = true;
-      this._failed = false;
+      this._status = "loading";
       this.render();
       try {
         const [pool, built] = await Promise.all([
           this.client.ctaPool(),
-          fetch(`${SITE8}/ctas.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${this.site}/ctas.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`ctas.json ${r.status}`);
             return r.json();
           })
         ]);
         this._ctas = Array.isArray(pool?.ctas) ? pool.ctas : [];
-        this._types = Array.isArray(pool?.types) && pool.types.length ? pool.types : TYPES;
         this._built = new Map((Array.isArray(built?.ctas) ? built.ctas : []).map((c) => [c.id, c]));
+        this._pages = pagesFromBuilt(built);
+        this._status = "ready";
       } catch (e) {
-        this._ctas = null;
-        this._built = null;
-        this._failed = true;
-        this._msg = `Could not load the CTAs (${e?.message || "unknown error"}).`;
+        this._status = "failed";
+        this._problem = e?.message || "unknown error";
       }
-      this._loading = false;
       this.render();
     }
-    /** The built artifact's view of one assignment: resolved / unresolved / not yet built. */
-    _resolution(ctaId, it) {
-      const b = this._built?.get(ctaId);
-      if (!b) return { state: "pending" };
-      const hit = (b.items || []).find((x) => x.type === it.type && x.ref === it.ref);
-      if (!hit) return { state: "pending" };
-      if (!hit.resolved) return { state: "missing" };
-      return { state: hit.live ? "live" : "draft", title: hit.title, url: hit.url };
+    _imageUrl(file) {
+      const path = ctaImageUrl(file);
+      return path ? `${this.site}${path}` : null;
+    }
+    /** A card's page title: the public page list, then the built registry's resolution, then the reference itself. */
+    _titleOf(ctaId, it) {
+      const page = (this._pages || []).find((p) => p.type === it.type && p.ref === it.ref);
+      if (page) return page.title;
+      const hit = (this._built?.get(ctaId)?.items || []).find((x) => x.type === it.type && x.ref === it.ref);
+      return hit?.title || it.ref;
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (superadmin) to manage CTAs.</p>`);
+        this.set(this.css(CTA_MANAGER_CSS) + '<p class="muted">Open in the GBTI client (superadmin) to manage call-to-actions.</p>');
         return;
       }
-      if (this._failed) {
-        this.set(this.css(CSS20) + `<p class="msg">${esc(this._msg)}</p><button class="lk" type="button" data-retry-load>Try again</button>`);
-        this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
+      if (this._status === "failed") {
+        this._paint(failedView(this._problem));
         return;
       }
-      if (!this._ctas) {
-        if (!this._loading) this.load();
-        this.set(this.css(CSS20) + `<p class="muted">Loading CTAs...</p>`);
+      if (this._status !== "ready") {
+        if (this._status === "idle") this.load();
+        else this._paint(loadingView());
         return;
       }
-      const enabled = this._ctas.filter((c) => c && c.enabled === true).length;
-      const rows = this._ctas.map((c) => this._row(c)).join("");
-      this.set(this.css(CSS20) + `<div class="${this._busy ? "busy" : ""}">
-      <div class="head"><span class="hint">${this._ctas.length} CTA${this._ctas.length === 1 ? "" : "s"}, ${enabled} enabled</span>
-        <button class="lk" type="button" data-show-add>${this._adding ? "Cancel" : "Add a CTA"}</button></div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      ${this._adding ? this._form("add", {}) : ""}
-      <p class="hint" style="margin:0 0 12px">A CTA renders as its own sidebar card on every item it is assigned to, above the weekly digest, only while it is enabled. Edits open a house PR and go live on the next site deploy. Disable a CTA to retire it; the history stays.</p>
-      <ul class="list">${rows || '<li class="muted">No CTAs yet.</li>'}</ul>
-    </div>`);
-      this._wire();
+      if (this._view === "edit" && this._st) {
+        this._paint(editorView(this._st, foundHosts(this._st.d.html, this._st.d.hosts)));
+        this._afterEditorPaint();
+        return;
+      }
+      const rows = this._ctas.map((c) => ({ cta: c, image: typeof c.image === "string" ? { url: this._imageUrl(c.image) } : null, busy: this._busyId === c.id }));
+      this._paint(listView({ rows, msg: this._listMsg, msgBad: this._listBad }));
     }
-    _form(mode, c) {
-      const v = (k) => esc(c?.[k] ?? "");
-      const fields = FIELDS.map(([k, label, hint]) => k === "note" ? `<label style="grid-column:1 / -1">${label}<textarea data-f="${k}" placeholder="${esc(hint)}">${v(k)}</textarea></label>` : `<label>${label}<input data-f="${k}" type="text" value="${v(k)}" placeholder="${esc(hint)}" /></label>`).join("");
-      const idField = mode === "add" ? `<label>Id (kebab-case)<input data-f="id" type="text" placeholder="stranger-in-a-strange-land" /></label>` : "";
-      return `<div class="form" data-form="${mode}" data-id="${esc(c?.id || "")}">${idField}${fields}
-      <div class="acts"><button class="btn" type="button" data-submit>${mode === "add" ? "Add CTA" : "Save"}</button>${mode === "edit" ? `<button class="lk" type="button" data-cancel-edit>Cancel</button>` : ""}</div></div>`;
+    _paint(markup) {
+      this.set(this.css(CTA_MANAGER_CSS + CTA_CARD_CSS) + markup);
     }
-    _row(c) {
-      const on = c.enabled === true;
-      const id = esc(c.id || "");
-      const items = (Array.isArray(c.items) ? c.items : []).map((it) => {
-        const r = this._resolution(c.id, it);
-        const key = `${esc(it.type)}:${esc(it.ref)}`;
-        let body;
-        if (r.state === "live") body = `<a href="${esc(SITE8 + r.url)}" target="_blank" rel="noopener">${esc(r.title || it.ref)}</a>`;
-        else if (r.state === "draft") body = `<span>${esc(r.title || it.ref)}</span> <span class="draft">(no public page yet)</span>`;
-        else if (r.state === "missing") body = `<span class="bad">No such item: ${key}</span>`;
-        else body = `<span>${esc(it.ref)}</span> <span class="pending">(resolving on the next deploy)</span>`;
-        return `<li class="it" data-item="${key}"><span class="ty">${esc(it.type)}</span>${body}<button class="lk danger" type="button" data-unassign="${id}" data-type="${esc(it.type)}" data-ref="${esc(it.ref)}">Unassign</button></li>`;
-      }).join("");
-      const typeOpts = (this._types || TYPES).map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
-      return `<li class="c ${on ? "" : "off"}" data-cta="${id}">
-      <div class="top"><span class="label">${esc(c.label || c.id)}</span><span class="badge">${esc(c.partner || "")}</span><span class="badge state ${on ? "on" : ""}">${on ? "Enabled" : "Disabled"}</span>
-        <span class="acts-r"><button class="lk" type="button" data-edit="${id}">${this._editing === c.id ? "Close" : "Edit"}</button><button class="lk" type="button" data-toggle="${id}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button></span></div>
-      <p class="line">${esc(c.line || "")}</p>
-      <span class="dest"><a href="${esc(c.destination || "#")}" target="_blank" rel="noopener">${esc(c.destination || "")}</a> <span class="muted">(button: ${esc(c.button || "")})</span></span>
-      ${c.note ? `<details><summary>Note</summary><p class="note">${esc(c.note)}</p></details>` : ""}
-      ${this._editing === c.id ? this._form("edit", c) : ""}
-      <ul class="items">${items || '<li class="it muted">Assigned to nothing yet.</li>'}</ul>
-      <div class="assign"><select data-assign-type="${id}">${typeOpts}</select><input data-assign-ref="${id}" type="text" placeholder="the item slug, or author/id for a share" /><button class="lk" type="button" data-assign="${id}">Assign</button></div>
-    </li>`;
-    }
-    _read(form) {
-      const out = {};
-      form.querySelectorAll("[data-f]").forEach((el) => {
-        out[el.dataset.f] = String(el.value || "").trim();
-      });
-      return out;
-    }
-    _wire() {
-      this.on("[data-show-add]", "click", () => {
-        this._adding = !this._adding;
-        this._msg = "";
-        this.render();
-      });
-      this.$$("[data-form] [data-submit]").forEach((b) => b.addEventListener("click", () => {
-        const form = b.closest("[data-form]");
-        const fields = this._read(form);
-        if (form.dataset.form === "add") {
-          if (!fields.id) {
-            this._msg = "An id is required.";
-            this.render();
-            return;
-          }
-          this._run(() => this.client.addCta(fields), () => {
-            this._adding = false;
-          });
-        } else {
-          this._run(() => this.client.updateCta({ id: form.dataset.id, ...fields }), () => {
-            this._editing = null;
-          });
-        }
-      }));
-      this.$$("[data-cancel-edit]").forEach((b) => b.addEventListener("click", () => {
-        this._editing = null;
-        this.render();
-      }));
-      this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
-        this._editing = this._editing === b.dataset.edit ? null : b.dataset.edit;
-        this._msg = "";
-        this.render();
-      }));
-      this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.setCtaEnabled({ id: b.dataset.toggle, enabled: b.dataset.on !== "1" }))));
-      this.$$("[data-assign]").forEach((b) => b.addEventListener("click", () => {
-        const id = b.dataset.assign;
-        const type = this.$(`[data-assign-type="${CSS_ESC(id)}"]`)?.value || "";
-        const ref = (this.$(`[data-assign-ref="${CSS_ESC(id)}"]`)?.value || "").trim();
-        if (!ref) {
-          this._msg = "A ref is required (the item slug, or author/id for a share).";
-          this.render();
-          return;
-        }
-        this._run(() => this.client.assignCta({ id, type, ref }));
-      }));
-      this.$$("[data-unassign]").forEach((b) => b.addEventListener("click", () => {
-        const { unassign: id, type, ref } = b.dataset;
-        if (typeof confirm === "function" && !confirm(`Unassign this CTA from ${type}:${ref}?`)) return;
-        this._run(() => this.client.unassignCta({ id, type, ref }));
-      }));
-    }
-    async _run(fn, after) {
-      this._busy = true;
-      this._msg = "";
+    // ---- list -------------------------------------------------------------------------------------------------------
+    async _toggle(id) {
+      const c = this._ctas.find((x) => x.id === id);
+      if (!c || this._busyId) return;
+      const enabled = c.enabled !== true;
+      this._busyId = id;
+      this._listMsg = "";
       this.render();
       try {
-        const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
-        after?.();
+        const r = await this.client.setCtaEnabled({ id, enabled });
+        c.enabled = enabled;
+        this._listMsg = r?.noop ? `${c.label} is already ${enabled ? "enabled" : "disabled"}.` : `${enabled ? "Enabled" : "Disabled"} ${c.label}. Submitted. It merges automatically and appears shortly.`;
+        this._listBad = false;
       } catch (e) {
-        this._msg = e?.message || "That edit failed.";
+        this._listMsg = e?.message || "That change failed.";
+        this._listBad = true;
       }
-      this._busy = false;
-      await this.load();
+      this._busyId = null;
+      this.render();
+    }
+    // ---- editor state -----------------------------------------------------------------------------------------------
+    _open(c) {
+      const isNew = !c;
+      const d = isNew ? blankDraft() : draftFromCta(c, { imageUrl: typeof c.image === "string" ? this._imageUrl(c.image) : null });
+      this._st = {
+        d,
+        isNew,
+        original: isNew ? null : structuredClone(c),
+        tried: false,
+        saving: false,
+        msg: "",
+        msgKind: "",
+        pickerOpen: false,
+        iconQuery: "",
+        iconSet: "",
+        icons: { status: "idle", total: 0, results: [], sets: [] },
+        hostDraft: "",
+        hostErr: "",
+        pageQuery: "",
+        cands: [],
+        drag: false,
+        imageMsg: "",
+        imageWork: false,
+        pvDark: false,
+        pvPhone: false,
+        titleOf: (it) => this._titleOf(d.id, it)
+      };
+      this._revalidate();
+      this._view = "edit";
+      this._listMsg = "";
+      this.render();
+    }
+    _back() {
+      this._view = "list";
+      this._st = null;
+      this.render();
+    }
+    _revalidate() {
+      const st = this._st;
+      st.v = validateDraft(st.d, { isNew: st.isNew, taken: new Set(this._ctas.map((c) => c.id)) });
+      if (st.msgKind === "err" && st.tried && !st.saving) {
+        st.msg = st.v.ok ? "" : Object.keys(st.v.errors).length ? "Fix the highlighted fields to save." : st.v.banner;
+        if (!st.msg) st.msgKind = "";
+      }
+    }
+    /** Any edit clears a sent or failed save's message (the draft now differs from what was sent), then revalidates. */
+    _touched() {
+      const st = this._st;
+      if (st.msg && st.msgKind !== "err") {
+        st.msg = "";
+        st.msgKind = "";
+      }
+      this._revalidate();
+    }
+    /** Redraw only what a keystroke changes, so the field under the cursor keeps its focus and selection. */
+    _refreshLive({ found = false } = {}) {
+      const st = this._st;
+      const title = this.$('[data-region="title"]');
+      if (title) title.textContent = editTitle(st);
+      for (const k of FIELD_KEYS) {
+        const msg = shownError(st, k);
+        this.$$(`[data-err="${k}"]`).forEach((el) => {
+          el.textContent = msg;
+          el.hidden = !msg;
+        });
+        this.$(`[data-fld="${k}"]`)?.classList.toggle("err", !!msg);
+      }
+      const banner = this.$('[data-region="banner"]');
+      if (banner) {
+        banner.textContent = st.msg;
+        banner.hidden = !st.msg;
+        banner.className = st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg";
+      }
+      const stage = this.$('[data-region="stage"]');
+      if (stage) stage.innerHTML = previewCard(st);
+      const note = this.$('[data-region="pvnote"]');
+      if (note) note.textContent = previewNote(st.d);
+      this.$$("[data-count]").forEach((el) => {
+        el.textContent = plural(st.d.items.length);
+      });
+      if (found) {
+        const f = this.$('[data-region="found"]');
+        if (f) f.innerHTML = foundLine(foundHosts(st.d.html, st.d.hosts));
+      }
+    }
+    _afterEditorPaint() {
+      const img = this.$("[data-stored-img]");
+      const img0 = this._st?.d.image;
+      if (img && img0?.kind === "stored") {
+        const info = this.$('[data-region="imginfo"]');
+        img.addEventListener("load", () => {
+          if (info && img.naturalWidth) info.textContent = `WebP · ${img.naturalWidth} × ${img.naturalHeight}`;
+        }, { once: true });
+        img.addEventListener("error", () => {
+          img.hidden = true;
+          if (info) info.textContent = "WebP · shows on the site after the next deploy";
+        }, { once: true });
+      }
+    }
+    async _setImage(file) {
+      const st = this._st;
+      st.imageWork = true;
+      st.imageMsg = "";
+      st.drag = false;
+      this._redrawImage();
+      const r = await encodeCtaImage(file);
+      if (this._st !== st) return;
+      st.imageWork = false;
+      if (r.ok) {
+        st.d.image = { kind: "upload", base64: r.base64, url: r.dataUrl, width: r.width, height: r.height, bytes: r.bytes };
+        this._touched();
+      } else {
+        st.imageMsg = r.problem;
+      }
+      this.render();
+    }
+    _redrawImage() {
+      const el = this.$('[data-region="image"]');
+      if (el) {
+        el.innerHTML = imageBody(this._st);
+        this._afterEditorPaint();
+      }
+    }
+    _addHost(raw) {
+      const st = this._st;
+      const n = normalizeHost(raw ?? st.hostDraft);
+      if (!n.ok) {
+        st.hostErr = n.problem;
+        const el = this.$('[data-region="hosterr"]');
+        if (el) {
+          el.textContent = n.problem;
+          el.hidden = false;
+        }
+        return;
+      }
+      if (!st.d.hosts.includes(n.host)) st.d.hosts = [...st.d.hosts, n.host];
+      if (raw === void 0) st.hostDraft = "";
+      st.hostErr = "";
+      this._touched();
+      this.render();
+    }
+    // ---- icons ------------------------------------------------------------------------------------------------------
+    async _searchIcons() {
+      const st = this._st;
+      const token = this._iconToken = (this._iconToken || 0) + 1;
+      try {
+        if (st.icons.status !== "ready") st.icons.sets = await this.icons.sets();
+        const { total, icons } = await this.icons.search(st.iconQuery, { setId: st.iconSet });
+        if (this._st !== st || token !== this._iconToken) return;
+        const first = st.icons.status !== "ready";
+        st.icons = { ...st.icons, status: "ready", total, results: icons };
+        if (first) this.render();
+        else {
+          const el = this.$('[data-region="icons"]');
+          if (el) el.innerHTML = iconResults(st);
+        }
+      } catch (e) {
+        if (this._st !== st || token !== this._iconToken) return;
+        st.icons = { ...st.icons, status: "failed", problem: e?.message || "unknown error" };
+        const el = this.$('[data-region="icons"]');
+        if (el) el.innerHTML = iconResults(st);
+        else this.render();
+      }
+    }
+    // ---- save -------------------------------------------------------------------------------------------------------
+    async _save() {
+      const st = this._st;
+      if (st.saving) return;
+      st.tried = true;
+      this._revalidate();
+      if (!st.v.ok) {
+        st.msg = Object.keys(st.v.errors).length ? "Fix the highlighted fields to save." : st.v.banner;
+        st.msgKind = "err";
+        this.render();
+        return;
+      }
+      const { fields, changed } = savePayload(st.d, st.original, { isNew: st.isNew });
+      if (!st.isNew && !changed.length) {
+        st.msg = "Nothing to save: this card already reads this way.";
+        st.msgKind = "";
+        this.render();
+        return;
+      }
+      st.saving = true;
+      st.msg = "";
+      st.msgKind = "";
+      this.render();
+      try {
+        const r = st.isNew ? await this.client.addCta(fields) : await this.client.updateCta(fields);
+        const saved = cardFromDraft(st.d);
+        if (st.d.image.kind === "upload") {
+          saved.image = `${saved.id}.webp`;
+          st.d.image = { kind: "stored", file: saved.image, url: st.d.image.url, width: st.d.image.width, height: st.d.image.height };
+        }
+        const at = this._ctas.findIndex((c) => c.id === saved.id);
+        if (at >= 0) this._ctas[at] = saved;
+        else this._ctas.push(saved);
+        st.original = structuredClone(saved);
+        st.isNew = false;
+        st.msg = r?.noop ? "Nothing to save: this card already reads this way." : SUBMITTED;
+        st.msgKind = "ok";
+      } catch (e) {
+        st.msg = e?.message || "That save failed.";
+        st.msgKind = "server";
+      }
+      st.saving = false;
+      this._revalidate();
+      this.render();
+    }
+    // ---- events (delegated once on the shadow root, so a redraw never needs rewiring) ----------------------------------
+    _listen() {
+      const root = this.root;
+      root.addEventListener("click", (e) => {
+        const b = e.target.closest?.("[data-act]");
+        if (!b || b.disabled) return;
+        this._act(b.dataset.act, b);
+      });
+      root.addEventListener("input", (e) => this._input(e.target));
+      root.addEventListener("change", (e) => {
+        const t = e.target;
+        if (t.matches?.("[data-file]")) {
+          const f = t.files?.[0];
+          t.value = "";
+          if (f && this._st) this._setImage(f);
+          return;
+        }
+        if (t.type === "checkbox") this._input(t);
+      });
+      root.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && e.target.matches?.('[data-q="host"]')) {
+          e.preventDefault();
+          this._addHost();
+        }
+      });
+      const onDrag = (on) => (e) => {
+        const zone = e.target.closest?.("[data-drop]");
+        if (!zone || !this._st) return;
+        e.preventDefault();
+        if (this._st.drag !== on) {
+          this._st.drag = on;
+          zone.classList.toggle("on", on);
+        }
+      };
+      root.addEventListener("dragover", onDrag(true));
+      root.addEventListener("dragleave", onDrag(false));
+      root.addEventListener("drop", (e) => {
+        const zone = e.target.closest?.("[data-drop]");
+        if (!zone || !this._st) return;
+        e.preventDefault();
+        const f = e.dataTransfer?.files?.[0];
+        if (f) this._setImage(f);
+        else {
+          this._st.drag = false;
+          zone.classList.remove("on");
+        }
+      });
+    }
+    _input(t) {
+      const st = this._st;
+      if (!st) return;
+      if (t.dataset.f) {
+        const k = t.dataset.f;
+        st.d[k] = t.type === "checkbox" ? t.checked : t.value;
+        this._touched();
+        this._refreshLive({ found: k === "html" });
+        return;
+      }
+      const q = t.dataset.q;
+      if (q === "icons") {
+        st.iconQuery = t.value;
+        clearTimeout(this._iconTimer);
+        this._iconTimer = setTimeout(() => this._searchIcons(), 160);
+      } else if (q === "pages") {
+        st.pageQuery = t.value;
+        st.cands = pageCandidates(this._pages, st.pageQuery, st.d.items);
+        const el = this.$('[data-region="cands"]');
+        if (el) el.innerHTML = candidateList(st);
+      } else if (q === "host") {
+        st.hostDraft = t.value;
+        if (st.hostErr) {
+          st.hostErr = "";
+          const el = this.$('[data-region="hosterr"]');
+          if (el) el.hidden = true;
+        }
+      }
+    }
+    _act(act, b) {
+      const st = this._st;
+      switch (act) {
+        case "retry":
+          this.load();
+          return;
+        case "new":
+          this._open(null);
+          return;
+        case "edit": {
+          const c = this._ctas.find((x) => x.id === b.dataset.id);
+          if (c) this._open(c);
+          return;
+        }
+        case "toggle":
+          this._toggle(b.dataset.id);
+          return;
+        default:
+          break;
+      }
+      if (!st) return;
+      switch (act) {
+        case "back":
+          this._back();
+          return;
+        case "save":
+          this._save();
+          return;
+        case "layout":
+          st.d.layout = b.dataset.layout;
+          st.pickerOpen = false;
+          break;
+        case "remove-image":
+          st.d.image = { kind: "none" };
+          st.imageMsg = "";
+          break;
+        case "picker":
+          st.pickerOpen = !st.pickerOpen;
+          if (st.pickerOpen && st.icons.status !== "ready") {
+            st.icons = { ...st.icons, status: "loading" };
+            this._searchIcons();
+          }
+          this.render();
+          return;
+        case "icons-retry":
+          st.icons = { ...st.icons, status: "loading" };
+          this.render();
+          this._searchIcons();
+          return;
+        case "icon-set":
+          st.iconSet = b.dataset.set || "";
+          this.render();
+          this._searchIcons();
+          return;
+        case "icon": {
+          const icon2 = st.icons.results[Number(b.dataset.i)];
+          if (!icon2) return;
+          st.d.icon = icon2;
+          st.pickerOpen = false;
+          break;
+        }
+        case "clear-icon":
+          st.d.icon = null;
+          st.pickerOpen = false;
+          break;
+        case "host-add":
+          this._addHost();
+          return;
+        case "host-allow":
+          this._addHost(b.dataset.host);
+          return;
+        case "host-remove":
+          st.d.hosts = st.d.hosts.filter((h) => h !== b.dataset.host);
+          break;
+        case "page-add": {
+          const c = st.cands[Number(b.dataset.i)];
+          if (!c) return;
+          st.d.items = [...st.d.items, { type: c.type, ref: c.ref }];
+          st.pageQuery = "";
+          st.cands = [];
+          break;
+        }
+        case "page-remove":
+          st.d.items = st.d.items.filter((_, n) => n !== Number(b.dataset.i));
+          break;
+        case "pv-light":
+          st.pvDark = false;
+          this.render();
+          return;
+        case "pv-dark":
+          st.pvDark = true;
+          this.render();
+          return;
+        case "pv-side":
+          st.pvPhone = false;
+          this.render();
+          return;
+        case "pv-phone":
+          st.pvPhone = true;
+          this.render();
+          return;
+        default:
+          return;
+      }
+      this._touched();
+      this.render();
     }
   };
-  var CSS_ESC = (s) => String(s || "").replace(/["\\]/g, "\\$&");
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS21 = `
+  var CSS20 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -11322,11 +12727,11 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS21) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS20) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -11335,7 +12740,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS21) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -11345,7 +12750,7 @@ ${listStyleProseCss(".doc-blocks")}
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS21) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS20) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
@@ -11615,7 +13020,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS22 = `
+  var CSS21 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -12114,7 +13519,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -12123,7 +13528,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS22) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS21) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -12136,7 +13541,7 @@ ${listStyleProseCss(".doc-blocks")}
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS22) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS21) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -12149,7 +13554,7 @@ ${listStyleProseCss(".doc-blocks")}
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS22) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS21) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -12757,7 +14162,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS23 = `
+  var CSS22 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -12793,7 +14198,7 @@ ${listStyleProseCss(".doc-blocks")}
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS23) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS22) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -12830,7 +14235,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS24 = `
+  var CSS23 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -12870,7 +14275,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS24) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS23) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -13087,7 +14492,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS25 = `
+  var CSS24 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -13149,7 +14554,7 @@ ${listStyleProseCss(".doc-blocks")}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS25));
+      this.set(this.css(CSS24));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -13222,13 +14627,13 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS25));
+        this.set(this.css(CSS24));
         return;
       }
       const u = esc(this._username || "");
       const av = `https://github.com/${u}.png?size=80`;
       if (!this._loaded) {
-        this.set(this.css(CSS25) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS24) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -13240,7 +14645,7 @@ ${listStyleProseCss(".doc-blocks")}
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS25) + `
+      this.set(this.css(CSS24) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -13328,7 +14733,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS26 = `
+  var CSS25 = `
   .wrap { display:inline-flex; align-items:center; gap:8px; }
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
@@ -13366,7 +14771,7 @@ ${listStyleProseCss(".doc-blocks")}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS26) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS25) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -13623,7 +15028,7 @@ ${listStyleProseCss(".doc-blocks")}
     if (OG_REASON_TEXT[reason]) return { kind: "empty", message: OG_REASON_TEXT[reason], retry: reason !== "not-a-page" };
     return { kind: "empty", message: "No preview available for this link.", retry: false };
   }
-  var CSS27 = `
+  var CSS26 = `
   /* sow-304: edit-mode controls */
   .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
   .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
@@ -13753,9 +15158,9 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
         case "no-client":
-          return this.set(this.css(CSS27) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+          return this.set(this.css(CSS26) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
         case "loading":
-          return this.set(this.css(CSS27) + `<div class="card"><p class="sub">Loading…</p></div>`);
+          return this.set(this.css(CSS26) + `<div class="card"><p class="sub">Loading…</p></div>`);
         case "locked":
           return this._renderLocked();
         case "trial":
@@ -13770,7 +15175,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS27) + this._noticeHtml(
+      this.set(this.css(CSS26) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
@@ -13780,7 +15185,7 @@ ${listStyleProseCss(".doc-blocks")}
     // and it states the tier plainly, because "your PR was rejected" after writing a Share is the experience this
     // exists to prevent.
     _renderTrial() {
-      this.set(this.css(CSS27) + this._noticeHtml(
+      this.set(this.css(CSS26) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares requires a paid membership. <a href="https://gbti.network/membership/">Upgrade to a paid membership</a> to post.',
         "👀"
@@ -13796,7 +15201,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._noteTab = "write";
       this._visibility = "members";
       const rail = STEP_LABELS.map((l, i) => `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join("");
-      this.set(this.css(CSS27) + `
+      this.set(this.css(CSS26) + `
       <div class="card wizard">
         <div class="rail">${rail}</div>
 
@@ -14615,7 +16020,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-card-list.mjs
   var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
-  var TYPE_LABEL4 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share", news: "News" };
+  var TYPE_LABEL5 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share", news: "News" };
   var lc2 = (s) => String(s || "").toLowerCase();
   var authorName2 = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "GBTI Network" : a;
   function faviconFor(urlOrHost) {
@@ -14645,7 +16050,7 @@ ${listStyleProseCss(".doc-blocks")}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS28 = `
+  var CSS27 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -14780,7 +16185,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
     }
     _chip(item) {
-      return `<span class="chip">${esc(TYPE_LABEL4[item.type] || item.type)}</span>`;
+      return `<span class="chip">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
     // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
     _categoryChip(item) {
@@ -14822,11 +16227,11 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS28) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS27) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS28) + body);
+      this.set(this.css(CSS27) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -14937,7 +16342,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS29 = `
+  var CSS28 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -15059,10 +16464,10 @@ ${listStyleProseCss(".doc-blocks")}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS28) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -15079,7 +16484,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS28) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -15105,12 +16510,12 @@ ${listStyleProseCss(".doc-blocks")}
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS29) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS28) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS29) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS28) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -15182,7 +16587,7 @@ ${listStyleProseCss(".doc-blocks")}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS29) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS28) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -15225,21 +16630,21 @@ ${listStyleProseCss(".doc-blocks")}
       }
     }
     _splash() {
-      this.set(this.css(CSS29) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS28) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS30 = `
+  var CSS29 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS30) + `<div class="stack">
+      this.set(this.css(CSS29) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -17215,8 +18620,8 @@ ${listStyleProseCss(".doc-blocks")}
     function generateNextLine(state, level) {
       return "\n" + common.repeat(" ", state.indent * level);
     }
-    function testImplicitResolving(state, str) {
-      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str)) return true;
+    function testImplicitResolving(state, str3) {
+      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str3)) return true;
       return false;
     }
     function isWhitespace(c) {
@@ -17622,7 +19027,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS31 = `
+  var CSS30 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -17638,7 +19043,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS31) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS30) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -17646,7 +19051,7 @@ ${listStyleProseCss(".doc-blocks")}
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS31) + `<div class="splash">
+        this.set(this.css(CSS30) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -17655,7 +19060,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div>`);
         return;
       }
-      this.set(this.css(CSS31) + `<slot></slot>`);
+      this.set(this.css(CSS30) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -17663,7 +19068,7 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS = 15e3;
   var POLL_MAX = 20;
-  var CSS32 = `
+  var CSS31 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -17734,7 +19139,7 @@ ${listStyleProseCss(".doc-blocks")}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS32) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS31) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -17835,7 +19240,7 @@ ${listStyleProseCss(".doc-blocks")}
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS33 = `
+  var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -17943,13 +19348,13 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS33) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS32) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       const hostedLike = Boolean(s.mode && s.mode !== "app");
       if (s.ready) {
         const note = hostedLike ? "Sign-in is all it takes: your drafts save privately, and the network publishes for you." : "Your drafts save to your copy, and we open the review request for you.";
-        this.set(this.css(CSS33) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS32) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">${note}</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -17967,7 +19372,7 @@ ${listStyleProseCss(".doc-blocks")}
         return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS33) + `
+      this.set(this.css(CSS32) + `
       <div class="head"><h2>${hostedLike ? "Sign in to publish" : "Set up publishing"}</h2><span class="count">${nDone} of ${stepIds.length}</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / stepIds.length * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -18239,7 +19644,7 @@ ${listStyleProseCss(".doc-blocks")}
   var SITE10 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
-  var CSS34 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
   .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
@@ -18322,14 +19727,14 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS34) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS33) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS34) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS33) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS34) + `
+      this.set(this.css(CSS33) + `
       <div class="bar">
         <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
         <span class="cnt" data-cnt></span>
@@ -18425,7 +19830,7 @@ ${listStyleProseCss(".doc-blocks")}
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var CSS35 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     /* The design handoff's dark palette (the extension default). */
     --wf-surface:#232029; --wf-panel:#2a2731; --wf-panel2:#302c37; --wf-raise:#35313d;
@@ -18849,7 +20254,7 @@ ${listStyleProseCss(".doc-blocks")}
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS35) + `<div class="splashwrap">
+      this.set(this.css(CSS34) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check2}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -18907,7 +20312,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS35) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`);
+        this.set(this.css(CSS34) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`);
         return;
       }
       if (this._authGate && !this._authenticated) {
@@ -18928,7 +20333,7 @@ ${listStyleProseCss(".doc-blocks")}
       const footR = this._done ? `<button class="gbtn" data-review type="button">Review steps</button>
          <button class="pbtn" data-done type="button">Go to your profile</button>` : `${showSkip ? `<button class="skipbtn" data-step-next type="button">Skip</button>` : ""}
          <button class="pbtn" data-step-next type="button">${isLast ? "I am all set" : "Continue &rarr;"}</button>`;
-      this.set(this.css(CSS35) + `<div class="wf">
+      this.set(this.css(CSS34) + `<div class="wf">
       ${this._railHtml()}
       <div class="main">
         <div class="top">
@@ -19260,7 +20665,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE12 = "https://gbti.network";
-  var CSS36 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -19332,15 +20737,15 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -19356,7 +20761,7 @@ ${listStyleProseCss(".doc-blocks")}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -19414,7 +20819,7 @@ ${listStyleProseCss(".doc-blocks")}
   var SITE13 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS37 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -19497,11 +20902,11 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS37) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -19510,7 +20915,7 @@ ${listStyleProseCss(".doc-blocks")}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -19616,7 +21021,7 @@ ${listStyleProseCss(".doc-blocks")}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS38 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -20199,7 +21604,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS38) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS37) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -20229,7 +21634,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS38) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS37) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -20248,7 +21653,7 @@ ${listStyleProseCss(".doc-blocks")}
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS38) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS37) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
@@ -20691,7 +22096,7 @@ ${listStyleProseCss(".doc-blocks")}
     } catch {
     }
   }
-  var CSS39 = `
+  var CSS38 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -20926,7 +22331,7 @@ ${listStyleProseCss(".doc-blocks")}
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS39) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS38) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -21024,7 +22429,7 @@ ${listStyleProseCss(".doc-blocks")}
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS40 = `
+  var CSS39 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -21156,7 +22561,7 @@ ${listStyleProseCss(".doc-blocks")}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS40) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS39) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -21211,7 +22616,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS41 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -21312,11 +22717,11 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS40) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS40) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global);
@@ -21339,7 +22744,7 @@ ${listStyleProseCss(".doc-blocks")}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE16}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS41) + `
+      this.set(this.css(CSS40) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -21422,7 +22827,7 @@ ${listStyleProseCss(".doc-blocks")}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS42 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -21582,12 +22987,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS41) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS42) + head + `<div data-body></div>`);
+      this.set(this.css(CSS41) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -21698,7 +23103,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS43 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -21811,12 +23216,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS43) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS42) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -21834,7 +23239,7 @@ ${listStyleProseCss(".doc-blocks")}
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS42) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -21863,7 +23268,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // membership/syndication-format.mjs
-  var TYPE_LABEL5 = { post: "article", project: "project", prompt: "prompt", share: "link" };
+  var TYPE_LABEL6 = { post: "article", project: "project", prompt: "prompt", share: "link" };
   function sanitizeMentions(text) {
     return String(text || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
   }
@@ -21958,7 +23363,7 @@ ${listStyleProseCss(".doc-blocks")}
       memberdiscord: mention || previewM || fullName,
       // the owner-decided fallback: full name, no ping
       memberdiscordusername: discordUsername,
-      contenttype: TYPE_LABEL5[item.source] || "item",
+      contenttype: TYPE_LABEL6[item.source] || "item",
       // {content-type}: article / product / prompt / link
       fullname: fullName,
       author: sanitizeMentions(item.author ? `@${item.author}` : "a member"),
@@ -22126,7 +23531,7 @@ From the author:
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function esc2(s) {
+  function esc4(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function safeHref(url) {
@@ -22271,7 +23676,7 @@ From the author:
     const render = (text) => {
       const store2 = [];
       const masked = maskRuns(text, store2);
-      const safe = esc2(masked);
+      const safe = esc4(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline3(safe, {
         bold: (t) => `<strong>${t}</strong>`,
@@ -22279,14 +23684,14 @@ From the author:
         strike: (t) => `<del>${t}</del>`,
         link: (label, url) => {
           const href = safeHref(resolve(url));
-          const inner = String(label || "").trim() || esc2(resolve(url));
-          return href ? `<a href="${esc2(href)}">${inner}</a>` : inner;
+          const inner = String(label || "").trim() || esc4(resolve(url));
+          return href ? `<a href="${esc4(href)}">${inner}</a>` : inner;
         }
       });
       return done.replace(MASK_RE, (_m, i) => {
         const run = store2[Number(i)];
         if (!run) return "";
-        return run.kind === "code" ? `<code>${esc2(run.raw)}</code>` : esc2(run.raw);
+        return run.kind === "code" ? `<code>${esc4(run.raw)}</code>` : esc4(run.raw);
       });
     };
     const out = [];
@@ -22297,7 +23702,7 @@ From the author:
         continue;
       }
       if (b.kind === "fence") {
-        out.push(`<pre><code>${esc2(b.lines.join("\n"))}</code></pre>`);
+        out.push(`<pre><code>${esc4(b.lines.join("\n"))}</code></pre>`);
         continue;
       }
       if (b.kind === "heading") {
@@ -22361,7 +23766,7 @@ From the author:
     } catch {
     }
   };
-  var CSS44 = `
+  var CSS43 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -22406,7 +23811,7 @@ From the author:
         this.set("");
         return;
       }
-      this.set(this.css(CSS44) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS43) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -22906,7 +24311,7 @@ From the author:
     const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
     return m ? m[1] : "";
   }
-  var TYPE_LABEL6 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
+  var TYPE_LABEL7 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
       return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
@@ -22958,7 +24363,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS45 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -23242,7 +24647,7 @@ From the author:
       return html;
     }
     _metaHtml(it, when) {
-      const t = TYPE_LABEL6[it.type] || it.type || "";
+      const t = TYPE_LABEL7[it.type] || it.type || "";
       const name = authorName4(it.author);
       const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
@@ -23291,7 +24696,7 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS45));
+        this.set(this.css(CSS44));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
@@ -23330,7 +24735,7 @@ From the author:
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
       const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -23454,7 +24859,7 @@ From the author:
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS46 = `
+  var CSS45 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -23580,7 +24985,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS45) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -23588,7 +24993,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS45) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -23632,7 +25037,7 @@ From the author:
     } catch {
     }
   }
-  var CSS47 = `
+  var CSS46 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -23766,7 +25171,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS46) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -23779,7 +25184,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS46) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -24257,7 +25662,7 @@ From the author:
       return "";
     }
   };
-  var CSS48 = `
+  var CSS47 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -24375,19 +25780,19 @@ From the author:
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS48) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this.set(this.css(CSS47) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS48) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS47) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS48) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this.set(this.css(CSS47) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
         this._wire();
         return;
       }
@@ -24401,7 +25806,7 @@ From the author:
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
       const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
       const chOpts = this._channelOptions();
-      this.set(this.css(CSS48) + this._shell(`
+      this.set(this.css(CSS47) + this._shell(`
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc(hint)}</p>
@@ -24509,8 +25914,8 @@ From the author:
     // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
     // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here
     // put raw asterisks and `> ` in front of the reader, which is the defect that started this.
-    _pasteText(t, field) {
-      const raw = t?.[field] || "";
+    _pasteText(t, field2) {
+      const raw = t?.[field2] || "";
       return rendersMarkdown(t?.channel) ? raw : mdToPlain(raw);
     }
     // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
@@ -24529,13 +25934,13 @@ From the author:
     // an await ahead of it spends the gesture; mdToHtml is synchronous for exactly this reason. The catch is
     // not decoration: Firefox ships ClipboardItem with `write` behind a pref, so feature-detection alone would
     // pass and then throw. Activation survives the rejection, so the plain fallback still lands.
-    async _copy(id, field = "text") {
+    async _copy(id, field2 = "text") {
       const t = this._byId(id);
       if (!t) return;
-      const what = field === "commentText" ? "first comment" : field === "bodyText" ? "body" : "post text";
-      const raw = t[field] || "";
-      const plain = this._pasteText(t, field);
-      const rich = field === "commentText" && t.channel === "reddit";
+      const what = field2 === "commentText" ? "first comment" : field2 === "bodyText" ? "body" : "post text";
+      const raw = t[field2] || "";
+      const plain = this._pasteText(t, field2);
+      const rich = field2 === "commentText" && t.channel === "reddit";
       try {
         if (rich && typeof ClipboardItem === "function" && navigator.clipboard?.write) {
           await navigator.clipboard.write([new ClipboardItem({
@@ -24611,7 +26016,7 @@ From the author:
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS49 = `
+  var CSS48 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -24718,7 +26123,7 @@ From the author:
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc(e.realm || "app")}</span></td>
             <td>${esc(e.area)}</td><td class="msg">${esc(e.msg)}</td>
             <td class="data">${esc(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS49) + `
+      this.set(this.css(CSS48) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -24795,8 +26200,8 @@ From the author:
   var MAX_STRING = 200;
   var MAX_DEPTH = 3;
   function clip(s) {
-    const str = String(s);
-    return str.length > MAX_STRING ? `${str.slice(0, MAX_STRING)}…(${str.length})` : str;
+    const str3 = String(s);
+    return str3.length > MAX_STRING ? `${str3.slice(0, MAX_STRING)}…(${str3.length})` : str3;
   }
   function redactDeep(value, depth = 0) {
     if (value == null) return value;
@@ -24884,8 +26289,8 @@ From the author:
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc3 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var SVG = {
+  var esc5 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var SVG2 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
     // inkwell + quill (Articles)
@@ -24919,7 +26324,7 @@ From the author:
     // SOW-052: the "Network" rail item (back to the co-op feed) — connected nodes.
     network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
-  var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
+  var ico = (k) => SVG2[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>` : "";
   var RAIL_FEED = [
     { group: "Feeds" },
     // SOW-063: an explicit #type=all so a rail click goes straight to the Activity feed; the BARE newtab.html (a fresh
@@ -25029,14 +26434,14 @@ From the author:
   function railHtml(active, nav = "feed") {
     const rail = RAILS[nav] || RAIL_FEED;
     const items = rail.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc3(r.group)}</div>`;
+      if (r.group) return `<div class="nt-rail-h">${esc5(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
       const on = r.key === active ? " on" : "";
       const admin = r.adminOnly ? " data-admin-only hidden" : "";
-      const sub = r.sub ? `<span class="sub">${esc3(r.sub)}</span>` : "";
+      const sub = r.sub ? `<span class="sub">${esc5(r.sub)}</span>` : "";
       const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc3(r.nm)}</span>${sub}</span></a>`;
-      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc3(c.nm)}</span></span></a>`).join("");
+      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc5(r.nm)}</span>${sub}</span></a>`;
+      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc5(c.nm)}</span></span></a>`).join("");
       return self + kids2;
     }).join("");
     const top = nav === "feed" ? feedControlsHtml() : "";
@@ -25079,7 +26484,7 @@ From the author:
         av.alt = `@${login}`;
       }
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc3(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc5(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;
