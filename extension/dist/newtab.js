@@ -17368,6 +17368,8 @@ ${String(body ?? "")}`;
 `;
   var QUEUE_CACHE = null;
   var CACHE_FRESH_MS = 3e4;
+  var QUEUE_TRIED_AT = 0;
+  var QUEUE_REFRESH_FAILED = false;
   var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
   var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
@@ -17389,15 +17391,19 @@ ${String(body ?? "")}`;
         this.render();
         return;
       }
+      QUEUE_TRIED_AT = Date.now();
       try {
-        this._data = await this.client.syndicationQueue();
+        const data = await this.client.syndicationQueue();
+        if (!data || typeof data !== "object") throw new Error("Could not load the syndication queue.");
+        this._data = data;
         this._err = false;
         QUEUE_CACHE = { data: this._data, at: Date.now() };
+        QUEUE_REFRESH_FAILED = false;
       } catch (e) {
         if (!this._data) {
           this._err = true;
           this._msg = e?.message || "Could not load the syndication queue.";
-        }
+        } else QUEUE_REFRESH_FAILED = true;
       }
       this._loading = false;
       this.render();
@@ -17429,7 +17435,7 @@ ${String(body ?? "")}`;
         this.set(this.css(CSS24) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
-      if (!this._loading && (!QUEUE_CACHE || Date.now() - QUEUE_CACHE.at > CACHE_FRESH_MS)) {
+      if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
         this._loading = true;
         this.load();
       }
@@ -17439,6 +17445,7 @@ ${String(body ?? "")}`;
       this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
       <div class="fbar">
         <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
         <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL2).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
@@ -17849,9 +17856,13 @@ ${String(body ?? "")}`;
         this._termTab = this._termTab || Object.keys(this._lists)[0] || "political";
         this._activeTab = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : this._readSubTab();
         this._loaded = true;
+        this._loadFailed = false;
       } catch {
         this._loaded = false;
-        this._msg = "Could not load the channel settings.";
+        this._loadFailed = true;
+        this._failedClient = this.client;
+        const ack = this._msg ? `${this._msg}${/[.!?]$/.test(this._msg) ? "" : "."} ` : "";
+        this._msg = ack ? `${ack}Could not reload the channel settings.` : "Could not load the channel settings.";
       }
       this._loading = false;
       this.render();
@@ -18031,9 +18042,23 @@ ${String(body ?? "")}`;
         return;
       }
       if (!this._loaded) {
+        if (this._loadFailed && this.client !== this._failedClient) {
+          this._loadFailed = false;
+          this._msg = "";
+        }
+        if (this._loadFailed) {
+          this.set(this.css(CSS25) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.$("[data-retry-load]")?.addEventListener("click", () => {
+            this._loadFailed = false;
+            this._msg = "";
+            this.render();
+          });
+          return;
+        }
         if (!this._loading) {
           this._loading = true;
           this.load();
+          if (!this._loading) return;
         }
         this.set(this.css(CSS25) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;

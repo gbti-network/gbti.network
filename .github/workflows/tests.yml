@@ -45,3 +45,20 @@ jobs:
       - run: npm run check:preview-shell
         env:
           REQUIRE_BROWSER: '1'
+
+  # sow-334: an admin section whose load fails must wait to be asked again, not retry at once for as long as the tab
+  # is open (the Channels manager made 500 Worker reads in 2 seconds against a failing route). The harness bundles the
+  # client-ui source in memory and drives every admin section with a stub client, so like preview-shell it needs no
+  # dist, no network and no secrets, and REQUIRE_BROWSER=1 turns a missing browser into a failure.
+  load-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check:load-retry
+        env:
+          REQUIRE_BROWSER: '1'

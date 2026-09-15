@@ -282,8 +282,12 @@ const signedOutExtra = extensionCtaShown
     bellUpgraded = true;
     const signupBase = document.documentElement.dataset.signupBase || '';
     const { createWorkbenchClient } = await import('../lib/workbench-client');
-    const { setClient } = await import('../../client-ui/src/base.mjs');
-    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+    const { setClient, getClient } = await import('../../client-ui/src/base.mjs');
+    // sow-334: never REPLACE a client the page already set. The header runs on every page, and /admin/ sets a
+    // richer one (isSuperadmin attaches the Channels methods). Whichever setClient landed last won, so in 19 of 30
+    // runs of the built admin page the header's replaced it and the Channels manager lost its methods. The bell
+    // needs only the shared methods, which every page's client carries.
+    if (!getClient()) setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
     await import('../../client-ui/src/elements/gbti-notification-bell.mjs');
   }
   upgradeBell(currentIdentity(readMemberSignal()));

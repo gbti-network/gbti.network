@@ -66,6 +66,12 @@ const CSS = `
 // while a quiet background refresh keeps it current.
 let QUEUE_CACHE = null; // { data, at }
 const CACHE_FRESH_MS = 30_000;
+// sow-334: the quiet refresh waits CACHE_FRESH_MS from the last ATTEMPT, not the last success. Timed from the
+// success, a refresh that failed left the cache exactly as stale as before, so the render after it refreshed again
+// at once: 100 requests in 2 s against a failing route, with the old table still on screen so nothing looked wrong.
+// Module-level like the cache, because a workspace re-render re-creates this element.
+let QUEUE_TRIED_AT = 0;
+let QUEUE_REFRESH_FAILED = false;
 
 const SRC_LABEL = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
 const STATUSES = ['pending', 'approved', 'sent', 'failed', 'cancelled'];
@@ -87,13 +93,21 @@ class GbtiSyndicationTracker extends GbtiElement {
 
   async load() {
     if (!this.client) { this.render(); return; }
+    QUEUE_TRIED_AT = Date.now();
     try {
-      this._data = await this.client.syndicationQueue();
+      const data = await this.client.syndicationQueue();
+      // sow-334: a reply that is not an object is a failure. The extension host returns null for a 200 whose body
+      // is not JSON; stored as data it left `_data` empty and `_err` false, the state render() loads from.
+      if (!data || typeof data !== 'object') throw new Error('Could not load the syndication queue.');
+      this._data = data;
       this._err = false;
       QUEUE_CACHE = { data: this._data, at: Date.now() };
+      QUEUE_REFRESH_FAILED = false;
     } catch (e) {
-      // Keep any cached paint on a refresh failure; only a cold load shows the error state.
+      // Keep any cached paint on a refresh failure, with a note saying how old it is; only a cold load shows the
+      // error state.
       if (!this._data) { this._err = true; this._msg = e?.message || 'Could not load the syndication queue.'; }
+      else QUEUE_REFRESH_FAILED = true;
     }
     this._loading = false;
     this.render();
@@ -118,13 +132,14 @@ class GbtiSyndicationTracker extends GbtiElement {
     if (this._err) { this.set(this.css(CSS) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`); this.$('[data-reload]')?.addEventListener('click', () => this.load()); return; }
     if (!this._data) { if (!this._err && !this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading the publishing activity...</p>`); return; }
     // A cache paint that has gone stale refreshes QUIETLY (the table stays on screen; no height flap).
-    if (!this._loading && (!QUEUE_CACHE || Date.now() - QUEUE_CACHE.at > CACHE_FRESH_MS)) { this._loading = true; this.load(); }
+    if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) { this._loading = true; this.load(); }
     const rows = this._rows();
     const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(label)}</option>`;
     const body = rows.map((it) => this._row(it)).join('');
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
+      ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}.</p>` : ''}
       <div class="fbar">
         <select data-f="status" aria-label="Filter by status">${opt('all', 'All statuses', this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join('')}</select>
         <select data-f="type" aria-label="Filter by type">${opt('all', 'All types', this._fType)}${Object.entries(SRC_LABEL).map(([v, l]) => opt(v, l, this._fType)).join('')}</select>

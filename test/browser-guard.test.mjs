@@ -49,7 +49,7 @@ test('skipOrDie: exit 0 with a note without the gate, exit 1 with the reason und
 });
 
 // The real scripts, against a build dir that does not exist. Neither reaches Playwright, so this is hermetic.
-for (const script of ['check-csp', 'check-overflow', 'check-save-controls']) {
+for (const script of ['check-csp', 'check-overflow', 'check-save-controls', 'check-admin-connection']) {
   test(`${script}: the real script skips green without the gate and fails red under it (empty build dir)`, () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-guard-empty-'));
     const run = (env) => spawnSync(process.execPath, [path.join(ROOT, 'scripts', `${script}.mjs`)], { env: { ...process.env, REQUIRE_BROWSER: '', GUARD_DIST: path.join(empty, 'dist'), ...env }, encoding: 'utf8' });
@@ -69,4 +69,15 @@ test('the weekly layout-guards job sets the gate on both guards and runs the CSP
   assert.match(yml, /npm run check:overflow\n\s+env:\n\s+REQUIRE_BROWSER: '1'/);
   assert.match(yml, /npm run check:csp\n\s+env:\n\s+REQUIRE_BROWSER: '1'/);
   assert.match(yml, /npm run check:save-controls\n\s+env:\n\s+REQUIRE_BROWSER: '1'/, 'sow-330: the driven save-controls guard runs under the gate');
+  assert.match(yml, /npm run check:admin-connection\n\s+env:\n\s+REQUIRE_BROWSER: '1'/, 'sow-334: the driven admin-connection guard runs under the gate');
+});
+
+test('sow-334: the unit-test workflow runs the load-retry guard under the gate, and the guard reads both admin pages', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '.github/workflows/tests.yml'), 'utf8');
+  assert.match(yml, /npm run check:load-retry\n\s+env:\n\s+REQUIRE_BROWSER: '1'/);
+  const src = fs.readFileSync(path.join(ROOT, 'scripts/check-load-retry.mjs'), 'utf8');
+  for (const page of ['src/pages/admin.astro', 'extension/admin.html']) {
+    assert.ok(fs.existsSync(path.join(ROOT, page)), `${page} exists`);
+    assert.ok(src.includes(`'${page}'`), `the census reads ${page}, so a section added there is driven`);
+  }
 });

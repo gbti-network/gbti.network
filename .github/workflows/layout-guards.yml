@@ -66,6 +66,13 @@ jobs:
         run: npm run check:save-controls
         env:
           REQUIRE_BROWSER: '1'
+      # sow-334: the built /admin/ page keeps the superadmin client it set. The site header's client replaced it in 19
+      # of 30 runs before the fix, a timing race no source read shows, so this drives the page 30 times.
+      - name: Admin-connection guard (the admin page keeps its superadmin client, driven)
+        if: always()
+        run: npm run check:admin-connection
+        env:
+          REQUIRE_BROWSER: '1'
       # sow-298: a SCHEDULED failure has nobody watching it (GitHub emails the automation account that last
       # touched this file, and the per-commit board stays green). This step never fails the job: if: failure()
       # and the script always exits zero.

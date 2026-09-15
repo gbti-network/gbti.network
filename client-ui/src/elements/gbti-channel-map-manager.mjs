@@ -333,9 +333,18 @@ class GbtiChannelMapManager extends GbtiElement {
       this._termTab = this._termTab || Object.keys(this._lists)[0] || 'political';
       this._activeTab = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : this._readSubTab();
       this._loaded = true;
+      this._loadFailed = false;
     } catch {
+      // sow-334: a FAILED load is its own state, not "not loaded yet". render() loads whenever `!_loaded`, which
+      // this catch leaves, so every failure started the next attempt at once: 100 attempts of five Worker reads in
+      // 2 s against a failing route, and a synchronous throw (a client without these methods) recursed to a stack
+      // overflow. It now waits for Try again, or for the host to hand over a different client.
       this._loaded = false;
-      this._msg = 'Could not load the channel settings.';
+      this._loadFailed = true;
+      this._failedClient = this.client;
+      // A reload after a successful word-list edit keeps the edit's acknowledgement in front of the failure.
+      const ack = this._msg ? `${this._msg}${/[.!?]$/.test(this._msg) ? '' : '.'} ` : '';
+      this._msg = ack ? `${ack}Could not reload the channel settings.` : 'Could not load the channel settings.';
     }
     this._loading = false;
     this.render();
@@ -546,7 +555,21 @@ class GbtiChannelMapManager extends GbtiElement {
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`); return; }
     if (!this._loaded) {
-      if (!this._loading) { this._loading = true; this.load(); }
+      // sow-334: a different client earns one fresh attempt (the website builds a new one on each sign-in); a
+      // re-render with the client that failed does not.
+      if (this._loadFailed && this.client !== this._failedClient) { this._loadFailed = false; this._msg = ''; }
+      if (this._loadFailed) {
+        this.set(this.css(CSS) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+        this.$('[data-retry-load]')?.addEventListener('click', () => { this._loadFailed = false; this._msg = ''; this.render(); });
+        return;
+      }
+      if (!this._loading) {
+        this._loading = true;
+        this.load();
+        // A load that settled synchronously (a client without these methods throws before its first await) has
+        // already painted its own result; painting "Loading" now would cover the Try again button.
+        if (!this._loading) return;
+      }
       this.set(this.css(CSS) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
       return;
     }
