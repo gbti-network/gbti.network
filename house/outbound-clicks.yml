@@ -5,6 +5,93 @@
 # of clicks whose agent names a well-known crawler, other = every answer that was not a 301 (Cloudflare's own Early
 # Hints probes land here). A date in `coverage` was queried; a date absent from it was NOT measured and must never
 # be read as zero. Request counts per path per day only: no personal data of any kind.
-generatedAt: null
-coverage: []
-clicks: {}
+generatedAt: '2026-09-15T12:42:37.581Z'
+coverage:
+  - '2026-09-08'
+  - '2026-09-09'
+  - '2026-09-10'
+  - '2026-09-11'
+  - '2026-09-12'
+  - '2026-09-13'
+  - '2026-09-14'
+clicks:
+  /codeable:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 0, crawlers: 0, other: 0}
+  /codeable/naresh-devineni:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 2, crawlers: 1, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 1, crawlers: 1, other: 0}
+    '2026-09-12': {clicks: 6, crawlers: 2, other: 1}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 2, crawlers: 1, other: 2}
+  /outbound/bugherd:
+    '2026-09-08': {clicks: 3, crawlers: 1, other: 2}
+    '2026-09-09': {clicks: 1, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 1, crawlers: 0, other: 37}
+    '2026-09-11': {clicks: 1, crawlers: 0, other: 1}
+    '2026-09-12': {clicks: 2, crawlers: 1, other: 2}
+    '2026-09-13': {clicks: 2, crawlers: 0, other: 5}
+    '2026-09-14': {clicks: 7, crawlers: 3, other: 7}
+  /outbound/cloudways:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 1, crawlers: 0, other: 1}
+    '2026-09-12': {clicks: 10, crawlers: 4, other: 6}
+    '2026-09-13': {clicks: 4, crawlers: 3, other: 2}
+    '2026-09-14': {clicks: 0, crawlers: 0, other: 0}
+  /outbound/codeable:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 5, crawlers: 1, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 1, crawlers: 1, other: 1}
+    '2026-09-13': {clicks: 1, crawlers: 0, other: 5}
+    '2026-09-14': {clicks: 3, crawlers: 3, other: 1}
+  /outbound/codeable/wordpress-services:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 0, crawlers: 0, other: 0}
+  /outbound/tailscale:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 0, crawlers: 0, other: 0}
+  /outsource/codeable/wp-cli:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 0, crawlers: 0, other: 0}
+  /outsourcing/codeable:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 0, crawlers: 0, other: 0}
+  /outsourcing/codeable/wp-cli:
+    '2026-09-08': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-09': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-10': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-11': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-12': {clicks: 2, crawlers: 2, other: 1}
+    '2026-09-13': {clicks: 0, crawlers: 0, other: 0}
+    '2026-09-14': {clicks: 3, crawlers: 3, other: 1}
