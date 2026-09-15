@@ -38,6 +38,10 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   // above rather than inheriting /house/'s admin rank.
   'house/mail-settings.yml',
 ]);
+// sow-337: directories pinned the same way. A call-to-action card image renders on every page the card is
+// assigned to, so writing one is the same decision as writing house/ctas.yml. Kept in lockstep with CODEOWNERS by
+// test/classify-pr-path-rank-agreement.test.mjs, which probes a file inside each pinned directory.
+export const SUPERADMIN_HOUSE_DIRS = Object.freeze(['house/applets/', 'house/images/ctas/']);
 
 /** A path is canonical iff it is a clean forward-slash relative path (mirrors classify-pr.isCleanPath). */
 function isCleanPath(p) {
@@ -49,6 +53,7 @@ function isCleanPath(p) {
 /**
  * The minimum role RANK required to write `path`, matching CODEOWNERS:
  *   superadmin: roles.yml, content-channels.yml, moderation-flags.yml, site-settings.yml, house/applets/**,
+ *               house/images/ctas/** (sow-337),
  *               CODEOWNERS, .github/**, and anything OUTSIDE members/ and house/ (root config, src/, scripts/,
  *               membership/, workers/, docs), which fail closed to superadmin.
  *   admin:      the rest of house/** (taxonomy.yml, quotes.yml, news-sources.yml, coupons.yml, bans.yml, ...).
@@ -60,7 +65,7 @@ export function rankForPath(path) {
   const p = String(path ?? '');
   if (!isCleanPath(p)) return ROLE_RANK[ROLE.superadmin];
   if (SUPERADMIN_HOUSE_FILES.has(p)) return ROLE_RANK[ROLE.superadmin];
-  if (p === 'CODEOWNERS' || p.startsWith('.github/') || p === 'house/applets' || p.startsWith('house/applets/')) {
+  if (p === 'CODEOWNERS' || p.startsWith('.github/') || SUPERADMIN_HOUSE_DIRS.some((d) => p === d.slice(0, -1) || p.startsWith(d))) {
     return ROLE_RANK[ROLE.superadmin];
   }
   if (p.startsWith('members/')) return ROLE_RANK[ROLE.member];

@@ -43,7 +43,8 @@ function defaultTitle(change) {
 /**
  * SOW-082: commit files to a branch on the member's FORK, WITHOUT opening a PR. This is the fork+branch+commit
  * primitive shared by `saveDraft` (commit only) and `publishContent`/`publishFiles` (commit then openPull). Each
- * file is { path, content }; content === null deletes. Idempotent by branch: re-running updates the same branch
+ * file is { path, content }; content === null deletes. sow-337: a binary file is { path, contentBase64 } (a call-to-action
+ * image), passed to the Contents API as sent rather than re-encoded as UTF-8 text. Idempotent by branch: re-running updates the same branch
  * file in place. The SOW-053 stale-base behavior is preserved (base on the FORK's main + a fresh per-file blob-sha
  * read), so GitHub's 3-way merge keeps concurrent edits (contributor credits, reconcile status flips).
  *
@@ -77,12 +78,13 @@ export async function commitToBranchOnFork({ repo, branch, files, message, reset
   for (const f of files) {
     // CREATE vs UPDATE: the Contents API needs the existing blob sha to overwrite a file on the branch.
     const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
-    if (f.content === null) {
+    const isBinary = f.contentBase64 !== undefined && f.contentBase64 !== null;
+    if (f.content === null && !isBinary) {
       if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
     } else {
       await repo.putFile(fork.full_name, f.path, {
         message: message ?? `Update ${f.path}`,
-        contentBase64: toBase64(f.content),
+        contentBase64: isBinary ? String(f.contentBase64) : toBase64(f.content),
         branch,
         sha: existingSha ?? undefined,
       });

@@ -17,7 +17,7 @@
 // red main and teach everyone to ignore the job.
 
 import { createDiscordClient } from '../clients/discord.mjs';
-import { SUPERADMIN_HOUSE_FILES } from '../membership/path-rank.mjs';
+import { SUPERADMIN_HOUSE_FILES, SUPERADMIN_HOUSE_DIRS } from '../membership/path-rank.mjs';
 import { GITHUB_EVENTS_CHANNEL_ID } from './notify-workflow-failure.mjs';
 
 export { GITHUB_EVENTS_CHANNEL_ID };
@@ -38,7 +38,7 @@ export function isGovernancePath(p) {
   if (SUPERADMIN_HOUSE_FILES.has(p)) return true;
   if (p === 'CODEOWNERS') return true;
   if (p === '.github' || p.startsWith('.github/')) return true;
-  if (p === 'house/applets' || p.startsWith('house/applets/')) return true;
+  if (SUPERADMIN_HOUSE_DIRS.some((d) => p === d.slice(0, -1) || p.startsWith(d))) return true; // house/applets/, sow-337 house/images/ctas/
   return false;
 }
 

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { webpInfo, bytesFromBase64, ctaImagePath, ctaImageFile, CTA_IMAGE_DIR, CTA_IMAGE_MAX_BYTES } from '../membership/cta-image.mjs';
+import { webpInfo, bytesFromBase64, ctaImagePath, ctaImageFile, ctaImageUpload, ctaImageFileChanges, CTA_IMAGE_DIR, CTA_IMAGE_MAX_BYTES } from '../membership/cta-image.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const b64 = (s) => new Uint8Array(Buffer.from(s, 'base64'));
@@ -80,4 +80,29 @@ test('bytesFromBase64 round-trips and refuses what is not base64; ctaImagePath r
 test('the committed Stranger in a Strange Land cover passes the check it will be uploaded against', () => {
   const bytes = new Uint8Array(fs.readFileSync(path.join(ROOT, CTA_IMAGE_DIR, 'stranger-in-a-strange-land.webp')));
   assert.deepEqual(webpInfo(bytes), { ok: true, width: 480, height: 792 });
+});
+
+// sow-337 part 2: the upload plan both writers share (the Worker route and the extension and npm writer).
+test('ctaImageUpload names the file after the card and passes the bytes through; it refuses what the check refuses', () => {
+  const b64 = Buffer.from(LOSSY).toString('base64');
+  assert.deepEqual(ctaImageUpload({ id: 'book', imageBase64: `${b64.slice(0, 20)}\n${b64.slice(20)}` }), { ok: true, fields: { image: 'book.webp' }, upload: { path: 'house/images/ctas/book.webp', contentBase64: b64 } });
+  assert.deepEqual(ctaImageUpload({ id: 'book', removeImage: true }), { ok: true, fields: { image: null }, upload: null });
+  assert.deepEqual(ctaImageUpload({ id: 'book' }), { ok: true, fields: {}, upload: null });
+  assert.deepEqual(ctaImageUpload({ id: 'book', removeImage: false }), { ok: true, fields: {}, upload: null });
+  assert.match(ctaImageUpload({ id: 'book', imageBase64: Buffer.from(EXIF).toString('base64') }).problem, /metadata/);
+  assert.match(ctaImageUpload({ id: 'book', imageBase64: Buffer.from(PNG).toString('base64') }).problem, /not a WebP/);
+  assert.match(ctaImageUpload({ id: 'book', imageBase64: 'A'.repeat(Math.ceil(CTA_IMAGE_MAX_BYTES / 3) * 4 + 8) }).problem, /over the 400 KB limit/);
+  assert.match(ctaImageUpload({ id: 'Bad Id', imageBase64: b64 }).problem, /kebab-case id/);
+  assert.match(ctaImageUpload({ id: 'book', imageBase64: b64, removeImage: true }).problem, /not both/);
+});
+
+test('ctaImageFileChanges: the upload, plus a delete for each image no card names after the edit', () => {
+  const up = { path: 'house/images/ctas/a.webp', contentBase64: 'AAAA' };
+  const reg = (...images) => ({ ctas: images.map((image, i) => ({ id: `c${i}`, ...(image ? { image } : {}) })) });
+  assert.deepEqual(ctaImageFileChanges(reg(), reg('a.webp'), up), [{ path: 'house/images/ctas/a.webp', contentBase64: 'AAAA' }]);
+  assert.deepEqual(ctaImageFileChanges(reg('a.webp', 'b.webp'), reg(null, 'b.webp')), [{ path: 'house/images/ctas/a.webp', content: null }]);
+  assert.deepEqual(ctaImageFileChanges(reg('a.webp', 'a.webp'), reg(null, 'a.webp')), [], 'still named by another card');
+  assert.deepEqual(ctaImageFileChanges(reg('a.webp'), reg('a.webp'), up), [up], 'a replacement is the upload alone, never also a delete');
+  assert.deepEqual(ctaImageFileChanges(reg('../roles.yml'), reg()), [], 'a malformed name in the registry is never turned into a path');
+  assert.deepEqual(ctaImageFileChanges(null, null), []);
 });

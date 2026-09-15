@@ -18835,12 +18835,13 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
   await repo.ensureBranch(fork.full_name, branch, baseSha);
   for (const f of files) {
     const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
-    if (f.content === null) {
+    const isBinary = f.contentBase64 !== void 0 && f.contentBase64 !== null;
+    if (f.content === null && !isBinary) {
       if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
     } else {
       await repo.putFile(fork.full_name, f.path, {
         message: message ?? `Update ${f.path}`,
-        contentBase64: toBase64(f.content),
+        contentBase64: isBinary ? String(f.contentBase64) : toBase64(f.content),
         branch,
         sha: existingSha ?? void 0
       });
@@ -19928,6 +19929,7 @@ var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 
 
 // membership/path-rank.mjs
 var ROLE_RANK = Object.freeze({ [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 });
+var SUPERADMIN_HOUSE_DIRS = Object.freeze(["house/applets/", "house/images/ctas/"]);
 
 // membership/classify-pr.mjs
 var CONTENT_DIRS = ["posts", "projects", "products", "prompts", "comments"];

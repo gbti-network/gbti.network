@@ -142,7 +142,11 @@ test('the validators bound every text field by the core caps, exactly', () => {
     assert.equal(at.ok, true, `${k} at the cap passes the validator (the core decides the rest)`);
   }
   assert.equal(ctaAddInput({ ...base, note: undefined }).ok, true, 'note is optional');
-  assert.equal(ctaAddInput({ ...base, label: undefined }).ok, false, 'the rest are required on add');
+  assert.equal(ctaAddInput({ ...base, label: undefined }).ok, false, 'the label is required on add');
+  assert.equal(ctaAddInput({ ...base, partner: '' }).ok, false, 'the partner is required on add');
+  // sow-337: which of the sentence, button and link a card needs depends on its layout, so the validator no longer
+  // requires them; the core refuses a card missing a part its layout draws (test/membership-cta-admin-image.test.mjs).
+  assert.equal(ctaAddInput({ ...base, line: undefined, button: undefined, destination: undefined }).ok, true, 'the core decides the rest by layout');
   assert.equal(ctaAddInput({ ...base, enabled: 'yes' }).ok, false);
   assert.deepEqual(ctaAddInput({ ...base, enabled: true }).args.enabled, true);
   assert.deepEqual(ctaAddInput(base).args.enabled, false, 'absent enabled is false');

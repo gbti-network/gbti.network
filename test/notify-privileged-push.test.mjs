@@ -45,6 +45,7 @@ test('the explicitly pinned governance paths are recognised', () => {
     'house/syndication-config.yml',
     'house/ctas.yml', // sow-281
     'house/applets/hue/index.md',
+    'house/images/ctas/stranger-in-a-strange-land.webp', // sow-337
     'CODEOWNERS',
     '.github/workflows/tests.yml',
   ]) {
@@ -64,6 +65,7 @@ test('ORDINARY PUSHES MUST NOT ALERT, which is the design decision this whole fi
     'house/taxonomy.yml',
     'house/quotes.yml',
     'house/news-sources.yml',
+    'house/images/logo.webp', // sow-337: only the card image folder is pinned, not house/images/
     '',
   ]) {
     assert.equal(isGovernancePath(p), false, `${p} must NOT alert: alerting on it would make the channel noise`);

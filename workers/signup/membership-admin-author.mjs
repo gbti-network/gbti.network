@@ -34,7 +34,8 @@ import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.m
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { addCta, updateCta, setCtaEnabled, assignCta, unassignCta } from '../../membership/cta-edits.mjs'; // sow-281
-import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput } from './membership-admin-ctas.mjs'; // sow-281: the validators (this file is at the size cap)
+import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput, ctaImageFiles } from './membership-admin-ctas.mjs'; // sow-281: the validators (this file is at the size cap); sow-337 the card image
+import { applyFile, decodeContent } from './membership-admin-files.mjs'; // sow-337: moved out for the size cap; writes a binary entry too
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
 import { rankForPath, maxRankForPaths } from '../../membership/path-rank.mjs'; // sow-161 A: the multi-file max-rank gate (matches CODEOWNERS, unlike classify-pr)
@@ -235,8 +236,9 @@ const CONFIG_OP = {
   // WEBSITE admin page can flip it, which is the direction sow-271 is moving the site.
   'site-setting-set': { path: 'house/site-settings.yml', rank: ROLE_RANK.superadmin, fn: setSiteToggle, input: siteToggleInput, slug: (a) => idSlug(a.key) },
   // sow-281: the CTA registry. SUPERADMIN like site-settings, and house/ctas.yml is pinned in CODEOWNERS + SUPERADMIN_HOUSE_FILES.
-  'cta-add': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: addCta, input: ctaAddInput, slug: (a) => idSlug(a.id) },
-  'cta-update': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: updateCta, input: ctaUpdateInput, slug: (a) => idSlug(a.id) },
+  // sow-337: add and update may carry the card image, committed beside the registry in the same PR (`files`).
+  'cta-add': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: addCta, input: ctaAddInput, files: ctaImageFiles, slug: (a) => idSlug(a.id) },
+  'cta-update': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: updateCta, input: ctaUpdateInput, files: ctaImageFiles, slug: (a) => idSlug(a.id) },
   'cta-toggle': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: setCtaEnabled, input: ctaToggleInput, slug: (a) => idSlug(a.id) },
   'cta-assign': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: assignCta, input: ctaAssignInput, slug: (a) => idSlug(`${a.id}-${a.type}-${a.ref}`) },
   'cta-unassign': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: unassignCta, input: ctaAssignInput, slug: (a) => idSlug(`${a.id}-${a.type}-${a.ref}`) },
@@ -387,22 +389,6 @@ async function buildCategoryBatch(payload, { fetchImpl, instToken, upstream, git
   return { files, slug: `category-batch-${stamp}`, title: `Categories: ${files.length} file${files.length === 1 ? '' : 's'} updated` };
 }
 
-/** Standard base64 of a UTF-8 string, chunked. */
-function b64utf8(s) {
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-/** Decode a GitHub Contents API base64 blob to a UTF-8 string, or null. */
-function decodeContent(b64) {
-  try {
-    const bin = atob(String(b64 || '').replace(/\s+/g, ''));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  } catch { return null; }
-}
 /** A bounded, git-safe action slug for the branch (`deplatform-my-post`), from the item slug. */
 function actionSlug(action, path) {
   const m = /\/([a-z0-9][a-z0-9-]*)\/index\.md$/.exec(path);
@@ -600,8 +586,14 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     let result;
     try { result = op.fn(load.parsed, built.args, { actor: { githubId }, now: Date.now() }); }
     catch (e) { return { status: 400, body: { error: 'bad_request', message: e?.message || 'invalid action' } }; }
-    if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
+    // sow-337: files committed beside the registry (a card image, or the delete of one no card names any more). A
+    // replaced image leaves the registry unchanged, so the edit is a no-op only when there is no file either, and
+    // every extra path is rank-checked like a multi-file op's, so a row can never carry a file above its rank.
+    const extra = op.files ? op.files(built, load.parsed, result.next) : [];
+    if (!result.changed && !extra.length) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
+    if ((ROLE_RANK[staff.role] ?? 0) < maxRankForPaths(extra.map((f) => f.path), op.rank)) return { status: 403, body: { error: 'forbidden', message: 'this change touches a file that requires a higher role' } };
     file = { path: op.path, content: leadingComment(load.raw) + yaml.dump(result.next, { lineWidth: 100, noRefs: true }) };
+    if (extra.length) files = [...(result.changed ? [file] : []), ...extra];
     branchSlug = `${action}-${op.slug(built.args)}`;
   } else {
     // sow-161 A: a MULTI-FILE op (tag-edit, category-batch). The build fn reads the affected files + applies the
@@ -848,27 +840,4 @@ export async function membershipAdminSyndicationSettings(request, env, deps = {}
       autoTypes: [...AUTO_TYPES], matrixChannels: [...MATRIX_CHANNELS], autoChannels: [...AUTO_CHANNELS], autoModes: [...AUTO_MODES], capability: { ...CHANNEL_CAPABILITY },
     },
   };
-}
-
-/** PUT (or DELETE for content:null) one file on the branch; one retry on a 409 sha race. Mirrors membership-author. */
-async function applyFile(fetchImpl, instToken, upstream, branch, f, attempt = 0) {
-  const url = `${GH}/repos/${upstream}/contents/${f.path}`;
-  const existing = await fetchImpl(`${url}?ref=${encodeURIComponent(branch)}`, { headers: GH_HEADERS(instToken) });
-  const exData = await existing.json().catch(() => ({}));
-  const sha = existing.ok ? exData?.sha : undefined;
-  if (f.content === null) {
-    if (!sha) return { ok: true, skipped: true }; // deleting a file that is already gone is a no-op
-    const res = await fetchImpl(url, {
-      method: 'DELETE', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `content: remove ${f.path}`, sha, branch }),
-    });
-    if (res.status === 409 && attempt === 0) return applyFile(fetchImpl, instToken, upstream, branch, f, 1);
-    return { ok: res.ok };
-  }
-  const res = await fetchImpl(url, {
-    method: 'PUT', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: `content: update ${f.path}`, content: b64utf8(f.content), branch, ...(sha ? { sha } : {}) }),
-  });
-  if (res.status === 409 && attempt === 0) return applyFile(fetchImpl, instToken, upstream, branch, f, 1);
-  return { ok: res.ok };
 }

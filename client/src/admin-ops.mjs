@@ -26,6 +26,7 @@ import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'
 import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
 import { setSiteToggle as setSiteToggleEdit, readAllToggles, SITE_TOGGLES, SiteSettingsEditError } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { addCta as addCtaEdit, updateCta as updateCtaEdit, setCtaEnabled as setCtaEnabledEdit, assignCta as assignCtaEdit, unassignCta as unassignCtaEdit, ctasOf, CTA_ITEM_TYPES, CtaEditError } from '../../membership/cta-edits.mjs'; // sow-281
+import { ctaImageUpload, ctaImageFileChanges } from '../../membership/cta-image.mjs'; // sow-337: the card image, the same check the Worker route runs
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
@@ -437,20 +438,31 @@ export async function setSiteToggle(ctx, { key, enabled } = {}) {
 // CODEOWNERS pin on the file. The read is public git data (the built site publishes the same registry as /ctas.json).
 const CTAS_PATH = 'house/ctas.yml';
 const ctaSlug = (a) => slugOf(String(a || '').slice(0, 60)) || 'cta';
-async function editCtas(ctx, edit, { branch, message, title, noopMsg }) {
-  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError });
+async function editCtas(ctx, edit, { branch, message, title, noopMsg, files }) {
+  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError, files });
+}
+// sow-337: split a card add or update into the edit core's fields and the image to commit beside the registry.
+// The file name comes from the card id, never from the caller, exactly as the Worker route does it.
+function ctaImagePlan(fields, { adding }) {
+  const { imageBase64, removeImage, image: _callerNamed, ...rest } = fields || {};
+  const img = ctaImageUpload({ id: rest.id, imageBase64, removeImage });
+  if (!img.ok) throw new OperationError('bad-request', img.problem);
+  if (adding && img.fields.image === null) throw new OperationError('bad-request', 'a new CTA has no image to remove');
+  return { fields: { ...rest, ...img.fields }, files: (before, after) => ctaImageFileChanges(before, after, img.upload) };
 }
 export async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
 }
 export async function addCta(ctx, fields = {}) {
-  return editCtas(ctx, (parsed) => addCtaEdit(parsed, fields, actionCtx(ctx)),
-    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: 'no change' });
+  const plan = ctaImagePlan(fields, { adding: true });
+  return editCtas(ctx, (parsed) => addCtaEdit(parsed, plan.fields, actionCtx(ctx)),
+    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: 'no change', files: plan.files });
 }
 export async function updateCta(ctx, fields = {}) {
-  return editCtas(ctx, (parsed) => updateCtaEdit(parsed, fields, actionCtx(ctx)),
-    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: 'no change' });
+  const plan = ctaImagePlan(fields, { adding: false });
+  return editCtas(ctx, (parsed) => updateCtaEdit(parsed, plan.fields, actionCtx(ctx)),
+    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: 'no change', files: plan.files });
 }
 export async function setCtaEnabled(ctx, { id, enabled } = {}) {
   const on = enabled === true;
@@ -473,7 +485,7 @@ export async function getSyndicationTemplatePool(ctx) {
   return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
 
-async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
+async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType, files }) {
   requireRole(ctx, canManageRoles, 'superadmin');
   const { repo } = requireRepo(ctx);
   const raw = (await ctx.reader?.readFile?.(relPath)) || '';
@@ -482,10 +494,14 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
   let result;
   try { result = edit(parsed); }
   catch (err) { if (err instanceof errType) throw new OperationError('bad-request', err.message); throw err; }
-  if (!result.changed) return noop(noopMsg, result.audit);
+  // sow-337: files committed beside the house file (a call-to-action image, or the delete of one no card names).
+  // A replaced image leaves the registry unchanged, so the edit is a no-op only when there is no file either.
+  const extra = files ? files(parsed, result.next) : [];
+  if (!result.changed && !extra.length) return noop(noopMsg, result.audit);
+  const out = [...(result.changed ? [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }] : []), ...extra];
   // clobberOpenPull: a house-config branch's open PR is always this same edit, so a stale CONFLICTING
   // PR self-heals to fresh content on the next save (hit live 2026-07-12, PR #107).
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit), clobberOpenPull: true });
+  const pr = await adminPublish(ctx, { repo, branch, files: out, message, title, body: prBody(null, result.audit), clobberOpenPull: true });
   return { ...pr, changed: true, audit: result.audit };
 }
 

@@ -21,6 +21,11 @@ test('rankForPath: the CODEOWNERS-pinned house files are superadmin', () => {
     assert.equal(rankForPath(p), SUPERADMIN, p);
   }
   assert.equal(rankForPath('house/applets/hue/index.md'), SUPERADMIN);
+  // sow-337: a card image is written at the registry's tier, and a neighbouring house/images path is not swept in.
+  assert.equal(rankForPath('house/images/ctas/stranger-in-a-strange-land.webp'), SUPERADMIN);
+  assert.equal(rankForPath('house/images/ctas'), SUPERADMIN);
+  assert.equal(rankForPath('house/images/ctas-other/x.webp'), ADMIN);
+  assert.equal(rankForPath('house/images/logo.webp'), ADMIN);
   assert.equal(rankForPath('CODEOWNERS'), SUPERADMIN);
   assert.equal(rankForPath('.github/workflows/deploy.yml'), SUPERADMIN);
 });

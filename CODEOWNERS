@@ -43,6 +43,9 @@
 # admin cannot attach a paid link to any member's item by pull request. membership/path-rank.mjs carries the
 # matching row and test/path-rank.test.mjs holds the two in lockstep.
 /house/ctas.yml              @atwellpub @gbtilabs
+# sow-337: the call-to-action card images, committed beside house/ctas.yml in the same PR. An image shows on every
+# page its card is assigned to, so it is pinned at the registry's tier. membership/path-rank.mjs carries the row.
+/house/images/ctas/          @atwellpub @gbtilabs
 
 # SOW-022: applets are a SUPERADMIN-only content type (GBTI does not host member code). Explicit so the rule
 # holds even if /house/ is later delegated to an admin team. The collection glob also excludes member folders,

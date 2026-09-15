@@ -18645,12 +18645,13 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
   await repo.ensureBranch(fork.full_name, branch, baseSha);
   for (const f of files) {
     const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
-    if (f.content === null) {
+    const isBinary = f.contentBase64 !== void 0 && f.contentBase64 !== null;
+    if (f.content === null && !isBinary) {
       if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
     } else {
       await repo.putFile(fork.full_name, f.path, {
         message: message ?? `Update ${f.path}`,
-        contentBase64: toBase64(f.content),
+        contentBase64: isBinary ? String(f.contentBase64) : toBase64(f.content),
         branch,
         sha: existingSha ?? void 0
       });
@@ -20031,6 +20032,7 @@ var isTier = (t) => Object.prototype.hasOwnProperty.call(RANK2, t);
 
 // membership/path-rank.mjs
 var ROLE_RANK = Object.freeze({ [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 });
+var SUPERADMIN_HOUSE_DIRS = Object.freeze(["house/applets/", "house/images/ctas/"]);
 
 // membership/classify-pr.mjs
 var ROLE_RANK2 = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
@@ -21954,7 +21956,102 @@ var CTA_TOKENS = Object.freeze({
 });
 
 // membership/cta-image.mjs
+var CTA_IMAGE_DIR = "house/images/ctas";
+var CTA_IMAGE_MAX_BYTES = 4e5;
 var CTA_IMAGE_FILE_RE = /^[a-z0-9][a-z0-9-]*\.webp$/;
+var METADATA_CHUNKS = { EXIF: "EXIF (camera) data", "XMP ": "XMP metadata", ICCP: "an ICC colour profile" };
+var ctaImageFile = (id) => `${String(id || "").trim()}.webp`;
+function ctaImagePath(file2) {
+  const f = String(file2 || "");
+  return CTA_IMAGE_FILE_RE.test(f) ? `${CTA_IMAGE_DIR}/${f}` : null;
+}
+var fourcc = (b, at) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+var u32 = (b, at) => (b[at] | b[at + 1] << 8 | b[at + 2] << 16 | b[at + 3] << 24) >>> 0;
+var u24 = (b, at) => b[at] | b[at + 1] << 8 | b[at + 2] << 16;
+function webpInfo(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : null;
+  if (!b) return { ok: false, problem: "the image is not binary data" };
+  if (b.length > CTA_IMAGE_MAX_BYTES) return { ok: false, problem: `the image is ${Math.ceil(b.length / 1024)} KB; the limit is ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB` };
+  if (b.length < 20 || fourcc(b, 0) !== "RIFF" || fourcc(b, 8) !== "WEBP") return { ok: false, problem: "the image is not a WebP file" };
+  if (u32(b, 4) + 8 > b.length) return { ok: false, problem: "the WebP file is truncated" };
+  let at = 12, width = 0, height = 0, image = false;
+  while (at + 8 <= b.length) {
+    const id = fourcc(b, at);
+    const size = u32(b, at + 4);
+    const body = at + 8;
+    if (body + size > b.length) return { ok: false, problem: `the WebP ${id.trim()} chunk is truncated` };
+    if (METADATA_CHUNKS[id]) return { ok: false, problem: `the image still carries ${METADATA_CHUNKS[id]}; re-encode it so it is removed` };
+    if (id === "ANIM" || id === "ANMF") return { ok: false, problem: "animated images are not supported on a card" };
+    if (id === "VP8X") {
+      if (size < 10) return { ok: false, problem: "the WebP header is malformed" };
+      const flags = b[body];
+      if (flags & 2) return { ok: false, problem: "animated images are not supported on a card" };
+      if (flags & 44) return { ok: false, problem: "the image still announces metadata (EXIF, XMP or a colour profile); re-encode it so it is removed" };
+      width = u24(b, body + 4) + 1;
+      height = u24(b, body + 7) + 1;
+    } else if (id === "VP8 ") {
+      if (size < 10 || b[body + 3] !== 157 || b[body + 4] !== 1 || b[body + 5] !== 42) return { ok: false, problem: "the WebP image data is malformed" };
+      if (!width) {
+        width = (b[body + 6] | b[body + 7] << 8) & 16383;
+        height = (b[body + 8] | b[body + 9] << 8) & 16383;
+      }
+      image = true;
+    } else if (id === "VP8L") {
+      if (size < 5 || b[body] !== 47) return { ok: false, problem: "the WebP image data is malformed" };
+      if (!width) {
+        const bits = u32(b, body + 1);
+        width = (bits & 16383) + 1;
+        height = (bits >>> 14 & 16383) + 1;
+      }
+      image = true;
+    }
+    at = body + size + size % 2;
+  }
+  if (!image) return { ok: false, problem: "the WebP file has no image data" };
+  if (!width || !height) return { ok: false, problem: "the WebP file has no dimensions" };
+  return { ok: true, width, height };
+}
+function bytesFromBase64(b64) {
+  const s = String(b64 || "").replace(/\s+/g, "");
+  if (!s || s.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(s)) return null;
+  let bin;
+  try {
+    bin = atob(s);
+  } catch {
+    return null;
+  }
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+var MAX_BASE64 = Math.ceil(CTA_IMAGE_MAX_BYTES / 3) * 4 + 4;
+function ctaImageUpload({ id, imageBase64, removeImage } = {}) {
+  const hasUpload = imageBase64 !== void 0 && imageBase64 !== null;
+  if (hasUpload && removeImage === true) return { ok: false, problem: "send a new image or remove the image, not both" };
+  if (removeImage !== void 0 && typeof removeImage !== "boolean") return { ok: false, problem: "removeImage must be true or false" };
+  if (removeImage === true) return { ok: true, fields: { image: null }, upload: null };
+  if (!hasUpload) return { ok: true, fields: {}, upload: null };
+  if (typeof imageBase64 !== "string") return { ok: false, problem: "the image must be sent as base64 text" };
+  const b64 = imageBase64.replace(/\s+/g, "");
+  if (b64.length > MAX_BASE64) return { ok: false, problem: `the image is over the ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB limit` };
+  const bytes = bytesFromBase64(b64);
+  if (!bytes) return { ok: false, problem: "the image is not valid base64" };
+  const info = webpInfo(bytes);
+  if (!info.ok) return { ok: false, problem: info.problem };
+  const path = ctaImagePath(ctaImageFile(id));
+  if (!path) return { ok: false, problem: "the card needs a kebab-case id before it can have an image" };
+  return { ok: true, fields: { image: ctaImageFile(id) }, upload: { path, contentBase64: b64 } };
+}
+function ctaImageFileChanges(before, after, upload = null) {
+  const names = (doc) => new Set((Array.isArray(doc?.ctas) ? doc.ctas : []).map((c) => c?.image).filter((f) => typeof f === "string"));
+  const kept = names(after);
+  const files = upload ? [{ path: upload.path, contentBase64: upload.contentBase64 }] : [];
+  for (const f of names(before)) {
+    const path = ctaImagePath(f);
+    if (path && !kept.has(f) && path !== upload?.path) files.push({ path, content: null });
+  }
+  return files;
+}
 
 // membership/cta-edits.mjs
 var CtaEditError = class extends Error {
@@ -22589,25 +22686,34 @@ async function setSiteToggle2(ctx, { key, enabled } = {}) {
 }
 var CTAS_PATH = "house/ctas.yml";
 var ctaSlug = (a) => slugOf(String(a || "").slice(0, 60)) || "cta";
-async function editCtas(ctx, edit, { branch, message, title, noopMsg }) {
-  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError });
+async function editCtas(ctx, edit, { branch, message, title, noopMsg, files }) {
+  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError, files });
+}
+function ctaImagePlan(fields, { adding }) {
+  const { imageBase64, removeImage, image: _callerNamed, ...rest } = fields || {};
+  const img = ctaImageUpload({ id: rest.id, imageBase64, removeImage });
+  if (!img.ok) throw new OperationError("bad-request", img.problem);
+  if (adding && img.fields.image === null) throw new OperationError("bad-request", "a new CTA has no image to remove");
+  return { fields: { ...rest, ...img.fields }, files: (before, after) => ctaImageFileChanges(before, after, img.upload) };
 }
 async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
 }
 async function addCta2(ctx, fields = {}) {
+  const plan = ctaImagePlan(fields, { adding: true });
   return editCtas(
     ctx,
-    (parsed) => addCta(parsed, fields, actionCtx(ctx)),
-    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: "no change" }
+    (parsed) => addCta(parsed, plan.fields, actionCtx(ctx)),
+    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: "no change", files: plan.files }
   );
 }
 async function updateCta2(ctx, fields = {}) {
+  const plan = ctaImagePlan(fields, { adding: false });
   return editCtas(
     ctx,
-    (parsed) => updateCta(parsed, fields, actionCtx(ctx)),
-    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: "no change" }
+    (parsed) => updateCta(parsed, plan.fields, actionCtx(ctx)),
+    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: "no change", files: plan.files }
   );
 }
 async function setCtaEnabled2(ctx, { id, enabled } = {}) {
@@ -22637,7 +22743,7 @@ async function getSyndicationTemplatePool(ctx) {
   const cfg = syndicationConfigFromParsed(parsed);
   return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
-async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
+async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType, files }) {
   requireRole(ctx, canManageRoles, "superadmin");
   const { repo } = requireRepo2(ctx);
   const raw = await ctx.reader?.readFile?.(relPath) || "";
@@ -22654,8 +22760,10 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
     if (err instanceof errType) throw new OperationError("bad-request", err.message);
     throw err;
   }
-  if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit), clobberOpenPull: true });
+  const extra = files ? files(parsed, result.next) : [];
+  if (!result.changed && !extra.length) return noop(noopMsg, result.audit);
+  const out = [...result.changed ? [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }] : [], ...extra];
+  const pr = await adminPublish(ctx, { repo, branch, files: out, message, title, body: prBody(null, result.audit), clobberOpenPull: true });
   return { ...pr, changed: true, audit: result.audit };
 }
 async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
