@@ -15,9 +15,6 @@
 /** The tier ladder, lowest first. Mirrors membership/tiers.mjs RANK without importing a Worker-side module. */
 export const TIER_RANK = Object.freeze({ none: 0, member: 1, creator: 2 });
 
-/** Where an application starts. One definition, so the card and the composer nudge cannot drift. */
-export const CREATOR_APPLICATION_PATH = '/creator-application/';
-
 /**
  * @param key       the card's tier key ('none' | 'member' | 'creator').
  * @param label     the card's display label, for the button text.

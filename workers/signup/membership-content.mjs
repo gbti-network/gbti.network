@@ -14,7 +14,7 @@ import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 1b: bearer-or-cookie identity choke point
 import { deriveMembership } from '../../membership/derive-status.mjs';
 import { effectiveStatus, bansFromParsed, rolesFromParsed, grandfathersFromParsed } from '../../membership/overrides-core.mjs';
-import { TIER, meetsTier, tierLabel } from '../../membership/tiers.mjs'; // sow-185: the paid tier axis
+import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-185: the paid tier axis
 import { buildEnvPriceTierMap, resolveEffectiveTier, grantTier } from '../../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { decryptAssetText, encryptAsset } from '../../client/src/crypto-assets.mjs';
@@ -142,7 +142,10 @@ export async function authorizeCreator(request, env, deps = {}) {
   if (!meetsTier(r.tier, TIER.creator)) {
     return deny(r.status !== 'paid'
       ? 'an active paid membership is required'
-      : `publishing on gbti.network requires ${tierLabel(TIER.creator)} status, which is granted by application: https://gbti.network/creator-application/`); // sow-316: it said "upgrade" while the tier is apply-only (sow-293)
+      // sow-323: the Curator tier is no longer applied for. It is granted silently by a superadmin, so there is
+      // nowhere to send someone and nothing for them to fill in; what they CAN do is publish to members and let
+      // the editorial review queue carry it forward.
+      : `publishing straight to the public site is reserved for trusted authors. Publish this to members only and a superadmin reviews it: https://gbti.network/submit-content/`);
   }
   return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status, tier: r.tier, via: r.via };
 }

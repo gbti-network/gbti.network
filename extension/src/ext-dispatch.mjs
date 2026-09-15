@@ -12,7 +12,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
   socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
-  listCreatorApplicationsOp, decideCreatorApplicationOp } from '../../client/src/operations.mjs'; // sow-293
+  listEditorialOp, decideEditorialOp } from '../../client/src/operations.mjs'; // sow-323
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
@@ -218,9 +218,9 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       }
       // sow-293: the creator application review lane. Same one-route, verb-from-the-request shape as the
       // invites above, and for the same reason: it keeps this host in step with the npm host and the Worker.
-      case '/api/creator-applications': {
-        if (method === 'POST') return ok(await decideCreatorApplicationOp(ctx, body ?? {}));
-        return ok(await listCreatorApplicationsOp(ctx));
+      case '/api/editorial': {
+        if (method === 'POST') return ok(await decideEditorialOp(ctx, body ?? {}));
+        return ok(await listEditorialOp(ctx));
       }
       case '/api/coupon-refresh': // SOW-119 QA: live-oracle recheck before the expiry popup nags (clears a stale grant date)
         return ok(await refreshCouponUntil(ctx));

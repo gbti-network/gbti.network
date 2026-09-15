@@ -55,8 +55,13 @@ test('the workspace element actually renders it in the trial banner slot', () =>
   assert.match(code, /paidTier: status\?\.paidTier \|\| 'none'/, 'the overview must carry the tier for the banner to read');
 });
 
-test('the Worker refusal names Curator and the application, not an upgrade', () => {
+test('the Worker refusal sends a member to members-only review, not to a retired application page', () => {
+  // sow-323 Phase 3: the application lane is retired, so the refusal may not send anyone to it. What a member
+  // CAN do is publish to members only and let the editorial review queue carry it forward, and that is what
+  // this pins: both the absence of the dead address and the presence of the live one.
   const src = readFileSync(new URL('../workers/signup/membership-content.mjs', import.meta.url), 'utf8');
-  assert.match(src, /requires \$\{tierLabel\(TIER\.creator\)\} status, which is granted by application: https:\/\/gbti\.network\/creator-application\//, 'bound to the label, not spelled');
+  assert.match(src, /reserved for trusted authors/, 'the refusal must say who may publish public directly');
+  assert.match(src, /https:\/\/gbti\.network\/submit-content\//, 'it must point at the page that explains review');
+  assert.doesNotMatch(src, /creator-application/, 'the application page is retired; nothing may send a member there');
   assert.doesNotMatch(src, /requires the Content Creator plan; upgrade/, 'the old message told an apply-only tier to upgrade');
 });

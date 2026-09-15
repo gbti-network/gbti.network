@@ -11,9 +11,12 @@
 import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 3a: bearer-or-cookie identity for the member reads
 import { authorizePaid } from './membership-content.mjs'; // sow-323: publishing is paid; the AUDIENCE is gated in membership-author.mjs
-import { parseHostedRef } from '../../membership/hosted-author.mjs'; // SOW-157: hosted PR ownership match
+import { parseHostedRef, statedVisibility } from '../../membership/hosted-author.mjs'; // SOW-157: hosted PR ownership match
 import { authorizeSuperadmin } from './membership-admin.mjs'; // sow-323 Phase 3: only a superadmin makes a share public
-import { audienceRefusal } from './membership-audience.mjs'; // sow-323 Phase 3: the SAME audience rule as the hosted route
+import { audienceRefusal } from './membership-audience.mjs';
+import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
+import { queueableItems } from '../../membership/editorial-queue.mjs';
+import { TIER, meetsTier } from '../../membership/tiers.mjs';
 
 const GH = 'https://api.github.com';
 const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
@@ -198,13 +201,28 @@ export async function openPullForMember(request, env, deps = {}) {
   const changes = await forkChanges({ fetchImpl, instToken, upstream, base, head });
   if (!changes?.ok) return { status: 502, body: { error: 'git_failed', message: 'could not read the changes on your branch to check who may see them; try again' } };
   const folders = [...new Set(changes.files.map((f) => /^members\/([a-z0-9][a-z0-9-]*)\//.exec(f.path)?.[1]).filter(Boolean))];
+  let queued = [];
   if (folders.length) {
     const superadmin = await authorizeSuper(request, env, deps);
+    const isSuperadmin = superadmin?.ok === true;
     const refusal = await audienceRefusal({
-      files: changes.files, folders, tier: paid.tier, isSuperadmin: superadmin?.ok === true,
+      files: changes.files, folders, tier: paid.tier, isSuperadmin,
       approvedCheck: deps.approvedCheck, fetchImpl, instToken, upstream,
     });
     if (refusal) return refusal;
+
+    // sow-323 Phase 3: the review queue record, written BEFORE the pull request opens, exactly as the hosted
+    // route writes it, and a failed write refuses the publish. Both ways of publishing have to record, or a
+    // member with a fork could put work on the site that no queue ever lists.
+    const items = folders.flatMap((folder) => queueableItems(changes.files, {
+      folder, trusted: meetsTier(paid.tier, TIER.creator), isSuperadmin, statedVisibility,
+    }));
+    const recorded = await recordEditorialItems(env?.SIGNUP_KV, items, { githubId: paid.githubId });
+    if (!recorded.ok) {
+      return { status: 503, body: { error: 'unavailable', message: 'your work could not be entered into the review queue; please try again' } };
+    }
+    queued = recorded.fresh;
+    await removeEditorialItems(env?.SIGNUP_KV, changes.files.filter((f) => f.content === null).map((f) => f.path));
   }
 
   const res = await fetchImpl(`${GH}/repos/${upstream}/pulls`, {
@@ -213,9 +231,9 @@ export async function openPullForMember(request, env, deps = {}) {
     body: JSON.stringify({ title: String(payload?.title || 'GBTI content').slice(0, 256), head, base, body: String(payload?.body || '').slice(0, 60000), maintainer_can_modify: false }),
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 422) return { status: 200, body: { ok: true, number: null, html_url: null, already: true, message: data?.errors?.[0]?.message || 'a pull request already exists for this branch' } };
+  if (res.status === 422) return { status: 200, body: { ok: true, number: null, html_url: null, already: true, message: data?.errors?.[0]?.message || 'a pull request already exists for this branch' }, queued };
   if (!res.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${res.status}` } };
-  return { status: 200, body: { ok: true, number: data.number, html_url: data.html_url } };
+  return { status: 200, body: { ok: true, number: data.number, html_url: data.html_url }, queued };
 }
 
 /**

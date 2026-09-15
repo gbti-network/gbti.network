@@ -10,7 +10,7 @@ import { SIGNUP_BASE, authModeFor } from './signup-base.mjs';
 import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, creatorApplicationAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 
 export async function getOverridesRoster(ctx) {
@@ -98,28 +98,28 @@ export async function getCouponUsageOp(ctx) {
  * non-admin instead of a 403 from a network call, and the Worker remains the real boundary.
  */
 /**
- * sow-293: the creator application review lane. requireAdmin here is the CLIENT-SIDE affordance; the Worker
- * gates at authorizeSuperadmin, which is stricter and is the real boundary. Keeping the local check at admin
- * rather than duplicating a superadmin test avoids a second role rule that could drift from the Worker's.
+ * sow-323: the editorial review queue. requireAdmin here is the CLIENT-SIDE affordance; the Worker gates at
+ * authorizeSuperadmin, which is stricter and is the real boundary. Keeping the local check at admin rather
+ * than duplicating a superadmin test avoids a second role rule that could drift from the Worker's.
  */
-export async function listCreatorApplicationsOp(ctx) {
+export async function listEditorialOp(ctx) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.('githubToken');
   if (!token) throw new OperationError('not-authenticated', 'sign in first');
   try {
-    return await creatorApplicationAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'GET', fetch: ctx.fetch ?? globalThis.fetch });
+    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'GET', fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
-    throw new OperationError('admin-op-failed', err?.message || 'could not list creator applications');
+    throw new OperationError('admin-op-failed', err?.message || 'could not read the review queue');
   }
 }
 
-/** sow-293: record a decision. Approving grants the tier; the Worker writes the grant BEFORE the record. */
-export async function decideCreatorApplicationOp(ctx, body = {}) {
+/** sow-323: decide one item. Approving COMMITS the item as public; the Worker does that before it records. */
+export async function decideEditorialOp(ctx, body = {}) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.('githubToken');
   if (!token) throw new OperationError('not-authenticated', 'sign in first');
   try {
-    return await creatorApplicationAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'POST', body, fetch: ctx.fetch ?? globalThis.fetch });
+    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: 'POST', body, fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
     throw new OperationError('admin-op-failed', err?.message || 'could not record the decision');
   }

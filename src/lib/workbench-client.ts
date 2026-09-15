@@ -927,8 +927,8 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // application is prose a person wrote about themselves, keyed by github_id, so it is KV state per the
     // storage boundary and opens no PR. The Worker gates both at authorizeSuperadmin, because approving
     // grants a real tier.
-    creatorApplications() { return workerGet('/membership/admin/creator-applications'); }, // { ok, applications }
-    decideCreatorApplication(args: any = {}) { return workerPost('/membership/admin/creator-applications', args); }, // { githubId, decision, note? }
+    editorialQueue() { return workerGet('/membership/admin/editorial'); }, // sow-323 { ok, items }
+    decideEditorial(args: any = {}) { return workerPost('/membership/admin/editorial', args); }, // { path, decision }
 
     // ----- SOW-043/046: interactive News over the cookie session (free-tier perk; authorizeSignedIn) -----
     getNews({ category, since, limit }: any = {}) {

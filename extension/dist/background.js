@@ -19620,9 +19620,9 @@ async function inviteAdminRequest({ token, signupBase, method = "GET", body = nu
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `invite request failed (${res.status})`);
   return data;
 }
-async function creatorApplicationAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
+async function editorialAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/creator-applications", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/editorial", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19632,7 +19632,7 @@ async function creatorApplicationAdminRequest({ token, signupBase, method = "GET
     data = await res.json();
   } catch {
   }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `creator application request failed (${res.status})`);
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `editorial review request failed (${res.status})`);
   return data;
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
@@ -20192,22 +20192,22 @@ async function getCouponUsageOp(ctx) {
     throw new OperationError("admin-op-failed", err?.message || "could not read coupon usage");
   }
 }
-async function listCreatorApplicationsOp(ctx) {
+async function listEditorialOp(ctx) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.("githubToken");
   if (!token) throw new OperationError("not-authenticated", "sign in first");
   try {
-    return await creatorApplicationAdminRequest({ token, signupBase: SIGNUP_BASE, method: "GET", fetch: ctx.fetch ?? globalThis.fetch });
+    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: "GET", fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
-    throw new OperationError("admin-op-failed", err?.message || "could not list creator applications");
+    throw new OperationError("admin-op-failed", err?.message || "could not read the review queue");
   }
 }
-async function decideCreatorApplicationOp(ctx, body = {}) {
+async function decideEditorialOp(ctx, body = {}) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.("githubToken");
   if (!token) throw new OperationError("not-authenticated", "sign in first");
   try {
-    return await creatorApplicationAdminRequest({ token, signupBase: SIGNUP_BASE, method: "POST", body, fetch: ctx.fetch ?? globalThis.fetch });
+    return await editorialAdminRequest({ token, signupBase: SIGNUP_BASE, method: "POST", body, fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
     throw new OperationError("admin-op-failed", err?.message || "could not record the decision");
   }
@@ -23183,9 +23183,9 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       }
       // sow-293: the creator application review lane. Same one-route, verb-from-the-request shape as the
       // invites above, and for the same reason: it keeps this host in step with the npm host and the Worker.
-      case "/api/creator-applications": {
-        if (method === "POST") return ok(await decideCreatorApplicationOp(ctx, body ?? {}));
-        return ok(await listCreatorApplicationsOp(ctx));
+      case "/api/editorial": {
+        if (method === "POST") return ok(await decideEditorialOp(ctx, body ?? {}));
+        return ok(await listEditorialOp(ctx));
       }
       case "/api/coupon-refresh":
         return ok(await refreshCouponUntil(ctx));

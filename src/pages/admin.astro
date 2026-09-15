@@ -31,7 +31,6 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="tags" data-min="admin" aria-selected="false" hidden>Tags</button>
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
           <button type="button" role="tab" data-tab="channels" data-min="superadmin" aria-selected="false" hidden>Channels</button>
-          <button type="button" role="tab" data-tab="applications" data-min="superadmin" aria-selected="false" hidden>Creator applications</button>{/* sow-293 */}
           <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
           <button type="button" role="tab" data-tab="outbound-links" data-min="superadmin" aria-selected="false" hidden>Outbound links</button>{/* sow-289 */}
           <button type="button" role="tab" data-tab="ctas" data-min="superadmin" aria-selected="false" hidden>CTAs</button>{/* sow-281 */}
@@ -54,13 +53,6 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         <div class="adm-card" data-panel="coupons" hidden>
           <h2 class="h2">Coupons</h2>
           <gbti-coupon-manager></gbti-coupon-manager>
-        </div>
-        {/* sow-293: the creator application review lane. SUPERADMIN, because approving grants the Content
-            Creator tier immediately. Unlike the managers above it opens no pull request: an application is
-            per-person KV state, so the decision writes straight to the Worker. */}
-        <div class="adm-card" data-panel="applications" hidden>
-          <h2 class="h2">Creator applications</h2>
-          <gbti-applications-manager></gbti-applications-manager>
         </div>
         {/* sow-161 A: the two managers the owner asked for on the website. They carry their OWN headers (a chead /
             an explorer header), so no card <h2> here, matching the extension admin. The category->Discord-channel
@@ -150,7 +142,6 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           import('../../client-ui/src/elements/gbti-quote-manager.mjs'),
           import('../../client-ui/src/elements/gbti-news-source-manager.mjs'),
           import('../../client-ui/src/elements/gbti-coupon-manager.mjs'),
-          import('../../client-ui/src/elements/gbti-applications-manager.mjs'), // sow-293
           import('../../client-ui/src/elements/gbti-categories-workspace.mjs'), // sow-161 A
           import('../../client-ui/src/elements/gbti-tag-explorer.mjs'), // sow-161 A
         ]);

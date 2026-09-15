@@ -120,6 +120,9 @@ const writtenGrants = (kv) => JSON.parse(kv.store.get(OVERRIDES_KEY)).grandfathe
 const fakeKv = () => ({ async get() { return null; }, async put() {} });
 const allow = async () => ({ allowed: true });
 const staffAdmin = async () => ({ ok: true, githubId: '2', role: 'admin' });
+// sow-323 Phase 3: elevating someone to the trusted-author tier is a SUPERADMIN act, because that tier
+// publishes straight to the public site with no editorial review. Every other grant keeps the admin floor.
+const staffSuper = async () => ({ ok: true, githubId: '9', role: 'superadmin' });
 const req = (body) => ({ headers: { get: () => 'Bearer tok' }, json: async () => body });
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const deB64 = (s) => Buffer.from(String(s), 'base64').toString('utf8');
@@ -138,17 +141,41 @@ function ghFetch(record, govFile, reads = []) {
     return { ok: false, status: 500, async json() { return {}; } };
   };
 }
-const run = (body, fetchImpl, kv = fakeKv()) =>
-  membershipAdminAuthor(req(body), env, { fetchImpl, authorize: staffAdmin, kv, limiter: allow, signJwt: async () => 'fake.jwt.sig' });
+const run = (body, fetchImpl, kv = fakeKv(), authorize = staffAdmin) =>
+  membershipAdminAuthor(req(body), env, { fetchImpl, authorize, kv, limiter: allow, signJwt: async () => 'fake.jwt.sig' });
 
 test('sow-213 Step 3 endpoint: a tier in the payload reaches the MIRROR grant that is written (KV-native, no PR)', async () => {
   const record = [];
   const kv = kvWith();
-  const r = await run({ action: 'grandfather', githubId: '77', tier: 'creator' }, ghFetch(record, 'grandfathered: []\n'), kv);
+  const r = await run({ action: 'grandfather', githubId: '77', tier: 'creator' }, ghFetch(record, 'grandfathered: []\n'), kv, staffSuper);
   assert.equal(r.status, 200);
   assert.equal(r.body.kvWritten, true);
   assert.ok(!record.some((c) => /\/pulls$/.test(c.url)), 'no PR');
-  assert.equal(writtenGrants(kv).find((e) => e.github_id === '77').tier, 'creator', 'the admin-chosen tier is committed, not dropped');
+  assert.equal(writtenGrants(kv).find((e) => e.github_id === '77').tier, 'creator', 'the chosen tier is committed, not dropped');
+});
+
+test('sow-323: an ADMIN cannot elevate anyone to the trusted-author tier, and nothing is written', async () => {
+  // The tier publishes straight to the public site with no editorial review, so granting it hands out the very
+  // authority the review queue exists to hold. The refusal lands before any read or write, so a denied attempt
+  // costs nothing and leaves no half-made grant.
+  const record = []; const reads = [];
+  const kv = kvWith();
+  const r = await run({ action: 'grandfather', githubId: '77', tier: 'creator' }, ghFetch(record, 'grandfathered: []\n', reads), kv);
+  assert.equal(r.status, 403);
+  assert.match(r.body.message, /only a superadmin/);
+  assert.equal(record.length, 0, 'refused before any branch, write or PR');
+  assert.equal(reads.length, 0, 'refused without spending a GitHub read');
+  assert.equal(writtenGrants(kv).length, 0, 'and with nothing written to the mirror');
+});
+
+test('sow-323 CONTROL: an admin keeps every other grant, so the check is scoped to the tier', async () => {
+  // Without this, raising the whole grandfather action to superadmin would pass the test above while quietly
+  // taking comped memberships away from admins, which nobody asked for.
+  const kv = kvWith();
+  const member = await run({ action: 'grandfather', githubId: '78', tier: 'member' }, ghFetch([], 'grandfathered: []\n'), kv);
+  assert.equal(member.status, 200, 'an admin still grants the ordinary paid tier');
+  const plain = await run({ action: 'grandfather', githubId: '79' }, ghFetch([], 'grandfathered: []\n'), kvWith());
+  assert.equal(plain.status, 200, 'and still grants a comped membership with no tier named');
 });
 
 test('sow-213 endpoint: an invalid tier is 400, rejected BEFORE the governance file is read', async () => {

@@ -7,7 +7,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { tierCta, TIER_RANK, CREATOR_APPLICATION_PATH } from '../src/lib/tier-cta.mjs';
+import { tierCta, TIER_RANK } from '../src/lib/tier-cta.mjs';
+
+// sow-323 Phase 3: the application page is retired (astro.config.mjs 301s it to /submit-content/), and the
+// constant that named it went with it. The address stays spelled out HERE, because what these two cases assert
+// is that no call to action ever links to it again.
+const CREATOR_APPLICATION_PATH = '/creator-application/';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 

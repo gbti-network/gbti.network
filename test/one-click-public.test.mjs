@@ -6,7 +6,7 @@
 // not, and a future reader who "makes them consistent" should fail here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { oneClickPublicView, makePublicPatch, makePublicPrompt, ONE_CLICK_STATES } from '../client-ui/src/one-click-public-core.mjs';
+import { oneClickPublicView, makePublicRequest, makePublicPrompt, ONE_CLICK_STATES } from '../client-ui/src/one-click-public-core.mjs';
 
 const view = (o) => oneClickPublicView(o);
 const PATH = 'members/ada/posts/hello/index.md';
@@ -53,23 +53,24 @@ test('an UNKNOWN visibility still offers the control, and that asymmetry is deli
   // it. That is the same fail-closed-on-the-real-question rule the content guards use.
 });
 
-test('the patch changes visibility and NOTHING else', () => {
-  // It returns a patch rather than a whole frontmatter object on purpose: handing back a full object invites
-  // a caller to spread it and quietly carry along whatever else was in scope.
-  const patch = makePublicPatch();
-  assert.deepEqual(patch, { visibility: 'public' });
-  assert.deepEqual(Object.keys(patch), ['visibility'], 'exactly one field, or this control does more than it says');
-  // A fresh object each call, so a caller mutating one cannot poison the next.
-  const second = makePublicPatch();
-  second.visibility = 'members';
-  assert.equal(makePublicPatch().visibility, 'public', 'makePublicPatch must not return shared state');
+test('sow-323: the control asks the WORKER to approve, and names the item by path', () => {
+  // It stopped editing the open document. The editor holds a members-only item whose body is a teaser, so
+  // submitting what is on screen with `visibility: public` published the teaser and orphaned the real body.
+  // What travels now is the item's path, and the Worker rebuilds the file from what is on main.
+  assert.deepEqual(makePublicRequest('members/ada/posts/hello/index.md'),
+    { path: 'members/ada/posts/hello/index.md', decision: 'approve' });
+  assert.deepEqual(Object.keys(makePublicRequest('members/ada/posts/hello/index.md')), ['path', 'decision'],
+    'exactly two fields, or this control carries something the route did not ask for');
+  for (const bad of [null, undefined, '', '   ', 42]) {
+    assert.equal(makePublicRequest(bad), null, `an unsaved item has no path to approve: ${JSON.stringify(bad)}`);
+  }
 });
 
 test('the confirmation names the item and says what actually happens', () => {
   const withTitle = makePublicPrompt('My Article');
   assert.match(withTitle, /"My Article"/);
-  assert.match(withTitle, /pull request/, 'the reader must know this opens a PR, not an instant flip');
-  assert.match(withTitle, /next deploy/, 'and that it is not live immediately');
+  assert.match(withTitle, /within a few minutes/, 'the reader must know it is not live the instant they click');
+  assert.match(withTitle, /author is told/, 'and that this sends the author an email');
   // A missing or blank title degrades to a generic noun rather than rendering "" or "undefined".
   for (const t of [null, undefined, '', '   ', 42]) {
     const p = makePublicPrompt(t);
@@ -108,16 +109,21 @@ test('the control renders ONLY inside the superadmin-gated Author section', asyn
   assert.equal(renders, 1, `the control renders in ${renders} places; it must render in exactly one`);
 });
 
-test('one-click public does NOT introduce a parallel write path', async () => {
+test('sow-323: one-click public APPROVES, and never republishes the open document', async () => {
+  // THIS ASSERTION WAS REVERSED ON 2026-09-15, and the reversal is the point. It used to require that
+  // _makePublic delegate to doPublish, on the reasoning that one publish path is better than two. That was
+  // right about paths and wrong about this one: the editor is holding a members-only item whose body is a
+  // TEASER, and the real body is encrypted where only the Worker can read it. Publishing what is on screen
+  // therefore published the teaser as the whole article, left the ciphertext orphaned, kept `publicStub`
+  // beside `public` (which the content check refuses) and restamped the dates. Approval is a Worker job now.
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../client-ui/src/elements/gbti-content-editor.mjs', import.meta.url), 'utf8');
   const fn = /async _makePublic\(\) \{([\s\S]*?)\n  \}/.exec(src);
   assert.ok(fn, '_makePublic was not found: this check is broken, not the subject');
 
-  // It must delegate to the ONE publish path, so the rules about what a publish does (gather, validate,
-  // rename handling, the PR) live in one place rather than two that can disagree.
-  assert.match(fn[1], /this\.doPublish\(\)/, '_makePublic must delegate to doPublish');
-  // A direct client call here would be that second path, and it would skip everything doPublish does.
-  assert.ok(!/this\.client\.(publish|saveDraft|hostedPublish)/.test(fn[1]),
-    '_makePublic calls the client directly, which is a parallel write path that bypasses doPublish');
+  assert.match(fn[1], /decideEditorial/, '_makePublic must call the editorial approval route');
+  assert.ok(!/this\.doPublish\(\)/.test(fn[1]),
+    'publishing the open document here publishes the teaser and orphans the encrypted body');
+  assert.ok(!/data-key="visibility"/.test(fn[1]),
+    'it must not write the visibility field either: the Worker decides what the approved file says');
 });

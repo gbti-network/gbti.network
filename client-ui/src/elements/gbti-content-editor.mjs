@@ -7,7 +7,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { publishChanges, changeLabel, formatValue, snippet } from '../publish-diff.mjs'; // sow-327: what exactly is unpublished
-import { oneClickPublicView, makePublicPatch, makePublicPrompt, audienceControl } from '../one-click-public-core.mjs'; // sow-293, sow-323
+import { oneClickPublicView, makePublicRequest, makePublicPrompt, audienceControl } from '../one-click-public-core.mjs'; // sow-293, sow-323
 import { editorStatus, mediaSummary } from '../editor-core.mjs';
 import { splitRailSections } from '../editor-rail-sections.mjs'; // sow-164: Media gets its own slot // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import { gatherInput } from '../form.mjs';
@@ -861,10 +861,9 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#draft', 'click', () => this.doDraft());
     this.on('#preview', 'click', () => this.doPreview());
     this.on('#publish', 'click', () => this.doPublish());
-    // sow-293: one-click public. It does NOT write by a separate path: it sets the visibility field and reuses
-    // doPublish, so the change goes through the same gather + validate + rename + PR flow every other publish
-    // does. A parallel write path here would be a second place for the content rules to be enforced, and the
-    // one that gets forgotten. The Worker re-verifies superadmin regardless; this control is the affordance.
+    // sow-323 Phase 3: one-click public is an EDITORIAL APPROVAL now, not a publish. It calls the approval
+    // route and the Worker rebuilds the item, because only the Worker holds the content key and only it can
+    // restore an encrypted members-only body. The Worker re-verifies superadmin; this control is the affordance.
     this.on('#makepublic', 'click', () => this._makePublic());
     // sow-327: compare against the live file on demand. Never on render: it is a network read, and the
     // answer is only interesting when the author asks for it.
@@ -1822,28 +1821,27 @@ class GbtiContentEditor extends GbtiElement {
   }
 
   /**
-   * sow-293: flip this item to public and publish, in one confirmed action.
+   * sow-323 Phase 3: approve this item for the public site, in one confirmed action.
    *
-   * Sets the SAME hidden field the visibility switch writes, then delegates to doPublish. Nothing here knows
-   * how to commit anything, which is the point: the rules about what a publish does live in one place.
+   * It sends the item's PATH to the approval route and the Worker does the rest. It deliberately does NOT
+   * edit the open document first: the editor holds a members-only item with a teaser body, so submitting what
+   * is on screen with `visibility: public` published the teaser and left the real body encrypted and
+   * unreachable. The Worker decrypts it, reassembles the article and commits the whole thing.
    */
   async _makePublic() {
     const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
+    const req = makePublicRequest(this.itemPath);
+    if (!req) { this.setStatus('Save this item first, then it can be approved.', 'err'); return; }
     // eslint-disable-next-line no-alert
     if (typeof confirm === 'function' && !confirm(makePublicPrompt(title))) return;
-    const patch = makePublicPatch();
-    const hidden = this.$('input[data-key="visibility"]');
-    if (hidden) hidden.value = patch.visibility;
-    // Keep the visible switch in step, so the rail does not contradict what is about to be published.
-    const sw = this.$('[data-visswitch]');
-    if (sw) {
-      sw.dataset.active = patch.visibility;
-      sw.querySelectorAll('.vs-opt').forEach((o) => o.classList.toggle('on', o.dataset.vis === patch.visibility));
+    this.setStatus('Approving...', '');
+    try {
+      const res = await this.client?.decideEditorial?.(req);
+      if (res?.alreadyPublic) { this.setStatus('This item is already public.', 'ok'); return; }
+      this.setStatus('Approved. It is public within a few minutes.', 'ok');
+    } catch (err) {
+      this.setStatus(err?.message || 'The approval did not go through. Try again in a minute.', 'err');
     }
-    const stub = this.$('[data-stubwrap]');
-    if (stub) stub.hidden = patch.visibility !== 'members';
-    this._markDirty();
-    await this.doPublish();
   }
 
   /**

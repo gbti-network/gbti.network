@@ -20,7 +20,10 @@ import { rateLimit } from './abuse.mjs';
 import { kickDispatch } from './checkout.mjs';
 import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // sow-323: shared with the fork route
 export { audienceRefusal, approvedOnMain }; // tests and callers keep importing them from here
-import { parseMembersIndex, validateHostedRequest, hostedBranchFor } from '../../membership/hosted-author.mjs';
+import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
+import { parseMembersIndex, validateHostedRequest, hostedBranchFor, statedVisibility } from '../../membership/hosted-author.mjs';
+import { queueableItems } from '../../membership/editorial-queue.mjs';
+import { TIER, meetsTier } from '../../membership/tiers.mjs';
 
 const GH = 'https://api.github.com';
 const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
@@ -158,6 +161,26 @@ export async function membershipAuthor(request, env, deps = {}) {
   });
   if (refusal) return refusal;
 
+  // sow-323: THE REVIEW QUEUE RECORD, WRITTEN BEFORE THE PULL REQUEST OPENS, and a failed write refuses the
+  // publish. The other order loses items: a publish that merges with no record is an item waiting for review
+  // that nothing lists, so nobody would ever know it was waiting. A record whose publish then fails is the
+  // harmless direction, because approving it answers "not on the site yet" and it can be set aside.
+  //
+  // Only a member's OWN members-only article, project or prompt enters. A trusted author and a superadmin
+  // publish public directly, so nothing of theirs waits for anyone; a share never enters at all (only a
+  // superadmin can make one public, so there is no decision to hold).
+  const queueable = queueableItems(payload?.files, {
+    folder, trusted: meetsTier(paid.tier, TIER.creator), isSuperadmin: allowAnyFolder, statedVisibility,
+  });
+  const recorded = await recordEditorialItems(kv, queueable, { githubId });
+  if (!recorded.ok) {
+    return { status: 503, body: { error: 'unavailable', message: 'your work could not be entered into the review queue; please try publishing again' } };
+  }
+  // A delete (a removal, or the old half of a rename) retires its record once the publish is actually open.
+  const deleted = (Array.isArray(payload?.files) ? payload.files : [])
+    .filter((f) => f && typeof f === 'object' && f.content === null && f.contentBase64 == null)
+    .map((f) => String(f.path ?? ''));
+
   const branch = hostedBranchFor(githubId, itemId);
   if (!branch) return { status: 400, body: { error: 'bad_request', message: 'invalid itemId' } };
 
@@ -193,9 +216,15 @@ export async function membershipAuthor(request, env, deps = {}) {
     method: 'POST', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, head: branch, base: 'main', body, maintainer_can_modify: false }),
   });
-  if (pr.res.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true } };
+  if (pr.res.status === 422) {
+    await removeEditorialItems(kv, deleted);
+    return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true }, queued: recorded.fresh };
+  }
   if (!pr.res.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${pr.res.status}` } };
-  return { status: 200, body: { ok: true, branch, number: pr.data.number, html_url: pr.data.html_url } };
+  await removeEditorialItems(kv, deleted);
+  // `queued` is returned alongside the body, never inside it: the caller fires the owner notice on exactly what
+  // was STORED, through ctx.waitUntil, so a fail-soft email never delays the response the member is waiting on.
+  return { status: 200, body: { ok: true, branch, number: pr.data.number, html_url: pr.data.html_url }, queued: recorded.fresh };
 }
 
 // sow-183: GET /membership/author/targets — superadmin-only, the picker source for the shared editor's Author

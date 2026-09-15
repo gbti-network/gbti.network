@@ -45,7 +45,7 @@ export const BACKUP_PREFIX = 'backup:';
 // themselves, it exists nowhere in git by design (the storage boundary), and losing it loses both the
 // pending review queue and the record of who was already turned down. This list is EXPLICIT, not a
 // wildcard, so a new store is silently outside the backup until its prefix is added here.
-export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'overrides:', 'application:'];
+export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'overrides:', 'application:', 'editorial:'];
 export const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export const SNAPSHOT_KEY = (iso) => `${BACKUP_PREFIX}${iso}`;
 

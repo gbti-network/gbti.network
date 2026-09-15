@@ -26,6 +26,7 @@ import { isCleanPath } from '../../membership/classify-pr.mjs';
 import { adminHostedBranchFor } from '../../membership/hosted-author.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole } from '../../membership/superadmin-actions.mjs'; // sow-161 increments 2-3
 import { PAID_GRANT_TIERS } from '../../membership/tier-gate.mjs'; // sow-213: the paid tiers a grandfather grant may name
+import { TIER } from '../../membership/tiers.mjs'; // sow-323: elevation to the trusted-author tier is superadmin only
 import { appendModerationLog, KV_SOURCE, OVERRIDES_KV_KEY } from './membership-override-kv.mjs'; // sow-213 Phase 2c + Step 3 (bans/grandfathers are KV-native now, no git half)
 import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 Phase 2b: the post-role-change mirror refresh
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
@@ -482,6 +483,14 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     const tier = payload?.tier ?? undefined;
     if (tier !== undefined && !PAID_GRANT_TIERS.includes(tier)) {
       return { status: 400, body: { error: 'bad_request', message: 'an invalid grant tier was requested' } };
+    }
+    // sow-323: ELEVATION TO TRUSTED AUTHOR IS A SUPERADMIN ACT. The tier lets its holder publish straight to
+    // the public site with no editorial review, so granting it hands out the very authority the review queue
+    // exists to hold. The grandfather action's own floor is admin, which is right for the rest of what it does
+    // (a comped year is not a publishing permission), so the tier is checked separately rather than by raising
+    // the whole action. Every other grant keeps its current rank.
+    if (tier === TIER.creator && (ROLE_RANK[staff.role] ?? 0) < ROLE_RANK.superadmin) {
+      return { status: 403, body: { error: 'forbidden', message: 'only a superadmin can make a member a trusted author' } };
     }
     const op = GOV_OP[action];
     const kvSection = GOV_KV_SECTION[action]; // 'bans' | 'grandfathered' | null (role is git-native)

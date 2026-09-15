@@ -166,10 +166,10 @@ test('CENSUS: the retired plan is not offered anywhere a visitor or ordinary mem
   const skip = /^(node_modules|\.git|dist|members|\.astro|\.data|\.product|\.snapshots|test|public\/extension|client-ui\/dist|extension\/dist|extension\/mcp)/;
   const allowed = new Set([
     'client-ui/src/elements/gbti-admin.mjs',              // superadmin grant control
-    'client-ui/src/elements/gbti-applications-manager.mjs', // the retired application lane, superadmin only
-    'src/pages/creator-application.astro',               // retired in a later phase, unlinked
-    'membership/creator-application-notify.mjs',         // inert, owner email
   ]);
+  // sow-323 Phase 3: the application lane is GONE, so its three exemptions went with it. They are removed
+  // rather than left harmlessly in place: an exemption for a file that no longer exists would silently cover
+  // a NEW file that later took the same path, which is the failure this census exists to catch.
   const offenders = [];
   const walk = (dir) => {
     for (const name of fs.readdirSync(path.join(ROOT, dir || '.'))) {

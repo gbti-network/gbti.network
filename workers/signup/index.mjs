@@ -63,8 +63,8 @@ import { membershipAdminOps } from './membership-admin-ops.mjs';
 import { membershipAdminMail } from './membership-admin-mail.mjs';
 import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-119
 import { membershipInviteCreate, membershipInviteList, membershipInviteUpdate } from './membership-invites-admin.mjs'; // sow-231
-import { creatorApplicationSubmit, creatorApplicationList, creatorApplicationDecide } from './membership-creator-applications.mjs'; // sow-293
-import { sendCreatorApplicationAlert } from './creator-application-alert.mjs'; // sow-293
+import { editorialList, editorialDecide } from './membership-editorial.mjs'; // sow-323: the editorial review queue
+import { sendEditorialQueueAlert, sendEditorialApprovedEmail } from './editorial-alert.mjs'; // sow-323
 import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
 import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
@@ -160,6 +160,20 @@ function json(body, status = 200, extraHeaders = {}, cookies = []) {
   const headers = new Headers({ ...JSON_HEADERS, ...extraHeaders });
   for (const c of cookies) headers.append('Set-Cookie', c);
   return new Response(JSON.stringify(body), { status, headers });
+}
+
+/**
+ * sow-323: tell the owner that a publish put work into the editorial review queue.
+ *
+ * FIRED ONLY ON RECORDS ALREADY STORED. Both publish routes write the queue record before they open the pull
+ * request and hand back exactly what they stored as `queued`, so a notice that fails costs the owner's
+ * awareness of work waiting and never the work itself. Through waitUntil, so it never delays the response the
+ * member is waiting on.
+ */
+function queueAlert(env, ctx, queued) {
+  if (!Array.isArray(queued) || !queued.length) return;
+  const send = sendEditorialQueueAlert(env, queued);
+  if (ctx?.waitUntil) ctx.waitUntil(send);
 }
 
 function redirect(location, extraHeaders = {}, cookies = []) {
@@ -1273,45 +1287,35 @@ export default {
         }
       }
 
+      // sow-323: the superadmin EDITORIAL REVIEW QUEUE. Every member article, project and prompt starts
+      // members-only and a superadmin decides what becomes public (owner, 2026-09-12), so listing shows work
+      // waiting and deciding PUBLISHES it. Both sit at the superadmin bar. Never cached.
+      if (pathname === '/membership/admin/editorial') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await editorialList(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+        if (method === 'POST') {
+          // The author notice is injected rather than fired here, because it must go AFTER the record is
+          // stored and only on an approval; the route holds that order and this only supplies the send.
+          const r = await editorialDecide(request, env, {
+            allowCookie: true,
+            notifyAuthor: (record) => {
+              const send = sendEditorialApprovedEmail(env, record);
+              if (ctx?.waitUntil) { ctx.waitUntil(send); return undefined; }
+              return send;
+            },
+          });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
       // sow-231: admin-gated ISSUED INVITES. A campaign (house/coupons.yml) says what an invite is worth; an
       // invite (KV) says who we handed one to. Same credentialed-CORS + allowCookie treatment as coupon-usage
       // so the WEBSITE coupon manager can issue over the cookie session (the extension's bearer call still
       // works). Person-keyed and note-bearing, so it is admin-gated and NEVER cached.
-      // sow-293: a member APPLIES for the Content Creator plan. Signed-in and not banned is the whole bar
-      // (authorizeMemberCheap): a free member applying to become a creator is the entire point of the route.
-      // Credentialed, because the website intake page calls it with the session cookie (POST -> CSRF gate in
-      // resolveIdentity). Never cached.
-      if (pathname === '/membership/creator-application') {
-        const cors = corsHeaders(request, env, { credentials: true });
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-        if (method === 'POST') {
-          const r = await creatorApplicationSubmit(request, env, { allowCookie: true });
-          // FAIL-SOFT, and fired only on a stored application. The record is already in KV, so a notice that
-          // fails costs the owner's awareness of a pending application and never the application itself.
-          // Through waitUntil so it does not delay the response the applicant is waiting on.
-          if (r.status === 200 && r.record) {
-            const alert = sendCreatorApplicationAlert(env, r.record);
-            if (ctx?.waitUntil) ctx.waitUntil(alert); else await alert;
-          }
-          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
-        }
-      }
-
-      // sow-293: the superadmin applications lane. Listing shows people's prose about themselves and deciding
-      // GRANTS A REAL TIER, so both sit at the superadmin bar rather than the admin one. Never cached.
-      if (pathname === '/membership/admin/creator-applications') {
-        const cors = corsHeaders(request, env, { credentials: true });
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-        if (method === 'GET') {
-          const r = await creatorApplicationList(request, env, { allowCookie: true });
-          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
-        }
-        if (method === 'POST') {
-          const r = await creatorApplicationDecide(request, env, { allowCookie: true });
-          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
-        }
-      }
-
       if (pathname === '/membership/admin/invites') {
         const cors = corsHeaders(request, env, { credentials: true });
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -1516,6 +1520,7 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'POST') {
           const r = await openPullForMember(request, env);
+          queueAlert(env, ctx, r.queued); // sow-323: the fork route records too, so it notifies too
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
@@ -1529,6 +1534,7 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'POST') {
           const r = await membershipAuthor(request, env, { allowCookie: true });
+          queueAlert(env, ctx, r.queued); // sow-323: fail-soft, and only on records already stored
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
         }
       }

@@ -48,20 +48,28 @@ export function oneClickPublicView({ isSuperadmin = false, visibility = null, it
 }
 
 /**
- * The frontmatter change this control makes. ONE field, named once, so the caller cannot widen it by accident.
+ * sow-323 Phase 3: THIS CONTROL NO LONGER EDITS THE FILE. It calls the editorial approval route, and the
+ * Worker rebuilds the item.
  *
- * It deliberately returns a patch rather than a whole frontmatter object: handing back a full object invites a
- * caller to spread it over the stored one and quietly carry along whatever else was in scope. A superadmin
- * making something public changes its visibility and nothing else.
+ * The editor version wrote `visibility: public` into the frontmatter it was about to submit, and that carried
+ * three faults it had no way to fix from here. It left `publicStub` beside `public`, which the content check
+ * refuses and the merge gate does not wait for, so the pull request merged and turned main red. It left the
+ * encrypted body file behind, orphaned, with nothing pointing at it. And submitting the whole frontmatter
+ * restamped the dates, against the owner's rule that an approved item keeps its original date.
+ *
+ * Only the Worker can do this properly, because only the Worker holds the content key: it decrypts the
+ * members-only body, puts the item back together, re-encrypts a section the author marked members-only, and
+ * commits the whole thing in one go. So this file now owns only the CONFIRMATION COPY and the request shape.
  */
-export function makePublicPatch() {
-  return { visibility: 'public' };
+export function makePublicRequest(itemPath) {
+  const path = typeof itemPath === 'string' ? itemPath.trim() : '';
+  return path ? { path, decision: 'approve' } : null;
 }
 
-/** The confirmation a superadmin reads before the write. Named here so the copy is testable with the rule. */
+/** The confirmation a superadmin reads before the approval. Named here so the copy is testable with the rule. */
 export function makePublicPrompt(title) {
   const name = typeof title === 'string' && title.trim() ? `"${title.trim()}"` : 'this item';
-  return `Make ${name} public? This opens a pull request changing its visibility, and it goes live on the next deploy.`;
+  return `Approve ${name} for the public site? It goes live within a few minutes, and its author is told.`;
 }
 
 // ---- sow-323: the AUDIENCE control in the editor's Details rail -----------------------------------------------
