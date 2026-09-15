@@ -20,6 +20,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { parseHeaders, cspForPath } from './check-headers.mjs';
+import { isCardRoutePath } from './lib/cta-headers.mjs'; // sow-337
 import { samplePages, coverageGaps, describeCoverage } from './lib/page-sample.mjs'; // sow-248: pages by content shape
 import { requireBrowser, skipOrDie, verdict } from './lib/browser-guard.mjs'; // sow-288: skips fail under the gate; zero is never a pass
 
@@ -52,6 +53,10 @@ const pages = [
   ...sample.pages,
   '/this-page-does-not-exist/', // the 404
 ];
+// sow-337: every page whose policy is replaced for a call-to-action HTML block (scripts/compose-headers.mjs), so the
+// partner code on it is loaded under the policy the page will really be served with.
+const cardPages = rules.filter((r) => isCardRoutePath(r.path) && r.unset.includes('content-security-policy')).map((r) => r.path);
+for (const p of cardPages) if (!pages.includes(p)) pages.push(p);
 const gaps = coverageGaps(sample.coverage);
 if (gaps.length) {
   console.error('✗ CSP guard cannot claim coverage: a shape present on the site has no sampled page:');

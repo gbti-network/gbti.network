@@ -7,6 +7,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scanHtmlCardPages, cardRules, CARD_POLICY_DIRECTIVES, HEADER_LIMITS } from './lib/cta-headers.mjs'; // sow-337
+import { readCtas } from './lib/ctas-store.mjs';
+import { CTA_HOST_RE } from '../membership/cta-edits.mjs';
 
 /**
  * Parse a Cloudflare Pages `_headers` file into rules. Each rule is { path, set: { <lowercase-name>: { name,
@@ -168,6 +171,58 @@ export function checkHeaders({ root, distDir = path.join(root, 'dist'), headersF
       errors.push(`only the /embed rules may admit a chrome-extension ancestor, but \`${r.path}\` does; extension framing of a signed-in page is a real clickjacking surface.`);
     }
   }
+
+  // sow-337: the call-to-action page policies (scripts/lib/cta-headers.mjs). Recomputed from the built pages and
+  // house/ctas.yml and required to match exactly, so a policy loosened by hand, a stale one, or a card page the
+  // composer never ran for all fail here. Then, WITHOUT reusing the composer's own function, every replaced policy is
+  // held against the site policy: it may differ only by bare https addresses added to the five card lists, so
+  // frame-ancestors, object-src, base-uri and the rest can never loosen through this path.
+  const EXEMPT = new Set([...EMBED_PATHS, '/tools/email-signature-generator/*']);
+  const replaced = rules.filter((r) => !EXEMPT.has(r.path) && (r.unset.includes('content-security-policy') || r.unset.includes('content-security-policy-report-only')));
+  let expected = [];
+  try {
+    const built = cardRules(scanHtmlCardPages(distDir), readCtas(root, { fresh: true }), entry.value);
+    expected = built.rules;
+    for (const p of built.problems) errors.push(`call-to-action page policy: ${p}`);
+  } catch (e) {
+    errors.push(`call-to-action page policy: house/ctas.yml could not be read (${e?.message?.split('\n')[0] || e}), so the card page policies cannot be checked.`);
+  }
+  for (const want of expected) {
+    const rule = rules.find((r) => r.path === want.path);
+    const served = cspEntryOf(rule);
+    if (!rule || !served || !rule.unset.includes(unsetKey)) {
+      errors.push(`${want.path} shows the call-to-action HTML block "${want.ids.join(', ')}" but dist/_headers does not replace its policy, so the partner code is blocked there. Run scripts/compose-headers.mjs after the build.`);
+    } else if (served.value !== want.value) {
+      errors.push(`the policy served for ${want.path} is not the one its card needs (house/ctas.yml "${want.ids.join(', ')}"). Expected: ${want.value} Served: ${served.value}`);
+    }
+  }
+  const site = new Map([...directives].map(([n, d]) => [n, d.tokens]));
+  for (const r of replaced) {
+    if (!expected.some((w) => w.path === r.path)) {
+      errors.push(`\`${r.path}\` replaces the site policy but shows no call-to-action HTML block with outside addresses; only the /embed relay, the eval tool and card pages may replace it.`);
+    }
+    const served = cspEntryOf(r);
+    if (!served) { errors.push(`\`${r.path}\` removes the site policy and sets none in its place.`); continue; }
+    const got = parseCsp(served.value);
+    for (const [name, tokens] of site) {
+      const mine = got.get(name)?.tokens;
+      if (!mine) { errors.push(`\`${r.path}\` drops the ${name} directive the site policy has.`); continue; }
+      if (!CARD_POLICY_DIRECTIVES.includes(name)) {
+        if (mine.join(' ') !== tokens.join(' ')) errors.push(`\`${r.path}\` changes ${name} (${mine.join(' ')}); a card page may only add addresses to ${CARD_POLICY_DIRECTIVES.join(', ')}, so ${name} must stay ${tokens.join(' ') || '(empty)'}.`);
+        continue;
+      }
+      const lost = tokens.filter((t) => !mine.includes(t));
+      if (lost.length) errors.push(`\`${r.path}\` removes ${lost.join(' ')} from ${name}.`);
+      const added = mine.filter((t) => !tokens.includes(t));
+      const bad = added.filter((t) => !CTA_HOST_RE.test(t));
+      if (bad.length) errors.push(`\`${r.path}\` adds ${bad.join(' ')} to ${name}; a card page may add only bare https addresses.`);
+    }
+    for (const name of got.keys()) if (!site.has(name)) errors.push(`\`${r.path}\` adds a ${name} directive the site policy does not have.`);
+    checked++;
+  }
+  if (rules.length > HEADER_LIMITS.rules - HEADER_LIMITS.reserved) errors.push(`dist/_headers has ${rules.length} rules; Cloudflare allows ${HEADER_LIMITS.rules}, and one is kept for the preview site's noindex rule.`);
+  const longLines = fs.readFileSync(headersFile, 'utf8').split('\n').filter((l) => l.length > HEADER_LIMITS.line).length;
+  if (longLines) errors.push(`dist/_headers has ${longLines} line(s) over Cloudflare's ${HEADER_LIMITS.line} characters, which it would not apply.`);
 
   // Recommended: the eval-using tool subtree unsets the CSP so enforce mode does not break its vendored jzip.
   const toolRule = rules.find((r) => r.path.includes('/tools/email-signature-generator/'));

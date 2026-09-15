@@ -49,6 +49,10 @@ jobs:
         run: npm run build
         env:
           GBTI_CF_ANALYTICS_TOKEN: ${{ vars.GBTI_CF_ANALYTICS_TOKEN }}
+      # sow-337: the page policies for call-to-action HTML blocks, as the deploy build writes them, so the CSP guard
+      # below loads each card page under the policy production serves.
+      - name: Compose the served headers
+        run: node scripts/compose-headers.mjs
       - name: Overflow guard (every content shape, three viewports)
         run: npm run check:overflow
         env:
