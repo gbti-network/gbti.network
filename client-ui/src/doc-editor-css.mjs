@@ -8,6 +8,7 @@
 // compared. This stylesheet's text is byte-identical in both. The bundles differ only in the bundler's own
 // numbering of its internal constants (CSS25 became CSS24 and so on), because one module entered the graph.
 import { IMAGE_LAYOUT_ROW_CSS } from './image-layout-ui.mjs';
+import { listStyleProseCss } from './list-style-ui.mjs'; // sow-322: the list marker styles, on the block's own tag
 
 export const DOC_EDITOR_CSS = `
   /* --blk-gutter reserves the column the hover toolbar lives in. Measured, not guessed: the toolbar measures 134px
@@ -61,6 +62,9 @@ export const DOC_EDITOR_CSS = `
   .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
   .ce-list li { padding:1px 0; }
   .ce-list ul, .ce-list ol { padding-left:22px; margin:2px 0; }
+  /* sow-322: scoped to .doc-blocks rather than .ce-list because the list block's ROOT tag carries the class
+     (ul.ce.ce-list.list-square) and a .ce-list-scoped rule could only reach the nested lists. */
+${listStyleProseCss('.doc-blocks')}
   /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
   .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
   .ce strong, .ce b { font-weight:700; }

@@ -278,7 +278,9 @@ test('the site lightbox stands aside for a click the Preview already handled', (
 test('the selection toolbar offers the image bar, and the inert stub carries the same method', () => {
   const src = read('client-ui/src/selection-toolbar.mjs');
   assert.ok(src.includes('imageTools = null,'), 'opt-in');
-  assert.ok(src.includes("showImageTools() {} };"), 'the stub keeps the shape');
+  // The stub's LAST member was pinned here until sow-322 added showListTools after it; the member itself is what
+  // matters, and test/selection-toolbar.test.mjs proves every real method has a stub twin.
+  assert.ok(src.includes('showImageTools() {}'), 'the stub keeps the shape');
   assert.ok(src.includes('showImageTools(el) { showImageTools(el); },'), 'the real one');
   assert.ok(src.includes('data-il="remove"'), 'Remove is on the bar');
   assert.ok(src.includes('applyImageLayoutAction(layoutOfEl(target), act)'), 'a click means what the shared rule says');

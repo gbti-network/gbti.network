@@ -14,6 +14,7 @@
 // a language label + Copy button.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
+import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
@@ -138,6 +139,7 @@ const CSS = `
   ${imageLayoutProseCss('.body')}
   .body ul,.body ol { padding-left:1.4em; margin:0 0 1em; }
   .body li > ul,.body li > ol { margin:.25em 0 0; }
+  ${listStyleProseCss('.body')}
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
      their own horizontal scroll rather than pushing the article wider than the viewport. */

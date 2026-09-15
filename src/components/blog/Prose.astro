@@ -36,6 +36,16 @@
   .prose-gbti ul > li { list-style: disc; }
   .prose-gbti ol > li { list-style: decimal; }
   .prose-gbti li > ul, .prose-gbti li > ol { margin: 0.25em 0 0; }
+  /* sow-322: a marker style chosen from the list bar ({square}, {lower-alpha} on the item that opens a run:
+     client/src/list-attrs.mjs) on that list's OWN items, the child combinator again so a sublist keeps its own
+     marker. Kept by hand in step with listStyleProseCss (client-ui/src/list-style-ui.mjs); test/list-styles.test.mjs
+     compares the two rule by rule. */
+  .prose-gbti ul.list-circle > li { list-style: circle; }
+  .prose-gbti ul.list-square > li { list-style: square; }
+  .prose-gbti ol.list-lower-alpha > li { list-style: lower-alpha; }
+  .prose-gbti ol.list-upper-alpha > li { list-style: upper-alpha; }
+  .prose-gbti ol.list-lower-roman > li { list-style: lower-roman; }
+  .prose-gbti ol.list-upper-roman > li { list-style: upper-roman; }
   .prose-gbti blockquote {
     border-left: 9px solid var(--green);
     margin: 1.5em 0;

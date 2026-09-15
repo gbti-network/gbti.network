@@ -9,6 +9,16 @@
 // inside code fences), so the allowlist breaks nothing that authors wrote.
 import { defaultSchema } from 'rehype-sanitize';
 import { IMAGE_LAYOUT_CLASS_RE } from '../../client/src/image-attrs.mjs'; // the five image layout classes
+import { LIST_STYLE_CLASS_RE } from '../../client/src/list-attrs.mjs';    // the six list marker style classes (sow-322)
+
+/**
+ * sow-322: the ONE className rule for a list. hast-util-sanitize honours only the FIRST className entry on a tag
+ * (measured 2026-09-15: a second entry appended after the default's yields class=""), and the default schema
+ * already carries ['className', 'contains-task-list'] on ul and ol for GFM task lists, so the list style classes
+ * are MERGED into that entry rather than added beside it. Every other attribute the default allows stays.
+ */
+const LIST_CLASS_RULE = ['className', 'contains-task-list', LIST_STYLE_CLASS_RE];
+const withListClassRule = (attrs) => [...(attrs ?? []).filter((a) => a !== 'className' && !(Array.isArray(a) && a[0] === 'className')), LIST_CLASS_RULE];
 
 /** The only hosts an <iframe> may point at: the shared embedUrl() providers (client/src/video-embed.mjs)
  *  plus the tweet-embed host reserved for sow-261. hast-util-sanitize filters protocols, not hosts, so
@@ -51,6 +61,9 @@ export const sanitizeSchema = {
     // A figure (a captioned image) carries the same five layout classes and nothing else.
     figure: [['className', IMAGE_LAYOUT_CLASS_RE]],
     li: [...(defaultSchema.attributes?.li ?? []), 'id'],
+    // A list carries its GFM task-list class and one of the six marker style classes, nothing else (see above).
+    ul: withListClassRule(defaultSchema.attributes?.ul),
+    ol: withListClassRule(defaultSchema.attributes?.ol),
     section: ['dataFootnotes', 'className'],
   },
   protocols: {

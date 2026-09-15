@@ -6,6 +6,8 @@
 // exposure, and the reader's "show this author's Discord on inspection" need is exactly that public data. Plain
 // .mjs so the Astro endpoint maps the collection into it and `node --test` imports the pure builder directly.
 
+import { stripListStyleSuffix } from '../../client/src/list-attrs.mjs'; // sow-322: a list marker style is not the author's words
+
 // The public social link keys we surface (the profile schema's links subset). Discord is included by design so the
 // reader can reveal the author's Discord handle on inspection.
 // sow-159: 'mastodon' removed (retired) so a member's stored handle never propagates into directory JSON.
@@ -45,6 +47,7 @@ export function bioExcerpt(body, max = 280) {
   t = t.replace(/<[^>]*>/g, ' ');               // well-formed HTML tags
   t = t.replace(/[<>]/g, ' ');                  // any residual angle bracket (an UNCLOSED tag leaves a '<') -> no bracket ever reaches the JSON
   t = t.replace(/!\[[^\]]*\]\([^)]*\)(?:\{[^}]*\})?/g, ' ');   // images, with any {full} / {left wrap} layout suffix
+  t = t.split('\n').map(stripListStyleSuffix).join('\n');      // a list marker style ({square}, {lower-alpha}) is not the author's words
   t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'); // links -> their label
   t = t.replace(/^\s{0,3}#{1,6}\s+/gm, '');      // heading markers
   t = t.replace(/^\s{0,3}>\s?/gm, '');           // blockquote markers

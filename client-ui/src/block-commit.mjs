@@ -16,7 +16,8 @@
 // are the doc editor's existing model, reused rather than reimplemented.
 import { parseBlocks, serializeBlocks, inlineHtmlToMd } from './markdown-blocks.mjs';
 import { normalizeImageLayout, cleanCaption } from '../../client/src/image-attrs.mjs';
-import { normalizeListItems, isFlatList, indentListItem, serializeListItems } from '../../client/src/list-items.mjs';
+import { normalizeListItems, isFlatList, indentListItem, serializeListItems, applyListAction } from '../../client/src/list-items.mjs';
+import { listStyleFromClass } from '../../client/src/list-attrs.mjs'; // sow-322: the list-* class a rendered list wears
 
 /** Rendered tags the Preview can edit. hr has nothing to edit; a callout/embed renders as a div and is not text. */
 export const EDITABLE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'PRE']);
@@ -216,22 +217,60 @@ export function planImageCaption(sourceText, caption) {
 /**
  * Read a rendered list back as { text, depth, ordered } items in document order: each <li>'s OWN inline content
  * (the nested list that may follow it inside the same <li> is not its text), its depth from the lists between it
- * and the block, its marker from its parent tag. Shared by the Preview and the block editor so the two cannot
+ * and the block, its marker from its parent tag. sow-322: the list-* class on a <ul>/<ol> is its run's marker
+ * style and comes back as `style` on that list's first item (the item that opens the run), so a text edit
+ * committed from either surface keeps the style. Shared by the Preview and the block editor so the two cannot
  * drift. `md(html)` turns inline HTML into markdown.
  */
 export function readListDom(el, md) {
   const out = [];
   const tagOf = (n) => String(n?.tagName || '').toUpperCase();
+  const classOf = (n) => (typeof n?.getAttribute === 'function' ? n.getAttribute('class') : n?.className) || '';
   const walk = (list, depth) => {
+    let style = listStyleFromClass(classOf(list));
     for (const li of Array.from(list.children || [])) {
       if (tagOf(li) !== 'LI') continue;
       const own = String(li.innerHTML ?? '').replace(/<(ul|ol)\b[\s\S]*$/i, '');
-      out.push({ text: md(own), depth, ordered: tagOf(list) === 'OL' });
+      out.push({ text: md(own), depth, ordered: tagOf(list) === 'OL', ...(style ? { style } : {}) });
+      style = null;
       for (const sub of Array.from(li.children || [])) if (tagOf(sub) === 'UL' || tagOf(sub) === 'OL') walk(sub, depth + 1);
     }
   };
   walk(el, 0);
   return out;
+}
+
+/** The single list block a source range holds, or null when the range is not exactly one list block. */
+export function listBlockOf(sourceText) {
+  const blocks = parseBlocks(String(sourceText ?? ''));
+  return blocks.length === 1 && blocks[0].type === 'list' ? blocks[0] : null;
+}
+
+/**
+ * sow-322: one list-bar click (ordered, unordered, style:<word>, style:default) on the run holding item
+ * `itemIndex` of ONE list block, through the shared applyListAction. Returns the block's replacement lines, or
+ * null when the range is not a single list, the item is out of range, or nothing changes, so a click on the bar
+ * can never write over a paragraph.
+ */
+export function planListAttrs(sourceText, itemIndex, action) {
+  const b = listBlockOf(sourceText);
+  if (!b) return null;
+  const next = applyListAction({ ordered: !!b.ordered, items: b.items }, itemIndex, action);
+  if (!next) return null;
+  return serializeListItems(next.items, next.ordered);
+}
+
+/**
+ * sow-322: Remove list. ONE list block becomes paragraphs, one per item in document order (a nested item is
+ * flattened into the sequence), blank-line separated; empty items are dropped. An all-empty list leaves one
+ * empty line, which markdown collapses. Null unless the range is exactly one list block.
+ */
+export function planListUnwrap(sourceText) {
+  const b = listBlockOf(sourceText);
+  if (!b) return null;
+  const texts = normalizeListItems(b.items, !!b.ordered).map((it) => it.text).filter((t) => t.trim() !== '');
+  if (!texts.length) return [''];
+  return serializeBlocks(texts.map((text) => ({ type: 'paragraph', text }))).split('\n');
 }
 
 /**

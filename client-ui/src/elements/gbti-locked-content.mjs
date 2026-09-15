@@ -8,6 +8,7 @@
 
 import { GbtiElement, define } from '../base.mjs';
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
+import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
 
 // A long code block in a comment (e.g. a shared prompt) is clipped to CLIP_LINES with a fade + a Show
@@ -36,6 +37,7 @@ const PROSE = `
   .unlocked p { margin: 0 0 1em; line-height: 1.6; }
   .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
   .unlocked li > ul, .unlocked li > ol { margin: .25em 0 0 1.2em; }
+  ${listStyleProseCss('.unlocked')}
   .unlocked a { color: var(--accent); }
   .unlocked img { max-width: 100%; height: auto; border-radius: 10px; }
   ${imageLayoutProseCss('.unlocked')}

@@ -388,10 +388,93 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return n;
   }
 
+  // client/src/list-attrs.mjs
+  var BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
+  var NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
+  var LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
+  var LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
+  var LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
+  function styleKind(word) {
+    const w = String(word ?? "");
+    if (BULLET_WORDS.includes(w)) return "bullet";
+    if (NUMBER_WORDS.includes(w)) return "number";
+    return null;
+  }
+  function isDefaultStyle(word) {
+    const kind = styleKind(word);
+    return !!kind && LIST_STYLE_DEFAULTS[kind] === String(word);
+  }
+  function normalizeListStyle(word, ordered) {
+    const kind = styleKind(word);
+    if (!kind || kind !== (ordered ? "number" : "bullet")) return null;
+    return isDefaultStyle(word) ? null : String(word);
+  }
+  function listStyleClass(style) {
+    return style && LIST_STYLE_CLASS_RE.test(`list-${style}`) ? `list-${style}` : null;
+  }
+  function listStyleFromClass(className) {
+    const tokens = Array.isArray(className) ? className : String(className ?? "").split(/\s+/);
+    for (const t of tokens) {
+      const m = LIST_STYLE_CLASS_RE.exec(String(t));
+      if (m) return m[1];
+    }
+    return null;
+  }
+  var SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
+  function splitListSuffix(text, ordered, { bare = false } = {}) {
+    const m = SUFFIX_RE.exec(String(text ?? ""));
+    if (!m) return null;
+    const kind = styleKind(m[2]);
+    if (!kind || kind !== (ordered ? "number" : "bullet")) return null;
+    const rest = m[1];
+    if (!bare && rest.trim() === "") return null;
+    return { style: normalizeListStyle(m[2], !!ordered), rest };
+  }
+  var LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
+  function stripListStyleSuffix(line) {
+    const m = LINE_RE.exec(String(line ?? ""));
+    if (!m) return String(line ?? "");
+    const split = splitListSuffix(m[4], /^\d/.test(m[2]));
+    if (!split) return String(line);
+    return `${m[1]}${m[2]}${m[3]}${split.rest}`;
+  }
+
   // client/src/list-items.mjs
   var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
   function isListLine(line) {
     return LIST_ITEM_RE.test(String(line ?? ""));
+  }
+  function opensRunBefore(items, i, depth, ordered) {
+    for (let j = i - 1; j >= 0; j--) {
+      if (items[j].depth < depth) return true;
+      if (items[j].depth === depth) return items[j].ordered !== ordered;
+    }
+    return true;
+  }
+  function opensRun(items, i) {
+    const it = items[i];
+    return !!it && opensRunBefore(items, i, it.depth, it.ordered);
+  }
+  function runOf(items, i) {
+    const d = items[i].depth;
+    const o = items[i].ordered;
+    let start = i;
+    for (let j = i - 1; j >= 0; j--) {
+      if (items[j].depth < d) break;
+      if (items[j].depth === d) {
+        if (items[j].ordered !== o) break;
+        start = j;
+      }
+    }
+    const out = [];
+    for (let j = start; j < items.length; j++) {
+      if (j > start && items[j].depth < d) break;
+      if (items[j].depth === d) {
+        if (items[j].ordered !== o) break;
+        out.push(j);
+      }
+    }
+    return out;
   }
   function takeListRun(lines, start = 0) {
     const items = [];
@@ -413,6 +496,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       items.push({ text: m[3], depth, ordered });
       i++;
     }
+    for (let k = 0; k < items.length; k++) {
+      if (!opensRun(items, k)) continue;
+      const split = splitListSuffix(items[k].text, items[k].ordered);
+      if (!split) continue;
+      items[k].text = split.rest;
+      if (split.style) items[k].style = split.style;
+    }
     return { items, next: i };
   }
   function normalizeListItems(items, ordered = false) {
@@ -423,7 +513,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       let depth = Math.max(0, Math.floor(Number(it.depth) || 0));
       if (depth > prevDepth + 1) depth = prevDepth + 1;
       const own = typeof it.ordered === "boolean" ? it.ordered : false;
-      out.push({ text: String(it.text ?? ""), depth, ordered: depth === 0 ? !!ordered : own });
+      const isOrdered = depth === 0 ? !!ordered : own;
+      const item = { text: String(it.text ?? ""), depth, ordered: isOrdered };
+      const style = it.style ? normalizeListStyle(it.style, isOrdered) : null;
+      if (style && opensRunBefore(out, out.length, depth, isOrdered)) item.style = style;
+      out.push(item);
       prevDepth = depth;
     }
     return out;
@@ -435,7 +529,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const firstOrdered = first && typeof first === "object" ? !!first.ordered : null;
     return list.every((it) => {
       if (!it || typeof it !== "object") return firstOrdered === null;
-      return (Number(it.depth) || 0) === 0 && !!it.ordered === firstOrdered;
+      return (Number(it.depth) || 0) === 0 && !!it.ordered === firstOrdered && !it.style;
     });
   }
   function serializeListItems(items, ordered = false) {
@@ -462,10 +556,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       counters[it.depth] = (counters[it.depth] || 0) + 1;
       const marker = it.ordered ? `${counters[it.depth]}. ` : "- ";
       markerWidth[it.depth] = marker.length;
-      lines.push(`${indents[it.depth]}${marker}${it.text}`);
+      const suffix = it.style && it.text.trim() !== "" ? ` {${it.style}}` : "";
+      lines.push(`${indents[it.depth]}${marker}${it.text}${suffix}`);
       prevDepth = it.depth;
     }
     return lines;
+  }
+  function withClass(attrs, cls) {
+    const a = String(attrs || "");
+    if (!cls) return a;
+    if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v) => `class="${v ? `${v} ` : ""}${cls}"`);
+    return `${a ? `${a} ` : ""}class="${cls}"`;
   }
   function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
     const norm2 = normalizeListItems(items, ordered);
@@ -473,7 +574,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const open = [];
     const openList = (it) => {
       const tag = it.ordered ? "ol" : "ul";
-      html += `<${tag}${!open.length && rootAttrs ? ` ${rootAttrs}` : ""}>`;
+      const attrs = withClass(open.length ? "" : rootAttrs, listStyleClass(it.style));
+      html += `<${tag}${attrs ? ` ${attrs}` : ""}>`;
       open.push({ tag, ordered: it.ordered });
     };
     const closeList = () => {
@@ -506,6 +608,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (newDepth === oldDepth) return null;
     const shift = newDepth - oldDepth;
     const out = norm2.map((it) => ({ ...it }));
+    if (out[i].style) {
+      for (let j = i + 1; j < out.length; j++) {
+        if (out[j].depth < oldDepth) break;
+        if (out[j].depth === oldDepth) {
+          if (out[j].ordered === out[i].ordered) out[j].style = out[i].style;
+          break;
+        }
+      }
+      delete out[i].style;
+    }
     out[i].depth = newDepth;
     for (let j = i - 1; j >= 0; j--) {
       if (out[j].depth < newDepth) break;
@@ -516,6 +628,44 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     for (let j = i + 1; j < out.length && out[j].depth > oldDepth; j++) out[j].depth = Math.max(0, out[j].depth + shift);
     return normalizeListItems(out, ordered);
+  }
+  function listRunState(items, ordered = false, index = 0) {
+    const norm2 = normalizeListItems(items, ordered);
+    if (!norm2.length) return { ordered: !!ordered, style: null, depth: 0 };
+    const i = Math.min(Math.max(0, Number(index) || 0), norm2.length - 1);
+    const run = runOf(norm2, i);
+    return { ordered: norm2[i].ordered, style: norm2[run[0]].style || null, depth: norm2[i].depth };
+  }
+  function applyListAction(list, index, action) {
+    const ordered = !!list?.ordered;
+    const norm2 = normalizeListItems(list?.items, ordered);
+    const i = Number(index);
+    if (!(i >= 0 && i < norm2.length)) return null;
+    const act = String(action || "");
+    let wantOrdered = null;
+    let wantStyle;
+    if (act === "ordered" || act === "unordered") wantOrdered = act === "ordered";
+    else if (act.startsWith("style:")) {
+      const word = act.slice("style:".length);
+      if (word === "default") wantStyle = null;
+      else {
+        const kind = styleKind(word);
+        if (!kind) return null;
+        wantOrdered = kind === "number";
+        wantStyle = normalizeListStyle(word, wantOrdered);
+      }
+    } else return null;
+    const out = norm2.map((it) => ({ ...it }));
+    if (wantOrdered !== null) for (const j of runOf(out, i)) out[j].ordered = wantOrdered;
+    if (wantStyle !== void 0) {
+      const run = runOf(out, i);
+      for (const j of run) delete out[j].style;
+      if (wantStyle) out[run[0]].style = wantStyle;
+    }
+    const topOrdered = out[0].ordered;
+    const next = normalizeListItems(out, topOrdered);
+    if (JSON.stringify(next) === JSON.stringify(norm2)) return null;
+    return { ordered: topOrdered, items: next };
   }
 
   // client-ui/src/markdown-blocks.mjs
@@ -648,7 +798,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (isListItem(line)) {
         const run = takeListRun(lines, i);
         const ordered = !!run.items[0]?.ordered;
-        const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o }) => ({ text, depth, ordered: o }));
+        const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o, style }) => ({ text, depth, ordered: o, ...style ? { style } : {} }));
         blocks2.push({ type: "list", ordered, items });
         i = run.next;
         continue;
@@ -896,6 +1046,98 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   }
 
+  // client-ui/src/list-style-ui.mjs
+  var LIST_STYLE_GROUPS = Object.freeze({
+    kind: Object.freeze([
+      { action: "unordered", label: "Bullets", title: "A bulleted list" },
+      { action: "ordered", label: "Numbers", title: "A numbered list" }
+    ]),
+    bullet: Object.freeze([
+      { action: "style:disc", label: "Disc", title: "Round bullets (the default)" },
+      { action: "style:circle", label: "Circle", title: "Hollow bullets" },
+      { action: "style:square", label: "Square", title: "Square bullets" }
+    ]),
+    number: Object.freeze([
+      { action: "style:decimal", label: "1.", title: "Numbers (the default)" },
+      { action: "style:lower-alpha", label: "a.", title: "Lower-case letters" },
+      { action: "style:upper-alpha", label: "A.", title: "Upper-case letters" },
+      { action: "style:lower-roman", label: "i.", title: "Lower-case roman numerals" },
+      { action: "style:upper-roman", label: "I.", title: "Upper-case roman numerals" }
+    ]),
+    remove: Object.freeze([
+      { action: "unwrap", label: "Remove list", title: "Turn the list into paragraphs, one per item" }
+    ])
+  });
+  function listStylePressed(state, action) {
+    const ordered = !!state?.ordered;
+    const style = state?.style || null;
+    if (action === "ordered") return ordered;
+    if (action === "unordered") return !ordered;
+    if (String(action).startsWith("style:")) {
+      const word = String(action).slice("style:".length);
+      if (styleKind(word) !== (ordered ? "number" : "bullet")) return false;
+      return isDefaultStyle(word) ? !style : style === word;
+    }
+    return false;
+  }
+  function listStyleButtonsHtml(state, { sep = '<span class="gbti-stb-sep" aria-hidden="true"></span>' } = {}) {
+    const groups = [LIST_STYLE_GROUPS.kind, state?.ordered ? LIST_STYLE_GROUPS.number : LIST_STYLE_GROUPS.bullet, LIST_STYLE_GROUPS.remove];
+    return groups.map((group) => group.map((b) => `<button type="button" data-la="${b.action}" title="${b.title}"` + (listStylePressed(state, b.action) ? ' aria-pressed="true"' : "") + `>${b.label}</button>`).join("")).join(sep);
+  }
+  function listStyleProseCss(scope) {
+    const s = String(scope || "").trim();
+    return LIST_STYLE_WORDS.filter((w) => !isDefaultStyle(w)).map((w) => `  ${s} ${styleKind(w) === "number" ? "ol" : "ul"}.list-${w} > li { list-style: ${w}; }`).join("\n");
+  }
+
+  // client-ui/src/block-commit.mjs
+  function readListDom(el, md) {
+    const out = [];
+    const tagOf2 = (n) => String(n?.tagName || "").toUpperCase();
+    const classOf = (n) => (typeof n?.getAttribute === "function" ? n.getAttribute("class") : n?.className) || "";
+    const walk2 = (list, depth) => {
+      let style = listStyleFromClass(classOf(list));
+      for (const li of Array.from(list.children || [])) {
+        if (tagOf2(li) !== "LI") continue;
+        const own = String(li.innerHTML ?? "").replace(/<(ul|ol)\b[\s\S]*$/i, "");
+        out.push({ text: md(own), depth, ordered: tagOf2(list) === "OL", ...style ? { style } : {} });
+        style = null;
+        for (const sub of Array.from(li.children || [])) if (tagOf2(sub) === "UL" || tagOf2(sub) === "OL") walk2(sub, depth + 1);
+      }
+    };
+    walk2(el, 0);
+    return out;
+  }
+  function listItemAtSelection(el, sel) {
+    let n = sel?.anchorNode || null;
+    if (n && n.nodeType !== 1) n = n.parentNode;
+    while (n && n !== el && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
+    if (!n || n === el) return { li: null, index: -1 };
+    const all = Array.from(el.querySelectorAll("li"));
+    return { li: n, index: all.indexOf(n) };
+  }
+  function caretAtEndOfItem(li, sel) {
+    if (!li || !sel) return;
+    let last = null;
+    for (const c of Array.from(li.childNodes || [])) {
+      const t = String(c.tagName || "").toUpperCase();
+      if (c.nodeType === 1 && (t === "UL" || t === "OL")) break;
+      last = c;
+    }
+    try {
+      const r = document.createRange();
+      if (last) {
+        r.selectNodeContents(last);
+        r.collapse(false);
+      } else {
+        r.setStart(li, 0);
+        r.collapse(true);
+      }
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } catch {
+    }
+  }
+
   // client-ui/src/selection-toolbar.mjs
   var STYLE_ID = "gbti-selection-toolbar-css";
   var SELECTION_TOOLBAR_CSS = `
@@ -919,6 +1161,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .gbti-stb button[disabled] { opacity: .4; cursor: default; }
 .gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
 .gbti-imgbar button { font-weight: 600; }
+.gbti-listbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-listbar button { font-weight: 600; }
 .gbti-lp {
   flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
   background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
@@ -983,13 +1227,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     listItemImages = null,
     onInsertImage = () => {
     },
-    imageTools = null
+    imageTools = null,
+    listTools = null
   }) {
     const hostEl = () => typeof host === "function" ? host() : host;
     if (!hostEl()) return { destroy() {
     }, isPanelOpen: () => false, hide() {
     }, editLink() {
     }, showImageTools() {
+    }, showListTools() {
     } };
     const mount = (node) => {
       const h = hostEl();
@@ -1040,6 +1286,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ibEl = null;
       hideCaptionPanel();
     };
+    let lb = null;
+    let lbEl = null;
+    let lbIndex = 0;
+    const hideListBar = () => {
+      if (lb) lb.style.display = "none";
+      lbEl = null;
+    };
     const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
     function buildTb() {
       const el = document.createElement("div");
@@ -1061,13 +1314,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     function update() {
       if (anyPanelOpen()) return;
       const sel = getSel();
+      let list = null;
+      try {
+        list = listTools && sel && sel.rangeCount > 0 ? listTools.listOf(sel.anchorNode) : null;
+      } catch {
+        list = null;
+      }
+      if (!list) hideListBar();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
         hideTb();
+        if (list) showListTools(list);
         return;
       }
       const el = editableOf(sel.anchorNode);
       if (!el) {
         hideTb();
+        if (list) showListTools(list);
         return;
       }
       try {
@@ -1076,6 +1338,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         hideTb();
       }
+      if (list) showListTools(list, void 0, { lift: !!tb && tb.style.display !== "none" });
     }
     function wrap(w) {
       const sel = getSel();
@@ -1354,11 +1617,57 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const img = el.querySelector && el.querySelector("img") || el;
       place(ib, img.getBoundingClientRect(), true);
     }
-    const onDocDown = (e) => {
-      if (!ib || ib.style.display === "none") return;
-      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
-      if (path.includes(ib) || ic3 && path.includes(ic3) || ibEl && path.includes(ibEl)) return;
+    const stateOfEl = (el, index) => {
+      try {
+        return typeof listTools?.stateOf === "function" && listTools.stateOf(el, index) || { ordered: false, style: null };
+      } catch {
+        return { ordered: false, style: null };
+      }
+    };
+    function paintListBar(state) {
+      if (lb) lb.innerHTML = listStyleButtonsHtml(state);
+    }
+    function buildListBar() {
+      const el = document.createElement("div");
+      el.className = "gbti-stb gbti-listbar";
+      el.addEventListener("mousedown", (e) => e.preventDefault());
+      el.addEventListener("click", (e) => {
+        const b = e.target && e.target.closest ? e.target.closest("button[data-la]") : null;
+        const target = lbEl;
+        const index = lbIndex;
+        if (!b || !target || b.disabled) return;
+        const act = b.dataset.la;
+        if (act === "unwrap") hideListBar();
+        if (typeof listTools?.onAction === "function") listTools.onAction(target, index, act);
+      });
+      return el;
+    }
+    function showListTools(el, index, { lift = false } = {}) {
+      if (!el || !listTools) return;
       hideImageBar();
+      hideImagePanel();
+      if (!lb) lb = buildListBar();
+      let idx = Number.isInteger(index) ? index : listItemAtSelection(el, getSel()).index;
+      if (idx < 0) idx = 0;
+      lbEl = el;
+      lbIndex = idx;
+      lb.dataset.item = String(idx);
+      paintListBar(stateOfEl(el, idx));
+      const hr = hostEl().getBoundingClientRect();
+      const blockRect = el.getBoundingClientRect();
+      const pinned = blockRect.top < 48;
+      place(lb, blockRect, true);
+      if (pinned) lb.style.top = `${8 - hr.top}px`;
+      lb.style.left = "auto";
+      lb.style.right = `${Math.max(0, hr.right - blockRect.right)}px`;
+      const extra = lb.offsetHeight - 38;
+      if (extra > 0 && !pinned) lb.style.top = `${parseFloat(lb.style.top) - extra}px`;
+      if (lift && !pinned) lb.style.top = `${parseFloat(lb.style.top) - 44}px`;
+    }
+    const onDocDown = (e) => {
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+      if (ib && ib.style.display !== "none" && !(path.includes(ib) || ic3 && path.includes(ic3) || ibEl && path.includes(ibEl))) hideImageBar();
+      if (lb && lb.style.display !== "none" && !(path.includes(lb) || lbEl && path.includes(lbEl))) hideListBar();
     };
     document.addEventListener("mousedown", onDocDown, true);
     const onSel = () => update();
@@ -1370,10 +1679,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         hidePanel();
         hideImagePanel();
         hideImageBar();
+        hideListBar();
       },
       /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
       showImageTools(el) {
         showImageTools(el);
+      },
+      /** Show the list bar above item `index` of a list block (the caret's item when omitted). See listTools. */
+      showListTools(el, index) {
+        showListTools(el, index);
       },
       /**
        * Open the link manager for an existing anchor, without going through the selection. A single click on a link
@@ -1396,6 +1710,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ip?.remove();
         ib?.remove();
         ic3?.remove();
+        lb?.remove();
         tb = null;
         lp = null;
         lk = null;
@@ -1404,54 +1719,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ib = null;
         ibEl = null;
         ic3 = null;
+        lb = null;
+        lbEl = null;
       }
     };
-  }
-
-  // client-ui/src/block-commit.mjs
-  function readListDom(el, md) {
-    const out = [];
-    const tagOf2 = (n) => String(n?.tagName || "").toUpperCase();
-    const walk2 = (list, depth) => {
-      for (const li of Array.from(list.children || [])) {
-        if (tagOf2(li) !== "LI") continue;
-        const own = String(li.innerHTML ?? "").replace(/<(ul|ol)\b[\s\S]*$/i, "");
-        out.push({ text: md(own), depth, ordered: tagOf2(list) === "OL" });
-        for (const sub of Array.from(li.children || [])) if (tagOf2(sub) === "UL" || tagOf2(sub) === "OL") walk2(sub, depth + 1);
-      }
-    };
-    walk2(el, 0);
-    return out;
-  }
-  function listItemAtSelection(el, sel) {
-    let n = sel?.anchorNode || null;
-    if (n && n.nodeType !== 1) n = n.parentNode;
-    while (n && n !== el && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
-    if (!n || n === el) return { li: null, index: -1 };
-    const all = Array.from(el.querySelectorAll("li"));
-    return { li: n, index: all.indexOf(n) };
-  }
-  function caretAtEndOfItem(li, sel) {
-    if (!li || !sel) return;
-    let last = null;
-    for (const c of Array.from(li.childNodes || [])) {
-      const t = String(c.tagName || "").toUpperCase();
-      if (c.nodeType === 1 && (t === "UL" || t === "OL")) break;
-      last = c;
-    }
-    try {
-      const r = document.createRange();
-      if (last) {
-        r.selectNodeContents(last);
-        r.collapse(false);
-      } else {
-        r.setStart(li, 0);
-        r.collapse(true);
-      }
-      sel.removeAllRanges();
-      sel.addRange(r);
-    } catch {
-    }
   }
 
   // client-ui/src/list-editing.mjs
@@ -1469,6 +1740,46 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (again) again.focus();
     if (li) caretAtEndOfItem(li, sel);
     return true;
+  }
+  var shapeOf = (items) => isFlatList(items) ? items.map((it) => it.text) : items;
+  function listBarTools(host) {
+    const md = (h) => inlineHtmlToMd(h);
+    return {
+      listOf: (node) => {
+        const ce = host.ceOf(node);
+        return ce && ce.dataset && ce.dataset.edit === "list" ? ce : null;
+      },
+      stateOf: (el, index) => {
+        const b = host.byId(el.dataset.id);
+        return b ? listRunState(b.items, !!b.ordered, index) : { ordered: false, style: null, depth: 0 };
+      },
+      onAction: (el, index, action) => {
+        const b = host.byId(el.dataset.id);
+        if (!b) return;
+        const current = readListDom(el, md);
+        if (action === "unwrap") {
+          const i = host.indexOf(b._id);
+          if (i < 0) return;
+          const texts = normalizeListItems(current, !!b.ordered).map((it) => it.text).filter((t) => t.trim() !== "");
+          const paras = (texts.length ? texts : [""]).map((text) => host.withId({ type: "paragraph", text }));
+          host.blocks().splice(i, 1, ...paras);
+          host.render();
+          host.change();
+          host.focusBlock(paras[0]._id);
+          return;
+        }
+        const next = applyListAction({ ordered: !!b.ordered, items: current }, index, action);
+        if (!next) return;
+        b.ordered = next.ordered;
+        b.items = shapeOf(next.items);
+        host.render();
+        host.change();
+        const again = host.query(`.ce[data-edit="list"][data-id="${b._id}"]`);
+        const li = again ? again.querySelectorAll("li")[index] : null;
+        if (again) again.focus();
+        if (li) caretAtEndOfItem(li, host.selection());
+      }
+    };
   }
 
   // client-ui/src/media-picker.mjs
@@ -1602,6 +1913,9 @@ ${String(body ?? "")}`;
   .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
   .ce-list li { padding:1px 0; }
   .ce-list ul, .ce-list ol { padding-left:22px; margin:2px 0; }
+  /* sow-322: scoped to .doc-blocks rather than .ce-list because the list block's ROOT tag carries the class
+     (ul.ce.ce-list.list-square) and a .ce-list-scoped rule could only reach the nested lists. */
+${listStyleProseCss(".doc-blocks")}
   /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
   .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
   .ce strong, .ce b { font-weight:700; }
@@ -1858,7 +2172,21 @@ ${String(body ?? "")}`;
           this._render();
           this._focusBlock(b._id);
           this._change();
-        }
+        },
+        // sow-322: the list bar (Bullets | Numbers, marker styles, Remove list) over a list block, the same bar the
+        // Preview shows; its hooks live in list-editing.mjs and act on the block model.
+        listTools: listBarTools({
+          ceOf: (n) => this._ceOf(n),
+          byId: (id) => this._byId(id),
+          indexOf: (id) => this._indexOf(id),
+          blocks: () => this._blocks,
+          withId,
+          render: () => this._render(),
+          change: () => this._change(),
+          query: (s) => this.$(s),
+          focusBlock: (id) => this._focusBlock(id),
+          selection: () => this.root.getSelection ? this.root.getSelection() : document.getSelection()
+        })
       });
     }
     disconnectedCallback() {
@@ -12284,6 +12612,7 @@ ${String(body ?? "")}`;
   .unlocked p { margin: 0 0 1em; line-height: 1.6; }
   .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
   .unlocked li > ul, .unlocked li > ol { margin: .25em 0 0 1.2em; }
+  ${listStyleProseCss(".unlocked")}
   .unlocked a { color: var(--accent); }
   .unlocked img { max-width: 100%; height: auto; border-radius: 10px; }
   ${imageLayoutProseCss(".unlocked")}
@@ -21867,7 +22196,7 @@ From the author:
       if (isUl(l)) {
         const items = [];
         while (i < lines.length && isUl(lines[i])) {
-          items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
+          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*[-*+]\s+/, ""));
           i++;
         }
         out.push({ kind: "ul", items });
@@ -21876,7 +22205,7 @@ From the author:
       if (isOl(l)) {
         const items = [];
         while (i < lines.length && isOl(lines[i])) {
-          items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*\d+[.)]\s+/, ""));
           i++;
         }
         out.push({ kind: "ol", items });
@@ -22668,6 +22997,7 @@ From the author:
   ${imageLayoutProseCss(".body")}
   .body ul,.body ol { padding-left:1.4em; margin:0 0 1em; }
   .body li > ul,.body li > ol { margin:.25em 0 0; }
+  ${listStyleProseCss(".body")}
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
      their own horizontal scroll rather than pushing the article wider than the viewport. */

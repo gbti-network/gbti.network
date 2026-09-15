@@ -6,6 +6,7 @@
 // author-supplied HTML -- and callout bodies are HTML-escaped, so no author script executes.
 import { embedUrl, bareVideoLine } from '../../client/src/video-embed.mjs';
 import { splitImageSuffix, imageLayoutClasses } from '../../client/src/image-attrs.mjs'; // ![a](b){full} -> class="img-full"
+import { splitListSuffix, listStyleClass } from '../../client/src/list-attrs.mjs';      // - a {square} -> <ul class="list-square"> (sow-322)
 
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -148,6 +149,32 @@ export function figureForCaptionedImage(paragraph) {
   };
 }
 
+/**
+ * sow-322: list marker styles. `- a {square}` parses as a list whose first item's paragraph ENDS in a text node
+ * carrying the braces; the word becomes the list's class (list-circle, list-square, list-lower-alpha, ...:
+ * client/src/list-attrs.mjs) and the braces leave the text. Only the first item of a list can carry it (that is
+ * the item that opens the run), only a word of the list's own kind counts, and a group with nothing before it
+ * in the item is the author's text (the sow-319 rule). The class REPLACES the class mdast-util-to-hast would
+ * compute (measured: hProperties.className is not merged), so a GFM task list keeps its contains-task-list
+ * class by being named here too. The default words (disc, decimal) are stripped and set no class at all.
+ */
+export function applyListStyle(list) {
+  if (!list || list.type !== 'list' || !Array.isArray(list.children) || !list.children.length) return;
+  const para = list.children[0]?.children?.[0];
+  if (!para || para.type !== 'paragraph' || !Array.isArray(para.children) || !para.children.length) return;
+  const k = para.children.length - 1;
+  const tx = para.children[k];
+  if (!tx || tx.type !== 'text') return;
+  const split = splitListSuffix(tx.value, !!list.ordered, { bare: k > 0 });
+  if (!split) return;
+  if (split.rest === '') para.children.splice(k, 1); else tx.value = split.rest;
+  const cls = listStyleClass(split.style);
+  if (!cls) return;
+  const task = list.children.some((li) => typeof li?.checked === 'boolean');
+  list.data = list.data || {};
+  list.data.hProperties = { ...(list.data.hProperties || {}), className: task ? [cls, 'contains-task-list'] : [cls] };
+}
+
 export function remarkContentBlocks() {
   return (tree, file) => {
     const autoEmbed = isCommentSource(file);
@@ -155,6 +182,9 @@ export function remarkContentBlocks() {
       if (!node || !Array.isArray(node.children)) return;
       for (let i = 0; i < node.children.length; i++) {
         const n = node.children[i];
+        // A list's style is read BEFORE the walk descends into it, so nested lists are reached through the same
+        // loop and the suffix is gone before a captioned image could replace the item's paragraph.
+        if (n && n.type === 'list') applyListStyle(n);
         if (n && n.type === 'paragraph') {
           applyImageLayouts(n);
           const fig = figureForCaptionedImage(n);

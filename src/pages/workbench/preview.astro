@@ -674,7 +674,8 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout, planImageCaption, planListIndent, listItemAtSelection, caretAtEndOfItem } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, isImageBlockEl, imageBlockOf, planImageLayout, planImageCaption, planListIndent, listItemAtSelection, caretAtEndOfItem, listBlockOf, planListAttrs, planListUnwrap } = await import('../../../client-ui/src/block-commit.mjs');
+      const { listRunState } = await import('../../../client/src/list-items.mjs'); // sow-322: what the list bar paints
       const { imagePastePlan, pastedImageName, fileToDataUrl, fitImageFile } = await import('../../../client-ui/src/image-paste.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
@@ -986,6 +987,38 @@ const labelOf = CATEGORY_LABELS;
                 const scope = doc === noteDoc ? $('[data-pv-note-card]') : bodyEl;
                 const again = scope?.querySelector(`[data-${doc.attr}="${idx}"]`) as HTMLElement | null;
                 if (again && isImageBlockEl(again)) seltb?.showImageTools(again);
+              });
+            },
+          },
+          // sow-322: the list bar (Bullets | Numbers, marker styles, Remove list) while the caret is inside a list
+          // block. The state is read from the SOURCE (a {square} suffix on the item that opens a run:
+          // client/src/list-attrs.mjs) and a click goes through spliceBlock like Tab does, with any half-typed
+          // text folded in first; the caret is put back on the same item afterwards, which re-shows the bar.
+          listTools: {
+            listOf: (node: any) => {
+              let cur = node;
+              while (cur && cur.nodeType !== 1) cur = cur.parentNode;
+              const el = editing ? (cur?.closest?.('[data-blk][contenteditable="true"], [data-nblk][contenteditable="true"]') as HTMLElement | null) : null;
+              return el && (el.tagName === 'UL' || el.tagName === 'OL') ? el : null;
+            },
+            stateOf: (el: HTMLElement, index: number) => {
+              const b: any = listBlockOf(sourceOf(docOfEl(el), el));
+              return b ? listRunState(b.items, !!b.ordered, index) : { ordered: el.tagName === 'OL', style: null };
+            },
+            onAction: (el: HTMLElement, index: number, action: string) => {
+              const doc = docOfEl(el);
+              const idx = Number(el.dataset[doc.attr]);
+              delete el.dataset.pvSnap; // the re-render replaces this node; its blur must not commit a stale read
+              void spliceBlock(doc, el, (before: string[]) => {
+                const edited = applyBlockEdit(before.join('\n'), readBlockDom(el));
+                const src = (edited || before).join('\n');
+                return action === 'unwrap' ? planListUnwrap(src) : planListAttrs(src, index, action);
+              }).then(() => {
+                if (action === 'unwrap') return;
+                const scope = doc === noteDoc ? $('[data-pv-note-card]') : bodyEl;
+                const again = scope?.querySelector(`[data-${doc.attr}="${idx}"]`) as HTMLElement | null;
+                const li = again ? (again.querySelectorAll('li')[index] as HTMLElement | undefined) : undefined;
+                if (again) { again.focus(); if (li) caretAtEndOfItem(li, document.getSelection()); }
               });
             },
           },

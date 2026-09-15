@@ -142,7 +142,9 @@ export function parseBlocks(md) {
       // reader has always seen; only nesting or a marker mix needs the { text, depth, ordered } objects.
       const run = takeListRun(lines, i);
       const ordered = !!run.items[0]?.ordered;
-      const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o }) => ({ text, depth, ordered: o }));
+      // sow-322: a run's marker style (client/src/list-attrs.mjs) rides on the item that opens it, so it is
+      // re-projected here or the next save would strip every `{square}` the author set.
+      const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o, style }) => ({ text, depth, ordered: o, ...(style ? { style } : {}) }));
       blocks.push({ type: 'list', ordered, items });
       i = run.next;
       continue;

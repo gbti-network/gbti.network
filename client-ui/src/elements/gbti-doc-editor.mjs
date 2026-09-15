@@ -11,7 +11,7 @@ import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToH
 import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: the toolbar + link manager, shared with the WorkBench Preview
 import { listHtml, isFlatList } from '../../../client/src/list-items.mjs'; // nested lists: depth and marker per item
 import { readListDom } from '../block-commit.mjs'; // the list read-back, shared with the Preview
-import { listTabKeydown } from '../list-editing.mjs'; // Tab / Shift+Tab in a list block
+import { listTabKeydown, listBarTools } from '../list-editing.mjs'; // Tab / Shift+Tab in a list block; the list bar's hooks (sow-322)
 import { resolveContentAsset } from '../assets.mjs';
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
@@ -147,6 +147,13 @@ class GbtiDocEditor extends GbtiElement {
         }
         this._render(); this._focusBlock(b._id); this._change();
       },
+      // sow-322: the list bar (Bullets | Numbers, marker styles, Remove list) over a list block, the same bar the
+      // Preview shows; its hooks live in list-editing.mjs and act on the block model.
+      listTools: listBarTools({
+        ceOf: (n) => this._ceOf(n), byId: (id) => this._byId(id), indexOf: (id) => this._indexOf(id), blocks: () => this._blocks, withId,
+        render: () => this._render(), change: () => this._change(), query: (s) => this.$(s), focusBlock: (id) => this._focusBlock(id),
+        selection: () => (this.root.getSelection ? this.root.getSelection() : document.getSelection()),
+      }),
     });
   }
 

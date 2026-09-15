@@ -20388,10 +20388,56 @@ function parseImageLine(line) {
   return { alt: m[1], url: m[2], caption: cleanCaption(m[3]), layout };
 }
 
+// client/src/list-attrs.mjs
+var BULLET_WORDS = Object.freeze(["disc", "circle", "square"]);
+var NUMBER_WORDS = Object.freeze(["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"]);
+var LIST_STYLE_WORDS = Object.freeze([...BULLET_WORDS, ...NUMBER_WORDS]);
+var LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
+var LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
+function styleKind(word) {
+  const w = String(word ?? "");
+  if (BULLET_WORDS.includes(w)) return "bullet";
+  if (NUMBER_WORDS.includes(w)) return "number";
+  return null;
+}
+function isDefaultStyle(word) {
+  const kind = styleKind(word);
+  return !!kind && LIST_STYLE_DEFAULTS[kind] === String(word);
+}
+function normalizeListStyle(word, ordered) {
+  const kind = styleKind(word);
+  if (!kind || kind !== (ordered ? "number" : "bullet")) return null;
+  return isDefaultStyle(word) ? null : String(word);
+}
+function listStyleClass(style) {
+  return style && LIST_STYLE_CLASS_RE.test(`list-${style}`) ? `list-${style}` : null;
+}
+var SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
+function splitListSuffix(text, ordered, { bare = false } = {}) {
+  const m = SUFFIX_RE.exec(String(text ?? ""));
+  if (!m) return null;
+  const kind = styleKind(m[2]);
+  if (!kind || kind !== (ordered ? "number" : "bullet")) return null;
+  const rest = m[1];
+  if (!bare && rest.trim() === "") return null;
+  return { style: normalizeListStyle(m[2], !!ordered), rest };
+}
+
 // client/src/list-items.mjs
 var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
 function isListLine(line) {
   return LIST_ITEM_RE.test(String(line ?? ""));
+}
+function opensRunBefore(items, i, depth, ordered) {
+  for (let j = i - 1; j >= 0; j--) {
+    if (items[j].depth < depth) return true;
+    if (items[j].depth === depth) return items[j].ordered !== ordered;
+  }
+  return true;
+}
+function opensRun(items, i) {
+  const it = items[i];
+  return !!it && opensRunBefore(items, i, it.depth, it.ordered);
 }
 function takeListRun(lines, start = 0) {
   const items = [];
@@ -20413,6 +20459,13 @@ function takeListRun(lines, start = 0) {
     items.push({ text: m[3], depth, ordered });
     i++;
   }
+  for (let k = 0; k < items.length; k++) {
+    if (!opensRun(items, k)) continue;
+    const split = splitListSuffix(items[k].text, items[k].ordered);
+    if (!split) continue;
+    items[k].text = split.rest;
+    if (split.style) items[k].style = split.style;
+  }
   return { items, next: i };
 }
 function normalizeListItems(items, ordered = false) {
@@ -20423,10 +20476,20 @@ function normalizeListItems(items, ordered = false) {
     let depth = Math.max(0, Math.floor(Number(it.depth) || 0));
     if (depth > prevDepth + 1) depth = prevDepth + 1;
     const own = typeof it.ordered === "boolean" ? it.ordered : false;
-    out.push({ text: String(it.text ?? ""), depth, ordered: depth === 0 ? !!ordered : own });
+    const isOrdered = depth === 0 ? !!ordered : own;
+    const item = { text: String(it.text ?? ""), depth, ordered: isOrdered };
+    const style = it.style ? normalizeListStyle(it.style, isOrdered) : null;
+    if (style && opensRunBefore(out, out.length, depth, isOrdered)) item.style = style;
+    out.push(item);
     prevDepth = depth;
   }
   return out;
+}
+function withClass(attrs, cls) {
+  const a = String(attrs || "");
+  if (!cls) return a;
+  if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v) => `class="${v ? `${v} ` : ""}${cls}"`);
+  return `${a ? `${a} ` : ""}class="${cls}"`;
 }
 function listHtml(items, inline2 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
   const norm = normalizeListItems(items, ordered);
@@ -20434,7 +20497,8 @@ function listHtml(items, inline2 = (t) => t, { ordered = false, rootAttrs = "" }
   const open = [];
   const openList = (it) => {
     const tag = it.ordered ? "ol" : "ul";
-    html += `<${tag}${!open.length && rootAttrs ? ` ${rootAttrs}` : ""}>`;
+    const attrs = withClass(open.length ? "" : rootAttrs, listStyleClass(it.style));
+    html += `<${tag}${attrs ? ` ${attrs}` : ""}>`;
     open.push({ tag, ordered: it.ordered });
   };
   const closeList = () => {

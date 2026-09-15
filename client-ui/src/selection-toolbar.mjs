@@ -10,6 +10,8 @@
 import { isDangerousUrl } from './markdown-blocks.mjs';
 import { applyImageLayoutAction } from '../../client/src/image-attrs.mjs'; // what an image-bar click means
 import { imageLayoutButtonsHtml } from './image-layout-ui.mjs';            // the image bar's buttons, shared with the editor card
+import { listStyleButtonsHtml } from './list-style-ui.mjs';                // sow-322: the list bar's buttons
+import { listItemAtSelection } from './block-commit.mjs';                  // sow-322: the <li> under the caret, shared with Tab
 
 const STYLE_ID = 'gbti-selection-toolbar-css';
 
@@ -36,6 +38,8 @@ export const SELECTION_TOOLBAR_CSS = `
 .gbti-stb button[disabled] { opacity: .4; cursor: default; }
 .gbti-imgbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
 .gbti-imgbar button { font-weight: 600; }
+.gbti-listbar { flex-wrap: wrap; max-width: calc(100% - 8px); }
+.gbti-listbar button { font-weight: 600; }
 .gbti-lp {
   flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
   background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
@@ -132,16 +136,24 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  *                    (applyImageLayoutAction applied to it) to write back; onRemove deletes the block; captionOf
  *                    reads the caption (the image title) and onCaption writes it ('' removes). The bar never
  *                    touches the document itself.
+ * @param listTools   { listOf(node), stateOf(el, index), onAction(el, index, action) }. OPT-IN (sow-322). The list
+ *                    bar (Bullets | Numbers, the marker styles of the current kind, Remove list) shown while the
+ *                    caret or selection is inside a list: listOf resolves the LIST BLOCK element holding a node
+ *                    (or null), stateOf reads { ordered, style } of the run holding item `index` out of the host's
+ *                    SOURCE, and onAction receives the item index under the caret and the action ('ordered',
+ *                    'unordered', 'style:<word>', 'style:default', 'unwrap') to apply through the shared
+ *                    applyListAction and its own splice. The bar sits above the <li> under the caret and never
+ *                    makes the list non-editable; showListTools(el, index) re-shows it after a re-render.
  */
 export function createSelectionToolbar({
   root, host, editableOf, allowInline = () => true, onCommit = () => {},
-  onRetype = null, listItemImages = null, onInsertImage = () => {}, imageTools = null,
+  onRetype = null, listItemImages = null, onInsertImage = () => {}, imageTools = null, listTools = null,
 }) {
   const hostEl = () => (typeof host === 'function' ? host() : host);
   // The stub must carry EVERY method of the real object below, not just the three a caller happened to
   // optional-chain. `?.` guards a missing OBJECT, never a missing METHOD, so an absent editLink here threw
   // `editLink is not a function` on a link click rather than doing nothing. Keep the two shapes in step.
-  if (!hostEl()) return { destroy() {}, isPanelOpen: () => false, hide() {}, editLink() {}, showImageTools() {} };
+  if (!hostEl()) return { destroy() {}, isPanelOpen: () => false, hide() {}, editLink() {}, showImageTools() {}, showListTools() {} };
 
   /** Append (or re-append) a popover to the CURRENT host. A re-rendered surface leaves the old node orphaned. */
   const mount = (node) => {
@@ -178,6 +190,10 @@ export function createSelectionToolbar({
   let ic = null;      // the caption panel under the image bar
   const hideCaptionPanel = () => { if (ic) ic.style.display = 'none'; };
   const hideImageBar = () => { if (ib) ib.style.display = 'none'; ibEl = null; hideCaptionPanel(); };
+  let lb = null;      // sow-322: the list bar
+  let lbEl = null;    // the list block the bar is showing for
+  let lbIndex = 0;    // the index of the <li> under the caret, in document order
+  const hideListBar = () => { if (lb) lb.style.display = 'none'; lbEl = null; };
   const anyPanelOpen = () => (!!lp && lp.style.display !== 'none') || (!!ip && ip.style.display !== 'none');
 
   // --- the toolbar -------------------------------------------------------------------------------------------
@@ -210,13 +226,20 @@ export function createSelectionToolbar({
   function update() {
     if (anyPanelOpen()) return;   // a panel owns the screen while it is open
     const sel = getSel();
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideTb(); return; }
+    // sow-322: the list bar follows the caret. It is decided BEFORE the collapsed-selection bail-out below, which
+    // stays exactly as it was: the B/I bar still needs a real selection, and the list bar needs only a caret.
+    let list = null;
+    try { list = listTools && sel && sel.rangeCount > 0 ? listTools.listOf(sel.anchorNode) : null; } catch { list = null; }
+    if (!list) hideListBar();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideTb(); if (list) showListTools(list); return; }
     const el = editableOf(sel.anchorNode);
-    if (!el) { hideTb(); return; }
+    if (!el) { hideTb(); if (list) showListTools(list); return; }
     try {
       if (!tb) tb = buildTb();
       place(tb, sel.getRangeAt(0).getBoundingClientRect(), true);
     } catch { hideTb(); }
+    // A selection inside a list shows both bars; the list bar moves up a row so the two never overlap.
+    if (list) showListTools(list, undefined, { lift: !!tb && tb.style.display !== 'none' });
   }
 
   function wrap(w) {
@@ -460,13 +483,72 @@ export function createSelectionToolbar({
     const img = (el.querySelector && el.querySelector('img')) || el;
     place(ib, img.getBoundingClientRect(), true);
   }
-  // A click anywhere but the bar or its image puts the bar away. composedPath, because the doc editor's host is
+  // --- the list bar (sow-322) ----------------------------------------------------------------------------------
+  // Bullets | Numbers, the marker styles of the current kind, Remove list, above the <li> under the caret. The host
+  // reads the run's state out of its SOURCE (listTools.stateOf) and applies the click itself (listTools.onAction,
+  // through the shared applyListAction), so the bar only knows which item the caret is in and what was pressed.
+  // Modeled on the image bar; unlike it, the list stays contenteditable and the bar follows the caret.
+  const stateOfEl = (el, index) => {
+    try { return (typeof listTools?.stateOf === 'function' && listTools.stateOf(el, index)) || { ordered: false, style: null }; } catch { return { ordered: false, style: null }; }
+  };
+  function paintListBar(state) {
+    if (lb) lb.innerHTML = listStyleButtonsHtml(state);
+  }
+  function buildListBar() {
+    const el = document.createElement('div');
+    el.className = 'gbti-stb gbti-listbar';
+    el.addEventListener('mousedown', (e) => e.preventDefault()); // keep the caret where it is
+    el.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('button[data-la]') : null;
+      const target = lbEl;
+      const index = lbIndex;
+      if (!b || !target || b.disabled) return;
+      const act = b.dataset.la;
+      if (act === 'unwrap') hideListBar();
+      if (typeof listTools?.onAction === 'function') listTools.onAction(target, index, act);
+    });
+    return el;
+  }
+  function showListTools(el, index, { lift = false } = {}) {
+    if (!el || !listTools) return;
+    hideImageBar(); hideImagePanel();
+    if (!lb) lb = buildListBar();
+    let idx = Number.isInteger(index) ? index : listItemAtSelection(el, getSel()).index;
+    if (idx < 0) idx = 0;
+    lbEl = el;
+    lbIndex = idx;
+    lb.dataset.item = String(idx); // which item the bar is acting on, readable by a drive or a test
+    paintListBar(stateOfEl(el, idx));
+    // Above the LIST BLOCK and right-aligned to it, never beside the caret's item. Two measurements on 2026-09-15
+    // decided this: a bar above the caret's item covered the item before it and took the click meant for that item
+    // (a whole list flipped), and a bar above the block, left-aligned, hid a one-line paragraph before the list
+    // entirely. Above the block the bar can only cover the tail of the block before the list, and a last line is
+    // usually short, so right-aligned that tail stays clickable. When the block's top has scrolled out of view (a
+    // tall list) the bar pins to the top of the viewport, where nothing a click would want sits under it.
+    const hr = hostEl().getBoundingClientRect();
+    const blockRect = el.getBoundingClientRect();
+    const pinned = blockRect.top < 48;
+    place(lb, blockRect, true);
+    if (pinned) lb.style.top = `${8 - hr.top}px`;
+    // Right-aligned by anchoring the RIGHT edge. A left offset computed from the bar's rounded width left it a
+    // fraction of a pixel short of room and wrapped it onto two rows (measured on the Preview); an anchored right
+    // edge keeps the whole host width available. place() sets left every time, so left is released every time.
+    lb.style.left = 'auto';
+    lb.style.right = `${Math.max(0, hr.right - blockRect.right)}px`;
+    // place() assumes one row; a narrow column wraps the bar onto two, and the extra row would sit over the
+    // first item, so the bar moves up by the height it gained. A pinned bar has the viewport edge above it and
+    // stays put, as it does when the B/I bar lifts the others a row.
+    const extra = lb.offsetHeight - 38;
+    if (extra > 0 && !pinned) lb.style.top = `${parseFloat(lb.style.top) - extra}px`;
+    if (lift && !pinned) lb.style.top = `${parseFloat(lb.style.top) - 44}px`;
+  }
+
+  // A click anywhere but a bar or its block puts that bar away. composedPath, because the doc editor's host is
   // a shadow root and e.target there is the host element, not the button.
   const onDocDown = (e) => {
-    if (!ib || ib.style.display === 'none') return;
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-    if (path.includes(ib) || (ic && path.includes(ic)) || (ibEl && path.includes(ibEl))) return;
-    hideImageBar();
+    if (ib && ib.style.display !== 'none' && !(path.includes(ib) || (ic && path.includes(ic)) || (ibEl && path.includes(ibEl)))) hideImageBar();
+    if (lb && lb.style.display !== 'none' && !(path.includes(lb) || (lbEl && path.includes(lbEl)))) hideListBar();
   };
   document.addEventListener('mousedown', onDocDown, true);
 
@@ -475,9 +557,11 @@ export function createSelectionToolbar({
 
   return {
     isPanelOpen: () => anyPanelOpen(),
-    hide() { hideTb(); hidePanel(); hideImagePanel(); hideImageBar(); },
+    hide() { hideTb(); hidePanel(); hideImagePanel(); hideImageBar(); hideListBar(); },
     /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
     showImageTools(el) { showImageTools(el); },
+    /** Show the list bar above item `index` of a list block (the caret's item when omitted). See listTools. */
+    showListTools(el, index) { showListTools(el, index); },
     /**
      * Open the link manager for an existing anchor, without going through the selection. A single click on a link
      * inside a contenteditable neither navigates (Chrome and Firefox both suppress that) nor shows anything, so
@@ -494,8 +578,8 @@ export function createSelectionToolbar({
     destroy() {
       document.removeEventListener('selectionchange', onSel);
       document.removeEventListener('mousedown', onDocDown, true);
-      tb?.remove(); lp?.remove(); ip?.remove(); ib?.remove(); ic?.remove();
-      tb = null; lp = null; lk = null; ip = null; ik = null; ib = null; ibEl = null; ic = null;
+      tb?.remove(); lp?.remove(); ip?.remove(); ib?.remove(); ic?.remove(); lb?.remove();
+      tb = null; lp = null; lk = null; ip = null; ik = null; ib = null; ibEl = null; ic = null; lb = null; lbEl = null;
     },
   };
 }
