@@ -1,0 +1,115 @@
+# sow-289: the outbound partner links (git-native, portable, admin-CODEOWNED under house/**).
+#
+# Each entry is one site path that 301s to a partner. scripts/gen-redirects.mjs reads this file and emits the
+# rows into public/_redirects, in this order, and src/pages/outbound-links.json.ts publishes it for the superadmin
+# board, which shows each link beside its daily click history (house/outbound-clicks.yml). Every entry is
+# validated by membership/outbound-link-edits.mjs at generation and at build time.
+#
+# Fields: path (the site path), destination (ABSOLUTE, with an explicit path before any query: a pathless
+# destination gets a trailing slash appended by Cloudflare Pages that lands inside the query), partner (a short
+# label), status (live | placeholder | retired; a retired link is still emitted so an old post never 404s), and
+# note (provenance: where the destination came from and what went wrong before, shown on the board).
+#
+# Only five of these paths sit under /outbound/. The other five are legacy WordPress paths that still carry
+# Codeable traffic, so anything that filters by the /outbound/ prefix silently misses half the store.
+links:
+  - path: /outbound/codeable
+    destination: https://codeable.io/?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      The WordPress site cloaked its affiliate links behind /outbound/ and /outsourcing/ paths served by the
+      Redirection plugin. The content migrated and the redirect rules did not, so seven links across five
+      published posts returned 404 for months, on both bylines, earning nothing; check-redirects never caught it
+      because a path that exists in no config has no destination to fail on. Each path was first restored to the
+      destination its own legacy rule carried, recovered from the legacy database dump (sow-119). The dump had two
+      enabled Codeable codes, so the paths were restored on the codes they each carried rather than guessed onto
+      one account. The owner has since consolidated: every Codeable path points at the single live code, MzT91,
+      and the other legacy code is retired (sow-257, owner decision 2026-08-18).
+  - path: /outbound/codeable/wordpress-services
+    destination: https://app.codeable.io/tasks/new?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      Restored from the legacy rule (sow-119), on the consolidated MzT91 code (sow-257).
+  - path: /codeable/naresh-devineni
+    destination: https://www.codeable.io/developers/naresh-devineni/?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      A legacy WordPress path outside /outbound/, restored from its own legacy rule (sow-119) on the consolidated
+      MzT91 code (sow-257).
+  - path: /outbound/bugherd
+    destination: https://partners.bugherd.com/gbti-network
+    partner: bugherd
+    status: live
+    note: >-
+      BugHerd carries four "Learn more about BugHerd" banner links across two published posts, all pointing at
+      this one path, so every click funnels through here. The note that stood on this row until 2026-08-25 was
+      wrong, and it cost real referrals: it said the legacy target https://partners.bugherd.com/gbti-network was
+      dead at the vendor (the URL 404s and so does the bare partners.bugherd.com root), and on that basis the path
+      was pointed at the bare project page, which credits nobody. Measured 2026-08-25: that URL answers 302 into
+      PartnerStack carrying our partner key (ps_partner_key / gspk), and only the bare subdomain root 404s, which
+      is ordinary for a PartnerStack subdomain with no index page. Checking the root and generalising from it to
+      the path is what produced the false conclusion; the claim also parked sow-257 as blocked on a dead vendor.
+      It was not a dormant link either: zone analytics for the seven days to 2026-08-25 recorded 59 requests to
+      this path, a third to a half of them from an identifiable browser (Chrome and Chrome Mobile from ID, US and
+      IN), so on the order of 20 to 30 human clicks a month were reaching BugHerd uncredited for as long as the
+      destination was wrong.
+  - path: /codeable
+    destination: https://codeable.io/?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      A legacy WordPress path outside /outbound/, restored from its own legacy rule (sow-119) on the consolidated
+      MzT91 code (sow-257).
+  - path: /outsourcing/codeable
+    destination: https://codeable.io/?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      A legacy WordPress path outside /outbound/, restored from its own legacy rule (sow-119) on the consolidated
+      MzT91 code (sow-257).
+  - path: /outsource/codeable/wp-cli
+    destination: https://www.codeable.io/developers/wp-cli/?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      A legacy WordPress path outside /outbound/, restored from its own legacy rule (sow-119) on the consolidated
+      MzT91 code (sow-257).
+  - path: /outsourcing/codeable/wp-cli
+    destination: https://www.codeable.io/developers/wp-cli/?ref=MzT91
+    partner: codeable
+    status: live
+    note: >-
+      Linked live from the atwellpub post on importing a remote database with WP-CLI staging. It matches no legacy
+      rule exactly: the dump has /outsourcing/codeable and /outsource/codeable/wp-cli, and this link is a hybrid
+      of the two, so it was probably broken on WordPress as well. Pointed at the WP-CLI developers page its
+      sibling rule used, on the consolidated MzT91 code like the rest.
+  - path: /outbound/cloudways
+    destination: https://cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti
+    partner: cloudways
+    status: live
+    note: >-
+      Added 2026-08-28 on the owner's affiliate account (id=644779, a_bid=f7340e91) with our own channel tag
+      chan=gbti, so clicks arriving through this path are attributable to us. A new partner rather than a restored
+      legacy rule: no WordPress redirect ever existed for it. The destination is exactly the URL the affiliate
+      program issued, apex and all. Measured 2026-08-28: the apex answers 301 to
+      https://www.cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti with every parameter preserved, so the extra
+      hop is Cloudways' own canonicalisation. Pointing at the issued URL rather than that canonical one is
+      deliberate: www.cloudways.com returns 403 to a scripted request and to a deliberately bad control path
+      alike, so that response cannot tell a live URL from a dead one, and swapping a verified destination for an
+      unverifiable one is how the BugHerd entry went wrong; verify the www URL from a real browser before ever
+      removing the hop. The explicit slash before the query is load-bearing and was found live: shipped first as
+      https://cloudways.com?id=... with no path, the deployed redirect answered with chan=gbti/ because Cloudflare
+      Pages appends a trailing slash to a pathless destination and it lands at the end of the query. The affiliate
+      snippet also ships an impression pixel; a redirect cannot fire a pixel, so this path tracks clicks only.
+  - path: /outbound/tailscale
+    destination: https://tailscale.com/
+    partner: tailscale
+    status: placeholder
+    note: >-
+      Added 2026-08-28 as a placeholder, owner-flagged as such: it points at the bare project page and carries no
+      affiliate or referral parameter, so a click through it credits nobody today. It exists so the path can be
+      published and linked now and repointed once a real referral URL is issued. When the real URL arrives, keep
+      the explicit path before any query.
