@@ -30,7 +30,7 @@ import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
 import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, resolvePublishedAt, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, resolvePublishedAt, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, draftRecordForEditor, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
 
@@ -762,11 +762,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       const r = await workerGet('/membership/drafts');
       const rec = (Array.isArray(r?.drafts) ? r.drafts : []).find((d: any) => d.type === type && d.slug === slug);
       if (!rec) throw err('not-found', 'could not open that draft');
-      return {
-        frontmatter: rec.frontmatter || {}, body: rec.body || '', path: rec.path || '',
-        authorNote: typeof rec.authorNote === 'string' ? rec.authorNote : null,
-        authorTarget: rec.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
-      };
+      return draftRecordForEditor(rec, user); // sow-336: repairs a pre-move flat image path, so the media card loads
     },
     discardDraft,
     async publishDraft({ type, slug, store, path }: any) {

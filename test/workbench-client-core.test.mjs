@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionBodyImages, bodyImagesToResolve } from '../src/lib/workbench-client-core.mjs';
-import { planMemberFiles, planPublishImage, planPublishImageFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, bodyImageRefs, bodyImageCandidates, planImageRefs, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
+import { planMemberFiles, planPublishImage, planPublishImageFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, bodyImageRefs, bodyImageCandidates, planImageRefs, normalizeImageFields, normalizeImageValue, draftRecordForEditor, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
 import { buildCommentFile, buildContentFile, buildShareFile, shareId, commentId, parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 
 const fakeEncrypt = async (plaintext, assetId) => ({ v: 1, kid: '1', iv: 'IV', aad: assetId, ct: 'CT(' + plaintext + ')' });
@@ -692,3 +692,24 @@ test('bodyImagesToResolve: a STAGED name is always resolved, and an unknown veri
   }
 });
 
+
+// sow-336: a saved draft opens in the editor with its image fields normalized, so a draft saved before the image moved
+// beside index.md previews what will publish instead of a broken image (the /grok prompt, 2026-09-15).
+
+test('draftRecordForEditor: repairs the caller\'s own pre-move flat image path, and leaves everything else alone', () => {
+  const rec = {
+    type: 'prompt', slug: 'grok', path: 'members/atwellpub/prompts/grok/index.md', body: 'Body', authorNote: 'Note',
+    frontmatter: { title: 'T', image: 'members/atwellpub/images/stranger-in-a-strange-land-header.webp', tags: ['a'] },
+  };
+  const out = draftRecordForEditor(rec, 'atwellpub');
+  assert.equal(out.frontmatter.image, './images/stranger-in-a-strange-land-header.webp');
+  assert.deepEqual({ ...out.frontmatter, image: undefined }, { title: 'T', image: undefined, tags: ['a'] });
+  assert.equal(out.body, 'Body'); assert.equal(out.path, rec.path); assert.equal(out.authorNote, 'Note'); assert.equal(out.authorTarget, null);
+  assert.equal(rec.frontmatter.image, 'members/atwellpub/images/stranger-in-a-strange-land-header.webp', 'the stored record is not mutated');
+  // Controls: an already-canonical value, another member's folder and an absolute URL pass through unchanged.
+  assert.equal(draftRecordForEditor({ frontmatter: { image: './images/x.webp' } }, 'atwellpub').frontmatter.image, './images/x.webp');
+  assert.equal(draftRecordForEditor({ frontmatter: { image: 'members/someone/images/x.webp' } }, 'atwellpub').frontmatter.image, 'members/someone/images/x.webp');
+  assert.equal(draftRecordForEditor({ frontmatter: { image: 'https://example.com/x.webp' } }, 'atwellpub').frontmatter.image, 'https://example.com/x.webp');
+  // A record with no fields still opens.
+  assert.deepEqual(draftRecordForEditor({}, 'atwellpub'), { frontmatter: {}, body: '', path: '', authorNote: null, authorTarget: null });
+});

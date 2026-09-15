@@ -130,6 +130,23 @@ export function normalizeImageFields(frontmatter, login) {
 }
 
 /**
+ * A saved (KV) draft record, shaped for the editor to open. The image fields are normalized HERE, on read, as well as
+ * at publish: a draft saved before the image moved beside its index.md still holds the flat
+ * `members/<login>/images/<file>` value, and the editor resolves that against the item folder, so its media card
+ * showed a broken image even though the publish would have repaired it (the /grok prompt, 2026-09-15). Normalizing
+ * on read makes the editor show what will publish, and the next save stores the repaired value.
+ */
+export function draftRecordForEditor(rec, login) {
+  return {
+    frontmatter: normalizeImageFields(rec?.frontmatter || {}, login),
+    body: rec?.body || '',
+    path: rec?.path || '',
+    authorNote: typeof rec?.authorNote === 'string' ? rec.authorNote : null,
+    authorTarget: rec?.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
+  };
+}
+
+/**
  * Every staged image a content item's frontmatter references, as `[{ field, name }]` deduped by name. Used to
  * flush ONLY the images the content actually uses into the publish PR (never an unreferenced upload).
  *

@@ -163,6 +163,10 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
     /* sow-225: the quick actions row above the container */
     .wb-quick { display: flex; align-items: stretch; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
     .wb-quick[hidden], .wb-mcp[hidden], .wb-share[hidden] { display: none; }
+    /* sow-336: while an editor is open (editing or creating), the row and the share bar step aside. The workspace
+       already toggles body.gbti-editing on every render, so this needs no event: its address updates use
+       replaceState, which fires none. */
+    :global(body.gbti-editing) .wb-quick, :global(body.gbti-editing) .wb-share { display: none; }
     .wb-new { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .wb-mcp { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; padding: 12px 16px; border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); color: var(--fg); text-decoration: none; min-width: 240px; }
     .wb-mcp:hover { border-color: var(--green); }
