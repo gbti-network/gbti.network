@@ -121,11 +121,20 @@ test('the audience control: a trusted author chooses, a supporter does not, and 
   const supporter = audienceControl({ paidTier: 'member' });
   assert.equal(supporter.mode, 'locked-members');
   assert.equal(supporter.value, 'members');
+  assert.equal(supporter.publicStub, true, 'sow-323 Phase 3: a waiting item keeps its own locked page, the page it is approved from');
+  assert.equal(audienceControl({ paidTier: 'member', currentVisibility: 'members', existing: true }).publicStub, true,
+    'and an edit keeps it, where it used to strip it');
+  assert.equal(audienceControl({ paidTier: 'creator' }).publicStub, undefined, 'the switch leaves the flag to the author\'s own toggle');
+  // The editor must actually SUBMIT it: the locked branch renders the flag as a hidden, checked [data-key] input,
+  // which is what gather() reads. A source pin, because the element cannot be rendered under node --test.
+  assert.match(read('client-ui/src/elements/gbti-content-editor.mjs'),
+    /aud\.publicStub === true \? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden \/>'/);
   // THE CASE THAT LOSES A PAGE IF IT IS WRONG. The editor submits the whole frontmatter on every save, so an
   // already-public item must keep submitting public or its author's typo fix takes the live page down.
   const approved = audienceControl({ paidTier: 'member', currentVisibility: 'public', existing: true });
   assert.equal(approved.mode, 'locked-public');
   assert.equal(approved.value, 'public');
+  assert.equal(approved.publicStub, false, 'never the locked-page flag beside public, which the content check refuses');
   // a NEW item claiming public is not grandfathered by claiming it
   assert.equal(audienceControl({ paidTier: 'member', currentVisibility: 'public', existing: false }).value, 'members');
   // an absent or unresolvable tier locks rather than unlocking: the safe direction for an affordance

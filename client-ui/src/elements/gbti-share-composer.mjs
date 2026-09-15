@@ -1,9 +1,8 @@
 // <gbti-share-composer> (SOW-018): the extension-only authoring surface for member "Shares" (status updates).
 // Shares are NOT a public website experience; this composer lives in the GBTI client/extension. It encodes the
 // access model directly from client.status().membership:
-//   - paid, ANY tier (sow-293) -> the full composer. Content Creator unlocks the PUBLIC audience; a Network
-//     Member posts members-only. The tier gates the VISIBILITY now, not the composer (reverses sow-218).
-//   - paid on a LOWER tier (sow-218) -> an upgrade notice, because a share PR needs creator at the gate
+//   - paid, ANY tier (sow-293) -> the full composer. Only a SUPERADMIN is offered the PUBLIC audience (sow-323,
+//     owner 2026-09-15); everyone else posts members-only and never sees the choice.
 //   - trialing       -> read-only notice: a trial may READ the community Shares stream but posting is paid
 //   - expired/cancelled/none/banned (Locked) -> a lock splash (renew to rejoin); no composer
 //   - unknown        -> show the composer optimistically (the oracle is down; publishShare + the gate are the
@@ -211,9 +210,11 @@ class GbtiShareComposer extends GbtiElement {
       // sow-218: also read the sow-185 paid TIER. `paid` alone is no longer enough to post a Share, and the
       // oracle already returns this, so it costs no extra call.
       this._tier = typeof s?.paidTier === 'string' ? s.paidTier : null;
+      this._role = typeof s?.role === 'string' ? s.role : null; // sow-323 Phase 3: only a superadmin posts a public share
     } catch {
       this._membership = 'unknown';
       this._tier = null;
+      this._role = null;
     }
     this.render();
   }
@@ -230,8 +231,8 @@ class GbtiShareComposer extends GbtiElement {
         return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
       case 'locked': return this._renderLocked();
       case 'trial': return this._renderTrial();
-      // sow-293: 'not-creator' is gone from this switch. The upgrade nudge did not disappear, it MOVED to
-      // the audience step, where it explains why Public is unavailable. See _applyPublicLock.
+      // sow-293: 'not-creator' is gone from this switch. sow-323 Phase 3: the audience step offers Public only to a
+      // superadmin (or to keep an already-public share public while it is edited). See _applyPublicLock.
       default: return this._renderComposer(); // any paid member, or an unresolved tier
     }
   }
@@ -332,13 +333,6 @@ class GbtiShareComposer extends GbtiElement {
             </button>
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
-          <p class="sub" data-public-nudge hidden>
-            <!-- sow-323: this said "Sharing publicly is part of Curator membership. Apply to become a Curator."
-                 Public sharing is not a plan any more: the share goes out to members now and a superadmin
-                 reviews it for the public site. Nothing to buy, nothing to apply for. -->
-            Members see this straight away. A superadmin reviews it before it appears publicly.
-            <a href="https://gbti.network/submit-content/">How publishing works</a>.
-          </p>
         </section>
 
         <div class="wizfoot">
@@ -438,33 +432,34 @@ class GbtiShareComposer extends GbtiElement {
   }
 
   /**
-   * sow-293: the Curator tier unlocks the PUBLIC audience. A Network Member gets the composer and posts
-   * members-only, with the upgrade nudge explaining why the second chip is unavailable.
+   * sow-323 Phase 3: the Public audience is a superadmin's (owner, 2026-09-15), so for everyone else the choice is
+   * not shown at all, rather than shown and disabled. Editing a share that is already public keeps the choice, so
+   * the author's edit does not take an approved share down.
    *
-   * This is an AFFORDANCE, not the boundary. The Worker reads the share's own `visibility` out of the files
-   * it is about to commit and refuses a public one from a non-creator (isMembersOnlyShare in
-   * workers/signup/membership-author.mjs), so poking the DOM buys nothing. It is here so a member does not
-   * compose a public share and meet the wall at submit.
+   * This is an AFFORDANCE, not the boundary: the Worker refuses a public share from anyone but a superadmin
+   * (membership-audience.mjs), so poking the DOM buys nothing.
    */
+  _publicAllowed() {
+    return canSharePublicly({ membership: this._membership, role: this._role, editingPublic: this._edit?.visibility === 'public' });
+  }
+
   _applyPublicLock() {
-    const allowed = canSharePublicly({ membership: this._membership, tier: this._tier });
+    const allowed = this._publicAllowed();
     const chip = this.$('[data-public]');
-    const nudge = this.$('[data-public-nudge]');
     if (chip) {
+      chip.hidden = !allowed;
       chip.disabled = !allowed;
       chip.setAttribute('aria-disabled', allowed ? 'false' : 'true');
-      chip.classList.toggle('locked', !allowed);
     }
-    if (nudge) nudge.hidden = allowed;
-    // If the tier resolved LATE and public was already chosen, fall back rather than leaving a selection the
-    // server will refuse. Silent correction is right here: the nudge above already says why.
+    // If the role resolved LATE and public was already chosen, fall back rather than leaving a selection the
+    // server will refuse.
     if (!allowed && this._visibility === 'public') this._selectAudience('members');
   }
 
   _selectAudience(vis) {
     // Refuse the upgrade rather than trusting the caller: _onCardClick delegates from a DOM event, and a
     // disabled attribute is a hint, not an enforcement.
-    if (vis === 'public' && !canSharePublicly({ membership: this._membership, tier: this._tier })) return;
+    if (vis === 'public' && !this._publicAllowed()) return;
     this._visibility = vis === 'public' ? 'public' : 'members';
     for (const c of this.$$('[data-vis]')) {
       const on = c.dataset.vis === this._visibility;
@@ -518,6 +513,7 @@ class GbtiShareComposer extends GbtiElement {
       const clr = box.querySelector('[data-ogclear]');
       if (clr) clr.addEventListener('click', () => { this._image = null; this._imageRemoved = true; box.hidden = true; box.innerHTML = ''; });
     }
+    this._applyPublicLock(); // sow-323 Phase 3: an already-public share keeps its Public choice while edited
     this._selectAudience(item.visibility === 'public' ? 'public' : 'members');
     this._applyEditChrome(decryptNote);
     this._paintAuthorRow(); // sow-183 for shares: the picker starts on this share's own author

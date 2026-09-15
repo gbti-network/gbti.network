@@ -36,6 +36,10 @@ const paidOk = async () => ({ ok: true, githubId: '1' });
 // a wrong-key read in authMemberLogin / openPullForMember (which previously read user.login and 401'd in prod).
 const userAlice = async () => ({ githubLogin: 'Alice', githubId: '1' });
 const req = (body) => ({ headers: { get: () => 'Bearer tok' }, json: async () => body });
+// sow-323 Phase 3: the fork route now reads the branch's changes for the audience rule before opening the PR. These
+// SOW-026 cases are about head ownership and the paid gate, so they stub that read as "no reviewable files"; the
+// audience cases are in test/fork-route-audience.test.mjs.
+const noChanges = async () => ({ ok: true, files: [] });
 
 function prFetch(record) {
   return async (url, init) => {
@@ -47,7 +51,7 @@ function prFetch(record) {
 
 test('openPullForMember: a paid member opens a PR from THEIR OWN fork via the installation token', async () => {
   const rec = [];
-  const r = await openPullForMember(req({ head: 'alice:gbti-post', base: 'main', title: 'My post' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: paidOk, fetchUser: userAlice });
+  const r = await openPullForMember(req({ head: 'alice:gbti-post', base: 'main', title: 'My post' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: paidOk, fetchUser: userAlice, forkChanges: noChanges });
   assert.equal(r.status, 200);
   assert.equal(r.body.number, 7);
   assert.match(rec[0].url, /\/repos\/gbti-network\/gbti\.network\/pulls$/);
@@ -57,7 +61,7 @@ test('openPullForMember: a paid member opens a PR from THEIR OWN fork via the in
 
 test('openPullForMember: rejects a head that is not the member own fork (403)', async () => {
   const rec = [];
-  const r = await openPullForMember(req({ head: 'mallory:evil', base: 'main' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: paidOk, fetchUser: userAlice });
+  const r = await openPullForMember(req({ head: 'mallory:evil', base: 'main' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: paidOk, fetchUser: userAlice, forkChanges: noChanges });
   assert.equal(r.status, 403);
   assert.equal(rec.length, 0, 'no PR opened for someone else fork');
 });
@@ -65,13 +69,13 @@ test('openPullForMember: rejects a head that is not the member own fork (403)', 
 test('openPullForMember: a non-paid caller is denied (fail-closed), no PR', async () => {
   const rec = [];
   const deny = async () => ({ ok: false, status: 403, body: { error: 'forbidden', message: 'an active paid membership is required' } });
-  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: deny, fetchUser: userAlice });
+  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: deny, fetchUser: userAlice, forkChanges: noChanges });
   assert.equal(r.status, 403);
   assert.equal(rec.length, 0);
 });
 
 test('openPullForMember: an identity mismatch (token user != paid github_id) is unauthorized', async () => {
-  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl: prFetch([]), signJwt, authorize: async () => ({ ok: true, githubId: '999' }), fetchUser: userAlice });
+  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl: prFetch([]), signJwt, authorize: async () => ({ ok: true, githubId: '999' }), fetchUser: userAlice, forkChanges: noChanges });
   assert.equal(r.status, 401);
 });
 
@@ -80,7 +84,7 @@ test('openPullForMember: an existing PR (422) is reported gracefully, not an err
     if (/access_tokens$/.test(url)) return { ok: true, async json() { return { token: 't', expires_at: new Date(Date.now() + 3600e3).toISOString() }; } };
     return { ok: false, status: 422, async json() { return { errors: [{ message: 'A pull request already exists for alice:x.' }] }; } };
   };
-  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl, signJwt, authorize: paidOk, fetchUser: userAlice });
+  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl, signJwt, authorize: paidOk, fetchUser: userAlice, forkChanges: noChanges });
   assert.equal(r.status, 200);
   assert.equal(r.body.already, true);
 });

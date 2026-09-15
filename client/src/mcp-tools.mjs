@@ -255,11 +255,11 @@ export const TOOLS = [
   // to keep in the members stream.
   {
     name: 'add_share',
-    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url` and REQUIRED `visibility`: "public" (anyone can see it, and it may syndicate) or "members" (the members-only stream, body encrypted). ALWAYS ask the member which one they want before calling; never guess. Title, description and image are auto-extracted from the url unless you pass them. Optional: title, shortDescription, image, category (one flat topic key), tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
+    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares go to the members-only stream (body encrypted); only a superadmin can post a public share, by passing `visibility: "public"`. Title, description and image are auto-extracted from the url unless you pass them. Optional: title, shortDescription, image, category (one flat topic key), tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
       {
         url: { type: 'string', description: 'The link being shared (absolute http/https URL).' },
-        visibility: { type: 'string', enum: ['public', 'members'], description: 'REQUIRED: ask the member. "public" is visible to everyone and may syndicate to social channels; "members" stays in the members-only stream.' },
+        visibility: { type: 'string', enum: ['public', 'members'], description: 'Optional, defaults to "members". "public" is refused unless the member is a superadmin.' },
         title: { type: 'string' },
         shortDescription: { type: 'string' },
         image: { type: 'string' },
@@ -268,7 +268,7 @@ export const TOOLS = [
         body: { type: 'string', description: 'Optional note in your own words about why the link is worth reading.' },
         message: { type: 'string' }, prBody: { type: 'string' },
       },
-      ['url', 'visibility'],
+      ['url'],
     ),
     handler: (ctx, args) => addShare(ctx, args ?? {}),
   },
@@ -286,6 +286,15 @@ export const TOOLS = [
   },
 ];
 
+/** sow-323 Phase 3: the audience add_share posts with: members-only unless asked, and only the two real values. */
+export function shareVisibilityArg(v) {
+  const visibility = v == null || v === '' ? 'members' : v;
+  if (visibility !== 'public' && visibility !== 'members') {
+    throw new OperationError('bad-request', 'visibility must be "members" (the default) or "public" (superadmins only).');
+  }
+  return visibility;
+}
+
 /**
  * sow-181: add_share = extract THEN publish, in one call.
  *
@@ -297,10 +306,10 @@ export const TOOLS = [
 export async function addShare(ctx, args = {}) {
   const url = String(args.url || '').trim();
   if (!url) throw new OperationError('bad-request', 'url is required');
-  const visibility = args.visibility;
-  if (visibility !== 'public' && visibility !== 'members') {
-    throw new OperationError('bad-request', 'visibility is required and must be "public" or "members". Ask the member which they want before posting.');
-  }
+  // sow-323 Phase 3 (owner, 2026-09-15): "Only superadmins can make shares public though, so don't even give members
+  // the option on creation." A share is members-only unless asked otherwise, and the Worker refuses a public one
+  // from anyone but a superadmin, so this no longer makes an agent ask the member a question with one real answer.
+  const visibility = shareVisibilityArg(args.visibility);
   let og = null;
   try { og = await ogPreview(ctx, { url }); } catch { og = null; } // best-effort: never block a share on extraction
   const input = stripBlank({

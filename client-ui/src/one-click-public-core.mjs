@@ -89,7 +89,9 @@ export const AUDIENCE_MODES = Object.freeze(['switch', 'locked-public', 'locked-
  * @param isSuperadmin       whether the Author rail resolved, which only a superadmin's adapter does
  * @param currentVisibility  the item's CURRENT visibility, from the loaded preset
  * @param existing           whether this item already exists in the repository (itemPath is set)
- * @returns { mode, value, note }  `value` is what the hidden input must submit.
+ * @returns { mode, value, note, publicStub }  `value` is what the hidden visibility input must submit. `publicStub`
+ *          is what a LOCKED control submits for the locked page (undefined in switch mode, where the author's own
+ *          toggle decides).
  */
 export function audienceControl({ paidTier = null, isSuperadmin = false, currentVisibility = null, existing = false } = {}) {
   const vis = String(currentVisibility ?? '') === 'members' ? 'members' : 'public';
@@ -105,11 +107,18 @@ export function audienceControl({ paidTier = null, isSuperadmin = false, current
       mode: 'locked-public',
       value: 'public',
       note: 'This is public, approved by a superadmin. Your edits stay public.',
+      // A public item never carries the locked-page flag: the content check refuses the two together.
+      publicStub: false,
     };
   }
   return {
     mode: 'locked-members',
     value: 'members',
     note: 'Members read this as soon as you publish. A superadmin reviews it before it appears on the public site.',
+    // sow-323 Phase 3: the item KEEPS ITS OWN PAGE while it waits (owner, 2026-09-12: members read it there, a
+    // signed-out visitor sees the locked card, and the superadmin approves from it). The locked control used to
+    // submit no flag at all, so every member item was saved with no page, and an edit stripped the page from one
+    // that had it.
+    publicStub: true,
   };
 }

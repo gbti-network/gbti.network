@@ -118,9 +118,12 @@ export function shouldAutoMerge(decision, paths) {
  * @param {Date}          [a.now]     clock injection for trial/grandfather windows.
  * @param {boolean}       [a.hostedContent] sow-193: the head is a `hosted/<id>/` CONTENT branch, so the
  *                                    Tier S + Tier A hard-fails apply even to a superadmin.
+ * @param {boolean}       [a.workerOpened] sow-323 Phase 3: GBTI's App opened this PR (the Worker's hosted or fork
+ *                                    route, which checked the audience). False, the default, holds an ordinary
+ *                                    supporter's reviewed content for a superadmin instead of merging it.
  * @returns {Promise<{check:'pass'|'fail', autoMerge:boolean, label:string, reasons:string[], status:string, role:string, ownedFolder:(string|null)}>}
  */
-export async function evaluatePR({ author, paths, changedFiles = null, overrides, stripe, botId = null, now = new Date(), resolveOwner = null, priceTierMap = null, hostedContent = false }) {
+export async function evaluatePR({ author, paths, changedFiles = null, overrides, stripe, botId = null, now = new Date(), resolveOwner = null, priceTierMap = null, hostedContent = false, workerOpened = false }) {
   const { roles, bans, grandfathers, membersIndex } = overrides;
   const authorId = String(author);
 
@@ -151,7 +154,7 @@ export async function evaluatePR({ author, paths, changedFiles = null, overrides
     ownerTier = isTier(r?.ownerTier) ? r.ownerTier : TIER.none;
   }
 
-  const d = decide({ paths, changedFiles, role, effective, ownedFolder, isBot, ownerApproved, ownerPaid, tier, ownerTier, hostedContent });
+  const d = decide({ paths, changedFiles, role, effective, ownedFolder, isBot, ownerApproved, ownerPaid, tier, ownerTier, hostedContent, workerOpened });
   return { ...d, status: effective.status, tier, role, ownedFolder, contributionTarget: target };
 }
 
@@ -161,6 +164,18 @@ export function readEvent(eventPath, botId = null) {
   const raw = fs.readFileSync(eventPath, 'utf8');
   const event = JSON.parse(raw);
   return parseEvent(event, botId);
+}
+
+/** sow-323 Phase 3: the comment on a supporter's content PR the gate holds for a superadmin (see decide()). */
+export const HOLD_NOTE =
+  'Thanks for your work. Articles, projects, prompts and shares from members are reviewed by a superadmin before ' +
+  'they appear publicly, and that review happens when you publish from the GBTI WorkBench, the extension or the ' +
+  'desktop client. This pull request was opened another way, so it stays open for a superadmin to review and ' +
+  'merge by hand. Nothing is lost. See https://gbti.network/submit-content/ for how publishing works.';
+
+/** True when the gate has just held a PR that does not already carry the hold label, so the note posts once. */
+export function shouldExplainHold(label, existingLabels) {
+  return label === 'held-for-review' && !(Array.isArray(existingLabels) && existingLabels.includes('held-for-review'));
 }
 
 /** Pure event parser (unit-testable). SOW-026: when GBTI's App bot opens the publish PR on a member's behalf
@@ -207,6 +222,7 @@ export function parseEvent(event, botId = null) {
     headSha: pr.head?.sha,
     botOpened,
     hostedContent, // sow-193: gate input, see decide()
+    labels: Array.isArray(pr.labels) ? pr.labels.map((l) => l?.name).filter((n) => typeof n === 'string') : [], // sow-323
   };
 }
 
@@ -228,7 +244,7 @@ async function main() {
 
   // Resolve PR metadata first so that even an early failure can be reported against the head sha. SOW-026:
   // botId lets the gate resolve the member from the PR head when GBTI's App opens the PR on their behalf.
-  const { number, author, headSha, hostedContent } = readEvent(process.env.GITHUB_EVENT_PATH, botId);
+  const { number, author, headSha, hostedContent, botOpened, labels } = readEvent(process.env.GITHUB_EVENT_PATH, botId);
   if (!headSha) throw new Error('could not resolve pull_request.head.sha from the event');
 
   try {
@@ -299,7 +315,7 @@ async function main() {
       return { ownerApproved, ownerPaid: ownerEff.status === 'paid', ownerTier };
     };
 
-    const d = await evaluatePR({ author, paths, changedFiles, overrides, stripe, botId, resolveOwner, priceTierMap, hostedContent });
+    const d = await evaluatePR({ author, paths, changedFiles, overrides, stripe, botId, resolveOwner, priceTierMap, hostedContent, workerOpened: botOpened });
 
     await gh.setStatus(headSha, {
       state: d.check === 'pass' ? 'success' : 'failure',
@@ -307,6 +323,11 @@ async function main() {
       description: d.reasons[0],
     });
     await gh.setLabels(number, [d.label]);
+
+    // sow-323 Phase 3: say why a held PR is not merging, once (the gate runs again on every push).
+    if (shouldExplainHold(d.label, labels)) {
+      try { await gh.comment(number, HOLD_NOTE); } catch (e) { console.error(`[pr-gate] could not comment on held PR #${number}: ${e?.message ?? e}`); }
+    }
 
     // Members only, and publishing is paid-only: auto-close a non-member PR (sign-up nudge) or a non-paid
     // trial member's content/contribution PR (upgrade nudge), but ONLY when the Stripe lookup was healthy,

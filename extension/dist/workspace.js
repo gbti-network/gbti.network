@@ -3498,13 +3498,20 @@ ${listStyleProseCss(".doc-blocks")}
       return {
         mode: "locked-public",
         value: "public",
-        note: "This is public, approved by a superadmin. Your edits stay public."
+        note: "This is public, approved by a superadmin. Your edits stay public.",
+        // A public item never carries the locked-page flag: the content check refuses the two together.
+        publicStub: false
       };
     }
     return {
       mode: "locked-members",
       value: "members",
-      note: "Members read this as soon as you publish. A superadmin reviews it before it appears on the public site."
+      note: "Members read this as soon as you publish. A superadmin reviews it before it appears on the public site.",
+      // sow-323 Phase 3: the item KEEPS ITS OWN PAGE while it waits (owner, 2026-09-12: members read it there, a
+      // signed-out visitor sees the locked card, and the superadmin approves from it). The locked control used to
+      // submit no flag at all, so every member item was saved with no page, and an edit stripped the page from one
+      // that had it.
+      publicStub: true
     };
   }
 
@@ -6227,6 +6234,7 @@ ${listStyleProseCss(".doc-blocks")}
           return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Audience</label>
           <div class="vislocked" data-vislocked>${icon2} <b>${word}</b></div>
           <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
+          ${stubField && aud.publicStub === true ? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden />' : ""}
           <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
           <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
         }
@@ -14926,10 +14934,10 @@ ${listStyleProseCss(".doc-blocks")}
     if (membership === "trialing") return "trial";
     return "composer";
   }
-  function canSharePublicly({ membership, tier = null } = {}) {
+  function canSharePublicly({ membership, role = null, editingPublic = false } = {}) {
     if (SHARE_LOCKED_STATES.has(membership) || membership === "trialing") return false;
-    if (!tier) return true;
-    return tier === "creator";
+    if (editingPublic === true) return true;
+    return role === "superadmin";
   }
   var SHARE_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
   function editInputFor({ share, fields = {}, now = null, status = null } = {}) {
@@ -15149,9 +15157,11 @@ ${listStyleProseCss(".doc-blocks")}
         const s = await this.client.status();
         this._membership = s?.membership ?? "unknown";
         this._tier = typeof s?.paidTier === "string" ? s.paidTier : null;
+        this._role = typeof s?.role === "string" ? s.role : null;
       } catch {
         this._membership = "unknown";
         this._tier = null;
+        this._role = null;
       }
       this.render();
     }
@@ -15165,8 +15175,8 @@ ${listStyleProseCss(".doc-blocks")}
           return this._renderLocked();
         case "trial":
           return this._renderTrial();
-        // sow-293: 'not-creator' is gone from this switch. The upgrade nudge did not disappear, it MOVED to
-        // the audience step, where it explains why Public is unavailable. See _applyPublicLock.
+        // sow-293: 'not-creator' is gone from this switch. sow-323 Phase 3: the audience step offers Public only to a
+        // superadmin (or to keep an already-public share public while it is edited). See _applyPublicLock.
         default:
           return this._renderComposer();
       }
@@ -15262,13 +15272,6 @@ ${listStyleProseCss(".doc-blocks")}
             </button>
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
-          <p class="sub" data-public-nudge hidden>
-            <!-- sow-323: this said "Sharing publicly is part of Curator membership. Apply to become a Curator."
-                 Public sharing is not a plan any more: the share goes out to members now and a superadmin
-                 reviews it for the public site. Nothing to buy, nothing to apply for. -->
-            Members see this straight away. A superadmin reviews it before it appears publicly.
-            <a href="https://gbti.network/submit-content/">How publishing works</a>.
-          </p>
         </section>
 
         <div class="wizfoot">
@@ -15383,28 +15386,28 @@ ${listStyleProseCss(".doc-blocks")}
       }
     }
     /**
-     * sow-293: the Curator tier unlocks the PUBLIC audience. A Network Member gets the composer and posts
-     * members-only, with the upgrade nudge explaining why the second chip is unavailable.
+     * sow-323 Phase 3: the Public audience is a superadmin's (owner, 2026-09-15), so for everyone else the choice is
+     * not shown at all, rather than shown and disabled. Editing a share that is already public keeps the choice, so
+     * the author's edit does not take an approved share down.
      *
-     * This is an AFFORDANCE, not the boundary. The Worker reads the share's own `visibility` out of the files
-     * it is about to commit and refuses a public one from a non-creator (isMembersOnlyShare in
-     * workers/signup/membership-author.mjs), so poking the DOM buys nothing. It is here so a member does not
-     * compose a public share and meet the wall at submit.
+     * This is an AFFORDANCE, not the boundary: the Worker refuses a public share from anyone but a superadmin
+     * (membership-audience.mjs), so poking the DOM buys nothing.
      */
+    _publicAllowed() {
+      return canSharePublicly({ membership: this._membership, role: this._role, editingPublic: this._edit?.visibility === "public" });
+    }
     _applyPublicLock() {
-      const allowed = canSharePublicly({ membership: this._membership, tier: this._tier });
+      const allowed = this._publicAllowed();
       const chip = this.$("[data-public]");
-      const nudge2 = this.$("[data-public-nudge]");
       if (chip) {
+        chip.hidden = !allowed;
         chip.disabled = !allowed;
         chip.setAttribute("aria-disabled", allowed ? "false" : "true");
-        chip.classList.toggle("locked", !allowed);
       }
-      if (nudge2) nudge2.hidden = allowed;
       if (!allowed && this._visibility === "public") this._selectAudience("members");
     }
     _selectAudience(vis) {
-      if (vis === "public" && !canSharePublicly({ membership: this._membership, tier: this._tier })) return;
+      if (vis === "public" && !this._publicAllowed()) return;
       this._visibility = vis === "public" ? "public" : "members";
       for (const c of this.$$("[data-vis]")) {
         const on = c.dataset.vis === this._visibility;
@@ -15462,6 +15465,7 @@ ${listStyleProseCss(".doc-blocks")}
           box.innerHTML = "";
         });
       }
+      this._applyPublicLock();
       this._selectAudience(item.visibility === "public" ? "public" : "members");
       this._applyEditChrome(decryptNote);
       this._paintAuthorRow();

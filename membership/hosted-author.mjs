@@ -264,7 +264,9 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
 // profile is a supporter's presence, and paid access is what unlocks it; moderation flags stay the backstop).
 
 /** The member-folder directories that hold reviewable content, and the content type each one carries. */
-export const REVIEWABLE_DIRS = Object.freeze({ posts: 'post', projects: 'project', prompts: 'prompt', shares: 'share' });
+// sow-323 Phase 3: products/ is the retired name of projects/ and still builds as a project (src/content.config.ts),
+// so leaving it out let a public project skip review by sitting in the old folder.
+export const REVIEWABLE_DIRS = Object.freeze({ posts: 'post', projects: 'project', products: 'project', prompts: 'prompt', shares: 'share' });
 
 /** The URL base a rename records in `redirectFrom`, per type, so an old slug can be recovered from it. */
 const RENAME_URL_DIR = Object.freeze({ post: 'articles', project: 'projects', prompt: 'prompts', share: 'shares' });
@@ -316,9 +318,12 @@ export function pathsNeedingApproval(files, folder) {
   for (const f of files) {
     const path = typeof f === 'string' ? f : f?.path;
     if (typeof path !== 'string' || path.includes('..')) continue;
-    const m = new RegExp(`^members/${folder}/(posts|projects|prompts|shares)/(.+)$`).exec(path);
+    const m = new RegExp(`^members/${folder}/(posts|projects|products|prompts|shares)/(.+)$`).exec(path);
     if (!m) continue;                                   // comments, profile.md, images, _enc: not reviewable
     if (!/\.(md|mdx)$/.test(path)) continue;             // only the frontmatter-bearing file states an audience
+    // sow-323 Phase 3: a DELETE publishes nothing, so it never needs approval. It used to read as unreadable and be
+    // refused, which refused every rename or author move of a members-only item (the old path is deleted).
+    if (typeof f === 'object' && f !== null && f.content === null && f.contentBase64 == null) continue;
     const type = REVIEWABLE_DIRS[m[1]];
     const content = typeof f === 'string' ? null : f?.content;
     if (statedVisibility(content) === 'members') continue;

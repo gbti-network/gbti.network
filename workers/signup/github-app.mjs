@@ -12,6 +12,8 @@ import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 3a: bearer-or-cookie identity for the member reads
 import { authorizePaid } from './membership-content.mjs'; // sow-323: publishing is paid; the AUDIENCE is gated in membership-author.mjs
 import { parseHostedRef } from '../../membership/hosted-author.mjs'; // SOW-157: hosted PR ownership match
+import { authorizeSuperadmin } from './membership-admin.mjs'; // sow-323 Phase 3: only a superadmin makes a share public
+import { audienceRefusal } from './membership-audience.mjs'; // sow-323 Phase 3: the SAME audience rule as the hosted route
 
 const GH = 'https://api.github.com';
 const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
@@ -119,9 +121,47 @@ export async function getForkInstallationToken(env, login, { fetchImpl = globalT
  * identifies them; the PR is opened with the canonical-repo installation token. A member may only open a PR
  * whose HEAD is their OWN fork (head = "<their-login>:<branch>"); anything else is rejected.
  */
+/**
+ * sow-323 Phase 3: the reviewable content files a member's fork branch changes against `base`, with their text AT
+ * THE BRANCH TIP, so the audience rule can read what the pull request would merge. Read through the canonical repo:
+ * a cross-fork compare (`base...owner:branch`) lists the files and the tip commit, and a fork commit's file is
+ * readable from the canonical repo by that commit (both verified against the live repository on 2026-09-15).
+ * By commit, never by branch name, so a push between this read and the merge is a new pull request event the gate
+ * holds rather than a file this read never saw.
+ *
+ * FAILS CLOSED: an unreadable compare, a tip that cannot be named, a truncated file list (GitHub stops at 300), or
+ * any unreadable file answers { ok: false } and the route refuses.
+ */
+export async function forkChangesForAudience({ fetchImpl, instToken, upstream, base, head }) {
+  try {
+    const cmp = await fetchImpl(`${GH}/repos/${upstream}/compare/${base}...${head}`, { headers: GH_HEADERS(instToken) });
+    if (!cmp || !cmp.ok) return { ok: false };
+    const data = await cmp.json().catch(() => null);
+    const files = Array.isArray(data?.files) ? data.files : null;
+    if (!files || files.length >= 300) return { ok: false };
+    const tip = Array.isArray(data?.commits) && data.commits.length ? data.commits[data.commits.length - 1]?.sha : null;
+    const out = [];
+    for (const f of files) {
+      const path = String(f?.filename || '');
+      if (!/^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts|shares)\/.+\.(md|mdx)$/.test(path)) continue;
+      if (f.status === 'removed') { out.push({ path, content: null }); continue; }
+      if (!/^[0-9a-f]{40}$/.test(String(tip || ''))) return { ok: false };
+      const r = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=${tip}`, {
+        headers: { ...GH_HEADERS(instToken), Accept: 'application/vnd.github.raw' },
+      });
+      if (!r || r.status !== 200) return { ok: false };
+      out.push({ path, content: await r.text() });
+    }
+    return { ok: true, files: out };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function openPullForMember(request, env, deps = {}) {
   const {
     fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, authorize = authorizePaid,
+    authorizeSuper = authorizeSuperadmin, forkChanges = forkChangesForAudience,
     upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
   } = deps;
 
@@ -145,9 +185,27 @@ export async function openPullForMember(request, env, deps = {}) {
   const headOwner = head.includes(':') ? head.split(':')[0].toLowerCase() : '';
   if (headOwner !== login) return { status: 403, body: { error: 'forbidden', message: 'the PR head must be your own fork' } };
   if (!/^[\w.\/-]{1,100}$/.test(base)) return { status: 400, body: { error: 'bad_request', message: 'invalid base branch' } };
+  // sow-323 Phase 3: the branch half is interpolated into the compare URL below, so bound its shape here.
+  if (!/^[\w.-]+:[\w.\/-]{1,200}$/.test(head)) return { status: 400, body: { error: 'bad_request', message: 'invalid head branch' } };
 
   let instToken;
   try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+
+  // sow-323 Phase 3: the AUDIENCE rule the hosted route applies (membership-audience.mjs). This route opens a pull
+  // request from the member's fork, and the gate reads only paths, so without this a member publishing from a fork
+  // put public content on the site with no review. Every member folder the branch touches is checked, so content
+  // placed in another member's folder is held to the same rule.
+  const changes = await forkChanges({ fetchImpl, instToken, upstream, base, head });
+  if (!changes?.ok) return { status: 502, body: { error: 'git_failed', message: 'could not read the changes on your branch to check who may see them; try again' } };
+  const folders = [...new Set(changes.files.map((f) => /^members\/([a-z0-9][a-z0-9-]*)\//.exec(f.path)?.[1]).filter(Boolean))];
+  if (folders.length) {
+    const superadmin = await authorizeSuper(request, env, deps);
+    const refusal = await audienceRefusal({
+      files: changes.files, folders, tier: paid.tier, isSuperadmin: superadmin?.ok === true,
+      approvedCheck: deps.approvedCheck, fetchImpl, instToken, upstream,
+    });
+    if (refusal) return refusal;
+  }
 
   const res = await fetchImpl(`${GH}/repos/${upstream}/pulls`, {
     method: 'POST',

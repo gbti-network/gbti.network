@@ -190,6 +190,13 @@ export function isContributionToFolder(paths, ownerFolder) {
  */
 export const TYPE_OTHER = 'other';
 
+/** sow-323 Phase 3: an encrypted members-only body, `_enc/<type>-<slug>-body.enc`, and the type its name declares.
+ *  The types are the ones encAssetFor is called with; the slug shape is the content slug shape. */
+const ENC_BODY_TYPE_RE = /^_enc\/(post|project|product|prompt|share|comment)-[a-z0-9][a-z0-9._-]*-body\.enc$/;
+
+/** sow-323 Phase 3: the own-folder types whose AUDIENCE a superadmin reviews (comments and profiles are not). */
+const REVIEWED_TYPES = Object.freeze(['post', 'project', 'product', 'prompt', 'share']);
+
 /**
  * Which content types an own-folder PR publishes (for labelling/notification, and the sow-185 tier floor).
  * Any own-folder path that is not profile.md and not under a CONTENT_DIRS dir reports as TYPE_OTHER; see above.
@@ -210,6 +217,12 @@ export function contentTypesTouched(paths, ownedFolder) {
         // separates "is this a reviewable contribution" from "what type is this", which that one list used
         // to answer at once. Only requiredTierFor consumes this, and only its ownFolder form relaxes.
         else if (dir === 'shares') types.add('share');
+        // sow-323 Phase 3: a members-only BODY is committed beside its item as _enc/<type>-<slug>-body.enc
+        // (client/src/member-content.mjs encAssetFor), so every members-only publish carries one. It used to fall
+        // to TYPE_OTHER, which requires the higher tier, so the gate closed EVERY supporter's members-only article
+        // and comment: the exact thing the one-plan change promised them. Classify it by the type its name
+        // declares; a name this cannot read still reports TYPE_OTHER, so the fail-closed default is unchanged.
+        else if (dir === '_enc' && ENC_BODY_TYPE_RE.test(rest)) types.add(ENC_BODY_TYPE_RE.exec(rest)[1]);
         else types.add(TYPE_OTHER); // never silently drop it: an unclassified own-folder path requires creator
       }
     }
@@ -286,7 +299,7 @@ const pass = (label, autoMerge, reason) => ({ check: 'pass', autoMerge, label, r
  * @param {string}   [a.tier]          the author's effective TIER (tier-gate resolveEffectiveTier), default none
  * @param {string}   [a.ownerTier]     for a contribution: the target folder owner's effective TIER, default none
  */
-export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBot = false, ownerApproved = false, ownerPaid = false, tier = TIER.none, ownerTier = TIER.none, hostedContent = false, changedFiles = null }) {
+export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBot = false, ownerApproved = false, ownerPaid = false, tier = TIER.none, ownerTier = TIER.none, hostedContent = false, changedFiles = null, workerOpened = false }) {
   const c = classifyPaths(paths, ownedFolder);
   // isBot is a FLOOR, not an override: it promotes an unprivileged bot to admin, but never DEMOTES a
   // bot that already holds a higher role. So an automation account that is also a superadmin (for
@@ -402,15 +415,25 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
     return fail('rejected-escalation', `mixed or multi-owner cross-folder PR: ${c.otherMemberPaths.join(', ')}`);
   }
 
-  // 7. Plain member: own folder only at this point. Publishing requires paid AND the tier for what is being
-  //    published (sow-185): Content Creator for public presence (post/product/prompt/profile), Network Member
-  //    for comments. A trial member's drafts stay on their own fork until they pay (the gate rejects + the
-  //    runnable wrapper auto-closes with a nudge), so no trial content ever reaches the canonical repo.
+  // 7. Plain member: own folder only at this point. Publishing requires paid; every recognised content type sits
+  //    on the member floor since the one-plan change (sow-323, requiredTierFor), and WHO may make it public is the
+  //    Worker's audience rule plus the hold below. A trial member's drafts stay on their own fork until they pay
+  //    (the gate rejects + the runnable wrapper auto-closes with a nudge), so no trial content reaches the repo.
   if (status === 'paid') {
-    const required = requiredTierFor(contentTypesTouched(paths, ownedFolder), { ownFolder: true }); // sow-293
+    const types = contentTypesTouched(paths, ownedFolder);
+    const required = requiredTierFor(types, { ownFolder: true }); // sow-293
     if (!meetsTier(tier, required)) {
       const need = tierLabel(required); // sow-316: the public tier name comes from one place
       return fail('rejected-not-creator', `publishing this content requires the ${need} tier or higher (your tier: ${tier ?? 'none'})`);
+    }
+    // sow-323 Phase 3: WHO may make content public is decided in the Worker, which can read the frontmatter this
+    // gate deliberately cannot (membership-author.mjs, and the fork route in github-app.mjs). A pull request the
+    // Worker did NOT open never passed that check: a member opening one by hand could put a public article on
+    // the site with no review. So an ordinary supporter's reviewed content from anywhere but the Worker is HELD,
+    // not closed and not merged: it stays open and green for a superadmin to merge by hand. A trusted author (the
+    // silently granted tier) is not reviewed, and comments and profiles are outside review, so neither is held.
+    if (!workerOpened && !meetsTier(tier, TIER.creator) && types.some((t) => REVIEWED_TYPES.includes(t))) {
+      return pass('held-for-review', false, 'content opened outside the GBTI publishing app waits for a superadmin to review it');
     }
     return pass('paid', c.ownFolderOnly, 'paid member own-folder content');
   }

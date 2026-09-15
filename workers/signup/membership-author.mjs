@@ -14,12 +14,12 @@
 
 import { githubFetchUser } from './oauth.mjs';
 import { authorizeCreator, authorizePaid } from './membership-content.mjs'; // sow-301: paid gates the route, creator gates PUBLISHING
-import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-323: the trusted-author waiver only
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
 import { kickDispatch } from './checkout.mjs';
-import { pathsNeedingApproval, statedVisibility } from '../../membership/hosted-author.mjs'; // sow-323
+import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // sow-323: shared with the fork route
+export { audienceRefusal, approvedOnMain }; // tests and callers keep importing them from here
 import { parseMembersIndex, validateHostedRequest, hostedBranchFor } from '../../membership/hosted-author.mjs';
 
 const GH = 'https://api.github.com';
@@ -57,67 +57,6 @@ export function isCommentOnly(files, folder) {
     const path = typeof f === 'string' ? f : f?.path;
     return typeof path === 'string' && path.startsWith(prefix) && !path.includes('..');
   });
-}
-
-/**
- * sow-293: is this file set a MEMBERS-ONLY share in the caller's own folder?
- *
- * Sharing opened up to every paid member, but PUBLIC sharing stays Content Creator only, so this is the
- * second exemption from the creator gate alongside isCommentOnly. It is a stricter check than that one,
- * because a share's visibility is not in its path: the answer lives in the frontmatter, and this function is
- * the only place that reads it.
- *
- * FAIL-CLOSED IN EVERY DIRECTION, and each clause is a way a public share could otherwise slip through as a
- * members-only one:
- *   - a non-array, an EMPTY set, or a malformed entry              -> false
- *   - ONE path outside `members/<folder>/shares/`                  -> false
- *   - a `.md` whose content is missing or not a string             -> false (we cannot read it, so we do not vouch)
- *   - a `.md` without a POSITIVE `visibility: members` frontmatter  -> false (absent is not members-only:
- *     the schema default for a share is `public`, so silence means public)
- *   - NO `.md` at all (an `.enc` on its own)                        -> false (nothing to check the visibility of)
- *
- * A members-only share is committed as a stub `.md` plus a sibling `.enc` holding the encrypted body
- * (SOW-016), so a two-file set is the normal case and the `.enc` carries no frontmatter to check.
- *
- * THE GATE THIS FEEDS IS THE WEBSITE'S, NOT THE LAST WORD. The PR gate reads changed PATHS only and cannot
- * see visibility, so it admits any share at Network Member tier (owner ruling 2026-09-03). A paying member
- * who hand-builds a pull request can therefore publish one public share without holding Content Creator.
- * That was weighed and accepted: it is a rule being bent by an authenticated member inside their own folder,
- * not an escalation, and closing it would mean either widening the gate beyond paths or migrating every
- * existing share into a visibility-named folder.
- *
- * Exported for tests: this decides who may publish publicly, so it must be assertable without a Worker.
- */
-/**
- * sow-323: is EVERY one of these repository paths already PUBLIC on main?
- *
- * This is the "already approved" waiver on the members-first rule. An author editing an article a superadmin
- * already approved must not be refused, and must not have their page taken down by their own typo fix, so the
- * gate asks main what the item's audience is today rather than trusting the request.
- *
- * Generalised from sow-304's isShareEdit, which read main for exactly this shape of question (does this path
- * exist there?) in order to exempt a share edit from the six-hour throttle. The throttle is gone by the owner's
- * decision of 2026-09-12, so its machinery now serves the audience rule instead of being deleted. The one real
- * difference: existence is not enough any more, the file's own frontmatter has to SAY public, so this reads the
- * raw text rather than only the status.
- *
- * FAILS CLOSED at every step: an empty list, a non-200, an unreadable body, a members-only file, or a thrown
- * fetch all answer false, which sends the request to the approval refusal.
- */
-export async function approvedOnMain({ fetchImpl, instToken, upstream, paths }) {
-  const list = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p && !p.includes('..')) : [];
-  if (!list.length) return false;
-  for (const path of list) {
-    try {
-      const r = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=main`, {
-        headers: { ...GH_HEADERS(instToken), Accept: 'application/vnd.github.raw' },
-      });
-      if (!r || r.status !== 200) return false;
-      const text = await r.text();
-      if (statedVisibility(text) !== 'public') return false;
-    } catch { return false; }
-  }
-  return true;
 }
 
 export async function membershipAuthor(request, env, deps = {}) {
@@ -205,32 +144,19 @@ export async function membershipAuthor(request, env, deps = {}) {
   // it `comment-anything`. validateHostedRequest has already confirmed these paths sit in the caller's own
   // folder (or that a re-verified superadmin may target another), so by here the paths are trustworthy.
   //
-  // THE WAIVERS, and each is a positive confirmation rather than an absence:
-  //   1. A trusted author (the creator tier, now granted silently by a superadmin and never sold) publishes
-  //      public directly. This is the only remaining use of that tier.
+  // THE WAIVERS (membership-audience.mjs audienceRefusal), each a positive confirmation rather than an absence:
+  //   1. A trusted author (the creator tier, granted silently by a superadmin and never sold) publishes an article,
+  //      project or prompt public directly. A SHARE is public only from a superadmin (owner, 2026-09-15).
   //   2. An item ALREADY public on main stays publishable by its author, so a typo fix does not take their
   //      approved page down, and a rename carries its old URL in redirectFrom so that path is checked instead.
   // Everything else is refused, including an absent `visibility` (the schema default is public, so silence
-  // means public) and an unreadable file. Comments and profiles never reach here: pathsNeedingApproval only
-  // looks under posts/, projects/, prompts/ and shares/.
-  const needsApproval = pathsNeedingApproval(payload?.files, folder);
-  if (needsApproval.length && !meetsTier(paid.tier, TIER.creator)) {
-    const { approvedCheck = approvedOnMain } = deps;
-    let allApproved = true;
-    for (const item of needsApproval) {
-      const candidates = [item.path, ...item.priorPaths];
-      let ok = false;
-      for (const path of candidates) {
-        if (await approvedCheck({ fetchImpl, instToken, upstream, paths: [path] })) { ok = true; break; }
-      }
-      if (!ok) { allApproved = false; break; }
-    }
-    if (!allApproved) {
-      return { status: 403, body: { error: 'review_required', message:
-        'public content is approved by a superadmin after editorial review. Publish this to members only and it '
-        + 'enters the review queue, or ask a superadmin to approve it: https://gbti.network/submit-content/' } };
-    }
-  }
+  // means public) and an unreadable file. A delete publishes nothing and is not checked. Comments and profiles
+  // never reach the rule: it only looks under posts/, projects/, products/, prompts/ and shares/.
+  const refusal = await audienceRefusal({
+    files: payload?.files, folders: [folder], tier: paid.tier, isSuperadmin: allowAnyFolder,
+    approvedCheck: deps.approvedCheck, fetchImpl, instToken, upstream,
+  });
+  if (refusal) return refusal;
 
   const branch = hostedBranchFor(githubId, itemId);
   if (!branch) return { status: 400, body: { error: 'bad_request', message: 'invalid itemId' } };

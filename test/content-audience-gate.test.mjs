@@ -67,8 +67,16 @@ test('comments and profiles are outside the rule BY CONSTRUCTION, not by a carve
   assert.equal(isCommentOnly([{ path: 'members/ada/posts/p/index.md' }], 'ada'), false);
 });
 
+test('a delete needs no approval, and an unreadable non-delete still does', () => {
+  // sow-323 Phase 3: a delete publishes nothing. It used to read as unreadable, which refused every rename or
+  // author move of a members-only item. Only a TRUE delete (content null, no binary) is waived.
+  assert.equal(needs([{ path: 'members/ada/posts/old/index.md', content: null }]), false);
+  assert.equal(needs([{ path: 'members/ada/posts/old/index.md', content: null, contentBase64: 'AAAA' }]), true);
+  assert.equal(needs([{ path: 'members/ada/posts/old/index.md' }]), true, 'a missing content field is not a delete');
+});
+
 test('all four reviewable directories are covered, and nothing else is', () => {
-  for (const [dir, tail] of [['posts', 'p/index.md'], ['projects', 'p/index.md'], ['prompts', 'p/index.md'], ['shares', 'x.md']]) {
+  for (const [dir, tail] of [['posts', 'p/index.md'], ['projects', 'p/index.md'], ['products', 'p/index.md'], ['prompts', 'p/index.md'], ['shares', 'x.md']]) {
     assert.equal(needs([md('public', `members/ada/${dir}/${tail}`)]), true, `${dir} must be reviewable`);
     assert.equal(needs([md('members', `members/ada/${dir}/${tail}`)]), false, `${dir} members-only must pass`);
   }

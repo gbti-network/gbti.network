@@ -85,21 +85,16 @@ export function optimisticShareItem({ res, input = {}, body = '', now = null } =
 // element's own branch names across test/ returned zero files, with a positive control confirming the search
 // reached them, so the tier gate the owner just tightened was resting on nothing.
 //
-// THE AFFORDANCE IS NOT THE BOUNDARY, and that is deliberate rather than an oversight. The server already
-// refuses a non-creator share in two independent places: authorizeCreator on the hosted author route, and
-// requiredTierFor at the PR gate, which drops to member tier only when every touched type is a comment. This
-// function exists so a Network Member does not compose an entire Share and meet the wall AFTER submitting,
-// as a rejected pull request. Removing it would degrade the experience; it would not open a hole.
+// THE AFFORDANCE IS NOT THE BOUNDARY, and that is deliberate rather than an oversight. The server decides: the
+// Worker's audience rule (workers/signup/membership-audience.mjs) refuses a public share from anyone but a
+// superadmin, on both publish routes. This function exists so a member does not compose an entire Share and meet
+// the wall AFTER submitting. Removing it would degrade the experience; it would not open a hole.
 export const SHARE_LOCKED_STATES = new Set(['expired', 'cancelled', 'none', 'banned']);
 
 /**
  * sow-293 INVERTED this gate, by owner ruling of 2026-09-03. It used to withhold the WHOLE composer from a
  * paid member below Content Creator (the sow-218 `not-creator` splash). Sharing is now open to every paid
- * member, and the tier gates the VISIBILITY instead: see canSharePublicly below.
- *
- * `not-creator` is deliberately still in the union and is still reachable from canSharePublicly's caller,
- * because the upgrade nudge did not disappear, it MOVED: it now appears against the public option rather
- * than against the composer.
+ * member; only the Public audience is restricted, to superadmins (sow-323, see canSharePublicly below).
  *
  * @returns {'no-client'|'loading'|'locked'|'trial'|'composer'}
  */
@@ -112,25 +107,23 @@ export function shareComposerView({ hasClient = false, membership } = {}) {
 }
 
 /**
- * sow-323: may this member post a share straight to PUBLIC, without editorial review?
+ * sow-323 Phase 3: may this viewer choose PUBLIC for a share?
  *
- * The question used to be "are they a Content Creator", sold as a plan. Since the owner collapsed the two paid
- * plans on 2026-09-12 it is "are they a TRUSTED author": a superadmin grants that silently to a supporter who no
- * longer needs reviewing. The tier key is unchanged, so this function is unchanged in shape; what changed is
- * what a `false` MEANS, and therefore what the composer says next. It is no longer an invitation to buy or apply
- * for anything. A public share by an ordinary supporter is not refused, it goes out to members and enters the
- * review queue.
+ * Owner, 2026-09-15: "Only superadmins can make shares public though, so don't even give members the option on
+ * creation." So the Public choice is offered to a SUPERADMIN, and otherwise only to keep a share that is ALREADY
+ * public public while its author edits it (an approved share must not be taken down by its author's typo fix, and
+ * the Worker admits that edit through approvedOnMain). A trusted author does not get it: that tier waives review
+ * for articles, projects and prompts, not for shares.
  *
- * FAIL OPEN ON AN ABSENT TIER, ON PURPOSE, carried over verbatim through both rewrites. A down status oracle
- * must not silently strip direct publishing from a trusted author, and the affordance is not the boundary: the
- * Worker reads the file's own `visibility` before committing anything (pathsNeedingApproval plus approvedOnMain
- * in workers/signup/membership-author.mjs), so the worst case here is a composer offering an option the server
- * then routes through review, which is the same failure it already risks when the oracle is down.
+ * FAILS CLOSED on an absent role now. It used to fail open on an absent tier so a down status oracle could not
+ * strip public posting from a trusted author, but the only people who may post a public share are superadmins,
+ * and the Worker refuses everyone else (membership-audience.mjs), so offering the option on an unknown role would
+ * only offer something the server then refuses.
  */
-export function canSharePublicly({ membership, tier = null } = {}) {
+export function canSharePublicly({ membership, role = null, editingPublic = false } = {}) {
   if (SHARE_LOCKED_STATES.has(membership) || membership === 'trialing') return false;
-  if (!tier) return true; // absent tier: see the fail-open note above
-  return tier === 'creator';
+  if (editingPublic === true) return true;
+  return role === 'superadmin';
 }
 
 // ---- sow-304: editing a published share ----------------------------------------------------------------------
@@ -140,7 +133,8 @@ export function canSharePublicly({ membership, tier = null } = {}) {
 //
 // Owner decisions, 2026-09-09: the url is FROZEN after publish (it is the identity of what was shared; discussion,
 // upvotes and the Discord and Reddit posts all point at it) but the member may REMOVE it; title, description,
-// note, category, tags and image are editable; the audience may change in either direction; a share is never
+// note, category, tags and image are editable; the audience may change in either direction (sow-323: public only by a
+// superadmin, or kept public on an already-public share); a share is never
 // deleted, only unpublished (status: draft) through the same path; an edit never re-syndicates (syndication fires
 // on the first publish transition only, which is already how the enqueue runner works).
 

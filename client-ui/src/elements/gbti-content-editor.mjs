@@ -1040,6 +1040,7 @@ class GbtiContentEditor extends GbtiElement {
         return `<div class="fld visfield" data-fkey="visibility"${visible ? '' : ' hidden'}><label>Audience</label>
           <div class="vislocked" data-vislocked>${icon} <b>${word}</b></div>
           <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
+          ${stubField && aud.publicStub === true ? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden />' : ''}
           <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
           <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
       }

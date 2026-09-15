@@ -62,23 +62,24 @@ test('shareComposerView: every membership and tier lands on the state the member
   assert.equal(v({ hasClient: true, membership: 'unknown', tier: null }), 'composer');
 });
 
-test('sow-293 canSharePublicly: the tier gates PUBLIC sharing, and nothing else', () => {
+test('sow-323 canSharePublicly: only a SUPERADMIN chooses Public, and an already-public share keeps it while edited', () => {
   const p = (o) => canSharePublicly(o);
-  assert.equal(p({ membership: 'paid', tier: 'creator' }), true);
-  assert.equal(p({ membership: 'paid', tier: 'member' }), false, 'a Network Member shares to members only');
-
-  // Anyone who cannot reach the composer at all certainly cannot post publicly. Asserted rather than assumed,
-  // because these two functions are read side by side and a reader will expect them to agree.
-  for (const m of ['expired', 'cancelled', 'none', 'banned', 'trialing']) {
-    assert.equal(p({ membership: m, tier: 'creator' }), false, `${m} must not post publicly even holding creator`);
+  // Owner, 2026-09-15: "Only superadmins can make shares public though, so don't even give members the option on
+  // creation." The trusted tier waives review for articles, projects and prompts, NOT for shares.
+  assert.equal(p({ membership: 'paid', role: 'superadmin' }), true);
+  for (const role of ['member', 'moderator', 'admin']) {
+    assert.equal(p({ membership: 'paid', role }), false, `${role} gets no Public option`);
   }
-
-  // FAIL OPEN ON AN ABSENT TIER, carried over verbatim from the gate this replaces. An absent tier means the
-  // oracle did not answer, not that the answer was no, and stripping public posting from a real Content
-  // Creator because a status call failed is the worse error. The Worker reads the file's own visibility
-  // before committing, so the affordance is not the boundary.
-  for (const t of [null, undefined, '']) {
-    assert.equal(p({ membership: 'paid', tier: t }), true, 'an unresolved tier fails OPEN; the Worker is the authority');
+  assert.equal(p({ membership: 'paid', role: 'member', tier: 'creator' }), false, 'a trusted author gets no Public option for a share');
+  // FAILS CLOSED on an unknown role now: the Worker refuses everyone but a superadmin, so offering it on a guess
+  // only offers something the server then refuses.
+  for (const role of [null, undefined, '']) assert.equal(p({ membership: 'paid', role }), false, JSON.stringify(role));
+  // an approved share must not be taken down by its author's edit
+  assert.equal(p({ membership: 'paid', role: 'member', editingPublic: true }), true);
+  // anyone who cannot reach the composer cannot post publicly, superadmin role or not
+  for (const m of ['expired', 'cancelled', 'none', 'banned', 'trialing']) {
+    assert.equal(p({ membership: m, role: 'superadmin' }), false, m);
+    assert.equal(p({ membership: m, role: 'member', editingPublic: true }), false, `${m} editing`);
   }
 });
 

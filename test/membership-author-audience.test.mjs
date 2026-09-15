@@ -55,7 +55,12 @@ function ghFetch(existing = [], { contentsThrow = false } = {}) {
 const PUB_ID = '20260901120000-a-public-share';
 const pubStub = { path: `members/atwellpub/shares/${PUB_ID}.md`, content: `---\ntype: share\nid: ${PUB_ID}\nauthor: atwellpub\nstatus: published\nvisibility: public\n---\nA link worth reading.\n` };
 const pubBody = { itemId: `share-${PUB_ID}`, title: 'A public share', files: [pubStub] };
-const run = (b, authorize, gh) => membershipAuthor(req(b), env, { fetchImpl: gh, fetchUser: userMe, authorize, kv: fakeKv(), signJwt });
+const notSuper = async () => ({ ok: false, status: 403 });
+const isSuper = async () => ({ ok: true, githubId: '2002207' });
+const run = (b, authorize, gh, authorizeSuper = notSuper) => membershipAuthor(req(b), env, { fetchImpl: gh, fetchUser: userMe, authorize, authorizeSuper, kv: fakeKv(), signJwt });
+// sow-323 Phase 3: a public ARTICLE, because shares now have their own rule (only a superadmin makes one public).
+const pubPost = { path: 'members/atwellpub/posts/a-public-piece/index.md', content: '---\ntype: post\ntitle: A public piece\nstatus: published\nvisibility: public\n---\nBody.\n' };
+const pubPostBody = { itemId: 'post-a-public-piece', title: 'A public piece', files: [pubPost] };
 
 test('pathsNeedingApproval is the pure half: members-only passes, public and silence and unreadable do not', () => {
   assert.deepEqual(pathsNeedingApproval([stub, enc], 'atwellpub'), [], 'a members share needs no approval');
@@ -81,7 +86,7 @@ test('a paid supporter publishes a MEMBERS-ONLY item with no approval and no cre
 });
 
 test('the same supporter publishing a PUBLIC item is refused for review, not for payment', async () => {
-  const r = await run(pubBody, memberOk, ghFetch([]));
+  const r = await run(pubPostBody, memberOk, ghFetch([]));
   assert.equal(r.status, 403);
   assert.equal(r.body.error, 'review_required', 'the error must name review, not membership: the old message told a paying member to pay');
   assert.match(r.body.message, /approved by a superadmin after editorial review/);
@@ -93,12 +98,39 @@ test('an item ALREADY public on main stays publishable by its author, so a typo 
 });
 
 test('a trusted author (the silently granted creator tier) publishes public directly', async () => {
-  const r = await run(pubBody, creatorOk, ghFetch([]));
+  const r = await run(pubPostBody, creatorOk, ghFetch([]));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+});
+
+test('only a SUPERADMIN makes a share public: a supporter and a trusted author are both refused (owner, 2026-09-15)', async () => {
+  for (const authorize of [memberOk, creatorOk]) {
+    const r = await run(pubBody, authorize, ghFetch([]));
+    assert.equal(r.status, 403, JSON.stringify(r.body));
+    assert.equal(r.body.error, 'review_required');
+    assert.match(r.body.message, /only a superadmin can make a share public/);
+  }
+  const sup = await run(pubBody, creatorOk, ghFetch([]), isSuper);
+  assert.equal(sup.status, 200, `a superadmin posts a public share: ${JSON.stringify(sup.body)}`);
+  const kept = await run(pubBody, memberOk, ghFetch([pubStub.path]));
+  assert.equal(kept.status, 200, 'a share already public on main stays public through its author\'s edit');
+});
+
+test('a public project in the retired products/ folder is reviewed like any project', async () => {
+  const f = { path: 'members/atwellpub/products/old-name/index.md', content: '---\ntitle: P\nvisibility: public\n---\nb' };
+  const r = await run({ itemId: 'project-old-name', title: 'P', files: [f] }, memberOk, ghFetch([]));
+  assert.equal(r.status, 403, JSON.stringify(r.body));
+  assert.equal(r.body.error, 'review_required');
+});
+
+test('renaming a members-only item passes: the delete of its old path publishes nothing', async () => {
+  const moved = { path: 'members/atwellpub/posts/new-slug/index.md', content: '---\ntitle: T\nvisibility: members\npublicStub: true\n---\nteaser' };
+  const gone = { path: 'members/atwellpub/posts/old-slug/index.md', content: null };
+  const r = await run({ itemId: 'post-new-slug', title: 'T', files: [moved, gone] }, memberOk, ghFetch([]));
   assert.equal(r.status, 200, JSON.stringify(r.body));
 });
 
 test('the main read FAILS CLOSED: a thrown contents fetch refuses rather than admits', async () => {
-  const r = await run(pubBody, memberOk, ghFetch([pubStub.path], { contentsThrow: true }));
+  const r = await run(pubPostBody, memberOk, ghFetch([pubPost.path], { contentsThrow: true }));
   assert.equal(r.status, 403);
   assert.equal(r.body.error, 'review_required');
 });

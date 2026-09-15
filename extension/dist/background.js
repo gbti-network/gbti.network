@@ -20037,6 +20037,7 @@ var SUPERADMIN_HOUSE_DIRS = Object.freeze(["house/applets/", "house/images/ctas/
 // membership/classify-pr.mjs
 var ROLE_RANK2 = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
 var OVERRIDES_GIT_FILES = Object.freeze(["house/bans.yml", "house/grandfathered.yml", "house/coupons.yml"]);
+var REVIEWED_TYPES = Object.freeze(["post", "project", "product", "prompt", "share"]);
 
 // membership/checkout-prices.mjs
 var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);
