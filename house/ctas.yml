@@ -18,14 +18,14 @@
 ctas:
   - id: stranger-in-a-strange-land
     label: Stranger in a Strange Land
-    line: The skill takes its name from Heinlein's novel.
+    line: Have you read Robert Heinlein's Stranger in a Strange Land?
     button: Get the book on Amazon
-    destination: https://www.amazon.com/dp/0441788386?tag=jakolorbbookc-20
+    destination: https://www.amazon.com/dp/B00005QTH2?tag=jakolorbbookc-20
     partner: amazon
     enabled: true
     note: >-
-      The standard Ace paperback, ISBN 0441788386, on the GBTI Amazon Associates tag jakolorbbookc-20. Direct
-      link by the Amazon rule above. Owner decision 2026-09-15.
+      The standard Ace paperback, ISBN 0441788386, on the GBTI Amazon Associates tag
+      jakolorbbookc-20. Direct link by the Amazon rule above. Owner decision 2026-09-15.
     items:
       - type: prompt
         ref: grok-skill-for-claude-code
