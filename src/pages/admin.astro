@@ -33,6 +33,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="channels" data-min="superadmin" aria-selected="false" hidden>Channels</button>
           <button type="button" role="tab" data-tab="applications" data-min="superadmin" aria-selected="false" hidden>Creator applications</button>{/* sow-293 */}
           <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
+          <button type="button" role="tab" data-tab="outbound-links" data-min="superadmin" aria-selected="false" hidden>Outbound links</button>{/* sow-289 */}
         </nav>
 
         <div class="adm-card" data-panel="admin">
@@ -91,6 +92,13 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <h2 class="h2">Member lookup</h2>
           <MemberLookup />
         </div>
+        {/* sow-289: SUPERADMIN, read only. The partner redirect paths (house/outbound-links.yml) beside their estimated
+            daily clicks (house/outbound-clicks.yml, rolled up by reconcile). The element reads the two public build
+            artifacts itself; the module is imported for superadmin only, so an admin never upgrades the tag. */}
+        <div class="adm-card" data-panel="outbound-links" hidden>
+          <h2 class="h2">Outbound links</h2>
+          <gbti-outbound-link-manager></gbti-outbound-link-manager>
+        </div>
       </div>
     </div>
   </section>
@@ -142,6 +150,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
       if (rank >= RANK.superadmin) {
         await import('../../client-ui/src/elements/gbti-site-settings-manager.mjs');
         await import('../../client-ui/src/elements/gbti-channel-map-manager.mjs'); // sow-161 B: the superadmin Channels workspace
+        await import('../../client-ui/src/elements/gbti-outbound-link-manager.mjs'); // sow-289: the read-only outbound link board
       }
       setupTabs(rank);
     }

@@ -1,0 +1,10 @@
+# sow-289: daily click history for the outbound partner links in house/outbound-links.yml.
+#
+# WRITTEN BY RECONCILE (scripts/lib/outbound-clicks.mjs), one auto-merged PR per day; do not edit by hand. Each
+# number is an ESTIMATE from Cloudflare zone analytics, which samples: clicks = 301 answers, crawlers = the subset
+# of clicks whose agent names a well-known crawler, other = every answer that was not a 301 (Cloudflare's own Early
+# Hints probes land here). A date in `coverage` was queried; a date absent from it was NOT measured and must never
+# be read as zero. Request counts per path per day only: no personal data of any kind.
+generatedAt: null
+coverage: []
+clicks: {}

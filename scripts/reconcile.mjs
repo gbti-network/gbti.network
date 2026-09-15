@@ -38,6 +38,8 @@ import { planReconcile } from './lib/reconcile-plan.mjs';
 import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorMailSettingsToKv, mirrorDigestEntitlementToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
 import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-source.mjs'; // sow-213 R4: KV overrides overlay for the plan + the git-present reality check behind reconcile's fail posture
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
+import { syncOutboundClicks, readClicksFromDisk } from './lib/outbound-clicks.mjs'; // sow-289: the daily outbound click rollup
+import { outboundRows } from './lib/outbound-links-store.mjs'; // sow-289: the paths the rollup queries, from the store, never a prefix
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
 import { syncEnrollments } from './lib/enroll-members.mjs'; // SOW-157: hosted-member index enrollment
 import { syncFollowerIndex } from './lib/follower-index.mjs'; // SOW-186 phase 3: build/heal followers:<github_id> from the forward graph
@@ -974,6 +976,31 @@ async function main() {
       );
     } catch (e) {
       console.error('reconcile: favorite-counts sync FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // sow-289: roll up the outbound partner links' clicks (Cloudflare zone analytics -> house/outbound-clicks.yml)
+  // through one auto-merged PR, the favorite-counts pattern. The zone answers one day at a time and keeps eight,
+  // so every run queries the last seven complete days and replaces each date's row (idempotent, so a missed run
+  // backfills). Skipped, not failed, without CF_ANALYTICS_TOKEN; a day whose query fails stays unmeasured.
+  if (dryRun) {
+    console.log('reconcile: DRY RUN would roll up outbound link clicks from Cloudflare zone analytics -> house/outbound-clicks.yml (requires CF_ANALYTICS_TOKEN + a GitHub PR).');
+  } else {
+    try {
+      const r = await syncOutboundClicks({
+        env, github, now,
+        paths: outboundRows(ROOT).map(([p]) => p),
+        readCurrent: () => readClicksFromDisk(ROOT),
+      });
+      const failed = r.failedDates?.length ? ` ${r.failedDates.length} day(s) NOT measured: ${r.failedDates.map((f) => `${f.date} (${f.reason})`).join('; ')}.` : '';
+      console.log(
+        r.synced
+          ? `reconcile: rolled up outbound clicks (PR #${r.prNumber}, ${r.dates.length} day(s)).${failed}`
+          : `reconcile: outbound-clicks rollup SKIPPED (${r.reason}).${failed}`,
+      );
+    } catch (e) {
+      console.error('reconcile: outbound-clicks rollup FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
   }

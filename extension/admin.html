@@ -85,6 +85,7 @@
         <button class="admin-tab" type="button" data-tab="applications">Creator applications</button>
         <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
+        <button class="admin-tab" type="button" data-tab="outbound-links">Outbound links</button>
       </div>
       <div class="admin-col">
         <section class="admin-card on" data-panel="members">
@@ -140,6 +141,12 @@
                Publishing Activity kanban plus pipeline, per-channel templates, auto-share, and word lists. -->
           <div class="admin-card-h"><h2>Syndication</h2><p>Publishing activity, the pipeline, per-channel templates, news auto-share, and the moderation word lists.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-channel-map-manager></gbti-channel-map-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="outbound-links">
+          <!-- sow-289: read-only. The partner redirect paths (house/outbound-links.yml) beside their estimated daily
+               clicks (house/outbound-clicks.yml, rolled up by reconcile). Editing links is a later phase. -->
+          <div class="admin-card-h"><h2>Outbound links</h2><p>The partner redirect paths and their estimated click history. Read only.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-outbound-link-manager></gbti-outbound-link-manager></div></div>
         </section>
       </div>
       </template>
