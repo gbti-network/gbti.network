@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ctaFor, resolveAssignments, itemUrl, assignmentsOf, itemKey } from '../src/lib/ctas.mjs';
-import { readCtas, ctaItemExists, CTAS_PATH } from '../scripts/lib/ctas-store.mjs';
+import { ctaFor, resolveAssignments, itemUrl, assignmentsOf, itemKey, ctaImageUrl } from '../src/lib/ctas.mjs';
+import { readCtas, ctaItemExists, ctaImageInfo, CTAS_PATH } from '../scripts/lib/ctas-store.mjs';
 import { rehypeSponsoredLinks, sitePathOf } from '../src/lib/rehype-sponsored-links.mjs';
 import { outboundRows } from '../scripts/lib/outbound-links-store.mjs';
 
@@ -120,4 +120,34 @@ test('rehypeSponsoredLinks: exactly the partner redirect paths get rel=sponsored
   ]);
   assert.equal(sitePathOf('//evil.example/outbound/codeable'), null, 'a protocol-relative href is not a site path');
   assert.equal(sitePathOf('/outbound/codeable#frag'), '/outbound/codeable');
+});
+
+// sow-337: the manager reads each card's layout and parts from /ctas.json, so the resolver has to carry them.
+test('resolveAssignments carries the layout, the image and where it is served, the icon, the html block and its hosts', () => {
+  const icon = { name: 'FaAmazon', set: 'Font Awesome 5', viewBox: '0 0 1 1', shapes: [{ tag: 'path', attrs: { d: 'M0 0' } }] };
+  const [plain, full] = resolveAssignments({ ctas: [cta(), cta({ id: 'b', layout: 'html', image: 'b.webp', icon, html: '<b>x</b>', showTitle: false, hosts: ['https://w.example.com'] })] }, []);
+  assert.deepEqual(
+    { layout: plain.layout, image: plain.image, imageUrl: plain.imageUrl, icon: plain.icon, html: plain.html, showTitle: plain.showTitle, hosts: plain.hosts },
+    { layout: 'text', image: null, imageUrl: null, icon: null, html: '', showTitle: true, hosts: [] },
+    'an older card reads as text only with no parts',
+  );
+  assert.deepEqual(
+    { layout: full.layout, image: full.image, imageUrl: full.imageUrl, icon: full.icon, html: full.html, showTitle: full.showTitle, hosts: full.hosts },
+    { layout: 'html', image: 'b.webp', imageUrl: '/media/ctas/b.webp', icon, html: '<b>x</b>', showTitle: false, hosts: ['https://w.example.com'] },
+  );
+  assert.equal(ctaImageUrl('../x.webp'), null);
+});
+
+test('ctaImageInfo: the committed cover passes with its size; a missing file, a bad name and a metadata-bearing file do not', () => {
+  const ok = ctaImageInfo(ROOT, 'stranger-in-a-strange-land.webp');
+  assert.equal(ok.ok, true, ok.problem);
+  assert.deepEqual([ok.width, ok.height], [480, 792]);
+  assert.match(ctaImageInfo(ROOT, 'no-such-card.webp').problem, /house\/images\/ctas\/no-such-card\.webp does not exist/);
+  assert.match(ctaImageInfo(ROOT, '../ctas.yml').problem, /not a card image file name/);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cta-img-'));
+  fs.mkdirSync(path.join(tmp, 'house/images/ctas'), { recursive: true });
+  // a real sharp encode with an EXIF block (the same sample test/cta-image.test.mjs reads chunk by chunk)
+  fs.writeFileSync(path.join(tmp, 'house/images/ctas/x.webp'), Buffer.from('UklGRjABAABXRUJQVlA4WAoAAAAIAAAACAAABgAAVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAEVYSUbkAAAARXhpZgAASUkqAAgAAAAIAA8BAgARAAAAfgAAABABAgADAAAAVDEAABIBAwABAAAAAQAAABoBBQABAAAAbgAAABsBBQABAAAAdgAAACgBAwABAAAAAgAAABMCAwABAAAAAQAAAGmHBAABAAAAkAAAAAAAAAA4YwAA6AMAADhjAADoAwAAR0JUSSB0ZXN0IGNhbWVyYQAABgAAkAcABAAAADAyMTABkQcABAAAAAECAwAAoAcABAAAADAxMDABoAMAAQAAAP//AAACoAQAAQAAAAkAAAADoAQAAQAAAAcAAAAAAAAA', 'base64'));
+  assert.match(ctaImageInfo(tmp, 'x.webp').problem, /metadata/);
+  fs.rmSync(tmp, { recursive: true, force: true });
 });

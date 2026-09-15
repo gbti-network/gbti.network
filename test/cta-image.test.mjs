@@ -1,0 +1,83 @@
+// sow-337: the card image backstop (membership/cta-image.mjs). Every writer and the content check refuse a card
+// image that is not a still WebP or that still carries camera, location or colour-profile data. The EXIF
+// and XMP samples below are real encoder output (sharp 0.34 withExif and withXmp on a 9x7 image), so
+// the test reads the chunks an encoder actually writes, not a layout guessed from the specification.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { webpInfo, bytesFromBase64, ctaImagePath, ctaImageFile, CTA_IMAGE_DIR, CTA_IMAGE_MAX_BYTES } from '../membership/cta-image.mjs';
+
+const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
+const b64 = (s) => new Uint8Array(Buffer.from(s, 'base64'));
+const LOSSY = b64('UklGRjIAAABXRUJQVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAA==');
+const LOSSLESS = b64('UklGRh4AAABXRUJQVlA4TBEAAAAvCIABAAdQz370q/+BiOh/AAA=');
+const EXIF = b64('UklGRjABAABXRUJQVlA4WAoAAAAIAAAACAAABgAAVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAEVYSUbkAAAARXhpZgAASUkqAAgAAAAIAA8BAgARAAAAfgAAABABAgADAAAAVDEAABIBAwABAAAAAQAAABoBBQABAAAAbgAAABsBBQABAAAAdgAAACgBAwABAAAAAgAAABMCAwABAAAAAQAAAGmHBAABAAAAkAAAAAAAAAA4YwAA6AMAADhjAADoAwAAR0JUSSB0ZXN0IGNhbWVyYQAABgAAkAcABAAAADAyMTABkQcABAAAAAECAwAAoAcABAAAADAxMDABoAMAAQAAAP//AAACoAQAAQAAAAkAAAADoAQAAQAAAAcAAAAAAAAA');
+const XMP = b64('UklGRr4AAABXRUJQVlA4WAoAAAAEAAAACAAABgAAVlA4ICYAAABwAQCdASoJAAcAAsBMJaACdAFAAAD+3FFB8XL/+QY/wa/zD5rgAFhNUCByAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyI+PHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIi8+PC94OnhtcG1ldGE+');
+const PNG = b64('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=');
+
+/** A copy with the VP8X flags byte replaced, so a chunk the header no longer announces is still in the file. */
+const withFlags = (bytes, flags) => { const c = bytes.slice(); assert.equal(Buffer.from(c.slice(12, 16)).toString('latin1'), 'VP8X'); c[20] = flags; return c; };
+/** A copy with one more chunk appended and the RIFF size updated. */
+function withChunk(bytes, fourcc, payload = new Uint8Array(4)) {
+  const out = new Uint8Array(bytes.length + 8 + payload.length + (payload.length % 2));
+  out.set(bytes);
+  out.set(Buffer.from(fourcc, 'latin1'), bytes.length);
+  new DataView(out.buffer).setUint32(bytes.length + 4, payload.length, true);
+  out.set(payload, bytes.length + 8);
+  new DataView(out.buffer).setUint32(4, out.length - 8, true);
+  return out;
+}
+
+test('a still WebP with no metadata passes, with its dimensions, lossy and lossless alike', () => {
+  assert.deepEqual(webpInfo(LOSSY), { ok: true, width: 9, height: 7 });
+  assert.deepEqual(webpInfo(LOSSLESS), { ok: true, width: 9, height: 7 });
+});
+
+test('real EXIF, XMP and ICC samples are refused, by the header flag AND by the chunk when the flag is cleared', () => {
+  assert.ok(Buffer.from(EXIF).includes('GBTI test camera'), 'the EXIF sample really carries camera data');
+  for (const [name, bytes, re] of [['EXIF', EXIF, /EXIF \(camera\) data/], ['XMP', XMP, /XMP metadata/]]) {
+    const flagged = webpInfo(bytes);
+    assert.equal(flagged.ok, false, name);
+    assert.match(flagged.problem, /announces metadata/, name);
+    const hidden = webpInfo(withFlags(bytes, 0));
+    assert.equal(hidden.ok, false, `${name} with the flag cleared`);
+    assert.match(hidden.problem, re, name);
+  }
+  assert.match(webpInfo(withChunk(LOSSY, 'ICCP', new Uint8Array(12))).problem, /ICC colour profile/);
+});
+
+test('animation is refused by the header flag and by an ANIM or ANMF chunk', () => {
+  assert.match(webpInfo(withFlags(EXIF, 0x02)).problem, /animated/);
+  assert.match(webpInfo(withChunk(LOSSY, 'ANIM', new Uint8Array(6))).problem, /animated/);
+  assert.match(webpInfo(withChunk(LOSSY, 'ANMF', new Uint8Array(16))).problem, /animated/);
+});
+
+test('not a WebP, truncated, malformed, empty, oversize and non-binary input are all refused, never thrown', () => {
+  assert.match(webpInfo(PNG).problem, /not a WebP/);
+  assert.match(webpInfo(LOSSY.slice(0, 30)).problem, /truncated/);
+  const badStart = LOSSY.slice(); badStart[23] = 0; // the VP8 start code 9d 01 2a begins at payload byte 3
+  assert.match(webpInfo(badStart).problem, /malformed/);
+  const badLossless = LOSSLESS.slice(); badLossless[20] = 0; // the VP8L signature byte 0x2f
+  assert.match(webpInfo(badLossless).problem, /malformed/);
+  const headerOnly = LOSSY.slice(0, 12); new DataView(headerOnly.buffer).setUint32(4, 4, true);
+  assert.match(webpInfo(withChunk(headerOnly, 'JUNK')).problem, /no image data/);
+  const big = new Uint8Array(CTA_IMAGE_MAX_BYTES + 1); big.set(LOSSY);
+  assert.match(webpInfo(big).problem, /limit is 400 KB/);
+  assert.match(webpInfo(Buffer.from('x').toString()).problem, /not binary/);
+  assert.match(webpInfo(null).problem, /not binary/);
+});
+
+test('bytesFromBase64 round-trips and refuses what is not base64; ctaImagePath refuses anything but a plain name', () => {
+  assert.deepEqual(bytesFromBase64(Buffer.from(LOSSY).toString('base64')), LOSSY);
+  for (const bad of ['', 'not base64!', 'abc', '====', null]) assert.equal(bytesFromBase64(bad), null, String(bad));
+  assert.equal(ctaImageFile('stranger-in-a-strange-land'), 'stranger-in-a-strange-land.webp');
+  assert.equal(ctaImagePath('stranger-in-a-strange-land.webp'), `${CTA_IMAGE_DIR}/stranger-in-a-strange-land.webp`);
+  for (const bad of ['../roles.yml', 'a/b.webp', 'cover.png', 'Cover.webp', '.webp', '-x.webp', 'x.webp.png']) assert.equal(ctaImagePath(bad), null, bad);
+});
+
+test('the committed Stranger in a Strange Land cover passes the check it will be uploaded against', () => {
+  const bytes = new Uint8Array(fs.readFileSync(path.join(ROOT, CTA_IMAGE_DIR, 'stranger-in-a-strange-land.webp')));
+  assert.deepEqual(webpInfo(bytes), { ok: true, width: 480, height: 792 });
+});

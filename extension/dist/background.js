@@ -21640,8 +21640,8 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
       detail
     };
   };
-  const same = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
-  if (same) return { next: d, changed: false, audit: audit3({ ...next, noop: true }) };
+  const same2 = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
+  if (same2) return { next: d, changed: false, audit: audit3({ ...next, noop: true }) };
   d.syndication.news_engagement = {
     enabled: next.enabled,
     open_threshold: next.open_threshold,
@@ -21837,15 +21837,136 @@ function setSiteToggle(doc, { key, enabled } = {}, ctx = {}) {
   return { next: d, changed: true, audit: auditEntry7(ctx, "site-setting.set", k, { enabled, was: current }) };
 }
 
+// membership/cta-icon.mjs
+var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
+var ICON_LIMITS = Object.freeze({ name: 64, set: 40, nodes: 200, depth: 4, value: 2e4, total: 6e4 });
+var NUM = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?$/i;
+var LEN = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?(px|%)?$/i;
+var PATH_DATA = /^[0-9eE.,\s+\-MmLlHhVvCcSsQqTtAaZz]*$/;
+var POINTS = /^[0-9eE.,\s+\-]*$/;
+var PAINT = /^(none|currentColor|inherit|#[0-9a-fA-F]{3,8})$/;
+var TRANSFORM = /^(\s*(translate|scale|rotate|matrix|skewX|skewY)\(\s*[0-9eE.,\s+\-]*\)\s*)+$/;
+var VIEWBOX = /^\s*-?[\d.]+([\s,]+-?[\d.]+){3}\s*$/;
+var NAME_RE = /^[A-Z][A-Za-z0-9]*$/;
+var SET_RE = /^[A-Za-z0-9 .\-]+$/;
+var ATTRS = Object.freeze({
+  d: PATH_DATA,
+  points: POINTS,
+  cx: LEN,
+  cy: LEN,
+  r: LEN,
+  rx: LEN,
+  ry: LEN,
+  x: LEN,
+  y: LEN,
+  x1: LEN,
+  y1: LEN,
+  x2: LEN,
+  y2: LEN,
+  width: LEN,
+  height: LEN,
+  fill: PAINT,
+  stroke: PAINT,
+  "stroke-width": LEN,
+  "stroke-linecap": /^(butt|round|square)$/,
+  "stroke-linejoin": /^(miter|round|bevel|arcs|miter-clip)$/,
+  "stroke-miterlimit": NUM,
+  "fill-rule": /^(nonzero|evenodd)$/,
+  "clip-rule": /^(nonzero|evenodd)$/,
+  opacity: NUM,
+  "fill-opacity": NUM,
+  "stroke-opacity": NUM,
+  transform: TRANSFORM
+});
+var ROOT_ATTRS = Object.freeze(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "clip-rule", "opacity"]);
+var isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+function attrProblems(attrs, allowed, at, budget) {
+  const problems = [];
+  if (attrs === void 0) return problems;
+  if (!isMap(attrs)) return [`${at}: attrs must be a map`];
+  for (const [k, raw] of Object.entries(attrs)) {
+    if (!allowed.includes(k)) {
+      problems.push(`${at}: attribute "${k}" is not allowed in an icon`);
+      continue;
+    }
+    if (typeof raw !== "string" && typeof raw !== "number") {
+      problems.push(`${at}: attribute "${k}" must be a string or number`);
+      continue;
+    }
+    const v = String(raw);
+    budget.total += v.length;
+    if (v.length > ICON_LIMITS.value) problems.push(`${at}: attribute "${k}" is too long`);
+    else if (!ATTRS[k].test(v)) problems.push(`${at}: attribute "${k}" has a value an icon may not carry`);
+  }
+  return problems;
+}
+function shapeProblems(shapes, at, depth, budget) {
+  if (!Array.isArray(shapes)) return [`${at}: shapes must be a list`];
+  if (depth > ICON_LIMITS.depth) return [`${at}: shapes are nested too deeply`];
+  const problems = [];
+  shapes.forEach((s, i) => {
+    const here = `${at}[${i}]`;
+    budget.nodes += 1;
+    if (!isMap(s)) {
+      problems.push(`${here}: must be a map of { tag, attrs }`);
+      return;
+    }
+    for (const k of Object.keys(s)) if (!["tag", "attrs", "children"].includes(k)) problems.push(`${here}: key "${k}" is not allowed`);
+    if (!ICON_TAGS.includes(s.tag)) {
+      problems.push(`${here}: element "${s.tag}" is not allowed in an icon`);
+      return;
+    }
+    problems.push(...attrProblems(s.attrs, Object.keys(ATTRS), here, budget));
+    if (s.children !== void 0) {
+      if (s.tag !== "g") problems.push(`${here}: only a group (g) may have children`);
+      else problems.push(...shapeProblems(s.children, `${here}.children`, depth + 1, budget));
+    }
+  });
+  return problems;
+}
+function iconProblems(icon, where = "icon") {
+  if (!isMap(icon)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
+  const problems = [];
+  for (const k of Object.keys(icon)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
+  if (typeof icon.name !== "string" || !NAME_RE.test(icon.name) || icon.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
+  if (typeof icon.set !== "string" || !SET_RE.test(icon.set) || icon.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
+  if (typeof icon.viewBox !== "string" || !VIEWBOX.test(icon.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
+  const budget = { nodes: 0, total: 0 };
+  problems.push(...attrProblems(icon.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
+  if (!Array.isArray(icon.shapes) || icon.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
+  else problems.push(...shapeProblems(icon.shapes, `${where}.shapes`, 1, budget));
+  if (budget.nodes > ICON_LIMITS.nodes) problems.push(`${where}: too many shapes (max ${ICON_LIMITS.nodes})`);
+  if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
+  return problems;
+}
+
+// membership/cta-card-render.mjs
+var CTA_LAYOUTS = Object.freeze(["below", "first", "compact", "image", "html", "text"]);
+var CTA_LAYOUT_NAMES = Object.freeze({ below: "Image below", first: "Image first", compact: "Compact", image: "Image only", html: "HTML block", text: "Text only" });
+function layoutUses(layout) {
+  const L = CTA_LAYOUTS.includes(layout) ? layout : "text";
+  const words = L === "below" || L === "first" || L === "compact" || L === "text";
+  return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
+}
+var CTA_TOKENS = Object.freeze({
+  light: "--paper:#ffffff;--paper-2:#faf9f8;--fg:#24222a;--fg-soft:#57545e;--fg-mute:#6c6976;--line:#e7e4e0;--line-2:#ddd9d4;--green-600:#178a51;--tint-warm:#f3f1ee;--ink:#25232b;--pcta-btn-hover:#ffffff",
+  dark: "--paper:#2d2a34;--paper-2:#1c1a21;--fg:#f3f2f0;--fg-soft:rgba(243,242,240,.72);--fg-mute:rgba(243,242,240,.50);--line:rgba(255,255,255,.12);--line-2:rgba(255,255,255,.20);--green-600:#46c089;--tint-warm:#25232b;--ink:rgba(255,255,255,.4);--pcta-btn-hover:rgba(255,255,255,.06)"
+});
+
+// membership/cta-image.mjs
+var CTA_IMAGE_FILE_RE = /^[a-z0-9][a-z0-9-]*\.webp$/;
+
 // membership/cta-edits.mjs
 var CtaEditError = class extends Error {
 };
 var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
-var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160 });
+var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200 });
 var ID_RE2 = /^[a-z0-9][a-z0-9-]*$/;
 var SLUG_RE2 = /^[a-z0-9][a-z0-9-]*$/;
 var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
 var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
+var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
 var str = (v) => typeof v === "string" ? v.trim() : "";
 function isoOf10(now) {
   const d = now instanceof Date ? now : new Date(now ?? Date.now());
@@ -21886,31 +22007,90 @@ function amazonDestinationProblem(destination) {
   if (!u.searchParams.get("tag")) return "an amazon destination must carry the Associates tag= parameter (without it the purchase earns nothing)";
   return null;
 }
+function htmlHrefs(html) {
+  const out = [];
+  const re = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+  let m;
+  while (m = re.exec(String(html || ""))) out.push((m[1] ?? m[2] ?? m[3] ?? "").replace(/&amp;/g, "&").trim());
+  return out;
+}
+function amazonHtmlProblems(html) {
+  const problems = [];
+  for (const href of htmlHrefs(html)) {
+    let u = null;
+    try {
+      u = new URL(href, "https://gbti.network");
+    } catch {
+      continue;
+    }
+    if (/(^|\/)outbound\//.test(u.pathname) && (u.hostname === "gbti.network" || u.hostname.endsWith(".gbti.network"))) {
+      problems.push(`the HTML links through /outbound/ (${href}); an amazon link must go straight to amazon`);
+    } else if (AMAZON_HOST_RE.test(u.hostname) && !u.searchParams.get("tag")) {
+      problems.push(`the HTML links to amazon without the Associates tag= parameter (${href})`);
+    }
+  }
+  return problems;
+}
 function validateCta(e, where = "cta") {
   const problems = [];
   if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
   const id = str(e.id);
   if (!id || !ID_RE2.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
-  for (const [k, max] of [["label", CTA_LIMITS.label], ["line", CTA_LIMITS.line], ["button", CTA_LIMITS.button]]) {
+  if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
+  const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
+  const uses = layoutUses(layout);
+  for (const [k, max, need] of [["label", CTA_LIMITS.label, true], ["line", CTA_LIMITS.line, uses.line], ["button", CTA_LIMITS.button, uses.button]]) {
+    if (e[k] !== void 0 && e[k] !== null && typeof e[k] !== "string") {
+      problems.push(`${where}: ${k} must be text`);
+      continue;
+    }
     const v = str(e[k]);
-    if (!v) problems.push(`${where}: ${k} is required`);
-    else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
+    if (!v) {
+      if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
+    } else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
   }
   const dest = str(e.destination);
   let u = null;
-  try {
-    u = new URL(dest);
-  } catch {
-    u = null;
+  if (dest || uses.link) {
+    try {
+      u = new URL(dest);
+    } catch {
+      u = null;
+    }
+    if (!u || u.protocol !== "https:" || !u.hostname) {
+      u = null;
+      problems.push(`${where}: destination must be an absolute https URL, got ${JSON.stringify(e.destination ?? null)}`);
+    } else if (dest.length > CTA_LIMITS.destination) problems.push(`${where}: destination is too long (max ${CTA_LIMITS.destination} chars)`);
   }
-  if (!u || u.protocol !== "https:" || !u.hostname) problems.push(`${where}: destination must be an absolute https URL, got ${JSON.stringify(e.destination ?? null)}`);
-  else if (dest.length > CTA_LIMITS.destination) problems.push(`${where}: destination is too long (max ${CTA_LIMITS.destination} chars)`);
+  if (e.image !== void 0) {
+    if (typeof e.image !== "string" || !CTA_IMAGE_FILE_RE.test(e.image) || e.image.length > CTA_LIMITS.image) problems.push(`${where}: image must be a WebP file name in house/images/ctas/ (like ${id || "my-card"}.webp), got ${JSON.stringify(e.image)}`);
+  } else if (uses.image) problems.push(`${where}: image is required for the ${layout} layout`);
+  if (e.icon !== void 0) problems.push(...iconProblems(e.icon, `${where}.icon`));
+  if (e.html !== void 0) {
+    if (typeof e.html !== "string") problems.push(`${where}: html must be text`);
+    else if (e.html.length > CTA_LIMITS.html) problems.push(`${where}: html is too long (max ${CTA_LIMITS.html} chars)`);
+  }
+  if (uses.html && !str(e.html)) problems.push(`${where}: html is required for the html layout`);
+  if (e.showTitle !== void 0 && typeof e.showTitle !== "boolean") problems.push(`${where}: showTitle must be true or false`);
+  if (e.hosts !== void 0) {
+    if (!Array.isArray(e.hosts)) problems.push(`${where}: hosts must be a list of https origins`);
+    else {
+      if (e.hosts.length > CTA_LIMITS.hosts) problems.push(`${where}: at most ${CTA_LIMITS.hosts} hosts`);
+      const seenHost = /* @__PURE__ */ new Set();
+      e.hosts.forEach((h, i) => {
+        if (typeof h !== "string" || h.length > CTA_LIMITS.host || !CTA_HOST_RE.test(h)) problems.push(`${where}.hosts[${i}]: must be a bare https origin like https://widgets.example.com (no path, quotes, spaces or semicolons), got ${JSON.stringify(h)}`);
+        else if (seenHost.has(h)) problems.push(`${where}.hosts[${i}]: ${h} is listed twice`);
+        else seenHost.add(h);
+      });
+    }
+  }
   const partner = str(e.partner);
   if (!partner || !ID_RE2.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
   if (partner === "amazon" && u) {
     const why = amazonDestinationProblem(dest);
     if (why) problems.push(`${where}: ${why}`);
   }
+  if (partner === "amazon" && typeof e.html === "string") for (const why of amazonHtmlProblems(e.html)) problems.push(`${where}: ${why}`);
   if (e.enabled !== void 0 && typeof e.enabled !== "boolean") problems.push(`${where}: enabled must be true or false`);
   if (e.note !== void 0 && e.note !== null && (typeof e.note !== "string" || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
   if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
@@ -21962,39 +22142,71 @@ function assertValid(d, where) {
   const problems = validateCtas(d);
   if (problems.length) throw new CtaEditError(`${where}: ${problems[0]}`);
 }
-var EDITABLE = ["label", "line", "button", "destination", "partner", "note"];
+var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
+var CLEARABLE = ["line", "button", "destination", "note", "layout", "html"];
+var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
+var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
+var KEY_ORDER = ["id", "label", "layout", "line", "button", "destination", "partner", "image", "icon", "html", "showTitle", "hosts", "enabled", "note", "items"];
+function canonical(e) {
+  const out = {};
+  for (const k of KEY_ORDER) if (e[k] !== void 0) out[k] = e[k];
+  for (const k of Object.keys(e)) if (!(k in out)) out[k] = e[k];
+  return out;
+}
+var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function addCta(doc, fields = {}, ctx = {}) {
   const d = clean6(doc);
   const id = str(fields.id);
   if (!id) throw new CtaEditError("a CTA needs an id");
   if (d.ctas.some((x) => x && str(x.id) === id)) throw new CtaEditError(`a CTA with id "${id}" already exists`);
-  const entry = { id };
-  for (const k of EDITABLE) if (fields[k] !== void 0 && fields[k] !== null) entry[k] = String(fields[k]).trim();
+  let entry = { id };
+  for (const k of EDITABLE) {
+    if (fields[k] === void 0 || fields[k] === null) continue;
+    const v = String(fields[k]).trim();
+    if (v || !CLEARABLE.includes(k)) entry[k] = v;
+  }
+  for (const k of STRUCTURED) if (fields[k] !== void 0 && fields[k] !== null) entry[k] = structuredClone(fields[k]);
   entry.enabled = fields.enabled === true;
   entry.items = [];
+  entry = canonical(entry);
   d.ctas.push(entry);
   assertValid(d, "add");
   return { next: d, changed: true, audit: auditEntry8(ctx, "cta.add", id, { partner: entry.partner, destination: entry.destination }) };
 }
 function updateCta(doc, fields = {}, ctx = {}) {
   const d = clean6(doc);
-  const e = findCta(d, fields.id);
+  const i = d.ctas.indexOf(findCta(d, fields.id));
+  const e = d.ctas[i];
   const changed = [];
   for (const k of EDITABLE) {
     if (fields[k] === void 0) continue;
     const v = fields[k] === null ? "" : String(fields[k]).trim();
-    if (k === "note" && !v) {
-      if (e.note !== void 0) {
-        delete e.note;
+    if (CLEARABLE.includes(k) && !v) {
+      if (e[k] !== void 0) {
+        delete e[k];
         changed.push(k);
       }
       continue;
     }
-    if (str(e[k]) === v) continue;
+    if (typeof e[k] === "string" && e[k].trim() === v) continue;
     e[k] = v;
     changed.push(k);
   }
+  for (const k of STRUCTURED) {
+    if (fields[k] === void 0) continue;
+    if (fields[k] === null) {
+      if (e[k] !== void 0) {
+        delete e[k];
+        changed.push(k);
+      }
+      continue;
+    }
+    if (same(e[k], fields[k])) continue;
+    e[k] = structuredClone(fields[k]);
+    changed.push(k);
+  }
   if (!changed.length) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.update", e.id, { noop: true }) };
+  d.ctas[i] = canonical(e);
   assertValid(d, "update");
   return { next: d, changed: true, audit: auditEntry8(ctx, "cta.update", e.id, { fields: changed }) };
 }

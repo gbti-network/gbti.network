@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { validateCtas, validRef } from '../../membership/cta-edits.mjs';
+import { ctaImagePath, webpInfo } from '../../membership/cta-image.mjs';
 
 export const CTAS_PATH = 'house/ctas.yml';
 
@@ -49,4 +50,19 @@ export function ctaItemExists(root, type, ref) {
     }
   }
   return false;
+}
+
+/**
+ * sow-337: a card image on disk, checked. { ok: true, width, height, abs } for a committed, metadata-free still WebP;
+ * { ok: false, problem } otherwise (a bad name, a missing file, or whatever membership/cta-image.mjs refuses). The
+ * card reads its dimensions from here so the page reserves the image's space, and the content check refuses a card
+ * whose image fails.
+ */
+export function ctaImageInfo(root, file) {
+  const rel = ctaImagePath(file);
+  if (!rel) return { ok: false, problem: `"${file}" is not a card image file name` };
+  const abs = path.join(root, rel);
+  if (!fs.existsSync(abs)) return { ok: false, problem: `${rel} does not exist` };
+  const info = webpInfo(new Uint8Array(fs.readFileSync(abs)));
+  return info.ok ? { ...info, abs } : info;
 }

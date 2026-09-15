@@ -5,6 +5,8 @@
 // is disabled (ctaFor null, the registry still lists the assignment), and an assignment that names no item
 // (resolved: false, never dropped, so the manager can show it in red instead of the site quietly forgetting it).
 import { ctasOf, validRef } from '../../membership/cta-edits.mjs';
+import { ctaLayoutOf } from '../../membership/cta-card-render.mjs';
+import { CTA_IMAGE_FILE_RE } from '../../membership/cta-image.mjs';
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -23,6 +25,9 @@ export function itemUrl(type, ref) {
     default: return null;
   }
 }
+
+/** sow-337: where the site serves a card image (src/pages/media/ctas/[file].ts), or null for a malformed name. */
+export const ctaImageUrl = (file) => (CTA_IMAGE_FILE_RE.test(String(file || '')) ? `/media/ctas/${file}` : null);
 
 /** Every assignment in the registry, flattened: [{ ctaId, type, ref, enabled }]. */
 export function assignmentsOf(registry) {
@@ -67,6 +72,14 @@ export function resolveAssignments(registry, items) {
     button: str(c.button),
     destination: str(c.destination),
     partner: str(c.partner),
+    // sow-337: the layout and its optional parts, as stored, plus where the site serves the image
+    layout: ctaLayoutOf(c),
+    image: typeof c.image === 'string' ? c.image : null,
+    imageUrl: typeof c.image === 'string' ? ctaImageUrl(c.image) : null,
+    icon: c.icon && typeof c.icon === 'object' ? c.icon : null,
+    html: typeof c.html === 'string' ? c.html : '',
+    showTitle: c.showTitle !== false,
+    hosts: Array.isArray(c.hosts) ? c.hosts.filter((h) => typeof h === 'string') : [],
     enabled: c.enabled === true,
     note: typeof c.note === 'string' ? c.note : '',
     items: (Array.isArray(c.items) ? c.items : []).filter((it) => it && typeof it === 'object').map((it) => {

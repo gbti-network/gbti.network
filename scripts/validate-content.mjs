@@ -19,7 +19,7 @@ import { PAID_GRANT_TIERS } from '../membership/tier-gate.mjs'; // sow-185: the 
 import { CATEGORY_NAMES } from '../workers/signup/news/config/categories.mjs'; // SOW-054: the canonical news category labels
 import { validateCtas } from '../membership/cta-edits.mjs'; // sow-281: the CTA registry rules
 import { assignmentsOf } from '../src/lib/ctas.mjs'; // sow-281
-import { ctaItemExists } from './lib/ctas-store.mjs'; // sow-281
+import { ctaItemExists, ctaImageInfo } from './lib/ctas-store.mjs'; // sow-281; sow-337 the card image check
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
@@ -641,6 +641,13 @@ function validateCtaRegistry() {
   const problems = validateCtas(parsed);
   for (const p of problems) errors.push(`${rel}: ${p}`);
   if (problems.length) return;
+  // sow-337: a card's image must be committed, a still WebP, and free of camera, location or profile data (the same
+  // check the Worker runs on an upload, so a hand-made PR meets the rule the admin does).
+  for (const c of parsed.ctas || []) {
+    if (typeof c?.image !== 'string') continue;
+    const info = ctaImageInfo(ROOT, c.image);
+    if (!info.ok) errors.push(`${rel}: CTA "${c.id}" image ${c.image}: ${info.problem}`);
+  }
   for (const a of assignmentsOf(parsed)) {
     if (!ctaItemExists(ROOT, a.type, a.ref)) {
       errors.push(`${rel}: CTA "${a.ctaId}" is assigned to ${a.type}:${a.ref}, which names no content item (a ${a.type === 'share' ? 'members/<author>/shares/<id>.md' : `members/*/${a.type}s/<slug>/index.md or house/${a.type}s/<slug>/index.md`} file). Fix the ref or unassign it in Admin, CTAs.`);

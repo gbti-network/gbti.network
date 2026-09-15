@@ -9,23 +9,47 @@
 // `wrap` is the chrome the mounting page wants (each rail has its own: the prompt aside uses .card, the project
 // rail .pd-block, the share aside .card.side-card, the article rail a bare div), because an empty wrapper on a
 // page with no CTA would be a visible blank card.
-import { readCtas } from '../../scripts/lib/ctas-store.mjs';
-import { ctaFor } from '../lib/ctas.mjs';
+//
+// sow-337: the card's markup and stylesheet come from membership/cta-card-render.mjs, the same drawing the
+// superadmin preview uses, so a card cannot look one way in the admin and another on the page. This component only
+// picks the chrome. A boxed chrome (.card) tells an Image first card how far to reach so its image meets the card's
+// edges, and an Image only card fills the box with no padding; any other chrome gets the card's own border. The
+// classes are prefixed pcta- because the site stylesheet already has a marketing .cta-card with 56px padding.
+import { readCtas, ctaImageInfo } from '../../scripts/lib/ctas-store.mjs';
+import { ctaFor, ctaImageUrl } from '../lib/ctas.mjs';
+import { renderCtaCard, ctaLayoutOf, layoutUses, CTA_CARD_CSS } from '../../membership/cta-card-render.mjs';
 
 interface Props { type: 'prompt' | 'post' | 'project' | 'share'; ref: string; wrap?: string; pad?: boolean }
 const { type, ref, wrap = 'card', pad = false } = Astro.props;
-const cta = ctaFor(readCtas(process.cwd()), type, ref);
+const root = process.cwd();
+const cta = ctaFor(readCtas(root), type, ref);
+
+let html = '';
+let style: string | undefined;
+let classes: string[] = [];
+let layout = 'text';
+if (cta) {
+  layout = ctaLayoutOf(cta);
+  let image = null;
+  if (layoutUses(layout).image && typeof cta.image === 'string') {
+    const info = ctaImageInfo(root, cta.image);
+    if (!info.ok) throw new Error(`CTA "${cta.id}" image ${cta.image}: ${info.problem}`);
+    image = { url: ctaImageUrl(cta.image), width: info.width, height: info.height };
+  }
+  html = renderCtaCard(cta, { image });
+  const chrome = String(wrap || '').split(/\s+/).filter(Boolean);
+  const boxed = chrome.includes('card');
+  const sideCard = chrome.includes('side-card');
+  classes = ['pcta', ...chrome, boxed ? '' : 'pcta-boxless', `pcta-l-${layout}`].filter(Boolean);
+  if (boxed && layout === 'image') style = 'padding:0;overflow:hidden';
+  else if (boxed && (pad || sideCard)) {
+    style = `${pad ? 'padding:22px;' : ''}--pcta-pad:22px;--pcta-top-radius:calc(var(--r-lg, 12px) - 1.5px) calc(var(--r-lg, 12px) - 1.5px) 0 0`;
+  }
+}
 ---
 {cta && (
-  <div class:list={['cta-card', wrap]} style={pad ? 'padding:22px' : undefined} data-cta={cta.id} data-cta-partner={cta.partner}>
-    <p class="eyebrow">{cta.label}</p>
-    <p class="cta-line">{cta.line}</p>
-    <a class="btn btn-ghost cta-btn" href={cta.destination} target="_blank" rel="sponsored nofollow noopener">{cta.button} <svg class="ar" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
+  <div class:list={classes} style={style} data-cta={cta.id} data-cta-partner={cta.partner} data-cta-layout={layout}>
+    <style is:inline set:html={CTA_CARD_CSS}></style>
+    <Fragment set:html={html} />
   </div>
 )}
-
-<style>
-  .cta-line { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--fg); }
-  .cta-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 13.5px; white-space: normal; text-align: left; }
-  .cta-btn .ar { flex: none; }
-</style>
