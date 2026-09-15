@@ -85,6 +85,7 @@ import { membershipNews, membershipNewsCategories, membershipNewsSources, public
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
 import { handleShoptalk } from './membership-shoptalk.mjs'; // sow-314: the Shop Talk call guest list
 import { handleDigestSwitch } from './membership-digest.mjs'; // sow-202: the member's weekly digest switch
+import { membershipMemberLookup } from './membership-member-lookup.mjs'; // sow-331: the superadmin member lookup
 import { createGoogleCalendarClient } from '../../clients/google-calendar.mjs'; // sow-314
 
 /**
@@ -1189,6 +1190,18 @@ export default {
         if (method === 'GET') {
           const r = await membershipAdminOverrides(request, env, { allowCookie: true });
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // sow-331: the superadmin member lookup (an email or a GitHub username -> everything held about the account).
+      // Superadmin-only and view-only; cookie-enabled for the website admin page (a GET carries no CSRF). Never cached,
+      // and corsHeaders(credentials) already varies on Origin and Authorization.
+      if (pathname === '/membership/admin/member-lookup') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await membershipMemberLookup(request, env);
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
         }
       }
 

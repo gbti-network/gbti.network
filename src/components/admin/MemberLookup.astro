@@ -1,0 +1,362 @@
+---
+// sow-331: the superadmin member lookup panel on /admin/. One search box takes an email address or a GitHub username;
+// the Worker (GET /membership/admin/member-lookup) answers with no match, a list of accounts to pick from, or the full
+// record. View only: each section links to the existing tab that acts on it. The Worker is the boundary (superadmin,
+// fail closed); this panel is UX. Every value from the Worker is written with textContent, never as markup.
+//
+// Site only, so no client-ui bundle. The panel makes its own credentialed GET rather than adding a method to the shared
+// workbench client, which is already past the repository's file-size cap.
+//
+// The nodes below the static root are built at runtime and never receive Astro's scoped attribute, so every rule for
+// them is written as `.ml :global(...)`, anchored on the static root.
+---
+<div class="ml" data-member-lookup>
+  <p class="ml-intro">Search by email address or GitHub username. Lookups are not recorded.</p>
+  <form class="ml-form" data-ml-form>
+    <label class="ml-label" for="ml-q">Email address or GitHub username</label>
+    <div class="ml-row">
+      <input id="ml-q" name="q" type="search" autocomplete="off" spellcheck="false" required maxlength="254" data-ml-q />
+      <button type="submit" data-ml-go>Look up</button>
+    </div>
+  </form>
+  <p class="ml-msg" role="status" aria-live="polite" data-ml-msg></p>
+  <div data-ml-out></div>
+</div>
+
+<script>
+  const root = document.querySelector('[data-member-lookup]') as HTMLElement | null;
+  if (root) {
+    const form = root.querySelector('[data-ml-form]') as HTMLFormElement;
+    const input = root.querySelector('[data-ml-q]') as HTMLInputElement;
+    const go = root.querySelector('[data-ml-go]') as HTMLButtonElement;
+    const msg = root.querySelector('[data-ml-msg]') as HTMLElement;
+    const out = root.querySelector('[data-ml-out]') as HTMLElement;
+    const base = document.documentElement.dataset.signupBase || '';
+
+    const PATHS: Record<string, string> = {
+      'stripe-email': 'Stripe, by email', 'digest-record': 'Weekly digest record', shoptalk: 'Shop Talk guest list',
+      'members-index': 'Member index', 'stripe-login': 'Stripe, by username', overrides: 'Staff, ban or grant list',
+    };
+    const SEARCHED: Record<string, string> = {
+      stripe: 'Stripe', digest: 'the weekly digest store', shoptalk: 'the Shop Talk guest list', membersIndex: 'the member index', overrides: 'the staff, ban and grant lists',
+    };
+    const STATUS: Record<string, string> = {
+      paid: 'Paid', trialing: 'Trial', expired: 'Expired', cancelled: 'Cancelled', none: 'No membership', banned: 'Banned', unknown: 'Unknown',
+    };
+    const SOURCE: Record<string, string> = {
+      ban: 'decided by a ban', staff: 'decided by a staff role', grandfather: 'decided by a grant', stripe: 'from Stripe', 'stripe-unreadable': 'Stripe could not be read',
+    };
+
+    type Node_ = HTMLElement;
+    function el(tag: string, cls?: string | null, text?: unknown): Node_ {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined && text !== null) n.textContent = String(text);
+      return n;
+    }
+    const when = (v: unknown) => {
+      if (v == null || v === '') return 'Not recorded';
+      const t = new Date(typeof v === 'number' ? v : String(v));
+      return Number.isNaN(t.getTime()) ? String(v) : t.toLocaleString();
+    };
+    const yesNo = (b: unknown) => (b ? 'Yes' : 'No');
+    const show = (v: unknown) => (v == null || v === '' ? 'Not recorded' : String(v));
+
+    /** A definition list from [label, value] rows. */
+    function rows(pairs: Array<[string, unknown]>): Node_ {
+      const dl = el('dl', 'ml-dl');
+      for (const [k, v] of pairs) { dl.append(el('dt', null, k), el('dd', null, v)); }
+      return dl;
+    }
+
+    /** A link that opens another admin tab (the tool that acts on this section). */
+    function toolLink(tab: string, text: string): Node_ {
+      const a = el('a', 'ml-tool', text) as HTMLAnchorElement;
+      a.href = '#tab=' + tab;
+      a.addEventListener('click', (e) => {
+        const btn = document.querySelector('[data-admin-tabs] button[data-tab="' + tab + '"]') as HTMLElement | null;
+        if (btn) { e.preventDefault(); btn.click(); window.scrollTo({ top: 0 }); }
+      });
+      return a;
+    }
+
+    /** One record section: a heading, then the body, or the reason it could not be read. */
+    function sec(title: string, part: any, body: (data: any) => Node_ | Node_[], tool?: Node_): Node_ {
+      const s = el('section', 'ml-sec');
+      s.dataset.mlSection = title;
+      s.append(el('h3', 'ml-h3', title));
+      if (!part || part.ok !== true) {
+        s.classList.add('ml-bad');
+        s.append(el('p', 'ml-unread', 'Could not read this: ' + (part?.reason || 'could not read') + '. This is not the same as having nothing stored.'));
+      } else {
+        const b = body(part.data);
+        s.append(...(Array.isArray(b) ? b : [b]));
+      }
+      if (tool) s.append(tool);
+      return s;
+    }
+
+    /** Five latest items with a Show all that expands from the data already returned. */
+    function itemList(items: any[], line: (i: any) => Node_): Node_ {
+      const wrap = el('div', 'ml-items');
+      const ul = el('ul', 'ml-ul');
+      const render = (all: boolean) => {
+        ul.replaceChildren(...(all ? items : items.slice(0, 5)).map((i) => { const li = el('li'); li.append(line(i)); return li; }));
+      };
+      render(false);
+      wrap.append(ul);
+      if (items.length > 5) {
+        const more = el('button', 'ml-more', 'Show all ' + items.length) as HTMLButtonElement;
+        more.type = 'button';
+        more.addEventListener('click', () => { render(true); more.remove(); });
+        wrap.append(more);
+      }
+      return wrap;
+    }
+
+    const para = (text: string, cls = 'ml-p') => el('p', cls, text);
+
+    function renderRecord(record: any, via?: string[]) {
+      const s = record.sections || {};
+      const head = el('div', 'ml-head');
+      const login = s.account?.ok && s.account.data?.login ? '@' + s.account.data.login : (s.username?.ok && s.username.data ? '@' + s.username.data : 'GitHub account ' + record.githubId);
+      head.append(el('h3', 'ml-name', login), para('GitHub id ' + record.githubId + (via && via.length ? '. Found by: ' + via.map((v) => PATHS[v] || v).join(', ') + '.' : '.'), 'ml-sub'));
+      out.append(head);
+
+      out.append(sec('Account', s.account, (d) => {
+        if (!d) return para('No Stripe customer is linked to this GitHub account.');
+        const nodes: Node_[] = [rows([
+          ['Email', show(d.email)], ['Name', show(d.name)], ['Member folder', s.username?.ok ? show(s.username.data) : 'Could not read the member index'],
+          ['Customer since', when(d.created)], ['Stripe status', (STATUS[d.stripeStatus] || show(d.stripeStatus)) + (d.stripeTier && d.stripeTier !== 'none' ? ', ' + d.stripeTier + ' tier' : '')],
+          ['Trial started', when(d.trialStartedAt)], ['Signup source', show(d.signupSource)], ['Referred by', show(d.referredBy)],
+          ['Discord user id', show(d.discordUserId)], ['Payout account', show(d.connectAccountId)], ['Stripe customer', show(d.customerId)],
+        ])];
+        if (d.subscriptions?.length) {
+          nodes.push(el('h4', 'ml-h4', 'Subscriptions'));
+          nodes.push(itemList(d.subscriptions, (x) => el('span', null, [STATUS[x.status] || x.status, x.priceId, 'renews ' + when(x.currentPeriodEnd), x.cancelAtPeriodEnd ? 'cancels at period end' : ''].filter(Boolean).join(', '))));
+        } else nodes.push(para('No subscriptions.'));
+        if (d.customerId) {
+          const a = el('a', 'ml-tool', 'Open this customer in Stripe') as HTMLAnchorElement;
+          a.href = 'https://dashboard.stripe.com/customers/' + encodeURIComponent(d.customerId);
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          nodes.push(a);
+        }
+        return nodes;
+      }));
+
+      out.append(sec('Standing', s.standing, (d) => rows([
+        ['Effective status', (STATUS[d.effectiveStatus] || d.effectiveStatus) + ', ' + (SOURCE[d.effectiveSource] || d.effectiveSource)],
+        ['Role', show(d.role)], ['News editor', yesNo(d.newsEditor)],
+        ['Ban', d.ban ? 'Banned. Reason: ' + show(d.ban.reason) + (d.ban.at ? '. Since ' + when(d.ban.at) : '') : 'Not banned'],
+        ['Grant', d.grandfather ? (d.grandfather.active ? 'Active' : 'Expired') + '. Reason: ' + show(d.grandfather.reason) + '. Until: ' + (d.grandfather.until ? when(d.grandfather.until) : 'no end date') : 'No grant'],
+        ['Lists last synced', when(d.mirrorGeneratedAt)],
+      ]), toolLink('admin', 'Change a ban, grant or role in Admin tools')));
+
+      out.append(sec('Creator application', s.application, (d) => {
+        if (!d) return para('No application.');
+        return rows([
+          ['State', show(d.state)], ['Submitted', when(d.submittedAt)], ['Why', show(d.why)], ['Links', show(d.links)], ['Topics', show(d.topics)],
+          ['Decided', d.decidedAt ? when(d.decidedAt) + (d.decidedByLogin ? ' by @' + d.decidedByLogin : '') : 'Not decided'], ['Decision note', show(d.decisionNote)],
+        ]);
+      }, toolLink('applications', 'Open Creator applications')));
+
+      const coupons = s.coupons;
+      const invites = s.invites;
+      const couponSec = sec('Coupons and invites', coupons, (d) => {
+        const nodes: Node_[] = [rows([
+          ['Coupon lock', d.grant ? d.grant.code + ', ' + (d.grant.active ? 'active' : 'ended') + ' (until ' + when(d.grant.until) + ')' : 'None'],
+          ['Codes redeemed', d.redeemed.length ? d.redeemed.join(', ') : 'None'],
+        ])];
+        if (!invites?.ok) nodes.push(el('p', 'ml-unread', 'Could not read invites: ' + (invites?.reason || 'could not read') + '.'));
+        else {
+          const inv = invites.data;
+          nodes.push(rows([
+            ['Invites issued', inv.issued.length ? inv.issued.map((i: any) => i.code + ' (' + i.state + ')').join(', ') : 'None'],
+            ['Invites redeemed', inv.redeemed.length ? inv.redeemed.map((i: any) => i.code + ' (issued by ' + show(i.issuedByLogin) + ')').join(', ') : 'None'],
+          ]));
+          if (!inv.complete) nodes.push(para('Only the first ' + inv.read + ' of ' + inv.total + ' invites were checked, so this list may be missing some.', 'ml-warn'));
+        }
+        return nodes;
+      }, toolLink('coupons', 'Open Coupons'));
+      out.append(couponSec);
+
+      out.append(sec('Saved and followed', s.activity, (d) => {
+        const nodes: Node_[] = [rows([
+          ['Saved items', d.favorites], ['Collections', d.collections.length ? d.collections.map((c: any) => c.name + ' (' + c.items + ')').join(', ') : 'None'],
+          ['Last change', when(d.updatedAt)],
+          ['Following', s.follows?.ok ? s.follows.data.count + (s.follows.data.count ? ': ' + s.follows.data.usernames.slice(0, 30).join(', ') : '') : 'Could not read'],
+          ['Followers', s.followers?.ok ? s.followers.data.count : 'Could not read'],
+        ])];
+        return nodes;
+      }));
+
+      out.append(sec('Settings and notifications', s.prefs, (d) => rows([
+        ['Topics followed', d ? d.topics : 'Never set'], ['News channels followed', d ? d.newsChannels : 'Never set'], ['Tags followed', d ? d.tags : 'Never set'],
+        ['Shown on Favorited by lists', d ? yesNo(d.publicFavorites) : 'No'], ['Own notification defaults', d ? yesNo(d.notificationDefaultsSet) : 'No'],
+        ['Notifications', s.notifications?.ok ? s.notifications.data.total + ' (' + s.notifications.data.unseen + ' unseen)' : 'Could not read'],
+        ['Shop Talk', s.shoptalk?.ok ? (s.shoptalk.data.optedOut ? 'Left the call' : 'Not opted out') + (s.shoptalk.data.invitedAddresses.length ? '. Invited as ' + s.shoptalk.data.invitedAddresses.join(', ') : '. Never invited') : 'Could not read'],
+      ])));
+
+      out.append(sec('Weekly digest and email', s.mail, (d) => {
+        const nodes: Node_[] = [];
+        if (!d.accountEmailChecked) nodes.push(para('The account email could not be checked, so only a record found by account id is shown.', 'ml-warn'));
+        const found = d.entries.filter((e: any) => e.subscribed);
+        if (!found.length) nodes.push(para(d.searchComplete ? 'No digest subscription.' : 'No digest subscription was found in the first ' + d.scanBudget + ' records searched. One may exist further on.', d.searchComplete ? 'ml-p' : 'ml-warn'));
+        for (const e of d.entries) {
+          if (!e.subscribed && !e.unsubscribeBlock && !e.softBounces) continue;
+          nodes.push(el('h4', 'ml-h4', e.where === 'account email' ? 'At the account email' : 'Member record'));
+          nodes.push(rows([
+            ['Subscribed', e.subscribed ? 'Yes, ' + (e.source === 'member' ? 'as a member' : 'through the public form') + ', ' + e.status : 'No'],
+            ['Receives the digest', yesNo(e.receivesDigest)], ['Digest switched off', yesNo(e.digestOff)],
+            ['Unsubscribe block', yesNo(e.unsubscribeBlock)], ['Soft bounces', e.softBounces], ['Since', when(e.createdAt)], ['Welcome issue sent', when(e.welcomedAt)],
+          ]));
+        }
+        return nodes;
+      }));
+
+      out.append(sec('Drafts', s.drafts, (d) => (d.length ? itemList(d, (x) => el('span', null, x.key + ', saved ' + when(x.updatedAt))) : para('No saved drafts.'))));
+
+      out.append(sec('Earnings and attribution', s.earnings, (d) => {
+        const conv = s.conversion;
+        return rows([
+          ['Earnings ledger', d ? d.entries + ' entries' + (d.totals ? '. Lifetime ' + show(d.totals.lifetime) + ', payable ' + show(d.totals.payable) + ', paid ' + show(d.totals.paid) : '') : 'None'],
+          ['Payout account', d ? (d.payoutReady ? 'Ready' : d.payoutConnected ? 'Connected, not ready' : 'Not connected') : 'Not connected'],
+          ['Conversion snapshot', !conv?.ok ? 'Could not read' : conv.data ? 'Converted ' + when(conv.data.conversionAt) + (conv.data.inviter ? ', invited by ' + conv.data.inviter : '') : 'None'],
+        ]);
+      }));
+
+      out.append(sec('Moderation history', s.moderation, (d) => {
+        const nodes: Node_[] = d.entries.length
+          ? [itemList(d.entries, (x) => el('span', null, when(x.at) + ': ' + show(x.action) + (x.actorLogin ? ' by @' + x.actorLogin : '') + (x.reason ? '. Reason: ' + x.reason : '')))]
+          : [para('No moderation actions recorded.')];
+        if (!d.complete) nodes.push(para('Only the most recent entries are shown.', 'ml-warn'));
+        return nodes;
+      }));
+
+      out.append(sec('Published content', s.content, (d) => {
+        if (!d.username) return para('No member folder, so nothing is published.');
+        const nodes: Node_[] = [];
+        const groups: Array<[string, string]> = [['articles', 'Articles'], ['projects', 'Projects'], ['prompts', 'Prompts'], ['shares', 'Public shares'], ['comments', 'Comments']];
+        for (const [key, label] of groups) {
+          const items = d.items[key] || [];
+          nodes.push(el('h4', 'ml-h4', label + ' (' + items.length + ')'));
+          if (!items.length) continue;
+          nodes.push(itemList(items, (x) => {
+            if (key === 'comments') return el('span', null, 'On ' + x.target + ', ' + when(x.at) + (x.visibility === 'members' ? ', members only' : ''));
+            const a = el('a', null, x.title || x.url) as HTMLAnchorElement;
+            a.href = String(x.url || '#');
+            return a;
+          }));
+        }
+        nodes.push(para('Members-only shares are not in the public index, so they are not counted here.', 'ml-sub'));
+        return nodes;
+      }));
+    }
+
+    function renderNone(body: any) {
+      out.append(para(body.queryKind === 'email' ? 'No member account uses this address.' : 'No member account has this username.', 'ml-lead'));
+      const failed = Object.entries(body.searched || {}).filter(([, v]: any) => !v.ok).map(([k]) => SEARCHED[k] || k);
+      if (failed.length) out.append(para('Not every place could be searched: ' + failed.join(', ') + ' could not be reached. A member may still exist.', 'ml-warn'));
+      const unlinked = body.searched?.stripe?.ok ? body.searched.stripe.data.unlinkedCustomers || [] : [];
+      if (unlinked.length) out.append(para('Stripe holds ' + unlinked.length + ' customer' + (unlinked.length === 1 ? '' : 's') + ' with this email and no GitHub account: ' + unlinked.map((c: any) => c.customerId).join(', ') + '.'));
+      if (body.queryKind === 'email') {
+        const n = body.nonMember;
+        const s = el('section', 'ml-sec');
+        s.append(el('h3', 'ml-h3', 'Weekly digest for this address'));
+        if (!body.searched?.digest?.ok || !n) s.append(el('p', 'ml-unread', 'Could not read the digest store for this address.'));
+        else s.append(rows([
+          ['Subscribed', n.subscribed ? 'Yes, ' + (n.source === 'member' ? 'as a member' : 'through the public form') + ', ' + n.status : 'No'],
+          ['Receives the digest', yesNo(n.receivesDigest)], ['Unsubscribe block', yesNo(n.unsubscribeBlock)], ['Soft bounces', n.softBounces], ['Since', when(n.createdAt)],
+        ]));
+        out.append(s);
+      }
+    }
+
+    function renderCandidates(body: any) {
+      out.append(para(body.candidates.length + ' accounts match. Pick one to open it.', 'ml-lead'));
+      if (!body.everySearched) out.append(para('Not every place could be searched, so this list may be missing an account.', 'ml-warn'));
+      const ul = el('ul', 'ml-cands');
+      for (const c of body.candidates) {
+        const b = el('button', 'ml-cand') as HTMLButtonElement;
+        b.type = 'button';
+        b.dataset.githubId = c.githubId;
+        b.append(el('strong', null, c.logins.length ? '@' + c.logins.join(', @') : 'GitHub account ' + c.githubId));
+        b.append(el('span', null, 'GitHub id ' + c.githubId + (c.stripeStatus ? '. Stripe: ' + (STATUS[c.stripeStatus] || c.stripeStatus) : '') + '. Found by: ' + c.via.map((v: string) => PATHS[v] || v).join(', ')));
+        b.addEventListener('click', () => lookup('githubId=' + encodeURIComponent(c.githubId)));
+        const li = el('li');
+        li.append(b);
+        ul.append(li);
+      }
+      out.append(ul);
+    }
+
+    let seq = 0;
+    async function lookup(qs: string) {
+      const mine = ++seq;
+      go.disabled = true;
+      msg.textContent = 'Looking up.';
+      out.replaceChildren();
+      let res: Response | null = null;
+      let body: any = null;
+      try {
+        res = await fetch(base + '/membership/admin/member-lookup?' + qs, { credentials: 'include' });
+        body = await res.json().catch(() => null);
+      } catch { res = null; }
+      if (mine !== seq) return;
+      go.disabled = false;
+      if (!res) { msg.textContent = 'The lookup could not reach the server. Try again.'; return; }
+      if (!res.ok) {
+        msg.textContent = res.status === 403 ? 'Only a superadmin can look up members.' : (body?.message || 'The lookup failed (' + res.status + ').');
+        return;
+      }
+      msg.textContent = '';
+      if (body.kind === 'member') renderRecord(body.record, body.via);
+      else if (body.kind === 'candidates') renderCandidates(body);
+      else renderNone(body);
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = input.value.trim();
+      if (!v) return;
+      lookup('q=' + encodeURIComponent(v));
+    });
+  }
+</script>
+
+<style>
+  .ml { display: grid; gap: 14px; }
+  .ml-intro { margin: 0; color: var(--fg-mute); }
+  .ml-label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .ml-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ml-row input { flex: 1 1 240px; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--paper); color: var(--fg); }
+  .ml-row button { font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 999px; border: 1.5px solid var(--green); background: var(--green); color: #fff; cursor: pointer; }
+  .ml-row button:disabled { opacity: .6; cursor: default; }
+  .ml-msg { margin: 0; min-height: 1.2em; }
+  .ml :global(.ml-head) { display: grid; gap: 2px; }
+  .ml :global(.ml-name) { margin: 0; font-size: 22px; }
+  .ml :global(.ml-sub) { margin: 0; color: var(--fg-mute); font-size: 14px; }
+  .ml :global(.ml-lead) { margin: 0; font-weight: 600; }
+  .ml :global(.ml-p) { margin: 0; }
+  .ml :global(.ml-warn) { margin: 0; padding: 8px 12px; border-radius: 10px; border: 1.5px solid var(--amber); background: var(--amber-tint); color: var(--fg); }
+  .ml :global(.ml-sec) { border-top: 1.5px solid var(--line); padding-top: 14px; display: grid; gap: 8px; }
+  .ml :global(.ml-h3) { margin: 0; font-size: 17px; }
+  .ml :global(.ml-h4) { margin: 6px 0 0; font-size: 14px; }
+  .ml :global(.ml-unread) { margin: 0; padding: 8px 12px; border-radius: 10px; border: 1.5px solid var(--clay); background: color-mix(in srgb, var(--clay) 12%, transparent); color: var(--fg); }
+  .ml :global(.ml-dl) { display: grid; grid-template-columns: minmax(120px, 220px) 1fr; gap: 4px 16px; margin: 0; }
+  .ml :global(.ml-dl dt) { color: var(--fg-mute); }
+  .ml :global(.ml-dl dd) { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+  .ml :global(.ml-ul) { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .ml :global(.ml-ul a), .ml :global(.ml-tool) { color: var(--green); text-decoration: underline; overflow-wrap: anywhere; }
+  .ml :global(.ml-tool) { justify-self: start; font-weight: 600; }
+  .ml :global(.ml-more) { font: inherit; margin-top: 6px; padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--paper); color: var(--fg); cursor: pointer; }
+  .ml :global(.ml-cands) { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .ml :global(.ml-cand) { font: inherit; width: 100%; text-align: left; display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--paper); color: var(--fg); cursor: pointer; }
+  .ml :global(.ml-cand:hover) { border-color: var(--green); }
+  .ml :global(.ml-cand span) { color: var(--fg-mute); font-size: 14px; overflow-wrap: anywhere; }
+  @media (max-width: 560px) {
+    .ml :global(.ml-dl) { grid-template-columns: 1fr; }
+    .ml :global(.ml-dl dd) { margin-bottom: 6px; }
+  }
+</style>

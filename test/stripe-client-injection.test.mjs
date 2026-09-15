@@ -63,3 +63,34 @@ test('stripe: findCustomerByGithubId inherits the guard (it is the deriveStatus 
   assert.equal(await client.findCustomerByGithubId("1' OR x:'1"), null);
   assert.equal(seen.length, 0, 'the deriveStatus entry point must not bypass the guard');
 });
+
+// sow-331: the superadmin member lookup's two searches put an ADDRESS and a LOGIN into the same kind of quoted literal.
+// Same rule, same direction: refuse (an empty list, the answer for no match) and make no request.
+test('stripe: an email search sends the lowercased address and returns every match', async () => {
+  const { client, seen } = spyClient();
+  const r = await client.searchCustomersByEmail('Member+tag@Example-Mail.com');
+  assert.deepEqual(r.map((c) => c.id), ['cus_1']);
+  const url = decodeURIComponent(seen[0]);
+  assert.ok(url.includes("email:'member+tag@example-mail.com'"), url);
+  assert.ok(url.includes('limit=10'), 'more than one account can share an address');
+});
+
+test('stripe: an address that could break out of the literal is REFUSED with no request', async () => {
+  const { client, seen } = spyClient();
+  const nl = String.fromCharCode(10);
+  const nul = String.fromCharCode(0);
+  for (const bad of ["a' OR email:'b@c.co", 'a"b@c.co', 'a\\b@c.co', 'a b@c.co', ' a@b.co', `a@b.co${nl}`, `a${nul}@b.co`, 'a@b', '', null, 42, 'x'.repeat(250) + '@b.co']) {
+    assert.deepEqual(await client.searchCustomersByEmail(bad), [], `must refuse ${JSON.stringify(bad)}`);
+  }
+  assert.equal(seen.length, 0);
+});
+
+test('stripe: a login search matches github_login exactly; anything that is not a login is refused', async () => {
+  const { client, seen } = spyClient();
+  await client.searchCustomersByLogin('Gbti-Labs');
+  assert.ok(decodeURIComponent(seen[0]).includes("metadata['github_login']:'Gbti-Labs'"));
+  for (const bad of ["x' OR metadata['github_id']:'1", '-x', 'x-', 'a--b', 'a b', ' x', 'x'.repeat(40), '', null]) {
+    assert.deepEqual(await client.searchCustomersByLogin(bad), [], `must refuse ${JSON.stringify(bad)}`);
+  }
+  assert.equal(seen.length, 1, 'only the valid login produced a request');
+});

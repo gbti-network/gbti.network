@@ -38,6 +38,26 @@ export function encodeForm(obj) {
     .join('&');
 }
 
+// sow-331: the characters an address may not carry into a quoted search literal: the at sign outside its one place,
+// both quote characters, the backslash, whitespace and every control character.
+const SEARCH_EMAIL_PART = String.raw`[^@'"\\\s\x00-\x1f\x7f]+`;
+const SEARCH_EMAIL_RE = new RegExp(`^${SEARCH_EMAIL_PART}@${SEARCH_EMAIL_PART}\\.${SEARCH_EMAIL_PART}$`);
+
+/**
+ * sow-331: an address safe to place inside a quoted Stripe search literal, lowercased, or null. Not trimmed: a padded
+ * value is refused rather than cleaned, the same reject-do-not-clean rule the github_id search follows.
+ */
+export function safeSearchEmail(email) {
+  const e = typeof email === 'string' ? email.toLowerCase() : '';
+  return e.length > 0 && e.length <= 254 && SEARCH_EMAIL_RE.test(e) ? e : null;
+}
+
+/** sow-331: a GitHub login (letters, digits, single inner hyphens, at most 39 characters) or null. Not trimmed. */
+export function safeSearchLogin(login) {
+  const l = typeof login === 'string' ? login : '';
+  return /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/.test(l) ? l : null;
+}
+
 export function createStripeClient({ apiKey, fetch = globalThis.fetch, baseUrl = 'https://api.stripe.com/v1' }) {
   if (!apiKey) throw new Error('createStripeClient: apiKey is required');
 
@@ -86,6 +106,29 @@ export function createStripeClient({ apiKey, fetch = globalThis.fetch, baseUrl =
         ...EXPAND_SUBS,
       });
       return r.data?.[0] ?? null;
+    },
+
+    /**
+     * sow-331: every Customer whose email is this address (up to 10, subscriptions expanded), for the superadmin
+     * member lookup. Stripe Search lags writes by about a minute, so a Customer created seconds ago may be missing.
+     *
+     * Same injection rule as searchCustomerByGithubId: the address lands inside a quoted search literal, so a value
+     * carrying a quote, a backslash, whitespace or a control character is REFUSED rather than escaped, and a refusal
+     * is an empty list, the same answer as no match, with no request made.
+     */
+    async searchCustomersByEmail(email) {
+      const e = safeSearchEmail(email);
+      if (!e) return [];
+      const r = await req('GET', '/customers/search', { query: `email:'${e}'`, limit: 10, ...EXPAND_SUBS });
+      return Array.isArray(r.data) ? r.data : [];
+    },
+
+    /** sow-331: every Customer whose metadata github_login is exactly this login (up to 10). Same refusal rule. */
+    async searchCustomersByLogin(login) {
+      const l = safeSearchLogin(login);
+      if (!l) return [];
+      const r = await req('GET', '/customers/search', { query: `metadata['github_login']:'${l}'`, limit: 10, ...EXPAND_SUBS });
+      return Array.isArray(r.data) ? r.data : [];
     },
 
     /** Consistent point lookup by customer id (used after a KV-index hit). */

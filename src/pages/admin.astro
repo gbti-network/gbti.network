@@ -1,12 +1,12 @@
 ---
-// sow-161: the native site admin surface (replaces the sow-158 stub). A staff member (moderator+) moderates
-// content from gbti.network over the httpOnly-cookie session, no extension: <gbti-admin> mounts with
-// caps="moderation" so only the content-moderation group (deplatform / republish / remove) renders, which is the
-// only server-side mutation cookie-enabled so far (POST /membership/admin/author). Ban / grandfather / role
-// assignment stay in the browser extension until sow-161 increments 2 and 3 cookie-enable them; widening the caps
-// attribute then surfaces them here with no component change. The Worker + the SOW-005 gate are the real boundary
-// (the role is re-checked server-side + at merge); this page is UX only. noindex: a per-staff surface.
+// sow-161: the native site admin surface, the primary admin surface (the extension relays to it). Staff sign in over
+// the httpOnly-cookie session. <gbti-admin> mounts with caps="moderation,membership,roles", so content moderation,
+// bans and grants, and role assignment all render here; the tab bar below adds the config managers (admin and up) and
+// the superadmin tools (site settings, channels, creator applications, member lookup). Each tab shows only when the
+// caller's rank clears its data-min. The Worker + the SOW-005 gate are the real boundary (the role is re-checked
+// server-side + at merge); this page is UX only. noindex: a per-staff surface.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
 ---
 <BaseLayout title="Admin tools" description="GBTI Network admin." noindex={true}>
   <section class="band">
@@ -32,6 +32,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
           <button type="button" role="tab" data-tab="channels" data-min="superadmin" aria-selected="false" hidden>Channels</button>
           <button type="button" role="tab" data-tab="applications" data-min="superadmin" aria-selected="false" hidden>Creator applications</button>{/* sow-293 */}
+          <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
         </nav>
 
         <div class="adm-card" data-panel="admin">
@@ -83,6 +84,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="adm-card" data-panel="channels" hidden>
           <h2 class="h2">Channels</h2>
           <gbti-channel-map-manager></gbti-channel-map-manager>
+        </div>
+        {/* sow-331: SUPERADMIN. Search an email address or a GitHub username and see everything held about the
+            account. View only; the Worker route is superadmin-gated and fails closed, so the tab gate is UX. */}
+        <div class="adm-card" data-panel="member-lookup" hidden>
+          <h2 class="h2">Member lookup</h2>
+          <MemberLookup />
         </div>
       </div>
     </div>
