@@ -86,7 +86,22 @@ export function sanitizeImageName(filename) {
 // The canonical value shape for an image()-typed field: `./images/<file>`, resolved by Astro RELATIVE to the
 // markdown file that declares it. It is the only shape that works, and the only shape any committed content
 // uses (78 of 78 across members/** and house/**).
-const CANONICAL_IMAGE_RE = /^\.\/images\/([a-z0-9][a-z0-9._-]*)$/;
+//
+// sow-340: THE FILE NAME IS MATCHED IN ANY CASE, AND THAT IS NOT A STYLE CHOICE. `sanitizeImageName` lowercases
+// every NEW upload, so everything this client writes is lowercase and stays lowercase. What it does not control
+// is what is ALREADY COMMITTED: the migrated corpus carries 17 frontmatter values and 35 body references whose
+// file name has capitals (`./images/atwellpub_Jeff_Bezos_...webp`), every one of them with its file present in
+// the repository. With a lowercase-only pattern such a value was not "already canonical", so normalizeImageValue
+// fell through to the sanitizer, lowercased a name that was correct, and handed publish a file name that exists
+// nowhere. All four lookups then missed and the publish REFUSED with "the image ... is no longer staged; choose
+// it again before publishing", which the author cannot act on because the image was never unstaged: it is
+// committed, under its real name, and the only thing wrong is the name we asked for. Reported by the owner on an
+// article whose cover has not changed since it was migrated.
+//
+// Reading the case faithfully makes the same publish a SKIP: onMain resolves the true path, nothing is sent, and
+// the Worker's deliberately case-strict upload gate (membership/hosted-author.mjs, sow-157) is never reached
+// because no file entry is produced. That gate stays exactly as strict as it is, and stays right to be.
+const CANONICAL_IMAGE_RE = /^\.\/images\/([A-Za-z0-9][A-Za-z0-9._-]*)$/;
 
 /**
  * Rewrite one image()-field value to the canonical `./images/<name>`, or return it untouched.
@@ -181,7 +196,17 @@ export function referencedImages(frontmatter) {
 // real idiom in this corpus (the click-to-enlarge `[![](x)](x)` pattern) and it has already produced four
 // live 404s, recorded in sow-165. `g` because a body has many; the leading `!` is simply not part of the
 // pattern, which is what makes one expression cover both.
-const BODY_IMAGE_RE = /\]\(\.\/images\/([a-z0-9][a-z0-9._-]*)\)/g;
+//
+// sow-340: it reads the file name in ANY CASE, for the reason CANONICAL_IMAGE_RE above gives at length. The
+// argument this pattern used to carry for skipping an uppercase name was that the hosted validator rejects one
+// anyway, so matching it here would only build a request that fails at the Worker. That is true of an image
+// whose bytes have to be SENT and false of every case that actually occurs: 35 uppercase body references are
+// committed across six articles and every one of their files is in the repository, so each resolves to a skip
+// that sends nothing. Skipping them in the scan does not avoid a failed request, it removes them from the
+// sow-323 existence check, which is the one guard standing between a body reference with no file and a red
+// main. An uppercase reference whose file is genuinely gone now refuses the publish with a message the author
+// can act on, instead of merging markdown that fails the site build with [ImageNotFound].
+const BODY_IMAGE_RE = /\]\(\.\/images\/([A-Za-z0-9][A-Za-z0-9._-]*)\)/g;
 
 /**
  * sow-165: every staged image a content item's BODY references, as `[{ name }]` deduped, in first-seen order.

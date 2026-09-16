@@ -188,6 +188,12 @@ test('normalizeImageValue: rewrites what the stager used to write, and leaves al
   assert.equal(n('cover.png'), './images/cover.png');
   assert.equal(n('members/gwen/images/Cover 1.PNG'), './images/cover-1.png', 'sanitized on the way through');
   assert.equal(n('./images/cover.png'), './images/cover.png', 'already canonical, untouched');
+  // sow-340: ALREADY CANONICAL INCLUDES THE CAPITALS OF AN IMAGE THAT IS ALREADY COMMITTED. Lowercasing one
+  // renames it to a file that exists nowhere, every publish lookup then misses, and the author is told their
+  // image "is no longer staged" about an image sitting in the repository under its real name. New uploads are
+  // still lowercased, by sanitizeImageName, which is the line above this one.
+  assert.equal(n('./images/atwellpub_Jeff_Bezos_78ab0eae.webp'), './images/atwellpub_Jeff_Bezos_78ab0eae.webp',
+    'a committed name with capitals is left exactly as it is');
   // Left alone: a resolved URL, a build-optimized asset, another member's folder, a non-image, and empties.
   for (const keep of ['https://cdn/x.png', '//cdn/x.png', '/_astro/x.hash.webp', '/img/x.png',
     'members/other/images/x.png', 'members/gwen/images/notes.txt', '', null, undefined]) {
@@ -254,9 +260,15 @@ test('bodyImageRefs: both markdown forms, deduped, and nothing that is not ours'
   assert.deepEqual(bodyImageRefs('[![](./images/x.webp)](./images/x.webp)').map((r) => r.name), ['x.webp']);
   assert.deepEqual(bodyImageRefs('![a](./images/a.png)\n\n![b](./images/b.png)\n\n![a again](./images/a.png)')
     .map((r) => r.name), ['a.png', 'b.png'], 'deduped, in first-seen order');
-  // Not ours to flush: a remote host, a site-absolute path, another folder, and an uppercase name (which the
-  // hosted validator rejects anyway, so matching it here would produce a request that fails at the Worker).
-  assert.deepEqual(bodyImageRefs('![](https://cdn/x.png) ![](/media/y.webp) ![](./other/z.png) ![](./images/Photo.webp)'), []);
+  // Not ours to flush: a remote host, a site-absolute path, and another folder.
+  assert.deepEqual(bodyImageRefs('![](https://cdn/x.png) ![](/media/y.webp) ![](./other/z.png)'), []);
+  // sow-340: AN UPPERCASE NAME IS OURS, and this assertion used to say the opposite. The old reasoning was
+  // that the hosted validator rejects an uppercase path, so matching one here would only build a request that
+  // fails at the Worker. It holds only for an image whose bytes must be sent. 35 uppercase body references are
+  // committed across six articles with every file present, so each resolves to a skip that sends nothing, and
+  // skipping them in the SCAN drops them out of the sow-323 existence check instead.
+  assert.deepEqual(bodyImageRefs('![](./images/Photo.webp)').map((r) => r.name), ['Photo.webp'],
+    'a committed uppercase file name is read as it really is, not lowercased into a name that exists nowhere');
   assert.deepEqual(bodyImageRefs(''), []);
   assert.deepEqual(bodyImageRefs(null), []);
 });
@@ -488,6 +500,28 @@ test('planPublishImage: an image already committed on main is a SKIP, not a fail
   // that carries a lead image.
   const plan = await planPublishImage(IMG, { fromSession: () => undefined, fromStore: async () => null, onMain: async () => true });
   assert.deepEqual(plan, { action: 'skip' });
+});
+
+// sow-340: THE OWNER'S PUBLISH, END TO END, because no single-function test reproduces it. The refusal was
+// assembled by three correct-looking steps in a row: normalizeImageFields lowercased a value that was already
+// canonical, referencedImages then reported the lowercased name, and planPublishImage asked a case-sensitive
+// repository for a file under a name nobody has ever committed. Each step is defensible alone, so the test has
+// to run the chain. `onMain` is case-sensitive here on purpose: GitHub's contents API is, and a lookup that
+// answered yes to either case would pass whatever this fix did.
+test('an article whose committed cover has capitals publishes: the chain keeps the name, so it is a SKIP', async () => {
+  const REAL = 'atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae.webp';
+  const fm = normalizeImageFields({ title: 'The Turtle King', coverImage: `./images/${REAL}` }, 'gbtilabs');
+  assert.equal(fm.coverImage, `./images/${REAL}`, 'the value reaches publish unchanged');
+  const refs = referencedImages(fm);
+  assert.deepEqual(refs.map((r) => r.name), [REAL], 'publish asks for the file that is actually committed');
+  const dir = 'members/gbtilabs/posts/the-turtle-king/images';
+  const onMain = async (r) => r.commitPath === `${dir}/${REAL}`; // case-sensitive, like the repository
+  const plan = await planPublishImage(
+    { name: refs[0].name, item: 'post:the-turtle-king', commitPath: `${dir}/${refs[0].name}` },
+    { fromSession: () => undefined, fromStore: async () => null, onMain },
+  );
+  assert.deepEqual(plan, { action: 'skip' },
+    'the image is committed and unchanged, so this publish sends no image and must not be refused');
 });
 
 // ---- sow-183: a MOVE has to carry the images with it (owner report 2026-08-27) ----
