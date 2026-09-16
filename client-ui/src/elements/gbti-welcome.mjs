@@ -9,7 +9,9 @@
 // Host-agnostic: it consumes only the injected client + a public fetch of /members-index.json, so it runs in
 // the extension now and the npm CMS later. Emits gbti:welcome-done when the member finishes.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill } from '../welcome-core.mjs';
+import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill, mergeChannelFollows, requestedStep } from '../welcome-core.mjs';
+import { ONBOARDING_STEPS } from '../../../membership/onboarding.mjs'; // sow-343: the one step list (the WorkBench card reads it too)
+import { saveWizardSocials } from '../welcome-socials.mjs'; // sow-343: Continue on the socials step saves
 import { DISCORD_LINK_URL } from '../discord.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs';
 import { recallProfileSocials } from '../profile-fields.mjs'; // SOW-129 QA: recall saved profile socials into the welcome step
@@ -23,15 +25,9 @@ const PAGE_SIZE = 12;
 const DISCORD_DONE_KEY = 'gbti-welcome-discord-joined';
 const CHAN_FOLLOWED_KEY = 'gbti-welcome-chan-followed'; // channels the member opened Follow on (local, best-effort)
 
-// The five steps (order is the single source of truth). `key` matches the historical step names; `label` +
-// `sub` feed the rail; `heading` feeds the main pane per the design handoff.
-const STEPS = [
-  { key: 'discord', label: 'Discord', sub: 'Join the community', heading: 'Connect Discord' },
-  { key: 'subreddit', label: 'Follow', sub: 'Network channels', heading: 'Follow the channels' },
-  { key: 'socials', label: 'Socials', sub: 'Your handles', heading: 'Add your socials' },
-  { key: 'follow', label: 'Members', sub: 'People to follow', heading: 'Follow members' },
-  { key: 'topics', label: 'Topics', sub: 'Tune your feed', heading: 'Follow topics' },
-];
+// The five steps. sow-343 moved the list to membership/onboarding.mjs, because the WorkBench progress card and the
+// stored skips must agree with the wizard on what the steps are: `label` + `sub` feed the rail, `heading` the pane.
+const STEPS = ONBOARDING_STEPS;
 const DONE_HEADING = 'You are all set';
 
 // GBTI's own channels (mirrors src/lib/social.ts, the site footer; the extension cannot import site TS).
@@ -49,8 +45,8 @@ const GBTI_CHANNELS = [
   ['linkedin', 'LinkedIn', 'https://www.linkedin.com/company/gbti-network/posts', 'Network updates and member work on LinkedIn.', 'GBTI Network'],
 ];
 
-// The socials step: raw handles stage here until the profile page's editor consumes them into profile.md
-// (mergeStagedLinks in profile-fields.mjs), so the ONE save runs through the real publish pipeline.
+// The socials step: raw handles stage here while the member types. sow-343: Continue saves them onto the profile
+// (_saveSocials), and a trial member's are kept on the account until they can publish one.
 const SOCIALS_STAGE_KEY = 'gbti-welcome-socials';
 // Shown by default: the syndication-mentioned platforms first (X / Bluesky / Mastodon get automatic handle
 // mentions today), then the common presence links. GitHub is implicit (they signed in with it) and Discord
@@ -368,6 +364,7 @@ class GbtiWelcome extends GbtiElement {
       this._membership = s?.membership ?? 'unknown';
       this._couponUntil = s?.couponUntil ?? null; // SOW-119 QA: a live coupon grant reframes the paid banner
       this._own = lc(s?.identity?.username || s?.identity?.login);
+      this._login = s?.identity?.login || s?.identity?.username || ''; // sow-343: a new profile's display name
     } catch {
       this._membership = 'unknown';
       this._couponUntil = null;
@@ -402,7 +399,8 @@ class GbtiWelcome extends GbtiElement {
     try {
       const p = await this.client?.getPrefs?.();
       this._topicsCount = Array.isArray(p?.categories) ? p.categories.length : 0;
-    } catch { this._topicsCount = 0; }
+      this._record = p?.onboarding ?? null; // sow-343: the stored progress (null = nothing stored yet)
+    } catch { this._topicsCount = 0; this._record = undefined; }
     // Discord connectedness: localStorage FIRST, then the SERVER, which is the actual authority.
     //
     // This used to read localStorage alone, and localStorage is per-browser. A member who linked Discord on one
@@ -427,11 +425,16 @@ class GbtiWelcome extends GbtiElement {
       const raw = JSON.parse(this._lsGet('chan') || '[]');
       this._chanFollowed = new Set(Array.isArray(raw) ? raw : []);
     } catch { this._chanFollowed = new Set(); }
+    // sow-343: the channels opened are on the account too. Show both, and hand the account any this browser alone knew.
+    const chans = mergeChannelFollows([...this._chanFollowed], this._record?.networkFollows);
+    this._chanFollowed = new Set(chans.all);
+    if (chans.missing.length && this._record !== undefined) this._prefs({ onboardingFollows: chans.missing });
     // The socials step's staged draft (survives a mid-flow abandon; consumed by the profile editor).
     try {
       const raw = JSON.parse(this._lsGet('socials') || 'null');
       this._socialDraft = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     } catch { this._socialDraft = {}; }
+    this._socialDraft = { ...(this._record?.socials || {}), ...this._socialDraft }; // sow-343: kept on the account
     // SOW-129 QA (2026-07-20): RECALL the member's SAVED profile socials so a welcome RESET does not clear them.
     // The staged draft (an in-flight edit) always wins; the saved profile fills the rest. Time-boxed + fail-open:
     // a brand-new member with no profile, a slow read, or any error leaves the fields blank and the welcome
@@ -446,7 +449,12 @@ class GbtiWelcome extends GbtiElement {
           const who = s?.identity?.username || s?.identity?.login;
           if (!path && who) path = `members/${who}/profile.md`;
           if (!path) return;
-          const full = await this.client?.getContentItem?.({ path });
+          // sow-343: a missing profile is an ANSWER (the save creates one); any other failure is not, and leaves
+          // _profileRead false so the save refuses rather than writing a bare profile over a real one.
+          let full = null;
+          try { full = await this.client?.getContentItem?.({ path }); } catch (e) { if (e?.code !== 'not-found') throw e; }
+          this._profile = full ? { path, frontmatter: full.frontmatter || {}, body: full.body || '' } : null;
+          this._profileRead = true;
           this._socialDraft = socialPrefill(recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
         })().catch(() => {}),
         new Promise((r) => setTimeout(r, 6000)),
@@ -458,7 +466,8 @@ class GbtiWelcome extends GbtiElement {
     // (the setClient fan-out can re-run it) never yanks a member out of the step they are reading.
     if (!this._resumed) {
       this._resumed = true;
-      this._step = resumeStep(this._stepDone(), STEPS.length);
+      const asked = requestedStep(this.getAttribute('start-step'), STEPS); // sow-343: the WorkBench card links to a step
+      this._step = asked >= 0 ? asked : resumeStep(this._stepDone(), STEPS.length);
     }
     this.render();
   }
@@ -522,7 +531,7 @@ class GbtiWelcome extends GbtiElement {
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a>. The trial is free.</p>
       </div></div>`);
     this.on('[data-auth-signin]', 'click', () => this.emit('gbti:welcome-signin'));
     this.on('[data-copy]', 'click', () => { try { navigator.clipboard?.writeText(code); } catch { /* clipboard blocked */ } });
@@ -535,11 +544,32 @@ class GbtiWelcome extends GbtiElement {
     this.render();
   }
 
-  _next() {
+  async _next({ skip = false } = {}) {
     this._stopDiscordPoll();
+    const key = STEPS[this._step]?.key;
+    if (this._socialSaving) return;
+    if (key === 'socials' && !skip && !(await this._saveSocials())) return;
+    // sow-343: moving on from a step that is not done is a skip, and the account remembers it. A rail jump is not.
+    if (key && !this._stepDone()[this._step]) this._prefs({ onboardingSkip: { step: key } });
     if (this._step >= STEPS.length - 1) this._done = true;
     else this._step++;
     this.render();
+  }
+
+  /** sow-343: best-effort write to the progress record. The card treats an unreadable record as unknown. */
+  _prefs(patch) { return Promise.resolve().then(() => this.client?.setPrefs?.(patch)).catch(() => null); }
+
+  // sow-343: Continue on the socials step saves the handles (welcome-socials.mjs). False keeps the member here.
+  async _saveSocials() {
+    this._socialSaving = true;
+    this._socialError = null;
+    this.render();
+    const r = await saveWizardSocials({ client: this.client, profile: this._profile, profileRead: this._profileRead, draft: this._socialDraft, membership: this._membership, login: this._login || this._own });
+    this._socialSaving = false;
+    if (r.profile) { this._profile = r.profile; this._lsRemove('socials'); }
+    this._socialError = r.error || null;
+    this.render();
+    return !r.error;
   }
 
   _back() {
@@ -597,8 +627,8 @@ class GbtiWelcome extends GbtiElement {
     const footR = this._done
       ? `<button class="gbtn" data-review type="button">Review steps</button>
          <button class="pbtn" data-done type="button">Go to your profile</button>`
-      : `${showSkip ? `<button class="skipbtn" data-step-next type="button">Skip</button>` : ''}
-         <button class="pbtn" data-step-next type="button">${isLast ? 'I am all set' : 'Continue &rarr;'}</button>`;
+      : `${showSkip ? `<button class="skipbtn" data-step-skip type="button">Skip</button>` : ''}
+         <button class="pbtn" data-step-next type="button"${this._socialSaving ? ' disabled' : ''}>${this._socialSaving ? 'Saving&hellip;' : isLast ? 'I am all set' : 'Continue &rarr;'}</button>`;
     this.set(this.css(CSS) + `<div class="wf">
       ${this._railHtml()}
       <div class="main">
@@ -619,6 +649,7 @@ class GbtiWelcome extends GbtiElement {
     // Navigation: the rail jumps anywhere (every step is skippable); the footer walks linearly.
     this.$$('[data-goto]').forEach((b) => b.addEventListener('click', () => this._goto(Number(b.dataset.goto))));
     this.$$('[data-step-next]').forEach((b) => b.addEventListener('click', () => this._next()));
+    this.on('[data-step-skip]', 'click', () => this._next({ skip: true })); // sow-343: Skip never saves
     this.on('[data-step-back]', 'click', () => this._back());
     this.on('[data-review]', 'click', () => this._goto(0));
     this.on('[data-done]', 'click', () => this.emit('gbti:welcome-done'));
@@ -646,6 +677,7 @@ class GbtiWelcome extends GbtiElement {
         window.open(chan[2], '_blank', 'noopener');
         this._chanFollowed.add(key);
         this._lsSet('chan', JSON.stringify([...this._chanFollowed]));
+        this._prefs({ onboardingFollows: [key] }); // sow-343
         this.render();
       }));
     } else if (step === 'socials') {
@@ -729,8 +761,7 @@ class GbtiWelcome extends GbtiElement {
   }
 
   // The socials step: collect the member's handles across the platform set. Raw values stage locally
-  // (SOCIALS_STAGE_KEY) and the profile editor consumes them into profile.md on the profile page, so the
-  // one real save happens through the normal publish pipeline. Fully skippable.
+  // (SOCIALS_STAGE_KEY) while typing; Continue saves them (_saveSocials). Fully skippable.
   _socialsCard() {
     const draft = this._socialDraft || {};
     const visible = [...new Set([...SOCIAL_STARTERS, ...Object.keys(draft)])]
@@ -746,7 +777,8 @@ class GbtiWelcome extends GbtiElement {
       : '';
     const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? 'Close' : '+ More platforms'}</button>` : '';
     return `
-      <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. You review and save these on your profile at the end.</p>
+      <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. ${this._membership === 'paid' ? 'Continue adds them to your public profile.' : 'We keep them on your account and add them to your public profile once your membership is paid.'}</p>
+      ${this._socialError ? `<p class="note" role="alert" style="color:var(--accent)">${esc(this._socialError)}</p>` : ''}
       ${rows}
       ${more}
       ${picker}`;

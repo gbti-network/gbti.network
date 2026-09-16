@@ -57,6 +57,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const { setClient } = await import('../../client-ui/src/base.mjs');
       const adapter = createWorkbenchClient({ signupBase, login: String(s.login), githubId: s.githubId != null ? String(s.githubId) : null });
       setClient(adapter);
+      // sow-343: the WorkBench progress card links to one step (?step=<key>); the element ignores a key it does not know.
+      const step = new URLSearchParams(location.search).get('step');
+      if (step) document.querySelector('gbti-welcome')?.setAttribute('start-step', step);
       document.querySelectorAll('.wel-load').forEach((el) => el.setAttribute('hidden', ''));
       // Defining the element upgrades the static tag; it renders on the setClient subscriber fan-out.
       await import('../../client-ui/src/elements/gbti-welcome.mjs');

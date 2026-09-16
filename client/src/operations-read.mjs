@@ -202,8 +202,22 @@ export async function getContentItem(ctx, { path } = {}) {
     return { path, frontmatter, body };
   }
   const item = await ctx.reader.get(id.username, path);
-  if (!item) throw new OperationError('not-found', 'no such item in your folder');
-  return item;
+  if (item) return item;
+  // sow-343: the reader answers null for ANY failed GitHub read, a rate limit included, so its "not found" is not
+  // evidence of absence. A caller that acts on absence (the welcome wizard creates a profile when there is none)
+  // would then write over a real file. Ask the network, which answers null only for a missing file and throws on
+  // anything else, so a failure surfaces as a failure rather than as "nothing there".
+  const own = path.startsWith(`members/${id.username}/`) && !path.includes('..') && !path.includes('\\');
+  let repo = null;
+  try { repo = own ? ctx.getRepoClient?.() : null; } catch { repo = null; }
+  if (repo?.getFileContent) {
+    const text = await repo.getFileContent(path);
+    if (text != null) {
+      const { frontmatter, body } = parseContentFile(text);
+      return { path, frontmatter, body };
+    }
+  }
+  throw new OperationError('not-found', 'no such item in your folder');
 }
 
 

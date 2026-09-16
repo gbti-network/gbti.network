@@ -18526,8 +18526,22 @@ async function getContentItem(ctx2, { path: path4 } = {}) {
     return { path: path4, frontmatter, body };
   }
   const item = await ctx2.reader.get(id.username, path4);
-  if (!item) throw new OperationError("not-found", "no such item in your folder");
-  return item;
+  if (item) return item;
+  const own = path4.startsWith(`members/${id.username}/`) && !path4.includes("..") && !path4.includes("\\");
+  let repo = null;
+  try {
+    repo = own ? ctx2.getRepoClient?.() : null;
+  } catch {
+    repo = null;
+  }
+  if (repo?.getFileContent) {
+    const text = await repo.getFileContent(path4);
+    if (text != null) {
+      const { frontmatter, body } = parseContentFile(text);
+      return { path: path4, frontmatter, body };
+    }
+  }
+  throw new OperationError("not-found", "no such item in your folder");
 }
 function validateContent(ctx2, { type, input, body } = {}) {
   const id = requireIdentity(ctx2);

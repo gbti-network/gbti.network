@@ -18317,8 +18317,22 @@ async function getContentItem(ctx, { path } = {}) {
     return { path, frontmatter, body };
   }
   const item = await ctx.reader.get(id.username, path);
-  if (!item) throw new OperationError("not-found", "no such item in your folder");
-  return item;
+  if (item) return item;
+  const own = path.startsWith(`members/${id.username}/`) && !path.includes("..") && !path.includes("\\");
+  let repo = null;
+  try {
+    repo = own ? ctx.getRepoClient?.() : null;
+  } catch {
+    repo = null;
+  }
+  if (repo?.getFileContent) {
+    const text = await repo.getFileContent(path);
+    if (text != null) {
+      const { frontmatter, body } = parseContentFile(text);
+      return { path, frontmatter, body };
+    }
+  }
+  throw new OperationError("not-found", "no such item in your folder");
 }
 
 // client/src/hosted-publish.mjs

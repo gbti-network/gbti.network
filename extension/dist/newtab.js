@@ -6509,11 +6509,59 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
     return { ...clean(staged), ...clean(saved) };
   }
+  function wizardProfileLinks(saved, draft, allowed = null) {
+    const base = saved && typeof saved === "object" && !Array.isArray(saved) ? { ...saved } : {};
+    const typed = socialPrefill(null, draft, allowed);
+    return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
+  }
+  function mergeChannelFollows(local, stored) {
+    const keys = (v) => Array.isArray(v) ? v.filter((k) => typeof k === "string" && k) : [];
+    const l = keys(local);
+    const s = keys(stored);
+    return { all: [.../* @__PURE__ */ new Set([...s, ...l])], missing: [...new Set(l.filter((k) => !s.includes(k)))] };
+  }
+  function requestedStep(key, steps) {
+    if (typeof key !== "string" || !key || !Array.isArray(steps)) return -1;
+    return steps.findIndex((s) => s?.key === key);
+  }
   function paginate(list, p, size = 10) {
     const pages = Math.max(1, Math.ceil(list.length / size));
     const page = Math.min(Math.max(1, p | 0 || 1), pages);
     const start = (page - 1) * size;
     return { page, pages, items: list.slice(start, start + size) };
+  }
+
+  // membership/onboarding.mjs
+  var ONBOARDING_STEPS = Object.freeze([
+    Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
+    Object.freeze({ key: "subreddit", label: "Follow", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
+    Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
+    Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
+    Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
+  ]);
+  var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
+
+  // client-ui/src/welcome-socials.mjs
+  async function saveWizardSocials({ client, profile = null, profileRead = false, draft = {}, membership, login = "" } = {}) {
+    const prefs = (patch) => Promise.resolve().then(() => client?.setPrefs?.(patch)).catch(() => null);
+    const { links, changed } = wizardProfileLinks(profile?.frontmatter?.links, draft, SOCIAL_KEYS);
+    if (!changed) return { outcome: "nothing" };
+    if (membership !== "paid") {
+      await prefs({ onboardingSocials: draft });
+      return { outcome: "kept" };
+    }
+    if (!profileRead) {
+      return { outcome: "unread", error: "We could not read your profile just now, so nothing was saved. Your handles are kept here. Try again in a moment, or skip for now." };
+    }
+    const frontmatter = profile ? { ...profile.frontmatter, links } : { displayName: login, links };
+    try {
+      await client.publish({ type: "profile", input: frontmatter, body: profile?.body ?? "", ...profile?.path ? { path: profile.path } : {} });
+    } catch (e) {
+      await prefs({ onboardingSocials: draft });
+      return { outcome: "failed", error: `Your handles were not saved (${e?.message || "the network did not answer"}). They are kept, so you can try again, or skip for now.` };
+    }
+    await prefs({ onboardingSocialsSaved: true });
+    return { outcome: "saved", profile: { path: profile?.path ?? null, body: profile?.body ?? "", frontmatter } };
   }
 
   // client-ui/src/discord.mjs
@@ -6689,13 +6737,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var PAGE_SIZE2 = 12;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var CHAN_FOLLOWED_KEY = "gbti-welcome-chan-followed";
-  var STEPS = [
-    { key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord" },
-    { key: "subreddit", label: "Follow", sub: "Network channels", heading: "Follow the channels" },
-    { key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials" },
-    { key: "follow", label: "Members", sub: "People to follow", heading: "Follow members" },
-    { key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics" }
-  ];
+  var STEPS = ONBOARDING_STEPS;
   var DONE_HEADING = "You are all set";
   var GBTI_CHANNELS = [
     ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, projects, and prompts syndicate to our community subreddit. Open it and hit Join.", "r/GBTI_network"],
@@ -7026,6 +7068,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._membership = s?.membership ?? "unknown";
         this._couponUntil = s?.couponUntil ?? null;
         this._own = lc(s?.identity?.username || s?.identity?.login);
+        this._login = s?.identity?.login || s?.identity?.username || "";
       } catch {
         this._membership = "unknown";
         this._couponUntil = null;
@@ -7062,8 +7105,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const p = await this.client?.getPrefs?.();
         this._topicsCount = Array.isArray(p?.categories) ? p.categories.length : 0;
+        this._record = p?.onboarding ?? null;
       } catch {
         this._topicsCount = 0;
+        this._record = void 0;
       }
       this._discordJoined = this._lsGet("discord") === "1";
       if (!this._discordJoined && this.client?.discordLinkStatus) {
@@ -7081,12 +7126,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         this._chanFollowed = /* @__PURE__ */ new Set();
       }
+      const chans = mergeChannelFollows([...this._chanFollowed], this._record?.networkFollows);
+      this._chanFollowed = new Set(chans.all);
+      if (chans.missing.length && this._record !== void 0) this._prefs({ onboardingFollows: chans.missing });
       try {
         const raw = JSON.parse(this._lsGet("socials") || "null");
         this._socialDraft = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
       } catch {
         this._socialDraft = {};
       }
+      this._socialDraft = { ...this._record?.socials || {}, ...this._socialDraft };
       try {
         await Promise.race([
           (async () => {
@@ -7095,7 +7144,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             const who = s?.identity?.username || s?.identity?.login;
             if (!path && who) path = `members/${who}/profile.md`;
             if (!path) return;
-            const full = await this.client?.getContentItem?.({ path });
+            let full = null;
+            try {
+              full = await this.client?.getContentItem?.({ path });
+            } catch (e) {
+              if (e?.code !== "not-found") throw e;
+            }
+            this._profile = full ? { path, frontmatter: full.frontmatter || {}, body: full.body || "" } : null;
+            this._profileRead = true;
             this._socialDraft = socialPrefill(recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
           })().catch(() => {
           }),
@@ -7106,7 +7162,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._loaded = true;
       if (!this._resumed) {
         this._resumed = true;
-        this._step = resumeStep(this._stepDone(), STEPS.length);
+        const asked = requestedStep(this.getAttribute("start-step"), STEPS);
+        this._step = asked >= 0 ? asked : resumeStep(this._stepDone(), STEPS.length);
       }
       this.render();
     }
@@ -7187,7 +7244,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a>. The trial is free.</p>
       </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
       this.on("[data-copy]", "click", () => {
@@ -7203,11 +7260,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._step = Math.min(Math.max(i, 0), STEPS.length - 1);
       this.render();
     }
-    _next() {
+    async _next({ skip = false } = {}) {
       this._stopDiscordPoll();
+      const key = STEPS[this._step]?.key;
+      if (this._socialSaving) return;
+      if (key === "socials" && !skip && !await this._saveSocials()) return;
+      if (key && !this._stepDone()[this._step]) this._prefs({ onboardingSkip: { step: key } });
       if (this._step >= STEPS.length - 1) this._done = true;
       else this._step++;
       this.render();
+    }
+    /** sow-343: best-effort write to the progress record. The card treats an unreadable record as unknown. */
+    _prefs(patch) {
+      return Promise.resolve().then(() => this.client?.setPrefs?.(patch)).catch(() => null);
+    }
+    // sow-343: Continue on the socials step saves the handles (welcome-socials.mjs). False keeps the member here.
+    async _saveSocials() {
+      this._socialSaving = true;
+      this._socialError = null;
+      this.render();
+      const r = await saveWizardSocials({ client: this.client, profile: this._profile, profileRead: this._profileRead, draft: this._socialDraft, membership: this._membership, login: this._login || this._own });
+      this._socialSaving = false;
+      if (r.profile) {
+        this._profile = r.profile;
+        this._lsRemove("socials");
+      }
+      this._socialError = r.error || null;
+      this.render();
+      return !r.error;
     }
     _back() {
       this._stopDiscordPoll();
@@ -7254,8 +7334,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const backOff = this._step === 0 && !this._done;
       const showSkip = !this._done && this._step >= 1 && this._step <= 3;
       const footR = this._done ? `<button class="gbtn" data-review type="button">Review steps</button>
-         <button class="pbtn" data-done type="button">Go to your profile</button>` : `${showSkip ? `<button class="skipbtn" data-step-next type="button">Skip</button>` : ""}
-         <button class="pbtn" data-step-next type="button">${isLast ? "I am all set" : "Continue &rarr;"}</button>`;
+         <button class="pbtn" data-done type="button">Go to your profile</button>` : `${showSkip ? `<button class="skipbtn" data-step-skip type="button">Skip</button>` : ""}
+         <button class="pbtn" data-step-next type="button"${this._socialSaving ? " disabled" : ""}>${this._socialSaving ? "Saving&hellip;" : isLast ? "I am all set" : "Continue &rarr;"}</button>`;
       this.set(this.css(CSS6) + `<div class="wf">
       ${this._railHtml()}
       <div class="main">
@@ -7274,6 +7354,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     </div>`);
       this.$$("[data-goto]").forEach((b) => b.addEventListener("click", () => this._goto(Number(b.dataset.goto))));
       this.$$("[data-step-next]").forEach((b) => b.addEventListener("click", () => this._next()));
+      this.on("[data-step-skip]", "click", () => this._next({ skip: true }));
       this.on("[data-step-back]", "click", () => this._back());
       this.on("[data-review]", "click", () => this._goto(0));
       this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
@@ -7298,6 +7379,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           window.open(chan[2], "_blank", "noopener");
           this._chanFollowed.add(key);
           this._lsSet("chan", JSON.stringify([...this._chanFollowed]));
+          this._prefs({ onboardingFollows: [key] });
           this.render();
         }));
       } else if (step === "socials") {
@@ -7371,8 +7453,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="grid">${cards}</div>`;
     }
     // The socials step: collect the member's handles across the platform set. Raw values stage locally
-    // (SOCIALS_STAGE_KEY) and the profile editor consumes them into profile.md on the profile page, so the
-    // one real save happens through the normal publish pipeline. Fully skippable.
+    // (SOCIALS_STAGE_KEY) while typing; Continue saves them (_saveSocials). Fully skippable.
     _socialsCard() {
       const draft = this._socialDraft || {};
       const visible = [.../* @__PURE__ */ new Set([...SOCIAL_STARTERS, ...Object.keys(draft)])].filter((k) => SOCIAL_KEYS.includes(k) && !SOCIAL_HIDDEN.has(k));
@@ -7385,7 +7466,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const picker = this._socialsMore && rest.length ? `<div class="pkrow">${rest.map((k) => `<button type="button" class="pk" data-social-add="${esc(k)}">${socialIcon(k, 14)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
       const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? "Close" : "+ More platforms"}</button>` : "";
       return `
-      <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. You review and save these on your profile at the end.</p>
+      <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. ${this._membership === "paid" ? "Continue adds them to your public profile." : "We keep them on your account and add them to your public profile once your membership is paid."}</p>
+      ${this._socialError ? `<p class="note" role="alert" style="color:var(--accent)">${esc(this._socialError)}</p>` : ""}
       ${rows}
       ${more}
       ${picker}`;

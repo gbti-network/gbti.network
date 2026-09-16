@@ -108,6 +108,36 @@ export function socialPrefill(saved, staged, allowed = null) {
   return { ...clean(staged), ...clean(saved) };
 }
 
+/**
+ * sow-343: the links a profile save writes from the socials step. What the member typed wins for the keys they
+ * typed (the fields were prefilled from the saved profile, so an untouched field carries the saved value and
+ * changes nothing); every other saved link is kept; nothing is removed, since an emptied field only means "not
+ * this one". `changed` is false when the save would write the file unchanged, so no pull request is opened.
+ */
+export function wizardProfileLinks(saved, draft, allowed = null) {
+  const base = saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...saved } : {};
+  const typed = socialPrefill(null, draft, allowed);
+  return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
+}
+
+/**
+ * sow-343: the GBTI channels a member opened, from this browser and from their account. Returns the union to show,
+ * and the ones only this browser knew about, which the wizard sends to the account once so a tick made before the
+ * record existed is not lost.
+ */
+export function mergeChannelFollows(local, stored) {
+  const keys = (v) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string' && k) : []);
+  const l = keys(local);
+  const s = keys(stored);
+  return { all: [...new Set([...s, ...l])], missing: [...new Set(l.filter((k) => !s.includes(k)))] };
+}
+
+/** sow-343: the step index a link asked for (`?step=<key>`), or -1 when it names no step. */
+export function requestedStep(key, steps) {
+  if (typeof key !== 'string' || !key || !Array.isArray(steps)) return -1;
+  return steps.findIndex((s) => s?.key === key);
+}
+
 export function paginate(list, p, size = 10) {
   const pages = Math.max(1, Math.ceil(list.length / size));
   const page = Math.min(Math.max(1, p | 0 || 1), pages);
