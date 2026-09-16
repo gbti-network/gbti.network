@@ -1,7 +1,7 @@
 ---
 title: 'The Turtle King: A look into the Turtly World of Jeff Bezos'
 slug: the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos
-status: published
+status: draft
 visibility: public
 publicStub: false
 excerpt: >-
