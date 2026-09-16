@@ -61,6 +61,22 @@ test('the popover CSS names its own tokens with fallbacks, so it renders in both
   assert.match(SELECTION_TOOLBAR_CSS, /--s-green, var\(--green-700/);
 });
 
+// sow-342: BOTH HALVES ARE PINNED HERE ON PURPOSE, and neither means anything alone. Assert only the panel rule
+// and it passes whichever way the base stylesheet goes; assert only the base rule and it says nothing about this
+// panel. The defect was the pair: BASE_CSS stretches every unqualified input to the full width of its container,
+// it is in the shadow root of every client-ui component, and the panel claimed only its text and url inputs. A
+// checkbox therefore rendered 177px wide inside a flex label, squeezing "New tab" onto two lines with the tick
+// stranded mid-row. Measured in a browser before and after; the numbers are in the CSS comment.
+test('the link panel claims its own checkboxes, and the base width:100% is why it has to', async () => {
+  const { BASE_CSS } = await import('../client-ui/src/tokens.mjs');
+  assert.match(BASE_CSS, /input, select, textarea \{[^}]*width:\s*100%/,
+    'the base rule this override exists for: if it goes, say so here rather than leaving a rule nobody can explain');
+  const rule = /\.gbti-lp input\[type="checkbox"\][^{]*\{([^}]*)\}/.exec(SELECTION_TOOLBAR_CSS);
+  assert.ok(rule, 'without a rule of its own a checkbox inherits width:100% and breaks the row');
+  assert.match(rule[1], /width:\s*auto/);
+  assert.match(rule[1], /flex:\s*none/, 'the label is a flex row, which would otherwise grow the box back');
+});
+
 // The no-host stub. createSelectionToolbar resolves its host EAGERLY and, when there is none, returns an inert
 // object instead of throwing. That path needs no DOM, so it is testable here, and it is worth testing because a
 // stub whose shape does not match the real object is worse than no stub: the caller's `?.` guard passes and the

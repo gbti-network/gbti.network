@@ -1173,6 +1173,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   border: 1px solid var(--stb-line); border-radius: 7px; padding: 7px 9px; min-width: 0;
 }
 .gbti-lp label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--stb-fg-soft); cursor: pointer; }
+/* sow-342: THE CHECKBOXES NEED THEIR OWN RULE, and the reason is that every other control here already has one.
+   BASE_CSS (client-ui/src/tokens.mjs) carries a bare \`input, select, textarea { width: 100%; padding: 9px 11px }\`
+   and it is in the shadow root of every client-ui component, this panel included. The two text inputs above
+   outrank it on specificity, so they look right; a checkbox matched nothing here and inherited width:100%. In a
+   flex label that stretches the box to the full panel width, leaves the caption its min-content width, and wraps
+   "New tab" onto two lines with the tick stranded in the middle of the row. Reported by the owner as the link
+   editor "needing help", which is exactly what it looked like.
+   Measured in a browser against the real shadow CSS: as shipped the two boxes render 177px and 190px wide and
+   the second row is 39px tall; with this rule both are 13px and both rows are 20px. */
+.gbti-lp input[type="checkbox"] { width: auto; min-width: 0; flex: none; margin: 0; padding: 0; accent-color: var(--stb-accent); }
 .gbti-lp .lp-btns { display: flex; gap: 8px; margin-top: 2px; }
 .gbti-lp button {
   font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; padding: 6px 12px;
