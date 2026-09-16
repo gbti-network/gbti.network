@@ -2965,7 +2965,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "share", "prs", "saved", "subs", "earnings"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "project", "share", "profile", "prs", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     const tab = m ? canonicalType(m[1]) : null;
@@ -3007,6 +3007,13 @@ ${listStyleProseCss(".doc-blocks")}
     if (tabHash !== tab && !editing) return { action: "switchTab", tab: tabHash };
     return { action: "none" };
   }
+  function profileStrip(read2, tab) {
+    if (!read2 || tab === "profile") return null;
+    if (read2.state === "found") return { name: String(read2.item?.frontmatter?.displayName || "Your profile"), action: "Edit profile" };
+    if (read2.state === "absent") return { name: "You have no public profile yet", action: "Create your profile" };
+    return null;
+  }
+  var isProfilePath = (path) => /^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/.test(String(path || ""));
   function typeForContentPath(path) {
     const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts)\//.exec(String(path || ""));
     return m ? m[1].slice(0, -1) : null;
@@ -19654,6 +19661,31 @@ ${listStyleProseCss(".doc-blocks")}
   var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
 
   // client-ui/src/profile-fields.mjs
+  var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
+  function isSanctionedAvatar(url) {
+    const v = String(url == null ? "" : url).trim();
+    if (!v) return true;
+    let u;
+    try {
+      u = new URL(v);
+    } catch {
+      return false;
+    }
+    return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
+  }
+  var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
+  function mergeStagedLinks(links, staged, allowed = null) {
+    const out = { ...links || {} };
+    if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    for (const [k, v] of Object.entries(staged)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (typeof out[k] === "string" && out[k].trim() !== "") continue;
+      out[k] = v.trim();
+    }
+    return out;
+  }
   function recallProfileSocials(links, allowed = null) {
     const out = {};
     if (!links || typeof links !== "object" || Array.isArray(links)) return out;
@@ -21193,9 +21225,471 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
 
+  // client-ui/src/elements/gbti-profile-editor.mjs
+  var SITE14 = "https://gbti.network";
+  var STATUS_LABEL2 = {
+    paid: "Paid member",
+    trialing: "Free trial",
+    trial: "Free trial",
+    expired: "Trial expired",
+    cancelled: "Cancelled",
+    none: "Not a member",
+    banned: "Suspended",
+    unknown: "Unknown"
+  };
+  var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  var CSS35 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .sec-h { padding:20px 24px 16px; }
+  .sec-h h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:20px; letter-spacing:-.005em; display:flex; align-items:center; gap:10px; }
+  .sec-h p { margin:5px 0 0; color:var(--muted); font-size:14px; line-height:1.5; max-width:60ch; }
+  .body { padding:4px 24px 20px; display:flex; flex-direction:column; gap:18px; }
+  .rows { border-top:1.5px solid var(--line); }
+  .row { display:grid; grid-template-columns:1fr auto; gap:24px; align-items:center; padding:16px 24px; }
+  .row + .row { border-top:1px solid var(--line); }
+  .row .rl .t { font-weight:600; font-size:15px; }
+  .row .rl .d { color:var(--muted); font-size:13.5px; line-height:1.45; margin-top:3px; max-width:48ch; }
+  @media (max-width:560px) { .row { grid-template-columns:1fr; } }
+  /* stacked field */
+  .fld label { display:block; font-weight:600; font-size:14px; margin:0 0 3px; }
+  .fld .d { color:var(--muted); font-size:13px; line-height:1.4; margin:0 0 7px; max-width:60ch; }
+  .fld input[type=text], .fld input[type=url], .fld textarea, .lv input { width:100%; box-sizing:border-box; font:inherit; font-size:14px; padding:10px 12px; border:1.5px solid var(--line); border-radius:9px; background:var(--bg, var(--panel)); color:var(--fg); }
+  .fld input:focus, .fld textarea:focus, .lv input:focus { outline:none; border-color:var(--accent); }
+  .fld textarea { min-height:120px; resize:vertical; line-height:1.55; font-family:var(--font-mono, ui-monospace, monospace); }
+  /* avatar field: preview + input */
+  .avrow { display:flex; gap:14px; align-items:flex-start; }
+  .avprev { width:64px; height:64px; flex:none; border-radius:50%; object-fit:cover; border:1.5px solid var(--line); background:var(--hover); }
+  .avfield { flex:1; min-width:0; }
+  .averr { color:#b3261e; font-size:12.5px; margin-top:5px; min-height:14px; }
+  /* segmented toggle */
+  .seg { display:inline-flex; background:var(--hover); border:1.5px solid var(--line); border-radius:9px; padding:3px; gap:2px; }
+  .seg .segbtn { border:0; background:transparent; font:inherit; font-weight:600; font-size:14px; padding:7px 16px; border-radius:6px; color:var(--muted); cursor:pointer; }
+  .seg .segbtn.on { background:var(--brand); color:#fff; }
+  .badge { display:inline-block; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border-radius:999px; padding:3px 9px; background:var(--hover); color:var(--fg); }
+  .badge.paid { background:var(--green-tint, #e9f6ef); color:var(--green-700, #0f6f40); }
+  /* tags (skills + roles) */
+  .tags { display:flex; flex-wrap:wrap; gap:7px; margin:0 0 9px; }
+  .tag { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; padding:5px 8px 5px 11px; border-radius:999px; border:1.5px solid var(--line); background:var(--hover); }
+  .tag.role { border-color:var(--accent); color:var(--fg); background:color-mix(in srgb, var(--accent) 10%, transparent); }
+  .tag button { border:0; background:transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:14px; line-height:1; padding:0; }
+  .tag button:hover { color:#b3261e; }
+  .taginput { display:flex; gap:8px; }
+  .taginput input { flex:1; }
+  .taginput button { font:inherit; font-weight:600; font-size:13px; padding:9px 14px; border-radius:9px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; white-space:nowrap; }
+  .taginput button:hover { border-color:var(--accent); color:var(--accent); }
+  /* social repeater */
+  .lrow { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; margin:0 0 9px; }
+  .lico { width:34px; height:34px; flex:none; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1.5px solid var(--line); background:var(--hover); color:var(--fg); }
+  .lico svg { width:16px; height:16px; }
+  .lv { min-width:0; }
+  .lv .llabel { font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:0 0 2px; }
+  .lrm { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; }
+  .lrm:hover { color:#b3261e; background:var(--hover); }
+  .picker { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .pk { display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px; font-weight:600; padding:8px 12px; border-radius:9px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; }
+  .pk:hover { border-color:var(--accent); color:var(--accent); }
+  .pk svg { width:15px; height:15px; }
+  .addbtn { font:inherit; font-weight:600; font-size:13.5px; padding:9px 15px; border-radius:9px; border:1.5px dashed var(--line); background:transparent; color:var(--fg); cursor:pointer; }
+  .addbtn:hover { border-color:var(--accent); color:var(--accent); }
+  /* save bar */
+  .savebar { position:sticky; bottom:0; display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:16px 4px 4px; background:linear-gradient(to top, var(--bg, var(--panel)) 60%, transparent); }
+  .savebar .save { font:inherit; font-weight:700; font-size:14px; padding:11px 22px; border-radius:10px; border:1.5px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  .savebar .save[disabled] { opacity:.6; cursor:default; }
+  .note { font-size:13px; color:var(--muted); }
+  .msg { font-size:13px; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:#b3261e; }
+  .nudge { padding:18px 20px; border:1.5px dashed var(--line); border-radius:16px; background:var(--panel); font-size:14px; color:var(--muted); }
+  .nudge a { color:var(--brand); font-weight:600; }
+  /* sow-346: on a phone the sticky bar covered a sixth of the screen, over the fields being edited; there it sits
+     at the end of the form instead. Last in the template: a media rule adds no specificity. */
+  @media (max-width:560px) { .savebar { position:static; background:none; } }
+`;
+  var GbtiProfileEditor = class extends GbtiElement {
+    _loaded = false;
+    _loading = false;
+    _addingLink = false;
+    _saving = false;
+    _msg = "";
+    _msgKind = "";
+    connectedCallback() {
+      this._moved = this._loaded && Boolean(this.root?.firstChild);
+      super.connectedCallback();
+      this._moved = false;
+    }
+    // sow-346: a client broadcast (the WorkBench page has a second, late setClient caller) must not rebuild a form
+    // that may hold unsaved edits. A view with no form (signed out, or a failed read) loads again instead.
+    skipClientRender() {
+      if (this._loaded && this._signedIn && this._readState !== "failed") return true;
+      if (this._loaded && !this._loading) this._loaded = false;
+      return false;
+    }
+    _maybeLoad() {
+      if (this.client && !this._loaded && !this._loading) {
+        this._loading = true;
+        this._load();
+      }
+    }
+    async _load() {
+      let status = null;
+      try {
+        status = await this.client.status?.() ?? null;
+      } catch {
+        status = null;
+      }
+      this._status = status;
+      const r = await readOwnProfile(this.client, { identity: status?.identity ?? null });
+      this._readState = r.state;
+      this._path = r.path;
+      const login = status?.identity?.username || status?.identity?.login || "";
+      const fm = r.item ? r.item.frontmatter : r.state === "absent" ? { displayName: status?.identity?.name || login } : {};
+      this._fm = fm;
+      this._model = this._modelFromFm(fm, r.item?.body || "");
+      if (r.state !== "failed") await this._offerKept(status);
+      this._loaded = true;
+      this._loading = false;
+      this.render();
+    }
+    // Handles typed during welcome that never reached the profile: this browser's (under an account-scoped key,
+    // sow-345) and a trial member's, kept on the account (sow-343). They fill only EMPTY links; a saved value wins.
+    async _offerKept(status) {
+      let staged = null;
+      const key = accountKey("gbti-welcome-socials", status?.identity);
+      try {
+        staged = key ? JSON.parse(browserStorage()?.getItem(key) || "null") : null;
+      } catch {
+        staged = null;
+      }
+      let kept = null;
+      try {
+        kept = (await this.client.getPrefs?.())?.onboarding?.socials ?? null;
+      } catch {
+        kept = null;
+      }
+      const offered = { ...kept && typeof kept === "object" ? kept : {}, ...staged && typeof staged === "object" ? staged : {} };
+      if (!Object.keys(offered).length) return;
+      this._model.links = mergeStagedLinks(this._model.links, offered, SOCIAL_KEYS);
+      if (staged) {
+        try {
+          browserStorage()?.removeItem(key);
+        } catch {
+        }
+      }
+    }
+    _modelFromFm(fm, body) {
+      const str3 = (v) => v == null ? "" : String(v);
+      const links = {};
+      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str3(v);
+      return {
+        displayName: str3(fm.displayName),
+        headline: str3(fm.headline),
+        avatar: str3(fm.avatar),
+        location: str3(fm.location),
+        // preserved, never surfaced (owner decision)
+        forHire: fm.forHire === true,
+        directory: fm.directory === true,
+        skills: Array.isArray(fm.skills) ? fm.skills.map(str3) : [],
+        roles: Array.isArray(fm.roles) ? fm.roles.map(str3) : [],
+        links,
+        visibility: fm.visibility || "public",
+        body: body || ""
+      };
+    }
+    get _signedIn() {
+      return Boolean(this._status?.authenticated && this._status?.identity?.login);
+    }
+    get _login() {
+      return this._status?.identity?.login || null;
+    }
+    get _membership() {
+      return this._status?.membership || "unknown";
+    }
+    get _paid() {
+      return this._membership === "paid";
+    }
+    // Sync the free-text inputs (which are NOT re-rendered per keystroke) into the model before any structural render.
+    _gather() {
+      if (!this._model) return;
+      const val = (sel) => this.$(sel)?.value;
+      if (this.$('[data-field="displayName"]')) this._model.displayName = val('[data-field="displayName"]') ?? this._model.displayName;
+      if (this.$('[data-field="headline"]')) this._model.headline = val('[data-field="headline"]') ?? this._model.headline;
+      if (this.$('[data-field="avatar"]')) this._model.avatar = val('[data-field="avatar"]') ?? this._model.avatar;
+      if (this.$('[data-field="body"]')) this._model.body = val('[data-field="body"]') ?? this._model.body;
+      this.$$("[data-link-key]").forEach((inp) => {
+        this._model.links[inp.dataset.linkKey] = inp.value;
+      });
+    }
+    render() {
+      if (this._moved) return;
+      this._maybeLoad();
+      if (!this.client) {
+        this.set(this.css(CSS35) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        return;
+      }
+      if (!this._loaded) {
+        this.set(this.css(CSS35) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        return;
+      }
+      if (!this._signedIn) {
+        this.set(this.css(CSS35) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE14}/membership/">Become a member</a>.</div>`);
+        return;
+      }
+      if (this._readState === "failed") {
+        this.set(this.css(CSS35) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        return;
+      }
+      const m = this._model || this._modelFromFm({}, "");
+      let sections;
+      try {
+        sections = this._identity(m) + this._bio(m) + this._presence(m) + this._skills(m) + this._roles(m) + this._socials(m) + this._saveBar();
+      } catch {
+        sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
+      }
+      this.set(this.css(CSS35) + sections);
+      this._wire();
+    }
+    _identity(m) {
+      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc(STATUS_LABEL2[this._membership] || this._membership)}</span>`;
+      return `<section class="sec">
+      <div class="sec-h"><h3>Profile ${badge}</h3><p>How you appear across gbti.network: your public profile page, the member directory, and content you author. Signed in as <b>@${esc(this._login || "")}</b>.</p></div>
+      <div class="body">
+        <div class="fld"><label for="pf-name">Display name</label><div class="d">Your name as it shows on your profile and cards.</div><input id="pf-name" type="text" data-field="displayName" value="${esc(m.displayName)}" maxlength="80" /></div>
+        <div class="fld"><label for="pf-headline">Headline</label><div class="d">A short line under your name (a role, a company, or a tagline).</div><input id="pf-headline" type="text" data-field="headline" value="${esc(m.headline)}" maxlength="120" /></div>
+        <div class="fld"><label for="pf-avatar">Avatar</label><div class="d">Your profile picture. Leave blank to use your GitHub avatar, or paste a Gravatar image URL. Other image hosts are not allowed.</div>
+          <div class="avrow">
+            <img class="avprev" data-avatar-preview alt="Avatar preview" src="${esc(this._avatarSrc(m.avatar))}" />
+            <div class="avfield">
+              <input id="pf-avatar" type="url" data-field="avatar" data-avatar-input value="${esc(m.avatar)}" placeholder="Blank = GitHub avatar, or https://gravatar.com/avatar/…" />
+              <div class="averr" data-avatar-err></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>`;
+    }
+    // The preview src: the entered avatar when it is a sanctioned https URL, else the member's GitHub avatar default.
+    _avatarSrc(v) {
+      const val = String(v || "").trim();
+      if (val && isSanctionedAvatar(val)) return val;
+      return githubAvatarUrl(this._login);
+    }
+    _bio(m) {
+      return `<section class="sec">
+      <div class="sec-h"><h3>Bio</h3><p>Your longer introduction, in Markdown. It renders below your name on your profile page.</p></div>
+      <div class="body"><div class="fld"><textarea data-field="body" placeholder="Write a few lines about yourself…">${esc(m.body)}</textarea></div></div>
+    </section>`;
+    }
+    _presence(m) {
+      const seg = (key, on) => `<div class="seg"><button type="button" class="segbtn${on ? "" : " on"}" data-toggle="${key}" data-val="off">Off</button><button type="button" class="segbtn${on ? " on" : ""}" data-toggle="${key}" data-val="on">On</button></div>`;
+      return `<section class="sec">
+      <div class="sec-h"><h3>Presence</h3><p>Where you show up on the network.</p></div>
+      <div class="rows">
+        <div class="row"><div class="rl"><div class="t">Available for hire</div><div class="d">Shows a "for hire" chip on your directory card.</div></div><div class="rc">${seg("forHire", m.forHire)}</div></div>
+        <div class="row"><div class="rl"><div class="t">List in the member directory</div><div class="d">Include your profile in the public members grid at /members/.</div></div><div class="rc">${seg("directory", m.directory)}</div></div>
+      </div>
+    </section>`;
+    }
+    _skills(m) {
+      const tags = m.skills.map((s, i) => `<span class="tag">${esc(s)}<button type="button" data-rm-skill="${i}" aria-label="Remove ${esc(s)}">×</button></span>`).join("");
+      return `<section class="sec">
+      <div class="sec-h"><h3>Skills</h3><p>Technologies and tools you work with. They render as tags on your profile.</p></div>
+      <div class="body">
+        ${m.skills.length ? `<div class="tags">${tags}</div>` : ""}
+        <div class="taginput"><input type="text" data-tag-add="skills" placeholder="Add a skill and press Enter (e.g. TypeScript)" /><button type="button" data-tag-btn="skills">Add</button></div>
+      </div>
+    </section>`;
+    }
+    _roles(m) {
+      const tags = m.roles.map((r, i) => `<span class="tag role">${esc(prettyRole(r))}<button type="button" data-rm-role="${i}" aria-label="Remove ${esc(r)}">×</button></span>`).join("");
+      return `<section class="sec">
+      <div class="sec-h"><h3>Specialties</h3><p>Your developer specialties (for example MCP Developer). They render as badges on your profile.</p></div>
+      <div class="body">
+        ${m.roles.length ? `<div class="tags">${tags}</div>` : ""}
+        <div class="taginput"><input type="text" data-tag-add="roles" placeholder="Add a specialty and press Enter (e.g. WordPress Developer)" /><button type="button" data-tag-btn="roles">Add</button></div>
+      </div>
+    </section>`;
+    }
+    _socials(m) {
+      const setKeys = SOCIAL_KEYS.filter((k) => typeof m.links[k] === "string" && m.links[k].trim() !== "" || Object.prototype.hasOwnProperty.call(m.links, k) && m.links[k] === "");
+      const rows = setKeys.map((k) => `<div class="lrow">
+      <span class="lico" aria-hidden="true">${socialIcon(k, 16)}</span>
+      <span class="lv"><span class="llabel">${esc(SOCIAL_LABELS[k] || k)}</span><input type="text" data-link-key="${esc(k)}" value="${esc(m.links[k] || "")}" placeholder="${esc(this._placeholder(k))}" /></span>
+      <button type="button" class="lrm" data-rm-link="${esc(k)}" aria-label="Remove ${esc(SOCIAL_LABELS[k] || k)}">×</button>
+    </div>`).join("");
+      const unused = SOCIAL_KEYS.filter((k) => !setKeys.includes(k));
+      const picker = this._addingLink && unused.length ? `<div class="picker">${unused.map((k) => `<button type="button" class="pk" data-add-link="${esc(k)}">${socialIcon(k, 15)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
+      const addBtn = unused.length ? `<button type="button" class="addbtn" data-add-toggle>${this._addingLink ? "Close" : "+ Add a link"}</button>` : "";
+      return `<section class="sec">
+      <div class="sec-h"><h3>Social links</h3><p>Your profiles across the web. Paste a full URL or a handle; we build the link. These also credit you when your content is shared to X and Bluesky.</p></div>
+      <div class="body">
+        ${rows || '<div class="note">No links yet. Add one below.</div>'}
+        ${addBtn}
+        ${picker}
+      </div>
+    </section>`;
+    }
+    _placeholder(k) {
+      if (k === "website") return "https://your-site.com";
+      if (k === "discord") return "your_handle";
+      if (k === "mastodon") return "@you@instance.social";
+      return "@handle or full URL";
+    }
+    _saveBar() {
+      const label = this._saving ? "Saving…" : this._paid ? "Publish profile" : "Save privately";
+      const note = this._paid ? "Publishing updates your public profile on gbti.network within a couple of minutes." : "Publishing your profile needs a paid membership. Your changes save privately and publish when you upgrade.";
+      return `<div class="savebar">
+      <button class="save" type="button" data-save ${this._saving ? "disabled" : ""}>${label}</button>
+      <span class="note">${esc(note)}</span>
+      <span class="msg ${this._msgKind}" data-msg aria-live="polite">${esc(this._msg)}</span>
+    </div>`;
+    }
+    _wire() {
+      this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => {
+        this._gather();
+        this._model[b.dataset.toggle] = b.dataset.val === "on";
+        this.render();
+      }));
+      const addTag = (kind) => {
+        const inp = this.$(`[data-tag-add="${kind}"]`);
+        if (!inp) return;
+        let raw = inp.value.trim();
+        if (!raw) return;
+        const value = kind === "roles" ? slugifyRole(raw) : raw;
+        if (value && !this._model[kind].includes(value)) {
+          this._gather();
+          this._model[kind].push(value);
+          this.render();
+          this.$(`[data-tag-add="${kind}"]`)?.focus();
+        }
+      };
+      ["skills", "roles"].forEach((kind) => {
+        const inp = this.$(`[data-tag-add="${kind}"]`);
+        if (inp) inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addTag(kind);
+          }
+        });
+        this.$(`[data-tag-btn="${kind}"]`)?.addEventListener("click", () => addTag(kind));
+      });
+      this.$$("[data-rm-skill]").forEach((b) => b.addEventListener("click", () => {
+        this._gather();
+        this._model.skills.splice(Number(b.dataset.rmSkill), 1);
+        this.render();
+      }));
+      this.$$("[data-rm-role]").forEach((b) => b.addEventListener("click", () => {
+        this._gather();
+        this._model.roles.splice(Number(b.dataset.rmRole), 1);
+        this.render();
+      }));
+      this.$("[data-add-toggle]")?.addEventListener("click", () => {
+        this._gather();
+        this._addingLink = !this._addingLink;
+        this.render();
+      });
+      this.$$("[data-add-link]").forEach((b) => b.addEventListener("click", () => {
+        this._gather();
+        this._model.links[b.dataset.addLink] = "";
+        this._addingLink = false;
+        this.render();
+        this.$(`[data-link-key="${b.dataset.addLink}"]`)?.focus();
+      }));
+      this.$$("[data-rm-link]").forEach((b) => b.addEventListener("click", () => {
+        this._gather();
+        delete this._model.links[b.dataset.rmLink];
+        this.render();
+      }));
+      const avInput = this.$("[data-avatar-input]");
+      const avPrev = this.$("[data-avatar-preview]");
+      const avErr = this.$("[data-avatar-err]");
+      if (avInput) avInput.addEventListener("input", () => {
+        const v = avInput.value.trim();
+        const bad = v && !isSanctionedAvatar(v);
+        if (avErr) avErr.textContent = bad ? "Use your GitHub or Gravatar image only. Other hosts are not allowed." : "";
+        if (avPrev) avPrev.src = this._avatarSrc(bad ? "" : v);
+      });
+      if (avPrev) avPrev.addEventListener("error", () => {
+        const fb = githubAvatarUrl(this._login);
+        if (fb && avPrev.getAttribute("src") !== fb) avPrev.src = fb;
+      });
+      this.$("[data-save]")?.addEventListener("click", () => this._save());
+    }
+    _buildInput() {
+      const m = this._model;
+      const input = { ...this._fm || {} };
+      for (const k of ["headline", "avatar", "location", "links"]) delete input[k];
+      const links = {};
+      for (const k of SOCIAL_KEYS) {
+        const raw = (m.links[k] || "").trim();
+        if (raw) links[k] = buildSocialUrl(k, raw);
+      }
+      Object.assign(input, {
+        displayName: (m.displayName || "").trim() || this._login || "Member",
+        forHire: m.forHire === true,
+        directory: m.directory === true,
+        skills: m.skills,
+        roles: m.roles,
+        visibility: m.visibility || "public"
+      });
+      if ((m.headline || "").trim()) input.headline = m.headline.trim();
+      if ((m.avatar || "").trim() && isSanctionedAvatar(m.avatar.trim())) input.avatar = m.avatar.trim();
+      if ((m.location || "").trim()) input.location = m.location.trim();
+      if (Object.keys(links).length) input.links = links;
+      return input;
+    }
+    async _save() {
+      if (this._saving || !this._model || !["found", "absent"].includes(this._readState)) return;
+      this._gather();
+      const av = (this._model.avatar || "").trim();
+      if (av && !isSanctionedAvatar(av)) {
+        this._msg = "Your avatar must be a GitHub or Gravatar image URL. Please fix it before saving.";
+        this._msgKind = "err";
+        this.render();
+        return;
+      }
+      this._saving = true;
+      this._msg = "";
+      this._msgKind = "";
+      this.render();
+      const input = this._buildInput();
+      const body = this._model.body || "";
+      const path = this._readState === "found" ? this._path || void 0 : void 0;
+      let published = false;
+      try {
+        if (this._paid) {
+          await this.client.publish({ type: "profile", input, body, path });
+          this._msg = "Profile published. It appears on gbti.network in a couple of minutes.";
+          this._msgKind = "ok";
+          published = true;
+        } else {
+          await this.client.saveDraft({ type: "profile", input, body, path });
+          this._msg = "Saved privately. Upgrade to a paid membership to publish it.";
+          this._msgKind = "ok";
+        }
+        this._fm = { ...input };
+      } catch (e) {
+        this._msg = e?.message ? `Could not save: ${e.message}` : "Could not save just now. Try again in a moment.";
+        this._msgKind = "err";
+      }
+      if (published) {
+        this._readState = "found";
+        if (input.links) {
+          try {
+            await this.client.setPrefs?.({ onboardingSocialsSaved: true });
+          } catch {
+          }
+        }
+        this.emit("gbti-profile-saved", { frontmatter: input });
+      }
+      this._saving = false;
+      this.render();
+    }
+  };
+  define("gbti-profile-editor", GbtiProfileEditor);
+
   // client-ui/src/elements/gbti-workspace.mjs
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
-  var SITE14 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
@@ -21204,6 +21698,8 @@ ${listStyleProseCss(".doc-blocks")}
     { id: "project", label: "Projects", type: "project", authoring: true },
     { id: "share", label: "Shares", authoring: true },
     // sow-304: the member's own shares, edited through the composer (no `type`: the tab is a self-loading list, not a content-type list)
+    { id: "profile", label: "Profile", authoring: true },
+    // sow-346: <gbti-profile-editor>, one instance kept across renders
     // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
     // type's list (a draft article under Articles), reached by the per-type Drafts filter.
     { id: "prs", label: "Pull requests" },
@@ -21216,7 +21712,7 @@ ${listStyleProseCss(".doc-blocks")}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -21331,6 +21827,10 @@ ${listStyleProseCss(".doc-blocks")}
       const hash = typeof location !== "undefined" ? location.hash : "";
       this._restore = this._editing ? null : (() => {
         const path = parseWorkspaceEdit(hash);
+        if (isProfilePath(path)) {
+          this._tab = "profile";
+          return null;
+        }
         if (path) return { edit: path };
         const d = parseWorkspaceDraft(hash);
         return d ? { draft: d } : null;
@@ -21357,6 +21857,9 @@ ${listStyleProseCss(".doc-blocks")}
             this._setScope("house", { persist: false });
           }
         }
+      });
+      this.shadowRoot?.addEventListener("gbti-profile-saved", (e) => {
+        this._ownProfile = { state: "found", item: { frontmatter: e.detail?.frontmatter || {} } };
       });
       this._loadProfile();
       this._ensureTab(this._tab);
@@ -21482,12 +21985,10 @@ ${listStyleProseCss(".doc-blocks")}
     }
     // ----- data loaders (each fail-soft to an empty state, like gbti-content-list/gbti-pr-list) -----
     async _loadProfile() {
-      try {
-        const items = (await this.client?.listContent?.({ type: "profile" }))?.items ?? [];
-        this._profile = items[0] || null;
-      } catch {
-        this._profile = null;
-      }
+      if (!this.client || this._ownProfileAsked) return;
+      this._ownProfileAsked = true;
+      const r = await readOwnProfile(this.client);
+      this._ownProfile = r;
       if (!this._editing) this.render();
     }
     // SOW-083 P2: the member's own earnings ledger (held + payable + paid), served by the Worker from earnings:<id>.
@@ -21783,9 +22284,10 @@ ${listStyleProseCss(".doc-blocks")}
         if (r.edit) this._openItem(r.edit, typeForContentPath(r.edit) || "post");
         else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug });
       }
+      if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS35) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS36) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -21821,7 +22323,8 @@ ${listStyleProseCss(".doc-blocks")}
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS35) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS36) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
@@ -21844,11 +22347,10 @@ ${listStyleProseCss(".doc-blocks")}
       return authoringEnabled(attr2, isExtensionHost());
     }
     _profileHtml() {
-      if (!this._profile) return "";
-      const f = this._profile.frontmatter || {};
-      const name = f.displayName || f.title || this._profile.title || "Your profile";
-      return `<div class="profile"><span class="lbl">Profile</span> <b>${esc(name)}</b><button class="btn" data-profile type="button">Edit profile</button></div>`;
+      const p = profileStrip(this._ownProfile, this._tab);
+      return p ? `<div class="profile"><span class="lbl">Profile</span> <b>${esc(p.name)}</b><button class="btn" data-profile type="button">${esc(p.action)}</button></div>` : "";
     }
+    // sow-346
     _body() {
       const tab = TABS.find((t) => t.id === this._tab);
       if (this._tab === "overview") return this._overviewHtml();
@@ -21857,6 +22359,7 @@ ${listStyleProseCss(".doc-blocks")}
         const scopeBar = this._canScope() ? `<div class="lc-bar">${this._scopeSwitchHtml()}</div>` : "";
         return `${scopeBar}<gbti-share-list${this._scopeNow() === "house" ? ' scope="network"' : ""}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
       }
+      if (this._tab === "profile") return "<div data-profile-slot></div>";
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
       if (this._tab === "prs") {
@@ -21972,7 +22475,7 @@ ${listStyleProseCss(".doc-blocks")}
       const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it.status === "published" ? publicPathFor({ type: it.type, path: it.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE14 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE15 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : "";
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
@@ -22033,11 +22536,13 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => {
-        if (typeof chrome !== "undefined" && chrome.runtime?.id && typeof window !== "undefined") {
-          window.open("https://gbti.network/workbench/", "_blank", "noopener");
+        if (!this._authoring() && typeof window !== "undefined") {
+          window.open("https://gbti.network/workbench/#tab=profile", "_blank", "noopener");
           return;
         }
-        this._openItem(this._profile?.path, "profile");
+        this._tab = "profile";
+        this._writeHash("#tab=profile");
+        this.render();
       });
       const tab = TABS.find((t) => t.id === this._tab);
       if (tab?.type) {
@@ -22238,7 +22743,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
-  var SITE15 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var POLL_MS2 = 12e4;
   var SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
@@ -22257,7 +22762,7 @@ ${listStyleProseCss(".doc-blocks")}
     } catch {
     }
   }
-  var CSS36 = `
+  var CSS37 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -22391,7 +22896,7 @@ ${listStyleProseCss(".doc-blocks")}
           // no reliable timestamp in both host modes; the number is a recency proxy for display sort
           title: p.title || `PR #${p.number}`,
           sub: lc12.needsAttention ? "Declined — open to see why" : "Accepted",
-          href: lc12.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE15
+          href: lc12.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE16
         };
       });
     }
@@ -22399,7 +22904,7 @@ ${listStyleProseCss(".doc-blocks")}
       const f = await this.client.getFollows() || {};
       const set = new Set((f.following || []).map((x) => String(x?.username || "").toLowerCase()).filter(Boolean));
       if (!set.size) return [];
-      const res = await fetch(`${SITE15}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE16}/activity-index.json`, { cache: "no-cache" });
       const data = res.ok ? await res.json() : {};
       const entries = Array.isArray(data?.entries) ? data.entries : [];
       return entries.filter((e) => set.has(String(e.author).toLowerCase())).map((e) => ({
@@ -22407,7 +22912,7 @@ ${listStyleProseCss(".doc-blocks")}
         ts: toMs(e.publishedAt),
         title: e.title || "New activity",
         sub: `@${e.author}`,
-        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE15}${e.url || ""}`
+        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE16}${e.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -22486,7 +22991,7 @@ ${listStyleProseCss(".doc-blocks")}
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS36) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS37) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -22584,7 +23089,7 @@ ${listStyleProseCss(".doc-blocks")}
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS37 = `
+  var CSS38 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -22716,7 +23221,7 @@ ${listStyleProseCss(".doc-blocks")}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS37) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS38) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -22766,12 +23271,12 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
-  var SITE16 = "https://gbti.network";
+  var SITE17 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS38 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -22872,11 +23377,11 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS38) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS39) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE17}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global);
@@ -22896,10 +23401,10 @@ ${listStyleProseCss(".doc-blocks")}
             <span class="tag${custom ? " custom" : ""}">${custom ? "Custom" : "Default"}</span>
             ${CHEV2}
           </button>`;
-      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE16}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
+      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE17}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS38) + `
+      this.set(this.css(CSS39) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -22969,8 +23474,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE17 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE17}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE18 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE18}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc5 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -22982,7 +23487,7 @@ ${listStyleProseCss(".doc-blocks")}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS39 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -23075,7 +23580,7 @@ ${listStyleProseCss(".doc-blocks")}
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE17}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE18}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -23142,12 +23647,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS39) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS40) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS39) + head + `<div data-body></div>`);
+      this.set(this.css(CSS40) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -23258,7 +23763,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS40 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -23371,12 +23876,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS40) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS41) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS40) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS41) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -23394,7 +23899,7 @@ ${listStyleProseCss(".doc-blocks")}
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS40) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS41) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -23409,7 +23914,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-news-reader", GbtiNewsReader);
 
   // client-ui/src/members-index.mjs
-  var SITE18 = "https://gbti.network";
+  var SITE19 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
@@ -23418,7 +23923,7 @@ ${listStyleProseCss(".doc-blocks")}
   var _directory = null;
   function loadMembersDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE18}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE19}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
 
@@ -23921,7 +24426,7 @@ From the author:
     } catch {
     }
   };
-  var CSS41 = `
+  var CSS42 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -23966,7 +24471,7 @@ From the author:
         this.set("");
         return;
       }
-      this.set(this.css(CSS41) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS42) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -24451,7 +24956,7 @@ From the author:
   define("gbti-syndicate-now", GbtiSyndicateNow);
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE19 = "https://gbti.network";
+  var SITE20 = "https://gbti.network";
   var lc9 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc9(a);
@@ -24474,8 +24979,8 @@ From the author:
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE19}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE20}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var loadDirectory = loadMembersDirectory;
   var SOCIALS = [
     ["github", "GitHub", "https://github.com/"],
@@ -24518,7 +25023,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS42 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -24830,7 +25335,7 @@ From the author:
       const wsBase = typeof location !== "undefined" && location.protocol === "chrome-extension:" ? "workspace.html" : "/workbench/";
       if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE19}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE20}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
@@ -24844,7 +25349,7 @@ From the author:
       }
       const socials = chips.length ? `<div class="socials">${chips.join("")}</div>` : "";
       const tagPills = [];
-      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole(r))}</span>`);
+      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole2(r))}</span>`);
       for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
       const tags = tagPills.length ? `<div class="tags">${tagPills.join("")}</div>` : "";
       return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div>${it.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
@@ -24852,17 +25357,17 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS42));
+        this.set(this.css(CSS43));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE19 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE20 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
       const copyAll = it.type === "prompt" && this._rawBody ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE19}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE20}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
@@ -24880,7 +25385,7 @@ From the author:
       const sideLink = it.type === "share" && it.url ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf2(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName4(it.author))} shared this from.</p><a class="side-open" href="${esc(utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Visit</a></div>` : "";
       const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
-      const syndUrl = it.url ? it.type === "share" ? it.url : SITE19 + it.url : "";
+      const syndUrl = it.url ? it.type === "share" ? it.url : SITE20 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
       const authorX = this._author?.entry?.links?.x || "";
       const authorDevto = this._author?.entry?.links?.devto || "";
@@ -24891,7 +25396,7 @@ From the author:
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
       const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS42) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -25010,12 +25515,12 @@ From the author:
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
-  var SITE20 = "https://gbti.network";
+  var SITE21 = "https://gbti.network";
   var lc11 = (s) => String(s || "").toLowerCase();
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
-  var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS43 = `
+  var CSS44 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -25084,7 +25589,7 @@ From the author:
         const [dir, status, ...idx] = await Promise.all([
           guard(loadMembersDirectory()),
           guard(this.client.status?.()),
-          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE20}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
+          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE21}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
         const me = lc11(status?.identity?.username || status?.identity?.login || "");
@@ -25115,11 +25620,11 @@ From the author:
           since = "";
         }
       }
-      const action = this._isSelf ? `<a class="edit" href="${SITE20}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
-      const siteLink = utmLink(`${SITE20}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
+      const action = this._isSelf ? `<a class="edit" href="${SITE21}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
+      const siteLink = utmLink(`${SITE21}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
       const actions = `<div class="actions">${action}<a class="site" href="${esc(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
       const tagPills = [];
-      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole2(r))}</span>`);
+      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole3(r))}</span>`);
       for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag">${esc(String(s))}</span>`);
       const tags = tagPills.length ? `<div class="tags">${tagPills.join("")}</div>` : "";
       const links = e.links || {};
@@ -25141,7 +25646,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS43) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS44) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -25149,7 +25654,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS43) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS44) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -25174,7 +25679,7 @@ From the author:
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE21 = "https://gbti.network";
+  var SITE22 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -25193,7 +25698,7 @@ From the author:
     } catch {
     }
   }
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -25287,7 +25792,7 @@ From the author:
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE21}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE22}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -25327,7 +25832,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS44) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS45) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -25340,7 +25845,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS44) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS45) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -25812,7 +26317,7 @@ From the author:
       return "";
     }
   };
-  var CSS45 = `
+  var CSS46 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -25930,19 +26435,19 @@ From the author:
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS45) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this.set(this.css(CSS46) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS45) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS46) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS45) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this.set(this.css(CSS46) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
         this._wire();
         return;
       }
@@ -25956,7 +26461,7 @@ From the author:
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
       const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
       const chOpts = this._channelOptions();
-      this.set(this.css(CSS45) + this._shell(`
+      this.set(this.css(CSS46) + this._shell(`
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc(hint)}</p>
@@ -26166,7 +26671,7 @@ From the author:
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS46 = `
+  var CSS47 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -26273,7 +26778,7 @@ From the author:
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc(e.realm || "app")}</span></td>
             <td>${esc(e.area)}</td><td class="msg">${esc(e.msg)}</td>
             <td class="data">${esc(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS46) + `
+      this.set(this.css(CSS47) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -26435,7 +26940,7 @@ From the author:
   var devlog = createDevlog({ enabled: devlogFlagOn, sink: console });
 
   // extension/src/shell.mjs
-  var SITE22 = "https://gbti.network";
+  var SITE23 = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -26528,7 +27033,7 @@ From the author:
     { div: true },
     // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
     // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-    { key: "profile", href: `${SITE22}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
+    { key: "profile", href: `${SITE23}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
     // SOW-129, repointed sow-204
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
@@ -26563,7 +27068,7 @@ From the author:
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
-        <a class="mi" role="menuitem" href="${SITE22}/workbench/" target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE23}/workbench/" target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -26595,7 +27100,7 @@ From the author:
       return self + kids2;
     }).join("");
     const top = nav === "feed" ? feedControlsHtml() : "";
-    return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE22}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+    return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE23}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
   function applyHeadingIcon(key) {
     const h1 = document.querySelector("[data-topbar] h1");

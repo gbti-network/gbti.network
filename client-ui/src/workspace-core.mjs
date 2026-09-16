@@ -11,7 +11,7 @@
 // carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
 import { canonicalType } from './content-types.mjs';
 
-const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'share', 'prs', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs); sow-304: 'share' (the member's own shares)
+const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'share', 'profile', 'prs', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs); sow-304: 'share' (the member's own shares); sow-346: 'profile'
 export function parseWorkspaceTab(hash) {
   const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
   // sow-196: #tab=product still resolves. The avatar menu and the extension have been emitting that link
@@ -76,6 +76,21 @@ export function planHashRoute(hash, { editing = false, tab = 'overview' } = {}) 
   if (tabHash !== tab && !editing) return { action: 'switchTab', tab: tabHash };
   return { action: 'none' };
 }
+
+/**
+ * sow-346: the profile strip above the WorkBench tabs, as DATA. `read` is a readOwnProfile result. A read that
+ * failed shows nothing, so the strip never offers to create a profile that may already exist; the Profile tab
+ * itself needs no strip.
+ */
+export function profileStrip(read, tab) {
+  if (!read || tab === 'profile') return null;
+  if (read.state === 'found') return { name: String(read.item?.frontmatter?.displayName || 'Your profile'), action: 'Edit profile' };
+  if (read.state === 'absent') return { name: 'You have no public profile yet', action: 'Create your profile' };
+  return null;
+}
+
+/** A profile deep link (`#edit=members/<you>/profile.md`) opens the Profile tab, not the generic content editor. */
+export const isProfilePath = (path) => /^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/.test(String(path || ''));
 
 /** The content type for a canonical content path (posts -> post), or null (a profile path has no list type). */
 export function typeForContentPath(path) {

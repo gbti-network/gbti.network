@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -20,6 +20,8 @@ import './gbti-share-list.mjs'; // sow-304: the Shares tab
 import './gbti-saved.mjs';
 import './gbti-subscriptions.mjs';
 import './gbti-onboarding-progress.mjs'; // sow-343: the onboarding card in the Overview banner slot
+import './gbti-profile-editor.mjs'; // sow-346: the Profile tab
+import { readOwnProfile } from '../own-profile.mjs'; // sow-346: the profile strip reads found / absent / failed
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
@@ -27,6 +29,7 @@ const TABS = [
   { id: 'prompt', label: 'Prompts', type: 'prompt', authoring: true },
   { id: 'project', label: 'Projects', type: 'project', authoring: true },
   { id: 'share', label: 'Shares', authoring: true }, // sow-304: the member's own shares, edited through the composer (no `type`: the tab is a self-loading list, not a content-type list)
+  { id: 'profile', label: 'Profile', authoring: true }, // sow-346: <gbti-profile-editor>, one instance kept across renders
   // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
   // type's list (a draft article under Articles), reached by the per-type Drafts filter.
   { id: 'prs', label: 'Pull requests' },
@@ -171,6 +174,7 @@ class GbtiWorkspace extends GbtiElement {
     const hash = typeof location !== 'undefined' ? location.hash : '';
     this._restore = this._editing ? null : (() => {
       const path = parseWorkspaceEdit(hash);
+      if (isProfilePath(path)) { this._tab = 'profile'; return null; } // sow-346: the generic editor mishandles profile links
       if (path) return { edit: path };
       const d = parseWorkspaceDraft(hash);
       return d ? { draft: d } : null;
@@ -204,6 +208,7 @@ class GbtiWorkspace extends GbtiElement {
         if (this._canScope() && this._scopeNow() === 'member') { this._editShareId = id; this._setScope('house', { persist: false }); }
       }
     });
+    this.shadowRoot?.addEventListener('gbti-profile-saved', (e) => { this._ownProfile = { state: 'found', item: { frontmatter: e.detail?.frontmatter || {} } }; }); // sow-346
     this._loadProfile();
     this._ensureTab(this._tab);
     // SOW-145: the Overview carries the caller's role + personal counts, which resolve the content SCOPE and gate
@@ -338,10 +343,10 @@ class GbtiWorkspace extends GbtiElement {
 
   // ----- data loaders (each fail-soft to an empty state, like gbti-content-list/gbti-pr-list) -----
   async _loadProfile() {
-    try {
-      const items = (await this.client?.listContent?.({ type: 'profile' }))?.items ?? [];
-      this._profile = items[0] || null;
-    } catch { this._profile = null; }
+    if (!this.client || this._ownProfileAsked) return; // sow-346: once per mount; render() asks again when the client arrives
+    this._ownProfileAsked = true;
+    const r = await readOwnProfile(this.client); // the website lists no profile, so the old listing never found one there
+    this._ownProfile = r; // profileStrip shows nothing for a failed read
     if (!this._editing) this.render();
   }
 
@@ -378,8 +383,7 @@ class GbtiWorkspace extends GbtiElement {
     if (!tab) return;
     if (id === 'overview') { this._ensureOverview(); return; } // SOW-052
     if (id === 'earnings') { await this._loadEarnings(); return; } // SOW-083 P2: the member's earnings ledger
-    // The Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
-    // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
+    // Saved / Subscriptions load themselves on connect (render() mounted them): nothing to preload, no extra render.
     if (id === 'saved' || id === 'subs') return;
     if (tab.type) { await this._swrContent(id, tab.type); this._loadDrafts(id); return; } // SOW-106 QA + SOW-085: drafts feed the staged-edits chips AND merge into the list
     if (id === 'prs') { await this._swrPrs(id); }
@@ -616,6 +620,7 @@ class GbtiWorkspace extends GbtiElement {
       if (r.edit) this._openItem(r.edit, typeForContentPath(r.edit) || 'post');
       else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug });
     }
+    if (this.client && !this._ownProfileAsked) this._loadProfile(); // sow-346
     if (typeof document !== 'undefined') document.body?.classList.toggle('gbti-editing', !!this._editing); // SOW-062 P6: paint .nt-main solid while editing (kills glass bleed)
     if (this._editing) {
       this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
@@ -664,6 +669,7 @@ class GbtiWorkspace extends GbtiElement {
       return `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
     }).join('');
     this.set(this.css(CSS) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`); // sow-163: .wb is the rail grid
+    if (this._tab === 'profile') this.$('[data-profile-slot]')?.append(this._profileEd ||= document.createElement('gbti-profile-editor')); // sow-346: kept, so a repaint never loses typed edits
     this._revealTab();
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this._draftMsg = null; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(this._tab); })); // SOW-085: a direct tab click resets the page + filter (was a gap)
     this._wireBody();
@@ -679,12 +685,7 @@ class GbtiWorkspace extends GbtiElement {
     return authoringEnabled(attr, isExtensionHost());
   }
 
-  _profileHtml() {
-    if (!this._profile) return '';
-    const f = this._profile.frontmatter || {};
-    const name = f.displayName || f.title || this._profile.title || 'Your profile';
-    return `<div class="profile"><span class="lbl">Profile</span> <b>${esc(name)}</b><button class="btn" data-profile type="button">Edit profile</button></div>`;
-  }
+  _profileHtml() { const p = profileStrip(this._ownProfile, this._tab); return p ? `<div class="profile"><span class="lbl">Profile</span> <b>${esc(p.name)}</b><button class="btn" data-profile type="button">${esc(p.action)}</button></div>` : ''; } // sow-346
 
   _body() {
     const tab = TABS.find((t) => t.id === this._tab);
@@ -701,6 +702,7 @@ class GbtiWorkspace extends GbtiElement {
       const scopeBar = this._canScope() ? `<div class="lc-bar">${this._scopeSwitchHtml()}</div>` : '';
       return `${scopeBar}<gbti-share-list${this._scopeNow() === 'house' ? ' scope="network"' : ''}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ''}></gbti-share-list>`; // sow-317: every member's shares in Network scope
     }
+    if (this._tab === 'profile') return '<div data-profile-slot></div>'; // sow-346: render() moves the kept editor in
     if (this._tab === 'saved') return `<gbti-saved></gbti-saved>`; // SOW-037
     if (this._tab === 'subs') return `<gbti-subscriptions></gbti-subscriptions>`; // SOW-037
     if (this._tab === 'prs') {
@@ -955,16 +957,14 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   _wireBody() {
-    // SOW-129 / sow-204: the extension used to open a dedicated bundled Profile page. It no longer hosts one,
-    // so from the extension "Edit profile" opens the WEBSITE WorkBench in a new tab. Everywhere else (the npm
-    // CMS, and this same component running ON the website) still falls back to the generic content editor
-    // opening the profile item in place, which is what the site should do rather than navigating to itself.
+    // sow-346: the strip opens the Profile tab. A host without authoring tabs (the extension, sow-204) opens the
+    // WEBSITE WorkBench on that tab in a new tab instead.
     this.on('[data-profile]', 'click', () => {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.id && typeof window !== 'undefined') {
-        window.open('https://gbti.network/workbench/', '_blank', 'noopener');
+      if (!this._authoring() && typeof window !== 'undefined') {
+        window.open('https://gbti.network/workbench/#tab=profile', '_blank', 'noopener');
         return;
       }
-      this._openItem(this._profile?.path, 'profile');
+      this._tab = 'profile'; this._writeHash('#tab=profile'); this.render();
     });
     const tab = TABS.find((t) => t.id === this._tab);
     if (tab?.type) {

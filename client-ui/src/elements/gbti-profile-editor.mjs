@@ -6,10 +6,17 @@
 // the network's pull request, so profile.md drives the public build). Named `-editor` to leave `<gbti-profile>` free for
 // SOW-067's deferred read-only view. Presentation copies <gbti-account>'s "GBTI Settings" cards. Inert in public
 // (no client -> a sign-in nudge). Publishing is PAID-ONLY (SOW-011): a non-paid member saves a private draft.
+//
+// sow-346: mounted as the WorkBench Profile tab (website and npm CMS; the extension hands off to the website).
+// It loads through readOwnProfile, and a read that did not answer shows a message and NO Save: the old load
+// turned every failure into "no profile", so on the website (which lists no profile) it opened blank for a
+// member who has one, and a save would have replaced their real profile.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS, buildSocialUrl } from '../social-icons.mjs';
 import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks } from '../profile-fields.mjs'; // SOW-129: the avatar host allowlist + the welcome-socials prefill
 import { accountKey } from '../welcome-core.mjs'; // sow-345: the staged handles live under an account-scoped key
+import { readOwnProfile } from '../own-profile.mjs'; // sow-346: found / absent / failed
+import { browserStorage } from '../storage.mjs'; // sow-347
 
 const SITE = 'https://gbti.network';
 
@@ -84,6 +91,9 @@ const CSS = `
   .msg { font-size:13px; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:#b3261e; }
   .nudge { padding:18px 20px; border:1.5px dashed var(--line); border-radius:16px; background:var(--panel); font-size:14px; color:var(--muted); }
   .nudge a { color:var(--brand); font-weight:600; }
+  /* sow-346: on a phone the sticky bar covered a sixth of the screen, over the fields being edited; there it sits
+     at the end of the form instead. Last in the template: a media rule adds no specificity. */
+  @media (max-width:560px) { .savebar { position:static; background:none; } }
 `;
 
 class GbtiProfileEditor extends GbtiElement {
@@ -94,51 +104,55 @@ class GbtiProfileEditor extends GbtiElement {
   _msg = '';
   _msgKind = '';
 
-  connectedCallback() { super.connectedCallback(); }
+  connectedCallback() {
+    // sow-346: the WorkBench keeps ONE editor across its own re-renders and moves it back in. A move must not
+    // rebuild the form, because typed text lives only in the inputs until a structural change gathers it.
+    this._moved = this._loaded && Boolean(this.root?.firstChild);
+    super.connectedCallback();
+    this._moved = false;
+  }
+
+  // sow-346: a client broadcast (the WorkBench page has a second, late setClient caller) must not rebuild a form
+  // that may hold unsaved edits. A view with no form (signed out, or a failed read) loads again instead.
+  skipClientRender() {
+    if (this._loaded && this._signedIn && this._readState !== 'failed') return true;
+    if (this._loaded && !this._loading) this._loaded = false;
+    return false;
+  }
 
   _maybeLoad() {
     if (this.client && !this._loaded && !this._loading) { this._loading = true; this._load(); }
   }
 
   async _load() {
-    const guard = (p) => Promise.race([
-      Promise.resolve(p).then((v) => v, () => null),
-      new Promise((res) => { setTimeout(() => res(null), 8000); }),
-    ]);
-    try {
-      const [status, list] = await Promise.all([
-        guard(this.client.status?.()),
-        guard(this.client.listContent?.({ type: 'profile' })),
-      ]);
-      this._status = status;
-      const item0 = (list?.items || [])[0];
-      let fm = {}; let body = '';
-      if (item0?.path) {
-        this._path = item0.path;
-        const full = await guard(this.client.getContentItem?.({ path: item0.path }));
-        fm = full?.frontmatter || {};
-        body = full?.body || '';
-      } else {
-        const login = status?.identity?.login || null;
-        this._path = login ? `members/${login}/profile.md` : null;
-        fm = { username: login, displayName: status?.identity?.name || login || '' };
-      }
-      this._fm = fm;
-      this._model = this._modelFromFm(fm, body);
-      // Consume the welcome flow's staged social handles (gbti-welcome-socials) into any UNSET link fields,
-      // so the member reviews and saves them once through the normal publish pipeline. An existing profile
-      // value always wins; the staged key clears on consume.
-      try {
-        const key = accountKey('gbti-welcome-socials', status?.identity); // sow-345: never the bare key
-        const staged = key ? JSON.parse(localStorage.getItem(key) || 'null') : null;
-        if (staged) {
-          this._model.links = mergeStagedLinks(this._model.links, staged, SOCIAL_KEYS);
-          localStorage.removeItem(key);
-        }
-      } catch { /* no storage or junk JSON: nothing to prefill */ }
-    } catch { /* render whatever resolved */ }
+    let status = null;
+    try { status = (await this.client.status?.()) ?? null; } catch { status = null; }
+    this._status = status;
+    const r = await readOwnProfile(this.client, { identity: status?.identity ?? null });
+    this._readState = r.state;
+    this._path = r.path;
+    // Only a read that ANSWERED "not found" starts a new profile, named after the member's login.
+    const login = status?.identity?.username || status?.identity?.login || '';
+    const fm = r.item ? r.item.frontmatter : (r.state === 'absent' ? { displayName: status?.identity?.name || login } : {});
+    this._fm = fm;
+    this._model = this._modelFromFm(fm, r.item?.body || '');
+    if (r.state !== 'failed') await this._offerKept(status);
     this._loaded = true; this._loading = false;
     this.render();
+  }
+
+  // Handles typed during welcome that never reached the profile: this browser's (under an account-scoped key,
+  // sow-345) and a trial member's, kept on the account (sow-343). They fill only EMPTY links; a saved value wins.
+  async _offerKept(status) {
+    let staged = null;
+    const key = accountKey('gbti-welcome-socials', status?.identity); // sow-345: never the bare key
+    try { staged = key ? JSON.parse(browserStorage()?.getItem(key) || 'null') : null; } catch { staged = null; }
+    let kept = null;
+    try { kept = (await this.client.getPrefs?.())?.onboarding?.socials ?? null; } catch { kept = null; }
+    const offered = { ...(kept && typeof kept === 'object' ? kept : {}), ...(staged && typeof staged === 'object' ? staged : {}) };
+    if (!Object.keys(offered).length) return;
+    this._model.links = mergeStagedLinks(this._model.links, offered, SOCIAL_KEYS);
+    if (staged) { try { browserStorage()?.removeItem(key); } catch { /* nothing to clear */ } }
   }
 
   _modelFromFm(fm, body) {
@@ -183,10 +197,15 @@ class GbtiProfileEditor extends GbtiElement {
   }
 
   render() {
+    if (this._moved) return;
     this._maybeLoad();
-    if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Open this in the GBTI client or extension to edit your profile.</div>`); return; }
+    if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Sign in to edit your profile.</div>`); return; }
     if (!this._loaded) { this.set(this.css(CSS) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`); return; }
-    if (!this._signedIn) { this.set(this.css(CSS) + `<div class="nudge">Sign in with the GBTI client to edit your profile. <a href="${SITE}/membership/">Become a member</a>.</div>`); return; }
+    if (!this._signedIn) { this.set(this.css(CSS) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE}/membership/">Become a member</a>.</div>`); return; }
+    if (this._readState === 'failed') {
+      this.set(this.css(CSS) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+      return;
+    }
     const m = this._model || this._modelFromFm({}, '');
     let sections;
     try {
@@ -354,19 +373,23 @@ class GbtiProfileEditor extends GbtiElement {
 
   _buildInput() {
     const m = this._model;
+    // sow-346: start from the loaded frontmatter, so fields this editor does not manage (status, anything added
+    // later) survive a save. The optional fields it does manage are dropped first, so clearing one removes it.
+    const input = { ...(this._fm || {}) };
+    for (const k of ['headline', 'avatar', 'location', 'links']) delete input[k];
     const links = {};
     for (const k of SOCIAL_KEYS) {
       const raw = (m.links[k] || '').trim();
       if (raw) links[k] = buildSocialUrl(k, raw);
     }
-    const input = {
+    Object.assign(input, {
       displayName: (m.displayName || '').trim() || this._login || 'Member',
       forHire: m.forHire === true,
       directory: m.directory === true,
       skills: m.skills,
       roles: m.roles,
       visibility: m.visibility || 'public',
-    };
+    });
     if ((m.headline || '').trim()) input.headline = m.headline.trim();
     if ((m.avatar || '').trim() && isSanctionedAvatar(m.avatar.trim())) input.avatar = m.avatar.trim();
     if ((m.location || '').trim()) input.location = m.location.trim(); // preserved, not surfaced
@@ -375,7 +398,7 @@ class GbtiProfileEditor extends GbtiElement {
   }
 
   async _save() {
-    if (this._saving || !this._model) return;
+    if (this._saving || !this._model || !['found', 'absent'].includes(this._readState)) return; // sow-346: never over an unread profile
     this._gather();
     const av = (this._model.avatar || '').trim();
     if (av && !isSanctionedAvatar(av)) {
@@ -387,19 +410,28 @@ class GbtiProfileEditor extends GbtiElement {
     this.render();
     const input = this._buildInput();
     const body = this._model.body || '';
-    const path = this._path || undefined;
+    const path = this._readState === 'found' ? (this._path || undefined) : undefined; // a new profile takes the member's own path
+    let published = false;
     try {
       if (this._paid) {
         await this.client.publish({ type: 'profile', input, body, path });
         this._msg = 'Profile published. It appears on gbti.network in a couple of minutes.'; this._msgKind = 'ok';
+        published = true;
       } else {
         await this.client.saveDraft({ type: 'profile', input, body, path });
         this._msg = 'Saved privately. Upgrade to a paid membership to publish it.'; this._msgKind = 'ok';
       }
       // Optimistic: treat the saved model as the current profile (the app reflects it now; the site rebuilds later).
-      this._fm = { ...this._fm, ...input };
+      this._fm = { ...input };
     } catch (e) {
       this._msg = e?.message ? `Could not save: ${e.message}` : 'Could not save just now. Try again in a moment.'; this._msgKind = 'err';
+    }
+    if (published) {
+      // sow-346: the profile now exists, and a publish that carries links finishes the setup card's socials step
+      // (and clears the handles a trial member kept on the account).
+      this._readState = 'found';
+      if (input.links) { try { await this.client.setPrefs?.({ onboardingSocialsSaved: true }); } catch { /* the card also reads the profile */ } }
+      this.emit('gbti-profile-saved', { frontmatter: input });
     }
     this._saving = false;
     this.render();

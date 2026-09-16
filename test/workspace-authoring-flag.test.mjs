@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner } from '../client-ui/src/workspace-core.mjs';
 
-// The real TABS shape, with the four Option A authoring tabs flagged. Kept here as a fixture rather than
+// The real TABS shape, with the five authoring tabs flagged. Kept here as a fixture rather than
 // imported, so a change to the component's tab list fails the ELEMENT test below rather than silently
 // redefining what these assertions mean.
 const TABS = [
@@ -14,6 +14,7 @@ const TABS = [
   { id: 'prompt', label: 'Prompts', authoring: true },
   { id: 'project', label: 'Projects', authoring: true },
   { id: 'share', label: 'Shares', authoring: true }, // sow-274: the contribution Inbox is gone; Shares is the fourth authoring tab
+  { id: 'profile', label: 'Profile', authoring: true }, // sow-346: the extension hands profile editing to the website
   { id: 'prs', label: 'Pull requests' },
   { id: 'saved', label: 'Saved' },
   { id: 'subs', label: 'Following' },
@@ -40,11 +41,11 @@ test('sow-204: with authoring OFF, Saved and Following SURVIVE and the authoring
   // The load-bearing assertion of this whole SOW increment.
   assert.ok(vis.includes('saved'), 'Saved must survive: favorites and collections live nowhere else');
   assert.ok(vis.includes('subs'), 'Following must survive: follows live nowhere else');
-  for (const gone of ['post', 'prompt', 'project', 'share']) {
+  for (const gone of ['post', 'prompt', 'project', 'share', 'profile']) {
     assert.ok(!vis.includes(gone), `${gone} is authoring and must be hidden`);
   }
   // Control: the filter must actually remove something, or this test passes on a no-op implementation.
-  assert.equal(vis.length, TABS.length - 4, 'exactly the four authoring tabs are removed');
+  assert.equal(vis.length, TABS.length - 5, 'exactly the five authoring tabs are removed');
 });
 
 test('sow-204: with authoring ON nothing is removed, and order is preserved either way', () => {
@@ -81,13 +82,14 @@ test('sow-204: the component TABS actually carry the flags this fixture assumes'
   const entries = [...block[1].matchAll(/\{\s*id:\s*'([a-z]+)'[^}]*\}/g)]
     .map((m) => ({ id: m[1], authoring: /authoring:\s*true/.test(m[0]) }));
   // Control: a regex that matched nothing would make every assertion below vacuous.
-  assert.equal(entries.length, 9, `parsed ${entries.length} tabs, expected 9`); // sow-304: + Shares; sow-274: - Inbox
+  assert.equal(entries.length, 10, `parsed ${entries.length} tabs, expected 10`); // sow-304: + Shares; sow-274: - Inbox; sow-346: + Profile
 
   const flagged = entries.filter((e) => e.authoring).map((e) => e.id).sort();
   // sow-304: the Shares tab (the member's own shares, edited through the composer) is authoring too: the
   // extension keeps its Share composer but has no WorkBench list to edit from.
-  assert.deepEqual(flagged, ['post', 'project', 'prompt', 'share'],
-    'exactly the three Option A authoring tabs still standing plus the sow-304 Shares tab are flagged (the Inbox went in sow-274)');
+  // sow-346: the Profile tab is authoring as well; the extension's "Edit profile" opens the website WorkBench on it.
+  assert.deepEqual(flagged, ['post', 'profile', 'project', 'prompt', 'share'],
+    'the three Option A authoring tabs, the sow-304 Shares tab and the sow-346 Profile tab are flagged (the Inbox went in sow-274)');
 
   for (const id of ['saved', 'subs']) {
     const t = entries.find((e) => e.id === id);
