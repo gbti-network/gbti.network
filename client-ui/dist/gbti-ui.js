@@ -19582,6 +19582,25 @@ ${listStyleProseCss(".doc-blocks")}
     for (let i = 0; i < n; i++) if (!flags[i]) return i;
     return n - 1;
   }
+  function accountKey(base, identity) {
+    const id = identity?.githubId ?? identity?.github_id ?? identity?.login ?? identity?.username;
+    if (!base || id == null || String(id).trim() === "") return null;
+    return `${base}:${String(id).trim().toLowerCase()}`;
+  }
+  function socialPrefill(saved, staged, allowed = null) {
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    const clean = (o) => {
+      const out = {};
+      if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+      for (const [k, v] of Object.entries(o)) {
+        if (ok && !ok.has(k)) continue;
+        if (typeof v !== "string" || !v.trim()) continue;
+        out[k] = v.trim();
+      }
+      return out;
+    };
+    return { ...clean(staged), ...clean(saved) };
+  }
   function paginate2(list, p, size = 10) {
     const pages = Math.max(1, Math.ceil(list.length / size));
     const page = Math.min(Math.max(1, p | 0 || 1), pages);
@@ -20202,10 +20221,7 @@ ${listStyleProseCss(".doc-blocks")}
     _onDiscordLinked() {
       this._stopDiscordPoll();
       this._discordJoined = true;
-      try {
-        localStorage.setItem(DISCORD_DONE_KEY, "1");
-      } catch {
-      }
+      this._lsSet("discord", "1");
       if (STEPS[this._step]?.key === "discord" && this._step < STEPS.length - 1) this._step++;
       this.render();
     }
@@ -20236,10 +20252,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (ok) {
         this._stopDiscordPoll();
         this._discordJoined = false;
-        try {
-          localStorage.removeItem(DISCORD_DONE_KEY);
-        } catch {
-        }
+        this._lsRemove("discord");
       }
       this.render();
     }
@@ -20264,6 +20277,13 @@ ${listStyleProseCss(".doc-blocks")}
         this._own = "";
       }
       this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
+      this._keys = { discord: accountKey(DISCORD_DONE_KEY, s?.identity), chan: accountKey(CHAN_FOLLOWED_KEY, s?.identity), socials: accountKey(SOCIALS_STAGE_KEY, s?.identity) };
+      for (const k of [DISCORD_DONE_KEY, CHAN_FOLLOWED_KEY, SOCIALS_STAGE_KEY]) {
+        try {
+          localStorage.removeItem(k);
+        } catch {
+        }
+      }
       if (this._authGate && !this._authenticated) {
         this._loaded = true;
         this.render();
@@ -20290,31 +20310,24 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
         this._topicsCount = 0;
       }
-      try {
-        this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === "1";
-      } catch {
-        this._discordJoined = false;
-      }
+      this._discordJoined = this._lsGet("discord") === "1";
       if (!this._discordJoined && this.client?.discordLinkStatus) {
         try {
           if ((await this.client.discordLinkStatus())?.linked) {
             this._discordJoined = true;
-            try {
-              localStorage.setItem(DISCORD_DONE_KEY, "1");
-            } catch {
-            }
+            this._lsSet("discord", "1");
           }
         } catch {
         }
       }
       try {
-        const raw = JSON.parse(localStorage.getItem(CHAN_FOLLOWED_KEY) || "[]");
+        const raw = JSON.parse(this._lsGet("chan") || "[]");
         this._chanFollowed = new Set(Array.isArray(raw) ? raw : []);
       } catch {
         this._chanFollowed = /* @__PURE__ */ new Set();
       }
       try {
-        const raw = JSON.parse(localStorage.getItem(SOCIALS_STAGE_KEY) || "null");
+        const raw = JSON.parse(this._lsGet("socials") || "null");
         this._socialDraft = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
       } catch {
         this._socialDraft = {};
@@ -20323,10 +20336,12 @@ ${listStyleProseCss(".doc-blocks")}
         await Promise.race([
           (async () => {
             const list = await this.client?.listContent?.({ type: "profile" });
-            const path = (list?.items || [])[0]?.path;
+            let path = (list?.items || [])[0]?.path;
+            const who = s?.identity?.username || s?.identity?.login;
+            if (!path && who) path = `members/${who}/profile.md`;
             if (!path) return;
             const full = await this.client?.getContentItem?.({ path });
-            this._socialDraft = { ...recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), ...this._socialDraft };
+            this._socialDraft = socialPrefill(recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
           })().catch(() => {
           }),
           new Promise((r) => setTimeout(r, 6e3))
@@ -20364,6 +20379,33 @@ ${listStyleProseCss(".doc-blocks")}
       ];
     }
     // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
+    // sow-345: account-scoped browser storage (see accountKey). No account means no key, and these are no-ops rather
+    // than guesses; a blocked storage reads as absent.
+    _lsGet(which) {
+      const k = this._keys?.[which];
+      if (!k) return null;
+      try {
+        return localStorage.getItem(k);
+      } catch {
+        return null;
+      }
+    }
+    _lsSet(which, v) {
+      const k = this._keys?.[which];
+      if (!k) return;
+      try {
+        localStorage.setItem(k, v);
+      } catch {
+      }
+    }
+    _lsRemove(which) {
+      const k = this._keys?.[which];
+      if (!k) return;
+      try {
+        localStorage.removeItem(k);
+      } catch {
+      }
+    }
     setCode(userCode, verificationUri) {
       this._code = userCode || null;
       if (verificationUri) this._verifyUri = verificationUri;
@@ -20500,10 +20542,7 @@ ${listStyleProseCss(".doc-blocks")}
           if (!chan) return;
           window.open(chan[2], "_blank", "noopener");
           this._chanFollowed.add(key);
-          try {
-            localStorage.setItem(CHAN_FOLLOWED_KEY, JSON.stringify([...this._chanFollowed]));
-          } catch {
-          }
+          this._lsSet("chan", JSON.stringify([...this._chanFollowed]));
           this.render();
         }));
       } else if (step === "socials") {
@@ -20511,10 +20550,7 @@ ${listStyleProseCss(".doc-blocks")}
           const k = inp.dataset.socialKey;
           if (inp.value.trim()) this._socialDraft[k] = inp.value;
           else delete this._socialDraft[k];
-          try {
-            localStorage.setItem(SOCIALS_STAGE_KEY, JSON.stringify(this._socialDraft));
-          } catch {
-          }
+          this._lsSet("socials", JSON.stringify(this._socialDraft));
         }));
         this.on("[data-social-more]", "click", () => {
           this._socialsMore = !this._socialsMore;

@@ -9,6 +9,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS, buildSocialUrl } from '../social-icons.mjs';
 import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks } from '../profile-fields.mjs'; // SOW-129: the avatar host allowlist + the welcome-socials prefill
+import { accountKey } from '../welcome-core.mjs'; // sow-345: the staged handles live under an account-scoped key
 
 const SITE = 'https://gbti.network';
 
@@ -128,10 +129,11 @@ class GbtiProfileEditor extends GbtiElement {
       // so the member reviews and saves them once through the normal publish pipeline. An existing profile
       // value always wins; the staged key clears on consume.
       try {
-        const staged = JSON.parse(localStorage.getItem('gbti-welcome-socials') || 'null');
+        const key = accountKey('gbti-welcome-socials', status?.identity); // sow-345: never the bare key
+        const staged = key ? JSON.parse(localStorage.getItem(key) || 'null') : null;
         if (staged) {
           this._model.links = mergeStagedLinks(this._model.links, staged, SOCIAL_KEYS);
-          localStorage.removeItem('gbti-welcome-socials');
+          localStorage.removeItem(key);
         }
       } catch { /* no storage or junk JSON: nothing to prefill */ }
     } catch { /* render whatever resolved */ }

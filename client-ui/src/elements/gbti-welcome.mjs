@@ -9,7 +9,7 @@
 // Host-agnostic: it consumes only the injected client + a public fetch of /members-index.json, so it runs in
 // the extension now and the npm CMS later. Emits gbti:welcome-done when the member finishes.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep } from '../welcome-core.mjs';
+import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill } from '../welcome-core.mjs';
 import { DISCORD_LINK_URL } from '../discord.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs';
 import { recallProfileSocials } from '../profile-fields.mjs'; // SOW-129 QA: recall saved profile socials into the welcome step
@@ -17,6 +17,9 @@ import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 
 const SITE = 'https://gbti.network';
 const PAGE_SIZE = 12;
+// sow-345: these are key BASES. Every read and write goes through _lsGet/_lsSet, which scope them by the signed-in
+// account (accountKey), because a bare key leaks between the accounts that share one browser. The bare keys are
+// purged on load and never read again.
 const DISCORD_DONE_KEY = 'gbti-welcome-discord-joined';
 const CHAN_FOLLOWED_KEY = 'gbti-welcome-chan-followed'; // channels the member opened Follow on (local, best-effort)
 
@@ -312,7 +315,7 @@ class GbtiWelcome extends GbtiElement {
   _onDiscordLinked() {
     this._stopDiscordPoll();
     this._discordJoined = true;
-    try { localStorage.setItem(DISCORD_DONE_KEY, '1'); } catch { /* storage blocked */ }
+    this._lsSet('discord', '1');
     // Auto-advance off the Discord step to the next to-do.
     if (STEPS[this._step]?.key === 'discord' && this._step < STEPS.length - 1) this._step++;
     this.render();
@@ -345,7 +348,7 @@ class GbtiWelcome extends GbtiElement {
     if (ok) {
       this._stopDiscordPoll();
       this._discordJoined = false;
-      try { localStorage.removeItem(DISCORD_DONE_KEY); } catch { /* storage blocked */ }
+      this._lsRemove('discord');
     }
     this.render();
   }
@@ -371,6 +374,9 @@ class GbtiWelcome extends GbtiElement {
       this._own = '';
     }
     this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
+    // sow-345: per-account storage keys, then purge the bare keys this browser may still hold from ANY account.
+    this._keys = { discord: accountKey(DISCORD_DONE_KEY, s?.identity), chan: accountKey(CHAN_FOLLOWED_KEY, s?.identity), socials: accountKey(SOCIALS_STAGE_KEY, s?.identity) };
+    for (const k of [DISCORD_DONE_KEY, CHAN_FOLLOWED_KEY, SOCIALS_STAGE_KEY]) { try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
     // Signed-out + auth-gate: show ONLY the sign-in splash; skip every member fetch (they 403 / are pointless).
     if (this._authGate && !this._authenticated) { this._loaded = true; this.render(); return; }
     // The randomized members list (shuffled ONCE so paging does not churn). Fail gracefully if the site is not
@@ -408,22 +414,22 @@ class GbtiWelcome extends GbtiElement {
     // only ever polled AFTER clicking connect, never consulted on load. A `true` from the server upgrades the
     // local flag and writes it back, so the next load is instant; a `false` never downgrades a local `true`,
     // because the poll fails closed and an unreachable Worker must not un-tick a step the member finished.
-    try { this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === '1'; } catch { this._discordJoined = false; }
+    this._discordJoined = this._lsGet('discord') === '1';
     if (!this._discordJoined && this.client?.discordLinkStatus) {
       try {
         if ((await this.client.discordLinkStatus())?.linked) {
           this._discordJoined = true;
-          try { localStorage.setItem(DISCORD_DONE_KEY, '1'); } catch { /* storage blocked */ }
+          this._lsSet('discord', '1');
         }
       } catch { /* unreachable: keep the local answer */ }
     }
     try {
-      const raw = JSON.parse(localStorage.getItem(CHAN_FOLLOWED_KEY) || '[]');
+      const raw = JSON.parse(this._lsGet('chan') || '[]');
       this._chanFollowed = new Set(Array.isArray(raw) ? raw : []);
     } catch { this._chanFollowed = new Set(); }
     // The socials step's staged draft (survives a mid-flow abandon; consumed by the profile editor).
     try {
-      const raw = JSON.parse(localStorage.getItem(SOCIALS_STAGE_KEY) || 'null');
+      const raw = JSON.parse(this._lsGet('socials') || 'null');
       this._socialDraft = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     } catch { this._socialDraft = {}; }
     // SOW-129 QA (2026-07-20): RECALL the member's SAVED profile socials so a welcome RESET does not clear them.
@@ -434,10 +440,14 @@ class GbtiWelcome extends GbtiElement {
       await Promise.race([
         (async () => {
           const list = await this.client?.listContent?.({ type: 'profile' });
-          const path = (list?.items || [])[0]?.path;
+          let path = (list?.items || [])[0]?.path;
+          // sow-345: the website host lists no profile type (its listing is index-driven), so when the list has
+          // nothing the member's own file is read by its known path. Member folders are named by username.
+          const who = s?.identity?.username || s?.identity?.login;
+          if (!path && who) path = `members/${who}/profile.md`;
           if (!path) return;
           const full = await this.client?.getContentItem?.({ path });
-          this._socialDraft = { ...recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), ...this._socialDraft };
+          this._socialDraft = socialPrefill(recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
         })().catch(() => {}),
         new Promise((r) => setTimeout(r, 6000)),
       ]);
@@ -473,6 +483,12 @@ class GbtiWelcome extends GbtiElement {
   }
 
   // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
+  // sow-345: account-scoped browser storage (see accountKey). No account means no key, and these are no-ops rather
+  // than guesses; a blocked storage reads as absent.
+  _lsGet(which) { const k = this._keys?.[which]; if (!k) return null; try { return localStorage.getItem(k); } catch { return null; } }
+  _lsSet(which, v) { const k = this._keys?.[which]; if (!k) return; try { localStorage.setItem(k, v); } catch { /* storage blocked */ } }
+  _lsRemove(which) { const k = this._keys?.[which]; if (!k) return; try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
+
   setCode(userCode, verificationUri) {
     this._code = userCode || null;
     if (verificationUri) this._verifyUri = verificationUri;
@@ -629,7 +645,7 @@ class GbtiWelcome extends GbtiElement {
         if (!chan) return;
         window.open(chan[2], '_blank', 'noopener');
         this._chanFollowed.add(key);
-        try { localStorage.setItem(CHAN_FOLLOWED_KEY, JSON.stringify([...this._chanFollowed])); } catch { /* private mode */ }
+        this._lsSet('chan', JSON.stringify([...this._chanFollowed]));
         this.render();
       }));
     } else if (step === 'socials') {
@@ -637,7 +653,7 @@ class GbtiWelcome extends GbtiElement {
       this.$$('[data-social-key]').forEach((inp) => inp.addEventListener('input', () => {
         const k = inp.dataset.socialKey;
         if (inp.value.trim()) this._socialDraft[k] = inp.value; else delete this._socialDraft[k];
-        try { localStorage.setItem(SOCIALS_STAGE_KEY, JSON.stringify(this._socialDraft)); } catch { /* private mode */ }
+        this._lsSet('socials', JSON.stringify(this._socialDraft));
       }));
       this.on('[data-social-more]', 'click', () => { this._socialsMore = !this._socialsMore; this.render(); });
       this.$$('[data-social-add]').forEach((b) => b.addEventListener('click', () => {

@@ -1,7 +1,7 @@
 // SOW-029: the pure helpers behind the post-setup welcome view (<gbti-welcome>). No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep } from '../client-ui/src/welcome-core.mjs';
+import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill } from '../client-ui/src/welcome-core.mjs';
 
 test('phaseLabel maps paid/trialing and never throws (unknown + lapsed -> neutral)', () => {
   assert.equal(phaseLabel('paid').phase, 'paid');
@@ -101,4 +101,23 @@ test('truthiness is not trusted: only real completion advances past a step', () 
   assert.equal(resumeStep([true, 0, true, true, true], 5), 1);
   assert.equal(resumeStep([true, '', true, true, true], 5), 1);
   assert.equal(resumeStep([true, null, true, true, true], 5), 1);
+});
+
+// sow-345: the wizard's browser-local state is per account, and the saved profile outranks the staged draft.
+test('accountKey (sow-345): one key per account, and none at all without one', () => {
+  assert.equal(accountKey('gbti-welcome-socials', { login: 'atwellpub', username: 'atwellpub', githubId: 90683647 }), 'gbti-welcome-socials:90683647');
+  assert.notEqual(accountKey('k', { githubId: 1 }), accountKey('k', { githubId: 2 }), 'two accounts never share a key');
+  assert.equal(accountKey('k', { login: 'Some-One' }), 'k:some-one', 'a login-only identity still scopes, case-folded');
+  for (const bad of [null, undefined, {}, { login: '' }, { githubId: ' ' }]) assert.equal(accountKey('k', bad), null, `no key for ${JSON.stringify(bad)}`);
+  assert.equal(accountKey('', { githubId: 1 }), null, 'no key without a base');
+});
+
+test('socialPrefill (sow-345): the saved profile wins, the draft fills only what is unset, junk is dropped', () => {
+  const saved = { youtube: 'https://www.youtube.com/@HudsonAtwell', x: 'https://x.com/atwellpub' };
+  const staged = { youtube: 'https://www.youtube.com/@someoneelse', website: ' https://example.com ', github: 'not allowed here' };
+  assert.deepEqual(socialPrefill(saved, staged, ['x', 'youtube', 'website']),
+    { youtube: saved.youtube, x: saved.x, website: 'https://example.com' });
+  assert.deepEqual(socialPrefill(null, 'junk'), {}, 'nothing usable on either side');
+  assert.deepEqual(socialPrefill({ x: 7, y: '' }, { z: 'ok' }), { z: 'ok' }, 'non-strings and blanks are dropped');
+  assert.deepEqual(socialPrefill({}, { x: 'https://x.com/me' }), { x: 'https://x.com/me' }, 'a draft with no profile shows as typed');
 });

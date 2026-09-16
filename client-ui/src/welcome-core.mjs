@@ -75,6 +75,39 @@ export function resumeStep(done, count) {
 }
 
 /** 1-based page `p` of `size` from `list`, clamped. Returns { page, pages, items }. */
+/**
+ * sow-345: the wizard's browser-local state is keyed by the signed-in ACCOUNT. The three keys used to be bare, so
+ * whatever one account typed or ticked in a browser came back for the next account signed in there (the owner saw
+ * another YouTube handle prefilled on their own socials step, and a Discord tick that was not theirs). With no
+ * account there is no key: the caller then neither reads nor writes, because a guessed key would leak the same way.
+ */
+export function accountKey(base, identity) {
+  const id = identity?.githubId ?? identity?.github_id ?? identity?.login ?? identity?.username;
+  if (!base || id == null || String(id).trim() === '') return null;
+  return `${base}:${String(id).trim().toLowerCase()}`;
+}
+
+/**
+ * sow-345: what the socials step shows. The SAVED profile handles win; the staged draft fills only the keys the
+ * profile does not have. That is the rule the consumer (mergeStagedLinks) already applies; the wizard used to let
+ * the draft win, which is how a stale draft outranked the member's real handles. Non-string, blank and
+ * disallowed keys are dropped on both sides.
+ */
+export function socialPrefill(saved, staged, allowed = null) {
+  const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+  const clean = (o) => {
+    const out = {};
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return out;
+    for (const [k, v] of Object.entries(o)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== 'string' || !v.trim()) continue;
+      out[k] = v.trim();
+    }
+    return out;
+  };
+  return { ...clean(staged), ...clean(saved) };
+}
+
 export function paginate(list, p, size = 10) {
   const pages = Math.max(1, Math.ceil(list.length / size));
   const page = Math.min(Math.max(1, p | 0 || 1), pages);
