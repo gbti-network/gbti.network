@@ -1,7 +1,7 @@
 ---
 title: 'The Turtle King: A look into the Turtly World of Jeff Bezos'
 slug: the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos
-status: draft
+status: published
 visibility: public
 publicStub: false
 excerpt: >-
@@ -13,8 +13,8 @@ layout: journal
 coverImage: >-
   ./images/atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae-0d20-4135-a587-09d5741a21d4.webp
 featured: false
-publishedAt: '2023-12-29T00:00:00.000Z'
-updatedAt: '2026-09-16T03:21:19.608Z'
+publishedAt: '2026-09-16T03:24:37.785Z'
+updatedAt: '2026-09-16T03:24:37.633Z'
 redirectFrom:
   - /entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/
 type: post
@@ -27,8 +27,6 @@ Bezos’ resemblance to other famous turtles has been a playful topic on [social
 
 ![](./images/image-1024x512-1.webp "Dana Carvey from the movie The Master of Disguise")
 
-  
-
 Listening to Jeff Bezos on the latest [Lex Fridman podcast](https://www.youtube.com/watch?v=DcWqzZ3I2cY) you get a sense of how _tutrly_ Bezos really can be as you can easily imagine this highly interesting conversation being held with the famous turtle from the Pixar movie Finding Nemo:
 
 “Righteous! Righteous!” – Crush rides the East Aulstrailian Current, Finding Nemo
@@ -38,8 +36,6 @@ Listening to Jeff Bezos on the latest [Lex Fridman podcast](https://www.youtube.
 Blue Origin’s coat of arms includes turtles reaching for the stars, symbolizing the company’s philosophy of steady progress in space exploration, mirroring a turtle’s journey.
 
 ![](./images/image-1-1024x529-1.webp "Image sourced from Blue Origin brand audit by Cynthia Shen.")
-
-  
 
 The coat of arms features a central shield with a graphical representation of Earth and space, flanked by two turtles looking upwards the celestial kingdom.
 
@@ -67,6 +63,6 @@ Jeff Bezos, intentional or coincidental, seems to lean into the appeal of the lo
 
 For this reason, in the spirit of The Doors, we have lovingly dubbed Jeff Bezos the *Turtle King*.  
 
-![](./images/dontyourlovehimmadly.webp "The Turtle King")
+![theturlekingjeffbezos](./images/theturlekingjeffbezos.webp "The Turtle King")
 
 Thanks for reading! Please leave your turtle-related comments below. 🐢
