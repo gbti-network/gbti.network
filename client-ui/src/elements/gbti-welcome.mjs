@@ -12,6 +12,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill, mergeChannelFollows, requestedStep } from '../welcome-core.mjs';
 import { ONBOARDING_STEPS } from '../../../membership/onboarding.mjs'; // sow-343: the one step list (the WorkBench card reads it too)
 import { saveWizardSocials } from '../welcome-socials.mjs'; // sow-343: Continue on the socials step saves
+import { readOwnProfile } from '../own-profile.mjs'; // sow-346: the one safe read of your own profile
 import { DISCORD_LINK_URL } from '../discord.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs';
 import { recallProfileSocials } from '../profile-fields.mjs'; // SOW-129 QA: recall saved profile socials into the welcome step
@@ -230,24 +231,17 @@ class GbtiWelcome extends GbtiElement {
     // SOW-129 QA (2026-07-20): RECALL the member's SAVED profile socials so a welcome RESET does not clear them.
     // The staged draft (an in-flight edit) always wins; the saved profile fills the rest. Time-boxed + fail-open:
     // a brand-new member with no profile, a slow read, or any error leaves the fields blank and the welcome
-    // proceeds. The read matches the profile editor's path (listContent -> getContentItem, frontmatter.links).
+    // proceeds. sow-346: the read is readOwnProfile (own-profile.mjs), shared with the profile editor and the card.
     try {
       await Promise.race([
         (async () => {
-          const list = await this.client?.listContent?.({ type: 'profile' });
-          let path = (list?.items || [])[0]?.path;
-          // sow-345: the website host lists no profile type (its listing is index-driven), so when the list has
-          // nothing the member's own file is read by its known path. Member folders are named by username.
-          const who = s?.identity?.username || s?.identity?.login;
-          if (!path && who) path = `members/${who}/profile.md`;
-          if (!path) return;
-          // sow-343: a missing profile is an ANSWER (the save creates one); any other failure is not, and leaves
+          // sow-343: a missing profile is an ANSWER (the save creates one); a failed read is not, and leaves
           // _profileRead false so the save refuses rather than writing a bare profile over a real one.
-          let full = null;
-          try { full = await this.client?.getContentItem?.({ path }); } catch (e) { if (e?.code !== 'not-found') throw e; }
-          this._profile = full ? { path, frontmatter: full.frontmatter || {}, body: full.body || '' } : null;
+          const r = await readOwnProfile(this.client, { identity: s?.identity ?? null });
+          if (r.state === 'failed') return;
+          this._profile = r.item;
           this._profileRead = true;
-          this._socialDraft = socialPrefill(recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
+          this._socialDraft = socialPrefill(recallProfileSocials(r.item?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
         })().catch(() => {}),
         new Promise((r) => setTimeout(r, 6000)),
       ]);

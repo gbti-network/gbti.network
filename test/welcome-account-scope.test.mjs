@@ -21,8 +21,11 @@ test('welcome storage (sow-345): the wizard never reads or writes a bare, accoun
 });
 
 test('welcome socials (sow-345): the member profile is read by path when the listing has nothing, and the saved profile wins', () => {
-  assert.match(SRC, /path = `members\/\$\{who\}\/profile\.md`/, 'the own profile path is derived from the identity');
-  assert.match(SRC, /socialPrefill\(recallProfileSocials\(full\?\.frontmatter\?\.links, SOCIAL_KEYS\), this\._socialDraft, SOCIAL_KEYS\)/, 'saved handles outrank the staged draft');
+  // sow-346 moved the read into client-ui/src/own-profile.mjs (shared with the profile editor and the WorkBench card).
+  const OWN = fs.readFileSync(new URL('../client-ui/src/own-profile.mjs', import.meta.url), 'utf8');
+  assert.match(OWN, /listed \|\| \(name \? `members\/\$\{name\}\/profile\.md` : null\)/, 'the own profile path is derived from the identity');
+  assert.match(SRC, /readOwnProfile\(this\.client, \{ identity: s\?\.identity \?\? null \}\)/, 'the wizard reads through it');
+  assert.match(SRC, /socialPrefill\(recallProfileSocials\(r\.item\?\.frontmatter\?\.links, SOCIAL_KEYS\), this\._socialDraft, SOCIAL_KEYS\)/, 'saved handles outrank the staged draft');
 });
 
 test('profile editor (sow-345): the consumer of the staged handles reads the same account-scoped key', () => {

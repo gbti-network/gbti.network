@@ -19557,6 +19557,35 @@ ${listStyleProseCss(".doc-blocks")}
     return { outcome: "saved", profile: { path: profile?.path ?? null, body: profile?.body ?? "", frontmatter } };
   }
 
+  // client-ui/src/own-profile.mjs
+  async function readOwnProfile(client2, { identity } = {}) {
+    if (!client2?.getContentItem) return { state: "failed", path: null, item: null };
+    let who = identity;
+    if (who === void 0) {
+      try {
+        who = (await client2.status())?.identity ?? null;
+      } catch {
+        who = null;
+      }
+    }
+    let listed = null;
+    try {
+      listed = (await client2.listContent?.({ type: "profile" }))?.items?.[0]?.path || null;
+    } catch {
+      listed = null;
+    }
+    const name = who?.username || who?.login || "";
+    const path = listed || (name ? `members/${name}/profile.md` : null);
+    if (!path) return { state: "failed", path: null, item: null };
+    try {
+      const item = await client2.getContentItem({ path });
+      if (!item) return { state: "failed", path, item: null };
+      return { state: "found", path, item: { path, frontmatter: item.frontmatter || {}, body: item.body || "" } };
+    } catch (e) {
+      return { state: e?.code === "not-found" ? "absent" : "failed", path, item: null };
+    }
+  }
+
   // client-ui/src/discord.mjs
   var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
 
@@ -20157,20 +20186,11 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         await Promise.race([
           (async () => {
-            const list = await this.client?.listContent?.({ type: "profile" });
-            let path = (list?.items || [])[0]?.path;
-            const who = s?.identity?.username || s?.identity?.login;
-            if (!path && who) path = `members/${who}/profile.md`;
-            if (!path) return;
-            let full = null;
-            try {
-              full = await this.client?.getContentItem?.({ path });
-            } catch (e) {
-              if (e?.code !== "not-found") throw e;
-            }
-            this._profile = full ? { path, frontmatter: full.frontmatter || {}, body: full.body || "" } : null;
+            const r = await readOwnProfile(this.client, { identity: s?.identity ?? null });
+            if (r.state === "failed") return;
+            this._profile = r.item;
             this._profileRead = true;
-            this._socialDraft = socialPrefill(recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
+            this._socialDraft = socialPrefill(recallProfileSocials(r.item?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
           })().catch(() => {
           }),
           new Promise((r) => setTimeout(r, 6e3))
@@ -21011,21 +21031,14 @@ ${listStyleProseCss(".doc-blocks")}
   async function loadOnboardingState(client2) {
     if (!client2) return {};
     const status = await answer(() => client2.status());
-    const who = status.ok ? status.v?.identity?.username || status.v?.identity?.login || "" : "";
     const [prefs, follows, discord, profile] = await Promise.all([
       answer(() => client2.getPrefs()),
       answer(() => client2.getFollows()),
       answer(() => client2.discordLinkStatus()),
       answer(async () => {
-        const list = await Promise.resolve(client2.listContent?.({ type: "profile" })).catch(() => null);
-        const path = list?.items?.[0]?.path || (who ? `members/${who}/profile.md` : "");
-        if (!path) throw new Error("no identity to read a profile for");
-        try {
-          return await client2.getContentItem({ path });
-        } catch (e) {
-          if (e?.code === "not-found") return null;
-          throw e;
-        }
+        const r = await readOwnProfile(client2, { identity: status.ok ? status.v?.identity ?? null : null });
+        if (r.state === "failed") throw new Error("the profile could not be read");
+        return r.item;
       })
     ]);
     const followList2 = follows.ok ? Array.isArray(follows.v) ? follows.v : follows.v?.following : null;

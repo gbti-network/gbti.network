@@ -253,12 +253,10 @@ test('the Skip button is its own action, and a channel Follow is written to the 
   assert.match(SRC, /if \(chans\.missing\.length && this\._record !== undefined\) this\._prefs\(\{ onboardingFollows: chans\.missing \}\)/);
 });
 
-test('the profile read treats only "not found" as absence', () => {
-  assert.match(SRC, /catch \(e\) \{ if \(e\?\.code !== 'not-found'\) throw e; \}/);
-  // _profileRead is set after the read answers, never before it.
-  const readAt = SRC.indexOf('full = await this.client?.getContentItem?.({ path })');
-  const flagAt = SRC.indexOf('this._profileRead = true;');
-  assert.ok(readAt > 0 && flagAt > readAt, 'the answered flag must follow the read');
+test('the profile read treats only "not found" as absence (the shared read, sow-346)', () => {
+  // The state logic itself is pinned in test/own-profile.test.mjs; here, that the wizard stops on "failed" before
+  // it marks the profile as read.
+  assert.match(SRC, /const r = await readOwnProfile\(this\.client, \{ identity: s\?\.identity \?\? null \}\);\n\s*if \(r\.state === 'failed'\) return;\n\s*this\._profile = r\.item;\n\s*this\._profileRead = true;/);
 });
 
 test('the website page passes a requested step to the wizard', () => {

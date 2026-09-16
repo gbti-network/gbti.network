@@ -34,7 +34,9 @@ function host(over = {}) {
 // ---- reading ----
 
 test('the state is read from every host shape, and a missing profile reads as "no handles"', async () => {
-  const s = await loadOnboardingState(host());
+  const website = host();
+  const s = await loadOnboardingState(website);
+  assert.equal(website.calls.status, 1, 'the identity is read once and passed to the profile read');
   assert.deepEqual(s, { discordLinked: false, follows: [{ username: 'bob' }], topics: ['ai'], profileSocials: false, record: { skipped: ['discord'] } });
   const ext = await loadOnboardingState(host({ getFollows: async () => [{ username: 'bob' }] }));
   assert.equal(ext.follows.length, 1, 'the extension returns a bare list');

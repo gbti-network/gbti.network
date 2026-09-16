@@ -8,6 +8,7 @@
 import { onboardingProgress, profileHasSocials } from '../../membership/onboarding.mjs';
 import { SOCIAL_KEYS } from './social-icons.mjs';
 import { esc } from './base.mjs';
+import { readOwnProfile } from './own-profile.mjs'; // sow-346
 
 export const WELCOME_SITE_URL = 'https://gbti.network/welcome/';
 
@@ -20,16 +21,14 @@ const answer = (p) => Promise.resolve().then(p).then((v) => ({ ok: true, v }), (
 export async function loadOnboardingState(client) {
   if (!client) return {};
   const status = await answer(() => client.status());
-  const who = status.ok ? (status.v?.identity?.username || status.v?.identity?.login || '') : '';
   const [prefs, follows, discord, profile] = await Promise.all([
     answer(() => client.getPrefs()),
     answer(() => client.getFollows()),
     answer(() => client.discordLinkStatus()),
     answer(async () => {
-      const list = await Promise.resolve(client.listContent?.({ type: 'profile' })).catch(() => null);
-      const path = list?.items?.[0]?.path || (who ? `members/${who}/profile.md` : '');
-      if (!path) throw new Error('no identity to read a profile for');
-      try { return await client.getContentItem({ path }); } catch (e) { if (e?.code === 'not-found') return null; throw e; }
+      const r = await readOwnProfile(client, { identity: status.ok ? (status.v?.identity ?? null) : null });
+      if (r.state === 'failed') throw new Error('the profile could not be read');
+      return r.item; // null when there is no profile yet
     }),
   ]);
   const followList = follows.ok ? (Array.isArray(follows.v) ? follows.v : follows.v?.following) : null;
