@@ -1,8 +1,9 @@
 // <gbti-welcome> (SOW-029): the post-setup welcome view, mounted by the extension when the onboarding wizard's
 // ready button ("Complete Integration") fires gbti:onboarding-start. Styled per the owner's Claude Design
-// handoff (2026-07-20, "Welcome Flow.dc.html"): a two-pane modal panel with a left rail stepper (numbered
-// circles, clickable), a per-step heading + progress bar, a scrollable content pane, and a Back/Skip/Continue
-// footer, in the handoff's dark + light palettes. It walks the member through five to-dos:
+// handoff (2026-07-20, "Welcome Flow.dc.html"): a left rail stepper (numbered circles, clickable), a per-step
+// heading + progress bar, the step content, and a Back/Skip/Continue footer, in the handoff's dark + light
+// palettes. sow-344 (2026-09-16) took the CARD away: the two columns sit on the page itself with one hairline
+// between them, nothing scrolls inside, and both hosts get the same look. It walks the member through five to-dos:
 //   Discord (connect + role), Follow the channels (the GBTI properties grid), Your socials (staged handles),
 //   Follow members (the directory grid), Follow topics (the shared picker) -> a done state with stats.
 // Host-agnostic: it consumes only the injected client + a public fetch of /members-index.json, so it runs in
@@ -81,25 +82,36 @@ const CSS = `
   @keyframes wf-in { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
   @keyframes wf-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
 
-  /* THE PANEL: a two-pane modal (rail + main) on the 7px house radius. */
-  .wf { display:flex; width:100%; max-width:1080px; margin:0 auto; height:min(72vh, 640px); min-height:480px;
-    background:var(--wf-surface); border:1px solid var(--wf-line); border-radius:7px; overflow:hidden;
-    /* Lightened for the light /welcome/ page; the ring is faint so it does not double the border above. */
-    box-shadow:0 14px 38px -22px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.05);
+  /* THE FRAME (sow-344): there is no card. The owner's design pass (2026-09-16, "Welcome wizard", the dissolved
+     option, chosen for both hosts) keeps the two columns and removes the box around them: no fill, no border, no
+     radius, no shadow, no fixed height and nothing scrolling inside. The rail and the content sit on the page
+     itself with one hairline between them, so the page's own background shows through on the /welcome/ page and
+     in the extension takeover alike, which is why nothing here paints --wf-surface any more. */
+  .wf { display:flex; width:100%; max-width:1080px; margin:0 auto; box-sizing:border-box;
     animation:wf-in .34s cubic-bezier(.2,.8,.2,1) both; color:var(--wf-fg); }
-  .rail { width:264px; flex:none; background:var(--wf-panel); border-right:1.5px solid var(--wf-line);
-    padding:26px 20px; display:flex; flex-direction:column; box-sizing:border-box; }
+  .rail { width:264px; flex:none; border-right:1px solid var(--wf-line);
+    padding:6px 28px 0 0; display:flex; flex-direction:column; box-sizing:border-box; }
   .brand { display:inline-flex; align-items:center; gap:9px; }
   .brand .mark { width:30px; height:30px; border-radius:7px; background:var(--wf-green); color:#fff;
     display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; }
   .brand b { font-family:var(--font-display); font-size:15px; font-weight:600; color:var(--wf-fg); line-height:1; }
   .railhead { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.14em;
     text-transform:uppercase; color:var(--wf-mute); margin:22px 0 12px; }
-  .rsteps { display:flex; flex-direction:column; gap:2px; flex:1; min-height:0; }
-  .rstep { display:flex; align-items:center; gap:12px; padding:10px 11px; border-radius:7px;
-    border:1.5px solid transparent; background:none; cursor:pointer; width:100%; font:inherit; text-align:left; transition:.12s; }
-  .rstep.active { border-color:var(--wf-line); background:var(--wf-panel2); }
-  .rstep .circ { width:26px; height:26px; flex:none; border-radius:50%; display:flex; align-items:center;
+  /* The five steps read as ONE connected track rather than five boxed rows: a 2px line runs behind the circles
+     from the first to the last. It is drawn per row, as a segment above and one below each circle, so it can
+     stop 3px short of the active circle without knowing the page colour (the two hosts paint different
+     backgrounds, and a ring in the wrong one would show as a halo). The active step has no pill any more; the
+     ring on its circle and the weight of its label carry the state. */
+  .rsteps { display:flex; flex-direction:column; gap:0; }
+  .rstep { position:relative; display:flex; align-items:center; gap:12px; padding:10px 0; border:0; border-radius:0;
+    background:none; cursor:pointer; width:100%; font:inherit; text-align:left; transition:.12s; }
+  .rstep::before, .rstep::after { content:""; position:absolute; left:12px; width:2px; background:var(--wf-line); border-radius:2px; }
+  .rstep::before { top:0; bottom:calc(50% + 13px); }
+  .rstep::after { top:calc(50% + 13px); bottom:0; }
+  .rstep:first-child::before, .rstep:last-child::after { display:none; }
+  .rstep.active::before { bottom:calc(50% + 16px); }
+  .rstep.active::after { top:calc(50% + 16px); }
+  .rstep .circ { position:relative; z-index:1; width:26px; height:26px; flex:none; border-radius:50%; display:flex; align-items:center;
     justify-content:center; font-family:var(--font-mono); font-weight:600; font-size:11px;
     background:var(--wf-raise); color:var(--wf-faint); box-sizing:border-box; }
   .rstep.done .circ { background:var(--wf-green); color:#fff; }
@@ -108,13 +120,10 @@ const CSS = `
   .rstep .rl b { font-size:13.5px; font-weight:600; color:var(--wf-soft); }
   .rstep.done .rl b, .rstep.active .rl b { color:var(--wf-fg); }
   .rstep .rl span { font-size:11px; color:var(--wf-mute); }
-  .themebtn { display:inline-flex; align-items:center; justify-content:center; gap:8px; font:inherit; font-weight:600;
-    font-size:12px; color:var(--wf-soft); background:var(--wf-panel2); border:1.5px solid var(--wf-line);
-    border-radius:7px; padding:9px 13px; cursor:pointer; margin-top:16px; }
-  .themebtn:hover { color:var(--wf-fg); border-color:var(--wf-line2); }
+  .rstep.active .rl span { color:var(--wf-greenfg); }
 
-  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
-  .top { padding:24px 34px 0; }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; padding-left:34px; }
+  .top { padding:0; }
   .eyebrow { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.16em;
     text-transform:uppercase; color:var(--wf-greenfg); display:flex; align-items:center; gap:10px; }
   .couponline { margin:2px 0 10px; font-size:12.5px; line-height:1.5; color:var(--muted); }
@@ -123,12 +132,12 @@ const CSS = `
   .heads { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:5px; }
   .heads h2 { font-family:var(--font-display); font-size:25px; font-weight:600; letter-spacing:-.01em; margin:0; color:var(--wf-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:none; }
   .stepmono { font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--wf-mute); white-space:nowrap; }
-  .bar { height:4px; background:var(--wf-panel2); border-radius:99px; overflow:hidden; margin-top:15px; }
+  .bar { height:4px; background:var(--wf-raise); border-radius:99px; overflow:hidden; margin-top:15px; }
   .bar i { display:block; height:100%; background:var(--wf-green); border-radius:99px; transition:width .3s; }
-  .content { flex:1; min-height:0; overflow-y:auto; padding:22px 34px; }
+  .content { flex:1; padding:22px 0 0; }
   .stepin { animation:wf-fade .3s ease both; }
-  .foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 34px;
-    border-top:1.5px solid var(--wf-line); background:var(--wf-surface); }
+  .foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:28px; padding:16px 0 0;
+    border-top:1px solid var(--wf-line); }
   .footr { display:flex; align-items:center; gap:10px; }
   .gbtn { font:inherit; font-weight:600; font-size:13px; color:var(--wf-soft); background:var(--wf-raise);
     border:1.5px solid var(--wf-line); border-radius:7px; padding:11px 18px; cursor:pointer; }
@@ -229,16 +238,18 @@ const CSS = `
   .stat b { display:block; font-family:var(--font-mono); font-weight:700; font-size:20px; color:var(--wf-greenfg); }
   .stat span { display:block; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--wf-mute); }
 
-  /* Small screens: the rail collapses to a horizontal step strip. */
+  /* Small screens: the rail collapses to a horizontal step strip under a hairline. The track segments go with
+     it, since they only make sense stacked. Responsive block last on purpose: source order, not specificity. */
   @media (max-width: 860px) {
-    .wf { flex-direction:column; height:auto; min-height:0; max-height:none; }
-    .rail { width:100%; flex-direction:row; align-items:center; gap:10px; padding:12px 14px; border-right:0; border-bottom:1.5px solid var(--wf-line); }
-    .brand b, .railhead, .themebtn { display:none; }
-    .rsteps { flex-direction:row; overflow-x:auto; gap:4px; }
-    .rstep { padding:7px 9px; }
+    .wf { flex-direction:column; }
+    .rail { width:100%; flex-direction:row; align-items:center; gap:10px; padding:0 0 12px; border-right:0; border-bottom:1px solid var(--wf-line); }
+    .brand b, .railhead { display:none; }
+    .rsteps { flex:1; min-width:0; flex-direction:row; overflow-x:auto; gap:4px; }
+    .rstep { width:auto; flex:none; padding:7px 9px; }
+    .rstep::before, .rstep::after { display:none; }
     .rstep .rl span { display:none; }
-    .top, .content, .foot { padding-left:18px; padding-right:18px; }
-    .content { max-height:60vh; }
+    .main { padding-left:0; }
+    .top { padding-top:18px; }
   }
 
   /* SOW-048: the forced-sign-in (login splash) mode + the loading state (token-styled, not the modal). */
@@ -538,12 +549,13 @@ class GbtiWelcome extends GbtiElement {
         <span class="rl"><b>${esc(s.label)}</b><span>${esc(s.sub)}</span></span>
       </button>`;
     }).join('');
-    const dark = (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme')) !== 'light';
+    // sow-344: the rail's own light/dark button went with the card. Each host already owns the theme (the site
+    // header toggle; the extension stamps the saved theme at takeover), and the dissolved layout has no panel
+    // foot for a control to sit in.
     return `<aside class="rail">
       <span class="brand"><span class="mark">G</span><b>GBTI Network</b></span>
       <span class="railhead">Get set up</span>
       <div class="rsteps">${rows}</div>
-      <button class="themebtn" data-theme-flip type="button">${dark ? '&#9728; Light mode' : '&#9790; Dark mode'}</button>
     </aside>`;
   }
 
@@ -594,14 +606,6 @@ class GbtiWelcome extends GbtiElement {
     this.on('[data-step-back]', 'click', () => this._back());
     this.on('[data-review]', 'click', () => this._goto(0));
     this.on('[data-done]', 'click', () => this.emit('gbti:welcome-done'));
-    // The rail theme flip mirrors the shell's toggle (persisted key + the documentElement stamp).
-    this.on('[data-theme-flip]', 'click', () => {
-      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem('gbti-theme', next); } catch { /* private mode */ }
-      this.render();
-    });
-
     if (this._done) return;
     if (step === 'discord') {
       // SOW: "Connect Discord account" opens the token-bound OAuth link in a new tab (joins the guild, assigns the
