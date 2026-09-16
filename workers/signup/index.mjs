@@ -110,11 +110,10 @@ import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SO
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
 import { membershipDeployStatus } from './membership-deploy-status.mjs'; // sow-185: public "still deploying" status check
 import { handleDiscordInvite } from './discord-invite.mjs';
-import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewFileContent, itemRevisions } from './github-app.mjs';
+import { listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewFileContent, itemRevisions } from './github-app.mjs';
 import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner-scoped repo-draft listing
 import { listSharesFeed, listMyShares } from './membership-shares.mjs';
 import { listNetworkContent, listNetworkShares } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
-import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
 import { membershipAdminCtaPool } from './membership-admin-ctas.mjs'; // sow-281: the CTA registry pool read (superadmin)
 import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy, membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool, membershipAdminNewsEngagement, membershipAdminSyndicationSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool; sow-161 B: the channel-map manager pool reads (superadmin)
@@ -136,7 +135,7 @@ import { generateCsrfToken, csrfCookieHeader, requireCsrf, requireOrigin } from 
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 // CORS for the membership endpoints (token-authenticated, no cookies). Covers BOTH the GET reads (status oracle,
-// my-pulls, pr-status) and the POST mutations (open-pr, activity, follows), so the preflight must allow POST +
+// my-pulls, pr-status) and the POST mutations (activity, follows), so the preflight must allow POST +
 // Content-Type. Safe cross-origin: wildcard origin + bearer-token auth + NO cookies, so broadening the methods
 // cannot enable CSRF (there is no ambient credential to ride).
 const MEMBERSHIP_CORS = {
@@ -1512,18 +1511,8 @@ export default {
         }
       }
 
-      // SOW-026: open the publish PR for a paid member. The member's fork-scoped App token cannot open a PR into
-      // the canonical repo, so the Worker opens it with GBTI's own canonical-repo App installation token. The
-      // App private key never leaves the Worker; the member token only authorizes + identifies them (head must
-      // be their own fork). Fail-closed paid-only.
-      if (pathname === '/membership/open-pr') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'POST') {
-          const r = await openPullForMember(request, env);
-          queueAlert(env, ctx, r.queued); // sow-323: the fork route records too, so it notifies too
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
+      // sow-274 Part 4: POST /membership/open-pr (opening a pull request from a member's own fork) is retired;
+      // every member publishes through the hosted author route below.
 
       // SOW-156 (spike, flag MEMBERSHIP_AUTHOR_ENABLED): hosted authoring. A paid member with no fork and no
       // App install POSTs own-folder files; the Worker validates fail-closed, commits them to a
@@ -1639,19 +1628,11 @@ export default {
         }
       }
 
-      // SOW-106 Phase A: sync the member fork's main with upstream (fork-installation token; the member token
-      // only authorizes + identifies). Best-effort by contract: every miss is a 200 { synced:false, reason }.
-      if (pathname === '/membership/sync-fork') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'POST') {
-          const r = await membershipSyncFork(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
+      // sow-274 Part 4: POST /membership/sync-fork (syncing a member fork's main) is retired with the fork path.
 
-      // SOW-026: read-side proxy so the client can show PR status in app mode. A fork-scoped member token cannot
-      // read the canonical repo, so the Worker reads with GBTI's installation token, SCOPED to the caller's own
-      // fork (the App opens the PRs, so they are matched by head owner, not author). Public data; member-scoped.
+      // SOW-026 + SOW-157: the member's own pull requests and their gate status, read with GBTI's installation
+      // token and SCOPED to the caller: network-opened PRs by the github_id in the branch, and PRs a member opened
+      // from their own fork before sow-274 by head owner. Public data; member-scoped.
       if (pathname === '/membership/my-pulls') {
         const cors = corsHeaders(request, env, { credentials: true }); // sow-158 Phase 3a: cookie-readable (authMemberLogin)
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });

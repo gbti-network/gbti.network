@@ -12,8 +12,9 @@ what you can do.
 
 ## Requirements
 
-Node 20+. You author by forking the public content repo and opening PRs, so you need a GitHub account
-(membership gates whether a PR merges, not whether you can open one).
+Node 20+ and a GitHub account. Signing in asks GitHub only who you are. Your drafts are saved privately in
+your GBTI account, and publishing sends your work to the network, which opens the pull request through
+GBTI's own GitHub App (membership decides whether it merges).
 
 ## Install
 

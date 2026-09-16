@@ -29,9 +29,8 @@ export function buildExtContext(store) {
     authExpired: () => authExpired,
     getRepoClient() {
       const t = store.get('githubToken');
-      // sow-274 Part 2: every member reads through the network, which opened their pull requests. There is no
-      // longer a stored mode that could send a read anywhere else.
-      return t ? createRepoClient({ token: t, upstream: UPSTREAM, appMode: true }) : null;
+      // sow-274: a member's pull requests are read through the network, which opened them (see github-repo.mjs).
+      return t ? createRepoClient({ token: t, upstream: UPSTREAM }) : null;
     },
     identity() {
       const id = store.get('identity');

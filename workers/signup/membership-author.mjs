@@ -7,7 +7,7 @@
 // The member's folder is resolved from house/members-index.yml read LIVE from canonical main by
 // github_id — the SAME mapping the merge gate uses (classify-pr ownedFolderFor) — never from the
 // current GitHub login, so a rename or case mismatch cannot mis-scope a write. A member with no index
-// entry gets a clear 409 (folder not provisioned), exactly the fork path's behavior today.
+// entry gets a clear 409 (folder not provisioned).
 //
 // Everything is injectable (fetch, fetchUser, authorize, kv, signJwt, limiter) so it unit-tests with
 // fakes: no network, no secrets.
@@ -18,7 +18,7 @@ import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
 import { kickDispatch } from './checkout.mjs';
-import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // sow-323: shared with the fork route
+import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // sow-323: the audience rule (its own module since the fork route that shared it was retired, sow-274)
 export { audienceRefusal, approvedOnMain }; // tests and callers keep importing them from here
 import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
 import { parseMembersIndex, validateHostedRequest, hostedBranchFor, statedVisibility } from '../../membership/hosted-author.mjs';

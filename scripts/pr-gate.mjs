@@ -45,19 +45,22 @@ export const STATUS_CONTEXT = 'membership-gate';
 export const CLOSE_LABELS = Object.freeze(['rejected-not-a-member', 'rejected-not-paid', 'rejected-not-creator']);
 
 /** The close comment per auto-close label. A non-member is nudged to sign up; a trial member is nudged
- * to upgrade and reassured their work is safe on their own fork (nothing is lost by the close). */
+ * to upgrade and reassured nothing is lost by the close. sow-274: neither names a fork any more. Drafts are saved
+ * privately in the member's account, and a pull request that reaches this gate was opened by hand, since the
+ * network refuses to open one for a member who is not paid, so closing it leaves the author's branch alone. */
 export const CLOSE_NUDGE = Object.freeze({
   'rejected-not-a-member':
     'Thanks for your interest. Publishing on gbti.network is a paid-member feature, so this pull request ' +
-    'cannot merge. A free 90-day trial (no card required) lets you join the community and author drafts, ' +
-    'but those drafts stay on your own fork until you upgrade. Sign up at https://gbti.network, and once ' +
-    'you are a paid member your client publishes your staged drafts as a new pull request. See ' +
-    'CONTRIBUTING.md for how content authoring works.',
+    'cannot merge. A free 90-day trial (no card required) lets you join the community and write drafts, ' +
+    'which are saved privately in your account until you upgrade. Sign up at https://gbti.network, and ' +
+    'once you are a paid member you can publish them from your WorkBench there. See CONTRIBUTING.md for ' +
+    'how content authoring works.',
   'rejected-not-paid':
     'Thanks for your work. Publishing on gbti.network is a paid-member feature, so this pull request ' +
-    'cannot merge during your trial. Nothing is lost: your draft stays on your own fork. Upgrade to a ' +
-    'paid membership at https://gbti.network, then your client will publish your staged drafts. See ' +
-    'CONTRIBUTING.md for how trial authoring works.',
+    'cannot merge during your trial. Nothing is lost: closing a pull request does not delete your branch, ' +
+    'and drafts you save in your WorkBench are kept privately in your account. Upgrade to a paid ' +
+    'membership at https://gbti.network, then publish them from there. See CONTRIBUTING.md for how trial ' +
+    'authoring works.',
   // sow-323: THIS NUDGE IS NO LONGER AN UPGRADE PITCH, because the thing it used to pitch is included. The owner
   // collapsed the two paid plans into one on 2026-09-12: a paid membership publishes articles, projects and
   // prompts, and the application page it pointed at is being retired. What is left of this label is the

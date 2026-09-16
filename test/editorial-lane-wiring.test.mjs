@@ -100,10 +100,10 @@ test('the retired application lane is gone from every host', () => {
 });
 
 test('an approval never runs without the queue record being written first', () => {
-  // Both publish routes write the record BEFORE they open the pull request, and refuse the publish when the
+  // The publish route writes the record BEFORE it opens the pull request, and refuses the publish when the
   // write fails. Read from the source because the ORDER is the property, and the order cannot be seen from
-  // either half on its own.
-  for (const file of ['workers/signup/membership-author.mjs', 'workers/signup/github-app.mjs']) {
+  // either half on its own. sow-274 Part 4 removed the fork route (github-app.mjs), so the hosted route is the only one.
+  for (const file of ['workers/signup/membership-author.mjs']) {
     const src = read(file);
     // The CALL site, not the import: the import sits at the top of every file and would make this pass
     // whatever the body did. The pull request is opened through a template literal ending in `/pulls`, so it

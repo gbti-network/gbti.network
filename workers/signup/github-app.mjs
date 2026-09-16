@@ -1,30 +1,27 @@
-// SOW-026: the server-side PR-opener. A member's fork-scoped GitHub App token can PUSH to their fork but
-// CANNOT open the PR into the canonical repo (the create-PR call is evaluated against the upstream owner, and
-// fine-grained / App tokens cannot open outside-contributor PRs; GitHub closed that as "not planned"). So the
-// Worker, authenticating as GBTI's OWN App installation on the canonical repo, opens the PR on the member's
-// behalf. The App private key never leaves the Worker. The member's token only AUTHORIZES + IDENTIFIES them;
-// it is never used to open the PR.
+// SOW-026 + SOW-157: the Worker's GitHub App plumbing and its member-scoped read proxies. The Worker holds GBTI's
+// App private key and mints installation tokens for the CANONICAL repo; a member's token only identifies them.
 //
-// Everything is injectable (fetch, now, kv, signJwt, the authorizer), so it unit-tests with fakes: no real key,
-// no network, no secrets.
+// sow-274 Part 4: this module used to open a member's pull request from their own fork (openPullForMember,
+// POST /membership/open-pr), mint a token for the App installation on that fork (getForkInstallationToken, used
+// by the fork sync route) and read a fork branch's changes for the audience rule (forkChangesForAudience). The
+// fork path is retired: every member publishes through the hosted author route (membership-author.mjs), so all
+// three are gone. What remains is the installation token and the reads the network still serves.
+//
+// Everything is injectable (fetch, now, kv, signJwt), so it unit-tests with fakes: no real key, no network,
+// no secrets.
 
 import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 3a: bearer-or-cookie identity for the member reads
-import { authorizePaid } from './membership-content.mjs'; // sow-323: publishing is paid; the AUDIENCE is gated in membership-author.mjs
-import { parseHostedRef, statedVisibility } from '../../membership/hosted-author.mjs'; // SOW-157: hosted PR ownership match
-import { authorizeSuperadmin } from './membership-admin.mjs'; // sow-323 Phase 3: only a superadmin makes a share public
-import { audienceRefusal } from './membership-audience.mjs';
-import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
-import { queueableItems } from '../../membership/editorial-queue.mjs';
-import { TIER, meetsTier } from '../../membership/tiers.mjs';
+import { parseHostedRef } from '../../membership/hosted-author.mjs'; // SOW-157: hosted PR ownership match
 
 const GH = 'https://api.github.com';
 const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
 const INSTALL_TOKEN_KEY = 'gh-app:installation-token';
-// Must match scripts/pr-gate.mjs STATUS_CONTEXT + client/src/github-repo.mjs GATE_CONTEXT.
+// Must match scripts/pr-gate.mjs STATUS_CONTEXT. (The client no longer reads the status itself; since sow-274 it
+// asks this Worker, so this is the one reader.)
 const GATE_CONTEXT = 'membership-gate';
 
-/** Map the gate's combined-status state to a member-facing meaning (mirrors github-repo.mjs interpretGateState). */
+/** Map the gate's combined-status state to a member-facing meaning. */
 function interpretGateState(state) {
   switch (state) {
     case 'success': return 'mergeable';
@@ -35,8 +32,8 @@ function interpretGateState(state) {
   }
 }
 
-/** The fork owner (lowercased) a PR's head lives on; in the hybrid flow the App opens the PR, so the member is
- *  identified by their FORK, not by the PR author. */
+/** The fork owner (lowercased) a PR's head lives on. Pull requests a member opened from their own fork before
+ *  sow-274 retired that path still belong to them in my-pulls and pr-status, so the match stays. */
 const headOwnerOf = (pr) => String(pr?.head?.repo?.owner?.login || pr?.head?.user?.login || '').toLowerCase();
 
 function b64urlBytes(bytes) {
@@ -82,158 +79,6 @@ export async function getInstallationToken(env, { fetchImpl = globalThis.fetch, 
   const expiresAt = Date.parse(data.expires_at) || now() + 55 * 60 * 1000;
   if (kv) await kv.put(INSTALL_TOKEN_KEY, JSON.stringify({ token: data.token, expiresAt }), { expirationTtl: 3000 }).catch(() => {});
   return data.token;
-}
-
-// SOW-106 Phase A: the publisher App is ALSO installed on each member's fork (the onboarding install step),
-// so the Worker can mint a FORK-scoped installation token and perform fork maintenance the member's own token
-// cannot (merge-upstream needs the workflows permission, which the App carries once the owner expands it).
-const FORK_TOKEN_KEY = (login) => `gh-app:fork-token:${login}`;
-
-/**
- * Mint (or reuse from KV) an installation access token for the App installation on ONE member's fork.
- * Fail-soft: returns null when the App is not configured, not installed on that fork, or GitHub errors —
- * callers treat null as "sync unavailable", never a hard failure.
- */
-export async function getForkInstallationToken(env, login, { fetchImpl = globalThis.fetch, now = Date.now, kv = env?.SIGNUP_KV, signJwt = signAppJwt, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = {}) {
-  const who = String(login || '').toLowerCase();
-  if (!who || !env?.GITHUB_APP_ID || !env?.GITHUB_APP_PRIVATE_KEY) return null;
-  const repoName = String(upstream).split('/')[1] || 'gbti.network';
-  if (kv) {
-    const cached = await kv.get(FORK_TOKEN_KEY(who), 'json').catch(() => null);
-    if (cached?.token && cached.expiresAt - now() > 5 * 60 * 1000) return cached.token;
-  }
-  try {
-    const jwt = await signJwt(env, { now });
-    const ins = await fetchImpl(`${GH}/repos/${who}/${repoName}/installation`, { headers: GH_HEADERS(jwt) });
-    if (!ins || !ins.ok) return null; // no fork, or the App is not installed on it
-    const inst = await ins.json();
-    if (!inst?.id) return null;
-    const res = await fetchImpl(`${GH}/app/installations/${inst.id}/access_tokens`, { method: 'POST', headers: GH_HEADERS(jwt) });
-    if (!res || !res.ok) return null;
-    const data = await res.json();
-    const expiresAt = Date.parse(data.expires_at) || now() + 55 * 60 * 1000;
-    if (kv) await kv.put(FORK_TOKEN_KEY(who), JSON.stringify({ token: data.token, expiresAt }), { expirationTtl: 3000 }).catch(() => {});
-    return data.token;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Open the publish PR for an EFFECTIVE-PAID member. The member's token authorizes (paid, fail-closed) and
- * identifies them; the PR is opened with the canonical-repo installation token. A member may only open a PR
- * whose HEAD is their OWN fork (head = "<their-login>:<branch>"); anything else is rejected.
- */
-/**
- * sow-323 Phase 3: the reviewable content files a member's fork branch changes against `base`, with their text AT
- * THE BRANCH TIP, so the audience rule can read what the pull request would merge. Read through the canonical repo:
- * a cross-fork compare (`base...owner:branch`) lists the files and the tip commit, and a fork commit's file is
- * readable from the canonical repo by that commit (both verified against the live repository on 2026-09-15).
- * By commit, never by branch name, so a push between this read and the merge is a new pull request event the gate
- * holds rather than a file this read never saw.
- *
- * FAILS CLOSED: an unreadable compare, a tip that cannot be named, a truncated file list (GitHub stops at 300), or
- * any unreadable file answers { ok: false } and the route refuses.
- */
-export async function forkChangesForAudience({ fetchImpl, instToken, upstream, base, head }) {
-  try {
-    const cmp = await fetchImpl(`${GH}/repos/${upstream}/compare/${base}...${head}`, { headers: GH_HEADERS(instToken) });
-    if (!cmp || !cmp.ok) return { ok: false };
-    const data = await cmp.json().catch(() => null);
-    const files = Array.isArray(data?.files) ? data.files : null;
-    if (!files || files.length >= 300) return { ok: false };
-    const tip = Array.isArray(data?.commits) && data.commits.length ? data.commits[data.commits.length - 1]?.sha : null;
-    const out = [];
-    for (const f of files) {
-      const path = String(f?.filename || '');
-      if (!/^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts|shares)\/.+\.(md|mdx)$/.test(path)) continue;
-      if (f.status === 'removed') { out.push({ path, content: null }); continue; }
-      if (!/^[0-9a-f]{40}$/.test(String(tip || ''))) return { ok: false };
-      const r = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=${tip}`, {
-        headers: { ...GH_HEADERS(instToken), Accept: 'application/vnd.github.raw' },
-      });
-      if (!r || r.status !== 200) return { ok: false };
-      out.push({ path, content: await r.text() });
-    }
-    return { ok: true, files: out };
-  } catch {
-    return { ok: false };
-  }
-}
-
-export async function openPullForMember(request, env, deps = {}) {
-  const {
-    fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, authorize = authorizePaid,
-    authorizeSuper = authorizeSuperadmin, forkChanges = forkChangesForAudience,
-    upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
-  } = deps;
-
-  const paid = await authorize(request, env, deps); // fail-closed: only paid members publish (SOW-011)
-  if (!paid.ok) return { status: paid.status, body: paid.body };
-
-  const authHeader = request.headers.get('Authorization') || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  let user;
-  try { user = await fetchUser(token, fetchImpl); } catch { return { status: 401, body: { error: 'unauthorized' } }; }
-  // githubFetchUser returns { githubId, githubLogin } (oauth.mjs); read githubLogin (the `login` fallback keeps
-  // any other-shaped caller working). Reading the wrong key silently emptied the login and 401'd every app-mode
-  // publish/read in production while test stubs that used `login` masked it.
-  const login = String(user?.githubLogin || user?.login || '').toLowerCase();
-  if (!login || String(user?.githubId) !== String(paid.githubId)) return { status: 401, body: { error: 'unauthorized', message: 'could not verify the member identity' } };
-
-  let payload;
-  try { payload = await request.json(); } catch { return { status: 400, body: { error: 'bad_request', message: 'a JSON body is required' } }; }
-  const head = String(payload?.head || '');
-  const base = String(payload?.base || 'main');
-  const headOwner = head.includes(':') ? head.split(':')[0].toLowerCase() : '';
-  if (headOwner !== login) return { status: 403, body: { error: 'forbidden', message: 'the PR head must be your own fork' } };
-  if (!/^[\w.\/-]{1,100}$/.test(base)) return { status: 400, body: { error: 'bad_request', message: 'invalid base branch' } };
-  // sow-323 Phase 3: the branch half is interpolated into the compare URL below, so bound its shape here.
-  if (!/^[\w.-]+:[\w.\/-]{1,200}$/.test(head)) return { status: 400, body: { error: 'bad_request', message: 'invalid head branch' } };
-
-  let instToken;
-  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
-
-  // sow-323 Phase 3: the AUDIENCE rule the hosted route applies (membership-audience.mjs). This route opens a pull
-  // request from the member's fork, and the gate reads only paths, so without this a member publishing from a fork
-  // put public content on the site with no review. Every member folder the branch touches is checked, so content
-  // placed in another member's folder is held to the same rule.
-  const changes = await forkChanges({ fetchImpl, instToken, upstream, base, head });
-  if (!changes?.ok) return { status: 502, body: { error: 'git_failed', message: 'could not read the changes on your branch to check who may see them; try again' } };
-  const folders = [...new Set(changes.files.map((f) => /^members\/([a-z0-9][a-z0-9-]*)\//.exec(f.path)?.[1]).filter(Boolean))];
-  let queued = [];
-  if (folders.length) {
-    const superadmin = await authorizeSuper(request, env, deps);
-    const isSuperadmin = superadmin?.ok === true;
-    const refusal = await audienceRefusal({
-      files: changes.files, folders, tier: paid.tier, isSuperadmin,
-      approvedCheck: deps.approvedCheck, fetchImpl, instToken, upstream,
-    });
-    if (refusal) return refusal;
-
-    // sow-323 Phase 3: the review queue record, written BEFORE the pull request opens, exactly as the hosted
-    // route writes it, and a failed write refuses the publish. Both ways of publishing have to record, or a
-    // member with a fork could put work on the site that no queue ever lists.
-    const items = folders.flatMap((folder) => queueableItems(changes.files, {
-      folder, trusted: meetsTier(paid.tier, TIER.creator), isSuperadmin, statedVisibility,
-    }));
-    const recorded = await recordEditorialItems(env?.SIGNUP_KV, items, { githubId: paid.githubId });
-    if (!recorded.ok) {
-      return { status: 503, body: { error: 'unavailable', message: 'your work could not be entered into the review queue; please try again' } };
-    }
-    queued = recorded.fresh;
-    await removeEditorialItems(env?.SIGNUP_KV, changes.files.filter((f) => f.content === null).map((f) => f.path));
-  }
-
-  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls`, {
-    method: 'POST',
-    headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: String(payload?.title || 'GBTI content').slice(0, 256), head, base, body: String(payload?.body || '').slice(0, 60000), maintainer_can_modify: false }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 422) return { status: 200, body: { ok: true, number: null, html_url: null, already: true, message: data?.errors?.[0]?.message || 'a pull request already exists for this branch' }, queued };
-  if (!res.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${res.status}` } };
-  return { status: 200, body: { ok: true, number: data.number, html_url: data.html_url }, queued };
 }
 
 /**
@@ -335,19 +180,12 @@ export async function memberPrStatus(request, env, deps = {}) {
   return { status: 200, body: { ok: true, state, meaning: interpretGateState(state), sha, description: gate?.description ?? null } };
 }
 
-// ----- SOW-028: read proxies for the in-client contribution review INBOX (app mode) -----
+// ----- Unscoped public-repo reads: the open pull request list (the superadmin queue) and one content file -----
 //
-// Unlike my-pulls / pr-status (which scope to the caller's OWN fork), the contribution inbox is about OTHER
-// members' PRs opened against the caller's folder, so the contributor's fork (not the caller's) owns the head.
-// These endpoints therefore CANNOT scope by head owner. That is safe: the canonical repo is PUBLIC, so every PR,
-// diff, and file these return is already world-readable on github.com. The installation token only stands in for
-// the fork-scoped member token's inability to reach the upstream; it surfaces nothing private. The CLIENT filters
-// the list to the caller's own folder (isContributionToFolder). A valid member token is required (no paid gate;
-// reads only). NOTE: there is deliberately no app-mode WRITE proxy. An approval must be authored by the owner's
-// github_id for the SOW-005 gate to honor it; a fork-scoped token cannot post to the upstream and the
-// installation token would author as GBTI's app (which the gate must never trust as a universal approver), so in
-// app mode the owner approves on github.com. Classic mode posts the review directly with the member's
-// account-wide token.
+// Unlike my-pulls / pr-status these CANNOT scope by head owner, which is safe: the canonical repo is PUBLIC, so
+// everything they return is already world-readable on github.com. A valid member token (or the website cookie)
+// is required; reads only. SOW-028 added them for the contribution review inbox, removed in sow-274 along with the
+// two reads only it used.
 
 const authorOf = (pr) => ({ login: pr?.user?.login ?? null, id: pr?.user?.id != null ? String(pr.user.id) : null });
 

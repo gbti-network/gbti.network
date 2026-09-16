@@ -276,16 +276,17 @@ const pass = (label, autoMerge, reason) => ({ check: 'pass', autoMerge, label, r
  *   5. Privileged author (moderator/admin/superadmin or bot) -> pass, may touch others' folders.
  *   6. Contribution (member, exactly one OTHER member's folder, nothing else) -> publishing a credit on
  *      the live site is paid-only, so a non-paid (trial) contributor -> fail `rejected-not-paid` (the gate
- *      auto-closes these; the draft stays on the contributor's fork). The contribution's content type sets a
+ *      auto-closes these; nothing of theirs is deleted). The contribution's content type sets a
  *      tier BOTH the contributor and the folder owner must hold (sow-185): a post/product/prompt needs Content
  *      Creator, a comment needs Network Member. A contributor below that tier -> fail `rejected-not-creator`;
  *      a folder owner below it -> fail `rejected-not-creator` (the content cannot live there). Otherwise a paid
- *      contributor passes only when the folder owner approved (ownerApproved) AND the owner is paid (ownerPaid);
- *      else held (`contribution-pending-owner`). Any mixed or multi-owner cross-folder PR -> `rejected-escalation`.
+ *      contributor passes only when the folder owner approved (ownerApproved) AND the owner is paid (ownerPaid),
+ *      and even then with auto-merge off; else held (`contribution-pending-owner`, a superadmin decides; sow-274
+ *      removed every GBTI surface that could open or approve one). Any mixed or multi-owner cross-folder PR -> `rejected-escalation`.
  *   7. Plain member, own folder only -> paid AND meeting the content's tier passes (+ auto-merge): Content
  *      Creator for post/product/prompt/profile, Network Member for comments (sow-185). A paid member below the
  *      required tier -> fail `rejected-not-creator`; a trial member -> fail `rejected-not-paid` (auto-closed;
- *      the draft stays on their fork until they pay, so no trial content reaches the repo).
+ *      their drafts are saved privately until they pay, so no trial content reaches the repo).
  *
  * @param {object} a
  * @param {string[]} a.paths           changed file paths (repo-relative, forward slashes)
@@ -379,9 +380,9 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
 
   // 6. Contribution: a member edits exactly one OTHER member's folder and nothing else. Publishing a
   //    contribution surfaces the contributor's credit on the live site, which is paid-only, so a trial
-  //    contributor is rejected (the gate auto-closes it; the draft stays on their fork). A paid
-  //    contributor merges only when that folder owner has accepted (an APPROVED review on the head SHA)
-  //    and the owner is paid. Auto-merge stays off; the owner approval merges it.
+  //    contributor is rejected (the gate auto-closes it). A paid contributor passes only when that folder owner
+  //    has accepted (an APPROVED review on the head SHA) and the owner is paid, and auto-merge stays off even
+  //    then, so a superadmin still merges it by hand.
   const isContribution =
     c.otherMemberPaths.length > 0 &&
     c.ownPaths.length === 0 &&
@@ -419,7 +420,7 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
 
   // 7. Plain member: own folder only at this point. Publishing requires paid; every recognised content type sits
   //    on the member floor since the one-plan change (sow-323, requiredTierFor), and WHO may make it public is the
-  //    Worker's audience rule plus the hold below. A trial member's drafts stay on their own fork until they pay
+  //    Worker's audience rule plus the hold below. A trial member's drafts are saved privately until they pay
   //    (the gate rejects + the runnable wrapper auto-closes with a nudge), so no trial content reaches the repo.
   if (status === 'paid') {
     const types = contentTypesTouched(paths, ownedFolder);
@@ -429,7 +430,7 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
       return fail('rejected-not-creator', `publishing this content requires the ${need} tier or higher (your tier: ${tier ?? 'none'})`);
     }
     // sow-323 Phase 3: WHO may make content public is decided in the Worker, which can read the frontmatter this
-    // gate deliberately cannot (membership-author.mjs, and the fork route in github-app.mjs). A pull request the
+    // gate deliberately cannot (membership-author.mjs). A pull request the
     // Worker did NOT open never passed that check: a member opening one by hand could put a public article on
     // the site with no review. So an ordinary supporter's reviewed content from anywhere but the Worker is HELD,
     // not closed and not merged: it stays open and green for a superadmin to merge by hand. A trusted author (the
@@ -439,5 +440,5 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
     }
     return pass('paid', c.ownFolderOnly, 'paid member own-folder content');
   }
-  return fail('rejected-not-paid', `publishing requires paid membership; trial drafts stay on your fork (status: ${status ?? 'none'})`);
+  return fail('rejected-not-paid', `publishing requires paid membership; trial drafts are saved privately until you upgrade (status: ${status ?? 'none'})`);
 }

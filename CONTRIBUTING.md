@@ -38,10 +38,10 @@ own or with any `house/` or `.github/` path, is rejected.
 ## What membership changes
 
 - Non-members (visitors and lapsed accounts) cannot publish: their pull requests are auto-rejected and closed.
-- Trial members author and stage drafts on their own fork; a trial content pull request (own folder or a
-  contribution) is auto-rejected and closed until they pay, so nothing reaches the canonical repo during the trial.
+- Trial members write drafts, which are saved privately in their account. A trial content pull request is
+  auto-rejected and closed until they pay, so nothing reaches the canonical repo during the trial.
 - Paid members' own-folder content auto-merges and publishes.
-- If a paid membership lapses, that member's content flips to draft until they resubscribe.
+- If a paid membership lapses, published work stays published. A lapse changes community access, not content.
 - Details: `.data/specs/membership-and-access.md` and `.data/specs/roles-and-capabilities.md`.
 
 ## Run the checks locally

@@ -34,8 +34,7 @@ export async function cmdLogin(deps) {
   const { store, clientId = activeClientId(), deviceFlowLogin, makeRepoClient, onPrompt, signupBase = SIGNUP_BASE, fetchImpl = globalThis.fetch } = deps;
   if (!clientId) throw new Error('no GitHub client id; set GBTI_GITHUB_CLIENT_ID (device-flow OAuth app, see human-todo)');
 
-  // SOW-026: the active auth mode picks the client id + scope. Classic mode keeps the account-wide
-  // public_repo scope; app mode targets the GitHub App (fork-scoped) and sends no scope (GitHub Apps ignore it).
+  // The baked sign-in mode picks the client id; the scope is identity only either way (sow-274 Part 4).
   const { accessToken } = await deviceFlowLogin({ clientId, scope: activeScope(), onPrompt });
   const user = await makeRepoClient(accessToken).getAuthUser(); // { login, id }
   const repoPath = store.get('repoPath');

@@ -2,10 +2,11 @@
 // process.env, so the client auth-mode vars must be inlined at bundle time (extension/build.mjs esbuild
 // `define`). If that mode came only from an ephemeral build-time env var, the committed bundle would NOT be
 // reproducible -> CI's `npm run build:extension` + `git diff` (extension-check.yml) would rebuild it in classic
-// and flag the committed app-mode bundle as drift. So the mode lives in a committed file (build-config.json),
+// and flag the committed App-client bundle as drift. So the mode lives in a committed file (build-config.json),
 // read here; a build-time env var still overrides it for ad-hoc builds. Absent/classic -> classic.
 //
-// build-config.json shape (all optional): { authMode: "classic"|"app", appClientId, appSlug, githubClientId, signupBase }
+// build-config.json shape (all optional): { authMode: "classic"|"app"|"hosted", appClientId, appSlug, githubClientId, signupBase }
+// The committed value is "hosted" since sow-274 Part 4 (identity-only App sign-in; the network publishes).
 // These are all PUBLIC (the device-flow client id + slug ship in the bundle anyway), so committing them is fine.
 //
 // Pure + injectable, so resolveExtensionDefine is unit-tested without running esbuild.
@@ -43,7 +44,7 @@ export function resolveExtensionDefine({ config = {}, env = {} } = {}) {
   };
   // SOW-157: 'hosted' is a recognized baked mode too (sign-in-only onboarding; the Worker does the git
   // work). It uses the same App client id for the device flow, so the app-mode credential guard applies to
-  // both. Note the BAKED mode is only the fallback: the per-member store value (decided at sign-in) wins.
+  // both. Since sow-274 the baked mode only picks the sign-in client; nothing reads a per-member mode any more.
   const mode = values.GBTI_AUTH_MODE === 'app' ? 'app' : values.GBTI_AUTH_MODE === 'hosted' ? 'hosted' : 'classic';
   if (mode !== 'classic' && !(values.GBTI_GITHUB_APP_CLIENT_ID && values.GBTI_GITHUB_APP_SLUG)) {
     throw new Error(`${mode} mode requires the App client id + slug (env GBTI_GITHUB_APP_CLIENT_ID/_SLUG, or build-config.json appClientId/appSlug) so the bundle carries the real values, not the placeholder.`);

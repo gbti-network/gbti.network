@@ -3,8 +3,9 @@
      (the action has no popup; a popup closes the instant it loses focus, which broke the device-flow code;
      a tab persists while the member reads the code and visits GitHub). Light mode by design, two columns: a
      brand panel on the left, the
-     shared <gbti-onboarding> wizard (sign in -> make your copy -> give access) on the right. No data-theme is
-     set, so the wizard's V3 tokens render in their light palette. -->
+     shared <gbti-onboarding> card on the right. Setup is sign-in only since sow-274: publishing goes through the
+     network, so there is no copy of the repository to make and no app to install. No data-theme is set, so the
+     card's V3 tokens render in their light palette. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -69,11 +70,9 @@
     <section class="brand">
       <img class="logo" src="icons/icon-128.png" alt="GBTI Network" />
       <h1>Set up publishing on GBTI Network</h1>
-      <p class="lede">Connect your GitHub account once, and you can write, edit, and publish to the co-op straight from your browser.</p>
+      <p class="lede">Connect your GitHub account once. It tells the network who you are, and the network publishes on your behalf.</p>
       <ol class="steps">
-        <li><span class="n">1</span><span class="tx"><b>Sign in with GitHub</b><span>We use a one-time code, no password leaves GitHub.</span></span></li>
-        <li><span class="n">2</span><span class="tx"><b>Make your copy</b><span>A fork of the content repository holds your drafts.</span></span></li>
-        <li><span class="n">3</span><span class="tx"><b>Give access</b><span>Install the GBTI app so we can open your pull requests.</span></span></li>
+        <li><span class="n">1</span><span class="tx"><b>Sign in with GitHub</b><span>We use a one-time code, no password leaves GitHub, and no repository access is requested.</span></span></li>
       </ol>
       <p class="foot" data-account>Not a paid member yet? Start a free trial to join the community and stage drafts; <a href="https://gbti.network/membership/" target="_blank" rel="noopener">a paid membership</a> unlocks publishing.</p>
     </section>

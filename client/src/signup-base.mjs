@@ -9,12 +9,10 @@ export const SIGNUP_BASE = (globalThis.process?.env?.GBTI_SIGNUP_BASE) || 'https
 // the MV3 service worker, so the optional chaining safely falls through to the default there.)
 export const GITHUB_CLIENT_ID = (globalThis.process?.env?.GBTI_GITHUB_CLIENT_ID) || 'Ov23limR5x7taIm33sTY';
 
-// SOW-026: the GitHub APP path (per-repo least privilege). A GitHub App's user-to-server token can be scoped to
-// ONLY the member's fork (contents:write + pull_requests:write on the fork), unlike the classic OAuth app whose
-// public_repo scope is account-wide. The device flow works the same for a GitHub App (no client secret), so the
-// only client-side change is the client id + dropping the (ignored) OAuth scope; the App's slug drives the
-// install deep-links + install-detection. PLACEHOLDERS until the App is provisioned (set GBTI_GITHUB_APP_CLIENT_ID
-// + the slug at M0). The canonical upstream repo the member forks.
+// SOW-026: the GitHub App client, used for sign-in by the extension (which bakes the real id at build time). With
+// no install of its own, an App user token identifies the member and can touch nothing else. The fallback here is
+// a PLACEHOLDER, which is why the command line tool signs in with the OAuth app above instead. UPSTREAM_REPO is
+// the canonical repository.
 export const GITHUB_APP_CLIENT_ID = (globalThis.process?.env?.GBTI_GITHUB_APP_CLIENT_ID) || 'Iv1.gbti-app-placeholder';
 export const GITHUB_APP_SLUG = (globalThis.process?.env?.GBTI_GITHUB_APP_SLUG) || 'gbti-network';
 export const UPSTREAM_REPO = (globalThis.process?.env?.GBTI_UPSTREAM_REPO) || 'gbti-network/gbti.network';
@@ -29,9 +27,17 @@ export const isHostedMode = () => AUTH_MODE === 'hosted';
 /** The device-flow client id for the active auth mode. Hosted uses the App id too (identity-only: with no
  *  install granted, an App user token identifies the member and can touch nothing else). */
 export const activeClientId = () => (AUTH_MODE === 'classic' ? GITHUB_CLIENT_ID : GITHUB_APP_CLIENT_ID);
-/** The OAuth scope for the active mode. GitHub Apps IGNORE scope (permissions come from the install), so app +
- *  hosted send an empty scope; classic keeps the account-wide public_repo read:user it has always used. */
-export const activeScope = () => (AUTH_MODE === 'classic' ? 'public_repo read:user' : '');
+/**
+ * The OAuth scope the sign-in asks for: IDENTITY ONLY, on every host.
+ *
+ * sow-274 Part 4: the command line tool and the agent server used to ask for `public_repo read:user`, which is
+ * write access to every public repository the member owns. They needed it only to publish from the member's own
+ * copy of the repository, and that path is gone, so the grant is gone too. `read:user` identifies the member and
+ * nothing more. GitHub Apps ignore scope (permissions come from an install, and members are no longer asked to
+ * install anything), so the App client sends none. A member who granted the old scope keeps that grant until they
+ * sign in again or revoke it (owner, 2026-09-15: stop asking, do not force anyone out).
+ */
+export const activeScope = () => (AUTH_MODE === 'classic' ? 'read:user' : '');
 
 // ---- sow-274 Part 2: every host publishes through the network ----
 //

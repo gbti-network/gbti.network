@@ -65,8 +65,8 @@ Work through the steps below, and confirm each one with me before moving on.
 
 5. Remind me of the rules of the road:
 
-   - Publishing is for paid members. On a free trial, my drafts stay on my own fork until I upgrade.
+   - Publishing is for paid members. On a free trial, my drafts are saved privately in my account until I upgrade.
    - Every change ships as a pull request through the GBTI gate, and the gate is the only thing that merges it. Nothing here can write to the live site directly.
-   - I can publish into my own member folder. To change another member's folder, that folder owner has to approve my contribution.
+   - I can publish into my own member folder. A change to another member's folder is held, and a superadmin decides whether it merges.
 
 When setup is verified, ask me what I would like to create first, and offer to draft it and open the pull request with `add_prompt`, `add_product`, or `add_post`.

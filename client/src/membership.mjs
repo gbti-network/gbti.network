@@ -1,6 +1,6 @@
 // Publish-eligibility for the client (SOW-011). Publishing to the canonical repo is paid-only, so the
 // client must know whether the signed-in member may publish BEFORE it opens a pull request, both to show a
-// "membership required to publish" notice and to keep a trial member's drafts on their own fork (nothing
+// "membership required to publish" notice and to keep a trial member's drafts in the private store (nothing
 // reaches the canonical repo until they pay). This is advisory UX: the SOW-005 gate stays the authority.
 //
 // The client holds no Stripe key, so it learns its EFFECTIVE membership from the signup Worker's
@@ -75,10 +75,11 @@ export function canPublish(membership) {
   return membership === 'paid';
 }
 
-// SOW-082: who may STAGE a draft on their OWN fork (Save, no PR). The tier table "Author + stage drafts": Trial yes /
-// Paid yes / Free no / banned no. This is DISTINCT from canSave (the KV favorites/follow perk) and from canPublish
-// (paid-only). 'unknown' is deliberately absent so the op fails OPEN (the fork write is the member's own repo; the
-// members-only encryption path re-checks effective-paid server-side anyway).
+// SOW-082: who may STAGE a draft (Save, no PR). The tier table "Author + stage drafts": Trial yes / Paid yes /
+// Free no / banned no. This is DISTINCT from canSave (the KV favorites/follow perk) and from canPublish
+// (paid-only). 'unknown' is deliberately absent and the callers let it through on their own (operations-drafts.mjs
+// saveDraft), so the op fails OPEN: since sow-274 a draft goes to the network's private store, which checks the
+// caller itself.
 const STAGE_TIER = new Set(['paid', 'trialing']);
 export function canStageDrafts(membership) {
   return STAGE_TIER.has(membership);

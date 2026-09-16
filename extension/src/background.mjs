@@ -34,10 +34,9 @@ function getStore() {
 
 async function handleLogin(store) {
   const { accessToken, refreshToken, expiresIn } = await deviceFlowLogin({
-    // SOW-026: classic mode = the public_repo OAuth app (account-wide); app mode = the GitHub App (fork-scoped,
-    // no scope, GitHub Apps ignore it). The token only ever reaches GitHub; app mode shrinks its capability to
-    // the member's single fork. The MV3 worker has no process.env, so AUTH_MODE defaults to classic until the
-    // bundle bakes app mode at provisioning.
+    // The extension bakes the GitHub App client (hosted mode) at build time and sends no scope: with no install
+    // requested, the token identifies the member and can touch nothing else (sow-274 Part 4). The MV3 worker has
+    // no process.env, so an unbaked bundle would fall back to the OAuth app, which asks for identity only too.
     clientId: activeClientId(),
     scope: activeScope(),
     onPrompt: ({ userCode, verificationUri }) => {

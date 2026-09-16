@@ -43,10 +43,8 @@ export function buildContext(store) {
     stager: createStager(repoPath),
     getRepoClient() {
       const token = store.get('githubToken');
-      // sow-274 Part 2: every member reads their pull requests through the network, because the network opened
-      // them. A direct GitHub search by author finds nothing: the author of a network-opened pull request is
-      // GBTI's App, not the member. (The option is still called appMode until Part 4 removes the other half.)
-      return token ? createRepoClient({ token, upstream: UPSTREAM, appMode: true }) : null;
+      // sow-274: a member's pull requests are read through the network, which opened them (see github-repo.mjs).
+      return token ? createRepoClient({ token, upstream: UPSTREAM }) : null;
     },
     identity() {
       const id = store.get('identity');

@@ -52,7 +52,7 @@ test('canPublish + isBlockedFromPublishing: only paid publishes; unknown is not 
   assert.equal(isBlockedFromPublishing('unknown'), false); // unknown fails OPEN to the gate
 });
 
-test('canStageDrafts (SOW-082): trial + paid may stage drafts on their fork; free/lapsed/banned may not', () => {
+test('canStageDrafts (SOW-082): trial + paid may save drafts privately; free/lapsed/banned may not', () => {
   for (const s of ['paid', 'trialing']) assert.equal(canStageDrafts(s), true);
   for (const s of ['expired', 'cancelled', 'none', 'banned', 'unknown']) assert.equal(canStageDrafts(s), false);
   // staging is BROADER than publishing (trial can stage but not publish) and NARROWER than canSave (no lapsed/free)

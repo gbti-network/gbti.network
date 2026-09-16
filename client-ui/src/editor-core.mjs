@@ -11,8 +11,8 @@ export function fmtDate(value) {
 }
 
 /**
- * SOW-184: the Status card descriptor for the editor rail. A fork-staged draft carries status: 'published' BY
- * DESIGN (the "draft" is its fork location, not a draft status -- see gbti-content-editor render()), so the
+ * SOW-184: the Status card descriptor for the editor rail. A staged draft carries status: 'published' BY
+ * DESIGN (the "draft" is where it is kept, not a draft status -- see gbti-content-editor render()), so the
  * `staged` flag WINS over the status field, exactly as the doc-slug meta does.
  * @param {{ staged?: boolean, status?: string, publishedAt?: string }} item
  * @returns {{ label: string, tone: 'live'|'staged'|'draft', publishedLabel: string }}

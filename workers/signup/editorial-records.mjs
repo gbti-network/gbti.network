@@ -1,9 +1,9 @@
 // sow-323 Phase 3: reading and writing the editorial review queue's KV records.
 //
-// SEPARATE FROM membership-editorial.mjs ON PURPOSE. Both publish routes write records, and one of them is
-// github-app.mjs, which membership-editorial.mjs imports for its installation token. Putting the writes in the
-// route module would make those two files import each other. The same reasoning put the audience rule in
-// membership-audience.mjs rather than leaving it where it was first written.
+// SEPARATE FROM membership-editorial.mjs ON PURPOSE. It was split out because the fork publish route in
+// github-app.mjs also wrote records, and membership-editorial.mjs imports github-app.mjs for its installation
+// token, so the writes in the route module would have made those files import each other. sow-274 retired the fork
+// route; the hosted author route and membership-editorial.mjs are the callers now, and the split stays.
 //
 // This module holds NO authorization and NO GitHub calls: the routes authorize, and the callers have already
 // decided which items need review (queueableItems).

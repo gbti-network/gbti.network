@@ -1,6 +1,6 @@
 {
-  "_comment": "SOW-026: committed source of truth for the extension's bundled auth mode (read by extension/build.mjs). 'app' = the GitHub-App device flow (per-repo least privilege); set authMode to 'classic' (or delete this file) to revert. appClientId/appSlug are PUBLIC. Provisioned 2026-06-15.",
-  "authMode": "app",
+  "_comment": "SOW-026 + sow-274 Part 4: committed source of truth for the extension's bundled sign-in mode (read by extension/build.mjs). 'hosted' = sign in with the GitHub App device flow for identity only; nothing is installed on any repository, and the network publishes on the member's behalf. It inlines the same App client id and slug that 'app' did. appClientId/appSlug are PUBLIC. Provisioned 2026-06-15, moved to hosted 2026-09-16.",
+  "authMode": "hosted",
   "appClientId": "Iv23lis8jbx62zI7cwE8",
   "appSlug": "gbti-network-publisher"
 }

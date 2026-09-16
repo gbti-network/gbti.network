@@ -191,12 +191,15 @@ test('paid Content Creator, own-folder content => pass + auto-merge', () => {
   assert.equal(d.label, 'paid');
 });
 
-test('trial member, own-folder content => rejected-not-paid (no profile carve-out; the draft stays on the fork)', () => {
+test('trial member, own-folder content => rejected-not-paid (no profile carve-out; the draft stays saved privately)', () => {
   for (const file of ['members/octocat/profile.md', 'members/octocat/posts/x/index.md', 'members/octocat/projects/y/index.md']) {
     const d = decide({ paths: [file], role: ROLE.member, effective: TRIAL, ownedFolder: 'octocat' });
     assert.equal(d.check, 'fail', file);
     assert.equal(d.label, 'rejected-not-paid', file);
     assert.equal(d.autoMerge, false, file);
+    // sow-274: the reason is shown to the member, and there is no fork to send them to any more.
+    assert.doesNotMatch(d.reasons.join(' '), /fork/i, file);
+    assert.match(d.reasons.join(' '), /saved privately/, file);
   }
 });
 

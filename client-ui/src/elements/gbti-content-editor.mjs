@@ -369,12 +369,12 @@ class GbtiContentEditor extends GbtiElement {
     const isPub = String(p.status || '').toLowerCase() === 'published';
     const statusLabel = isPub ? (p.publishedAt ? String(p.publishedAt).slice(0, 10) : 'published') : 'draft';
     // sow-184 (design 3a): the Status-card descriptor (pill label + tone + published date). `staged` wins over the
-    // status field, since a fork-staged draft carries status: published by design.
+    // status field, since a staged draft carries status: published by design.
     const status = editorStatus({ staged: this.staged, status: p.status, publishedAt: p.publishedAt });
     // SOW-062 P6: the slug-meta shows when the item was last updated on LIVE (publishedAt) and LOCALLY (updatedAt,
     // stamped client-side on each save/publish). A published item edited locally shows Live older than Local.
     const fmtD = (d) => { if (!d) return ''; const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : t.toISOString().slice(0, 10); };
-    // SOW-106 QA: a fork-staged draft carries status: published BY DESIGN (the "draft" is the fork location),
+    // SOW-106 QA: a staged draft carries status: published BY DESIGN (the "draft" is where it is kept),
     // so the meta must key off the staged flag, never the status field, or it would misread as Live.
     const liveLabel = this.staged ? 'Staged draft · not published' : isPub ? (fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : 'Live') : 'Draft';
     const localLabel = fmtD(p.updatedAt) ? `Local ${fmtD(p.updatedAt)}` : '';
@@ -783,7 +783,7 @@ class GbtiContentEditor extends GbtiElement {
          </div>
          <div class="edgrid">
            <article class="doc">
-             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
+             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to save your work privately; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || '')}</div>
              ${(() => {
                // SOW-106 QA fix: the slug IS the item identity (branch + path derive from it), so on an EXISTING
@@ -1934,8 +1934,8 @@ class GbtiContentEditor extends GbtiElement {
       // the prior value, so a first publish still gets its date and a re-publish keeps it. Resurfacing is now
       // the feed's job: feedTime sorts on the later of publishedAt/updatedAt and the row marks itself Updated.
       if (['post', 'project', 'prompt'].includes(type)) { input.updatedAt = new Date().toISOString(); }
-      // publish() already stages to the member's OWN fork first (publishFiles -> commitToBranchOnFork) and opens the
-      // network PR FROM that fork branch, so no separate pre-publish saveDraft is needed.
+      // publish() sends the files to the network, which opens the pull request (sow-274: no fork step), so no
+      // separate pre-publish saveDraft is needed.
       // SOW-112 v2: `path` names the loaded canonical item; a changed permalink makes this publish a RENAME.
       // SOW-145: a house target publishes to house/ (author stays 'gbti'); the server re-checks superadmin.
       // sow-183: the Author picker (superadmin-only, rendered only for an existing item) -> authorTarget. Sent
@@ -2000,7 +2000,7 @@ class GbtiContentEditor extends GbtiElement {
     pb.hidden = false;
   }
 
-  // SOW-082: Save the current content as a draft on the member's own fork (no PR). Allowed for trial + paid; a
+  // SOW-082: Save the current content as a private draft (no PR; sow-274: never a fork). Allowed for trial + paid; a
   // trial member's members-only content is refused server-side with a clean upgrade nudge (membership-required).
   // sow-169 phase 4: preview the item as the page it will become, in a new tab.
   //
@@ -2099,8 +2099,8 @@ class GbtiContentEditor extends GbtiElement {
       // A pending rename is a big deal — say so in the top banner too (the bottom status line hides below the fold).
       if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
       this.out(res?.renamed
-        ? `<span class="tag ok">saved</span> Draft staged on your fork with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.`
-        : '<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
+        ? `<span class="tag ok">saved</span> Draft saved privately with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.`
+        : '<span class="tag ok">saved</span> Draft saved privately. Open <b>Drafts</b> to review or publish it.');
       this.emit('gbti-draft-saved', res);
     } catch (err) {
       this._setChip('');

@@ -213,13 +213,13 @@ test('sow-204: the trial banner renders only for a trial member, on both hosts',
 
 test('sow-204: with authoring OFF the banner stops claiming this host can author', () => {
   const off = trialBanner('trialing', false);
-  assert.doesNotMatch(off.body, /on your own fork now/,
+  assert.doesNotMatch(off.body, /save drafts privately now/,
     'the extension banner must not tell a member to stage drafts in a host that no longer authors');
   assert.match(off.body, /WorkBench on gbti\.network/, 'it must name the host that CAN author');
   assert.equal(off.ctaHref, 'https://gbti.network/workbench/');
 
   const on = trialBanner('trialing', true);
-  assert.match(on.body, /on your own fork now/, 'the website and npm hosts keep the original copy unchanged');
+  assert.match(on.body, /save drafts privately now/, 'the website and npm hosts tell a trial member they can write here');
   assert.equal(on.ctaHref, 'https://gbti.network/membership/');
 
   // The membership FACT is the same on both hosts; only the instruction differs. A banner that dropped the
@@ -227,6 +227,8 @@ test('sow-204: with authoring OFF the banner stops claiming this host can author
   for (const b of [on, off]) {
     assert.match(b.body, /paid membership/, 'both variants must still say publishing requires a paid membership');
     assert.equal(b.headline, 'You are on the free trial');
+    // sow-274 Part 4: drafts are private records, so no variant may send a member to a fork.
+    assert.doesNotMatch(b.body, /fork/i, `the banner still mentions a fork: ${b.body}`);
   }
 });
 

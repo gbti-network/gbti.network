@@ -118,7 +118,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/read') return run(() => readContent(ctx, { path: query.path })); // SOW-031: cross-member published-content read for the reader
   if (method === 'POST' && pathname === '/api/validate') return run(() => validateContent(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/publish') return run(() => publish(ctx, body ?? {}));
-  // SOW-082: universal draft staging (save to the fork without a PR; review; publish from the staged branch).
+  // SOW-082: universal draft staging (save privately without a PR; review; publish). Private store since sow-274.
   if (method === 'GET' && pathname === '/api/drafts') return run(() => listDrafts(ctx, { type: query.type }));
   if (method === 'GET' && pathname === '/api/draft') return run(() => readDraft(ctx, { type: query.type, slug: query.slug, store: query.store, path: query.path }));
   if (method === 'POST' && pathname === '/api/draft') return run(() => saveDraft(ctx, body ?? {}));

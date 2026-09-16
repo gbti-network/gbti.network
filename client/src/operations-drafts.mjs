@@ -9,7 +9,7 @@
 // Split out of operations.mjs, which re-exports the public surface unchanged.
 
 import { buildContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
-import { branchName } from './publish.mjs';
+import { branchName } from './hosted-publish.mjs';
 import { canStageDrafts, isBlockedFromPublishing } from './membership.mjs';
 import { decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';

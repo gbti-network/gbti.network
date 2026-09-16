@@ -91,10 +91,10 @@ GITHUB_PUBLISHER_CLIENT_ID = "Iv23lis8jbx62zI7cwE8"
 # Public content repo ("owner/name") for the re-gate / disable dispatch (SOW-005 signal).
 GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
 
-# SOW-026 GitHub App PR-opener (non-secret). The canonical repo a member forks; the Worker opens the publish PR
-# into it with GBTI's App installation token. The App id + installation id + private key are SECRETS, set via
+# SOW-026 GitHub App (non-secret). The canonical repo the Worker commits to and opens every publish PR into, with
+# GBTI's App installation token. The App id + installation id + private key are SECRETS, set via
 # `wrangler secret put GITHUB_APP_ID` / `GITHUB_APP_INSTALLATION_ID` / `GITHUB_APP_PRIVATE_KEY` (see human-todo).
-# Until they are set, POST /membership/open-pr returns "misconfigured" and the client stays on classic OAuth.
+# Until they are set, publishing returns "misconfigured".
 UPSTREAM_REPO = "gbti-network/gbti.network"
 
 # SOW-007 referral feature switch for the Worker. Mirror house/referral-config.yml `enabled` here: keep

@@ -6,8 +6,17 @@
 
 import { SIGNUP_BASE } from './signup-base.mjs';
 
-/** The hosted item id (the branch's last segment, server-prefixed with the verified github_id). Mirrors the
- *  fork-mode branchName identity so re-publishing an item reuses one branch + PR. */
+/** Deterministic per-item branch name (`gbti/<type>-<slug>`, `gbti/house-...` for house, `gbti/profile`). A
+ *  draft row still carries it as the item's identity. Moved here from publish.mjs, which sow-274 deleted with the
+ *  fork writers it held. */
+export function branchName(type, slug, scope = 'member') {
+  if (type === 'profile') return 'gbti/profile';
+  const prefix = scope === 'house' ? 'gbti/house-' : 'gbti/';
+  return `${prefix}${type}-${slug}`;
+}
+
+/** The hosted item id (the branch's last segment, server-prefixed with the verified github_id). It mirrors
+ *  branchName, so re-publishing an item reuses one branch + PR. */
 export function hostedItemId(type, slug) {
   return type === 'profile' ? 'profile' : `${type}-${slug}`;
 }

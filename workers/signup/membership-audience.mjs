@@ -1,7 +1,7 @@
-// sow-323: the AUDIENCE rule, in its own module because BOTH publish routes apply it and they cannot import each
-// other (membership-author.mjs already imports github-app.mjs). The hosted author route checks the files the caller
-// sent; the fork route (github-app.mjs openPullForMember) checks the files the member's fork branch changes. One
-// function, so the two ways a member publishes cannot disagree about what may be public.
+// sow-323: the AUDIENCE rule, in its own module. It was split out because two publish routes applied it: the hosted
+// author route (the files the caller sent) and a fork route that read a member's fork branch. sow-274 Part 4
+// retired the fork route, so the hosted author route (membership-author.mjs) is the only caller now; the module
+// stays separate because that route re-exports it and its tests import it from both places.
 import { TIER, meetsTier } from '../../membership/tiers.mjs';
 import { pathsNeedingApproval, statedVisibility } from '../../membership/hosted-author.mjs';
 
@@ -41,8 +41,8 @@ export async function approvedOnMain({ fetchImpl, instToken, upstream, paths }) 
 }
 
 /**
- * sow-323: the AUDIENCE rule, shared by the hosted author route below and the fork route (github-app.mjs
- * openPullForMember), so the two ways a member publishes cannot disagree about what may be public.
+ * sow-323: the AUDIENCE rule the hosted author route applies (the fork route that also applied it was retired in
+ * sow-274 Part 4).
  *
  * Refused unless positively allowed:
  *   - an article, project or prompt that is not members-only, unless the author is TRUSTED (the silently granted

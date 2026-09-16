@@ -1,8 +1,9 @@
-// SOW-026: the server-side PR-opener (workers/signup/github-app.mjs). Installation-token mint/cache + the
-// open-PR head-ownership + paid gate. All injectable: fake KV, fake fetch, fake JWT signer, stubbed authorizer.
+// SOW-026: the Worker's GitHub App plumbing (workers/signup/github-app.mjs). Installation-token mint/cache and the
+// member-scoped pull request reads. All injectable: fake KV, fake fetch, fake JWT signer, stubbed user lookup.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getInstallationToken, openPullForMember, listMemberPulls, memberPrStatus } from '../workers/signup/github-app.mjs';
+import { getInstallationToken, listMemberPulls, memberPrStatus } from '../workers/signup/github-app.mjs';
+import worker from '../workers/signup/index.mjs';
 
 const env = { GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM', UPSTREAM_REPO: 'gbti-network/gbti.network' };
 const fakeKv = (init = {}) => {
@@ -30,64 +31,37 @@ test('getInstallationToken reuses a fresh cached token (no mint)', async () => {
   assert.equal(fetched, false, 'no network when the cache is fresh');
 });
 
-// ---- openPullForMember ----
-const paidOk = async () => ({ ok: true, githubId: '1' });
+// sow-274 Part 4 removed that route: openPullForMember (POST /membership/open-pr) and its five tests are gone.
+
+test('sow-274 Part 4: the retired fork routes get exactly what an unknown path gets', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => { throw new Error(`no network in unit tests: ${url}`); };
+  const post = async (path) => {
+    const res = await worker.fetch(new Request(`https://w${path}`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer tok', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ head: 'alice:gbti-post', base: 'main' }),
+    }), env, { waitUntil() {} });
+    return { status: res.status, headers: [...res.headers], body: await res.text() };
+  };
+  try {
+    const unknown = await post('/membership/no-such-route');
+    // Two controls, so the comparison cannot pass on two identical failures: the unknown path gets the router's own
+    // not-found, and a live membership route under the same env and request is still served.
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(JSON.parse(unknown.body), { error: 'not_found' });
+    assert.notEqual((await post('/membership/author')).status, 404, 'the request never reached the membership routes');
+    for (const path of ['/membership/open-pr', '/membership/sync-fork']) {
+      assert.deepEqual(await post(path), unknown, `${path} is still served`);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 // Mirrors the REAL githubFetchUser shape { githubId, githubLogin } (oauth.mjs) so this stub can never again mask
-// a wrong-key read in authMemberLogin / openPullForMember (which previously read user.login and 401'd in prod).
+// a wrong-key read in authMemberLogin (which previously read user.login and 401'd in prod).
 const userAlice = async () => ({ githubLogin: 'Alice', githubId: '1' });
-const req = (body) => ({ headers: { get: () => 'Bearer tok' }, json: async () => body });
-// sow-323 Phase 3: the fork route now reads the branch's changes for the audience rule before opening the PR. These
-// SOW-026 cases are about head ownership and the paid gate, so they stub that read as "no reviewable files"; the
-// audience cases are in test/fork-route-audience.test.mjs.
-const noChanges = async () => ({ ok: true, files: [] });
-
-function prFetch(record) {
-  return async (url, init) => {
-    if (/\/access_tokens$/.test(url)) return { ok: true, async json() { return { token: 'ghs_inst', expires_at: new Date(Date.now() + 3600e3).toISOString() }; } };
-    record.push({ url, body: JSON.parse(init.body) });
-    return { ok: true, status: 201, async json() { return { number: 7, html_url: 'https://github.com/gbti-network/gbti.network/pull/7' }; } };
-  };
-}
-
-test('openPullForMember: a paid member opens a PR from THEIR OWN fork via the installation token', async () => {
-  const rec = [];
-  const r = await openPullForMember(req({ head: 'alice:gbti-post', base: 'main', title: 'My post' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: paidOk, fetchUser: userAlice, forkChanges: noChanges });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.number, 7);
-  assert.match(rec[0].url, /\/repos\/gbti-network\/gbti\.network\/pulls$/);
-  assert.equal(rec[0].body.head, 'alice:gbti-post');
-  assert.equal(rec[0].body.maintainer_can_modify, false, 'avoids the fork_collab 422');
-});
-
-test('openPullForMember: rejects a head that is not the member own fork (403)', async () => {
-  const rec = [];
-  const r = await openPullForMember(req({ head: 'mallory:evil', base: 'main' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: paidOk, fetchUser: userAlice, forkChanges: noChanges });
-  assert.equal(r.status, 403);
-  assert.equal(rec.length, 0, 'no PR opened for someone else fork');
-});
-
-test('openPullForMember: a non-paid caller is denied (fail-closed), no PR', async () => {
-  const rec = [];
-  const deny = async () => ({ ok: false, status: 403, body: { error: 'forbidden', message: 'an active paid membership is required' } });
-  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl: prFetch(rec), signJwt, authorize: deny, fetchUser: userAlice, forkChanges: noChanges });
-  assert.equal(r.status, 403);
-  assert.equal(rec.length, 0);
-});
-
-test('openPullForMember: an identity mismatch (token user != paid github_id) is unauthorized', async () => {
-  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl: prFetch([]), signJwt, authorize: async () => ({ ok: true, githubId: '999' }), fetchUser: userAlice, forkChanges: noChanges });
-  assert.equal(r.status, 401);
-});
-
-test('openPullForMember: an existing PR (422) is reported gracefully, not an error', async () => {
-  const fetchImpl = async (url) => {
-    if (/access_tokens$/.test(url)) return { ok: true, async json() { return { token: 't', expires_at: new Date(Date.now() + 3600e3).toISOString() }; } };
-    return { ok: false, status: 422, async json() { return { errors: [{ message: 'A pull request already exists for alice:x.' }] }; } };
-  };
-  const r = await openPullForMember(req({ head: 'alice:x' }), env, { kv: fakeKv(), fetchImpl, signJwt, authorize: paidOk, fetchUser: userAlice, forkChanges: noChanges });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.already, true);
-});
 
 // ---- listMemberPulls / memberPrStatus (SOW-026 read proxy) ----
 const getReq = (url = 'https://w/membership/my-pulls') => ({ url, headers: { get: () => 'Bearer tok' } });

@@ -18042,9 +18042,8 @@ var GITHUB_APP_SLUG = globalThis.process?.env?.GBTI_GITHUB_APP_SLUG || "gbti-net
 var UPSTREAM_REPO = globalThis.process?.env?.GBTI_UPSTREAM_REPO || "gbti-network/gbti.network";
 var rawAuthMode = globalThis.process?.env?.GBTI_AUTH_MODE;
 var AUTH_MODE = rawAuthMode === "app" ? "app" : rawAuthMode === "hosted" ? "hosted" : "classic";
-var isAppMode = () => AUTH_MODE === "app";
 var activeClientId = () => AUTH_MODE === "classic" ? GITHUB_CLIENT_ID : GITHUB_APP_CLIENT_ID;
-var activeScope = () => AUTH_MODE === "classic" ? "public_repo read:user" : "";
+var activeScope = () => AUTH_MODE === "classic" ? "read:user" : "";
 
 // client/src/github-repo.mjs
 var GitHubError = class extends Error {
@@ -18055,259 +18054,74 @@ var GitHubError = class extends Error {
     this.body = body;
   }
 };
-function fromBase64(b64) {
-  const clean = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean, "base64").toString("utf8");
-  const bin = atob(clean);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
-}
-function interpretGateState(state) {
-  switch (state) {
-    case "success":
-      return "mergeable";
-    case "pending":
-      return "checking";
-    case "failure":
-      return "held";
-    case "error":
-      return "error";
-    default:
-      return "unknown";
-  }
-}
-function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl = "https://api.github.com", appMode = isAppMode(), signupBase = SIGNUP_BASE }) {
+function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl = "https://api.github.com", signupBase = SIGNUP_BASE }) {
   if (!token) throw new Error("createRepoClient: token is required");
   if (!upstream) throw new Error('createRepoClient: upstream ("owner/name") is required');
-  const GATE_CONTEXT = "membership-gate";
-  async function req(method, path4, body) {
+  async function req(method, path4) {
     const res = await fetch(baseUrl + path4, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "gbti-network-client",
-        ...body ? { "Content-Type": "application/json" } : {}
-      },
-      body: body ? JSON.stringify(body) : void 0
+        "User-Agent": "gbti-network-client"
+      }
     });
     if (res.status === 204) return null;
     const text = await res.text();
     if (!res.ok) throw new GitHubError(res.status, text);
     return text ? JSON.parse(text) : null;
   }
-  async function callWorker(method, path4, body) {
+  async function callWorker(method, path4) {
     const res = await fetch(`${String(signupBase).replace(/\/$/, "")}${path4}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, ...body ? { "Content-Type": "application/json" } : {} },
-      ...body ? { body: JSON.stringify(body) } : {}
+      headers: { Authorization: `Bearer ${token}` }
     });
     const text = await res.text();
     if (!res.ok) throw new GitHubError(res.status, text);
     return text ? JSON.parse(text) : {};
   }
   return {
-    _req: req,
     upstream,
     /** The authenticated user ({ login, id }) from the device-flow token. */
     async getAuthUser() {
       const u = await req("GET", "/user");
       return { login: u.login, id: String(u.id) };
     },
-    /** Ensure the member has a fork of upstream. Classic: POST /forks (idempotent, returns the existing fork).
-     *  App mode (SOW-026): VERIFY the fork exists (the fork-scoped token cannot create it; the member forks via
-     *  the web UI in the onboarding wizard). A missing fork means setup is incomplete. */
-    async ensureFork() {
-      if (appMode) {
-        const me = await req("GET", "/user");
-        const full = `${String(me.login).toLowerCase()}/${upstream.split("/")[1]}`;
-        let r;
-        try {
-          r = await req("GET", `/repos/${full}`);
-        } catch (err) {
-          if (err instanceof GitHubError && err.status === 404) {
-            throw new GitHubError(404, "no fork found. Finish setup in the GBTI extension (make your copy of the network), then publish again.");
-          }
-          throw err;
-        }
-        if (!r.fork) throw new GitHubError(409, `${full} is not a fork of ${upstream}; rename it and make your copy from the extension.`);
-        return { full_name: r.full_name, owner: r.owner?.login, default_branch: r.default_branch };
-      }
-      const f = await req("POST", `/repos/${upstream}/forks`);
-      return { full_name: f.full_name, owner: f.owner?.login, default_branch: f.default_branch };
+    /** The caller's pull requests (open, and recently closed or merged), newest activity first, from the network.
+     *  Each is { number, title, html_url, state, merged, createdAt, updatedAt, mergedAt, closedAt }. SOW-033 P4
+     *  keeps closed and merged ones so the workspace can show Accepted and Declined. */
+    async listMyPulls() {
+      const p = await callWorker("GET", "/membership/my-pulls");
+      return p.items ?? [];
     },
-    /** Upstream's default branch name (e.g. "main"). */
-    async getDefaultBranch(repoFullName = upstream) {
-      const r = await req("GET", `/repos/${repoFullName}`);
-      return r.default_branch;
-    },
-    /** The head commit SHA of a branch on a repo. */
-    async getBranchSha(repoFullName, branch) {
-      const r = await req("GET", `/repos/${repoFullName}/git/ref/heads/${encodeURIComponent(branch)}`);
-      return r.object?.sha;
-    },
-    /** Force-move a branch ref to sha (used ONLY to reset a leftover publish branch with no open PR). */
-    async forceBranch(repoFullName, branch, sha) {
-      await req("PATCH", `/repos/${repoFullName}/git/refs/heads/${encodeURIComponent(branch)}`, { sha, force: true });
-    },
-    /** Create the branch if absent (from fromSha). A 422 (already exists) is treated as success. */
-    async ensureBranch(repoFullName, branch, fromSha) {
-      try {
-        await req("POST", `/repos/${repoFullName}/git/refs`, { ref: `refs/heads/${branch}`, sha: fromSha });
-      } catch (err) {
-        if (err instanceof GitHubError && err.status === 422) return;
-        throw err;
-      }
-    },
-    /** The blob SHA of a file on a branch, or null when it does not exist yet (needed to UPDATE vs CREATE). */
-    async getFileSha(repoFullName, path4, ref) {
-      try {
-        const r = await req("GET", `/repos/${repoFullName}/contents/${path4}?ref=${encodeURIComponent(ref)}`);
-        return Array.isArray(r) ? null : r.sha ?? null;
-      } catch (err) {
-        if (err instanceof GitHubError && err.status === 404) return null;
-        throw err;
-      }
-    },
-    /** Create or update a file on a branch (Contents API). content is base64. */
-    async putFile(repoFullName, path4, { message, contentBase64, branch, sha }) {
-      return req("PUT", `/repos/${repoFullName}/contents/${path4}`, {
-        message,
-        content: contentBase64,
-        branch,
-        ...sha ? { sha } : {}
-      });
-    },
-    /** Delete a file on a branch (Contents API DELETE; needs the current blob sha). */
-    async deleteFile(repoFullName, path4, { message, branch, sha }) {
-      return req("DELETE", `/repos/${repoFullName}/contents/${path4}`, { message, branch, sha });
-    },
-    /** Open a PR upstream. head is "forkOwner:branch". Classic: POST directly with the member token. App mode
-     *  (SOW-026): delegate to the Worker (the fork-scoped token cannot open a PR into the canonical repo); the
-     *  Worker opens it with GBTI's App installation and dedups an existing PR (returns { already: true }). */
-    async openPull({ title, head, base: base2, body }) {
-      if (appMode) {
-        const p2 = await callWorker("POST", "/membership/open-pr", { title, head, base: base2, body });
-        return { number: p2.number ?? null, html_url: p2.html_url ?? null, already: p2.already === true };
-      }
-      const p = await req("POST", `/repos/${upstream}/pulls`, { title, head, base: base2, body });
-      return { number: p.number, html_url: p.html_url };
-    },
-    /** Find an OPEN upstream PR for a given head ("forkOwner:branch"), or null. App mode (SOW-026): the
-     *  fork-scoped token cannot read the upstream, so skip the check and let the Worker dedup on open. */
-    async findOpenPull({ head }) {
-      if (appMode) return null;
-      const list = await req("GET", `/repos/${upstream}/pulls?state=open&head=${encodeURIComponent(head)}&per_page=1`);
-      const p = list?.[0];
-      return p ? { number: p.number, html_url: p.html_url } : null;
-    },
-    /** A member's PRs upstream, with title + number + url + state + merged. SOW-033 P4: returns OPEN *and*
-     *  recently-updated CLOSED/MERGED PRs (newest activity first, capped) so the workspace can show Accepted
-     *  (merged) and Declined (closed) in addition to Proposed/Needs-changes. App mode (SOW-026): the fork-scoped
-     *  token cannot read the upstream + the PRs are opened by GBTI's App, so the Worker lists them scoped to the
-     *  member's fork (and likewise returns state + merged). The `author:`/head-owner scoping is unchanged: a
-     *  member only ever sees their own PRs. */
-    async listMyPulls(login) {
-      if (appMode) {
-        const p = await callWorker("GET", "/membership/my-pulls");
-        return p.items ?? [];
-      }
-      const q = encodeURIComponent(`repo:${upstream} type:pr author:${login}`);
-      const r = await req("GET", `/search/issues?q=${q}&sort=updated&order=desc&per_page=100`);
-      return (r.items ?? []).map((i) => ({
-        number: i.number,
-        title: i.title,
-        html_url: i.html_url,
-        state: i.state ?? "open",
-        merged: Boolean(i.pull_request?.merged_at)
-      }));
-    },
-    /** Open upstream PRs ({ number, title, html_url, author:{login,id}, headSha, createdAt, updatedAt }), newest
-     *  first. The superadmin open-PR queue (SOW-038) reads these. (SOW-028's contribution inbox used them too; it
-     *  was removed in sow-274.) Through the network, GBTI's App installation reads the upstream. */
+    /** Open pull requests on the canonical repository ({ number, title, html_url, author:{login,id}, headSha,
+     *  createdAt, updatedAt }), newest first, for the superadmin open-PR queue (SOW-038). */
     async listOpenPulls() {
-      if (appMode) {
-        const p = await callWorker("GET", "/membership/open-pulls");
-        return p.items ?? [];
-      }
-      const list = await req("GET", `/repos/${upstream}/pulls?state=open&sort=created&direction=desc&per_page=100`);
-      return (list ?? []).map((p) => ({
-        number: p.number,
-        title: p.title,
-        html_url: p.html_url,
-        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null },
-        headSha: p.head?.sha ?? null,
-        createdAt: p.created_at ?? null,
-        updatedAt: p.updated_at ?? null
-      }));
+      const p = await callWorker("GET", "/membership/open-pulls");
+      return p.items ?? [];
     },
-    /** The gate status for a PR: { state, meaning, sha }. App mode (SOW-026): the Worker reads the upstream PR +
-     *  combined status with GBTI's App installation, scoped to the member's own PR. Classic reads it directly. */
+    /** The gate status of one of the caller's pull requests: { state, meaning, sha, description }. */
     async gateStatus(prNumber) {
-      if (appMode) {
-        const p = await callWorker("GET", `/membership/pr-status?number=${encodeURIComponent(prNumber)}`);
-        return { state: p.state ?? "unknown", meaning: p.meaning ?? "unknown", sha: p.sha ?? null, description: p.description };
-      }
-      const pr = await req("GET", `/repos/${upstream}/pulls/${prNumber}`);
-      const sha = pr.head?.sha;
-      if (!sha) return { state: "unknown", meaning: "unknown", sha: null };
-      const status = await req("GET", `/repos/${upstream}/commits/${sha}/status`);
-      const gate = (status.statuses ?? []).find((s) => s.context === GATE_CONTEXT);
-      const state = gate?.state ?? status.state ?? "unknown";
-      return { state, meaning: interpretGateState(state), sha, description: gate?.description };
+      const p = await callWorker("GET", `/membership/pr-status?number=${encodeURIComponent(prNumber)}`);
+      return { state: p.state ?? "unknown", meaning: p.meaning ?? "unknown", sha: p.sha ?? null, description: p.description };
     },
-    // sow-232: the commits on a ref that touched one path (newest first, capped at 100 by per_page).
+    // sow-232: the commits on a ref that touched one path (newest first, capped at 100 by per_page). The
+    // repository is public, so this is a plain GitHub read.
     async listCommits(path4, { ref = "main", perPage = 100 } = {}) {
       return req("GET", `/repos/${upstream}/commits?path=${encodeURIComponent(path4)}&sha=${encodeURIComponent(ref)}&per_page=${perPage}`);
     },
-    /** The decoded text of a canonical file at a ref, or null if it does not exist there. Publishing reads the
-     *  prior version through this (a collision check, a re-publish's original publishedAt). */
-    async getFileContent(path4, ref) {
-      if (appMode) {
-        const p = await callWorker("GET", `/membership/file?path=${encodeURIComponent(path4)}&ref=${encodeURIComponent(ref)}`);
-        return p.text ?? null;
-      }
-      try {
-        const r = await req("GET", `/repos/${upstream}/contents/${path4}?ref=${encodeURIComponent(ref)}`);
-        if (Array.isArray(r) || !r?.content) return null;
-        return fromBase64(r.content);
-      } catch (err) {
-        if (err instanceof GitHubError && err.status === 404) return null;
-        throw err;
-      }
-    },
-    // ----- SOW-082: fork-staged draft I/O. A draft is a per-item branch gbti/<type>-<slug> on the member's FORK
-    // with NO open PR. All three operate DIRECTLY on the fork in both classic and app mode (the fork is the
-    // member's own repo; the app-mode fork-scoped token can read+write+delete it), so none need a Worker proxy. -----
-    /** List branch refs on a repo matching `heads/<prefix>` (GET git/matching-refs). Used to enumerate a member's
-     *  fork-staged draft branches (prefix 'gbti/'). Returns [{ branch, sha }]; an empty/absent set -> []. */
-    async listMatchingRefs(repoFullName, prefix) {
-      try {
-        const r = await req("GET", `/repos/${repoFullName}/git/matching-refs/heads/${prefix}`);
-        return (Array.isArray(r) ? r : []).map((x) => ({ branch: String(x.ref || "").replace(/^refs\/heads\//, ""), sha: x.object?.sha ?? null }));
-      } catch (err) {
-        if (err instanceof GitHubError && err.status === 404) return [];
-        throw err;
-      }
-    },
-    /** Delete a branch ref on a repo (DELETE git/refs/heads). Used to discard a fork-staged draft. The branch is
-     *  NOT URL-encoded: the slashes in `heads/gbti/<slug>` are real path separators in the git-refs API. */
-    async deleteBranch(repoFullName, branch) {
-      return req("DELETE", `/repos/${repoFullName}/git/refs/heads/${branch}`);
-    },
-    /** The decoded text of a file at a ref on a SPECIFIC repo (the member's fork), or null if absent. Unlike
-     *  getFileContent (which targets the upstream / Worker), this reads the fork directly with the member token. */
-    async getForkFileContent(repoFullName, path4, ref) {
-      try {
-        const r = await req("GET", `/repos/${repoFullName}/contents/${path4}?ref=${encodeURIComponent(ref)}`);
-        if (Array.isArray(r) || !r?.content) return null;
-        return fromBase64(r.content);
-      } catch (err) {
-        if (err instanceof GitHubError && err.status === 404) return null;
-        throw err;
-      }
+    /** The decoded text of a canonical file at a ref (main when none is given), or null if it does not exist
+     *  there. Publishing reads the prior version through this (a collision check, a re-publish's original
+     *  publishedAt).
+     *
+     *  THE DEFAULT IS LOAD-BEARING. Every caller passes a path alone. Without a default the query said
+     *  `ref=undefined`, GitHub has no such branch, the network reported no file, and the caller read that as
+     *  "nothing there": the rename collision check passed for a slug that was taken, on every host that reads
+     *  through the network. Found in sow-274 Part 4. */
+    async getFileContent(path4, ref = "main") {
+      const p = await callWorker("GET", `/membership/file?path=${encodeURIComponent(path4)}&ref=${encodeURIComponent(ref)}`);
+      return p.text ?? null;
     }
   };
 }
@@ -18443,7 +18257,7 @@ function buildContext(store) {
     stager: createStager(repoPath),
     getRepoClient() {
       const token = store.get("githubToken");
-      return token ? createRepoClient({ token, upstream: UPSTREAM, appMode: true }) : null;
+      return token ? createRepoClient({ token, upstream: UPSTREAM }) : null;
     },
     identity() {
       const id = store.get("identity");
@@ -18726,11 +18540,36 @@ function validateContent(ctx2, { type, input, body } = {}) {
   }
 }
 
-// client/src/publish.mjs
+// client/src/hosted-publish.mjs
 function branchName(type, slug, scope = "member") {
   if (type === "profile") return "gbti/profile";
   const prefix = scope === "house" ? "gbti/house-" : "gbti/";
   return `${prefix}${type}-${slug}`;
+}
+function hostedItemId(type, slug) {
+  return type === "profile" ? "profile" : `${type}-${slug}`;
+}
+function hostedPublishFiles(ctx2, { branch, files, title }) {
+  const itemId = String(branch || "").replace(/^gbti\//, "");
+  return hostedAuthor({
+    token: ctx2.store?.get?.("githubToken"),
+    itemId,
+    files,
+    title,
+    signupBase: SIGNUP_BASE,
+    fetchImpl: ctx2.fetch ?? globalThis.fetch
+  });
+}
+async function hostedAuthor({ token, itemId, files, title, signupBase = SIGNUP_BASE, fetchImpl = globalThis.fetch }) {
+  if (!token) throw new Error("sign in to publish");
+  const res = await fetchImpl(`${String(signupBase).replace(/\/$/, "")}/membership/author`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ itemId, files, title })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.ok) throw new Error(body.message || `hosted publish failed (${res.status})`);
+  return { prNumber: body.number, prUrl: body.html_url, branch: body.branch, fork: null, updated: !!body.already, hosted: true };
 }
 
 // client/src/drafts-client.mjs
@@ -18810,33 +18649,6 @@ function mergeRepoDrafts(existing = [], repoItems = [], { type = null } = {}) {
     rows.push(mapRepoDraftItem(item));
   }
   return rows;
-}
-
-// client/src/hosted-publish.mjs
-function hostedItemId(type, slug) {
-  return type === "profile" ? "profile" : `${type}-${slug}`;
-}
-function hostedPublishFiles(ctx2, { branch, files, title }) {
-  const itemId = String(branch || "").replace(/^gbti\//, "");
-  return hostedAuthor({
-    token: ctx2.store?.get?.("githubToken"),
-    itemId,
-    files,
-    title,
-    signupBase: SIGNUP_BASE,
-    fetchImpl: ctx2.fetch ?? globalThis.fetch
-  });
-}
-async function hostedAuthor({ token, itemId, files, title, signupBase = SIGNUP_BASE, fetchImpl = globalThis.fetch }) {
-  if (!token) throw new Error("sign in to publish");
-  const res = await fetchImpl(`${String(signupBase).replace(/\/$/, "")}/membership/author`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ itemId, files, title })
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.ok) throw new Error(body.message || `hosted publish failed (${res.status})`);
-  return { prNumber: body.number, prUrl: body.html_url, branch: body.branch, fork: null, updated: !!body.already, hosted: true };
 }
 
 // client/src/operations-publish.mjs
@@ -19533,7 +19345,7 @@ import path3 from "node:path";
 // client/src/auth-device.mjs
 var GITHUB = "https://github.com";
 var FORM = { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" };
-async function requestDeviceCode({ clientId, scope = "public_repo read:user", fetch = globalThis.fetch }) {
+async function requestDeviceCode({ clientId, scope = "read:user", fetch = globalThis.fetch }) {
   if (!clientId) throw new Error("requestDeviceCode: clientId is required");
   const res = await fetch(`${GITHUB}/login/device/code`, {
     method: "POST",

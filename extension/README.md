@@ -1,7 +1,7 @@
 # GBTI Network Extension (Chrome)
 
 The Chrome (MV3) delivery of the SOW-006 client. Browse gbti.network as a member and edit your own content in
-place; the change opens a pull request through the same SOW-005 gate. The other delivery is the npm server
+place; the network opens a pull request for the change on your behalf, through the same SOW-005 gate. The other delivery is the npm server
 (`gbti-network`); both run the SAME portable core and the SAME `@gbti/client-ui` web components.
 
 ## How it works
@@ -12,14 +12,15 @@ place; the change opens a pull request through the same SOW-005 gate. The other 
   to the background worker by message passing (no token in the page).
 - The **background service worker** (`dist/background.js`) holds the GitHub token in `chrome.storage.local`
   (never exposed to the page), runs the device-flow sign-in, and answers `/api/*` requests by running the
-  dispatcher against a GitHub-Contents-API Reader + the shared git client. Editing flows to a fork -> branch ->
-  PR, exactly like the npm host.
+  dispatcher against a GitHub-Contents-API Reader. Publishing goes through the network, exactly like the npm
+  host: the worker sends the files to the signup Worker, which opens the pull request with GBTI's own GitHub App.
+  There is no copy of the repository to make and nothing to install (sow-274).
 - There is **no popup**. The toolbar action has no `default_popup`, so clicking the icon fires
   `chrome.action.onClicked` in the background worker, which opens **`onboarding.html`** in a tab (focusing an
   already-open one). A popup closes on focus loss, which discarded the device-flow code the moment the member
   tabbed to GitHub; a tab survives the trip. The page is light, two-column, and mounts the shared
-  `<gbti-onboarding>` wizard (sign in -> make your copy -> give access, ONE focused step at a time), plus the
-  signed-in identity + a sign-out control.
+  `<gbti-onboarding>` card (sign in with GitHub, the only step), plus the signed-in identity + a sign-out
+  control. Sign-in is identity only: it tells the network who the member is.
 
 The SOW-005 gate remains the only authority on what merges; the extension only surfaces what a member may do.
 
@@ -65,22 +66,20 @@ Loading it unpacked (Build + load, above) is for working on the extension itself
   route again, or if any page but the MCP guide links the package zip.
 
 ## HUMAN-TODO before publishing
-- Set `GITHUB_CLIENT_ID` in `src/background.mjs` to the real device-flow OAuth app client id
-  (`GBTI_GITHUB_CLIENT_ID`, the same one the npm CLI uses). It is public by design (device flow has no secret).
+- Sign-in uses the GitHub App client id and slug committed in `build-config.json` (`authMode: "hosted"`), which
+  `build.mjs` inlines into the bundle. Both are public by design (the device flow has no secret).
 - Pack + submit to the Chrome Web Store (review + the host-permission justification for gbti.network +
   api.github.com + github.com).
-- (Lifecycle hardening, recommended) Consider a GitHub App with fine-grained, auto-expiring installation
-  tokens (contents + pull_requests on the one content repo) instead of the classic OAuth device flow. The
-  device-flow token is long-lived and cannot be revoked from the extension (no client secret), so sign-out
-  clears local storage only. See `human-todo.md`.
 
 ## Security model (verified by the SOW-006 P6 adversarial threat-model pass)
 - The token lives ONLY in the background worker's `chrome.storage.local`; the page and content script never
   read it (they message the worker). MV3 isolated worlds keep the page's own JS away from the extension. The
   manifest has NO `externally_connectable` and NO `web_accessible_resources`, so a web page cannot message the
   worker or load the bundles. (P6: token-isolation dimension verified clean end to end.)
-- Least privilege: the device flow requests only `public_repo read:user` (the content repo is public, so this
-  is enough to fork it, push to the member's own fork, and open a PR). It does NOT request account-wide `repo`.
+- Least privilege: the device flow signs in with GBTI's GitHub App and requests no scope. Members install the
+  App nowhere, so the token identifies the member and cannot change anything in any repository. The GitHub App
+  user token expires, and the background refreshes it through the Worker, which holds the App client secret.
+  Publishing goes through the network, which writes with GBTI's own App installation.
 - Privilege is re-derived worker-side from the worker-held identity, never trusted from a message: publish
   forces `author`/`username` to the signed-in user, strips system-managed fields, and rejects out-of-folder /
   traversal paths. The dispatcher exposes NO `/api/admin` route. The SOW-005 gate remains the merge authority.
@@ -106,7 +105,7 @@ package and runs the file from there. Key points:
   (`~/.config/gbti-network/`); the server reads it on every run. So once signed in, the member can publish
   **with Chrome closed** (the MCP does not depend on the extension at runtime; the extension is just the
   delivery vehicle). The token is held by the node process, never by a Chrome surface.
-- **No new privilege.** The MCP uses the GitHub REST API (fork -> put file -> open PR), never local `git`. The
-  SOW-005 gate stays the merge authority: a directly-held `public_repo` token can only PROPOSE a PR to the
-  member's own folder, never merge to the canonical repo. Publishing is paid-only (SOW-011), enforced server
+- **No new privilege.** The MCP publishes through the network, like every other host, and never runs local
+  `git`. The SOW-005 gate stays the merge authority: the network can only PROPOSE a PR to the member's own
+  folder, never merge to the canonical repo on its own. Publishing is paid-only (SOW-011), enforced server
   side. Rebuild it with `node extension/build.mjs` (it is emitted alongside the `dist/*.js` bundles).

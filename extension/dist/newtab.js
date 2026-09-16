@@ -3240,7 +3240,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const headline = "You are on the free trial";
     return authoring ? {
       headline,
-      body: "Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.",
+      body: "Write and save drafts privately now. Publishing to gbti.network requires a paid membership.",
       ctaLabel: "Upgrade to publish",
       ctaHref: "https://gbti.network/membership/"
     } : {
@@ -6466,7 +6466,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       case "paid":
         return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, projects, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
       case "trialing":
-        return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and stage drafts on your own fork now. Upgrade to a paid membership any time to publish under your name.", upgrade: true };
+        return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and save drafts privately now. Upgrade to a paid membership any time to publish under your name.", upgrade: true };
       default:
         return { phase: "neutral", title: "Welcome to GBTI Network", body: "You are set up to author and publish through the co-op.", upgrade: false };
     }
@@ -12935,7 +12935,7 @@ ${listStyleProseCss(".doc-blocks")}
          </div>
          <div class="edgrid">
            <article class="doc">
-             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
+             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to save your work privately; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
              ${(() => {
           const slugVal = `<span class="slug-val locked">${esc(this.presetStr(p.slug) || "")}</span>`;
@@ -14079,7 +14079,7 @@ ${listStyleProseCss(".doc-blocks")}
       pb.innerHTML = `${INFO}<span>${html}</span>`;
       pb.hidden = false;
     }
-    // SOW-082: Save the current content as a draft on the member's own fork (no PR). Allowed for trial + paid; a
+    // SOW-082: Save the current content as a private draft (no PR; sow-274: never a fork). Allowed for trial + paid; a
     // trial member's members-only content is refused server-side with a clean upgrade nudge (membership-required).
     // sow-169 phase 4: preview the item as the page it will become, in a new tab.
     //
@@ -14169,7 +14169,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
         this._setChip(`${CHECK2} Draft saved`, "ok");
         if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
-        this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft staged on your fork with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
+        this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft saved privately with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft saved privately. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
       } catch (err) {
         this._setChip("");
@@ -22238,17 +22238,14 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-comment-echoes", GbtiCommentEchoes);
 
   // client-ui/src/elements/gbti-onboarding.mjs
-  var STEP_IDS = ["signin", "fork", "install"];
-  var HOSTED_SIGNIN_META = {
+  var SIGNIN_META = {
     title: "Sign in with GitHub",
     why: "Your GitHub account is your identity on the network. No repository access is requested, and the network publishes on your behalf.",
     doneLabel: "Signed in"
   };
   var check2 = (filled) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="${filled ? "var(--brand)" : "none"}" stroke="${filled ? "var(--brand)" : "var(--line)"}" stroke-width="2"/>${filled ? '<path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' : ""}</svg>`;
   var BTN_ICON = {
-    signin: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>`,
-    fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
-    install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
+    signin: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>`
   };
   var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -22264,8 +22261,6 @@ ${listStyleProseCss(".doc-blocks")}
   .card { flex:1; min-width:0; border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .card .title { font-family:var(--font-display); font-size:16px; font-weight:700; margin:0 0 3px; }
   .card .why { font-size:12.5px; color:var(--muted); margin:0 0 7px; line-height:1.45; }
-  .card .see { font-size:12px; color:var(--fg); margin:0 0 11px; display:flex; gap:6px; align-items:flex-start; }
-  .card .see svg { flex:none; margin-top:1px; opacity:.7; }
   /* Primary action. Used as BOTH a <button> (Sign in) and an <a> (Open github.com/login/device), so it must be a
      block-level flex box (an inline <a> let its green background wrap mid-text into two ragged pieces) with WHITE
      text to match the site's green CTA. */
@@ -22280,7 +22275,6 @@ ${listStyleProseCss(".doc-blocks")}
   .copy { font-family:var(--font-body); font-size:11px; font-weight:600; letter-spacing:0; border:1px solid var(--line); background:var(--panel); color:var(--accent); border-radius:6px; padding:3px 8px; cursor:pointer; }
   .copy:hover { border-color:var(--accent); }
   .note { font-size:12px; color:var(--muted); margin:8px 0 0; }
-  .note.warn { color:var(--danger); }
   /* Decodes GitHub's scary-sounding "Act on your behalf" wording on the authorize screen. */
   .reassure { display:flex; gap:8px; align-items:flex-start; margin:0 0 11px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); }
   .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
@@ -22333,7 +22327,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._checking = true;
         this.render();
       }
-      const sig = (s) => s ? [s.signedIn, s.forkReady, s.installReady, s.allReposGrant, s.activeStep].join("|") : "";
+      const sig = (s) => s ? [s.signedIn, s.activeStep].join("|") : "";
       const before = sig(this._status);
       try {
         const s = await this.client?.onboardingStatus?.();
@@ -22361,31 +22355,20 @@ ${listStyleProseCss(".doc-blocks")}
         this.set(this.css(CSS35) + `<p class="note">Checking your setup...</p>`);
         return;
       }
-      const hostedLike = Boolean(s.mode && s.mode !== "app");
       if (s.ready) {
-        const note = hostedLike ? "Sign-in is all it takes: your drafts save privately, and the network publishes for you." : "Your drafts save to your copy, and we open the review request for you.";
         this.set(this.css(CSS35) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
-        <p class="note">${note}</p>
+        <p class="note">Sign-in is all it takes: your drafts save privately, and the network publishes for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
         return;
       }
-      const stepIds = hostedLike ? ["signin"] : STEP_IDS;
-      const doneAll = [s.signedIn, s.forkReady, s.installReady];
-      const done = stepIds.map((_, i) => doneAll[i]);
-      const nDone = done.filter(Boolean).length;
-      const active = s.activeStep || (s.signedIn ? null : "signin");
-      const rows = stepIds.map((id, i) => {
-        const meta = s.steps?.[id] || (hostedLike && id === "signin" ? HOSTED_SIGNIN_META : {});
-        if (done[i]) return `<li class="row done"><span class="ic">${check2(true)}</span><span class="t">${esc(meta.doneLabel || meta.title || id)}</span></li>`;
-        if (id !== active) return "";
-        return `<li class="row"><span class="ic">${check2(false)}</span>${this._card(id, meta, s)}</li>`;
-      }).filter(Boolean).join("");
+      const row = s.signedIn ? `<li class="row done"><span class="ic">${check2(true)}</span><span class="t">${esc(SIGNIN_META.doneLabel)}</span></li>` : `<li class="row"><span class="ic">${check2(false)}</span>${this._card()}</li>`;
       const reached = s.reachedGithub !== false;
+      const nDone = s.signedIn ? 1 : 0;
       this.set(this.css(CSS35) + `
-      <div class="head"><h2>${hostedLike ? "Sign in to publish" : "Set up publishing"}</h2><span class="count">${nDone} of ${stepIds.length}</span></div>
-      <div class="bar"><i style="width:${Math.round(nDone / stepIds.length * 100)}%"></i></div>
-      <ul>${rows}</ul>
+      <div class="head"><h2>Sign in to publish</h2><span class="count">${nDone} of 1</span></div>
+      <div class="bar"><i style="width:${nDone * 100}%"></i></div>
+      <ul>${row}</ul>
       <p class="foot${reached ? "" : " err"}">${reached ? "Reached GitHub just now." : "We could not reach GitHub. Trying again."}</p>`);
       this.on("[data-again]", "click", () => this.refresh({ manual: true }));
       this.on("[data-signin]", "click", () => this.emit("gbti:onboarding-signin"));
@@ -22397,36 +22380,18 @@ ${listStyleProseCss(".doc-blocks")}
         } catch {
         }
       });
-      const open = this.$("[data-open]");
-      if (open) open.addEventListener("click", () => {
-        const u = open.getAttribute("data-open");
-        if (u) window.open(u, "_blank", "noopener");
-        setTimeout(() => this.refresh(), 1500);
-      });
     }
-    _card(id, meta, s) {
-      const eye = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5c-5 0-8.5 4.5-9 7 0.5 2.5 4 7 9 7s8.5-4.5 9-7c-.5-2.5-4-7-9-7zm0 11a4 4 0 110-8 4 4 0 010 8z" fill="currentColor"/></svg>`;
-      const why = `<p class="why">${esc(meta.why || "")}</p>`;
-      const see = `<p class="see">${eye}<span>${esc(meta.preview || "")}</span></p>`;
+    _card() {
+      const meta = SIGNIN_META;
+      const why = `<p class="why">${esc(meta.why)}</p>`;
       const again = `<button class="again" data-again type="button"${this._checking ? " disabled" : ""}>${this._checking ? "Checking..." : "Check again"}</button>${this._staleNote && !this._checking ? `<p class="note">Checked just now, no change yet. GitHub can take a minute to reflect updates, and this step re-checks itself every few seconds.</p>` : ""}`;
-      if (id === "signin") {
-        const verifyUrl = this._code?.url || "https://github.com/login/device";
-        const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
-        const reassure = `<div class="reassure">${shield}<p><b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network can only open pull requests and save drafts to the copy you choose. It cannot read your private code, change your account, or reach any other repository. You can remove it at any time in your GitHub settings.</p></div>`;
-        const code = this._code ? `<div class="code"><span data-codeval>${esc(this._code.code)}</span><button class="copy" data-copy type="button" title="Copy the code">Copy</button></div>
-           <a class="btn" href="${esc(verifyUrl)}" target="_blank" rel="noopener">${BTN_ICON.signin}<span>Open github.com/login/device</span></a>
-           <p class="note">Copy the code, open the GitHub page, paste it there, and Authorize. Leave this tab open: it checks off on its own when you come back.</p>` : `<button class="btn" data-signin type="button">${BTN_ICON.signin}<span>${esc(meta.button || "Sign in with GitHub")}</span></button>`;
-        return `<div class="card"><p class="title">${esc(meta.title || "Sign in with GitHub")}</p>${why}${see}${reassure}${code}${again}</div>`;
-      }
-      if (id === "install" && s.allReposGrant) {
-        return `<div class="card"><p class="title">Switch to just your copy</p>
-        <p class="why">You granted GBTI access to <b>all</b> your repositories. For your security we only want your one copy. Open the installation, choose <b>Only select repositories</b>, pick gbti.network, and save.</p>
-        <button class="btn" data-open="${esc(s.links?.manage || "https://github.com/settings/installations")}" type="button">${BTN_ICON.install}<span>Fix access on GitHub</span></button>${again}
-        <p class="note warn">Access to all repositories is not accepted.</p></div>`;
-      }
-      const link = id === "fork" ? s.links?.fork : s.links?.install;
-      return `<div class="card"><p class="title">${esc(meta.title)}</p>${why}${see}
-      <button class="btn" data-open="${esc(link || "")}" type="button">${BTN_ICON[id] || ""}<span>${esc(meta.button)}</span></button>${again}</div>`;
+      const verifyUrl = this._code?.url || "https://github.com/login/device";
+      const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
+      const reassure = `<div class="reassure">${shield}<p><b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network uses your sign-in only to know who you are. It does not ask for access to your repositories, and it cannot read your private code or change your account. You can remove it at any time in your GitHub settings.</p></div>`;
+      const code = this._code ? `<div class="code"><span data-codeval>${esc(this._code.code)}</span><button class="copy" data-copy type="button" title="Copy the code">Copy</button></div>
+         <a class="btn" href="${esc(verifyUrl)}" target="_blank" rel="noopener">${BTN_ICON.signin}<span>Open github.com/login/device</span></a>
+         <p class="note">Copy the code, open the GitHub page, paste it there, and Authorize. Leave this tab open: it checks off on its own when you come back.</p>` : `<button class="btn" data-signin type="button">${BTN_ICON.signin}<span>Sign in with GitHub</span></button>`;
+      return `<div class="card"><p class="title">${esc(meta.title)}</p>${why}${reassure}${code}${again}</div>`;
     }
   };
   define("gbti-onboarding", GbtiOnboarding);
@@ -23461,7 +23426,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(r.path)}`);
         }, { once: true });
         const notes = [];
-        if (e.staged) notes.push("You are editing your staged fork draft. It is not live until you Publish.");
+        if (e.staged) notes.push("You are editing your saved draft. It is not live until you Publish.");
         if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
         if (notes.length && ed?.out) ed.out(esc(notes.join(" ")), e.invalidNote ? "danger" : "muted");
         ed?.addEventListener("gbti-published", () => {
@@ -23542,7 +23507,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._viewList = view;
       const controls = this._listControls();
       const note = this._msg || this._draftMsg ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : "";
-      const draftNote = this._statusFilter === "draft" ? this._scopeNow() === "house" ? `<p class="muted draft-intro">Unpublished items across the network. Republish restores one to the site.</p>` : `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>` : "";
+      const draftNote = this._statusFilter === "draft" ? this._scopeNow() === "house" ? `<p class="muted draft-intro">Unpublished items across the network. Republish restores one to the site.</p>` : `<p class="muted draft-intro">Drafts are saved privately. Save work here, then publish it to the network when you are ready.</p>` : "";
       if (view.length === 0) {
         const empty = this._statusFilter === "all" ? `No ${esc(tab.label.toLowerCase())} yet.` : this._statusFilter === "draft" ? `No drafts in ${esc(tab.label)}.` : `No published ${esc(tab.label.toLowerCase())}.`;
         return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
@@ -23837,10 +23802,10 @@ ${listStyleProseCss(".doc-blocks")}
         this.render();
       }
     }
-    // SOW-082: discard a staged draft (deletes its fork branch). Refused server-side if it has an open PR.
+    // SOW-082: discard a saved draft (deletes its private record). Refused server-side if it has an open PR.
     async _discardDraft(d, btn) {
       if (!d) return;
-      if (typeof confirm === "function" && !confirm(`Discard the draft "${d.title}"? This deletes it from your fork.`)) return;
+      if (typeof confirm === "function" && !confirm(`Discard the draft "${d.title}"? This deletes the saved draft.`)) return;
       this._draftMsg = null;
       if (btn) {
         btn.disabled = true;
@@ -26587,7 +26552,7 @@ From the author:
       // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
       validateContent: (b) => request("POST", "/api/validate", b),
       publish: (b) => request("POST", "/api/publish", b),
-      // SOW-082: universal draft staging (Save to the fork without a PR; review; Publish from the staged branch).
+      // SOW-082: universal draft staging (save privately without a PR; review; publish). Private store since sow-274.
       saveDraft: (b) => request("POST", "/api/draft", b),
       // { type, input, body } -> { branch, state: 'staged' }
       listDrafts: ({ type } = {}) => request("GET", `/api/drafts${qs({ type })}`),
@@ -27404,26 +27369,19 @@ From the author:
     document.body.appendChild(overlay);
   }
   async function loadSetupBanner() {
-    const [status, ob] = await Promise.all([api2("/api/status"), api2("/api/onboarding-status")]);
+    const status = await api2("/api/status");
     const signedIn = Boolean(status?.authenticated && status?.identity?.login);
-    const ready = ob ? ob.ready || ob.appMode === false && signedIn : signedIn;
     maybeShowWelcome(signedIn);
     const setup = $("[data-setup]");
     if (!setup) return;
-    if (ready) {
+    if (signedIn) {
       setup.classList.remove("show");
       return;
     }
     const txt = setup.querySelector("[data-setup-txt]");
     const go = setup.querySelector("[data-setup-go]");
-    if (!signedIn) {
-      if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub to write and publish your work on GBTI Network.</span>`;
-      if (go) go.textContent = "Get started";
-    } else {
-      const step = ob?.activeStep === "fork" ? 2 : ob?.activeStep === "install" ? 3 : 1;
-      if (txt) txt.innerHTML = `<b>Finish setting up publishing</b><span>Step ${step} of 3. Make your copy and give access to start publishing.</span>`;
-      if (go) go.textContent = "Finish setup";
-    }
+    if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub once. The network publishes on your behalf.</span>`;
+    if (go) go.textContent = "Get started";
     setup.classList.add("show");
   }
   async function applyMembershipState() {

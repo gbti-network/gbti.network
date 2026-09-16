@@ -6,7 +6,7 @@
 //
 // SECURITY INVARIANT: cookie acceptance is OPT-IN (allowCookie defaults false). A route that does not pass
 // allowCookie:true is bearer-only and behaves byte-for-byte as it did before this change, including its 401
-// messages. That keeps every token-required route (encrypt, open-pr, author, admin, ...) closed to a tokenless
+// messages. That keeps every token-required route (encrypt, author, admin, ...) closed to a tokenless
 // cookie caller by default. The cookie carries github_id + github_login but NO GitHub token, so a route that
 // needs a live token can also assert needToken to reject a cookie caller explicitly.
 

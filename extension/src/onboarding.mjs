@@ -2,8 +2,8 @@
 // no popup; a popup closes on focus loss and lost the device-flow code the moment the member tabbed to GitHub).
 // It reuses the SAME messaging bridge as the content script / Shares page: /api/* requests are relayed to the
 // background worker (which holds the token + runs the device-flow polling), so this page never sees the token.
-// It mounts the shared <gbti-onboarding> wizard (sign in -> fork -> install, one focused step at a time, driven
-// by /api/onboarding-status = durable GitHub state) and surfaces the signed-in identity + a sign-out control
+// It mounts the shared <gbti-onboarding> card (sign-in only since sow-274, driven by /api/onboarding-status,
+// which reports whether the member is signed in) and surfaces the signed-in identity + a sign-out control
 // (the job the old popup used to do).
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
@@ -50,7 +50,7 @@ async function status() {
 
 async function signOut() {
   await chrome.runtime.sendMessage({ type: 'signout' });
-  mount();          // reset the wizard back to step 1
+  mount();          // reset the card to the sign-in step
   refreshAccount(); // back to the "join" line
 }
 
@@ -78,7 +78,7 @@ function mount() {
   const el = document.createElement('gbti-onboarding');
   app.replaceChildren(el);
 
-  // Sign-in: run the device flow in the background worker; feed the user code into the wizard's sign-in card
+  // Sign-in: run the device flow in the background worker; feed the user code into the card
   // (it shows the code + a Copy button + an "Open github.com/login/device" link). On success, re-probe.
   el.addEventListener('gbti:onboarding-signin', () => {
     client.login(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri))

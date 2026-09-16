@@ -182,7 +182,7 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
       // The recursive Git Trees API truncates at ~100k entries / ~7MB and sets t.truncated; for this co-op's
       // repo that ceiling is years away. If it is ever hit, paths past the cut are dropped and this feed is
       // best-effort (a paginated per-folder fallback would be the future fix). The canonical repo holds only
-      // PUBLISHED shares (trial drafts stay on forks), so the read loop below is ~cap reads in practice.
+      // PUBLISHED shares (drafts are held privately, never here), so the read loop below is ~cap reads in practice.
       const paths = t.tree
         .filter((e) => e && e.type === 'blob' && typeof e.path === 'string' && SHARE_PATH.test(e.path))
         .map((e) => e.path)

@@ -613,7 +613,7 @@ async function loadActivity() {
   }
 }
 
-/** GET /api/* via the background worker; null on any failure. (The setup banner needs status + onboarding.) */
+/** GET /api/* via the background worker; null on any failure. (The setup banner needs the sign-in status.) */
 async function api(pathname) {
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname, query: {} } });
@@ -624,8 +624,8 @@ async function api(pathname) {
 const WELCOME_SEEN_KEY = 'gbti-welcome-seen';
 // SOW-029 fix: the post-setup welcome (join Discord + follow members) was reachable ONLY via the onboarding wizard's
 // "Complete Integration" click, so a member who reached the new tab any other way never saw it. Show it ONCE on the
-// first new-tab open for ANY signed-in member -- it is COMMUNITY onboarding (Discord + follow), so it is NOT gated on
-// the publish setup (fork + install). The flag is set on SHOW (so it never nags and survives an abandon); the
+// first new-tab open for ANY signed-in member -- it is COMMUNITY onboarding (Discord + follow), and signing in is the
+// whole of the publish setup since sow-274. The flag is set on SHOW (so it never nags and survives an abandon); the
 // onboarding-wizard path checks + sets the same flag, so the two never double up.
 function maybeShowWelcome(signedIn) {
   let seen = false;
@@ -645,26 +645,20 @@ function maybeShowWelcome(signedIn) {
   document.body.appendChild(overlay);
 }
 
-// SOW-026/029: the onboarding setup banner. Shown until the member is signed in AND set up (fork + GBTI App
-// install). The shell owns the account control + identity; this only drives the banner.
+// SOW-026/029: the onboarding setup banner. Shown until the member is signed in, which since sow-274 is the whole
+// of the setup: publishing goes through the network, so there is no copy of the repository to make and no app to
+// install. The shell owns the account control + identity; this only drives the banner.
 async function loadSetupBanner() {
-  const [status, ob] = await Promise.all([api('/api/status'), api('/api/onboarding-status')]);
+  const status = await api('/api/status');
   const signedIn = Boolean(status?.authenticated && status?.identity?.login);
-  const ready = ob ? (ob.ready || (ob.appMode === false && signedIn)) : signedIn;
-  maybeShowWelcome(signedIn); // first-run welcome, independent of the wizard's button + the publish setup
+  maybeShowWelcome(signedIn); // first-run welcome, independent of the setup card's button
   const setup = $('[data-setup]');
   if (!setup) return;
-  if (ready) { setup.classList.remove('show'); return; }
+  if (signedIn) { setup.classList.remove('show'); return; }
   const txt = setup.querySelector('[data-setup-txt]');
   const go = setup.querySelector('[data-setup-go]');
-  if (!signedIn) {
-    if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub to write and publish your work on GBTI Network.</span>`;
-    if (go) go.textContent = 'Get started';
-  } else {
-    const step = ob?.activeStep === 'fork' ? 2 : ob?.activeStep === 'install' ? 3 : 1;
-    if (txt) txt.innerHTML = `<b>Finish setting up publishing</b><span>Step ${step} of 3. Make your copy and give access to start publishing.</span>`;
-    if (go) go.textContent = 'Finish setup';
-  }
+  if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub once. The network publishes on your behalf.</span>`;
+  if (go) go.textContent = 'Get started';
   setup.classList.add('show');
 }
 
@@ -767,7 +761,7 @@ function init() {
   readNewsCache().then((cached) => { if (cached && !NEWS_LOADED) { NEWS = cached; renderFeed($('[data-filter]')?.value || ''); } });
   loadSetupBanner();
 
-  // The setup banner opens the onboarding tab (sign in -> fork -> install).
+  // The setup banner opens the onboarding tab (sign in; since sow-274 that is the only step).
   $('[data-setup]')?.addEventListener('click', (e) => {
     e.preventDefault();
     chrome.tabs?.create
@@ -894,7 +888,7 @@ function init() {
 
   if (document.documentElement.getAttribute('data-off') !== '1') loadActivity();
 
-  // Re-check the setup banner when the member returns to this tab (e.g. after forking in another tab).
+  // Re-check the setup banner when the member returns to this tab (e.g. after signing in in another tab).
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadSetupBanner(); });
   // SOW-092: a share posted from the shell "+" modal opens IMMEDIATELY in the page reader (the composer
   // emits a reader-ready optimistic item; SOW-076 instant-feel). Claiming the event stops the shell's

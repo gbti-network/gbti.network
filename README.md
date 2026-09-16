@@ -42,19 +42,23 @@ mods.
 |---|---|---|---|
 | Browse the public site | yes | yes | yes |
 | Discord + weekly sessions | no | read-only trial access | full access |
-| Author content (write, edit, stage on your fork) | no | yes | yes |
+| Author content (write, edit, save drafts privately) | no | yes | yes |
 | Profile, blog, products, prompts go live | no | stage now, publish when you pay | yes |
 
 The trial is a real evaluation of the community. Paying turns on your public presence: your member
 profile, your blog posts, your products in the directory, and your prompts in the library all publish
 under your name. Membership is a single annual tier at $150 per year, billed through Stripe.
 
-Publishing is paid-only. A trial member authors freely, and their drafts live on their own fork until
-they pay; nothing reaches the canonical repo during the trial. A content pull request from anyone who is
-not a paid member (a visitor, a lapsed account, or a trial member) is rejected by the gate and closed
-with a sign-up or upgrade nudge that reassures a trial member their work is safe on their fork. There is
-no trial publishing carve-out: paying is what turns on your public presence, and your client publishes
-your staged drafts the moment you upgrade.
+Publishing is paid-only. A trial member authors freely, and their drafts are saved privately in their
+account until they pay; nothing reaches the canonical repo during the trial. A content pull request from
+anyone who is not a paid member (a visitor, a lapsed account, or a trial member) is rejected by the gate
+and closed with a sign-up or upgrade nudge that reassures a trial member nothing is lost. There is no
+trial publishing carve-out: paying is what turns on your public presence, and your saved drafts are
+there to publish the moment you upgrade.
+
+Every surface publishes the same way. The website, the extension and the agent server send your work to
+the network, which commits it through GBTI's own GitHub App. Signing in asks GitHub only who you are, never
+for access to your repositories.
 
 ## A syndication network
 
@@ -185,19 +189,18 @@ fails closed: a missing Customer or any lookup error is treated as not paid.
 Members open pull requests; a metadata-only GitHub Action, the gate, decides whether each one may merge.
 The gate runs on the base branch and reads only pull-request metadata (the author's GitHub id and the
 changed file paths). It never checks out or runs the pull request's code, which is what keeps the
-membership and automation secrets safe. It runs on both pull-request and pull-request-review events, so
-a folder owner's approving review can flip a held check green.
+membership and automation secrets safe. It runs on both pull-request and pull-request-review events.
 
 The gate enforces a few rules:
 
 - **Paid to publish.** A content pull request from anyone who is not a paid member (a visitor, a lapsed
   account, or a trial member) is rejected and closed with a sign-up or upgrade nudge (and left open, not
   destroyed, if the Stripe lookup was unhealthy at that moment, so a real member's work is never lost). A
-  trial member's drafts stay on their own fork until they pay; nothing reaches the canonical repo during
+  trial member's drafts are saved privately until they pay; nothing reaches the canonical repo during
   the trial.
-- **Contribution carve-out.** A paid member may edit one other member's folder. That pull request is held
-  until the folder owner approves it with a GitHub review on the current commit, resolved by the owner's
-  immutable GitHub id, then it merges and the contributor is credited.
+- **Other members' folders are held.** A member publishes into their own folder only. A pull request
+  that changes another member's folder is held, never merged automatically, and a superadmin decides
+  whether it merges. Superadmins may edit any folder.
 - **No privilege escalation.** Roles, bans, and overrides live in git under `house/`. Protected paths are
   owned through `CODEOWNERS`, and the gate hard-fails a pull request that reaches above its author's
   role, independent of review.

@@ -4,8 +4,8 @@
 //   - a superadmin lists what is waiting;
 //   - a superadmin approves (which makes the item public in one commit) or dismisses it (silent, owner's rule).
 //
-// THE RECORD IS WRITTEN BEFORE THE PULL REQUEST OPENS (the publish routes call recordEditorialItems first and
-// refuse the publish if the write fails). The other order loses items: a publish that merges with no record is
+// THE RECORD IS WRITTEN BEFORE THE PULL REQUEST OPENS (the publish route, membership-author.mjs, calls
+// recordEditorialItems first and refuses the publish if the write fails; the fork route that did too is retired). The other order loses items: a publish that merges with no record is
 // an item waiting for review that nothing lists, and nobody would ever know. A record whose publish then fails
 // is the harmless direction: approving it answers "not on the site yet", and a superadmin can dismiss it.
 //

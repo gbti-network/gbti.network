@@ -16,8 +16,7 @@ import { resolveMembership } from './membership.mjs';
 import { GITHUB_CLIENT_ID, SIGNUP_BASE, activeClientId, activeScope } from './signup-base.mjs';
 import { UPSTREAM } from './context.mjs';
 
-// SOW-026: classic mode keeps the account-wide public_repo scope; app mode targets the GitHub App (fork-scoped)
-// and sends no scope (GitHub Apps ignore it). The active mode picks both the client id + the scope.
+// The baked sign-in mode picks the client id; the scope is identity only either way (sow-274 Part 4).
 const SCOPE = activeScope();
 
 // Read a repo file from a local clone if one is configured; null when there is no clone (standalone MCP) or the

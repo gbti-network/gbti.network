@@ -63,11 +63,35 @@ test('resolveExtensionDefine: a build-time env var overrides the committed confi
 
 test('resolveExtensionDefine: app mode without the client id/slug throws (no broken placeholder bundle)', () => {
   assert.throws(() => resolveExtensionDefine({ config: { authMode: 'app' }, env: {} }), /app mode requires/);
+  assert.throws(() => resolveExtensionDefine({ config: { authMode: 'hosted' }, env: {} }), /hosted mode requires/);
 });
 
-test('the COMMITTED extension/build-config.json selects app mode with the real App identifiers', () => {
+// sow-274 Part 4: the extension signs in for identity only. 'hosted' must inline the App client id + slug exactly
+// as 'app' did, or the device flow would ask GitHub for the placeholder client and sign-in would break.
+test('resolveExtensionDefine: hosted mode inlines the App client id + slug exactly as app mode did', () => {
+  const cfg = { appClientId: REAL_CLIENT_ID, appSlug: REAL_SLUG };
+  const hosted = resolveExtensionDefine({ config: { ...cfg, authMode: 'hosted' }, env: {} });
+  const app = resolveExtensionDefine({ config: { ...cfg, authMode: 'app' }, env: {} });
+  assert.equal(hosted.mode, 'hosted');
+  assert.equal(hosted.define['globalThis.process.env.GBTI_AUTH_MODE'], JSON.stringify('hosted'));
+  const { ['globalThis.process.env.GBTI_AUTH_MODE']: _h, ...hostedRest } = hosted.define;
+  const { ['globalThis.process.env.GBTI_AUTH_MODE']: _a, ...appRest } = app.define;
+  assert.deepEqual(hostedRest, appRest);
+  assert.equal(hostedRest['globalThis.process.env.GBTI_GITHUB_APP_CLIENT_ID'], JSON.stringify(REAL_CLIENT_ID));
+  assert.equal(hostedRest['globalThis.process.env.GBTI_GITHUB_APP_SLUG'], JSON.stringify(REAL_SLUG));
+});
+
+test('the hosted-mode bundle carries the real App client id + slug and no placeholder', async () => {
+  const { define } = resolveExtensionDefine({ config: { authMode: 'hosted', appClientId: REAL_CLIENT_ID, appSlug: REAL_SLUG }, env: {} });
+  const txt = await bundleText(define);
+  assert.ok(txt.includes(REAL_CLIENT_ID), 'the real App client id is inlined');
+  assert.ok(txt.includes(REAL_SLUG), 'the real App slug is inlined');
+  assert.ok(!txt.includes(PLACEHOLDER), 'the placeholder client id is constant-folded away in hosted mode');
+});
+
+test('the COMMITTED extension/build-config.json selects hosted mode with the real App identifiers', () => {
   const cfg = readBuildConfig();
-  assert.equal(cfg.authMode, 'app', 'the repo is flipped to app mode (build-config.json)');
+  assert.equal(cfg.authMode, 'hosted', 'the repo signs in for identity only since sow-274 Part 4 (build-config.json)');
   assert.equal(cfg.appClientId, REAL_CLIENT_ID);
   assert.equal(cfg.appSlug, REAL_SLUG);
 });

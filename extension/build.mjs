@@ -18,8 +18,9 @@ const out = (f) => path.join(dir, 'dist', f);
 // client/src/signup-base.mjs as `globalThis.process?.env?.GBTI_*`) must be INLINED at bundle time via esbuild
 // `define` (it substitutes through the optional chain). The mode comes from the COMMITTED extension/build-config.json
 // (so the bundle is reproducible in CI without env), with a build-time env override for ad-hoc builds. Classic
-// stays the default when the config + env are absent. Flip with `bash .data/sow/provision-sow026-app.sh flip`
-// (writes the config), or ad-hoc: `GBTI_AUTH_MODE=app GBTI_GITHUB_APP_CLIENT_ID=.. GBTI_GITHUB_APP_SLUG=.. node extension/build.mjs`.
+// stays the default when the config + env are absent. Since sow-274 Part 4 the committed mode is 'hosted': the App
+// device flow, identity only, inlining the same App client id + slug 'app' did. Ad-hoc:
+// `GBTI_AUTH_MODE=hosted GBTI_GITHUB_APP_CLIENT_ID=.. GBTI_GITHUB_APP_SLUG=.. node extension/build.mjs`.
 const { define, mode, values } = resolveExtensionDefine({ config: readBuildConfig(), env: process.env });
 
 // LOAD-BEARING, DO NOT REMOVE AS COSMETIC (sow-237, 2026-08-14). esbuild RESOLVES symlinks by default, so

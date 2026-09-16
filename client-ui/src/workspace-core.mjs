@@ -230,15 +230,15 @@ export function shouldPollPr(lifecycle) {
   return lifecycle?.phase === 'pending';
 }
 
-// SOW-082: a fork-staged draft's lifecycle state. A draft is identified by its deterministic branch
-// gbti/<type>-<slug> on the member's fork; its state joins "branch exists" with the PR (if any) for that branch.
-// `pull` is the matched PR ({ state, merged }) or null (no PR yet = still staged on the fork). Reuses classifyPull
-// for the PR half. Pure; node-testable.
+// SOW-082: a staged draft's lifecycle state. A draft is identified by its deterministic branch name
+// gbti/<type>-<slug> (sow-274: the private store keeps the name, no fork holds it); its state joins "a draft is
+// saved" with the PR (if any) for that branch. `pull` is the matched PR ({ state, merged }) or null (no PR yet =
+// still staged). Reuses classifyPull for the PR half. Pure; node-testable.
 export function classifyDraft({ pull = null, status = null, store = null } = {}) {
   // sow-194: a repo draft is a status:draft item committed to the canonical repo (no fork branch, no PR). It is
-  // neither "Staged" (that means a fork branch) nor "Submitted" (that means an open PR); label it plainly.
+  // neither "Staged" (that means a privately saved draft) nor "Submitted" (an open PR); label it plainly.
   if (store === 'repo') return { state: 'repo', label: 'Repo draft', tone: '' };
-  if (!pull) return { state: 'staged', label: 'Staged', tone: '' }; // branch on the fork, no PR opened yet
+  if (!pull) return { state: 'staged', label: 'Staged', tone: '' }; // saved privately, no PR opened yet
   const c = classifyPull(pull, status);
   if (c.label === 'Accepted') return { state: 'published', label: 'Published', tone: 'ok' };
   if (c.label === 'Declined') return { state: 'declined', label: 'Declined', tone: 'muted' };
@@ -499,7 +499,7 @@ export function visibleTiles(tiles, tabs, authoring) {
  *
  * The banner is the only place a trial member is told why they cannot publish, so deleting it in the
  * extension would remove the explanation along with the affordance. What it must not do is keep saying
- * "author and stage drafts on your own fork now" in a host that no longer authors: same membership fact,
+ * "author and save drafts privately now" in a host that no longer authors: same membership fact,
  * false sentence. With authoring off it names the host that CAN author instead.
  *
  * @param {string|undefined} membership the effective membership from the overview payload
@@ -578,7 +578,7 @@ export function trialBanner(membership, authoring) {
   return authoring
     ? {
       headline,
-      body: 'Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.',
+      body: 'Write and save drafts privately now. Publishing to gbti.network requires a paid membership.',
       ctaLabel: 'Upgrade to publish',
       ctaHref: 'https://gbti.network/membership/',
     }

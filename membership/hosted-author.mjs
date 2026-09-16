@@ -164,8 +164,8 @@ function utf8Bytes(s) {
 
 // sow-183: a content path lives under SOME member's folder or house/. Shape-only (isCleanPath already ruled
 // out traversal/unclean segments by the time this runs) -- it does not confirm the folder is a REAL
-// registered member, matching the fact that a superadmin can already reach any path via the fork+gate path
-// today (classify-pr.mjs's decide() auto-merges a superadmin on any path); this is not a NEW ceiling, just
+// registered member, matching the fact that a superadmin can already reach any path through the gate
+// (classify-pr.mjs's decide() auto-merges a superadmin on any path); this is not a NEW ceiling, just
 // the hosted-authoring endpoint's own shape check, same rigor as its existing own-folder-only pattern.
 const ANY_MEMBER_FOLDER_RE = /^members\/[a-z0-9][a-z0-9-]{0,63}\//;
 // EXPLICIT house CONTENT subdirectories only -- never a bare 'house/' prefix. house/ also holds Tier-S/A

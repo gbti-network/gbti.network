@@ -37,7 +37,7 @@ const labelOf = CATEGORY_LABELS;
         </div>
         <!-- sow-235: editing is OFF by default, so the default preview renders byte-identically to what it
              always did. The control is revealed for any draft whose path this page resolved, which is both a
-             committed repo draft and a KV or fork draft, since all of them save through one client.saveDraft
+             committed repo draft and a privately saved draft, since all of them save through one client.saveDraft
              call. A draft with no path stays read-only. -->
         <div class="pv-view pv-edit-ctl" role="group" aria-label="Edit" hidden data-pv-editctl>
           <button type="button" data-pv-edit-toggle>Edit</button>

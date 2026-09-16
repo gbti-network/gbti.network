@@ -639,7 +639,7 @@ class GbtiWorkspace extends GbtiElement {
       }, { once: true });
       // SOW-106: surface the fork-draft state and any schema drift together in the editor status line.
       const notes = [];
-      if (e.staged) notes.push('You are editing your staged fork draft. It is not live until you Publish.');
+      if (e.staged) notes.push('You are editing your saved draft. It is not live until you Publish.');
       if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
       if (notes.length && ed?.out) ed.out(esc(notes.join(' ')), e.invalidNote ? 'danger' : 'muted');
       // SOW-073: publishing/editing from the embedded editor invalidates the affected type (+ Overview + PRs) so the
@@ -747,11 +747,11 @@ class GbtiWorkspace extends GbtiElement {
     // SOW-085: the status-flip ack (_msg) AND draft-action errors (_draftMsg, previously shown on the Drafts tab)
     // both surface here now that drafts live in the content list.
     const note = (this._msg || this._draftMsg) ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : '';
-    // The "drafts live on your fork" copy that lived on the Drafts tab now shows only when the Drafts filter is on.
+    // The "drafts are saved privately" copy that lived on the Drafts tab now shows only when the Drafts filter is on.
     const draftNote = this._statusFilter === 'draft'
       ? (this._scopeNow() === 'house'
         ? `<p class="muted draft-intro">Unpublished items across the network. Republish restores one to the site.</p>`
-        : `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>`) : '';
+        : `<p class="muted draft-intro">Drafts are saved privately. Save work here, then publish it to the network when you are ready.</p>`) : '';
     if (view.length === 0) {
       const empty = this._statusFilter === 'all' ? `No ${esc(tab.label.toLowerCase())} yet.`
         : this._statusFilter === 'draft' ? `No drafts in ${esc(tab.label)}.`
@@ -908,8 +908,8 @@ class GbtiWorkspace extends GbtiElement {
     const tileHtml = visibleTiles(tiles, TABS, this._authoring()) // sow-204: see visibleTiles in workspace-core
       .map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? '' : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join('');
     const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
-    // SOW-075: a trial member can author + stage drafts on their own fork but cannot publish; the Overview gave no
-    // explanation. This banner makes the fork-only / paid-to-publish reality clear where the trial member spends time.
+    // SOW-075: a trial member can author + save private drafts but cannot publish; the Overview gave no
+    // explanation. This banner makes the drafts-only / paid-to-publish reality clear where the trial member spends time.
     // sow-316: a paid-but-not-Curator member gets the same banner slot as a trial member. One or the other, never both.
     const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring()); // the copy decisions live in workspace-core
     const trialHtml = !tb ? ''
@@ -1092,10 +1092,10 @@ class GbtiWorkspace extends GbtiElement {
     }
   }
 
-  // SOW-082: discard a staged draft (deletes its fork branch). Refused server-side if it has an open PR.
+  // SOW-082: discard a saved draft (deletes its private record). Refused server-side if it has an open PR.
   async _discardDraft(d, btn) {
     if (!d) return;
-    if (typeof confirm === 'function' && !confirm(`Discard the draft "${d.title}"? This deletes it from your fork.`)) return;
+    if (typeof confirm === 'function' && !confirm(`Discard the draft "${d.title}"? This deletes the saved draft.`)) return;
     this._draftMsg = null;
     if (btn) { btn.disabled = true; btn.textContent = 'Discarding...'; }
     try {

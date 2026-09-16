@@ -293,11 +293,13 @@ test('shouldAutoMerge: a passing own-folder member PR auto-merges; a protected-p
 test('CLOSE_NUDGE distinguishes the non-member sign-up nudge from the trial upgrade nudge', () => {
   for (const label of CLOSE_LABELS) assert.ok(CLOSE_NUDGE[label], `a nudge exists for ${label}`);
   assert.match(CLOSE_NUDGE['rejected-not-a-member'], /sign up/i);
-  assert.match(CLOSE_NUDGE['rejected-not-paid'], /your own fork/i); // reassures the trial member nothing is lost
-  // SOW-075: both nudges name the fork (publishing is paid-only; the draft is safe), and NEITHER may tell the
-  // author to "reopen" the closed PR (post-upgrade the client opens a FRESH PR from the fork-staged drafts).
-  assert.match(CLOSE_NUDGE['rejected-not-a-member'], /your own fork/i);
+  assert.match(CLOSE_NUDGE['rejected-not-paid'], /nothing is lost/i); // reassures the trial member
+  // SOW-075: NEITHER nudge may tell the author to "reopen" the closed PR (after upgrading they publish afresh).
+  // sow-274: and neither may send anyone to a fork. Drafts are saved privately in the member's account now, so a
+  // nudge that still said "your draft stays on your own fork" would point a trial member at nothing.
   for (const label of ['rejected-not-a-member', 'rejected-not-paid']) {
+    assert.doesNotMatch(CLOSE_NUDGE[label], /fork/i, `${label} still talks about a fork`);
+    assert.match(CLOSE_NUDGE[label], /privately/i, `${label} does not say where drafts are kept`);
     assert.doesNotMatch(CLOSE_NUDGE[label], /reopen/i, `${label} must not say "reopen"`);
     assert.match(CLOSE_NUDGE[label], /paid member/i, `${label} states publishing is paid-only`);
   }

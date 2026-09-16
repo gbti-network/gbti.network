@@ -1,14 +1,15 @@
 // GitHub OAuth device flow (SOW-006). The client has NO embedded secret: it uses the device flow, where
 // the user is shown a short code to enter at github.com/login/device, and we poll until GitHub returns a
-// token. That token is then used for local git push + PR create/update via the GitHub API, and by the MCP
-// server. Pure transport with an injectable fetch + sleep so the polling loop is unit-testable.
+// token. That token identifies the member to the network (sow-274: it no longer writes anything to GitHub),
+// for the command line tool and the agent server alike. Pure transport with an injectable fetch + sleep so
+// the polling loop is unit-testable.
 
 const GITHUB = 'https://github.com';
 
 const FORM = { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' };
 
 /** Step 1: request a device + user code. Returns GitHub's { device_code, user_code, verification_uri, interval, expires_in }. */
-export async function requestDeviceCode({ clientId, scope = 'public_repo read:user', fetch = globalThis.fetch }) {
+export async function requestDeviceCode({ clientId, scope = 'read:user', fetch = globalThis.fetch }) {
   if (!clientId) throw new Error('requestDeviceCode: clientId is required');
   const res = await fetch(`${GITHUB}/login/device/code`, {
     method: 'POST',

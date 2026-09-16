@@ -63,7 +63,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     readItem: ({ path }) => request('GET', `/api/read${qs({ path })}`), // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
     validateContent: (b) => request('POST', '/api/validate', b),
     publish: (b) => request('POST', '/api/publish', b),
-    // SOW-082: universal draft staging (Save to the fork without a PR; review; Publish from the staged branch).
+    // SOW-082: universal draft staging (save privately without a PR; review; publish). Private store since sow-274.
     saveDraft: (b) => request('POST', '/api/draft', b), // { type, input, body } -> { branch, state: 'staged' }
     listDrafts: ({ type } = {}) => request('GET', `/api/drafts${qs({ type })}`), // -> { drafts: [{ type, slug, title, branch, pull, store }] } (sow-194: store is 'fork'|'kv'|'repo')
     readDraft: ({ type, slug, store, path } = {}) => request('GET', `/api/draft${qs({ type, slug, store, path })}`), // -> { frontmatter, body } for the editor prefill (sow-194: store+path route a repo draft to its canonical file)

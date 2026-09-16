@@ -2,10 +2,10 @@
 // editor for the member's own members/<username>/profile.md: identity (display name, headline, avatar), a
 // markdown bio, presence toggles (for hire, member directory), skills + roles tags, and a branded-icon social
 // links repeater across the comprehensive platform set. Host-agnostic: it talks ONLY to the injected client and
-// reuses the existing content pipeline (listContent -> getContentItem to load; publish/saveDraft to save via the
-// member's fork PR, so profile.md drives the public build). Named `-editor` to leave `<gbti-profile>` free for
+// reuses the existing content pipeline (listContent -> getContentItem to load; publish/saveDraft to save through
+// the network's pull request, so profile.md drives the public build). Named `-editor` to leave `<gbti-profile>` free for
 // SOW-067's deferred read-only view. Presentation copies <gbti-account>'s "GBTI Settings" cards. Inert in public
-// (no client -> a sign-in nudge). Publishing is PAID-ONLY (SOW-011): a non-paid member stages to their fork.
+// (no client -> a sign-in nudge). Publishing is PAID-ONLY (SOW-011): a non-paid member saves a private draft.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS, buildSocialUrl } from '../social-icons.mjs';
 import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks } from '../profile-fields.mjs'; // SOW-129: the avatar host allowlist + the welcome-socials prefill
@@ -295,10 +295,10 @@ class GbtiProfileEditor extends GbtiElement {
   }
 
   _saveBar() {
-    const label = this._saving ? 'Saving…' : (this._paid ? 'Publish profile' : 'Save to fork');
+    const label = this._saving ? 'Saving…' : (this._paid ? 'Publish profile' : 'Save privately');
     const note = this._paid
       ? 'Publishing updates your public profile on gbti.network within a couple of minutes.'
-      : 'Publishing your profile needs a paid membership. Your changes stage on your fork and publish when you upgrade.';
+      : 'Publishing your profile needs a paid membership. Your changes save privately and publish when you upgrade.';
     return `<div class="savebar">
       <button class="save" type="button" data-save ${this._saving ? 'disabled' : ''}>${label}</button>
       <span class="note">${esc(note)}</span>
@@ -394,7 +394,7 @@ class GbtiProfileEditor extends GbtiElement {
         this._msg = 'Profile published. It appears on gbti.network in a couple of minutes.'; this._msgKind = 'ok';
       } else {
         await this.client.saveDraft({ type: 'profile', input, body, path });
-        this._msg = 'Saved to your fork. Upgrade to a paid membership to publish it.'; this._msgKind = 'ok';
+        this._msg = 'Saved privately. Upgrade to a paid membership to publish it.'; this._msgKind = 'ok';
       }
       // Optimistic: treat the saved model as the current profile (the app reflects it now; the site rebuilds later).
       this._fm = { ...this._fm, ...input };

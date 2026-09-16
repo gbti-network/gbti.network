@@ -15,7 +15,7 @@ const ctxWith = (store) => ({ store });
 test('startDeviceLogin: requests a code, stashes pending state, returns the user code + URL', async () => {
   const store = fakeStore();
   const requestCode = async ({ clientId, scope }) => {
-    assert.equal(scope, 'public_repo read:user');
+    assert.equal(scope, 'read:user'); // sow-274 Part 4: identity only (test/sign-in-scope.test.mjs pins it)
     assert.ok(clientId);
     return { device_code: 'DEV', user_code: 'WXYZ-1234', verification_uri: 'https://github.com/login/device', expires_in: 900, interval: 5 };
   };
