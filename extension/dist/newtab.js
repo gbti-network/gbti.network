@@ -6511,7 +6511,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function wizardProfileLinks(saved, draft, allowed = null) {
     const base = saved && typeof saved === "object" && !Array.isArray(saved) ? { ...saved } : {};
-    const typed = socialPrefill(null, draft, allowed);
+    const typed = {};
+    for (const [k, v] of Object.entries(socialPrefill(null, draft, allowed))) {
+      const url = buildSocialUrl(k, v);
+      if (url) typed[k] = url;
+    }
     return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
   }
   function mergeChannelFollows(local, stored) {

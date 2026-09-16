@@ -19234,168 +19234,6 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-onboarding", GbtiOnboarding);
 
-  // client-ui/src/welcome-core.mjs
-  function phaseLabel(membership, { couponUntil = null, now = Date.now() } = {}) {
-    if (membership === "paid" && couponUntil) {
-      const until = new Date(couponUntil);
-      if (!Number.isNaN(until.getTime()) && until.getTime() > now) {
-        const end = until.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-        return {
-          phase: "coupon",
-          title: "Your free membership period is active",
-          body: `Your coupon covers full membership through ${end}: your profile, posts, projects, and prompts publish under your name. No card is on file and nothing bills automatically.`,
-          upgrade: false,
-          until: until.toISOString()
-        };
-      }
-    }
-    switch (membership) {
-      case "paid":
-        return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, projects, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
-      case "trialing":
-        return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and save drafts privately now. Upgrade to a paid membership any time to publish under your name.", upgrade: true };
-      default:
-        return { phase: "neutral", title: "Welcome to GBTI Network", body: "You are set up to author and publish through the co-op.", upgrade: false };
-    }
-  }
-  function shuffle(list, rng = Math.random) {
-    const a = [...list];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-  function excludeSelf(members, ownUsername) {
-    const me = String(ownUsername || "").toLowerCase();
-    return me ? members.filter((m) => String(m?.username || "").toLowerCase() !== me) : [...members];
-  }
-  function resumeStep(done, count2) {
-    const flags = Array.isArray(done) ? done : [];
-    const n = Number.isInteger(count2) && count2 > 0 ? count2 : flags.length;
-    if (n <= 0) return 0;
-    for (let i = 0; i < n; i++) if (!flags[i]) return i;
-    return n - 1;
-  }
-  function accountKey(base, identity) {
-    const id = identity?.githubId ?? identity?.github_id ?? identity?.login ?? identity?.username;
-    if (!base || id == null || String(id).trim() === "") return null;
-    return `${base}:${String(id).trim().toLowerCase()}`;
-  }
-  function socialPrefill(saved, staged, allowed = null) {
-    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
-    const clean = (o) => {
-      const out = {};
-      if (!o || typeof o !== "object" || Array.isArray(o)) return out;
-      for (const [k, v] of Object.entries(o)) {
-        if (ok && !ok.has(k)) continue;
-        if (typeof v !== "string" || !v.trim()) continue;
-        out[k] = v.trim();
-      }
-      return out;
-    };
-    return { ...clean(staged), ...clean(saved) };
-  }
-  function wizardProfileLinks(saved, draft, allowed = null) {
-    const base = saved && typeof saved === "object" && !Array.isArray(saved) ? { ...saved } : {};
-    const typed = socialPrefill(null, draft, allowed);
-    return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
-  }
-  function mergeChannelFollows(local, stored) {
-    const keys = (v) => Array.isArray(v) ? v.filter((k) => typeof k === "string" && k) : [];
-    const l = keys(local);
-    const s = keys(stored);
-    return { all: [.../* @__PURE__ */ new Set([...s, ...l])], missing: [...new Set(l.filter((k) => !s.includes(k)))] };
-  }
-  function requestedStep(key, steps) {
-    if (typeof key !== "string" || !key || !Array.isArray(steps)) return -1;
-    return steps.findIndex((s) => s?.key === key);
-  }
-  function paginate2(list, p, size = 10) {
-    const pages = Math.max(1, Math.ceil(list.length / size));
-    const page = Math.min(Math.max(1, p | 0 || 1), pages);
-    const start = (page - 1) * size;
-    return { page, pages, items: list.slice(start, start + size) };
-  }
-
-  // membership/onboarding.mjs
-  var ONBOARDING_STEPS = Object.freeze([
-    Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
-    Object.freeze({ key: "subreddit", label: "Follow", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
-    Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
-    Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
-    Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
-  ]);
-  var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
-  var KEY = /^[a-z][a-z0-9-]{0,39}$/;
-  var MAX_NETWORK_FOLLOWS = 40;
-  var MAX_SOCIALS = 30;
-  var MAX_HANDLE = 200;
-  var isOnboardingKey = (v) => typeof v === "string" && KEY.test(v);
-  function cleanKeys(v, max, allow = null) {
-    const out = [];
-    for (const x of Array.isArray(v) ? v : []) {
-      if (!isOnboardingKey(x) || allow && !allow.includes(x) || out.includes(x)) continue;
-      out.push(x);
-      if (out.length >= max) break;
-    }
-    return out;
-  }
-  function cleanSocials(v) {
-    const out = {};
-    if (!v || typeof v !== "object" || Array.isArray(v)) return out;
-    let n = 0;
-    for (const [k, raw] of Object.entries(v)) {
-      if (!isOnboardingKey(k) || typeof raw !== "string") continue;
-      const s = raw.trim();
-      if (!s || s.length > MAX_HANDLE || /[\x00-\x1f\x7f]/.test(s)) continue;
-      out[k] = s;
-      if (++n >= MAX_SOCIALS) break;
-    }
-    return out;
-  }
-  function normalizeOnboarding(v) {
-    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
-    const out = {
-      skipped: cleanKeys(v.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
-      networkFollows: cleanKeys(v.networkFollows, MAX_NETWORK_FOLLOWS),
-      socials: cleanSocials(v.socials),
-      socialsSaved: v.socialsSaved === true
-    };
-    return isEmptyOnboarding(out) ? null : out;
-  }
-  function isEmptyOnboarding(o) {
-    return !o || !o.skipped.length && !o.networkFollows.length && !Object.keys(o.socials).length && !o.socialsSaved;
-  }
-  function profileHasSocials(links, allowed = null) {
-    if (!links || typeof links !== "object" || Array.isArray(links)) return false;
-    return Object.entries(links).some(([k, v]) => (!allowed || allowed.includes(k)) && typeof v === "string" && v.trim() !== "");
-  }
-  var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
-  var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
-  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record } = {}) {
-    const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
-    const nFollows = count(follows);
-    const nTopics = count(topics);
-    const known = typeof discordLinked === "boolean" && nFollows !== null && nTopics !== null && typeof profileSocials === "boolean" && rec !== void 0;
-    const r = rec ?? emptyRecord();
-    const done = {
-      discord: discordLinked === true,
-      subreddit: r.networkFollows.length > 0,
-      socials: profileSocials === true || r.socialsSaved,
-      follow: (nFollows ?? 0) > 0,
-      topics: (nTopics ?? 0) > 0
-    };
-    const steps = ONBOARDING_STEPS.map((s) => ({
-      key: s.key,
-      label: s.label,
-      title: s.title,
-      state: done[s.key] ? "done" : r.skipped.includes(s.key) ? "skipped" : "todo"
-    }));
-    const outstanding = steps.filter((s) => s.state !== "done").length;
-    return { steps, complete: outstanding === 0, known, outstanding };
-  }
-
   // client-ui/src/social-icons.mjs
   var LINKEDIN_PATH = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
   var WEBSITE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z";
@@ -19547,6 +19385,172 @@ ${listStyleProseCss(".doc-blocks")}
     const handle = value.replace(/^@+/, "");
     const base = SOCIAL_URL_BASE[k];
     return base ? base + handle : value;
+  }
+
+  // client-ui/src/welcome-core.mjs
+  function phaseLabel(membership, { couponUntil = null, now = Date.now() } = {}) {
+    if (membership === "paid" && couponUntil) {
+      const until = new Date(couponUntil);
+      if (!Number.isNaN(until.getTime()) && until.getTime() > now) {
+        const end = until.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        return {
+          phase: "coupon",
+          title: "Your free membership period is active",
+          body: `Your coupon covers full membership through ${end}: your profile, posts, projects, and prompts publish under your name. No card is on file and nothing bills automatically.`,
+          upgrade: false,
+          until: until.toISOString()
+        };
+      }
+    }
+    switch (membership) {
+      case "paid":
+        return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, projects, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
+      case "trialing":
+        return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and save drafts privately now. Upgrade to a paid membership any time to publish under your name.", upgrade: true };
+      default:
+        return { phase: "neutral", title: "Welcome to GBTI Network", body: "You are set up to author and publish through the co-op.", upgrade: false };
+    }
+  }
+  function shuffle(list, rng = Math.random) {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function excludeSelf(members, ownUsername) {
+    const me = String(ownUsername || "").toLowerCase();
+    return me ? members.filter((m) => String(m?.username || "").toLowerCase() !== me) : [...members];
+  }
+  function resumeStep(done, count2) {
+    const flags = Array.isArray(done) ? done : [];
+    const n = Number.isInteger(count2) && count2 > 0 ? count2 : flags.length;
+    if (n <= 0) return 0;
+    for (let i = 0; i < n; i++) if (!flags[i]) return i;
+    return n - 1;
+  }
+  function accountKey(base, identity) {
+    const id = identity?.githubId ?? identity?.github_id ?? identity?.login ?? identity?.username;
+    if (!base || id == null || String(id).trim() === "") return null;
+    return `${base}:${String(id).trim().toLowerCase()}`;
+  }
+  function socialPrefill(saved, staged, allowed = null) {
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    const clean = (o) => {
+      const out = {};
+      if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+      for (const [k, v] of Object.entries(o)) {
+        if (ok && !ok.has(k)) continue;
+        if (typeof v !== "string" || !v.trim()) continue;
+        out[k] = v.trim();
+      }
+      return out;
+    };
+    return { ...clean(staged), ...clean(saved) };
+  }
+  function wizardProfileLinks(saved, draft, allowed = null) {
+    const base = saved && typeof saved === "object" && !Array.isArray(saved) ? { ...saved } : {};
+    const typed = {};
+    for (const [k, v] of Object.entries(socialPrefill(null, draft, allowed))) {
+      const url = buildSocialUrl(k, v);
+      if (url) typed[k] = url;
+    }
+    return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
+  }
+  function mergeChannelFollows(local, stored) {
+    const keys = (v) => Array.isArray(v) ? v.filter((k) => typeof k === "string" && k) : [];
+    const l = keys(local);
+    const s = keys(stored);
+    return { all: [.../* @__PURE__ */ new Set([...s, ...l])], missing: [...new Set(l.filter((k) => !s.includes(k)))] };
+  }
+  function requestedStep(key, steps) {
+    if (typeof key !== "string" || !key || !Array.isArray(steps)) return -1;
+    return steps.findIndex((s) => s?.key === key);
+  }
+  function paginate2(list, p, size = 10) {
+    const pages = Math.max(1, Math.ceil(list.length / size));
+    const page = Math.min(Math.max(1, p | 0 || 1), pages);
+    const start = (page - 1) * size;
+    return { page, pages, items: list.slice(start, start + size) };
+  }
+
+  // membership/onboarding.mjs
+  var ONBOARDING_STEPS = Object.freeze([
+    Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
+    Object.freeze({ key: "subreddit", label: "Follow", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
+    Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
+    Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
+    Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
+  ]);
+  var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
+  var KEY = /^[a-z][a-z0-9-]{0,39}$/;
+  var MAX_NETWORK_FOLLOWS = 40;
+  var MAX_SOCIALS = 30;
+  var MAX_HANDLE = 200;
+  var isOnboardingKey = (v) => typeof v === "string" && KEY.test(v);
+  function cleanKeys(v, max, allow = null) {
+    const out = [];
+    for (const x of Array.isArray(v) ? v : []) {
+      if (!isOnboardingKey(x) || allow && !allow.includes(x) || out.includes(x)) continue;
+      out.push(x);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+  function cleanSocials(v) {
+    const out = {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+    let n = 0;
+    for (const [k, raw] of Object.entries(v)) {
+      if (!isOnboardingKey(k) || typeof raw !== "string") continue;
+      const s = raw.trim();
+      if (!s || s.length > MAX_HANDLE || /[\x00-\x1f\x7f]/.test(s)) continue;
+      out[k] = s;
+      if (++n >= MAX_SOCIALS) break;
+    }
+    return out;
+  }
+  function normalizeOnboarding(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    const out = {
+      skipped: cleanKeys(v.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
+      networkFollows: cleanKeys(v.networkFollows, MAX_NETWORK_FOLLOWS),
+      socials: cleanSocials(v.socials),
+      socialsSaved: v.socialsSaved === true
+    };
+    return isEmptyOnboarding(out) ? null : out;
+  }
+  function isEmptyOnboarding(o) {
+    return !o || !o.skipped.length && !o.networkFollows.length && !Object.keys(o.socials).length && !o.socialsSaved;
+  }
+  function profileHasSocials(links, allowed = null) {
+    if (!links || typeof links !== "object" || Array.isArray(links)) return false;
+    return Object.entries(links).some(([k, v]) => (!allowed || allowed.includes(k)) && typeof v === "string" && v.trim() !== "");
+  }
+  var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
+  var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
+  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record } = {}) {
+    const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
+    const nFollows = count(follows);
+    const nTopics = count(topics);
+    const known = typeof discordLinked === "boolean" && nFollows !== null && nTopics !== null && typeof profileSocials === "boolean" && rec !== void 0;
+    const r = rec ?? emptyRecord();
+    const done = {
+      discord: discordLinked === true,
+      subreddit: r.networkFollows.length > 0,
+      socials: profileSocials === true || r.socialsSaved,
+      follow: (nFollows ?? 0) > 0,
+      topics: (nTopics ?? 0) > 0
+    };
+    const steps = ONBOARDING_STEPS.map((s) => ({
+      key: s.key,
+      label: s.label,
+      title: s.title,
+      state: done[s.key] ? "done" : r.skipped.includes(s.key) ? "skipped" : "todo"
+    }));
+    const outstanding = steps.filter((s) => s.state !== "done").length;
+    return { steps, complete: outstanding === 0, known, outstanding };
   }
 
   // client-ui/src/welcome-socials.mjs

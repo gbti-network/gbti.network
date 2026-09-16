@@ -1,6 +1,8 @@
 // SOW-029: pure helpers for the post-setup welcome view (<gbti-welcome>). Node-free so `node --test` imports
 // them directly without a DOM; the component is the only DOM consumer. Keep this dependency-light.
 
+import { buildSocialUrl } from './social-icons.mjs'; // sow-346: a saved handle must be a link the profile can show
+
 /** Map the effective membership status to the welcome-banner phase. NEVER throws (unknown -> neutral).
  *  SOW-119 QA (2026-07-21): a coupon member's oracle status is 'paid' (publishing is unlocked), but the
  *  welcome banner must not claim they PAID. When couponUntil marks a live coupon grant, the phase says the
@@ -113,10 +115,17 @@ export function socialPrefill(saved, staged, allowed = null) {
  * typed (the fields were prefilled from the saved profile, so an untouched field carries the saved value and
  * changes nothing); every other saved link is kept; nothing is removed, since an emptied field only means "not
  * this one". `changed` is false when the save would write the file unchanged, so no pull request is opened.
+ *
+ * sow-346: typed values become full links first (buildSocialUrl), exactly as the profile editor saves them. The
+ * public profile shows only http(s) values, so a handle saved as typed ("@name") was stored and never shown.
  */
 export function wizardProfileLinks(saved, draft, allowed = null) {
   const base = saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...saved } : {};
-  const typed = socialPrefill(null, draft, allowed);
+  const typed = {};
+  for (const [k, v] of Object.entries(socialPrefill(null, draft, allowed))) {
+    const url = buildSocialUrl(k, v);
+    if (url) typed[k] = url;
+  }
   return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
 }
 

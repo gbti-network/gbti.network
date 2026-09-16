@@ -30,12 +30,20 @@ function fakeClient({ publishError = null } = {}) {
 // ---- the pure helpers ----
 
 test('the links a save writes: typed values win, untouched saved links stay, nothing is removed', () => {
-  const saved = { github: 'https://github.com/a', x: '@old' };
-  assert.deepEqual(wizardProfileLinks(saved, { github: 'https://github.com/a', x: '@old' }), { links: saved, changed: false }, 'prefilled and untouched: no save');
-  assert.deepEqual(wizardProfileLinks(saved, { x: '@new' }), { links: { github: 'https://github.com/a', x: '@new' }, changed: true });
+  const saved = { github: 'https://github.com/a', x: 'https://x.com/old' };
+  assert.deepEqual(wizardProfileLinks(saved, { github: 'https://github.com/a', x: 'https://x.com/old' }), { links: saved, changed: false }, 'prefilled and untouched: no save');
+  assert.deepEqual(wizardProfileLinks(saved, { x: '@new' }), { links: { github: 'https://github.com/a', x: 'https://x.com/new' }, changed: true });
   assert.deepEqual(wizardProfileLinks(saved, {}).links, saved, 'an emptied field removes nothing');
-  assert.deepEqual(wizardProfileLinks(null, { x: ' @me ', junk: 5 }, ['x']), { links: { x: '@me' }, changed: true });
+  assert.deepEqual(wizardProfileLinks(null, { x: ' @me ', junk: 5 }, ['x']), { links: { x: 'https://x.com/me' }, changed: true });
   assert.equal(wizardProfileLinks(null, { mastodon: '@me' }, ['x']).changed, false, 'a key that is not offered never lands');
+});
+
+test('sow-346: every saved value is a link the public profile will show, and an old raw handle gets repaired', () => {
+  const { links } = wizardProfileLinks(null, { x: '@me', bluesky: 'me.bsky.social', website: 'me.dev', youtube: '@chan' });
+  assert.deepEqual(links, { x: 'https://x.com/me', bluesky: 'https://bsky.app/profile/me.bsky.social', website: 'https://me.dev', youtube: 'https://www.youtube.com/@chan' });
+  for (const v of Object.values(links)) assert.match(v, /^https?:\/\//, 'the profile page hides anything else');
+  // A handle saved raw before this fix is prefilled raw; Continue now writes it as a link, so it finally shows.
+  assert.deepEqual(wizardProfileLinks({ x: '@me' }, { x: '@me' }), { links: { x: 'https://x.com/me' }, changed: true });
 });
 
 test('channel follows merge from the browser and the account, and only the browser-only ones are sent up', () => {
@@ -53,7 +61,7 @@ test('a link to a step opens that step, and an unknown key opens nothing in part
 
 test('nothing typed, or nothing changed: no save and no record write', async () => {
   const c = fakeClient();
-  const r = await saveWizardSocials({ client: c, profile: { path: 'members/a/profile.md', frontmatter: { links: { x: '@a' } } }, profileRead: true, draft: { x: '@a' }, membership: 'paid' });
+  const r = await saveWizardSocials({ client: c, profile: { path: 'members/a/profile.md', frontmatter: { links: { x: 'https://x.com/a' } } }, profileRead: true, draft: { x: 'https://x.com/a' }, membership: 'paid' });
   assert.equal(r.outcome, 'nothing');
   assert.deepEqual(c.calls, { prefs: [], publish: [] });
 });
@@ -72,16 +80,16 @@ test('a paid member with a profile: the handles are added, and everything else o
   const profile = { path: 'members/alice/profile.md', frontmatter: { displayName: 'Alice', headline: 'Builder', links: { github: 'g' } }, body: 'My bio.' };
   const r = await saveWizardSocials({ client: c, profile, profileRead: true, draft: { x: '@alice' }, membership: 'paid', login: 'alice' });
   assert.equal(r.outcome, 'saved');
-  assert.deepEqual(c.calls.publish, [{ type: 'profile', input: { displayName: 'Alice', headline: 'Builder', links: { github: 'g', x: '@alice' } }, body: 'My bio.', path: 'members/alice/profile.md' }]);
+  assert.deepEqual(c.calls.publish, [{ type: 'profile', input: { displayName: 'Alice', headline: 'Builder', links: { github: 'g', x: 'https://x.com/alice' } }, body: 'My bio.', path: 'members/alice/profile.md' }]);
   assert.deepEqual(c.calls.prefs, [{ onboardingSocialsSaved: true }], 'a save that landed clears the kept handles');
-  assert.equal(r.profile.frontmatter.links.x, '@alice');
+  assert.equal(r.profile.frontmatter.links.x, 'https://x.com/alice');
 });
 
 test('a paid member with no profile gets one, named after their GitHub login', async () => {
   const c = fakeClient();
   const r = await saveWizardSocials({ client: c, profile: null, profileRead: true, draft: { bluesky: '@me.bsky' }, membership: 'paid', login: 'newbie' });
   assert.equal(r.outcome, 'saved');
-  assert.deepEqual(c.calls.publish, [{ type: 'profile', input: { displayName: 'newbie', links: { bluesky: '@me.bsky' } }, body: '' }]);
+  assert.deepEqual(c.calls.publish, [{ type: 'profile', input: { displayName: 'newbie', links: { bluesky: 'https://bsky.app/profile/me.bsky' } }, body: '' }]);
 });
 
 test('THE GUARD: when the profile read did not answer, nothing is written, least of all a new profile', async () => {
