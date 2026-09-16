@@ -2,8 +2,8 @@
 // compose and on edit, with a flip re-publishing the comment. SOW-044's "public only as a from-the-author intro"
 // rule ended; the leak rule stayed (a members body is never committed plaintext) and gained its mirror (a
 // public comment carries no encryptedBody). These pin the comment box, the website client, the shared
-// publisher's stale-ciphertext delete, and the two guards' source. The extension ops are exercised with a
-// fake repo in test/comment-authoring.test.mjs.
+// publisher's stale-ciphertext delete, and the two guards' source. The extension ops are exercised against a
+// fake network author route in test/comment-authoring.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -41,7 +41,8 @@ test('the extension ops: publishComment takes the choice, editComment takes it a
   assert.match(src, /input\.visibility = \(visibility === 'public' \|\| isPublicIntro\) \? 'public' : 'members';/);
   assert.match(src, /export async function editComment\(ctx, \{ id, body, authorNote, visibility \} = \{\}\)/);
   assert.match(src, /const staleEnc = input\.visibility === 'public' && typeof fm\.encryptedBody === 'string' && fm\.encryptedBody\.startsWith\(`members\/\$\{idn\.username\}\/_enc\/`\) \? fm\.encryptedBody : null;/);
-  assert.match(src, /export async function planAndPublishComment\(ctx, repo, built, body, \{ message, title, prBody, removeEnc = null \} = \{\}\)/);
+  // sow-274 Part 2: the publisher lost its repo client and the commit message and body (the network writes its own).
+  assert.match(src, /export async function planAndPublishComment\(ctx, built, body, \{ title, removeEnc = null \} = \{\}\)/);
   assert.match(src, /if \(!plan\?\.encPath && typeof removeEnc === 'string' && removeEnc\) files\.push\(\{ path: removeEnc, content: null \}\);/);
 });
 

@@ -1,7 +1,10 @@
-// SOW-112 v2: the publish-event rename (owner-directed stage-first flow). saveDraft stages a slug change on
-// the item's OWN branch at its OLD path; publish performs the move (deletes + intro move + redirectFrom merge
-// + preserved publishedAt) from the old-slug branch; a plain re-publish with `path` keeps existing
-// redirectFrom; a pathless publish is untouched. Fakes only.
+// SOW-112 v2: the publish-event rename (owner-directed stage-first flow). saveDraft stages a slug change under
+// the item's OLD identity; publish performs the move (deletes + intro move + redirectFrom merge + preserved
+// publishedAt); a plain re-publish with `path` keeps existing redirectFrom; a pathless publish is untouched.
+//
+// sow-274 Part 2: every write goes to the network now, so these assert on the file set that REACHES the network
+// (POST /membership/author) and on the staged record (POST /membership/drafts), not on writes to a fake fork.
+// The fork-only cases (fork sync, branch rebuild, the open-PR block on a fork branch) went with the fork path.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { publish, saveDraft, renameOriginOf, OperationError } from '../client/src/operations.mjs';
@@ -14,34 +17,54 @@ const INPUT = {
   categories: ['skill'], visibility: 'public', publishedAt: '2026-07-06T09:00:00.000Z', updatedAt: '2026-07-06T09:00:00.000Z',
 };
 
-function fakeRepo({ upstreamFiles = {}, baseHasOld = true } = {}) {
-  const puts = []; const deletes = []; const pulls = [];
+/** The canonical-repo read client. Reads only: a publish that reached for any fork writer would throw here. */
+function fakeRepo({ upstreamFiles = {} } = {}) {
   return {
-    puts, deletes, pulls,
     upstream: 'gbti-network/gbti.network',
-    async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-    async getDefaultBranch() { return 'main'; },
-    async getBranchSha(r, branch) { if (branch === 'main') return 'main-sha'; throw new Error('404'); },
-    async ensureBranch() {},
-    async getFileSha(r, p, ref) { return ref === 'main' ? (baseHasOld && p === OLD ? 'old-sha' : null) : 'blob'; },
     async getFileContent(p) { return upstreamFiles[p] ?? null; },
-    async findOpenPull() { return null; },
-    async putFile(r, p, opts) { puts.push({ path: p, content: Buffer.from(opts.contentBase64, 'base64').toString('utf8') }); },
-    async deleteFile(r, p) { deletes.push(p); },
-    async openPull(opts) { pulls.push(opts); return { number: 7, html_url: 'u' }; },
   };
 }
 
-function ctxFor({ repo, files = {} } = {}) {
+/** The network: records every author call (the file set that would be committed) and every staged-draft write. */
+function network({ drafts = [] } = {}) {
+  const authored = [];
+  const draftWrites = [];
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+  const fetch = async (url, init = {}) => {
+    const path = new URL(String(url)).pathname;
+    const body = init.body ? JSON.parse(init.body) : null;
+    if (path === '/membership/author') {
+      authored.push(body);
+      return ok({ ok: true, number: 7, html_url: 'u', branch: `hosted/1/${body.itemId}` });
+    }
+    if (path === '/membership/drafts') {
+      if (!body) return ok({ ok: true, drafts });
+      draftWrites.push(body);
+      return ok({ ok: true });
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  const files = () => authored.flatMap((a) => a.files);
+  return {
+    fetch, authored, draftWrites,
+    puts: () => files().filter((f) => f.content != null),
+    deletes: () => files().filter((f) => f.content == null).map((f) => f.path),
+    staged: () => draftWrites.filter((w) => w.op === 'put').map((w) => w.draft),
+  };
+}
+
+function ctxFor({ repo = fakeRepo(), net = network(), files = {} } = {}) {
   const all = { [OLD]: OLD_FM, ...files };
   return {
     identity: () => ({ username: 'alice' }),
     getRepoClient: () => repo,
     membership: async () => 'paid',
     reader: { readFile: async (rel) => all[rel] ?? null },
-    store: { get: () => null },
+    store: { get: (k) => (k === 'githubToken' ? 'tok' : null) },
+    fetch: net.fetch,
   };
 }
+const fmOf = (net, path) => parseContentFile(net.puts().find((f) => f.path === path).content).frontmatter;
 
 test('renameOriginOf: own item of the same type only', () => {
   assert.deepEqual(renameOriginOf({ path: OLD, username: 'alice', type: 'prompt' }), { oldSlug: 'old-name', oldPath: OLD });
@@ -51,188 +74,125 @@ test('renameOriginOf: own item of the same type only', () => {
   assert.equal(renameOriginOf({ username: 'alice', type: 'prompt' }), null);
 });
 
-test('publish with a changed slug performs the rename from the old-slug branch', async () => {
-  const repo = fakeRepo();
+test('publish with a changed slug performs the rename under the old-slug identity', async () => {
+  const net = network();
   const intro = '---\ntype: comment\nid: intro-old-name\nauthor: alice\ntargetType: prompt\ntargetSlug: old-name\nstatus: published\nvisibility: public\nauthorNote: true\ncreatedAt: 2026-07-02\n---\n\nHi.\n';
-  const ctx = ctxFor({ repo, files: { 'members/alice/comments/intro-old-name.md': intro } });
+  const ctx = ctxFor({ net, files: { 'members/alice/comments/intro-old-name.md': intro } });
   const res = await publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'New body.', path: OLD });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  const newIndex = repo.puts.find((f) => f.path === 'members/alice/prompts/new-name/index.md');
-  const fm = parseContentFile(newIndex.content).frontmatter;
+  const fm = fmOf(net, 'members/alice/prompts/new-name/index.md');
   assert.equal(fm.slug, 'new-name');
   // redirectFrom = the old file's legacy entry + the rename-generated old URL
   assert.deepEqual([...fm.redirectFrom].sort(), ['/devops/legacy-wp-path/', '/prompts/old-name/'].sort());
   // publishedAt preserved from the OLD file (the editor stamped now; the server restores the original)
   assert.equal(new Date(fm.publishedAt).toISOString(), '2026-07-02T00:00:00.000Z');
-  // the old index deletes; the intro moved + retargeted
-  assert.ok(repo.deletes.includes(OLD));
-  assert.ok(repo.deletes.includes('members/alice/comments/intro-old-name.md'));
-  const movedIntro = repo.puts.find((f) => f.path === 'members/alice/comments/intro-new-name.md');
+  // the old index deletes; the intro moved + retargeted, all in ONE network commit
+  assert.equal(net.authored.length, 1);
+  assert.ok(net.deletes().includes(OLD));
+  assert.ok(net.deletes().includes('members/alice/comments/intro-old-name.md'));
+  const movedIntro = net.puts().find((f) => f.path === 'members/alice/comments/intro-new-name.md');
   assert.equal(parseContentFile(movedIntro.content).frontmatter.targetSlug, 'new-name');
-  // the PR rode the ITEM's branch (old-slug identity), so a staged rename draft is reused + auto-cleans
-  assert.equal(repo.pulls[0].head, 'alice:gbti/prompt-old-name');
+  // the change rides the ITEM's identity (old slug), so a staged rename draft and the publish share one item
+  assert.equal(net.authored[0].itemId, 'prompt-old-name');
 });
 
-test('publish rename guards: collision on the new path; fail-closed when the old file is off the branch base', async () => {
+test('publish rename guards: collision on the new path; fail-closed when the old file vanishes from the network', async () => {
+  const collide = network();
   await assert.rejects(
-    publish(ctxFor({ repo: fakeRepo({ upstreamFiles: { 'members/alice/prompts/new-name/index.md': 'x' } }) }),
+    publish(ctxFor({ net: collide, repo: fakeRepo({ upstreamFiles: { 'members/alice/prompts/new-name/index.md': 'x' } }) }),
       { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
     (e) => e instanceof OperationError && /already taken/.test(e.message));
-  const repo = fakeRepo({ baseHasOld: false });
+  assert.equal(collide.authored.length, 0);
+  // The old file was readable when the edit was loaded and is gone by the time the move is assembled: the delete
+  // half has nothing to delete, so the publish refuses rather than shipping a half-move.
+  const net = network();
+  const ctx = ctxFor({ net });
+  let reads = 0;
+  ctx.reader = { readFile: async (rel) => (rel === OLD && reads++ === 0 ? OLD_FM : null) };
   await assert.rejects(
-    publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
-    (e) => /fork to sync/.test(e.message));
-  assert.equal(repo.pulls.length, 0); // never a half-move
+    publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
+    (e) => /could not be found on the network/.test(e.message));
+  assert.equal(net.authored.length, 0); // never a half-move
 });
 
 test('a plain re-publish with path preserves the old redirectFrom (no rename)', async () => {
-  const repo = fakeRepo();
-  const res = await publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT }, body: 'Edited.', path: OLD });
+  const net = network();
+  const res = await publish(ctxFor({ net }), { type: 'prompt', input: { ...INPUT }, body: 'Edited.', path: OLD });
   assert.equal(res.renamed, undefined);
-  const idx = repo.puts.find((f) => f.path === OLD);
-  const fm = parseContentFile(idx.content).frontmatter;
+  const fm = fmOf(net, OLD);
   assert.deepEqual(fm.redirectFrom, ['/devops/legacy-wp-path/']); // previously silently dropped
-  assert.equal(repo.deletes.length, 0);
+  assert.deepEqual(net.deletes(), []);
   // a plain re-publish keeps the editor's re-surface stamp (only a rename preserves the old date)
   assert.equal(new Date(fm.publishedAt).toISOString(), '2026-07-06T09:00:00.000Z');
 });
 
 test('a pathless publish (new item) is untouched by the rename machinery', async () => {
-  const repo = fakeRepo();
-  const res = await publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'fresh' }, body: 'B.' });
+  const net = network();
+  const res = await publish(ctxFor({ net }), { type: 'prompt', input: { ...INPUT, slug: 'fresh' }, body: 'B.' });
   assert.equal(res.renamed, undefined);
-  assert.ok(repo.puts.some((f) => f.path === 'members/alice/prompts/fresh/index.md'));
-  assert.equal(repo.deletes.length, 0);
+  assert.ok(net.puts().some((f) => f.path === 'members/alice/prompts/fresh/index.md'));
+  assert.deepEqual(net.deletes(), []);
 });
 
-test('saveDraft with a changed slug stages at the OLD path on the OLD-slug branch (pending rename)', async () => {
-  const repo = fakeRepo();
-  const commits = [];
-  repo.getBranchSha = async (r, b) => { if (b === 'main') return 'main-sha'; throw new Error('404'); };
-  const res = await saveDraft(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
-  assert.equal(res.branch, 'gbti/prompt-old-name'); // the ITEM's branch, not a silent fork under the new slug
+test('saveDraft with a changed slug stages under the OLD identity (pending rename)', async () => {
+  const net = network();
+  const res = await saveDraft(ctxFor({ net }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
+  assert.equal(res.branch, 'gbti/prompt-old-name'); // the ITEM's identity, not a silent fork under the new slug
   assert.equal(res.path, OLD);                       // staged at the old path; the frontmatter slug is the marker
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  const staged = repo.puts.find((f) => f.path === OLD);
-  assert.equal(parseContentFile(staged.content).frontmatter.slug, 'new-name');
+  const [staged] = net.staged();
+  assert.equal(staged.slug, 'old-name');
+  assert.equal(staged.pendingSlug, 'new-name');
+  assert.equal(staged.path, OLD);
+  assert.equal(staged.frontmatter.slug, 'new-name');
+  assert.equal(net.authored.length, 0, 'a draft never reaches the repository');
 });
 
 test('saveDraft without a slug change stages normally under its own slug', async () => {
-  const repo = fakeRepo();
-  const res = await saveDraft(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT }, body: 'B.', path: OLD });
+  const net = network();
+  const res = await saveDraft(ctxFor({ net }), { type: 'prompt', input: { ...INPUT }, body: 'B.', path: OLD });
   assert.equal(res.branch, 'gbti/prompt-old-name');
   assert.equal(res.renamed, undefined);
+  assert.equal(net.staged()[0].pendingSlug, null);
 });
 
-test('publishDraft routes a pending-rename draft through the full rename publish (never a half-rename PR)', async () => {
+// A staged record as saveDraft writes it for a pending rename: the old identity, the new slug in the frontmatter.
+const pendingRecord = (fm = {}) => ({
+  type: 'prompt', slug: 'old-name', pendingSlug: 'new-name', path: OLD,
+  frontmatter: { ...INPUT, slug: 'new-name', ...fm }, body: 'Staged body.',
+});
+
+test('publishDraft routes a pending-rename draft through the full rename publish (never a half-rename)', async () => {
   const { publishDraft } = await import('../client/src/operations.mjs');
-  const repo = fakeRepo();
-  const stagedText = OLD_FM.replace('slug: old-name', 'slug: new-name');
-  repo.getForkFileContent = async (r, p, branch) => (p === OLD && branch === 'gbti/prompt-old-name' ? stagedText : null);
-  const res = await publishDraft(ctxFor({ repo }), { type: 'prompt', slug: 'old-name' });
+  const net = network({ drafts: [pendingRecord()] });
+  const res = await publishDraft(ctxFor({ net }), { type: 'prompt', slug: 'old-name' });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  assert.ok(repo.puts.some((f) => f.path === 'members/alice/prompts/new-name/index.md'));
-  assert.ok(repo.deletes.includes(OLD)); // the move shipped, not the raw mismatched branch file
-  assert.equal(repo.pulls[0].head, 'alice:gbti/prompt-old-name');
+  assert.ok(net.puts().some((f) => f.path === 'members/alice/prompts/new-name/index.md'));
+  assert.ok(net.deletes().includes(OLD)); // the move shipped, not a file at the old path carrying the new slug
+  assert.equal(net.authored[0].itemId, 'prompt-old-name');
+  assert.ok(net.draftWrites.some((w) => w.op === 'delete' && w.slug === 'old-name'), 'the staged record is cleared');
 });
 
-test('publishDraft without a pending rename opens the PR from the branch untouched', async () => {
+test('publishDraft without a pending rename publishes the staged item in place', async () => {
   const { publishDraft } = await import('../client/src/operations.mjs');
-  const repo = fakeRepo();
-  repo.getForkFileContent = async () => OLD_FM; // slug matches the branch
-  const res = await publishDraft(ctxFor({ repo }), { type: 'prompt', slug: 'old-name' });
+  const net = network({ drafts: [{ type: 'prompt', slug: 'old-name', pendingSlug: null, path: OLD, frontmatter: { ...INPUT }, body: 'Staged body.' }] });
+  const res = await publishDraft(ctxFor({ net }), { type: 'prompt', slug: 'old-name' });
   assert.equal(res.renamed, undefined);
-  assert.equal(repo.puts.length, 0); // no rebuild: the branch ships as-is
-  assert.equal(repo.pulls[0].head, 'alice:gbti/prompt-old-name');
+  assert.deepEqual(net.deletes(), []);
+  assert.equal(net.puts().find((f) => f.path === OLD).content.includes('Staged body.'), true);
+  assert.equal(net.authored[0].itemId, 'prompt-old-name');
 });
 
-// SOW-112 QA: the create-only sync gate skips an EXISTING draft branch (created from a stale base before the
-// App permission), so the rename must recover: sync the fork main directly, then rebuild the branch.
-test('rename recovers a stale draft branch: direct sync + branch rebuild, then the move ships', async () => {
-  const repo = fakeRepo({ baseHasOld: false });
-  let synced = false;
-  const branchDeletes = [];
-  let staleBranchGone = false;
-  repo.getBranchSha = async (r, b) => {
-    if (b === 'main') return 'main-sha';
-    if (staleBranchGone) throw new Error('404');
-    return 'stale-branch-sha'; // the draft branch EXISTS (created from a base that predates the item)
-  };
-  // ref-aware: the stale branch NEVER has the old file; main gains it once the sync runs.
-  repo.getFileSha = async (r, p, ref) => {
-    if (p !== OLD) return 'blob';
-    if (ref === 'main') return synced ? 'old-sha' : null;
-    return staleBranchGone ? 'old-sha' : null; // the rebuilt branch (from fresh main) has it; the stale one did not
-  };
-  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); staleBranchGone = true; };
-  const ctx = ctxFor({ repo });
-  ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
-  ctx.fetch = async () => { synced = true; return { ok: true, json: async () => ({ ok: true, synced: true }) }; };
-  const res = await publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
-  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  assert.deepEqual(branchDeletes, ['gbti/prompt-old-name']); // the stale branch rebuilt from the fresh base
-  assert.ok(repo.deletes.includes(OLD)); // and the delete half shipped
-});
-
-// The half-rename hole (PR #67): the staged draft ADDS the old-path file to the branch, so a branch check is
-// satisfied while the MERGE BASE still predates the file and the delete nets out of the PR diff. Renames must
-// therefore ALWAYS rebuild the branch from a verified-fresh main, even when main is already fresh.
-test('rename rebuilds an existing branch unconditionally (a branch check would be fooled by the staged file)', async () => {
-  const repo = fakeRepo();
-  const branchDeletes = [];
-  let staleBranchGone = false;
-  repo.getBranchSha = async (r, b) => {
-    if (b === 'main') return 'main-sha';
-    if (staleBranchGone) throw new Error('404');
-    return 'stale-branch-sha';
-  };
-  repo.getFileSha = async (r, p, ref) => {
-    if (p !== OLD) return 'blob';
-    if (ref === 'main') return 'old-sha'; // fresh main HAS the file
-    return 'staged-sha'; // the stale branch ALSO has it (the staged pending rename lives at the old path!)
-  };
-  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); staleBranchGone = true; };
-  const res = await publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
-  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  assert.deepEqual(branchDeletes, ['gbti/prompt-old-name']);
-  assert.ok(repo.deletes.includes(OLD)); // the delete would have been silently skipped without the rebuild
-});
-
-test('rename still fails closed when the direct sync cannot provide the old file (even though the staged file sits on the branch)', async () => {
-  const repo = fakeRepo({ baseHasOld: false });
-  repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'stale-branch-sha');
-  repo.getFileSha = async (r, p, ref) => (ref === 'main' ? null : 'staged-sha'); // main never gains it; the branch has the staged copy
-  const ctx = ctxFor({ repo });
-  ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
-  ctx.fetch = async () => ({ ok: false, status: 422, json: async () => ({}) }); // permission still missing
-  await assert.rejects(
-    publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
-    (e) => /fork to sync/.test(e.message));
-  assert.equal(repo.pulls.length, 0);
-});
-
-
-test('rename with an OPEN pull request on the item branch blocks with a clear message (never closes it)', async () => {
-  const repo = fakeRepo();
-  const branchDeletes = [];
-  repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'branch-sha');
-  repo.findOpenPull = async () => ({ number: 12 });
-  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); };
-  await assert.rejects(
-    publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
-    (e) => /open pull request .*#12/.test(e.message));
-  assert.deepEqual(branchDeletes, []);
-});
+// Removed by sow-274 Part 2: the stale-draft-branch recovery (direct fork sync + branch rebuild), the
+// unconditional branch rebuild, the fork-sync fail-closed case and the open-PR block on a fork branch. Each
+// existed only because a fork branch bases on a stale main; the network commits on live main.
 
 test('publishDraft rename routing forces status published (a staged draft may carry status draft)', async () => {
   const { publishDraft } = await import('../client/src/operations.mjs');
-  const repo = fakeRepo();
-  const stagedText = OLD_FM.replace('slug: old-name', 'slug: new-name').replace('status: published', 'status: draft');
-  repo.getForkFileContent = async (r, p, branch) => (p === OLD && branch === 'gbti/prompt-old-name' ? stagedText : null);
-  repo.findOpenPull = async () => null;
-  const res = await publishDraft(ctxFor({ repo }), { type: 'prompt', slug: 'old-name' });
+  const net = network({ drafts: [pendingRecord({ status: 'draft' })] });
+  const res = await publishDraft(ctxFor({ net }), { type: 'prompt', slug: 'old-name' });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/prompts/new-name/index.md').content).frontmatter;
+  const fm = fmOf(net, 'members/alice/prompts/new-name/index.md');
   assert.equal(fm.status, 'published'); // PR #67 landed status: draft without this
 });
 
@@ -240,13 +200,13 @@ test('publishDraft rename routing forces status published (a staged draft may ca
 // FRESH intro at the new slug — the OLD intro must still be deleted, or it orphans (a duplicate author note
 // via the alias union).
 test('rename with a fresh authorNote intro still deletes the old intro', async () => {
-  const repo = fakeRepo();
+  const net = network();
   const intro = '---\ntype: comment\nid: intro-old-name\nauthor: alice\ntargetType: prompt\ntargetSlug: old-name\nstatus: published\nvisibility: public\nauthorNote: true\ncreatedAt: 2026-07-02\n---\n\nHi.\n';
-  const ctx = ctxFor({ repo, files: { 'members/alice/comments/intro-old-name.md': intro } });
+  const ctx = ctxFor({ net, files: { 'members/alice/comments/intro-old-name.md': intro } });
   const res = await publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD, authorNote: 'A fresh intro note.' });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  assert.ok(repo.puts.some((f) => f.path === 'members/alice/comments/intro-new-name.md')); // the fresh intro
-  assert.ok(repo.deletes.includes('members/alice/comments/intro-old-name.md')); // the old one still deletes
+  assert.ok(net.puts().some((f) => f.path === 'members/alice/comments/intro-new-name.md')); // the fresh intro
+  assert.ok(net.deletes().includes('members/alice/comments/intro-old-name.md')); // the old one still deletes
 });
 
 // SOW-100 Phase 0.5 (owner ask): the rename machinery was only E2E-tested on prompts. Prove POST + PRODUCT
@@ -258,21 +218,20 @@ const POST_FM = '---\ntype: post\ntitle: X\nslug: old-name\nauthor: alice\nstatu
 const POST_INPUT = { title: 'X', slug: 'old-name', excerpt: 'about it', categories: ['devops'], visibility: 'public', publishedAt: '2026-07-07T09:00:00.000Z', updatedAt: '2026-07-07T09:00:00.000Z' };
 
 test('POST rename parity: full move, /articles/ base, and NO intro machinery', async () => {
-  const repo = fakeRepo();
-  repo.getFileSha = async (r, p, ref) => (ref === 'main' ? (p === POST_OLD ? 'old-sha' : null) : 'blob');
+  const net = network();
   const reads = [];
-  const ctx = ctxFor({ repo, files: { [POST_OLD]: POST_FM } });
+  const ctx = ctxFor({ net, files: { [POST_OLD]: POST_FM } });
   const innerRead = ctx.reader.readFile;
   ctx.reader = { readFile: async (rel) => { reads.push(rel); return innerRead(rel); } };
   const res = await publish(ctx, { type: 'post', input: { ...POST_INPUT, slug: 'new-name' }, body: 'B.', path: POST_OLD });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/posts/new-name/index.md').content).frontmatter;
+  const fm = fmOf(net, 'members/alice/posts/new-name/index.md');
   assert.deepEqual(fm.redirectFrom, ['/articles/old-name/']); // the POST url base
   assert.equal(new Date(fm.publishedAt).toISOString(), '2026-07-02T00:00:00.000Z');
-  assert.ok(repo.deletes.includes(POST_OLD));
-  assert.equal(repo.pulls[0].head, 'alice:gbti/post-old-name');
+  assert.ok(net.deletes().includes(POST_OLD));
+  assert.equal(net.authored[0].itemId, 'post-old-name');
   assert.ok(!reads.some((r) => r.includes('/comments/intro-')), 'a post rename must not touch intro comments');
-  assert.ok(!repo.deletes.some((d) => d.includes('/comments/')), 'no comment deletes for a post');
+  assert.ok(!net.deletes().some((d) => d.includes('/comments/')), 'no comment deletes for a post');
 });
 
 const PROD_OLD = 'members/alice/projects/old-name/index.md';
@@ -284,69 +243,68 @@ const PROD_INPUT = {
 };
 
 test('PRODUCT rename parity: full move, /projects/ base, intro moves, pricing round-trips', async () => {
-  const repo = fakeRepo();
-  repo.getFileSha = async (r, p, ref) => (ref === 'main' ? (p === PROD_OLD ? 'old-sha' : null) : 'blob');
+  const net = network();
   const intro = '---\ntype: comment\nid: intro-old-name\nauthor: alice\ntargetType: product\ntargetSlug: old-name\nstatus: published\nvisibility: public\nauthorNote: true\ncreatedAt: 2026-07-02\n---\n\nHi.\n';
-  const ctx = ctxFor({ repo, files: { [PROD_OLD]: PROD_FM, 'members/alice/comments/intro-old-name.md': intro } });
+  const ctx = ctxFor({ net, files: { [PROD_OLD]: PROD_FM, 'members/alice/comments/intro-old-name.md': intro } });
   const res = await publish(ctx, { type: 'project', input: { ...PROD_INPUT, slug: 'new-name' }, body: 'B.', path: PROD_OLD });
   assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
-  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/projects/new-name/index.md').content).frontmatter;
+  const fm = fmOf(net, 'members/alice/projects/new-name/index.md');
   assert.deepEqual(fm.redirectFrom, ['/projects/old-name/']); // the PRODUCT url base
   assert.equal(fm.pricing, 'paid');
   assert.equal(fm.pricingUrl, 'https://example.com/buy'); // commerce fields survive the move
-  const movedIntro = repo.puts.find((f) => f.path === 'members/alice/comments/intro-new-name.md');
+  const movedIntro = net.puts().find((f) => f.path === 'members/alice/comments/intro-new-name.md');
   assert.equal(parseContentFile(movedIntro.content).frontmatter.targetSlug, 'new-name');
-  assert.ok(repo.deletes.includes(PROD_OLD));
-  assert.ok(repo.deletes.includes('members/alice/comments/intro-old-name.md'));
+  assert.ok(net.deletes().includes(PROD_OLD));
+  assert.ok(net.deletes().includes('members/alice/comments/intro-old-name.md'));
 });
 
-test('saveDraft rename staging parity for post + product (old path, old-slug branch)', async () => {
+test('saveDraft rename staging parity for post + product (old path, old-slug identity)', async () => {
   for (const [type, oldPath, fm, input] of [
     ['post', POST_OLD, POST_FM, POST_INPUT],
     ['project', PROD_OLD, PROD_FM, PROD_INPUT],
   ]) {
-    const repo = fakeRepo();
-    const res = await saveDraft(ctxFor({ repo, files: { [oldPath]: fm } }), { type, input: { ...input, slug: 'renamed-x' }, body: 'B.', path: oldPath });
+    const net = network();
+    const res = await saveDraft(ctxFor({ net, files: { [oldPath]: fm } }), { type, input: { ...input, slug: 'renamed-x' }, body: 'B.', path: oldPath });
     assert.equal(res.branch, `gbti/${type}-old-name`);
     assert.equal(res.path, oldPath);
     assert.deepEqual(res.renamed, { from: 'old-name', to: 'renamed-x' });
+    assert.equal(net.staged()[0].path, oldPath);
+    assert.equal(net.staged()[0].pendingSlug, 'renamed-x');
   }
 });
 
 // 2026-07-09: date parity with the WorkBench editor. The MCP/API publish path never stamped
 // publishedAt, so an add_* item landed dateless (bottom of every feed, no date chip: the /ci prompt).
 test('publish stamps publishedAt for a NEW item; preserves it (+ bumps updatedAt) on a re-publish', async () => {
+  const FRESH = 'members/alice/prompts/fresh/index.md';
   // New item (no prior file anywhere): publishedAt stamped.
-  const repoA = fakeRepo();
-  await publish(ctxFor({ repo: repoA }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B' });
-  const created = repoA.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md');
-  const fmNew = parseContentFile(created.content).frontmatter;
+  const netA = network();
+  await publish(ctxFor({ net: netA }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B' });
+  const fmNew = fmOf(netA, FRESH);
   assert.ok(fmNew.publishedAt, 'a new publish carries publishedAt');
   assert.ok(!fmNew.updatedAt, 'a first publish has no updatedAt');
 
   // Re-publish of an existing item WITHOUT a path param (the MCP add_* shape): the canonical file's
   // publishedAt is preserved and updatedAt bumps.
   const existing = '---\ntype: prompt\ntitle: Fresh\nslug: fresh\nauthor: alice\nstatus: published\nvisibility: public\nshortDescription: d\npublishedAt: 2026-07-01T00:00:00.000Z\n---\n\nOld body.\n';
-  const repoB = fakeRepo();
-  await publish(ctxFor({ repo: repoB, files: { 'members/alice/prompts/fresh/index.md': existing } }),
+  const netB = network();
+  await publish(ctxFor({ net: netB, files: { [FRESH]: existing } }),
     { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B2' });
-  const updated = repoB.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md');
-  const fmUp = parseContentFile(updated.content).frontmatter;
+  const fmUp = fmOf(netB, FRESH);
   assert.match(String(fmUp.publishedAt instanceof Date ? fmUp.publishedAt.toISOString() : fmUp.publishedAt), /^2026-07-01/);
   assert.ok(fmUp.updatedAt, 'a re-publish bumps updatedAt');
 
   // The MCP host has no working reader: the repo client's canonical read preserves the date instead.
-  const repoD = fakeRepo();
-  repoD.getFileContent = async (p2) => (p2 === 'members/alice/prompts/fresh/index.md' ? existing : null);
-  const ctxNoReader = { ...ctxFor({ repo: repoD }), reader: {} };
+  const netD = network();
+  const ctxNoReader = { ...ctxFor({ net: netD, repo: fakeRepo({ upstreamFiles: { [FRESH]: existing } }) }), reader: {} };
   await publish(ctxNoReader, { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B3' });
-  const viaRepo = parseContentFile(repoD.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  const viaRepo = fmOf(netD, FRESH);
   assert.match(String(viaRepo.publishedAt instanceof Date ? viaRepo.publishedAt.toISOString() : viaRepo.publishedAt), /^2026-07-01/);
 
   // An explicit caller publishedAt always wins (never overwritten).
-  const repoC = fakeRepo();
-  await publish(ctxFor({ repo: repoC }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd', publishedAt: '2026-06-01T00:00:00.000Z' }, body: 'B' });
-  const explicit = parseContentFile(repoC.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  const netC = network();
+  await publish(ctxFor({ net: netC }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd', publishedAt: '2026-06-01T00:00:00.000Z' }, body: 'B' });
+  const explicit = fmOf(netC, FRESH);
   assert.match(String(explicit.publishedAt instanceof Date ? explicit.publishedAt.toISOString() : explicit.publishedAt), /^2026-06-01/);
 });
 
@@ -356,10 +314,10 @@ test('publish stamps publishedAt for a NEW item; preserves it (+ bumps updatedAt
 test('publish stamps publishedAt to now for the FIRST publish of a prior canonical draft', async () => {
   const draftPrior = '---\ntype: prompt\ntitle: Fresh\nslug: fresh\nauthor: alice\nstatus: draft\nvisibility: public\nshortDescription: d\npublishedAt: 2026-01-01T00:00:00.000Z\n---\n\nDraft body.\n';
   const startIso = new Date().toISOString();
-  const repoE = fakeRepo();
-  await publish(ctxFor({ repo: repoE, files: { 'members/alice/prompts/fresh/index.md': draftPrior } }),
+  const net = network();
+  await publish(ctxFor({ net, files: { 'members/alice/prompts/fresh/index.md': draftPrior } }),
     { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B4' });
-  const fm = parseContentFile(repoE.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  const fm = fmOf(net, 'members/alice/prompts/fresh/index.md');
   const iso = String(fm.publishedAt instanceof Date ? fm.publishedAt.toISOString() : fm.publishedAt);
   assert.ok(!iso.startsWith('2026-01-01'), 'the draft-time publishedAt is not surfaced as the publication date');
   assert.ok(iso >= startIso, 'the first publish of a draft stamps publishedAt to now');
@@ -374,10 +332,10 @@ test('publish stamps publishedAt to now for the FIRST publish of a prior canonic
 test('re-publish that SUPPLIES publishedAt still bumps updatedAt (SOW-258)', async () => {
   const existing = '---\ntype: prompt\ntitle: Fresh\nslug: fresh\nauthor: alice\nstatus: published\nvisibility: public\nshortDescription: d\npublishedAt: 2026-07-01T00:00:00.000Z\n---\n\nOld body.\n';
   const startIso = new Date().toISOString();
-  const repo = fakeRepo();
-  await publish(ctxFor({ repo, files: { 'members/alice/prompts/fresh/index.md': existing } }),
+  const net = network();
+  await publish(ctxFor({ net, files: { 'members/alice/prompts/fresh/index.md': existing } }),
     { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd', publishedAt: '2026-07-01T00:00:00.000Z' }, body: 'B2' });
-  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  const fm = fmOf(net, 'members/alice/prompts/fresh/index.md');
   const pub = String(fm.publishedAt instanceof Date ? fm.publishedAt.toISOString() : fm.publishedAt);
   assert.match(pub, /^2026-07-01/, 'the supplied publishedAt is preserved (not re-stamped)');
   assert.ok(fm.updatedAt, 'a re-publish that round-trips publishedAt still bumps updatedAt');

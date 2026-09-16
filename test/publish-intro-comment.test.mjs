@@ -1,7 +1,10 @@
 // SOW-014 x the MCP publish flow: publish() seeds the from-the-author intro comment into the SAME PR when
 // `authorNote` is passed, so a new prompt/product publishes compliant in ONE pull request
-// (operations.buildIntroCommentFile + the multi-file publishFiles path). add_prompt/add_product/publish_content
-// forward `authorNote` to publish(), so this covers all three MCP tools.
+// (operations.buildIntroCommentFile + one network publish carrying both files). add_prompt/add_product/
+// publish_content forward `authorNote` to publish(), so this covers all three MCP tools.
+//
+// sow-274 Part 2: every publish goes to the network (POST /membership/author), so these assert the file set and
+// title that reached it, where they used to read what a fake fork recorded.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -37,30 +40,44 @@ test('an author note is PERMITTED on a post but never REQUIRED of one', () => {
   assert.doesNotMatch(validate, /requires? a from-the-author (introduction )?comment[^\n]*\bpost\b/);
 });
 
-const fakeRepo = (puts = [], opens = []) => ({
-  upstream: 'gbti-network/gbti.network',
-  async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-  async getDefaultBranch() { return 'main'; },
-  async getBranchSha() { return 'sha'; },
-  async ensureBranch() {},
-  async getFileSha() { return null; },
-  async putFile(_full, path, opts) { puts.push({ path, content: opts?.contentBase64, message: opts?.message }); },
-  async findOpenPull() { return null; },
-  async openPull(opts) { opens.push(opts); return { number: 7, html_url: 'u' }; },
-});
+/**
+ * The network, as far as a publish sees it. `authored` holds each POST /membership/author body
+ * ({ itemId, files: [{ path, content }], title }); `staged` holds each draft record saved to the private store.
+ */
+function fakeNetwork() {
+  const authored = [];
+  const staged = [];
+  const fetch = async (url, init = {}) => {
+    const path = new URL(String(url)).pathname;
+    const body = init.body ? JSON.parse(init.body) : null;
+    if (path === '/membership/author') {
+      authored.push(body);
+      return { ok: true, status: 200, json: async () => ({ ok: true, number: 7, html_url: 'u', branch: `hosted/1/${body.itemId}` }) };
+    }
+    if (path === '/membership/drafts' && body?.op === 'put') {
+      staged.push(body.draft);
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  return { authored, staged, fetch };
+}
 
-function ctxFor({ membership = 'paid', repo = fakeRepo(), now = '2026-07-02T00:00:00Z' } = {}) {
+function ctxFor({ membership = 'paid', net = fakeNetwork(), now = '2026-07-02T00:00:00Z' } = {}) {
   return {
     identity: () => ({ login: 'alice', githubId: '1', username: 'alice' }),
-    getRepoClient: () => repo,
+    getRepoClient: () => ({ upstream: 'gbti-network/gbti.network', getFileContent: async () => null }),
     membership: () => membership,
     store: { get: (k) => ({ githubToken: 'tok' })[k] },
     now: () => now,
-    fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }),
+    fetch: net.fetch,
   };
 }
 
-const decode = (puts, re) => Buffer.from(puts.find((p) => re.test(p.path)).content, 'base64').toString('utf8');
+/** The paths, and one file's text, from the single publish a test made. */
+const onlyPublish = (net) => { assert.equal(net.authored.length, 1, 'expected exactly one publish'); return net.authored[0]; };
+const pathsOf = (net) => onlyPublish(net).files.map((f) => f.path).sort();
+const textOf = (net, re) => onlyPublish(net).files.find((f) => re.test(f.path)).content;
 const promptBuilt = () => buildContentFile({ type: 'prompt', username: 'alice', input: { title: 'T', slug: 'my-prompt', shortDescription: 'x' }, body: 'B' });
 
 test('buildIntroCommentFile: builds a PUBLIC authorNote intro for a prompt (deterministic intro-<slug> id)', () => {
@@ -94,46 +111,46 @@ test('buildIntroCommentFile: null for a blank note, a missing note, or a type th
   assert.equal(buildIntroCommentFile({ username: 'alice', built: share, authorNote: 'note' }), null); // never a share
 });
 
-test('publish: a prompt WITH authorNote seeds the intro comment into the SAME PR (two files, one branch)', async () => {
-  const puts = [];
-  const out = await publish(ctxFor({ repo: fakeRepo(puts) }), {
+test('publish: a prompt WITH authorNote seeds the intro comment into the SAME PR (two files, one publish)', async () => {
+  const net = fakeNetwork();
+  const out = await publish(ctxFor({ net }), {
     type: 'prompt', input: { title: 'My Prompt', slug: 'my-prompt', shortDescription: 'x' }, body: 'The prompt body', authorNote: 'Why I made this.',
   });
   assert.equal(out.prNumber, 7);
   assert.deepEqual(
-    puts.map((p) => p.path).sort(),
+    pathsOf(net),
     ['members/alice/comments/intro-my-prompt.md', 'members/alice/prompts/my-prompt/index.md'],
-    'the prompt index.md AND its intro comment are committed to the same branch/PR',
+    'the prompt index.md AND its intro comment are sent in the same publish',
   );
-  const intro = decode(puts, /comments\/intro-my-prompt\.md$/);
+  const intro = textOf(net, /comments\/intro-my-prompt\.md$/);
   assert.match(intro, /authorNote: true/);
   assert.match(intro, /targetSlug: my-prompt/);
   assert.match(intro, /Why I made this\./);
 });
 
 test('publish: a POST with authorNote seeds the intro comment into the SAME PR', async () => {
-  const puts = [];
-  await publish(ctxFor({ repo: fakeRepo(puts) }), {
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), {
     type: 'post', input: { title: 'My Article', slug: 'my-article' }, body: 'The article body', authorNote: 'Why I wrote this.',
   });
   assert.deepEqual(
-    puts.map((p) => p.path).sort(),
+    pathsOf(net),
     ['members/alice/comments/intro-my-article.md', 'members/alice/posts/my-article/index.md'],
-    'the article index.md AND its intro comment ride one branch, so the note is never silently dropped',
+    'the article index.md AND its intro comment ride one publish, so the note is never silently dropped',
   );
-  assert.match(decode(puts, /comments\/intro-my-article\.md$/), /targetType: post/);
+  assert.match(textOf(net, /comments\/intro-my-article\.md$/), /targetType: post/);
 });
 
 test('publish: a POST WITHOUT authorNote stays a single-file PR (the note is optional for an article)', async () => {
-  const puts = [];
-  await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'post', input: { title: 'A', slug: 'no-note' }, body: 'Body' });
-  assert.deepEqual(puts.map((p) => p.path), ['members/alice/posts/no-note/index.md']);
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), { type: 'post', input: { title: 'A', slug: 'no-note' }, body: 'Body' });
+  assert.deepEqual(pathsOf(net), ['members/alice/posts/no-note/index.md']);
 });
 
 test('publish: a prompt WITHOUT authorNote stays a single-file PR (no regression)', async () => {
-  const puts = [];
-  await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'prompt', input: { title: 'P', slug: 'no-intro', shortDescription: 'x' }, body: 'Body' });
-  assert.deepEqual(puts.map((p) => p.path), ['members/alice/prompts/no-intro/index.md']);
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), { type: 'prompt', input: { title: 'P', slug: 'no-intro', shortDescription: 'x' }, body: 'Body' });
+  assert.deepEqual(pathsOf(net), ['members/alice/prompts/no-intro/index.md']);
 });
 
 test('describeContentPublish: a human-readable title + body from the content (not the slug)', () => {
@@ -147,64 +164,62 @@ test('describeContentPublish: a human-readable title + body from the content (no
   assert.match(d.body, /intro comment/);
 });
 
-test('publish: opens the PR with a DESCRIPTIVE title + non-empty body (not the bare "Update")', async () => {
-  const opens = [];
-  await publish(ctxFor({ repo: fakeRepo([], opens) }), {
+// sow-274 Part 2: the network writes its own pull request body, so the client's descriptive body is no longer
+// sent and its assertion is gone. The descriptive TITLE still is, and describeContentPublish keeps its own test above.
+test('publish: sends a DESCRIPTIVE pull request title (not the bare "Update")', async () => {
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), {
     type: 'prompt', input: { title: 'Author a GBTI SOW', slug: 'author-a-gbti-sow', shortDescription: 'A skill.', categories: ['skill'] }, body: 'Body', authorNote: 'Why I made this.',
   });
-  assert.equal(opens.length, 1);
-  assert.equal(opens[0].title, 'Publish prompt: Author a GBTI SOW');
-  assert.notEqual(opens[0].title, 'Update');
-  assert.ok(opens[0].body && opens[0].body.length > 0, 'the PR body is not empty');
-  assert.match(opens[0].body, /Author a GBTI SOW/);
+  assert.equal(onlyPublish(net).title, 'Publish prompt: Author a GBTI SOW');
+  assert.notEqual(onlyPublish(net).title, 'Update');
+  assert.equal(onlyPublish(net).itemId, 'prompt-author-a-gbti-sow');
 });
 
-test('publish: an explicit title/prBody still wins over the descriptive default', async () => {
-  const opens = [];
-  await publish(ctxFor({ repo: fakeRepo([], opens) }), {
+test('publish: an explicit title still wins over the descriptive default', async () => {
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), {
     type: 'prompt', input: { title: 'T', slug: 's', shortDescription: 'x' }, body: 'B', title: 'My exact title', prBody: 'My exact body',
   });
-  assert.equal(opens[0].title, 'My exact title');
-  assert.equal(opens[0].body, 'My exact body');
+  assert.equal(onlyPublish(net).title, 'My exact title');
+  assert.equal('body' in onlyPublish(net), false, 'a pull request body is never sent (sow-274 Part 2)');
 });
 
 // SOW-106 Phase 1: publishing merges to the network repo, and merged content is PUBLIC.
-const docFor = (puts, re) => Buffer.from(puts.find((p) => re.test(p.path)).content, 'base64').toString('utf8');
-
 test('publish: forces status: published (no silent hidden merged draft)', async () => {
-  const puts = [];
-  await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'prompt', input: { title: 'T', slug: 'p1', shortDescription: 'x' }, body: 'B' });
-  assert.match(docFor(puts, /prompts\/p1\/index\.md$/), /^status: published$/m);
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), { type: 'prompt', input: { title: 'T', slug: 'p1', shortDescription: 'x' }, body: 'B' });
+  assert.match(textOf(net, /prompts\/p1\/index\.md$/), /^status: published$/m);
 });
 
 test('publish: respects an explicit status: draft (member self-unpublish)', async () => {
-  const puts = [];
-  await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'prompt', input: { title: 'T', slug: 'p2', shortDescription: 'x', status: 'draft' }, body: 'B' });
-  assert.match(docFor(puts, /prompts\/p2\/index\.md$/), /^status: draft$/m);
+  const net = fakeNetwork();
+  await publish(ctxFor({ net }), { type: 'prompt', input: { title: 'T', slug: 'p2', shortDescription: 'x', status: 'draft' }, body: 'B' });
+  assert.match(textOf(net, /prompts\/p2\/index\.md$/), /^status: draft$/m);
 });
 
-test('saveDraft: a fork-staged draft carries status: published and opens NO pull request', async () => {
-  const puts = [];
-  const opens = [];
-  await saveDraft(ctxFor({ repo: fakeRepo(puts, opens) }), { type: 'prompt', input: { title: 'T', slug: 'p3', shortDescription: 'x' }, body: 'B' });
-  assert.match(docFor(puts, /prompts\/p3\/index\.md$/), /^status: published$/m);
-  assert.equal(opens.length, 0, 'saveDraft stages on the fork with no PR');
+test('saveDraft: a staged draft carries status: published and publishes NOTHING', async () => {
+  const net = fakeNetwork();
+  await saveDraft(ctxFor({ net }), { type: 'prompt', input: { title: 'T', slug: 'p3', shortDescription: 'x' }, body: 'B' });
+  assert.equal(net.staged.length, 1);
+  assert.equal(net.staged[0].frontmatter.status, 'published');
+  assert.equal(net.authored.length, 0, 'saveDraft stages privately and never publishes');
 });
 
 // SOW-106 Phase 5: the MCP author entry forces an explicit publish-vs-draft intent.
 test('authorContent: status published routes to publish (opens a PR)', async () => {
-  const opens = [];
-  const out = await authorContent(ctxFor({ repo: fakeRepo([], opens) }), { type: 'prompt', input: { title: 'T', slug: 'a1', shortDescription: 'x' }, body: 'B', status: 'published' });
+  const net = fakeNetwork();
+  const out = await authorContent(ctxFor({ net }), { type: 'prompt', input: { title: 'T', slug: 'a1', shortDescription: 'x' }, body: 'B', status: 'published' });
   assert.equal(out.prNumber, 7);
-  assert.equal(opens.length, 1, 'published -> a PR is opened');
+  assert.equal(net.authored.length, 1, 'published -> sent to the network');
+  assert.equal(net.staged.length, 0);
 });
 
-test('authorContent: status draft routes to saveDraft (fork stage, no PR)', async () => {
-  const opens = [];
-  const puts = [];
-  await authorContent(ctxFor({ repo: fakeRepo(puts, opens) }), { type: 'prompt', input: { title: 'T', slug: 'a2', shortDescription: 'x' }, body: 'B', status: 'draft' });
-  assert.equal(opens.length, 0, 'draft -> staged on the fork, no PR');
-  assert.ok(puts.some((p) => /prompts\/a2\/index\.md$/.test(p.path)), 'draft is committed to the fork branch');
+test('authorContent: status draft routes to saveDraft (private stage, no PR)', async () => {
+  const net = fakeNetwork();
+  await authorContent(ctxFor({ net }), { type: 'prompt', input: { title: 'T', slug: 'a2', shortDescription: 'x' }, body: 'B', status: 'draft' });
+  assert.equal(net.authored.length, 0, 'draft -> staged privately, nothing published');
+  assert.deepEqual(net.staged.map((d) => d.path), ['members/alice/prompts/a2/index.md'], 'the draft is saved to the private store');
 });
 
 test('authorContent: a missing status throws status-required (forced intent, nothing silently drafts)', async () => {

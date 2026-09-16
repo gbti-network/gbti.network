@@ -1,33 +1,33 @@
 // SOW-027: member comment authoring. buildCommentFile (flat own-folder file, forced author), commentId, and the
 // publishComment / editComment / getComment operations (paid-only, own-folder, updatedAt-on-edit, scope checks).
+//
+// sow-274 Part 2: a comment is published through the network (POST /membership/author), never from the member's
+// own copy of the repository. The fake below stands in for that route and records the file set that reached it,
+// so every assertion reads what the network was actually asked to commit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCommentFile, commentId } from '../client/src/content-ops.mjs';
 import { publishComment, editComment, getComment, OperationError } from '../client/src/operations.mjs';
 
-const fakeRepo = (puts = []) => ({
-  upstream: 'gbti-network/gbti.network',
-  async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-  async getDefaultBranch() { return 'main'; },
-  async getBranchSha() { return 'sha'; },
-  async ensureBranch() {},
-  async getFileSha() { return null; },
-  async putFile(_full, path, opts) { puts.push({ path, content: opts?.contentBase64 }); },
-  async findOpenPull() { return null; },
-  async openPull() { return { number: 7, html_url: 'u' }; },
-});
-
 // SOW-044: a members comment encrypts its body via the Worker on publish. This stub stands in for the Worker
-// encrypt route, echoing the requested assetId as the envelope AAD (the real Worker binds the same AAD).
-const encryptFetch = async (_url, init) => {
-  const { assetId } = JSON.parse(init.body);
-  return { ok: true, status: 200, json: async () => ({ ok: true, envelope: { v: 1, kid: '1', iv: 'iv', aad: assetId, ct: 'ct' } }) };
+// encrypt route, echoing the requested assetId as the envelope AAD (the real Worker binds the same AAD), and for the
+// network author route, recording each file ({ path, content }; content null = a delete) into `puts`.
+const netFetch = (puts = [], calls = []) => async (url, init) => {
+  const body = JSON.parse(init.body);
+  if (String(url).endsWith('/membership/encrypt')) {
+    return { ok: true, status: 200, json: async () => ({ ok: true, envelope: { v: 1, kid: '1', iv: 'iv', aad: body.assetId, ct: 'ct' } }) };
+  }
+  if (String(url).endsWith('/membership/author')) {
+    calls.push(body);
+    puts.push(...body.files);
+    return { ok: true, status: 200, json: async () => ({ ok: true, number: 7, html_url: 'u', branch: `hosted/1/${body.itemId}` }) };
+  }
+  throw new Error(`unexpected fetch: ${url}`);
 };
 
-function ctxFor({ membership = 'paid', repo = fakeRepo(), comment = undefined, now = '2026-06-10T12:00:00Z', fetch = encryptFetch } = {}) {
+function ctxFor({ membership = 'paid', puts = [], calls = [], comment = undefined, now = '2026-06-10T12:00:00Z', fetch = netFetch(puts, calls) } = {}) {
   return {
     identity: () => ({ login: 'alice', githubId: '1', username: 'alice' }),
-    getRepoClient: () => repo,
     membership: () => membership,
     store: { get: (k) => ({ githubToken: 'tok' })[k] },
     now: () => now,
@@ -36,7 +36,7 @@ function ctxFor({ membership = 'paid', repo = fakeRepo(), comment = undefined, n
   };
 }
 
-const decodeOf = (puts, re) => Buffer.from(puts.find((p) => re.test(p.path)).content, 'base64').toString('utf8');
+const decodeOf = (puts, re) => puts.find((p) => re.test(p.path)).content;
 
 test('commentId: sortable timestamp stem + suffix', () => {
   assert.equal(commentId('2026-06-10T12:00:00Z', 'aB3!'), '20260610120000-ab3');
@@ -70,7 +70,10 @@ test('buildCommentFile: SOW-032 accepts targetType "share" with a composite "<au
 
 test('publishComment: SOW-044 a plain comment is members-only + ENCRYPTED by default (no plaintext leak), own-folder PR', async () => {
   const puts = [];
-  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'post', targetSlug: 'hello', body: 'great read' });
+  const calls = [];
+  const r = await publishComment(ctxFor({ puts, calls }), { targetType: 'post', targetSlug: 'hello', body: 'great read' });
+  assert.equal(calls.length, 1, 'one change on the network');
+  assert.equal(calls[0].itemId, `comment-${r.id}`, 'the change is keyed to the comment itself');
   assert.equal(r.targetType, 'post');
   assert.equal(r.visibility, 'members'); // no longer public by default
   assert.equal(r.encrypted, true);
@@ -88,7 +91,7 @@ test('publishComment: SOW-044 a plain comment is members-only + ENCRYPTED by def
 
 test('publishComment: SOW-044 a from-the-author intro (authorNote on a product) stays PUBLIC + plaintext', async () => {
   const puts = [];
-  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'project', targetSlug: 'radle', body: 'why I built this', authorNote: true, visibility: 'public' });
+  const r = await publishComment(ctxFor({ puts }), { targetType: 'project', targetSlug: 'radle', body: 'why I built this', authorNote: true, visibility: 'public' });
   assert.equal(r.visibility, 'public');
   assert.equal(r.encrypted, false); // a public intro is plain (it is the public teaser on the product page)
   const md = decodeOf(puts, /comments\/.*\.md$/);
@@ -99,7 +102,7 @@ test('publishComment: SOW-044 a from-the-author intro (authorNote on a product) 
 
 test('publishComment: the audience is the author\'s (2026-09-11): a public non-intro is committed public + plaintext', async () => {
   const puts = [];
-  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'post', targetSlug: 'hello', body: 'just a reply', visibility: 'public' });
+  const r = await publishComment(ctxFor({ puts }), { targetType: 'post', targetSlug: 'hello', body: 'just a reply', visibility: 'public' });
   assert.equal(r.visibility, 'public');
   assert.equal(r.encrypted, false);
   const md = decodeOf(puts, /comments\/.*\.md$/);
@@ -110,12 +113,12 @@ test('publishComment: the audience is the author\'s (2026-09-11): a public non-i
 
 test('publishComment: a Share comment may be public too, and stays members by default', async () => {
   const puts = [];
-  const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'nice find', visibility: 'public' });
+  const r = await publishComment(ctxFor({ puts }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'nice find', visibility: 'public' });
   assert.equal(r.visibility, 'public');
   assert.equal(r.encrypted, false);
   assert.match(decodeOf(puts, /comments\/.*\.md$/), /nice find/);
   const puts2 = [];
-  const d = await publishComment(ctxFor({ repo: fakeRepo(puts2) }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'members thought' });
+  const d = await publishComment(ctxFor({ puts: puts2 }), { targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', body: 'members thought' });
   assert.equal(d.visibility, 'members');
   assert.equal(d.encrypted, true);
   assert.doesNotMatch(decodeOf(puts2, /comments\/.*\.md$/), /members thought/);
@@ -132,7 +135,7 @@ test('editComment: preserves createdAt + target, sets updatedAt, re-publishes th
   const puts = [];
   // A from-the-author intro on a product (the legit public comment): editing keeps it public + plaintext.
   const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'project', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z', __body: 'first version' };
-  const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'edited version' });
+  const r = await editComment(ctxFor({ puts, comment: existing }), { id: '20260101000000-old', body: 'edited version' });
   assert.equal(r.edited, true);
   assert.equal(r.id, '20260101000000-old');
   // SOW-032: editComment carries the target back (like publishComment) so the gbti-comment-edited event can
@@ -140,7 +143,7 @@ test('editComment: preserves createdAt + target, sets updatedAt, re-publishes th
   assert.equal(r.targetType, 'project');
   assert.equal(r.targetSlug, 'radle');
   // the re-published file carries the original createdAt + a new updatedAt + the new body (a public intro is plaintext)
-  const file = Buffer.from(puts.find((p) => /comments\/20260101000000-old\.md$/.test(p.path)).content, 'base64').toString('utf8');
+  const file = decodeOf(puts, /comments\/20260101000000-old\.md$/);
   assert.match(file, /createdAt: '?2026-01-01/); // original createdAt preserved (js-yaml quotes the ISO string)
   assert.match(file, /updatedAt: '?2026-06-10/);
   assert.match(file, /edited version/);
@@ -150,7 +153,7 @@ test('editComment: preserves createdAt + target, sets updatedAt, re-publishes th
 test('editComment: un-flagging an intro keeps its audience unless told; asking for members encrypts it (no plaintext strand)', async () => {
   const puts = [];
   const existing = { type: 'comment', id: '20260101000000-old', author: 'alice', targetType: 'project', targetSlug: 'radle', status: 'published', visibility: 'public', authorNote: true, createdAt: '2026-01-01T00:00:00Z' };
-  const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'now just a reply', authorNote: false, visibility: 'members' });
+  const r = await editComment(ctxFor({ puts, comment: existing }), { id: '20260101000000-old', body: 'now just a reply', authorNote: false, visibility: 'members' });
   assert.equal(r.visibility, 'members');
   assert.equal(r.encrypted, true);
   const stub = decodeOf(puts, /comments\/20260101000000-old\.md$/);
@@ -162,10 +165,11 @@ test('editComment: un-flagging an intro keeps its audience unless told; asking f
 test('editComment: a members comment flipped to public is committed plaintext and its old ciphertext is deleted in the same change', async () => {
   const puts = [];
   const existing = { type: 'comment', id: '20260101000000-mem', author: 'alice', targetType: 'share', targetSlug: 'bob/20260101000000-x', status: 'published', visibility: 'members', createdAt: '2026-01-01T00:00:00Z', encryptedBody: 'members/alice/_enc/comment-20260101000000-mem-body.enc' };
-  // publishFiles deletes only a file that exists on the branch (getFileSha), through repo.deleteFile: this fake
-  // knows the old .enc and records its removal beside the puts.
-  const repo = { ...fakeRepo(puts), async getFileSha(_full, p) { return p.endsWith('.enc') ? 'encsha' : null; }, async deleteFile(_full, p) { puts.push({ path: p, content: null }); } };
-  const r = await editComment(ctxFor({ repo, comment: existing }), { id: '20260101000000-mem', body: 'now for everyone', visibility: 'public' });
+  // The old .enc rides in the SAME network change as a delete (content null), so the site never holds a public
+  // stub beside a stale ciphertext.
+  const calls = [];
+  const r = await editComment(ctxFor({ puts, calls, comment: existing }), { id: '20260101000000-mem', body: 'now for everyone', visibility: 'public' });
+  assert.equal(calls.length, 1, 'the stub and the delete are one change');
   assert.equal(r.visibility, 'public');
   assert.equal(r.encrypted, false);
   const stub = decodeOf(puts, /comments\/20260101000000-mem\.md$/);

@@ -1,5 +1,5 @@
 // SOW-106 Phase B: the member self-unpublish/republish (setOwnContentStatus) + the shared status-flip core.
-// Own-folder guard, paid gate, fresh-read flip, idempotent no-op, and the gated-PR wiring. Fakes only.
+// Own-folder guard, paid gate, fresh-read flip, idempotent no-op, and the network commit wiring. Fakes only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flipContentStatus } from '../client/src/content-ops.mjs';
@@ -20,82 +20,81 @@ test('flipContentStatus flips ONLY status (visibility + fields survive) and no-o
   assert.equal(same.content, null);
 });
 
-function ctxFor({ username = 'alice', membership = 'paid', file = FILE, repo = null } = {}) {
-  return {
-    identity: () => ({ username }),
-    getRepoClient: () => repo,
-    membership: async () => membership,
-    reader: { readFile: async (rel) => (rel.includes('/x/') ? file : null) },
-    store: { get: () => null },
+// sow-274 Part 2: the flip goes to the network, so `net` records what reached it (POST /membership/author)
+// in place of a fake fork's puts and pulls.
+function network() {
+  const authored = [];
+  const fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : null;
+    if (new URL(String(url)).pathname === '/membership/author') {
+      authored.push(body);
+      return { ok: true, status: 200, json: async () => ({ ok: true, number: 77, html_url: 'u', branch: `hosted/1/${body.itemId}` }) };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
   };
+  return { fetch, authored, files: () => authored.flatMap((x) => x.files) };
 }
 
-function fakeRepo() {
-  const puts = [];
-  const pulls = [];
+function ctxFor({ username = 'alice', membership = 'paid', file = FILE, net = network() } = {}) {
   return {
-    puts,
-    pulls,
-    upstream: 'gbti-network/gbti.network',
-    async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-    async getDefaultBranch() { return 'main'; },
-    async getBranchSha() { return 'sha'; },
-    async ensureBranch() {},
-    async getFileSha() { return 'existing'; },
-    async putFile(r, p, opts) { puts.push({ path: p, content: Buffer.from(opts.contentBase64, 'base64').toString('utf8'), branch: opts.branch }); },
-    async findOpenPull() { return null; },
-    async openPull(opts) { pulls.push(opts); return { number: 77, html_url: 'u' }; },
+    identity: () => ({ username }),
+    getRepoClient: () => null, // a status flip needs no repository client at all
+    membership: async () => membership,
+    reader: { readFile: async (rel) => (rel.includes('/x/') ? file : null) },
+    store: { get: (k) => (k === 'githubToken' ? 'tok' : null) },
+    fetch: net.fetch,
   };
 }
 
 const PATH = 'members/alice/posts/x/index.md';
 
 test('setOwnContentStatus: unpublish flips the own item to draft via the gated own-folder PR', async () => {
-  const repo = fakeRepo();
-  const r = await setOwnContentStatus(ctxFor({ repo }), { path: PATH, status: 'draft' });
+  const net = network();
+  const r = await setOwnContentStatus(ctxFor({ net }), { path: PATH, status: 'draft' });
   assert.equal(r.ok, true);
   assert.equal(r.prNumber, 77);
-  assert.equal(repo.puts[0].path, PATH);
-  assert.equal(repo.puts[0].branch, 'gbti/status-post-x');
-  assert.match(repo.puts[0].content, /status: draft/);
-  assert.match(repo.puts[0].content, /visibility: members/); // untouched
-  assert.match(repo.pulls[0].title, /^Unpublish: x$/);
+  assert.equal(net.authored.length, 1);
+  const [file] = net.files();
+  assert.equal(file.path, PATH);
+  assert.equal(net.authored[0].itemId, 'status-post-x');
+  assert.match(file.content, /status: draft/);
+  assert.match(file.content, /visibility: members/); // untouched
+  assert.match(net.authored[0].title, /^Unpublish: x$/);
 });
 
 test('setOwnContentStatus: idempotent no-op (no PR) when already in the requested state', async () => {
-  const repo = fakeRepo();
-  const r = await setOwnContentStatus(ctxFor({ repo }), { path: PATH, status: 'published' });
+  const net = network();
+  const r = await setOwnContentStatus(ctxFor({ net }), { path: PATH, status: 'published' });
   assert.deepEqual(r, { ok: true, noop: true, status: 'published' });
-  assert.equal(repo.puts.length, 0);
-  assert.equal(repo.pulls.length, 0);
+  assert.equal(net.authored.length, 0);
 });
 
 test('setOwnContentStatus: guards — another member\'s path, a bad shape, a bad status, a non-paid member', async () => {
-  const repo = fakeRepo();
+  const net = network();
   await assert.rejects(
-    setOwnContentStatus(ctxFor({ repo }), { path: 'members/bob/posts/x/index.md', status: 'draft' }),
+    setOwnContentStatus(ctxFor({ net }), { path: 'members/bob/posts/x/index.md', status: 'draft' }),
     (e) => e instanceof OperationError && e.code === 'forbidden',
   );
   await assert.rejects(
-    setOwnContentStatus(ctxFor({ repo }), { path: 'house/roles.yml', status: 'draft' }),
+    setOwnContentStatus(ctxFor({ net }), { path: 'house/roles.yml', status: 'draft' }),
     (e) => e instanceof OperationError && e.code === 'bad-request',
   );
   await assert.rejects(
-    setOwnContentStatus(ctxFor({ repo }), { path: PATH, status: 'hidden' }),
+    setOwnContentStatus(ctxFor({ net }), { path: PATH, status: 'hidden' }),
     (e) => e instanceof OperationError && e.code === 'bad-request',
   );
   await assert.rejects(
-    setOwnContentStatus(ctxFor({ repo, membership: 'trialing' }), { path: PATH, status: 'draft' }),
+    setOwnContentStatus(ctxFor({ net, membership: 'trialing' }), { path: PATH, status: 'draft' }),
     (e) => e instanceof OperationError && e.code === 'membership-required',
   );
-  assert.equal(repo.pulls.length, 0);
+  assert.equal(net.authored.length, 0);
 });
 
 test('setOwnContentStatus: republish flips a drafted item back', async () => {
-  const repo = fakeRepo();
+  const net = network();
   const drafted = FILE.replace('status: published', 'status: draft');
-  const r = await setOwnContentStatus(ctxFor({ repo, file: drafted }), { path: PATH, status: 'published' });
+  const r = await setOwnContentStatus(ctxFor({ net, file: drafted }), { path: PATH, status: 'published' });
   assert.equal(r.ok, true);
-  assert.match(repo.puts[0].content, /status: published/);
-  assert.match(repo.pulls[0].title, /^Republish: x$/);
+  assert.match(net.files()[0].content, /status: published/);
+  assert.match(net.authored[0].title, /^Republish: x$/);
 });

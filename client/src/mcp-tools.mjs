@@ -45,8 +45,8 @@ const obj = (properties, required = []) => ({ type: 'object', properties, requir
 // before canonicalType can resolve it. The tools are a published interface that agents were written
 // against; removing the value breaks those agents with a validation error, not a helpful message.
 const TYPE_ENUM = { type: 'string', enum: ['post', 'project', 'product', 'prompt', 'profile'] };
-// SOW-106: the REQUIRED author intent. "published" merges to the network (public); "draft" stages on the fork.
-const STATUS_ENUM = { type: 'string', enum: ['draft', 'published'], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
+// SOW-106: the REQUIRED author intent. "published" merges to the network (public); "draft" saves it privately.
+const STATUS_ENUM = { type: 'string', enum: ['draft', 'published'], description: 'REQUIRED: "published" merges and goes live on the network; "draft" saves it privately for review.' };
 const COMMENT_TARGET = { type: 'string', enum: ['post', 'project', 'prompt', 'share', 'news'] }; // SOW-072
 // sow-193: `path` + `scope`, which authorContent forwards to publish()/saveDraft() now. `path` is what turns a
 // re-publish under a changed slug into a RENAME (one PR that moves the item and 301s the old URL) instead of a
@@ -57,25 +57,25 @@ const SCOPE_PARAM = { type: 'string', enum: ['member', 'house'], description: 'T
 
 // sow-194 + sow-193: RESOLVE a draft's store server-side before acting on it.
 //
-// listDrafts folds three stores now (a fork branch, a hosted KV record, and a repo draft committed to the
-// canonical repo), and each action routes differently. The operations take `store` and `path` to do that
-// routing, but the tool schema advertises only { type, slug }, so that is what an agent sends. With `store`
-// undefined, discardDraft's `store === 'repo'` guard never fires and it falls through to the FORK path, where
-// it computes gbti/<type>-<slug> and deletes that branch. A member holding a stale fork branch at the same
-// slug would lose their unpublished fork work, reported as success by the alreadyGone catch.
+// listDrafts folds two stores (a private staged record, and a repo draft committed to the canonical repo; a
+// third, the fork branch, was retired in sow-274), and each action routes differently. The operations take
+// `store` and `path` to do that routing, but the tool schema advertises only { type, slug }, so that is what an
+// agent sends. With `store` undefined, discardDraft's `store === 'repo'` guard never fires and a repo draft is
+// treated as a staged one. When there were forks, that meant deleting a stale fork branch at the same slug and
+// reporting success; now it means a wrong-store delete. Resolving the row here prevents both.
 //
 // Threading `store` through the handlers would only fix the caller who remembers to pass it. Resolving it here
 // means the caller cannot get it wrong, because the caller no longer supplies it. An explicit `store` argument
 // is still accepted as a hint, but the resolved row wins.
 //
-// FAIL SAFE: when the row cannot be identified, the caller gets a typed error rather than the fork fallback.
-// An unresolvable discard must be a no-op with a message, never a silent branch delete.
+// FAIL SAFE: when the row cannot be identified, the caller gets a typed error rather than a guessed store.
+// An unresolvable discard must be a no-op with a message, never a silent delete of the wrong record.
 async function resolveDraftRow(ctx, { type, slug }) {
   try {
     const { drafts } = await listDrafts(ctx, { type });
     return (Array.isArray(drafts) ? drafts : []).find((d) => d?.type === type && d?.slug === slug) ?? null;
   } catch {
-    return null; // a listing failure must not silently downgrade to the fork path
+    return null; // a listing failure must not silently guess a store
   }
 }
 
@@ -137,9 +137,9 @@ export const TOOLS = [
   },
   {
     name: 'publish_content',
-    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" saves it privately for review (no PR, nothing public). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM },
+      { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM },
       ['type', 'input', 'status'],
     ),
     // sow-271: this one forwards `args` WHOLE, so the type has to be canonicalized here rather than relying
@@ -151,29 +151,29 @@ export const TOOLS = [
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: 'add_prompt',
-    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
-    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
+    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'prompt' }),
   },
   {
     name: 'add_product',
-    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
-    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'project' }),
   },
   {
     name: 'add_post',
-    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
-    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'post' }),
   },
   // sow-193: the DRAFT lifecycle. These four operations existed and were tested since SOW-082 but none was
   // exposed as a tool, so an agent could create a draft with status:"draft" and then never list, read, publish
-  // or discard it. A fork-staged draft is at least a visible branch on the member's own GitHub; a hosted draft
-  // lives in private KV, so the hole was about to get worse. Thin wrappers, no new logic.
+  // or discard it. A staged draft lives in the private store, where nothing else would ever show it to them.
+  // Thin wrappers, no new logic.
   {
     name: 'list_drafts',
-    description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, whether it still validates against the current schema, and its pull request if one is open.',
+    description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, and whether it still validates against the current schema.',
     inputSchema: obj({ type: TYPE_ENUM }),
     handler: (ctx, args) => listDrafts(ctx, { type: canonicalType(args?.type) || undefined }),
   },
@@ -186,8 +186,8 @@ export const TOOLS = [
   {
     name: 'publish_draft',
     description: 'Publish a staged draft: opens the gated pull request from the draft branch it is already on. Paid-only, like every publish.',
-    inputSchema: obj({ type: TYPE_ENUM, slug: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['type', 'slug']),
-    handler: async (ctx, args) => publishDraft(ctx, { ...(await draftTarget(ctx, args)), title: args?.title, prBody: args?.prBody }),
+    inputSchema: obj({ type: TYPE_ENUM, slug: { type: 'string' }, title: { type: 'string' } }, ['type', 'slug']),
+    handler: async (ctx, args) => publishDraft(ctx, { ...(await draftTarget(ctx, args)), title: args?.title }),
   },
   {
     name: 'discard_draft',
@@ -234,9 +234,9 @@ export const TOOLS = [
   // your own post/product/prompt is public; every reply, and ALL Share comments, are members-only + encrypted).
   {
     name: 'post_comment',
-    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
+    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), title (the pull request title). author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
-      { targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, body: { type: 'string' }, authorNote: { type: 'boolean' }, parentId: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } },
+      { targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, body: { type: 'string' }, authorNote: { type: 'boolean' }, parentId: { type: 'string' }, title: { type: 'string' } },
       ['targetType', 'targetSlug', 'body'],
     ),
     handler: (ctx, args) => publishComment(ctx, args ?? {}),
@@ -266,7 +266,6 @@ export const TOOLS = [
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
         body: { type: 'string', description: 'Optional note in your own words about why the link is worth reading.' },
-        message: { type: 'string' }, prBody: { type: 'string' },
       },
       ['url'],
     ),
@@ -323,7 +322,7 @@ export async function addShare(ctx, args = {}) {
   });
   // NB: publishShare's `title` is the PULL REQUEST title, not the share's. Leave it unset so it derives
   // "New Share: <share title>" itself; passing args.title here would conflate the two.
-  return publishShare(ctx, { input, body: args.body ?? '', message: args.message, prBody: args.prBody });
+  return publishShare(ctx, { input, body: args.body ?? '' });
 }
 
 const stripBlank = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ''));

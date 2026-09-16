@@ -21,26 +21,34 @@ function seedRepo(dir, withIndex = true) {
   }
   return dir;
 }
-function ctxFor({ repoPath, repo, identity } = {}) {
+// sow-274 Part 2: a publish reaches the network, so every context carries a fetch that answers the author route
+// and records what it received. With no fetch injected the publish would call the real network.
+function networkFake() {
+  const authored = [];
+  const fetch = async (url, init = {}) => {
+    if (new URL(String(url)).pathname === '/membership/author') {
+      authored.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ ok: true, number: 21, html_url: 'u', branch: 'hosted/1/post-hello' }) };
+    }
+    throw new Error(`unexpected network call in test: ${url}`);
+  };
+  return { fetch, authored };
+}
+function ctxFor({ repoPath, repo, identity, net = networkFake() } = {}) {
   const data = { repoPath, githubToken: repo ? 'tok' : null };
   return {
     store: { get: (k) => data[k], set: (p) => Object.assign(data, p) },
     reader: createReader(repoPath ?? '/nope'),
     getRepoClient: () => repo ?? null,
     identity: () => (identity === null ? null : { login: 'alice', githubId: '1', username: 'alice' }),
+    fetch: net.fetch,
   };
 }
+// The repository client is read-only now: identity, the canonical file read, and the pull request reads.
 const fakeRepo = () => ({
   upstream: 'gbti-network/gbti.network',
   async getAuthUser() { return { login: 'Alice', id: '1' }; },
-  async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-  async getDefaultBranch() { return 'main'; },
-  async getBranchSha() { return 'sha'; },
-  async ensureBranch() {},
-  async getFileSha() { return null; },
-  async putFile() {},
-  async findOpenPull() { return null; },
-  async openPull() { return { number: 21, html_url: 'u' }; },
+  async getFileContent() { return null; },
   async listMyPulls() { return [{ number: 21, title: 'x', html_url: 'u' }]; },
   async gateStatus() { return { state: 'failure', meaning: 'held', sha: 'sha' }; },
 });
@@ -89,12 +97,16 @@ test('cmdNew: scaffolds a validated file into the working copy and refuses to cl
   assert.throws(() => cmdNew(ctx, { type: 'post', input: { title: 'Hello', slug: 'hello' } }), /already exists/);
 });
 
-test('cmdPublish: reads a staged file and opens a PR through the gate', async () => {
+test('cmdPublish: reads a staged file and publishes it through the network', async () => {
   const repo = seedRepo(tmp());
-  const ctx = ctxFor({ repoPath: repo, repo: fakeRepo() });
+  const net = networkFake();
+  const ctx = ctxFor({ repoPath: repo, repo: fakeRepo(), net });
   cmdNew(ctx, { type: 'post', input: { title: 'Hello', slug: 'hello' }, body: 'Body' });
   const out = await cmdPublish(ctx, { file: 'members/alice/posts/hello/index.md' });
   assert.equal(out.prNumber, 21);
+  assert.equal(net.authored.length, 1);
+  assert.deepEqual(net.authored[0].files.map((f) => f.path), ['members/alice/posts/hello/index.md']);
+  assert.match(net.authored[0].files[0].content, /Body/);
 });
 
 test('cmdWhoami + cmdPr', async () => {

@@ -3,6 +3,6 @@
   "name": "GBTI Network Extension",
   "zip": "/extension/gbti-network-extension.zip",
   "webStoreUrl": "https://chromewebstore.google.com/detail/gbti-network-extension/iffjdmifgnjgkdjoodapjciddibmifka",
-  "bytes": 3030495,
+  "bytes": 3023252,
   "mcp": "mcp/gbti-network-mcp.mjs"
 }

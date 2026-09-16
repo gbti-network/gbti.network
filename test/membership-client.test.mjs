@@ -135,24 +135,23 @@ test('sow-213 R2: resolveMembership carries couponUntil from the ORACLE only (no
 });
 
 // ---- the operations.publish choke point ----
+// sow-274 Part 2: a publish reaches the network (POST /membership/author). `sent` records every file path the
+// network received, so "nothing was published" is asserted on the one route that can publish anything.
 function ctxFor(membership) {
-  const repoCalls = [];
+  const sent = [];
   return {
-    repoCalls,
+    sent,
     identity: () => ({ login: 'alice', githubId: '1', username: 'alice' }),
     membership: () => membership,
     store: { get: () => 'tok' },
-    getRepoClient: () => ({
-      upstream: 'gbti-network/gbti.network',
-      ensureFork: async () => ({ full_name: 'alice/gbti.network', owner: 'alice' }),
-      getDefaultBranch: async () => 'main',
-      getBranchSha: async () => 'sha',
-      ensureBranch: async () => {},
-      getFileSha: async () => null,
-      putFile: async (r, p) => repoCalls.push(p),
-      findOpenPull: async () => null,
-      openPull: async () => ({ number: 7, html_url: 'u' }),
-    }),
+    getRepoClient: () => ({ upstream: 'gbti-network/gbti.network', getFileContent: async () => null }),
+    fetch: async (url, init = {}) => {
+      if (new URL(String(url)).pathname === '/membership/author') {
+        sent.push(...JSON.parse(init.body).files.map((f) => f.path));
+        return { ok: true, status: 200, json: async () => ({ ok: true, number: 7, html_url: 'u', branch: 'hosted/1/post-my-post' }) };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    },
   };
 }
 
@@ -167,18 +166,19 @@ test('publish: a trial member is blocked with membership-required BEFORE any PR 
       return true;
     },
   );
-  assert.deepEqual(ctx.repoCalls, [], 'no fork write / PR is attempted for a blocked member');
+  assert.deepEqual(ctx.sent, [], 'nothing is sent to the network for a blocked member');
 });
 
 test('publish: a paid member publishes; an unknown membership fails OPEN to the gate', async () => {
   const paid = ctxFor('paid');
   const r1 = await publish(paid, { type: 'post', input: { title: 'T', slug: 'my-post' }, body: 'x' });
   assert.equal(r1.prNumber, 7);
-  assert.deepEqual(paid.repoCalls, ['members/alice/posts/my-post/index.md']);
+  assert.deepEqual(paid.sent, ['members/alice/posts/my-post/index.md']);
 
   const unknown = ctxFor('unknown'); // oracle unreachable -> do not block; the gate is the authority
   const r2 = await publish(unknown, { type: 'post', input: { title: 'T', slug: 'my-post' }, body: 'x' });
   assert.equal(r2.prNumber, 7);
+  assert.deepEqual(unknown.sent, ['members/alice/posts/my-post/index.md']);
 });
 
 test('getStatus surfaces membership + canPublish for the UI notice', () => {

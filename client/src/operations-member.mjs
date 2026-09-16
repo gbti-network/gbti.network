@@ -10,9 +10,7 @@ import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsCl
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
 import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
-import { probeReadiness } from './github-app-probe.mjs';
-import { nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName, deviceVerificationUrl, forkUrl, appInstallUrl, manageInstallsUrl } from './onboarding.mjs';
-import { SIGNUP_BASE, GITHUB_APP_SLUG, UPSTREAM_REPO, authModeFor } from './signup-base.mjs';
+import { SIGNUP_BASE } from './signup-base.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
 import { getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction } from './member-admin-client.mjs';
 import { OperationError, requireIdentity } from './operations-core.mjs';
@@ -343,35 +341,13 @@ export async function getDiscordLinkStatus(ctx) {
 }
 
 
-// SOW-026: first-run onboarding readiness. Reads durable GitHub state (token, fork, App install) and returns the
-// first not-yet-done step, so the wizard never loops on a cleared store. Only meaningful in app-mode (classic
-// has no fork/install onboarding); in classic mode the wizard is dormant (ready once signed in).
+// SOW-026 first-run onboarding readiness, reduced by sow-274 Part 2. There used to be a fork and an App install
+// to set up before a member could publish; publishing goes through the network now, so signing in is the whole
+// of it. The shape is kept for the screens that read it: `forkReady` and `installReady` are always true because
+// there is nothing left for them to wait on.
 export async function getOnboardingStatus(ctx) {
   const token = ctx.store?.get?.('githubToken');
-  const mode = authModeFor(ctx); // SOW-157: the per-member runtime mode, falling back to the baked constant
-  if (mode !== 'app') {
-    // Classic + hosted: there is no fork/install step. Signed-in = ready (hosted is the 1-click default:
-    // the Worker does the git work, so sign-in is the whole onboarding).
-    return { appMode: false, mode, signedIn: !!token, forkReady: true, installReady: true, activeStep: token ? 'ready' : 'signin', ready: !!token, reachedGithub: true };
-  }
-  const r = await probeReadiness({ token, appSlug: GITHUB_APP_SLUG, upstream: UPSTREAM_REPO, fetch: ctx.fetch ?? globalThis.fetch });
-  // Self-heal a DEAD token: if GitHub reached us and rejected the token (reachedGithub && !signedIn) while a token
-  // was stored, the App user token is expired/revoked and the public client cannot refresh it. Clear the stale
-  // token + identity so the UI shows ONE clean "sign in" prompt instead of "Signed in as @x" alongside "0 of 3".
-  // probeReadiness sets reachedGithub on a definitive 401 only, never a transient error, so this never signs a
-  // member out on a GitHub blip. (The ROOT fix is the App's "Expire user authorization tokens" = OFF.)
-  if (token && r.reachedGithub && !r.signedIn) {
-    try { ctx.store?.set?.({ githubToken: null, identity: null }); } catch { /* best-effort */ }
-  }
-  const activeStep = onboardingNextStep(r);
-  // Enrich with the step copy + the resolved deep-links so the UI component is purely data-driven (no
-  // cross-package import). The install link preselects the member account via their numeric id.
-  return {
-    appMode: true, mode, ...r, activeStep, ready: activeStep === 'ready',
-    forkName: r.login ? forkFullName(r.login) : null,
-    steps: ONBOARDING_STEPS,
-    links: { device: deviceVerificationUrl(), fork: forkUrl(), install: appInstallUrl({ targetId: r.githubId }), manage: manageInstallsUrl() },
-  };
+  return { appMode: false, mode: 'hosted', signedIn: !!token, forkReady: true, installReady: true, activeStep: token ? 'ready' : 'signin', ready: !!token, reachedGithub: true };
 }
 
 // SOW-024: favorites are RETIRED from git. A favorite used to be written to members/<me>/favorites.yml via an

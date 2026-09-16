@@ -23,18 +23,52 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 /**
- * The same source with its comments removed.
+ * Source with its comments removed, so a guard reads what a module DOES rather than what it says about itself.
  *
- * A guard that greps a file matches the file's own prose, so a comment explaining that the fork writer is gone
- * reads as the fork writer being present. That happened while writing this file, which is the best argument for
- * the helper: the check has to look at what the module DOES, not at what it says about itself. `//` is left
- * alone when it follows a colon, so a URL in a string survives the strip.
+ * A small scanner, not a pair of regular expressions. The regex version this replaced treated `house/**` inside a
+ * LINE comment as the start of a block comment and deleted about 12,000 characters of real code up to the next
+ * `*` + `/`, which is exactly the code these guards exist to look at, so they passed while blind. The scanner
+ * tracks strings, template literals and regular expression literals, so a comment marker inside any of them is
+ * left alone, and a line comment is removed before it can open anything.
  */
-const codeOf = (src) => src
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .split('\n')
-  .map((line) => line.replace(/(^|[^:])\/\/.*$/, '$1'))
-  .join('\n');
+function codeOf(src) {
+  let out = '';
+  let i = 0;
+  let prev = ''; // the last significant character emitted, to tell a regex literal from a division
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) j += src[j] === '\\' ? 2 : 1;
+      out += src.slice(i, j + 1);
+      prev = c;
+      i = j + 1;
+      continue;
+    }
+    if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && n === '*') { const end = src.indexOf('*/', i + 2); i = end < 0 ? src.length : end + 2; continue; }
+    if (c === '/' && (prev === '' || '(,=:[!&|?{};+-*%<>~^'.includes(prev))) {
+      let j = i + 1;
+      let inClass = false;
+      while (j < src.length && src[j] !== '\n') {
+        if (src[j] === '\\') { j += 2; continue; }
+        if (src[j] === '[') inClass = true;
+        else if (src[j] === ']') inClass = false;
+        else if (src[j] === '/' && !inClass) break;
+        j++;
+      }
+      out += src.slice(i, j + 1);
+      prev = '/';
+      i = j + 1;
+      continue;
+    }
+    out += c;
+    if (!/\s/.test(c)) prev = c;
+    i++;
+  }
+  return out;
+}
 
 /**
  * Every admin action name the shipped screens can send, gathered from the source of each surface.
@@ -77,6 +111,16 @@ function actionsTheScreensSend() {
 
   return found;
 }
+
+test('the comment stripper keeps code and removes only comments', () => {
+  // A line comment naming a glob must not open a block comment and swallow the code after it (it did).
+  const sample = "const a = 1; // house/** x\nconst b = 'x // y /* z'; /* gone */ const r = /[/'\"]+/g;\nconst t = `${a} // kept`;\nopenPull(a);";
+  const out = codeOf(sample);
+  assert.match(out, /openPull\(a\)/, 'code after a comment was removed');
+  assert.match(out, /'x \/\/ y \/\* z'/, 'a string was treated as a comment');
+  assert.match(out, /`\$\{a\} \/\/ kept`/, 'a template literal was treated as a comment');
+  assert.doesNotMatch(out, /house|gone/, 'a comment survived');
+});
 
 test('every admin action the screens send is one the network serves', () => {
   const sent = actionsTheScreensSend();

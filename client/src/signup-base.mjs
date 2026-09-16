@@ -19,9 +19,9 @@ export const GITHUB_APP_CLIENT_ID = (globalThis.process?.env?.GBTI_GITHUB_APP_CL
 export const GITHUB_APP_SLUG = (globalThis.process?.env?.GBTI_GITHUB_APP_SLUG) || 'gbti-network';
 export const UPSTREAM_REPO = (globalThis.process?.env?.GBTI_UPSTREAM_REPO) || 'gbti-network/gbti.network';
 
-// AUTH_MODE = 'classic' (today, account-wide public_repo) | 'app' (SOW-026, fork-scoped GitHub App) |
-// 'hosted' (SOW-156 spike: identity-only sign-in, no fork, no install; the Worker does the git work).
-// Defaults to classic so nothing changes until a mode is explicitly set via GBTI_AUTH_MODE.
+// AUTH_MODE = 'classic' | 'app' | 'hosted'. Since sow-274 Part 2 this selects the SIGN-IN client only (which
+// GitHub client id and scope the device flow asks for); every mode publishes through the network, see
+// authModeFor below. Defaults to classic, which is what the command line tool and the agent server sign in with.
 const rawAuthMode = globalThis.process?.env?.GBTI_AUTH_MODE;
 export const AUTH_MODE = rawAuthMode === 'app' ? 'app' : rawAuthMode === 'hosted' ? 'hosted' : 'classic';
 export const isAppMode = () => AUTH_MODE === 'app';
@@ -33,31 +33,14 @@ export const activeClientId = () => (AUTH_MODE === 'classic' ? GITHUB_CLIENT_ID 
  *  hosted send an empty scope; classic keeps the account-wide public_repo read:user it has always used. */
 export const activeScope = () => (AUTH_MODE === 'classic' ? 'public_repo read:user' : '');
 
-// ---- SOW-157: runtime per-member auth mode ----
-// The extension bakes ONE build-time AUTH_MODE for every member of a bundle, but the rollout needs new
-// members on hosted while existing fork members keep app. So the PER-MEMBER store value (set once at
-// sign-in from the readiness probe) wins over the baked constant, which remains the fallback for members
-// with no stored mode (all pre-SOW-157 sessions) and for store-less contexts (the cli). Mode confers ZERO
-// privilege: it only selects the transport; the Worker re-authorizes every write server-side.
-
-/** The effective auth mode for a ctx (or a bare store): the stored per-member value, else the baked one. */
-export function authModeFor(ctxOrStore) {
-  const store = ctxOrStore?.store ?? ctxOrStore;
-  const stored = store?.get?.('authMode');
-  return stored === 'app' || stored === 'hosted' || stored === 'classic' ? stored : AUTH_MODE;
-}
-export const isHostedCtx = (ctxOrStore) => authModeFor(ctxOrStore) === 'hosted';
-
-/**
- * Decide a freshly signed-in member's auth mode from the readiness probe. Pure; null = leave unset (the
- * baked fallback applies). Rules (SOW-157 adversarial review): never decide on an unreachable probe (a
- * transient network failure must not flip an app member and orphan their staged fork drafts); a working
- * fork + install keeps the member on app; no fork at all means hosted (the 1-click default); a fork
- * WITHOUT the install is left to the onboarding install prompt rather than silently flipped.
- */
-export function decideAuthMode(probe) {
-  if (!probe?.reachedGithub || !probe?.signedIn) return null;
-  if (probe.forkReady && probe.installReady) return 'app';
-  if (!probe.forkReady) return 'hosted';
-  return null;
-}
+// ---- sow-274 Part 2: every host publishes through the network ----
+//
+// SOW-157 stored a per-member mode here (authModeFor, isHostedCtx, decideAuthMode) that chose between
+// publishing through the network and publishing from the member's own copy of the repository. The second path
+// is retired, so the chooser is deleted rather than pinned: with nothing to ask, no caller can ask it the wrong
+// way, and a session that still carries a stored 'app' or 'classic' value has nothing left that reads it.
+//
+// The baked AUTH_MODE above still selects the SIGN-IN client (activeClientId / activeScope) until Part 4 retires
+// it. That is deliberate and temporary: the command line tool's alternative client id is a placeholder outside
+// the extension build, so switching sign-in here would break sign-in rather than narrow it. It no longer decides
+// where anything is written.

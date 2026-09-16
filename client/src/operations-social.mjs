@@ -2,16 +2,18 @@
 // lifecycle (post, edit, delete, read). Member-visibility bodies are encrypted through the Worker.
 //
 // Split out of operations.mjs, which re-exports the public surface unchanged.
+//
+// sow-274 Part 2: every write here goes to the network, which commits against live main with GBTI's own
+// credentials. The fork arm each operation used to carry is gone.
 
 import { buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, parseContentFile, ContentValidationError } from './content-ops.mjs';
-import { publishFiles } from './publish.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { encryptViaWorker, MemberContentLockedError } from './member-content.mjs';
 import { addCommentEcho as workerAddCommentEcho } from './member-comment-echo-client.mjs';
-import { SIGNUP_BASE, isHostedCtx } from './signup-base.mjs';
+import { SIGNUP_BASE } from './signup-base.mjs';
 import { hostedPublishFiles } from './hosted-publish.mjs';
-import { OperationError, membershipOf, requireIdentity, requireRepo } from './operations-core.mjs';
-import { planMemberFiles, syncForkIfCreatingBranch } from './operations-publish.mjs';
+import { OperationError, membershipOf, requireIdentity } from './operations-core.mjs';
+import { planMemberFiles } from './operations-publish.mjs';
 import { decryptMemberAsset } from './operations-drafts.mjs';
 
 /**
@@ -20,9 +22,8 @@ import { decryptMemberAsset } from './operations-drafts.mjs';
  * stub .md + a sibling .enc in ONE PR; a public Share is a single plain .md. Paid-only (SOW-011): a known
  * non-paid member is blocked BEFORE any PR opens. The id is a sortable timestamp-slug derived from createdAt.
  */
-export async function publishShare(ctx, { input = {}, body = '', removeEnc = null, message, title, prBody } = {}) {
+export async function publishShare(ctx, { input = {}, body = '', removeEnc = null, title } = {}) {
   const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.', { membership });
@@ -57,16 +58,8 @@ export async function publishShare(ctx, { input = {}, body = '', removeEnc = nul
   const isEdit = !!input.id;
   if (isEdit && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
   const shareTitle = title ?? `${isEdit ? 'Update Share' : 'New Share'}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ''}`;
-  const pr = isHostedCtx(ctx)
-    ? await hostedPublishFiles(ctx, { branch: `gbti/share-${id_}`, files, title: shareTitle }) // SOW-157: no fork
-    : await publishFiles({
-        repo,
-        branch: `gbti/share-${id_}`, // idempotent by branch: re-publishing the same id updates the same PR
-        files,
-        message: message ?? `Share: ${built.frontmatter.title || id_}`,
-        title: shareTitle,
-        body: prBody,
-      });
+  // Idempotent by item: re-publishing the same share id reuses one network branch and pull request.
+  const pr = await hostedPublishFiles(ctx, { branch: `gbti/share-${id_}`, files, title: shareTitle });
   // SOW-092: spread the PR handle (prNumber/prUrl/updated) like the comment op does, so the composer ack
   // can cite the real PR (it used to read an undefined prNumber). The explicit fields win on collision.
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? 'members', status: built.frontmatter.status ?? 'published', encrypted: Boolean(plan?.encPath), edited: isEdit };
@@ -80,7 +73,7 @@ export async function publishShare(ctx, { input = {}, body = '', removeEnc = nul
 export const commentSuffix = () => Math.random().toString(36).slice(2, 8); // short collision-avoidance suffix for the id
 
 
-export async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody, removeEnc = null } = {}) {
+export async function planAndPublishComment(ctx, built, body, { title, removeEnc = null } = {}) {
   const token = ctx.store?.get?.('githubToken');
   const encrypt = (plaintext, assetId) =>
     encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
@@ -97,19 +90,16 @@ export async function planAndPublishComment(ctx, repo, built, body, { message, t
   // A comment that flipped to public leaves its old ciphertext behind unless it rides in the same PR as a delete
   // (the same rule publishShare applies). Only when nothing was encrypted this time, and only the caller's own.
   if (!plan?.encPath && typeof removeEnc === 'string' && removeEnc) files.push({ path: removeEnc, content: null });
-  // Idempotent by branch: re-editing the same comment id updates the same PR (hosted reuses one hosted branch).
-  const pr = isHostedCtx(ctx)
-    ? await hostedPublishFiles(ctx, { branch: `gbti/comment-${built.id}`, files, title })
-    : await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
+  // Idempotent by item: re-editing the same comment id reuses one network branch and pull request.
+  const pr = await hostedPublishFiles(ctx, { branch: `gbti/comment-${built.id}`, files, title });
   // SOW-072 P2: spread the PR handle (prNumber/prUrl/updated) so the comment ack + the MCP post_comment can report
   // it (publishFiles returns it; this op used to discard it). The explicit fields win on any key collision.
   return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? 'public', encrypted: Boolean(plan?.encPath) };
 }
 
 
-export async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
+export async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, title } = {}) {
   const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.', { membership });
@@ -133,10 +123,8 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
-  const r = await planAndPublishComment(ctx, repo, built, body, {
-    message: message ?? `Comment on ${targetType} ${targetSlug}`,
+  const r = await planAndPublishComment(ctx, built, body, {
     title: title ?? `Comment on ${targetType}: ${targetSlug}`,
-    prBody,
   });
   const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
   // SOW-076: optimistic echo so the AUTHOR's own comment appears instantly (read-your-writes) while the SOW-072 PR
@@ -161,7 +149,6 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
 // next deploy. Hard delete by owner intent; git history retains it (the moderation-ops caveat applies).
 export async function deleteComment(ctx, { id } = {}) {
   const identity = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
   const cid = String(id || '').trim();
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(cid)) throw new OperationError('bad-request', 'a comment id is required');
   const membership = await membershipOf(ctx);
@@ -175,19 +162,7 @@ export async function deleteComment(ctx, { id } = {}) {
   if (String(fm.author || '').toLowerCase() !== String(identity.username).toLowerCase()) {
     throw new OperationError('forbidden', 'you may only delete your own comments');
   }
-  const branch = `gbti/comment-delete-${cid}`;
-  if (isHostedCtx(ctx)) {
-    const pr = await hostedPublishFiles(ctx, { branch, files: [{ path: rel, content: null }], title: `Delete comment: ${cid}` });
-    return { ...pr, ok: true, id: cid, path: rel };
-  }
-  await syncForkIfCreatingBranch(ctx, repo, branch);
-  const pr = await publishFiles({
-    repo, branch,
-    files: [{ path: rel, content: null }],
-    message: `Delete comment ${cid}`,
-    title: `Delete comment: ${cid}`,
-    body: 'The author removed their own comment.',
-  });
+  const pr = await hostedPublishFiles(ctx, { branch: `gbti/comment-delete-${cid}`, files: [{ path: rel, content: null }], title: `Delete comment: ${cid}` });
   return { ...pr, ok: true, id: cid, path: rel };
 }
 
@@ -208,7 +183,6 @@ export async function getComment(ctx, { id } = {}) {
 
 export async function editComment(ctx, { id, body, authorNote, visibility } = {}) {
   const idn = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
   if (!id || typeof id !== 'string') throw new OperationError('bad-request', 'a comment id is required');
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
@@ -247,10 +221,8 @@ export async function editComment(ctx, { id, body, authorNote, visibility } = {}
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
   const staleEnc = input.visibility === 'public' && typeof fm.encryptedBody === 'string' && fm.encryptedBody.startsWith(`members/${idn.username}/_enc/`) ? fm.encryptedBody : null;
-  const r = await planAndPublishComment(ctx, repo, built, body, {
-    message: `Edit comment ${id}`,
+  const r = await planAndPublishComment(ctx, built, body, {
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
-    prBody: undefined,
     removeEnc: staleEnc,
   });
   // Carry the target back (mirrors publishComment) so the gbti-comment-edited event can refresh the right open

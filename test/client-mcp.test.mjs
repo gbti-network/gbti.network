@@ -17,25 +17,42 @@ function tmpRepo() {
   return dir;
 }
 
-function ctxFor({ repoPath, repo, identity } = {}) {
+/**
+ * The network as the tools see it (sow-274 Part 2: every publish goes to POST /membership/author, drafts to the
+ * private store). `authored` records each publish body; `drafts` seeds the store; `deletes` records each store
+ * delete; `repoItems` is the committed repo-drafts listing. Nothing here reaches a real network.
+ */
+function fakeNetwork({ drafts = [], repoItems = [] } = {}) {
+  const net = { authored: [], deletes: [] };
+  const store = new Map(drafts.map((d) => [`${d.type}:${d.slug}`, d]));
+  net.fetch = async (url, init = {}) => {
+    const u = new URL(String(url)).pathname;
+    const body = init.body ? JSON.parse(init.body) : null;
+    const json = (status, data) => ({ ok: status < 400, status, json: async () => data });
+    if (u === '/membership/author') { net.authored.push(body); return json(200, { ok: true, number: 11, html_url: 'u', branch: `hosted/1/${body.itemId}` }); }
+    if (u === '/membership/repo-drafts') return json(200, { items: repoItems });
+    if (u === '/membership/drafts' && (init.method || 'GET') === 'GET') return json(200, { drafts: [...store.values()] });
+    if (u === '/membership/drafts' && body?.op === 'delete') { net.deletes.push(`${body.type}:${body.slug}`); store.delete(`${body.type}:${body.slug}`); return json(200, { ok: true }); }
+    return json(404, {});
+  };
+  return net;
+}
+
+function ctxFor({ repoPath, repo, identity, net = fakeNetwork() } = {}) {
   return {
     store: { get: (k) => ({ repoPath, githubToken: repo ? 'tok' : null, mcpEnabled: true })[k] },
     reader: createReader(repoPath ?? '/nope'),
     getRepoClient: () => repo ?? null,
     identity: () => (identity === null ? null : { login: 'alice', githubId: '1', username: 'alice' }),
+    fetch: net.fetch,
+    net,
   };
 }
 
+// The repo client now only reads (the canonical fallback, the member's pull requests and their gate status).
 const fakeRepo = () => ({
   upstream: 'gbti-network/gbti.network',
-  async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-  async getDefaultBranch() { return 'main'; },
-  async getBranchSha() { return 'sha'; },
-  async ensureBranch() {},
-  async getFileSha() { return null; },
-  async putFile() {},
-  async findOpenPull() { return null; },
-  async openPull() { return { number: 11, html_url: 'u' }; },
+  async getFileContent() { return null; },
   async listMyPulls() { return [{ number: 11, title: 'x', html_url: 'u' }]; },
   async gateStatus() { return { state: 'failure', meaning: 'held', sha: 'sha' }; },
 });
@@ -77,11 +94,13 @@ test('tools/call validate_content: valid and invalid both return cleanly', async
   assert.equal(bad.valid, false);
 });
 
-test('tools/call publish_content: opens a PR via the repo client', async () => {
+test('tools/call publish_content: publishes through the network', async () => {
   const ctx = ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() });
   const res = await call('publish_content', { type: 'post', status: 'published', input: { title: 'T', slug: 'my-post' } }, ctx);
-  assert.notEqual(res.result.isError, true);
+  assert.notEqual(res.result.isError, true, JSON.stringify(res.result));
   assert.equal(textOf(res).prNumber, 11);
+  assert.equal(ctx.net.authored.length, 1);
+  assert.ok(ctx.net.authored[0].files.some((f) => f.path === 'members/alice/posts/my-post/index.md'));
 });
 
 test('tools/call publish_content without auth is an isError tool result, not a transport error', async () => {
@@ -93,13 +112,12 @@ test('tools/call publish_content without auth is an isError tool result, not a t
 
 // SOW-025: the per-type add_* wrappers forward to publish with the correct type (so the right schema applies).
 test('tools/call add_prompt: publishes a prompt (the prompt schema applies) into the prompts folder', async () => {
-  const puts = [];
-  const repo = { ...fakeRepo(), async putFile(_full, path) { puts.push(path); } };
-  const ctx = ctxFor({ repoPath: tmpRepo(), repo });
+  const ctx = ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() });
   const ok = await call('add_prompt', { status: 'published', input: { title: 'P', slug: 'my-prompt', shortDescription: 'a one-liner' }, body: 'do the thing' }, ctx);
-  assert.notEqual(ok.result.isError, true);
+  assert.notEqual(ok.result.isError, true, JSON.stringify(ok.result));
   assert.equal(textOf(ok).prNumber, 11);
-  assert.ok(puts.some((p) => p.includes('/prompts/my-prompt/')), `expected a prompts/ path, got ${JSON.stringify(puts)}`);
+  const paths = ctx.net.authored.flatMap((a) => a.files.map((f) => f.path));
+  assert.ok(paths.some((p) => p.includes('/prompts/my-prompt/')), `expected a prompts/ path, got ${JSON.stringify(paths)}`);
   // missing shortDescription -> invalid as a PROMPT (proving the prompt schema, not the post schema, is applied)
   const bad = await call('add_prompt', { status: 'published', input: { title: 'P', slug: 'no-desc' } }, ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() }));
   assert.equal(bad.result.isError, true);
@@ -161,6 +179,13 @@ test('sow-193: the author tools accept path + scope (rename and house targeting 
   assert.deepEqual(byName.publish_content.inputSchema.properties.scope.enum, ['member', 'house']);
   // list_my_content reads house content for a superadmin; it never forwarded scope before.
   assert.ok(byName.list_my_content.inputSchema.properties.scope);
+  // sow-274 Part 2: the network writes its own commit message and pull request body, so the tools stop offering
+  // them. Advertising a field that does nothing invites an agent to rely on it.
+  for (const name of ['publish_content', 'add_post', 'add_product', 'add_prompt', 'add_share', 'post_comment', 'publish_draft']) {
+    const props = byName[name].inputSchema.properties;
+    assert.equal('message' in props, false, `${name} still advertises message`);
+    assert.equal('prBody' in props, false, `${name} still advertises prBody`);
+  }
 });
 
 test('sow-193: authorContent FORWARDS path to publish, so a changed slug renames instead of duplicating', async () => {
@@ -208,80 +233,39 @@ test('sow-193: listMembersOnly awaits its reader (a Promise as `items` was the a
 // supplies `store` by hand, which is the one condition a real caller never meets.
 // ---------------------------------------------------------------------------
 
-/** A ctx whose repo-drafts route returns `repoItems` and whose fork carries `forkBranches`. */
-function ctxWithRepoDrafts({ repoItems = [], forkBranches = [], onDeleteBranch } = {}) {
-  const repo = {
-    ...fakeRepo(),
-    async listMatchingRefs() { return forkBranches.map((b) => ({ branch: b, sha: 'sha' })); },
-    // listDrafts builds a fork row from the file ON the branch, read by tip sha; without this the row is
-    // skipped and the branch alone proves nothing.
-    async getForkFileContent(_full, p) {
-      const slug = p.split('/').at(-2);
-      return `---\ntype: post\ntitle: Fork draft\nslug: ${slug}\nauthor: alice\nstatus: published\n---\n\nbody\n`;
-    },
-    async deleteBranch(_full, branch) { onDeleteBranch?.(branch); },
-    async getBranchSha() { return null; }, // so an attempted delete reports alreadyGone rather than throwing
-  };
-  const ctx = ctxFor({ repoPath: tmpRepo(), repo });
-  // foldRepoDrafts -> workerListRepoDrafts(fetch) -> GET /membership/repo-drafts
-  ctx.fetch = async (url) => (String(url).includes('/membership/repo-drafts')
-    ? { ok: true, json: async () => ({ items: repoItems }) }
-    : { ok: false, status: 404, json: async () => ({}) });
-  return ctx;
+/** A ctx whose repo-drafts route returns `repoItems` and whose private store holds `drafts`. */
+function ctxWithRepoDrafts({ repoItems = [], drafts = [] } = {}) {
+  return ctxFor({ repoPath: tmpRepo(), repo: fakeRepo(), net: fakeNetwork({ repoItems, drafts }) });
 }
 
 test('sow-194 seam: discard_draft on a REPO row is refused instead of reporting a false success', async () => {
-  // The accurate hazard. mergeRepoDrafts drops a repo row when a fork/KV draft exists for the same
-  // (type, slug), so a repo row only survives when there is NO fork branch to delete. Before the fix, `store`
-  // was undefined at the tool boundary, so discard fell to the fork path, tried to delete a branch that does
-  // not exist, and the alreadyGone catch turned that into `{ ok: true }`. The agent was told it discarded a
-  // draft that is still sitting in the repo.
-  const deleted = [];
+  // Before the fix, `store` was undefined at the tool boundary, so discard fell to the wrong store's delete and
+  // reported success. The agent was told it discarded a draft that is still sitting in the repo.
   const ctx = ctxWithRepoDrafts({
     repoItems: [{ type: 'post', slug: 'my-repo-draft', path: 'members/alice/posts/my-repo-draft/index.md', title: 'My repo draft' }],
-    forkBranches: [],
-    onDeleteBranch: (b) => deleted.push(b),
   });
 
   const res = await call('discard_draft', { type: 'post', slug: 'my-repo-draft' }, ctx);
   assert.equal(res.result.isError, true, 'a repo draft must be refused, not silently "discarded"');
   assert.equal(textOf(res).error, 'unsupported');
-  assert.deepEqual(deleted, [], 'nothing may be deleted for a repo draft');
+  assert.deepEqual(ctx.net.deletes, [], 'nothing may be deleted for a repo draft');
 });
 
-test('sow-194 seam: a fork branch whose file is unreadable does NOT get deleted by a repo-draft discard', async () => {
-  // The narrow destructive case. If a fork branch exists at the same slug but its file cannot be read,
-  // listDrafts skips the fork row, so the repo row survives the merge AND the branch is still there. The old
-  // code would have deleted that orphan branch while the caller believed it was discarding a repo draft.
-  const deleted = [];
-  const ctx = ctxWithRepoDrafts({
-    repoItems: [{ type: 'post', slug: 'orphaned', path: 'members/alice/posts/orphaned/index.md', title: 'Orphaned' }],
-    forkBranches: ['gbti/post-orphaned'],
-    onDeleteBranch: (b) => deleted.push(b),
-  });
-  ctx.getRepoClient().getForkFileContent = async () => null; // unreadable -> the fork row is skipped
+// sow-274 Part 2 removed the unreadable-fork-branch case: there is no fork branch left to orphan.
 
-  const res = await call('discard_draft', { type: 'post', slug: 'orphaned' }, ctx);
-  assert.equal(res.result.isError, true);
-  assert.equal(textOf(res).error, 'unsupported');
-  assert.deepEqual(deleted, [], 'the orphan fork branch must survive');
-});
-
-test('sow-194 seam: an UNRESOLVABLE draft is refused rather than falling through to a fork delete', async () => {
-  const deleted = [];
-  const ctx = ctxWithRepoDrafts({ repoItems: [], forkBranches: [], onDeleteBranch: (b) => deleted.push(b) });
+test('sow-194 seam: an UNRESOLVABLE draft is refused rather than falling through to a delete', async () => {
+  const ctx = ctxWithRepoDrafts({});
   const res = await call('discard_draft', { type: 'post', slug: 'ghost' }, ctx);
   assert.equal(res.result.isError, true);
   assert.equal(textOf(res).error, 'not-found');
-  assert.deepEqual(deleted, [], 'an unidentified draft must never reach deleteBranch');
+  assert.deepEqual(ctx.net.deletes, [], 'an unidentified draft must never reach a delete');
 });
 
-test('sow-194 seam: a genuine FORK draft still discards (the guard is not over-broad)', async () => {
-  const deleted = [];
-  const ctx = ctxWithRepoDrafts({ repoItems: [], forkBranches: ['gbti/post-real-fork-draft'], onDeleteBranch: (b) => deleted.push(b) });
-  const res = await call('discard_draft', { type: 'post', slug: 'real-fork-draft' }, ctx);
+test('sow-194 seam: a genuine STAGED draft still discards (the guard is not over-broad)', async () => {
+  const ctx = ctxWithRepoDrafts({ drafts: [{ type: 'post', slug: 'real-draft', path: 'members/alice/posts/real-draft/index.md', frontmatter: { title: 'Real', slug: 'real-draft' }, body: 'b' }] });
+  const res = await call('discard_draft', { type: 'post', slug: 'real-draft' }, ctx);
   assert.notEqual(res.result.isError, true, textOf(res)?.error ?? 'expected success');
-  assert.deepEqual(deleted, ['gbti/post-real-fork-draft']);
+  assert.deepEqual(ctx.net.deletes, ['post:real-draft']);
 });
 
 // ---- sow-195 regression: the WorkBench network scope must reach members/gbtilabs/ ----

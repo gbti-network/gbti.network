@@ -46,48 +46,26 @@ test('getContributionReview fails closed for the owner own PR and for another fo
   await assert.rejects(() => getContributionReview(ctx({ repo: other }), { number: 7 }), (e) => e instanceof OperationError && e.code === 'forbidden');
 });
 
-test('approve submits an APPROVE review on the CURRENT head SHA', async () => {
-  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
-  const out = await reviewContribution(ctx({ repo }), { number: 7, decision: 'approve', message: 'nice' });
-  assert.deepEqual(out, { ok: true, decision: 'approve', number: 7 });
-  assert.equal(repo.calls.reviews.length, 1);
-  assert.deepEqual(repo.calls.reviews[0], { number: 7, event: 'APPROVE', body: 'nice', commitId: 'HEAD7' });
+// sow-274 Part 2: a decision used to post a GitHub review with the owner's own token. That token's write access is
+// retired with the fork path, so every decision is refused and taken on github.com instead, where the gate records
+// the reviewer. Part 3 removes the operation and its screens; until then the refusal must be total and silent to
+// GitHub: no review, no comment, no close, whatever the decision and whatever the pull request.
+test('every decision is refused, and nothing is written to GitHub', async () => {
+  for (const [decision, message] of [['approve', 'nice'], ['request-changes', 'tighten the intro'], ['decline', 'not now'], ['decline', undefined], ['merge', undefined]]) {
+    const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
+    await assert.rejects(
+      () => reviewContribution(ctx({ repo }), { number: 7, decision, message }),
+      (e) => e instanceof OperationError && e.code === 'forbidden' && /github\.com/.test(e.message),
+      `${decision} was not refused`,
+    );
+    assert.deepEqual(repo.calls, { reviews: [], comments: [], closed: [] }, `${decision} reached GitHub`);
+  }
 });
 
-test('request-changes needs a message; with one it submits REQUEST_CHANGES', async () => {
-  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
-  await assert.rejects(
-    () => reviewContribution(ctx({ repo }), { number: 7, decision: 'request-changes', message: '   ' }),
-    (e) => e instanceof OperationError && e.code === 'bad-request',
-  );
-  await reviewContribution(ctx({ repo }), { number: 7, decision: 'request-changes', message: 'tighten the intro' });
-  assert.equal(repo.calls.reviews[0].event, 'REQUEST_CHANGES');
-  assert.equal(repo.calls.reviews[0].body, 'tighten the intro');
-});
-
-test('decline submits a REQUEST_CHANGES review with the note + best-effort close (never merges)', async () => {
-  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
-  await reviewContribution(ctx({ repo }), { number: 7, decision: 'decline', message: 'not now' });
-  assert.equal(repo.calls.reviews.length, 1);
-  assert.equal(repo.calls.reviews[0].event, 'REQUEST_CHANGES');
-  assert.equal(repo.calls.reviews[0].body, 'not now');
-  assert.deepEqual(repo.calls.closed, [7]); // best-effort close attempted
-});
-
-test('decline survives a close that the owner is not permitted to make', async () => {
-  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
-  repo.closePull = async () => { throw new Error('403 not a collaborator'); };
-  const out = await reviewContribution(ctx({ repo }), { number: 7, decision: 'decline' });
-  assert.deepEqual(out, { ok: true, decision: 'decline', number: 7 });
-  assert.equal(repo.calls.reviews[0].event, 'REQUEST_CHANGES'); // the declining review still stands
-});
-
-test('an unknown decision is a bad-request', async () => {
-  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
-  await assert.rejects(
-    () => reviewContribution(ctx({ repo }), { number: 7, decision: 'merge' }),
-    (e) => e instanceof OperationError && e.code === 'bad-request',
-  );
+test('the review screen is told it cannot act, so it hides the decide buttons', async () => {
+  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')], contentByPath: { 'members/alice/posts/x/index.md': '---\ntitle: X\n---\nbody' } });
+  const r = await getContributionReview(ctx({ repo }), { number: 7 });
+  assert.equal(r.canActInClient, false);
 });
 
 test('diffRows classifies hunk / add / del / context; diffTotals sums', () => {

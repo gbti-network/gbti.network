@@ -233,9 +233,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
   // sow-158 permalink rename (SOW-112 v2, owner-directed rename-at-publish): `path` names the canonical item this
   // edit was loaded from; a submitted slug that differs makes this publish a RENAME (one hosted PR: the new path,
   // the old path + old .enc deleted, the old URL in redirectFrom so the build 301s, the intro moved). Even without
-  // a slug change the old file's redirectFrom is merged in (a plain re-publish used to DROP it). Mirrors the
-  // isHostedCtx branch of client/src/operations.mjs publish(); the website is hosted-only, so the fork dance does
-  // not apply (the hosted branch is always fresh-based on live main).
+  // a slug change the old file's redirectFrom is merged in (a plain re-publish used to DROP it). Mirrors
+  // client/src/operations-publish.mjs publish(), which since sow-274 is network-only on every host too (the
+  // network branch is always fresh-based on live main).
   //
   // sow-183: `authorTarget` ({ scope: 'house'|'member', username? }), when given, reassigns an EXISTING item's
   // author -- the shared editor's Author field only ever sends this for a superadmin and only when it differs

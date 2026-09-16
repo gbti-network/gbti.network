@@ -33,8 +33,11 @@ function defaultTitle(change) {
 // credits, a reconcile status flip) reads as a DELETION and gets clobbered by the merge. The stale base + the
 // fresh-read-for-edit + GitHub's 3-way merge is exactly what preserves those concurrent edits. See SOW-053.
 //
-// SOW-106 Phase A: the fork's main is now kept fresh SERVER-SIDE instead. Right before the publish path CREATES
-// a per-item branch, operations.syncForkIfCreatingBranch asks the Worker to merge-upstream the fork main (the
+// sow-274 Part 2: NOTHING CALLS THIS MODULE'S FORK WRITERS ANY MORE. Every host publishes through the network, and
+// Part 4 deletes what is left here. The note below is the history of why a fork base was ever safe to use.
+//
+// SOW-106 Phase A: the fork's main was kept fresh SERVER-SIDE. Right before the publish path CREATED
+// a per-item branch, a fork sync (removed in sow-274) asked the Worker to merge-upstream the fork main (the
 // publisher App's fork-installation token; the member token cannot: merge-upstream needs the workflows
 // permission and create-ref off an unfetched upstream SHA 404s). An EXISTING branch is never synced or moved,
 // so the SOW-053 protection above still holds for in-flight edits; a sync miss just falls back to this stale

@@ -6,7 +6,7 @@
 
 import { parseContentFile, NETWORK_CONTENT_OWNER } from './content-ops.mjs';
 import { fetchStripeStatus } from './membership.mjs';
-import { SIGNUP_BASE, authModeFor } from './signup-base.mjs';
+import { SIGNUP_BASE } from './signup-base.mjs';
 import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
@@ -348,9 +348,8 @@ export async function getContributionReview(ctx, { number } = {}) {
     author: pr.author,
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
     proposed,
-    // SOW-028: only the classic account-wide token can post a review the gate honors by the member's
-    // github_id. App mode (fork-scoped) and hosted mode (SOW-157, identity-only) both decide on github.com.
-    canActInClient: authModeFor(ctx) === 'classic',
+    // sow-274: no client can post a review the gate honours any more; the decision is taken on github.com.
+    canActInClient: false,
   };
 }
 
@@ -360,41 +359,14 @@ export const DECLINE_NOTE =
 
 
 /**
- * SOW-028 P3: the owner's decision on an incoming contribution. The client NEVER merges directly: an APPROVE is
- * a GitHub PR review on the current head SHA, which the SOW-005 gate reads (by the owner's github_id) and then
- * auto-merges + runs the SOW-008 award. `request-changes` is a REQUEST_CHANGES review with a message. `decline`
- * posts a note and closes the PR (the draft stays on the contributor's fork). Fail-closed via loadOwnContribution.
+ * SOW-028 P3: the owner's decision on an incoming contribution. It used to post a GitHub review with the owner's
+ * own account-wide token, which the gate read by github_id. sow-274 retired that token's write access along with
+ * the fork path, so a decision is taken on github.com, where the gate records the reviewer. Part 3 of sow-274
+ * removes this operation and the screens around it; until then it refuses every decision, loudly, rather than
+ * appearing to do something. The UI already hides the decide buttons (canActInClient is false).
  */
-export async function reviewContribution(ctx, { number, decision, message } = {}) {
-  // App mode (SOW-026): a fork-scoped token cannot post a review the gate would honor by the owner's github_id,
-  // and the installation token must not act as a universal approver, so the decision is taken on github.com.
-  // Hosted mode (SOW-157) has an identity-only token, so the same applies. Fail fast with a clear message
-  // (the UI hides the decide buttons via canActInClient; this guards the MCP/agent path).
-  if (authModeFor(ctx) !== 'classic') {
-    throw new OperationError('forbidden', 'approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)');
-  }
-  const { repo, n, pr } = await loadOwnContribution(ctx, number);
-  const msg = typeof message === 'string' ? message.trim() : '';
-  switch (decision) {
-    case 'approve':
-      // The gate only honors an approval whose commit_id is the CURRENT head SHA, so use the freshly-read head.
-      await repo.submitReview(n, { event: 'APPROVE', body: msg, commitId: pr.headSha });
-      return { ok: true, decision, number: n };
-    case 'request-changes':
-      if (!msg) throw new OperationError('bad-request', 'request-changes needs a message describing what to change');
-      await repo.submitReview(n, { event: 'REQUEST_CHANGES', body: msg, commitId: pr.headSha });
-      return { ok: true, decision, number: n };
-    case 'decline':
-      // The owner cannot merge-close another member's PR (they are not a collaborator), so decline is a
-      // REQUEST_CHANGES review carrying the decline note (authored by the owner, which the contributor sees), plus
-      // a best-effort close. A close failure is non-fatal: the declining review stands and the contributor can
-      // close their own PR or revise it.
-      await repo.submitReview(n, { event: 'REQUEST_CHANGES', body: msg || DECLINE_NOTE, commitId: pr.headSha });
-      try { await repo.closePull(n); } catch { /* owner lacks permission to close a non-own PR; the review stands */ }
-      return { ok: true, decision, number: n };
-    default:
-      throw new OperationError('bad-request', `unknown decision "${decision}" (approve | request-changes | decline)`);
-  }
+export async function reviewContribution() {
+  throw new OperationError('forbidden', 'approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)');
 }
 
 

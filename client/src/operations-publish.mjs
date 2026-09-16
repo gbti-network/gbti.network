@@ -2,15 +2,17 @@
 // PR. This decides no privilege: it scopes to the member's own folder and forces the gated fields (via
 // content-ops), but the SOW-005 gate remains authoritative.
 //
+// sow-274 Part 2: every write here goes to the network (SOW-156/157), which commits against live main with
+// GBTI's own credentials. The fork arm each operation used to carry is gone, and with it the SOW-106 fork sync
+// and the SOW-112 rename workaround, both of which existed only because a fork branch bases on a stale main.
+//
 // Split out of operations.mjs, which re-exports the public surface unchanged.
 
 import { buildContentFile, flipContentStatus, buildCommentFile, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
-import { publishContent, publishFiles, branchName } from './publish.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
-import { workerSyncFork } from './fork-sync-client.mjs';
 import { workerDeleteDraft } from './drafts-client.mjs'; // sow-326: a publish clears its own staged record
-import { SIGNUP_BASE, isHostedCtx } from './signup-base.mjs';
+import { SIGNUP_BASE } from './signup-base.mjs';
 import { hostedAuthor, hostedItemId, hostedPublishFiles } from './hosted-publish.mjs';
 import { NETWORK_CONTENT_PATH_RE, OperationError, isNetworkContentPath, membershipOf, requireIdentity, requireRepo, requireSuperadminForHouse } from './operations-core.mjs';
 import { AUTHOR_NOTE_TYPES } from './operations-read.mjs';
@@ -19,10 +21,9 @@ import { AUTHOR_NOTE_TYPES } from './operations-read.mjs';
 // SOW-112: the TRUE permalink rename. One PR moves the item to the new slug (redirectFrom carries the old
 // public URL so the build emits a 301 and every slug-keyed reader aliases the old slug), deletes the old
 // path, byte-moves the .enc sibling (the envelope AAD is self-referential, never path-bound), and moves +
-// retargets the author's intro comment (the SOW-014 diff-scoped check demands it at the new slug). Blocked
-// while a staged draft or an open PR exists for either slug (v1 safety), and fail-CLOSED when the old file
-// cannot resolve on the branch base (the delete half needs it; the SOW-106 fork sync provides it) — never a
-// half-move. Paid-only, own-folder, post/product/prompt only. publishedAt is preserved (feeds stay stable).
+// retargets the author's intro comment (the SOW-014 diff-scoped check demands it at the new slug). Fail-CLOSED
+// when the old file cannot be read from the network (the delete half needs it), so it is never a half-move.
+// Paid-only, own-folder, post/project/prompt only. publishedAt is preserved (feeds stay stable).
 export const RENAME_URL_BASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' }; // sow-196: the retired type name maps to the SAME current URL
 
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -76,22 +77,6 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
     throw new OperationError('membership-required', 'Renaming a published item requires a paid membership.', { membership });
   }
 
-  // SOW-157: hosted mode has no fork; the staged-work safety loop and the fork base checks below are
-  // fork-mode-only (the hosted branch is always fresh-based on live main, so the SOW-112 stale-base
-  // failure cannot occur and the old file is verified via the canonical reader read further down).
-  const hosted = isHostedCtx(ctx);
-  if (!hosted) {
-    const fork = await repo.ensureFork();
-    // v1 safety: no rename while staged work or an open PR exists for either slug (the rename would strand them).
-    for (const s of [oldSlug, slug]) {
-      const branch = branchName(type, s);
-      const staged = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-      if (staged) throw new OperationError('bad-request', `a staged draft exists for "${s}" — publish or discard it first`);
-      const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-      if (pull) throw new OperationError('bad-request', `an open pull request exists for "${s}" — wait for it to merge or close it first`);
-    }
-  }
-
   const newPath = contentPath(type, id.username, slug);
   const collision = await repo.getFileContent(newPath).catch(() => null);
   if (collision != null) throw new OperationError('bad-request', `the permalink "${slug}" is already taken`);
@@ -119,27 +104,8 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
   // The from-the-author intro comment (project/prompt) moves + retargets in the same PR.
   files.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug, newSlug: slug }));
 
-  const branch = `gbti/rename-${type}-${oldSlug}`;
-  if (hosted) {
-    const pr = await hostedPublishFiles(ctx, { branch, files, title: `Rename: ${oldSlug} -> ${slug}` });
-    return { ...pr, ok: true, type, oldSlug, slug, path: newPath };
-  }
-  await syncForkIfCreatingBranch(ctx, repo, branch);
-  // The delete half needs the old file ON the branch base; without it the move would half-apply. Fail closed.
-  const fork = await repo.ensureFork();
-  const base = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base).catch(() => null);
-  const oldOnBase = baseSha ? await repo.getFileSha(fork.full_name, rel, base).catch(() => null) : null;
-  if (!oldOnBase) {
-    throw new OperationError('bad-request', 'the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — try again later or contact the co-op');
-  }
-
-  const pr = await publishFiles({
-    repo, branch, files,
-    message: `Rename ${type} ${oldSlug} -> ${slug}`,
-    title: `Rename: ${oldSlug} -> ${slug}`,
-    body: `Permalink rename (SOW-112). ${oldUrl} redirects to ${RENAME_URL_BASE[type]}/${slug}/ after the next deploy.`,
-  });
+  // The network branch is always based on live main, so the old file it deletes is the one read above.
+  const pr = await hostedPublishFiles(ctx, { branch: `gbti/rename-${type}-${oldSlug}`, files, title: `Rename: ${oldSlug} -> ${slug}` });
   return { ...pr, ok: true, type, oldSlug, slug, path: newPath };
 }
 
@@ -152,7 +118,6 @@ export const OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|projec
 
 export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
   const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
   if (status !== 'published' && status !== 'draft') {
     throw new OperationError('bad-request', 'status must be "published" or "draft"');
   }
@@ -190,52 +155,12 @@ export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
   const flip = flipContentStatus(text, status);
   if (!flip.changed) return { ok: true, noop: true, status };
   const verb = status === 'draft' ? 'Unpublish' : 'Republish';
-  if (isHostedCtx(ctx)) {
-    const pr = await hostedPublishFiles(ctx, { branch, files: [{ path: rel, content: flip.content }], title: `${verb}: ${slug}` });
-    return { ...pr, ok: true, status };
-  }
-  await syncForkIfCreatingBranch(ctx, repo, branch); // SOW-106 Phase A: fresh-base the flip branch
-  const pr = await publishFiles({
-    repo, branch, files: [{ path: rel, content: flip.content }],
-    message: `${verb} ${slug}`, title: `${verb}: ${slug}`,
-    body: status === 'draft'
-      ? 'Member unpublish: a reversible status flip to draft (SOW-106). The file stays in the repo; republishing reverses it.'
-      : 'Member republish: the status flips back to published (SOW-106).',
-  });
+  const pr = await hostedPublishFiles(ctx, { branch, files: [{ path: rel, content: flip.content }], title: `${verb}: ${slug}` });
   return { ...pr, ok: true, status };
 }
 
 
-/**
- * SOW-106 Phase A: when the publish path is about to CREATE the per-item branch, first sync the fork's main
- * with upstream via the Worker (fork-installation token), so the new branch bases on a main that CONTAINS the
- * member's already-merged files and the PR is a clean modify diff instead of an add/add conflict. An EXISTING
- * branch is NEVER synced or moved (the SOW-053 stale-base protection for in-flight edits stays intact), and
- * every failure is a silent miss: the publish proceeds exactly as before, with the needs-rebase surfacing as
- * the backstop. Exported for unit tests.
- */
-export async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFork } = {}) {
-  try {
-    const fork = await repo.ensureFork();
-    const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
-    // A branch WITH an open PR carries in-flight edits: never sync under it (SOW-053; the stale base is
-    // what protects concurrent edits). A LEFTOVER branch (exists, but its PR already merged/closed) gets
-    // the sync anyway: publish is about to force-reset it to the fork main (2026-07-09, PRs 95-97), and
-    // resetting onto an UNSYNCED main would re-create the very conflict the reset exists to prevent.
-    if (exists) {
-      let open = null;
-      try { open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { open = { number: -1 }; }
-      if (open) return { synced: false, reason: 'branch-exists' };
-    }
-    const token = ctx.store?.get?.('githubToken');
-    return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-  } catch {
-    return { synced: false, reason: 'error' };
-  }
-}
-
-
-export async function publish(ctx, { type, input, body, message, title, prBody, authorNote, path, scope } = {}) {
+export async function publish(ctx, { type, input, body, title, authorNote, path, scope } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   // SOW-145: a house publish targets the non-member house/ folder (author stays 'gbti'). The scope is declared
@@ -249,14 +174,14 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   const targetScope = houseTarget ? 'house' : 'member';
   if (houseTarget) await requireSuperadminForHouse(ctx);
   // SOW-011: publishing to the canonical repo is paid-only. Block a KNOWN non-paid (trial / lapsed) member
-  // BEFORE opening any PR, so their draft stays on their own fork and nothing reaches the canonical repo.
+  // BEFORE opening any PR, so nothing of theirs reaches the canonical repo (a draft stays in their private store).
   // 'unknown' (oracle unreachable) fails OPEN to the SOW-005 gate, which is the real authority and rejects a
   // genuinely non-paid PR anyway, so a paid member is never wrongly blocked when the oracle is down.
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       'membership-required',
-      'Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.',
+      'Publishing on gbti.network requires a paid membership. Save it as a draft to keep it privately, then upgrade at https://gbti.network and publish it.',
       { membership },
     );
   }
@@ -356,104 +281,49 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // A descriptive PR title / commit message / body (used only when the caller gave none), so the pull request
   // reads clearly and the activity feed (which shows the PR title) is not a bare "Update".
   const desc = describeContentPublish(built, { hasIntro: Boolean(introFile) });
-  const msg = message ?? desc.message;
+  // The network takes the title only and writes its own commit message and pull request body.
   const ttl = title ?? desc.title;
-  const bdy = prBody ?? desc.body;
-  // SOW-156/157: hosted mode hands the file set to the Worker (no fork, no local commit); the Worker
-  // commits to a canonical hosted branch and opens the auto-merging PR. A hosted RENAME needs none of the
-  // SOW-112 fork dance below (that dance exists because fork branches base stale; the hosted branch is
-  // ALWAYS fresh-based on live main), so it is just the old-path deletes + the intro move in the same
-  // files[] — every path is own-folder, verified against the canonical reader.
-  if (isHostedCtx(ctx)) {
-    // sow-203: the NETWORK's content publishes from a hosted host like any other member folder. The refusal
-    // that used to sit here (SOW-157, 2026-07-25) predated sow-195 and was broader than the rule it guarded.
-    // Nothing special is needed: the Worker authorises a superadmin to write any member folder
-    // (allowAnyFolder, sow-183) and the SOW-108 gate auto-merges the PR. The hosted image rule does not apply
-    // either, because it is checked only against BINARY entries and a website upload is staged flat under the
-    // acting caller's own folder (src/lib/workbench-client.ts stageImage), which that rule already accepts.
-    const hostedRenameFiles = [];
-    if (renaming) {
-      const onMain = (await ctx.reader?.readFile?.(origin.oldPath)) != null;
-      if (!onMain) throw new OperationError('bad-request', 'the original item could not be found on the network — refresh and try the rename again');
-      hostedRenameFiles.push({ path: origin.oldPath, content: null });
-      if (typeof oldFm?.encryptedBody === 'string' && oldFm.encryptedBody) hostedRenameFiles.push({ path: oldFm.encryptedBody, content: null });
-      if (!introFile) {
-        hostedRenameFiles.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
-      } else {
-        const oldIntro = `members/${id.username}/comments/intro-${origin.oldSlug}.md`;
-        if ((await ctx.reader?.readFile?.(oldIntro)) != null) hostedRenameFiles.push({ path: oldIntro, content: null });
-      }
-    }
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(hostedRenameFiles);
-    const r = await hostedAuthor({
-      token: ctx.store?.get?.('githubToken'), itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
-      files, title: ttl, signupBase: SIGNUP_BASE, fetchImpl: ctx.fetch ?? globalThis.fetch,
-    });
-    // sow-326: drop the staged draft record, mirroring the website host (src/lib/workbench-client.ts). Without
-    // this the extension and the npm CMS resurrect the very record the website just cleared, and the immortal
-    // "not published yet" banner comes back on the next open. Best-effort and strictly after the author call,
-    // so a failed publish leaves the draft intact and a cleanup miss cannot fail a successful publish; the
-    // delete is idempotent, so the publishDraft path deleting it too is harmless. A rename sweeps both slugs.
-    for (const staleSlug of [...new Set([built.slug, renaming ? origin.oldSlug : null].filter(Boolean))]) {
-      try {
-        await workerDeleteDraft({
-          type, slug: staleSlug, token: ctx.store?.get?.('githubToken'),
-          signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
-        });
-      } catch { /* see above */ }
-    }
-    return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
-  }
-  // SOW-112 v2: a rename rides the item's OWN branch (the staged-draft identity), carries the deletes of the
-  // old path (+ its .enc; the new one was freshly encrypted above), and moves the intro comment — unless this
-  // publish writes a fresh authorNote intro at the new slug already.
-  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope); // SOW-145: house prefix
-  // SOW-106 Phase A: fresh-base a branch that is about to be created (best-effort; a miss changes nothing).
-  await syncForkIfCreatingBranch(ctx, repo, branch);
-  let renameFiles = [];
+  // SOW-156/157: hand the file set to the network (no local commit), which commits to a canonical branch based
+  // on live main and opens the auto-merging PR. A RENAME is just the old-path deletes plus the intro move in the
+  // same files[]; every path is own-folder, verified against the canonical reader.
+  // sow-203: the NETWORK's content publishes from a hosted host like any other member folder. The refusal
+  // that used to sit here (SOW-157, 2026-07-25) predated sow-195 and was broader than the rule it guarded.
+  // Nothing special is needed: the Worker authorises a superadmin to write any member folder
+  // (allowAnyFolder, sow-183) and the SOW-108 gate auto-merges the PR. The hosted image rule does not apply
+  // either, because it is checked only against BINARY entries and a website upload is staged flat under the
+  // acting caller's own folder (src/lib/workbench-client.ts stageImage), which that rule already accepts.
+  const renameFiles = [];
   if (renaming) {
-    // The delete half must survive the PR DIFF, which is computed against the branch's MERGE BASE — not the
-    // branch tip and not today's fork main. A draft branch cut from a stale base ADDS the old-path file (the
-    // staged pending rename lives there), so deleting it on that branch nets to NOTHING in the diff and the
-    // merged PR leaves the old page live (exactly how PR #67 half-landed). The only safe shape: verify the
-    // old file on a FRESH fork main, then ALWAYS rebuild the branch from it — this publish rebuilds every
-    // file from the submitted content, so the branch carries nothing worth keeping. An open PR blocks (the
-    // rebuild would close it); the fail-closed message stays when the sync cannot provide the file.
-    const fork = await repo.ensureFork();
-    const base = await repo.getDefaultBranch(repo.upstream);
-    const token = ctx.store?.get?.('githubToken');
-    await workerSyncFork({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
-    if (!onMain) {
-      throw new OperationError('bad-request', 'the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op');
-    }
-    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-    if (branchSha) {
-      const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-      if (pull) throw new OperationError('bad-request', `an open pull request exists for this item (#${pull.number}) — wait for it to merge or close it, then publish the rename`);
-      await repo.deleteBranch(fork.full_name, branch).catch(() => {});
-    }
+    const onMain = (await ctx.reader?.readFile?.(origin.oldPath)) != null;
+    if (!onMain) throw new OperationError('bad-request', 'the original item could not be found on the network — refresh and try the rename again');
     renameFiles.push({ path: origin.oldPath, content: null });
-    if (typeof oldFm.encryptedBody === 'string' && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
+    if (typeof oldFm?.encryptedBody === 'string' && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
     if (!introFile) {
       renameFiles.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
     } else {
-      // A fresh authorNote intro ships at the new slug in this same publish; the OLD intro must still be
-      // deleted or it survives as an orphan the alias union surfaces as a duplicate author note (hit in PR #68:
-      // the editor prefills the note field from the existing intro, so renames practically always take this arm).
       const oldIntro = `members/${id.username}/comments/intro-${origin.oldSlug}.md`;
       if ((await ctx.reader?.readFile?.(oldIntro)) != null) renameFiles.push({ path: oldIntro, content: null });
     }
   }
-  const withRename = (r) => (renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r);
-  if (introFile || renaming) {
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
-    return withRename(await publishFiles({ repo, branch, files, message: msg, title: ttl, body: bdy }));
+  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+  const r = await hostedAuthor({
+    token: ctx.store?.get?.('githubToken'), itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
+    files, title: ttl, signupBase: SIGNUP_BASE, fetchImpl: ctx.fetch ?? globalThis.fetch,
+  });
+  // sow-326: drop the staged draft record, mirroring the website host (src/lib/workbench-client.ts). Without
+  // this the extension and the npm CMS resurrect the very record the website just cleared, and the immortal
+  // "not published yet" banner comes back on the next open. Best-effort and strictly after the author call,
+  // so a failed publish leaves the draft intact and a cleanup miss cannot fail a successful publish; the
+  // delete is idempotent, so the publishDraft path deleting it too is harmless. A rename sweeps both slugs.
+  for (const staleSlug of [...new Set([built.slug, renaming ? origin.oldSlug : null].filter(Boolean))]) {
+    try {
+      await workerDeleteDraft({
+        type, slug: staleSlug, token: ctx.store?.get?.('githubToken'),
+        signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
+      });
+    } catch { /* see above */ }
   }
-  if (plan) {
-    return withRename(await publishFiles({ repo, branch, files: plan.files, message: msg, title: ttl, body: bdy }));
-  }
-  return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
+  return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
 }
 
 
@@ -564,7 +434,4 @@ export async function planMemberFiles({ built, body, encrypt }) {
   };
 }
 
-// ----- SOW-082: universal draft staging. A draft is the item committed to its per-item branch gbti/<type>-<slug>
-// on the member's FORK with NO open PR. Save commits there (no PR); Publish opens the PR from that same branch.
-// Save is trial+paid (canStageDrafts); Publish stays paid-only (the SOW-005 gate is the backstop). -----
 

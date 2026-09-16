@@ -11,8 +11,7 @@ import { createGithubReader } from '../../client/src/github-reader.mjs';
 import { deviceFlowLogin } from '../../client/src/auth-device.mjs';
 import { createRepoClient } from '../../client/src/github-repo.mjs';
 import { resolveMembership } from '../../client/src/membership.mjs';
-import { GITHUB_CLIENT_ID, GITHUB_APP_SLUG, activeClientId, activeScope, decideAuthMode } from '../../client/src/signup-base.mjs';
-import { probeReadiness } from '../../client/src/github-app-probe.mjs'; // SOW-157: mode decision at sign-in
+import { GITHUB_CLIENT_ID, activeClientId, activeScope } from '../../client/src/signup-base.mjs';
 import { resolveOpenPage } from './open-page.mjs';
 import { needsRefresh, refreshPatch } from './token-refresh.mjs';
 
@@ -61,18 +60,9 @@ async function handleLogin(store) {
     identity: { login: u.login, githubId: String(u.id), username: String(u.login).toLowerCase() },
   });
 
-  // SOW-157: decide this member's auth mode ONCE per fresh sign-in, from the readiness probe. A stored mode
-  // is never overwritten automatically (a member who chose fork mode keeps it; switching is an explicit
-  // account action), and decideAuthMode returns null on an unreachable probe or a fork-without-install (no
-  // silent flip that would orphan staged fork drafts). New members with no fork land on 'hosted': sign-in
-  // IS the whole onboarding, and the Worker does the git work. The background is the only mode writer.
-  if (!store.get('authMode')) {
-    try {
-      const probe = await probeReadiness({ token: accessToken, appSlug: GITHUB_APP_SLUG, upstream: UPSTREAM, fetch: globalThis.fetch });
-      const mode = decideAuthMode(probe);
-      if (mode) store.set({ authMode: mode });
-    } catch { /* leave unset; the baked default applies */ }
-  }
+  // sow-274 Part 2: there is no publishing mode to decide at sign-in any more. SOW-157 probed the member's fork
+  // and App install here and stored 'app' or 'hosted'; every member publishes through the network now, and a
+  // stored value from before has nothing left that reads it, so nothing is probed and nothing is stored.
 
   // SOW-011: resolve + cache the effective membership so the in-page editor can show the "membership required
   // to publish" notice and block a trial publish. Best-effort: any failure leaves it 'unknown' (fails OPEN to

@@ -29,6 +29,7 @@ const aliceCtx = (overrides = {}) => ({
   reader: overrides.reader,
   getRepoClient: overrides.getRepoClient ?? (() => null),
   identity: () => (overrides.identity === null ? null : { login: 'alice', githubId: '1', username: 'alice' }),
+  fetch: overrides.fetch,
 });
 
 test('reader: lists the member own content and reads one item, scoped', () => {
@@ -67,7 +68,9 @@ test('api /api/validate: reports invalid content without throwing', async () => 
   assert.match(bad.json.error, /slug/);
 });
 
-test('api /api/publish: requires auth, else publishes via the repo client', async () => {
+// sow-274 Part 2: the publish reaches the NETWORK (POST /membership/author), not a fork, so the success half
+// asserts on the file set the network received. Signed-out is still refused before anything is sent.
+test('api /api/publish: requires auth, else publishes through the network', async () => {
   const reader = createReader(tmpRepo());
   const noAuth = await handleApi(
     { method: 'POST', pathname: '/api/publish', body: { type: 'post', input: { title: 'T', slug: 's' } } },
@@ -75,25 +78,24 @@ test('api /api/publish: requires auth, else publishes via the repo client', asyn
   );
   assert.equal(noAuth.status, 401);
 
-  const calls = [];
-  const fakeRepo = {
-    upstream: 'gbti-network/gbti.network',
-    async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-    async getDefaultBranch() { return 'main'; },
-    async getBranchSha() { return 'sha'; },
-    async ensureBranch() {},
-    async getFileSha() { return null; },
-    async putFile(r, p) { calls.push(p); },
-    async findOpenPull() { return null; },
-    async openPull() { return { number: 9, html_url: 'u' }; },
+  const authored = [];
+  const fetch = async (url, init = {}) => {
+    if (new URL(String(url)).pathname === '/membership/author') {
+      authored.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ ok: true, number: 9, html_url: 'u', branch: 'hosted/1/post-my-post' }) };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
   };
+  // A read-only repository client: the publish must not reach for anything else on it.
+  const readOnlyRepo = { upstream: 'gbti-network/gbti.network', async getFileContent() { return null; } };
   const ok = await handleApi(
     { method: 'POST', pathname: '/api/publish', body: { type: 'post', input: { title: 'T', slug: 'my-post' } } },
-    aliceCtx({ reader, getRepoClient: () => fakeRepo }),
+    aliceCtx({ reader, githubToken: 'tok', fetch, getRepoClient: () => readOnlyRepo }),
   );
-  assert.equal(ok.status, 200);
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
   assert.equal(ok.json.prNumber, 9);
-  assert.deepEqual(calls, ['members/alice/posts/my-post/index.md']);
+  assert.equal(authored.length, 1);
+  assert.deepEqual(authored[0].files.map((f) => f.path), ['members/alice/posts/my-post/index.md']);
 });
 
 test('api: 409 when there is no identity, 404 for unknown routes', async () => {

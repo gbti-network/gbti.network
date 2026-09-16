@@ -35,7 +35,7 @@ var STORE_DEFAULTS = Object.freeze({
   status: null,
   // cached derived membership status (refreshed periodically)
   authMode: null
-  // SOW-157: per-member auth mode ('app' | 'hosted' | 'classic'); null = baked default
+  // SOW-157, IGNORED since sow-274 Part 2: every member publishes through the network. Kept so an old store still loads
 });
 function createStore({ dir = defaultStoreDir(), fileName = "config.json" } = {}) {
   const file2 = path.join(dir, fileName);
@@ -18045,12 +18045,6 @@ var AUTH_MODE = rawAuthMode === "app" ? "app" : rawAuthMode === "hosted" ? "host
 var isAppMode = () => AUTH_MODE === "app";
 var activeClientId = () => AUTH_MODE === "classic" ? GITHUB_CLIENT_ID : GITHUB_APP_CLIENT_ID;
 var activeScope = () => AUTH_MODE === "classic" ? "public_repo read:user" : "";
-function authModeFor(ctxOrStore) {
-  const store = ctxOrStore?.store ?? ctxOrStore;
-  const stored = store?.get?.("authMode");
-  return stored === "app" || stored === "hosted" || stored === "classic" ? stored : AUTH_MODE;
-}
-var isHostedCtx = (ctxOrStore) => authModeFor(ctxOrStore) === "hosted";
 
 // client/src/github-repo.mjs
 var GitHubError = class extends Error {
@@ -18061,14 +18055,6 @@ var GitHubError = class extends Error {
     this.body = body;
   }
 };
-function toBase64(text) {
-  const s = String(text);
-  if (typeof Buffer !== "undefined") return Buffer.from(s, "utf8").toString("base64");
-  const bytes = new TextEncoder().encode(s);
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
-}
 function fromBase64(b64) {
   const clean = String(b64 || "").replace(/\s+/g, "");
   if (typeof Buffer !== "undefined") return Buffer.from(clean, "base64").toString("utf8");
@@ -18519,7 +18505,7 @@ function buildContext(store) {
     stager: createStager(repoPath),
     getRepoClient() {
       const token = store.get("githubToken");
-      return token ? createRepoClient({ token, upstream: UPSTREAM, appMode: authModeFor(store) !== "classic" }) : null;
+      return token ? createRepoClient({ token, upstream: UPSTREAM, appMode: true }) : null;
     },
     identity() {
       const id = store.get("identity");
@@ -18808,76 +18794,6 @@ function branchName(type, slug, scope = "member") {
   const prefix = scope === "house" ? "gbti/house-" : "gbti/";
   return `${prefix}${type}-${slug}`;
 }
-function defaultMessage(change) {
-  return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
-}
-function defaultTitle(change) {
-  return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
-}
-async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false, clobberOpenPull = false }) {
-  if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
-  const fork = await repo.ensureFork();
-  const base2 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base2);
-  if (resetStale && repo.findOpenPull && repo.forceBranch) {
-    let tip = null;
-    try {
-      tip = await repo.getBranchSha(fork.full_name, branch);
-    } catch {
-      tip = null;
-    }
-    if (tip && tip !== baseSha) {
-      const open = clobberOpenPull ? null : await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
-    }
-  }
-  await repo.ensureBranch(fork.full_name, branch, baseSha);
-  for (const f of files) {
-    const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
-    const isBinary = f.contentBase64 !== void 0 && f.contentBase64 !== null;
-    if (f.content === null && !isBinary) {
-      if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
-    } else {
-      await repo.putFile(fork.full_name, f.path, {
-        message: message ?? `Update ${f.path}`,
-        contentBase64: isBinary ? String(f.contentBase64) : toBase64(f.content),
-        branch,
-        sha: existingSha ?? void 0
-      });
-    }
-  }
-  return { fork: fork.full_name, owner: fork.owner, branch, base: base2 };
-}
-async function publishContent({ repo, change, message, title, body }) {
-  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const branch = branchName(change.type, change.slug, change.scope);
-  const { fork, owner, base: base2 } = await commitToBranchOnFork({
-    repo,
-    branch,
-    files: [{ path: change.path, content: change.markdown }],
-    message: message ?? defaultMessage(change),
-    resetStale: true
-    // a leftover branch from a merged PR must not seed a conflicting new PR
-  });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) {
-    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  }
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
-}
-async function publishFiles({ repo, branch, files, message, title, body, clobberOpenPull = false }) {
-  if (!branch) throw new Error("publishFiles: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
-  const { fork, owner, base: base2 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true, clobberOpenPull });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base2, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
-}
 
 // client/src/drafts-client.mjs
 var trimBase2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
@@ -18958,24 +18874,6 @@ function mergeRepoDrafts(existing = [], repoItems = [], { type = null } = {}) {
   return rows;
 }
 
-// client/src/fork-sync-client.mjs
-var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
-async function workerSyncFork({ token, signupBase, fetch = globalThis.fetch, branch = "main" } = {}) {
-  if (!token || !signupBase) return { ok: false, synced: false, reason: "not-signed-in" };
-  try {
-    const res = await fetch(`${trimBase4(signupBase)}/membership/sync-fork`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ branch })
-    });
-    if (!res.ok) return { ok: false, synced: false, reason: `http-${res.status}` };
-    const data = await res.json().catch(() => null);
-    return data && typeof data === "object" ? data : { ok: false, synced: false, reason: "bad-response" };
-  } catch {
-    return { ok: false, synced: false, reason: "network" };
-  }
-}
-
 // client/src/hosted-publish.mjs
 function hostedItemId(type, slug) {
   return type === "profile" ? "profile" : `${type}-${slug}`;
@@ -19027,7 +18925,6 @@ async function introMoveFiles(ctx2, { username, type, oldSlug, newSlug }) {
 var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 async function setOwnContentStatus(ctx2, { path: rel, status } = {}) {
   const id = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
   if (status !== "published" && status !== "draft") {
     throw new OperationError("bad-request", 'status must be "published" or "draft"');
   }
@@ -19059,41 +18956,10 @@ async function setOwnContentStatus(ctx2, { path: rel, status } = {}) {
   const flip = flipContentStatus(text, status);
   if (!flip.changed) return { ok: true, noop: true, status };
   const verb = status === "draft" ? "Unpublish" : "Republish";
-  if (isHostedCtx(ctx2)) {
-    const pr2 = await hostedPublishFiles(ctx2, { branch, files: [{ path: rel, content: flip.content }], title: `${verb}: ${slug}` });
-    return { ...pr2, ok: true, status };
-  }
-  await syncForkIfCreatingBranch(ctx2, repo, branch);
-  const pr = await publishFiles({
-    repo,
-    branch,
-    files: [{ path: rel, content: flip.content }],
-    message: `${verb} ${slug}`,
-    title: `${verb}: ${slug}`,
-    body: status === "draft" ? "Member unpublish: a reversible status flip to draft (SOW-106). The file stays in the repo; republishing reverses it." : "Member republish: the status flips back to published (SOW-106)."
-  });
+  const pr = await hostedPublishFiles(ctx2, { branch, files: [{ path: rel, content: flip.content }], title: `${verb}: ${slug}` });
   return { ...pr, ok: true, status };
 }
-async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncFork } = {}) {
-  try {
-    const fork = await repo.ensureFork();
-    const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
-    if (exists) {
-      let open = null;
-      try {
-        open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-      } catch {
-        open = { number: -1 };
-      }
-      if (open) return { synced: false, reason: "branch-exists" };
-    }
-    const token = ctx2.store?.get?.("githubToken");
-    return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
-  } catch {
-    return { synced: false, reason: "error" };
-  }
-}
-async function publish(ctx2, { type, input, body, message, title, prBody, authorNote, path: path4, scope } = {}) {
+async function publish(ctx2, { type, input, body, title, authorNote, path: path4, scope } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   const houseTarget = scope === "house" || isNetworkContentPath(path4);
@@ -19103,7 +18969,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       "membership-required",
-      "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.",
+      "Publishing on gbti.network requires a paid membership. Save it as a draft to keep it privately, then upgrade at https://gbti.network and publish it.",
       { membership }
     );
   }
@@ -19179,67 +19045,13 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   }
   const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx2.now?.() });
   const desc = describeContentPublish(built, { hasIntro: Boolean(introFile) });
-  const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
-  const bdy = prBody ?? desc.body;
-  if (isHostedCtx(ctx2)) {
-    const hostedRenameFiles = [];
-    if (renaming) {
-      const onMain = await ctx2.reader?.readFile?.(origin.oldPath) != null;
-      if (!onMain) throw new OperationError("bad-request", "the original item could not be found on the network — refresh and try the rename again");
-      hostedRenameFiles.push({ path: origin.oldPath, content: null });
-      if (typeof oldFm?.encryptedBody === "string" && oldFm.encryptedBody) hostedRenameFiles.push({ path: oldFm.encryptedBody, content: null });
-      if (!introFile) {
-        hostedRenameFiles.push(...await introMoveFiles(ctx2, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
-      } else {
-        const oldIntro = `members/${id.username}/comments/intro-${origin.oldSlug}.md`;
-        if (await ctx2.reader?.readFile?.(oldIntro) != null) hostedRenameFiles.push({ path: oldIntro, content: null });
-      }
-    }
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(hostedRenameFiles);
-    const r = await hostedAuthor({
-      token: ctx2.store?.get?.("githubToken"),
-      itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
-      files,
-      title: ttl,
-      signupBase: SIGNUP_BASE,
-      fetchImpl: ctx2.fetch ?? globalThis.fetch
-    });
-    for (const staleSlug of [...new Set([built.slug, renaming ? origin.oldSlug : null].filter(Boolean))]) {
-      try {
-        await workerDeleteDraft({
-          type,
-          slug: staleSlug,
-          token: ctx2.store?.get?.("githubToken"),
-          signupBase: SIGNUP_BASE,
-          fetch: ctx2.fetch ?? globalThis.fetch
-        });
-      } catch {
-      }
-    }
-    return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
-  }
-  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope);
-  await syncForkIfCreatingBranch(ctx2, repo, branch);
-  let renameFiles = [];
+  const renameFiles = [];
   if (renaming) {
-    const fork = await repo.ensureFork();
-    const base2 = await repo.getDefaultBranch(repo.upstream);
-    const token2 = ctx2.store?.get?.("githubToken");
-    await workerSyncFork({ token: token2, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
-    const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base2).catch(() => null);
-    if (!onMain) {
-      throw new OperationError("bad-request", "the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op");
-    }
-    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-    if (branchSha) {
-      const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-      if (pull) throw new OperationError("bad-request", `an open pull request exists for this item (#${pull.number}) — wait for it to merge or close it, then publish the rename`);
-      await repo.deleteBranch(fork.full_name, branch).catch(() => {
-      });
-    }
+    const onMain = await ctx2.reader?.readFile?.(origin.oldPath) != null;
+    if (!onMain) throw new OperationError("bad-request", "the original item could not be found on the network — refresh and try the rename again");
     renameFiles.push({ path: origin.oldPath, content: null });
-    if (typeof oldFm.encryptedBody === "string" && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
+    if (typeof oldFm?.encryptedBody === "string" && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
     if (!introFile) {
       renameFiles.push(...await introMoveFiles(ctx2, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
     } else {
@@ -19247,15 +19059,28 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
       if (await ctx2.reader?.readFile?.(oldIntro) != null) renameFiles.push({ path: oldIntro, content: null });
     }
   }
-  const withRename = (r) => renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
-  if (introFile || renaming) {
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
-    return withRename(await publishFiles({ repo, branch, files, message: msg, title: ttl, body: bdy }));
+  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+  const r = await hostedAuthor({
+    token: ctx2.store?.get?.("githubToken"),
+    itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
+    files,
+    title: ttl,
+    signupBase: SIGNUP_BASE,
+    fetchImpl: ctx2.fetch ?? globalThis.fetch
+  });
+  for (const staleSlug of [...new Set([built.slug, renaming ? origin.oldSlug : null].filter(Boolean))]) {
+    try {
+      await workerDeleteDraft({
+        type,
+        slug: staleSlug,
+        token: ctx2.store?.get?.("githubToken"),
+        signupBase: SIGNUP_BASE,
+        fetch: ctx2.fetch ?? globalThis.fetch
+      });
+    } catch {
+    }
   }
-  if (plan) {
-    return withRename(await publishFiles({ repo, branch, files: plan.files, message: msg, title: ttl, body: bdy }));
-  }
-  return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
+  return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
 }
 function describeContentPublish(built, { hasIntro } = {}) {
   const LABEL = { post: "article", project: "project", prompt: "prompt", profile: "profile" };
@@ -19334,21 +19159,15 @@ async function planMemberFiles({ built, body, encrypt }) {
 }
 
 // client/src/operations-drafts.mjs
-async function authorContent(ctx2, { type, input, body, status, message, title, prBody, authorNote, path: path4, scope } = {}) {
+async function authorContent(ctx2, { type, input, body, status, title, authorNote, path: path4, scope } = {}) {
   if (status !== "draft" && status !== "published") {
-    throw new OperationError("status-required", 'Specify status: "published" to publish (merge and go live on the network) or "draft" to stage on your fork for review before publishing.');
+    throw new OperationError("status-required", 'Specify status: "published" to publish (merge and go live on the network) or "draft" to save it privately for review before publishing.');
   }
-  if (status === "draft") return saveDraft(ctx2, { type, input, body, message, path: path4 });
-  return publish(ctx2, { type, input, body, message, title, prBody, authorNote, path: path4, scope });
+  if (status === "draft") return saveDraft(ctx2, { type, input, body, path: path4 });
+  return publish(ctx2, { type, input, body, title, authorNote, path: path4, scope });
 }
-function draftMetaFromBranch(branch) {
-  if (branch === "gbti/profile") return { type: "profile", slug: null };
-  const m = String(branch || "").match(/^gbti\/(post|project|product|prompt)-(.+)$/);
-  return m ? { type: m[1], slug: m[2] } : null;
-}
-async function saveDraft(ctx2, { type, input, body, message, path: path4 } = {}) {
+async function saveDraft(ctx2, { type, input, body, path: path4 } = {}) {
   const id = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
   const membership = await membershipOf(ctx2);
   if (membership !== "unknown" && !canStageDrafts(membership)) {
     throw new OperationError("forbidden", "Saving drafts requires an active trial or paid membership.", { membership });
@@ -19362,55 +19181,26 @@ async function saveDraft(ctx2, { type, input, body, message, path: path4 } = {})
   const origin = renameOriginOf({ path: path4, username: id.username, type: built.type });
   const staging = origin && built.slug !== origin.oldSlug ? origin : null;
   const branch = branchName(built.type, staging ? staging.oldSlug : built.slug);
-  if (isHostedCtx(ctx2)) {
-    let fm = {};
-    try {
-      fm = parseContentFile(built.markdown).frontmatter ?? {};
-    } catch {
-      fm = {};
-    }
-    await workerPutDraft({
-      draft: {
-        type: built.type,
-        slug: staging ? staging.oldSlug : built.slug,
-        pendingSlug: staging ? built.slug : null,
-        path: staging ? staging.oldPath : built.path,
-        frontmatter: fm,
-        body
-      },
-      token: ctx2.store?.get?.("githubToken"),
-      signupBase: SIGNUP_BASE,
-      fetch: ctx2.fetch ?? globalThis.fetch
-    });
-    return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: "staged", hosted: true, ...staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {} };
-  }
-  const token = ctx2.store?.get?.("githubToken");
-  const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
-  let plan;
+  let fm = {};
   try {
-    plan = await planMemberFiles({ built, body, encrypt });
-  } catch (err) {
-    if (err instanceof MemberContentLockedError) {
-      throw new OperationError("membership-required", "Staging members-only content needs an active membership. Save it as public, or check your membership status.", { membership });
-    }
-    throw err;
-  }
-  let files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  if (staging) files = files.map((f) => f.path === built.path ? { ...f, path: staging.oldPath } : f);
-  await syncForkIfCreatingBranch(ctx2, repo, branch);
-  await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
-  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: "staged", ...staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {} };
-}
-async function forkContentMatchesLive(ctx2, path4, forkText) {
-  try {
-    const staged = parseContentFile(forkText);
-    if (staged.frontmatter?.encryptedBody) return false;
-    const live = await ctx2.reader?.read?.(path4);
-    if (!live) return false;
-    return String(staged.body ?? "").trim() === String(live.body ?? "").trim() && JSON.stringify(staged.frontmatter ?? {}) === JSON.stringify(live.frontmatter ?? {});
+    fm = parseContentFile(built.markdown).frontmatter ?? {};
   } catch {
-    return false;
+    fm = {};
   }
+  await workerPutDraft({
+    draft: {
+      type: built.type,
+      slug: staging ? staging.oldSlug : built.slug,
+      pendingSlug: staging ? built.slug : null,
+      path: staging ? staging.oldPath : built.path,
+      frontmatter: fm,
+      body
+    },
+    token: ctx2.store?.get?.("githubToken"),
+    signupBase: SIGNUP_BASE,
+    fetch: ctx2.fetch ?? globalThis.fetch
+  });
+  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: "staged", hosted: true, ...staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {} };
 }
 async function foldRepoDrafts(ctx2, drafts, type) {
   let items = [];
@@ -19427,113 +19217,41 @@ async function foldRepoDrafts(ctx2, drafts, type) {
 }
 async function listDrafts(ctx2, { type } = {}) {
   const id = requireIdentity(ctx2);
-  if (isHostedCtx(ctx2)) {
-    const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
-    const { drafts: recs } = await workerListDrafts(opts);
-    const drafts2 = [];
-    for (const r of recs ?? []) {
-      if (type && r.type !== type) continue;
-      let valid = true;
-      let invalidReason = null;
-      try {
-        buildContentFile({ type: r.type, username: id.username, input: r.frontmatter ?? {}, body: r.body ?? "" });
-      } catch (err) {
-        valid = false;
-        invalidReason = err?.message || "this draft no longer matches the current schema";
-      }
-      let rowPath = r.path;
-      if (!rowPath) {
-        try {
-          rowPath = contentPath(r.type, id.username, r.slug);
-        } catch {
-          rowPath = null;
-        }
-      }
-      drafts2.push({
-        type: r.type,
-        slug: r.slug,
-        branch: branchName(r.type, r.slug),
-        path: rowPath,
-        pendingSlug: r.pendingSlug ?? null,
-        title: r.frontmatter?.title || r.frontmatter?.displayName || r.slug || r.type,
-        visibility: r.frontmatter?.visibility || "public",
-        status: r.frontmatter?.status || "draft",
-        valid,
-        invalidReason,
-        pull: null,
-        store: "kv"
-        // sow-194: the store discriminator, so a repo draft never collides with a KV draft
-      });
-    }
-    return foldRepoDrafts(ctx2, drafts2, type);
-  }
-  const repo = requireRepo(ctx2);
-  const fork = await repo.ensureFork();
-  const refs = await repo.listMatchingRefs(fork.full_name, "gbti/");
+  const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
+  const { drafts: recs } = await workerListDrafts(opts);
   const drafts = [];
-  for (const { branch, sha } of refs) {
-    const meta3 = draftMetaFromBranch(branch);
-    if (!meta3) continue;
-    if (type && meta3.type !== type) continue;
-    let path4;
-    try {
-      path4 = contentPath(meta3.type, id.username, meta3.slug);
-    } catch {
-      continue;
-    }
-    let text = null;
-    try {
-      text = await repo.getForkFileContent(fork.full_name, path4, sha || branch);
-    } catch {
-      text = null;
-    }
-    if (!text) continue;
-    let fm = {};
-    let draftBody = "";
-    try {
-      const parsed = parseContentFile(text);
-      fm = parsed.frontmatter ?? {};
-      draftBody = parsed.body ?? "";
-    } catch {
-      fm = {};
-    }
+  for (const r of recs ?? []) {
+    if (type && r.type !== type) continue;
     let valid = true;
     let invalidReason = null;
     try {
-      buildContentFile({ type: meta3.type, username: id.username, input: fm, body: draftBody });
+      buildContentFile({ type: r.type, username: id.username, input: r.frontmatter ?? {}, body: r.body ?? "" });
     } catch (err) {
       valid = false;
       invalidReason = err?.message || "this draft no longer matches the current schema";
     }
-    let pull = null;
-    try {
-      pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-    } catch {
-      pull = null;
-    }
-    if (!pull && await forkContentMatchesLive(ctx2, path4, text)) {
+    let rowPath = r.path;
+    if (!rowPath) {
       try {
-        await repo.deleteBranch(fork.full_name, branch);
+        rowPath = contentPath(r.type, id.username, r.slug);
       } catch {
+        rowPath = null;
       }
-      continue;
     }
     drafts.push({
-      type: meta3.type,
-      slug: meta3.slug,
-      branch,
-      path: path4,
-      // SOW-112 v2: a frontmatter slug that differs from the branch identity is a PENDING RENAME (it applies
-      // when the draft publishes). Surfaced so same-titled drafts are tellable apart in the Drafts tab.
-      pendingSlug: typeof fm.slug === "string" && fm.slug !== meta3.slug ? fm.slug : null,
-      title: fm.title || fm.displayName || meta3.slug || meta3.type,
-      visibility: fm.visibility || "public",
-      status: fm.status || "draft",
+      type: r.type,
+      slug: r.slug,
+      branch: branchName(r.type, r.slug),
+      path: rowPath,
+      pendingSlug: r.pendingSlug ?? null,
+      title: r.frontmatter?.title || r.frontmatter?.displayName || r.slug || r.type,
+      visibility: r.frontmatter?.visibility || "public",
+      status: r.frontmatter?.status || "draft",
       valid,
       invalidReason,
-      pull: pull ? { number: pull.number, html_url: pull.html_url } : null,
-      store: "fork"
-      // sow-194: the store discriminator, so a repo draft never collides with a fork draft
+      pull: null,
+      store: "kv"
+      // sow-194: the store discriminator, so a repo draft never collides with a staged one
     });
   }
   return foldRepoDrafts(ctx2, drafts, type);
@@ -19551,87 +19269,45 @@ async function readDraft(ctx2, { type, slug, store, path: repoPath } = {}) {
       }
     }
     if (!rel) throw new OperationError("bad-request", "a repo draft needs its path");
-    let text2 = null;
+    let text = null;
     try {
-      text2 = await ctx2.reader?.readFile?.(rel);
+      text = await ctx2.reader?.readFile?.(rel);
     } catch {
-      text2 = null;
+      text = null;
     }
-    if (text2 == null) throw new OperationError("not-found", `could not read the repo draft: ${rel}`);
-    const { frontmatter: frontmatter2, body: body2 } = parseContentFile(text2);
-    if (frontmatter2?.encryptedBody) {
+    if (text == null) throw new OperationError("not-found", `could not read the repo draft: ${rel}`);
+    const { frontmatter, body } = parseContentFile(text);
+    if (frontmatter?.encryptedBody) {
       try {
-        const { text: plain } = await decryptMemberAsset(ctx2, { encPath: frontmatter2.encryptedBody });
-        return { path: rel, branch: null, store: "repo", frontmatter: frontmatter2, body: plain };
+        const { text: plain } = await decryptMemberAsset(ctx2, { encPath: frontmatter.encryptedBody });
+        return { path: rel, branch: null, store: "repo", frontmatter, body: plain };
       } catch {
       }
     }
-    return { path: rel, branch: null, store: "repo", frontmatter: frontmatter2, body: body2 };
+    return { path: rel, branch: null, store: "repo", frontmatter, body };
   }
-  if (isHostedCtx(ctx2)) {
-    const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
-    const { drafts: recs } = await workerListDrafts(opts);
-    const rec = (recs ?? []).find((r) => r.type === type && r.slug === slug);
-    if (!rec) throw new OperationError("not-found", "no such draft");
-    let recPath = rec.path;
-    if (!recPath) {
-      try {
-        recPath = contentPath(type, id.username, slug);
-      } catch {
-        recPath = null;
-      }
-    }
-    return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "" };
-  }
-  const repo = requireRepo(ctx2);
-  const branch = branchName(type, slug);
-  const fork = await repo.ensureFork();
-  let path4;
-  try {
-    path4 = contentPath(type, id.username, slug);
-  } catch (err) {
-    throw new OperationError("bad-request", err.message);
-  }
-  const text = await repo.getForkFileContent(fork.full_name, path4, branch);
-  if (!text) throw new OperationError("not-found", "no such draft on your fork");
-  const { frontmatter, body } = parseContentFile(text);
-  if (frontmatter?.encryptedBody) {
+  const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
+  const { drafts: recs } = await workerListDrafts(opts);
+  const rec = (recs ?? []).find((r) => r.type === type && r.slug === slug);
+  if (!rec) throw new OperationError("not-found", "no such draft");
+  let recPath = rec.path;
+  if (!recPath) {
     try {
-      const { text: plain } = await decryptMemberAsset(ctx2, { encPath: frontmatter.encryptedBody });
-      return { path: path4, branch, frontmatter, body: plain };
+      recPath = contentPath(type, id.username, slug);
     } catch {
+      recPath = null;
     }
   }
-  return { path: path4, branch, frontmatter, body };
+  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "" };
 }
 async function discardDraft(ctx2, { type, slug, store } = {}) {
   requireIdentity(ctx2);
   if (!type) throw new OperationError("bad-request", "type is required");
   if (store === "repo") throw new OperationError("unsupported", "This draft is committed to the network and cannot be discarded here. Publish it, or open a removal request.");
-  if (isHostedCtx(ctx2)) {
-    await workerDeleteDraft({ type, slug, token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
-    return { ok: true, branch: branchName(type, slug), hosted: true };
-  }
-  const repo = requireRepo(ctx2);
-  const branch = branchName(type, slug);
-  const fork = await repo.ensureFork();
-  let pull = null;
-  try {
-    pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-  } catch {
-    pull = null;
-  }
-  if (pull) throw new OperationError("bad-request", "This draft has an open pull request; withdraw it from review before discarding.", { prNumber: pull.number });
-  try {
-    await repo.deleteBranch(fork.full_name, branch);
-  } catch (err) {
-    const still = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-    if (still) throw err;
-    return { ok: true, branch, alreadyGone: true };
-  }
-  return { ok: true, branch };
+  await workerDeleteDraft({ type, slug, token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+  return { ok: true, branch: branchName(type, slug), hosted: true };
 }
-async function publishDraft(ctx2, { type, slug, title, prBody, store, path: path4 } = {}) {
+async function publishDraft(ctx2, { type, slug, title, store, path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   if (store === "repo") {
     let rel = path4;
@@ -19645,51 +19321,27 @@ async function publishDraft(ctx2, { type, slug, title, prBody, store, path: path
     if (!rel) throw new OperationError("bad-request", "a repo draft needs its path to publish");
     return setOwnContentStatus(ctx2, { path: rel, status: "published" });
   }
-  const repo = requireRepo(ctx2);
   const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.", { membership });
+    throw new OperationError("membership-required", "Publishing on gbti.network requires a paid membership. Your draft is saved privately. Upgrade to a paid membership at https://gbti.network, then publish it.", { membership });
   }
-  if (isHostedCtx(ctx2)) {
-    const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
-    const { drafts: recs } = await workerListDrafts(opts);
-    const rec = (recs ?? []).find((r2) => r2.type === type && r2.slug === slug);
-    if (!rec) throw new OperationError("not-found", "no such draft");
-    const r = await publish(ctx2, {
-      type,
-      input: rec.frontmatter ?? {},
-      body: rec.body ?? "",
-      title,
-      prBody,
-      ...rec.pendingSlug && rec.path ? { path: rec.path } : {}
-      // a pending rename applies at the publish event (SOW-112)
-    });
-    try {
-      await workerDeleteDraft({ type, slug, ...opts });
-    } catch {
-    }
-    return { ...r, ok: true, hosted: true };
+  const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
+  const { drafts: recs } = await workerListDrafts(opts);
+  const rec = (recs ?? []).find((r2) => r2.type === type && r2.slug === slug);
+  if (!rec) throw new OperationError("not-found", "no such draft");
+  const r = await publish(ctx2, {
+    type,
+    input: { ...rec.frontmatter ?? {}, status: "published" },
+    body: rec.body ?? "",
+    title,
+    ...rec.pendingSlug && rec.path ? { path: rec.path } : {}
+    // a pending rename applies at the publish event (SOW-112)
+  });
+  try {
+    await workerDeleteDraft({ type, slug, ...opts });
+  } catch {
   }
-  const branch = branchName(type, slug);
-  const fork = await repo.ensureFork();
-  const head = `${fork.owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, updated: true };
-  if (type !== "profile") {
-    const oldPath = contentPath(type, id.username, slug);
-    const text = await repo.getForkFileContent(fork.full_name, oldPath, branch).catch(() => null);
-    if (text != null) {
-      const parsed = parseContentFile(text);
-      const fm = parsed.frontmatter ?? {};
-      if (typeof fm.slug === "string" && fm.slug !== slug) {
-        return publish(ctx2, { type, input: { ...fm, status: "published" }, body: parsed.body, path: oldPath, title, prBody });
-      }
-    }
-  }
-  const base2 = await repo.getDefaultBranch(repo.upstream);
-  const titleText2 = title ?? (type === "profile" ? `Update ${id.username}'s profile` : `${type}: ${slug}`);
-  const pull = await repo.openPull({ title: titleText2, head, base: base2, body: prBody ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, updated: false };
+  return { ...r, ok: true, hosted: true };
 }
 var ENC_PATH_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/_enc\/[a-z0-9][a-z0-9._-]*\.enc$/;
 async function decryptMemberAsset(ctx2, { encPath } = {}) {
@@ -19721,9 +19373,8 @@ async function decryptMemberAsset(ctx2, { encPath } = {}) {
 }
 
 // client/src/operations-social.mjs
-async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, message, title, prBody } = {}) {
+async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, title } = {}) {
   const id = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
   const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.", { membership });
@@ -19752,19 +19403,11 @@ async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, mes
   const isEdit = !!input.id;
   if (isEdit && typeof removeEnc === "string" && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
   const shareTitle = title ?? `${isEdit ? "Update Share" : "New Share"}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`;
-  const pr = isHostedCtx(ctx2) ? await hostedPublishFiles(ctx2, { branch: `gbti/share-${id_}`, files, title: shareTitle }) : await publishFiles({
-    repo,
-    branch: `gbti/share-${id_}`,
-    // idempotent by branch: re-publishing the same id updates the same PR
-    files,
-    message: message ?? `Share: ${built.frontmatter.title || id_}`,
-    title: shareTitle,
-    body: prBody
-  });
+  const pr = await hostedPublishFiles(ctx2, { branch: `gbti/share-${id_}`, files, title: shareTitle });
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
-async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody, removeEnc = null } = {}) {
+async function planAndPublishComment(ctx2, built, body, { title, removeEnc = null } = {}) {
   const token = ctx2.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   let plan;
@@ -19778,12 +19421,11 @@ async function planAndPublishComment(ctx2, repo, built, body, { message, title, 
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   if (!plan?.encPath && typeof removeEnc === "string" && removeEnc) files.push({ path: removeEnc, content: null });
-  const pr = isHostedCtx(ctx2) ? await hostedPublishFiles(ctx2, { branch: `gbti/comment-${built.id}`, files, title }) : await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
+  const pr = await hostedPublishFiles(ctx2, { branch: `gbti/comment-${built.id}`, files, title });
   return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
 }
-async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
+async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, parentId, visibility, title } = {}) {
   const id = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
   const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.", { membership });
@@ -19801,10 +19443,8 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
-  const r = await planAndPublishComment(ctx2, repo, built, body, {
-    message: message ?? `Comment on ${targetType} ${targetSlug}`,
-    title: title ?? `Comment on ${targetType}: ${targetSlug}`,
-    prBody
+  const r = await planAndPublishComment(ctx2, built, body, {
+    title: title ?? `Comment on ${targetType}: ${targetSlug}`
   });
   const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
   const echoToken = ctx2.store?.get?.("githubToken");
@@ -19821,7 +19461,6 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
 }
 async function editComment(ctx2, { id, body, authorNote, visibility } = {}) {
   const idn = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
   if (!id || typeof id !== "string") throw new OperationError("bad-request", "a comment id is required");
   const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
@@ -19855,22 +19494,20 @@ async function editComment(ctx2, { id, body, authorNote, visibility } = {}) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
   const staleEnc = input.visibility === "public" && typeof fm.encryptedBody === "string" && fm.encryptedBody.startsWith(`members/${idn.username}/_enc/`) ? fm.encryptedBody : null;
-  const r = await planAndPublishComment(ctx2, repo, built, body, {
-    message: `Edit comment ${id}`,
+  const r = await planAndPublishComment(ctx2, built, body, {
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
-    prBody: void 0,
     removeEnc: staleEnc
   });
   return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
 }
 
 // client/src/member-og-client.mjs
-var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
 async function ogPreview({ url: url2, token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
-  const res = await fetch(trimBase5(signupBase) + "/membership/og-preview", {
+  const res = await fetch(trimBase4(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ url: url2 })
@@ -20052,36 +19689,12 @@ async function getContributionReview(ctx2, { number: number4 } = {}) {
     author: pr.author,
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
     proposed,
-    // SOW-028: only the classic account-wide token can post a review the gate honors by the member's
-    // github_id. App mode (fork-scoped) and hosted mode (SOW-157, identity-only) both decide on github.com.
-    canActInClient: authModeFor(ctx2) === "classic"
+    // sow-274: no client can post a review the gate honours any more; the decision is taken on github.com.
+    canActInClient: false
   };
 }
-var DECLINE_NOTE = "Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.";
-async function reviewContribution(ctx2, { number: number4, decision, message } = {}) {
-  if (authModeFor(ctx2) !== "classic") {
-    throw new OperationError("forbidden", "approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)");
-  }
-  const { repo, n, pr } = await loadOwnContribution(ctx2, number4);
-  const msg = typeof message === "string" ? message.trim() : "";
-  switch (decision) {
-    case "approve":
-      await repo.submitReview(n, { event: "APPROVE", body: msg, commitId: pr.headSha });
-      return { ok: true, decision, number: n };
-    case "request-changes":
-      if (!msg) throw new OperationError("bad-request", "request-changes needs a message describing what to change");
-      await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg, commitId: pr.headSha });
-      return { ok: true, decision, number: n };
-    case "decline":
-      await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg || DECLINE_NOTE, commitId: pr.headSha });
-      try {
-        await repo.closePull(n);
-      } catch {
-      }
-      return { ok: true, decision, number: n };
-    default:
-      throw new OperationError("bad-request", `unknown decision "${decision}" (approve | request-changes | decline)`);
-  }
+async function reviewContribution() {
+  throw new OperationError("forbidden", "approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)");
 }
 
 // client/src/mcp-auth.mjs
@@ -20206,7 +19819,7 @@ function logout(ctx2) {
 var PROTOCOL_VERSION = "2024-11-05";
 var obj = (properties, required2 = []) => ({ type: "object", properties, required: required2, additionalProperties: true });
 var TYPE_ENUM = { type: "string", enum: ["post", "project", "product", "prompt", "profile"] };
-var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
+var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: 'REQUIRED: "published" merges and goes live on the network; "draft" saves it privately for review.' };
 var COMMENT_TARGET = { type: "string", enum: ["post", "project", "prompt", "share", "news"] };
 var PATH_PARAM = { type: "string", description: "The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate." };
 var SCOPE_PARAM = { type: "string", enum: ["member", "house"], description: 'Target folder. "member" (default) is your own folder; "house" is the non-member house/ content and is superadmin-only, re-checked server-side.' };
@@ -20272,9 +19885,9 @@ var TOOLS = [
   },
   {
     name: "publish_content",
-    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" saves it privately for review (no PR, nothing public). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM },
+      { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM },
       ["type", "input", "status"]
     ),
     // sow-271: this one forwards `args` WHOLE, so the type has to be canonicalized here rather than relying
@@ -20286,29 +19899,29 @@ var TOOLS = [
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: "add_prompt",
-    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
-    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
+    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "prompt" })
   },
   {
     name: "add_product",
-    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
-    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "project" })
   },
   {
     name: "add_post",
-    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
-    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "post" })
   },
   // sow-193: the DRAFT lifecycle. These four operations existed and were tested since SOW-082 but none was
   // exposed as a tool, so an agent could create a draft with status:"draft" and then never list, read, publish
-  // or discard it. A fork-staged draft is at least a visible branch on the member's own GitHub; a hosted draft
-  // lives in private KV, so the hole was about to get worse. Thin wrappers, no new logic.
+  // or discard it. A staged draft lives in the private store, where nothing else would ever show it to them.
+  // Thin wrappers, no new logic.
   {
     name: "list_drafts",
-    description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, whether it still validates against the current schema, and its pull request if one is open.',
+    description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, and whether it still validates against the current schema.',
     inputSchema: obj({ type: TYPE_ENUM }),
     handler: (ctx2, args) => listDrafts(ctx2, { type: canonicalType(args?.type) || void 0 })
   },
@@ -20321,8 +19934,8 @@ var TOOLS = [
   {
     name: "publish_draft",
     description: "Publish a staged draft: opens the gated pull request from the draft branch it is already on. Paid-only, like every publish.",
-    inputSchema: obj({ type: TYPE_ENUM, slug: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["type", "slug"]),
-    handler: async (ctx2, args) => publishDraft(ctx2, { ...await draftTarget(ctx2, args), title: args?.title, prBody: args?.prBody })
+    inputSchema: obj({ type: TYPE_ENUM, slug: { type: "string" }, title: { type: "string" } }, ["type", "slug"]),
+    handler: async (ctx2, args) => publishDraft(ctx2, { ...await draftTarget(ctx2, args), title: args?.title })
   },
   {
     name: "discard_draft",
@@ -20369,9 +19982,9 @@ var TOOLS = [
   // your own post/product/prompt is public; every reply, and ALL Share comments, are members-only + encrypted).
   {
     name: "post_comment",
-    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
+    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"project"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), title (the pull request title). author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
-      { targetType: COMMENT_TARGET, targetSlug: { type: "string" }, body: { type: "string" }, authorNote: { type: "boolean" }, parentId: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
+      { targetType: COMMENT_TARGET, targetSlug: { type: "string" }, body: { type: "string" }, authorNote: { type: "boolean" }, parentId: { type: "string" }, title: { type: "string" } },
       ["targetType", "targetSlug", "body"]
     ),
     handler: (ctx2, args) => publishComment(ctx2, args ?? {})
@@ -20400,9 +20013,7 @@ var TOOLS = [
         image: { type: "string" },
         category: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
-        body: { type: "string", description: "Optional note in your own words about why the link is worth reading." },
-        message: { type: "string" },
-        prBody: { type: "string" }
+        body: { type: "string", description: "Optional note in your own words about why the link is worth reading." }
       },
       ["url"]
     ),
@@ -20447,7 +20058,7 @@ async function addShare(ctx2, args = {}) {
     category: args.category,
     tags: Array.isArray(args.tags) ? args.tags : void 0
   });
-  return publishShare(ctx2, { input, body: args.body ?? "", message: args.message, prBody: args.prBody });
+  return publishShare(ctx2, { input, body: args.body ?? "" });
 }
 var stripBlank = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== ""));
 var TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));

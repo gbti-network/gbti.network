@@ -1,10 +1,10 @@
 // SOW-106 Phase A: the Worker-side fork-main sync. Tier gate (paid|trialing), merge-upstream outcome mapping
-// (every miss is a clean 200), the fork-installation token helper, and the client-side create-gate. Fakes only.
+// (every miss is a clean 200), and the fork-installation token helper. Fakes only. The Worker route stays until
+// sow-274 Part 4 deletes it; the client-side caller is already gone (see the note at the foot).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { membershipSyncFork } from '../workers/signup/membership-sync-fork.mjs';
 import { getForkInstallationToken } from '../workers/signup/github-app.mjs';
-import { syncForkIfCreatingBranch } from '../client/src/operations.mjs';
 
 const req = (body = {}, method = 'POST') => ({ method, headers: { get: () => 'Bearer t' }, json: async () => body });
 const memberAs = (login, status) => async () => ({ ok: true, githubId: '42', login, status });
@@ -66,31 +66,4 @@ test('getForkInstallationToken: resolves the fork installation, mints + caches; 
   assert.equal(await getForkInstallationToken({}, 'alice', { fetchImpl }), null);
 });
 
-test('syncForkIfCreatingBranch: absent branch syncs; an OPEN PR blocks; a LEFTOVER branch syncs too', async () => {
-  const calls = [];
-  const sync = async (args) => { calls.push(args); return { ok: true, synced: true }; };
-  const ctx = { store: { get: (k) => (k === 'githubToken' ? 'tok' : null) }, fetch: async () => {} };
-  const repoWith = (sha, openPull) => ({
-    ensureFork: async () => ({ full_name: 'alice/gbti.network', owner: 'alice' }),
-    getBranchSha: async () => { if (sha) return sha; throw new Error('404'); },
-    findOpenPull: async () => openPull ?? null,
-  });
-  const absent = await syncForkIfCreatingBranch(ctx, repoWith(null), 'gbti/post-x', { sync });
-  assert.equal(absent.synced, true);
-  assert.equal(calls.length, 1);
-  // A branch with an OPEN PR carries in-flight edits: never synced under it (SOW-053).
-  const inFlight = await syncForkIfCreatingBranch(ctx, repoWith('abc', { number: 9 }), 'gbti/post-x', { sync });
-  assert.deepEqual(inFlight, { synced: false, reason: 'branch-exists' });
-  assert.equal(calls.length, 1); // no second sync
-  // A LEFTOVER branch (its PR merged/closed) syncs: publish is about to reset it to the fork main
-  // (2026-07-09, PRs 95-97: resetting onto an unsynced main re-created the conflict).
-  const leftover = await syncForkIfCreatingBranch(ctx, repoWith('abc', null), 'gbti/post-x', { sync });
-  assert.equal(leftover.synced, true);
-  assert.equal(calls.length, 2);
-  // An unreadable PR state fails SAFE (no sync, the SOW-053 posture).
-  const unknown = await syncForkIfCreatingBranch(ctx, { ...repoWith('abc'), findOpenPull: async () => { throw new Error('down'); } }, 'gbti/post-x', { sync });
-  assert.deepEqual(unknown, { synced: false, reason: 'branch-exists' });
-  // a throwing repo is a silent miss, never an error
-  const broken = await syncForkIfCreatingBranch(ctx, { ensureFork: async () => { throw new Error('down'); } }, 'b', { sync });
-  assert.equal(broken.synced, false);
-});
+// sow-274 Part 2 removed syncForkIfCreatingBranch (the client-side create-gate): no client publishes from a fork now.

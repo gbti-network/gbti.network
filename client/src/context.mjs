@@ -7,7 +7,7 @@ import { createGithubReader } from './github-reader.mjs'; // sow-193: the clone-
 import { createRepoClient } from './github-repo.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from './roles.mjs';
 import { resolveMembership } from './membership.mjs';
-import { SIGNUP_BASE, authModeFor } from './signup-base.mjs';
+import { SIGNUP_BASE } from './signup-base.mjs';
 import { createDevlog } from '../../membership/devlog-core.mjs';
 
 export const UPSTREAM = process.env.GBTI_UPSTREAM || 'gbti-network/gbti.network';
@@ -43,8 +43,10 @@ export function buildContext(store) {
     stager: createStager(repoPath),
     getRepoClient() {
       const token = store.get('githubToken');
-      // SOW-157: app AND hosted read through the Worker proxies; only classic reads GitHub directly.
-      return token ? createRepoClient({ token, upstream: UPSTREAM, appMode: authModeFor(store) !== 'classic' }) : null;
+      // sow-274 Part 2: every member reads their pull requests through the network, because the network opened
+      // them. A direct GitHub search by author finds nothing: the author of a network-opened pull request is
+      // GBTI's App, not the member. (The option is still called appMode until Part 4 removes the other half.)
+      return token ? createRepoClient({ token, upstream: UPSTREAM, appMode: true }) : null;
     },
     identity() {
       const id = store.get('identity');

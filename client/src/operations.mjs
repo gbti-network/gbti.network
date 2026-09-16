@@ -33,7 +33,6 @@ export {
 export {
   authorContent,
   saveDraft,
-  forkContentMatchesLive,
   listDrafts,
   readDraft,
   discardDraft,
@@ -45,7 +44,6 @@ export {
   renameOriginOf,
   renameContent,
   setOwnContentStatus,
-  syncForkIfCreatingBranch,
   publish,
   describeContentPublish,
   buildIntroCommentFile,
