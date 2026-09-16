@@ -4,6 +4,7 @@
 // of the key; wired into sop-member-erasure.md alongside activity + follows).
 
 import { normalizeNotify } from './notify-resolve.mjs';
+import { normalizeOnboarding, isEmptyOnboarding, isStepKey, isOnboardingKey, cleanKeys, cleanSocials, MAX_NETWORK_FOLLOWS, MAX_HANDLE } from './onboarding.mjs';
 
 export class PrefsError extends Error {}
 
@@ -67,7 +68,56 @@ export function normalizePrefs(stored) {
   // keeps the record's prior shape and resolveNotify falls through to SYSTEM_NOTIFY_DEFAULT (email OFF).
   const notify = normalizeNotify(p.notify);
   if (notify) out.notify = notify;
+  // sow-343: onboarding progress (skips, GBTI channels opened, a trial member's kept social handles). Present only
+  // once something is stored, the same rule as notify, so an untouched record keeps its shape.
+  const onboarding = normalizeOnboarding(p.onboarding);
+  if (onboarding) out.onboarding = onboarding;
   return out;
+}
+
+/** sow-343: apply the onboarding patches to a normalized prefs object (mutates `next`). */
+function applyOnboardingPatch(next, patch) {
+  if (patch.onboarding !== undefined) {
+    // The one whole-block write is a CLEAR (the account page's "reset the welcome process"). A caller cannot
+    // hand over a block wholesale: every other change goes through a patch that validates its one field.
+    if (patch.onboarding !== null) throw new PrefsError('onboarding can only be cleared (null)');
+    delete next.onboarding;
+  }
+  const touched = patch.onboardingSkip !== undefined || patch.onboardingFollows !== undefined
+    || patch.onboardingSocials !== undefined || patch.onboardingSocialsSaved !== undefined;
+  if (!touched) return;
+  const ob = next.onboarding ?? { skipped: [], networkFollows: [], socials: {}, socialsSaved: false };
+  if (patch.onboardingSkip !== undefined) {
+    const step = patch.onboardingSkip?.step;
+    if (!isStepKey(step)) throw new PrefsError('a known welcome step is required');
+    const on = patch.onboardingSkip.on !== false;
+    ob.skipped = on ? cleanKeys([...ob.skipped, step], 20) : ob.skipped.filter((k) => k !== step);
+  }
+  if (patch.onboardingFollows !== undefined) {
+    // Add only. Nothing in the wizard un-follows, and a stale tab must not be able to erase another tab's ticks.
+    if (!Array.isArray(patch.onboardingFollows) || !patch.onboardingFollows.every(isOnboardingKey)) {
+      throw new PrefsError('onboardingFollows must be a list of channel keys');
+    }
+    const merged = [...ob.networkFollows, ...patch.onboardingFollows.filter((k) => !ob.networkFollows.includes(k))];
+    if (merged.length > MAX_NETWORK_FOLLOWS) throw new PrefsError(`too many followed channels (the limit is ${MAX_NETWORK_FOLLOWS})`);
+    ob.networkFollows = cleanKeys(merged, MAX_NETWORK_FOLLOWS);
+  }
+  if (patch.onboardingSocials !== undefined) {
+    const v = patch.onboardingSocials;
+    if (v !== null && (typeof v !== 'object' || Array.isArray(v))) throw new PrefsError('onboardingSocials must be an object of handles');
+    if (v && Object.values(v).some((h) => typeof h === 'string' && h.trim().length > MAX_HANDLE)) {
+      throw new PrefsError(`a social handle is too long (the limit is ${MAX_HANDLE} characters)`);
+    }
+    ob.socials = cleanSocials(v);
+  }
+  if (patch.onboardingSocialsSaved !== undefined) {
+    if (typeof patch.onboardingSocialsSaved !== 'boolean') throw new PrefsError('onboardingSocialsSaved must be a boolean');
+    ob.socialsSaved = patch.onboardingSocialsSaved;
+    // A save that landed clears the handles it was carrying (a publish clears its own draft record).
+    if (ob.socialsSaved) ob.socials = {};
+  }
+  if (isEmptyOnboarding(ob)) delete next.onboarding;
+  else next.onboarding = ob;
 }
 
 /**
@@ -79,10 +129,17 @@ export function normalizePrefs(stored) {
  *  - { publicFavorites: boolean }             SOW-114: opt in/out of the public "Favorited by" list
  *  - { notify: { [type]: { api?, email? } } } SOW-186: set the global notification defaults matrix
  *                                             (null or {} clears it, falling back to the system default)
+ *  - sow-343 onboarding progress:
+ *    { onboardingSkip: { step, on } }         mark / unmark a welcome step as skipped (known steps only)
+ *    { onboardingFollows: string[] }          add GBTI channels the member opened (add only, capped)
+ *    { onboardingSocials: object | null }     replace / clear the social handles kept for a trial member
+ *    { onboardingSocialsSaved: boolean }      the handles reached the profile (true also clears them)
+ *    { onboarding: null }                     clear all of it (the account page's welcome reset)
  * Throws PrefsError on an invalid patch. Idempotent (re-following a channel is a no-op).
  */
 export function applyPrefs(stored, patch = {}) {
   const next = normalizePrefs(stored);
+  applyOnboardingPatch(next, patch);
   if (patch.categories !== undefined) {
     if (!Array.isArray(patch.categories)) throw new PrefsError('categories must be an array');
     next.categories = cleanList(patch.categories, MAX_CATEGORIES);

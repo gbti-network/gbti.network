@@ -19340,11 +19340,12 @@ async function getPrefs(ctx) {
     mapNewsErr(err, "read your preferences");
   }
 }
-async function setPrefs(ctx, { categories, followChannel, publicFavorites, notify } = {}) {
+async function setPrefs(ctx, { categories, followChannel, publicFavorites, notify, onboarding, onboardingSkip, onboardingFollows, onboardingSocials, onboardingSocialsSaved } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
+  const patch = { categories, followChannel, publicFavorites, notify, onboarding, onboardingSkip, onboardingFollows, onboardingSocials, onboardingSocialsSaved };
   try {
-    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites, notify } });
+    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch });
   } catch (err) {
     mapNewsErr(err, "save your preferences");
   }

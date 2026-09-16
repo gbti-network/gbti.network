@@ -220,14 +220,19 @@ export async function getPrefs(ctx) {
   catch (err) { mapNewsErr(err, 'read your preferences'); }
 }
 
-export async function setPrefs(ctx, { categories, followChannel, publicFavorites, notify } = {}) {
+export async function setPrefs(ctx, { categories, followChannel, publicFavorites, notify, onboarding, onboardingSkip, onboardingFollows, onboardingSocials, onboardingSocialsSaved } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   // SOW-114: publicFavorites = the member's opt-in to the public "Favorited by" list. JSON.stringify drops
   // undefined keys, so an absent field never touches the stored value.
   // SOW-186 C3: notify = the member's global notification defaults matrix ({ [event]: { api?, email? } });
   // the Worker's member-prefs normalizes it, and an absent field leaves the stored value untouched (same rule).
-  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites, notify } }); }
+  // sow-343: the onboarding progress patches. THIS LIST IS AN ALLOWLIST, so a field missing here is silently dropped
+  // on the extension and the command line while the website (which forwards the whole patch) works: add new prefs
+  // patches in both places. `onboarding: null` survives JSON.stringify, which is what makes the reset reach the
+  // Worker; an absent one is undefined and dropped.
+  const patch = { categories, followChannel, publicFavorites, notify, onboarding, onboardingSkip, onboardingFollows, onboardingSocials, onboardingSocialsSaved };
+  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch }); }
   catch (err) { mapNewsErr(err, 'save your preferences'); }
 }
 
