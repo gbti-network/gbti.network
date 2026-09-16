@@ -14,7 +14,8 @@ tags:
   - drupal
   - wordpress
   - fair
-image: https://dri.es/files/cache/blog/open-source-infrastructure-cracks-1280w.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260916230629-open-source-infrastructure-deserves-a-business-m-d09184de.webp
+imageSource: https://dri.es/files/cache/blog/open-source-infrastructure-cracks-1280w.jpg
 id: 20260916230629-open-source-infrastructure-deserves-a-business-m
 createdAt: '2026-09-16T23:06:29.657Z'
 type: share
