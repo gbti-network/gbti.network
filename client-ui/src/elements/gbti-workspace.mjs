@@ -10,6 +10,7 @@ import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, sh
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
+import { readStored } from '../storage.mjs'; // sow-347: a stored-setting read that cannot throw
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'project']); // SOW-073: types whose publish invalidates a tab
 const SITE = 'https://gbti.network'; // SOW-173: the live site origin, prefixed onto a View link from the extension host
@@ -179,14 +180,13 @@ class GbtiWorkspace extends GbtiElement {
     // SOW-085: the content-list controls. The SORT persists across sessions (one device-local pref); the STATUS
     // filter resets to All on each tab switch. `_viewList` is the merged+sorted+filtered list for the current
     // content tab, the index target the row action handlers read.
-    this._sort = sortModeFor(typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
+    this._sort = sortModeFor(readStored(WORKSPACE_SORT_KEY)); // sow-347: a blocked storage must not stop the WorkBench
     this._statusFilter = 'all';
     this._authorFilter = ''; // sow-317: the Network content author filter (session-only, like the status filter)
     this._viewList = [];
-    // SOW-145: the content SCOPE (My content / Network content), superadmin-only. Unresolved (null) until the
-    // Overview arrives with the caller's role + personal counts; treated as 'member' until then (so a
-    // non-superadmin, and the pre-overview paint, always list the member folder). `scopeFor` then resolves it
-    // (an empty-personal superadmin defaults to house). Persisted device-local like the sort pref.
+    // SOW-145: the content SCOPE (My content / Network content), superadmin-only. Unresolved (null) until the Overview
+    // arrives with the caller's role + personal counts; treated as 'member' until then (a non-superadmin and the
+    // pre-overview paint always list the member folder). `scopeFor` resolves it; persisted device-local like the sort.
     this._scope = null;
     this._scopeResolved = false;
     super.connectedCallback?.(); // base now renders the initial view with fields in place
@@ -305,7 +305,7 @@ class GbtiWorkspace extends GbtiElement {
     // house scope; everyone else stays 'member'. If the resolution moves us off 'member', reload the visible tab.
     if (trusted && !this._scopeResolved) {
       this._scopeResolved = true;
-      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SCOPE_KEY) : null;
+      const stored = readStored(WORKSPACE_SCOPE_KEY); // sow-347
       const personalCount = items(post).length + items(prompt).length + items(project).length;
       const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
       const moved = resolved !== this._scopeNow(); // compare BEFORE assigning

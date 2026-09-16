@@ -3,6 +3,7 @@
 // :host-context. The DEFAULTS are Glass + Dark (a new device opts in automatically; both stay reversible). The pure
 // normalizers/resolver are node-tested; the apply/current wrappers take injectable doc/storage/prefersDark so they
 // test without a real DOM. The no-flash boot (extension/src/theme-init.mjs) mirrors the SAME keys + the same defaults.
+import { browserStorage } from './storage.mjs'; // sow-347: reading localStorage itself throws when the browser blocks it
 
 export const LAYOUT_KEY = 'gbti-layout';
 export const THEME_KEY = 'gbti-theme';
@@ -23,7 +24,7 @@ export function resolveTheme(theme, prefersDark) {
 const osPrefersDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; } };
 
 /** Persist + apply the layout to the document root. Returns the normalized value. */
-export function applyLayout(layout, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+export function applyLayout(layout, { doc = (typeof document !== 'undefined' ? document : null), storage = browserStorage() } = {}) {
   const l = normalizeLayout(layout);
   try { storage?.setItem(LAYOUT_KEY, l); } catch { /* private mode */ }
   doc?.documentElement?.setAttribute('data-layout', l);
@@ -33,18 +34,18 @@ export function applyLayout(layout, { doc = (typeof document !== 'undefined' ? d
 /** Persist + apply the theme. All three choices are STORED explicitly now (including 'system', which follows the OS):
  *  the default (a missing key) is Dark, so 'system' can no longer be represented by an absent key. This is the SAME
  *  key the header quick-toggle writes (light|dark), so the two never disagree. Returns the normalized value. */
-export function applyTheme(theme, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null), prefersDark = osPrefersDark() } = {}) {
+export function applyTheme(theme, { doc = (typeof document !== 'undefined' ? document : null), storage = browserStorage(), prefersDark = osPrefersDark() } = {}) {
   const t = normalizeTheme(theme);
   try { storage?.setItem(THEME_KEY, t); } catch { /* private mode */ }
   doc?.documentElement?.setAttribute('data-theme', resolveTheme(t, prefersDark));
   return t;
 }
 
-export function currentLayout({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+export function currentLayout({ storage = browserStorage() } = {}) {
   try { return normalizeLayout(storage?.getItem(LAYOUT_KEY)); } catch { return 'glass'; }
 }
 
-export function currentTheme({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+export function currentTheme({ storage = browserStorage() } = {}) {
   try { return normalizeTheme(storage?.getItem(THEME_KEY)); } catch { return 'dark'; }
 }
 
@@ -62,15 +63,15 @@ export function normalizeGlass(v) { if (v == null || v === '') return 85; const 
 export function glassStrength(pct) { return normalizeGlass(pct) / 50; }
 
 /** Persist + apply the glass intensity (an inline --glass-strength on the root). Returns the normalized percent. */
-export function applyGlass(pct, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+export function applyGlass(pct, { doc = (typeof document !== 'undefined' ? document : null), storage = browserStorage() } = {}) {
   const p = normalizeGlass(pct);
   try { storage?.setItem(GLASS_KEY, String(p)); } catch { /* private mode */ }
   doc?.documentElement?.style?.setProperty('--glass-strength', String(glassStrength(p)));
   return p;
 }
 
-export function currentGlass({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
-  try { return normalizeGlass(storage?.getItem(GLASS_KEY)); } catch { return 50; }
+export function currentGlass({ storage = browserStorage() } = {}) {
+  try { return normalizeGlass(storage?.getItem(GLASS_KEY)); } catch { return normalizeGlass(null); } // the documented default (85)
 }
 
 // SOW-070: COLOR HIGHLIGHT INTENSITY -- only meaningful when layout is Glass. Scales the four ambient backdrop
@@ -86,13 +87,13 @@ export function normalizeGlow(v) { if (v == null || v === '') return 50; const n
 export function glowStrength(pct) { return normalizeGlow(pct) / 50; }
 
 /** Persist + apply the color-highlight intensity (an inline --glass-glow on the root). Returns the normalized percent. */
-export function applyGlow(pct, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+export function applyGlow(pct, { doc = (typeof document !== 'undefined' ? document : null), storage = browserStorage() } = {}) {
   const p = normalizeGlow(pct);
   try { storage?.setItem(GLOW_KEY, String(p)); } catch { /* private mode */ }
   doc?.documentElement?.style?.setProperty('--glass-glow', String(glowStrength(p)));
   return p;
 }
 
-export function currentGlow({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+export function currentGlow({ storage = browserStorage() } = {}) {
   try { return normalizeGlow(storage?.getItem(GLOW_KEY)); } catch { return 50; }
 }

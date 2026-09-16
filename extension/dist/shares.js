@@ -7556,6 +7556,22 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-settings", GbtiSettings);
 
+  // client-ui/src/storage.mjs
+  function browserStorage() {
+    try {
+      return typeof localStorage !== "undefined" ? localStorage : null;
+    } catch {
+      return null;
+    }
+  }
+  function readStored(key) {
+    try {
+      return browserStorage()?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // client-ui/src/display-prefs.mjs
   var LAYOUT_KEY = "gbti-layout";
   var THEME_KEY = "gbti-theme";
@@ -7576,7 +7592,7 @@ ${listStyleProseCss(".doc-blocks")}
       return false;
     }
   };
-  function applyLayout(layout, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function applyLayout(layout, { doc = typeof document !== "undefined" ? document : null, storage = browserStorage() } = {}) {
     const l = normalizeLayout(layout);
     try {
       storage?.setItem(LAYOUT_KEY, l);
@@ -7585,7 +7601,7 @@ ${listStyleProseCss(".doc-blocks")}
     doc?.documentElement?.setAttribute("data-layout", l);
     return l;
   }
-  function applyTheme(theme, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null, prefersDark = osPrefersDark() } = {}) {
+  function applyTheme(theme, { doc = typeof document !== "undefined" ? document : null, storage = browserStorage(), prefersDark = osPrefersDark() } = {}) {
     const t = normalizeTheme(theme);
     try {
       storage?.setItem(THEME_KEY, t);
@@ -7594,14 +7610,14 @@ ${listStyleProseCss(".doc-blocks")}
     doc?.documentElement?.setAttribute("data-theme", resolveTheme(t, prefersDark));
     return t;
   }
-  function currentLayout({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function currentLayout({ storage = browserStorage() } = {}) {
     try {
       return normalizeLayout(storage?.getItem(LAYOUT_KEY));
     } catch {
       return "glass";
     }
   }
-  function currentTheme({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function currentTheme({ storage = browserStorage() } = {}) {
     try {
       return normalizeTheme(storage?.getItem(THEME_KEY));
     } catch {
@@ -7617,7 +7633,7 @@ ${listStyleProseCss(".doc-blocks")}
   function glassStrength(pct) {
     return normalizeGlass(pct) / 50;
   }
-  function applyGlass(pct, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function applyGlass(pct, { doc = typeof document !== "undefined" ? document : null, storage = browserStorage() } = {}) {
     const p = normalizeGlass(pct);
     try {
       storage?.setItem(GLASS_KEY, String(p));
@@ -7626,11 +7642,11 @@ ${listStyleProseCss(".doc-blocks")}
     doc?.documentElement?.style?.setProperty("--glass-strength", String(glassStrength(p)));
     return p;
   }
-  function currentGlass({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function currentGlass({ storage = browserStorage() } = {}) {
     try {
       return normalizeGlass(storage?.getItem(GLASS_KEY));
     } catch {
-      return 50;
+      return normalizeGlass(null);
     }
   }
   var GLOW_KEY = "gbti-glass-glow";
@@ -7642,7 +7658,7 @@ ${listStyleProseCss(".doc-blocks")}
   function glowStrength(pct) {
     return normalizeGlow(pct) / 50;
   }
-  function applyGlow(pct, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function applyGlow(pct, { doc = typeof document !== "undefined" ? document : null, storage = browserStorage() } = {}) {
     const p = normalizeGlow(pct);
     try {
       storage?.setItem(GLOW_KEY, String(p));
@@ -7651,7 +7667,7 @@ ${listStyleProseCss(".doc-blocks")}
     doc?.documentElement?.style?.setProperty("--glass-glow", String(glowStrength(p)));
     return p;
   }
-  function currentGlow({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+  function currentGlow({ storage = browserStorage() } = {}) {
     try {
       return normalizeGlow(storage?.getItem(GLOW_KEY));
     } catch {
@@ -21244,7 +21260,7 @@ ${listStyleProseCss(".doc-blocks")}
       })();
       this._editShareId = parseWorkspaceEditShare(hash);
       this._page = 0;
-      this._sort = sortModeFor(typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
+      this._sort = sortModeFor(readStored(WORKSPACE_SORT_KEY));
       this._statusFilter = "all";
       this._authorFilter = "";
       this._viewList = [];
@@ -21361,7 +21377,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       if (trusted && !this._scopeResolved) {
         this._scopeResolved = true;
-        const stored = typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SCOPE_KEY) : null;
+        const stored = readStored(WORKSPACE_SCOPE_KEY);
         const personalCount = items(post).length + items(prompt2).length + items(project).length;
         const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
         const moved = resolved !== this._scopeNow();
