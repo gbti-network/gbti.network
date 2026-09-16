@@ -801,9 +801,9 @@ test('sow-158 Phase 2: an open-redirect return_to is dropped from the state', as
   );
 });
 
-test('sow-158 Phase 2: the github callback lands on SITE_BASE_URL + return_to when present', async () => {
+test('sow-158 Phase 2 + sow-343: a NEW account carries return_to to the welcome steps as next (returning: onboarding-landing)', async () => {
   const env = fakeEnv();
-  const startState = await packState({ ref: 'bob', nonce: 'n1', jti: 'jti-return-to', returnTo: '/account/' }, env);
+  const startState = await packState({ ref: 'bob', nonce: 'n1', jti: 'jti-return-to', returnTo: '/workbench/' }, env);
   await withFetch(
     (url) => {
       if (url.includes('login/oauth/access_token')) return { status: 200, body: { access_token: 'gho_token' } };
@@ -819,7 +819,7 @@ test('sow-158 Phase 2: the github callback lands on SITE_BASE_URL + return_to wh
         env, {},
       );
       assert.equal(res.status, 302);
-      assert.equal(res.headers.get('Location'), 'https://gbti.test/account/');
+      assert.equal(res.headers.get('Location'), 'https://gbti.test/welcome/?next=%2Fworkbench%2F');
       const cookies = res.headers.getSetCookie();
       assert.ok(cookies.some((c) => c.startsWith('gbti_session=')) && cookies.some((c) => c.startsWith('gbti_csrf=')), 'both cookies set');
     },

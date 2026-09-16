@@ -27,7 +27,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <p class="wel-load">Loading your welcome&hellip;</p>
           <gbti-welcome></gbti-welcome>
         </div>
-        <p class="wel-skip"><a href="/account/">Skip for now, go to my account</a></p>
+        <p class="wel-skip"><a href="/account/" data-welcome-skip>Skip for now, go to my account</a></p>
       </div>
     </div>
   </section>
@@ -39,6 +39,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const inn = document.querySelector('[data-welcome-signedin]') as HTMLElement | null;
 
     let mounted = false; // the client-ui wizard loads once, on the first signed-in signal
+
+    // sow-343: a brand-new account arrives here from sign-in with `next`, where it was headed. The skip link sends it
+    // on. Same-site paths only, the same rule the login page applies to return_to; anything else is ignored.
+    function safeNext(): string {
+      try {
+        const n = new URLSearchParams(location.search).get('next') || '';
+        if (n.charAt(0) === '/' && n.charAt(1) !== '/' && n.charAt(1) !== '\\' && n.indexOf('\\') < 0 && !/[\u0000-\u001f]/.test(n)) return n;
+      } catch { /* ignore */ }
+      return '';
+    }
+    const next = safeNext();
+    const skip = document.querySelector('[data-welcome-skip]') as HTMLAnchorElement | null;
+    if (skip && next) { skip.href = next; skip.textContent = 'Skip for now and continue'; }
 
     function render(s: any) {
       const signedIn = !!(s && s.login);

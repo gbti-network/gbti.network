@@ -152,7 +152,7 @@ class GbtiAccount extends GbtiElement {
       <div class="sec-h"><h3>Account</h3><p>Signed in as <b>@${esc(this._login)}</b> on this device.</p></div>
       <div class="rows">
         <div class="row"><div class="rl"><div class="t">Sign out</div><div class="d">End this session on this device.</div></div><div class="rc"><button data-signout type="button">Sign out</button></div></div>
-        <div class="row"><div class="rl"><div class="t">Welcome tour</div><div class="d">Show the post-setup welcome (join Discord + discover members) again.</div></div><div class="rc"><button data-reset-welcome type="button">Reset</button></div></div>
+        <div class="row"><div class="rl"><div class="t">Welcome steps</div><div class="d">Clear the steps you skipped and the channels you marked as followed, so the welcome steps ask again.</div></div><div class="rc"><button data-reset-welcome type="button">Reset</button></div></div>
       </div>
       <div class="msg" data-account-msg aria-live="polite"></div>
     </section>`;
@@ -292,15 +292,21 @@ class GbtiAccount extends GbtiElement {
     this.on('[data-delete]', 'click', () => this._requestDeletion());
   }
 
-  _resetWelcome() {
-    let n = 0;
+  // sow-343: the progress also lives on the account (skips, channels marked followed, handles kept for later), so the
+  // reset clears that record too. Real state (a linked Discord, follows, topics, the profile) is not touched and
+  // still counts as done, which is why the message says what it cleared rather than "start over".
+  async _resetWelcome() {
     try {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const k = localStorage.key(i);
-        if (k && k.startsWith(WELCOME_PREFIX)) { localStorage.removeItem(k); n++; }
+        if (k && k.startsWith(WELCOME_PREFIX)) localStorage.removeItem(k);
       }
     } catch { /* storage blocked */ }
-    this._say('[data-account-msg]', n ? 'Welcome tour reset. It will run again next time you open onboarding.' : 'Nothing to reset — the welcome tour has not run yet.', 'ok');
+    let cleared = false;
+    try { await this.client?.setPrefs?.({ onboarding: null }); cleared = !!this.client?.setPrefs; } catch { cleared = false; }
+    this._say('[data-account-msg]', cleared
+      ? 'Welcome steps reset. Skipped steps and the channels you marked as followed are cleared. Anything you actually connected or followed still counts.'
+      : 'We could not reach your account, so only this device was reset. Please try again in a moment.', cleared ? 'ok' : 'err');
   }
 
   async _copy(id) {

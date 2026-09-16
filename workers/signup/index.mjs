@@ -35,6 +35,7 @@ import { createDiscordClient } from '../../clients/discord.mjs';
 import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacted, retained via [observability])
 
 import { signSession, verifySession, sessionCookieHeader, readSessionCookie } from './session.mjs';
+import { signinLanding } from './signin-landing.mjs'; // sow-343: a new account meets the welcome steps first
 import {
   githubAuthorizeUrl,
   githubExchangeCode,
@@ -502,12 +503,9 @@ async function handleGithubCallback(request, env, ctx) {
   // Discord, following members and channels, adding socials, and picking topics. The extension is now a reader,
   // not the forced post-signup destination (sow-204). The coupon needs no query param: the /welcome/ phase banner
   // reads the effective status (couponUntil) from the oracle and shows the free period on its own.
-  // sow-158 Phase 2: a website login carries a validated same-site return_to in the signed state; land the member
-  // back there (the header hydrates the signed-in state from the cookie). Re-validate defense-in-depth.
-  const returnTo = safeReturnTo(state.returnTo);
-  const dest = returnTo
-    ? `${env.SITE_BASE_URL}${returnTo}`
-    : `${env.SITE_BASE_URL}/welcome/`;
+  // sow-158 Phase 2 + sow-343: a website login carries a validated same-site return_to (re-validated here). A NEW
+  // account goes to /welcome/ first and carries it as next; a returning one lands on it. See signin-landing.mjs.
+  const dest = `${env.SITE_BASE_URL}${signinLanding({ created: signup.created, returnTo: safeReturnTo(state.returnTo) })}`; // sow-343
   // sow-158 Phase 1b: mint the CSRF token cookie alongside the session so the website client can make
   // credentialed writes (double-submit). Both are set here as two Set-Cookie headers via the cookies array.
   return redirect(dest, {}, [sessionCookieHeader(session), csrfCookieHeader(generateCsrfToken(), { domain: env.COOKIE_DOMAIN })]);
