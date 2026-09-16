@@ -1,0 +1,91 @@
+---
+// sow-323 Phase 4: APPROVE THIS FOR THE PUBLIC SITE, on the item's own page.
+//
+// The queue in the admin area lists what is waiting, but a superadmin decides by READING the thing, and the
+// place they read it is the page itself. Without this the decision means opening a second screen and matching
+// a title by eye, which is how the wrong item gets approved.
+//
+// SUPERADMIN ONLY, and only on a members-only item: an approved item has nothing left to approve. The control
+// renders hidden and is revealed client-side from the member signal, exactly as the Edit pill beside it is
+// (wireEditAffordance), because these pages are static and cached. This is UX, never the boundary: the Worker
+// re-checks superadmin on every call.
+import { contentRepoPath } from '../lib/content';
+
+interface Props {
+  type: 'post' | 'project' | 'prompt';
+  owner: string;
+  slug: string;
+  visibility?: string;
+}
+const { type, owner, slug, visibility } = Astro.props as Props;
+// Only a members-only item can be approved. Silence is public (the schema default), so anything that is not
+// explicitly members has nothing waiting on it.
+const path = visibility === 'members' ? contentRepoPath(type, owner, slug) : null;
+---
+
+{path && (
+  <button type="button" class="detail-approve" data-approve-item data-approve-path={path} hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    <span data-approve-label>Approve for the public site</span>
+  </button>
+)}
+
+<style>
+  .detail-approve {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+    padding: 7px 12px; border-radius: 999px; cursor: pointer;
+    background: none; border: 1.5px solid var(--green, #1f9e5f); color: var(--green-fg, #1f9e5f);
+  }
+  .detail-approve:hover:not([disabled]) { background: var(--green, #1f9e5f); color: #fff; }
+  .detail-approve[disabled] { opacity: .55; cursor: default; }
+  .detail-approve svg { width: 15px; height: 15px; flex: none; }
+  .detail-approve[hidden] { display: none !important; }
+  @media (max-width: 480px) { .detail-approve { font-size: 12.5px; padding: 6px 10px; } }
+</style>
+
+<script>
+  import { readMemberSignal, currentIdentity, onMemberSignal } from '../lib/member-signal';
+  import { decidePrompt } from '../../client-ui/src/editorial-queue-view.mjs';
+
+  const btn = document.querySelector<HTMLButtonElement>('[data-approve-item]');
+  if (btn) {
+    const path = btn.getAttribute('data-approve-path') || '';
+    const label = btn.querySelector('[data-approve-label]');
+    const readCookie = (name: string) => document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1) || '';
+
+    // A superadmin signed in on the WEBSITE. An extension-only signal carries no web session, so it cannot
+    // authenticate the call; the extension has its own admin surface for this.
+    const apply = (identity: any) => {
+      btn.hidden = !(identity && identity.role === 'superadmin' && readCookie('gbti_csrf'));
+    };
+    apply(currentIdentity(readMemberSignal()));
+    onMemberSignal(apply);
+
+    btn.addEventListener('click', async () => {
+      const title = document.querySelector('h1')?.textContent?.trim() || '';
+      if (!confirm(decidePrompt({ title }, 'approve'))) return;
+      btn.disabled = true;
+      if (label) label.textContent = 'Approving...';
+      try {
+        const signupBase = document.documentElement.dataset.signupBase || '';
+        const signal = currentIdentity(readMemberSignal());
+        const { createWorkbenchClient } = await import('../lib/workbench-client');
+        const client = createWorkbenchClient({
+          signupBase,
+          login: String(signal?.login || ''),
+          githubId: signal?.githubId != null ? String(signal.githubId) : null,
+          isSuperadmin: true,
+        });
+        const res: any = await client.decideEditorial({ path, decision: 'approve' });
+        // The page is static and already built as a members-only item, so it does not become public in front of
+        // the reader. Saying "within a few minutes" is the honest answer, and it stops a superadmin refreshing
+        // and approving again because nothing changed.
+        if (label) label.textContent = res?.alreadyPublic ? 'Already public' : 'Approved. Public within a few minutes.';
+      } catch (err: any) {
+        btn.disabled = false;
+        if (label) label.textContent = err?.message || 'That did not go through. Try again in a minute.';
+      }
+    });
+  }
+</script>

@@ -82,6 +82,7 @@
         <button class="admin-tab" type="button" data-tab="news">News sources</button>
         <button class="admin-tab" type="button" data-tab="quotes">Quotes</button>
         <button class="admin-tab" type="button" data-tab="coupons">Coupons</button>
+        <button class="admin-tab" type="button" data-tab="editorial" data-min="superadmin">Editorial review</button>
         <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
         <button class="admin-tab" type="button" data-tab="outbound-links">Outbound links</button>
@@ -121,6 +122,13 @@
           <!-- SOW-119: the coupon registry (git-native config) + KV usage + the shareable invite links. -->
           <div class="admin-card-h"><h2>Coupons</h2><p>Free-time signup codes: create and edit coupons, track redemptions, and manage the invite links. Config edits open an auto-merged house PR.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-coupon-manager></gbti-coupon-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="editorial">
+          <!-- sow-323: the editorial review queue. SUPERADMIN, because approving PUBLISHES a member's work to
+               the open web. It opens no pull request of its own: the decision goes straight to the Worker,
+               which does the commit, because only the Worker can read an encrypted members-only body. -->
+          <div class="admin-card-h"><h2>Editorial review</h2><p>Member articles, projects and prompts start members-only. Approving one makes it public and tells its author; setting it aside is silent.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-editorial-manager></gbti-editorial-manager></div></div>
         </section>
         <section class="admin-card" data-panel="site-settings">
           <!-- sow-271: the site-wide presentation toggles. SUPERADMIN: the Worker route carries ROLE_RANK.superadmin

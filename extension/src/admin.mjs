@@ -15,7 +15,7 @@
 // Worker's authorizeStaff/authorizeAdmin against the KV mirror, and the SOW-005 gate plus CODEOWNERS are the real
 // authority. Nothing here is a reason to relax any of that.
 import { mountPageClient } from './page-client.mjs';
-import { initShell, shouldGateStaff } from './shell.mjs';
+import { initShell, shouldGateStaff, shouldGateTab } from './shell.mjs';
 
 mountPageClient();
 
@@ -48,14 +48,31 @@ function wireAdminTabs() {
   window.addEventListener('hashchange', () => { const t = tabFromHash(); if (t) showAdminTab(t); });
 }
 
+/**
+ * sow-323: remove the tabs and panels this account does not clear.
+ *
+ * REMOVED, not hidden. The panels upgrade and load their data as soon as they are in the document, so a hidden
+ * one would still make its Worker calls and take the 403 silently; and a tab the Worker refuses is worse than
+ * no tab, because it reads as a broken feature rather than as one that is not yours.
+ */
+function gateAdminTabs(status) {
+  for (const el of Array.from(document.querySelectorAll('[data-min]'))) {
+    if (!shouldGateTab(status, el.getAttribute('data-min'))) continue;
+    const name = el.dataset.tab;
+    if (name) document.querySelector(`[data-panel="${name}"]`)?.remove();
+    el.remove();
+  }
+}
+
 /** sow-228: reveal the staff surface, once. Cloning the template is what mounts the panels. */
 let revealed = false;
-function revealAdminPanels() {
+function revealAdminPanels(status) {
   if (revealed) return;
   const tpl = document.querySelector('template[data-admin-panels]');
   if (!tpl) return;
   revealed = true;
   tpl.replaceWith(tpl.content.cloneNode(true));
+  gateAdminTabs(status); // before wiring, so a removed tab is never a tab anything can select
   wireAdminTabs();
 }
 
@@ -74,6 +91,6 @@ shell.loadShellAccount()
   .then((status) => {
     if (!status) return;                       // signed out: the shell's auth splash owns this case
     if (shouldGateStaff(status)) { showAdminDenied(); return; }
-    revealAdminPanels();
+    revealAdminPanels(status);
   })
   .catch(() => { /* status unavailable: stay closed, and stay quiet about why */ });

@@ -36,6 +36,7 @@ import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the op
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
 import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
+import ApprovePill from '../../components/ApprovePill.astro'; // sow-323: the superadmin approval, beside Edit
 import {
   normalizeGallery,
   hasCaptions,
@@ -133,6 +134,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
           Edit
         </a>
       )}
+      <ApprovePill type="project" owner={d.author} slug={d.slug} visibility={d.visibility} />
       <div class="pd-wrap pd-hero-in">
         <Image src={markImage} alt={`${d.title} icon`} width={124} height={124} class="pd-mark" />
         <div class="pd-hero-txt">

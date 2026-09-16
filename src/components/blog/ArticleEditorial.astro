@@ -19,6 +19,7 @@ import { breadcrumb, leafKey } from '../../lib/taxonomy';
 import CategoryCrumbs from '../CategoryCrumbs.astro'; // sow-174: the inert full breadcrumb becomes linked crumbs
 import { ART_OVERVIEW_ID, coverDimensions } from '../../lib/article-page.mjs';
 import { contentRepoPath } from '../../lib/content';
+import ApprovePill from '../ApprovePill.astro'; // sow-323: the superadmin approval, beside Edit
 
 interface Props {
   d: any; // CollectionEntry<'post'>['data']
@@ -50,6 +51,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
           Edit
         </a>
       )}
+      <ApprovePill type="post" owner={d.author} slug={d.slug} visibility={d.visibility} />
       <div class="art-e-hero-in">
         <div class="art-e-cats"><CategoryCrumbs categories={d.categories} class="art-e-cat" /></div>
         <h1 data-gbti-region="title" class="art-e-title">{d.title}</h1>
@@ -64,6 +66,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
           Edit
         </a>
       )}
+      <ApprovePill type="post" owner={d.author} slug={d.slug} visibility={d.visibility} />
       <div class="art-e-cats"><CategoryCrumbs categories={d.categories} class="art-e-cat" /></div>
       <h1 data-gbti-region="title" class="art-e-title">{d.title}</h1>
       <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} />

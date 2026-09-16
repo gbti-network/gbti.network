@@ -122,7 +122,7 @@ export function audienceControl({ paidTier = null, isSuperadmin = false, current
   return {
     mode: 'locked-members',
     value: 'members',
-    note: 'Members read this as soon as you publish. A superadmin reviews it before it appears on the public site.',
+    note: 'Members read this as soon as you publish. A superadmin reviews it for the public site, and you are emailed if it goes public.',
     // sow-323 Phase 3: the item KEEPS ITS OWN PAGE while it waits (owner, 2026-09-12: members read it there, a
     // signed-out visitor sees the locked card, and the superadmin approves from it). The locked control used to
     // submit no flag at all, so every member item was saved with no page, and an edit stripped the page from one

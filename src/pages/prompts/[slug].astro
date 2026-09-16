@@ -24,6 +24,7 @@ import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // so
 import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { promptImageFraming } from '../../lib/prompt-page.mjs';
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
+import ApprovePill from '../../components/ApprovePill.astro'; // sow-323: the superadmin approval, beside Edit
 
 export async function getStaticPaths() {
   const prompts = (await getCollection('prompt')).filter(hasPublicPage);
@@ -92,6 +93,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
               Edit
             </a>
           )}
+          <ApprovePill type="prompt" owner={d.author} slug={d.slug} visibility={d.visibility} />
         </div>
         <h1 data-gbti-region="title" class="h1 mt12">{d.title}</h1>
         <div class="mt16 flex items-center g12 wrap-w">

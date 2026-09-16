@@ -26,6 +26,7 @@ import './elements/gbti-tag-explorer.mjs'; // SOW-100 follow-on: the Admin -> Ta
 import './elements/gbti-news-source-manager.mjs'; // SOW-056 P2: superadmin news-source manager
 import './elements/gbti-quote-manager.mjs'; // SOW-063 P3: superadmin splash-quote manager
 import './elements/gbti-coupon-manager.mjs'; // SOW-119: superadmin coupon manager
+import './elements/gbti-editorial-manager.mjs'; // sow-323: superadmin editorial review queue
 import './elements/gbti-site-settings-manager.mjs'; // sow-271: superadmin site-wide presentation toggles
 import './elements/gbti-outbound-link-manager.mjs'; // sow-289: the read-only outbound partner link board
 import './elements/gbti-cta-manager.mjs'; // sow-281: the superadmin CTA registry manager

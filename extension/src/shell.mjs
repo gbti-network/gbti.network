@@ -279,6 +279,21 @@ export function shouldGateStaff(status) {
   return typeof rank !== 'number' || rank < RANK.moderator;
 }
 
+/** sow-323: does this status clear a tab's own floor? TRUE means DENY, matching shouldGateStaff.
+ *
+ *  The staff gate above is ONE threshold for the whole admin page, and some sections sit higher than it. The
+ *  editorial review queue is superadmin at the Worker, so without this a moderator or admin saw a tab whose
+ *  every request came back 403 -- which is exactly the mismatch the retired applications tab shipped with, and
+ *  the reason its replacement is gated on both hosts. An unrecognized floor denies, like every other lookup here.
+ *  UX and disclosure control, never the boundary: authorizeSuperadmin at the Worker stays the authority. */
+export function shouldGateTab(status, min) {
+  if (!min) return shouldGateStaff(status);
+  if (shouldGateStaff(status)) return true;
+  const need = RANK[String(min)];
+  const have = RANK[status.role];
+  return typeof need !== 'number' || typeof have !== 'number' || have < need;
+}
+
 // The last raw /api/status, kept so the gate can tell an EXPIRED session (token died) from a never-signed-in one
 // and label the splash accordingly. Not exported; read only by initShell's gate handler.
 let _lastStatus = null;

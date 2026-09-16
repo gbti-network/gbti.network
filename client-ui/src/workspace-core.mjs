@@ -522,15 +522,48 @@ export function visibleTiles(tiles, tabs, authoring) {
  * a different and smaller thing: their work goes out to members first, and a superadmin reviews it before it
  * appears on the public site. Nothing here asks them to buy or apply for anything.
  *
+ * sow-323 Phase 4 corrected it once more. It promised the author would be "told either way", and there is no
+ * decline email: a superadmin can set something aside silently and it simply stays members-only (owner,
+ * 2026-09-15). Promising a message nobody sends leaves an author waiting for one, and reading its absence as
+ * the review never having happened.
+ *
  * Only for `paid` + a tier below the trusted-author level. A trial member gets trialBanner instead; a trusted
  * author gets nothing, because for them nothing waits.
  */
+/**
+ * sow-323 Phase 4: where one of the author's own items stands with the editorial review.
+ *
+ * THE AUTHOR IS TOLD ABOUT APPROVALS, AND ONLY ABOUT APPROVALS (owner, 2026-09-15). This is the WorkBench half
+ * of that: an approved item reads as public here, which is the whole message, and one still waiting says so
+ * rather than showing a bare "members" tag that could mean anything.
+ *
+ * Derived entirely from the item itself, with no per-person state behind it. That is deliberate: a record of
+ * what each author has already seen would be one more store to keep, and it would let a notice be "used up"
+ * and vanish. The state of their work is the notice.
+ *
+ * A DISMISSAL IS INVISIBLE HERE, which is the point. A set-aside item is a published members-only item, the
+ * same as one nobody has read yet, so this says the same thing about both. Anything else would be a decline
+ * notice by implication, and the owner ruled there is none.
+ *
+ * @returns `{ label, title }`, or null when there is nothing worth saying (a draft, or an unpublished item).
+ */
+export function audienceTag(item) {
+  if (!item || item.status !== 'published') return null;
+  if (item.visibility === 'members') {
+    return {
+      label: 'members only, in review',
+      title: 'Members read this now. A superadmin reviews it for the public site, and you are emailed if it goes public.',
+    };
+  }
+  return { label: 'public', title: 'This is on the public site. Your later edits stay public, and it keeps its original date.' };
+}
+
 export function curatorBanner(membership, paidTier, authoring) {
   if (membership !== 'paid') return null;
   if (paidTier === 'creator') return null; // the internal trust level: their work publishes without review
   const headline = 'Your work publishes to members first';
-  const body = 'Everything you publish goes out to members straight away. A superadmin reviews it before it '
-    + 'appears on the public site, and you will be told either way.';
+  const body = 'Everything you publish goes out to members straight away. A superadmin reviews it for the '
+    + 'public site, and you get an email if it goes public. A piece that is not taken stays published for members.';
   return {
     headline,
     body: authoring ? `${body} You can keep writing in the meantime.` : body,

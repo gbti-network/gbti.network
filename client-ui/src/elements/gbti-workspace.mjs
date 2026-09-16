@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, authorsIn, filterByAuthor, authorOf } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -875,7 +875,11 @@ class GbtiWorkspace extends GbtiElement {
   _contentRow(it, i) {
     const g = glyphFor(null, it.type);
     const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
-    const vis = it.visibility === 'members' ? `<span class="tag">members</span>` : '';
+    // sow-323 Phase 4: where this stands with the editorial review, told from the item itself. An approved
+    // item reads as public here, which is how the author is told in the WorkBench; a set-aside one is
+    // indistinguishable from one nobody has read yet, which is the owner's rule that a dismissal is silent.
+    const aud = audienceTag(it);
+    const vis = aud ? `<span class="tag" title="${esc(aud.title)}">${esc(aud.label)}</span>` : '';
     const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '';
     const flip = it.status === 'published'
       ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
