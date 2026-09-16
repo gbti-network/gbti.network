@@ -11,3 +11,13 @@ export function canEditItem(identity, owner) {
   if (identity.role === 'superadmin') return true;
   return !!identity.login && !!owner && identity.login.toLowerCase() === String(owner).toLowerCase();
 }
+
+/**
+ * sow-346: whether the signed-in identity IS the member whose profile page this is. Deliberately narrower than
+ * canEditItem: the page's "Edit profile" link opens the viewer's OWN profile in the WorkBench, so showing it to a
+ * superadmin on someone else's page would open the wrong profile. Case-insensitive, like GitHub logins.
+ */
+export function isOwnProfile(identity, username) {
+  const login = identity?.username || identity?.login;
+  return !!login && !!username && String(login).toLowerCase() === String(username).toLowerCase();
+}

@@ -46,6 +46,8 @@ const total = posts.length + projects.length + prompts.length;
     {!isOrg && (
       <div class="mt-4 flex flex-wrap justify-center gap-3 sm:justify-start">
         <SubscribeButton name={d.displayName} username={d.username} variant="white" />
+        {/* sow-346: shown only to this member, and it opens their profile in the WorkBench */}
+        <a class="btn btn-ghost" data-profile-edit data-profile-owner={d.username} href="/workbench/#tab=profile" hidden>Edit profile</a>
       </div>
     )}
   </ProfileHeader>
@@ -94,3 +96,11 @@ const total = posts.length + projects.length + prompts.length;
     </Container>
   </section>
 </BaseLayout>
+
+<script>
+  // sow-346: reveal "Edit profile" to the member whose page this is, and to nobody else (a superadmin's link would
+  // open their own profile). Presentational: the WorkBench edits only the signed-in member's own profile.
+  import { wireEditAffordance } from '../../lib/content';
+  import { isOwnProfile } from '../../lib/content-edit.mjs';
+  wireEditAffordance('[data-profile-edit]', 'data-profile-owner', isOwnProfile);
+</script>

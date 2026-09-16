@@ -257,3 +257,26 @@ test('the copy follows the writing rules', () => {
   const strip = [profileStrip({ state: 'absent' }, 'x'), profileStrip({ state: 'found', item: {} }, 'x')].flatMap((p) => [p.name, p.action]).join(' ');
   assert.doesNotMatch(strip, /[–—]|\b\w+'(s|t|re|ll|ve|d)\b/);
 });
+
+// ---- the profile page link and the handbook ----
+
+test('the profile page carries a hidden Edit profile link that only its member is shown', () => {
+  const page = read('src/pages/members/[username].astro');
+  assert.match(page, /<a class="btn btn-ghost" data-profile-edit data-profile-owner=\{d\.username\} href="\/workbench\/#tab=profile" hidden>Edit profile<\/a>/);
+  assert.match(page, /wireEditAffordance\('\[data-profile-edit\]', 'data-profile-owner', isOwnProfile\);/);
+  assert.match(page, /import \{ isOwnProfile \} from '\.\.\/\.\.\/lib\/content-edit\.mjs';/);
+  const lib = read('src/lib/content.ts');
+  assert.match(lib, /allow: \(identity: MemberSignal \| null, owner: string\) => boolean = canEditItem\)/, 'every other page keeps the owner-or-superadmin rule');
+  assert.match(lib, /btn\.hidden = !allow\(identity, owner\);/);
+  assert.equal(parseWorkspaceTab('#tab=profile'), 'profile', 'the link names a tab the WorkBench opens');
+});
+
+test('the handbook says where profile editing lives', () => {
+  const hb = read('src/pages/handbook/index.astro');
+  const sec = hb.slice(hb.indexOf('<section class="hb-sec" id="profile"'), hb.indexOf('</section>', hb.indexOf('id="profile"')));
+  assert.match(sec, /Profile tab of the\s+<a href="\/workbench\/#tab=profile">WorkBench<\/a>/);
+  assert.match(sec, /Edit profile link on your own profile\s+page/);
+  assert.doesNotMatch(sec, /Edit it from\s+<a href="\/account\/">/, 'the account page never edited profiles');
+  assert.doesNotMatch(sec, /location/, 'the editor keeps location but does not offer it');
+  assert.doesNotMatch(sec.replace(/<[^>]+>/g, ' '), /[–—]|\b\w+'(s|t|re|ll|ve|d)\b/);
+});

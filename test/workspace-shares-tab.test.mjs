@@ -117,6 +117,8 @@ test('the share page reveals Edit to the owner or a superadmin through the share
   const rule = read('src/lib/content-edit.mjs');
   assert.match(rule, /if \(identity\.role === 'superadmin'\) return true;/, 'the shared rule admits a superadmin');
   const helper = read('src/lib/content.ts');
-  assert.match(helper, /export function wireEditAffordance\(selector: string, ownerAttr: string\)/);
-  assert.match(helper, /btn\.hidden = !canEditItem\(identity, owner\)/);
+  // sow-346 added an optional rule for the profile page's owner-only link; with no third argument, as here, it is
+  // still canEditItem.
+  assert.match(helper, /export function wireEditAffordance\(selector: string, ownerAttr: string, allow: .*=> boolean = canEditItem\)/);
+  assert.match(helper, /btn\.hidden = !allow\(identity, owner\)/);
 });

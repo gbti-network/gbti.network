@@ -119,13 +119,14 @@ export function contentRepoPath(type: 'post' | 'project' | 'prompt' | 'profile',
  * affordance (project's hero pill, the article/prompt variants) shares this one resolve/toggle instead of each
  * repeating the same few lines. `ownerAttr` names the data attribute the page stamped the item's owner into.
  * No-ops off the browser (this module is also imported server-side, e.g. EditHooks.astro's frontmatter).
+ * sow-346: `allow` swaps the rule, for the profile page's owner-only link (isOwnProfile).
  */
-export function wireEditAffordance(selector: string, ownerAttr: string): void {
+export function wireEditAffordance(selector: string, ownerAttr: string, allow: (identity: MemberSignal | null, owner: string) => boolean = canEditItem): void {
   if (typeof document === 'undefined') return;
   const btn = document.querySelector<HTMLElement>(selector);
   if (!btn) return;
   const owner = btn.getAttribute(ownerAttr) || '';
-  const apply = (identity: MemberSignal | null) => { btn.hidden = !canEditItem(identity, owner); };
+  const apply = (identity: MemberSignal | null) => { btn.hidden = !allow(identity, owner); };
   apply(currentIdentity(readMemberSignal()));
   onMemberSignal(apply);
 }

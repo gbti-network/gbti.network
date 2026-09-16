@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { canEditItem } from '../src/lib/content-edit.mjs';
+import { canEditItem, isOwnProfile } from '../src/lib/content-edit.mjs';
 
 test('canEditItem: the owner (case-insensitive) may edit; a stranger may not', () => {
   assert.equal(canEditItem({ login: 'atwellpub', role: 'member' }, 'atwellpub'), true);
@@ -21,4 +21,16 @@ test('canEditItem: signed out, or signed in with no matching login/role, sees no
   assert.equal(canEditItem(null, 'atwellpub'), false);
   assert.equal(canEditItem({ login: 'atwellpub', role: 'admin' }, ''), false); // no owner to compare against
   assert.equal(canEditItem({ login: null, role: 'member' }, 'atwellpub'), false);
+});
+
+// sow-346: the profile page's "Edit profile" link opens the VIEWER's own profile, so only the page's member sees it.
+test('isOwnProfile: only the member whose page it is, case-insensitive; never a superadmin on someone else\'s page', () => {
+  assert.equal(isOwnProfile({ login: 'atwellpub', username: 'atwellpub' }, 'atwellpub'), true);
+  assert.equal(isOwnProfile({ login: 'AtwellPub' }, 'atwellpub'), true, 'login case differs');
+  assert.equal(isOwnProfile({ username: 'atwellpub' }, 'AtwellPub'), true);
+  assert.equal(isOwnProfile({ login: 'gbtilabs', role: 'superadmin' }, 'atwellpub'), false, 'a superadmin would open their own profile');
+  assert.equal(isOwnProfile({ login: 'someoneelse' }, 'atwellpub'), false);
+  assert.equal(isOwnProfile(null, 'atwellpub'), false);
+  assert.equal(isOwnProfile({ login: 'atwellpub' }, ''), false);
+  assert.equal(isOwnProfile({ login: '' }, ''), false);
 });
