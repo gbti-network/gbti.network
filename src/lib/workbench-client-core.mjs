@@ -206,7 +206,22 @@ export function referencedImages(frontmatter) {
 // sow-323 existence check, which is the one guard standing between a body reference with no file and a red
 // main. An uppercase reference whose file is genuinely gone now refuses the publish with a message the author
 // can act on, instead of merging markdown that fails the site build with [ImageNotFound].
-const BODY_IMAGE_RE = /\]\(\.\/images\/([A-Za-z0-9][A-Za-z0-9._-]*)\)/g;
+//
+// sow-341: THE PATH MAY BE FOLLOWED BY A TITLE, `![alt](./images/x.webp "a caption")`, and until this landed
+// the closing paren was required immediately after the path, so a captioned image was invisible to every
+// consumer of this pattern. It is not a rare shape. The owner's article carries three body images and ALL
+// THREE have captions, and the editor writes one whenever the author fills the caption field.
+//
+// The cost was the whole of sow-323 for those references. publish never saw the image, so it never staged the
+// bytes into the pull request, so the merged markdown pointed at a file that is not in the repository, and the
+// site build fails on that rather than rendering a broken image. The publish reported success, the auto-merge
+// landed, and post-publish remediation then flipped the article to draft for failing validation, twice. The
+// author sees their published article quietly unpublish itself with no way to tell why.
+//
+// scripts/validate-content.mjs has allowed the title since sow-165 (BODY_IMAGE_REF_RE), which is exactly why
+// this stayed hidden: the safety net at merge time could see more than the collector at publish time, so the
+// only symptom was the net catching things the collector had already let through. The two now agree.
+const BODY_IMAGE_RE = /\]\(\.\/images\/([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\)/g;
 
 /**
  * sow-165: every staged image a content item's BODY references, as `[{ name }]` deduped, in first-seen order.

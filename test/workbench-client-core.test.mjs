@@ -273,6 +273,24 @@ test('bodyImageRefs: both markdown forms, deduped, and nothing that is not ours'
   assert.deepEqual(bodyImageRefs(null), []);
 });
 
+// sow-341: THE DEFECT THIS FILE WAS ONE ASSERTION AWAY FROM CATCHING. Every case above closes the paren
+// straight after the path, and markdown allows a title there. The editor writes one whenever the author fills
+// the caption field, so this is the normal shape, not an exotic one: the owner's article carries three body
+// images and all three are captioned. None of them was visible to publish, so the image was never committed,
+// the merged markdown pointed at a file that is not in the repository, and the site build failed on it.
+test('bodyImageRefs: a CAPTIONED image is still a reference to a file that has to be committed', () => {
+  assert.deepEqual(bodyImageRefs('![k](./images/theturlekingjeffbezos.webp "The Turtle King")').map((r) => r.name),
+    ['theturlekingjeffbezos.webp'], 'the shape that shipped an article with a missing image');
+  assert.deepEqual(bodyImageRefs("![](./images/a.png 'single quoted')").map((r) => r.name), ['a.png']);
+  assert.deepEqual(bodyImageRefs('![](./images/b.png (parenthesised))').map((r) => r.name), ['b.png']);
+  // A title may hold anything, including the punctuation of the surrounding markdown.
+  assert.deepEqual(bodyImageRefs('![](./images/c.png "a (caption) with ] and (")').map((r) => r.name), ['c.png']);
+  // Both forms, captioned, pointing at one file: still one image.
+  assert.deepEqual(bodyImageRefs('[![](./images/d.png "small")](./images/d.png "full size")').map((r) => r.name), ['d.png']);
+  // The captioned and bare forms of the same file are the same file.
+  assert.deepEqual(bodyImageRefs('![](./images/e.png "x")\n\n![](./images/e.png)').map((r) => r.name), ['e.png']);
+});
+
 test('bodyImageRefs: a members item is scanned on BOTH sides of the marker', () => {
   // planMemberFiles splits here and encrypts the second half, but the images it references are ordinary files
   // that still have to be committed. Scanning built.markdown instead of the raw body would miss every one.
@@ -724,6 +742,20 @@ test('bodyImagesToResolve: a STAGED name is always resolved, and an unknown veri
     assert.deepEqual(bodyImagesToResolve(body, [], present).map((r) => r.name), ['a.webp'],
       'an unverified name must be resolved: skipping it is what committed a dangling reference');
   }
+});
+
+// sow-341: the sow-323 guard applied to the shape that evaded it. Asserted HERE, at the decision publish
+// actually makes, and not only on the scanner, because the scanner returning the name proves nothing about
+// whether the publish then looks it up. This is the assertion that would have stopped the owner's article
+// merging with an image that is not in the repository.
+test('bodyImagesToResolve: a CAPTIONED reference is verified like any other, staged or not', () => {
+  const body = '![k](./images/theturlekingjeffbezos.webp "The Turtle King")';
+  assert.deepEqual(bodyImagesToResolve(body, [], []).map((r) => r.name), ['theturlekingjeffbezos.webp'],
+    'not on main and not staged: publish must resolve it, which commits the bytes or refuses');
+  assert.deepEqual(bodyImagesToResolve(body, ['theturlekingjeffbezos.webp'], []).map((r) => r.name),
+    ['theturlekingjeffbezos.webp'], 'staged in this session: resolved, so the bytes ship');
+  assert.deepEqual(bodyImagesToResolve(body, [], ['theturlekingjeffbezos.webp']), [],
+    'proven present on main: nothing to do, and no wasted round-trip');
 });
 
 
