@@ -14,20 +14,20 @@ coverImage: >-
   ./images/atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae-0d20-4135-a587-09d5741a21d4.webp
 featured: false
 publishedAt: '2026-09-16T03:49:28.567Z'
-updatedAt: '2026-09-16T03:54:45.295Z'
+updatedAt: '2026-09-16T13:07:53.378Z'
 redirectFrom:
   - /entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/
 type: post
 author: gbtilabs
 ---
 
-In a world where billionaires and tech moguls are often likened to superheroes or visionary geniuses, Jeff Bezos, the founder of Amazon and space exploration company [Blue Origin](https://www.blueorigin.com/), has garnered a unique and somewhat whimsical comparison: the turtle.
+In a world where billionaires and tech moguls are often likened to superheroes or visionary geniuses, Jeff Bezos, the founder of Amazon and space exploration company <a href="https://www.blueorigin.com/" rel="nofollow noopener" target="_blank">Blue Origin</a>, has garnered a unique and somewhat whimsical comparison: the turtle.
 
-Bezos’ resemblance to other famous turtles has been a playful topic on [social media](https://twitter.com/search?q=bezos%2Bturtle&src=typed_query). We particularly like this rendition played by Dana Carvey in the movie [The Master of Disgu](https://www.imdb.com/title/tt0295427/)[i](https://www.imdb.com/title/tt0295427/)[se](https://www.imdb.com/title/tt0295427/).
+Bezos’ resemblance to other famous turtles has been a playful topic on <a href="https://twitter.com/search?q=bezos%2Bturtle&amp;src=typed_query" rel="nofollow noopener" target="_blank">social media</a>. We particularly like this rendition played by Dana Carvey in the movie <a href="https://www.imdb.com/title/tt0295427/" rel="nofollow noopener" target="_blank">The Master of Disgu</a>[i](https://www.imdb.com/title/tt0295427/)[se](https://www.imdb.com/title/tt0295427/).
 
 ![](./images/image-1024x512-1.webp "Dana Carvey from the movie The Master of Disguise")
 
-Listening to Jeff Bezos on the latest [Lex Fridman podcast](https://www.youtube.com/watch?v=DcWqzZ3I2cY) you get a sense of how _tutrly_ Bezos really can be as you can easily imagine this highly interesting conversation being held with the famous turtle from the Pixar movie Finding Nemo:
+Listening to Jeff Bezos on the <a href="https://www.youtube.com/watch?v=DcWqzZ3I2cY" rel="nofollow noopener" target="_blank">Lex Fridman podcast</a> you get a sense of how *tutrly *Bezos really can be as you can easily imagine this highly interesting conversation being held with the famous turtle from the Pixar movie Finding Nemo:
 
 “Righteous! Righteous!” – Crush rides the East Aulstrailian Current, Finding Nemo
 
@@ -43,7 +43,7 @@ Above the shield is a banner with the company’s motto, **“Gradatim Ferociter
 
 ## The Tortoise and the Hare
 
-In July of 2021, [Trung Phan](https://twitter.com/TrungTPhan) a developer, writer, and podcaster, produced an [X/Twitter thread](https://twitter.com/TrungTPhan/status/1416416608990294017) that highlighted the relationship between Elon Musk and Jeff Bezos and their mutual interest in space travel. Elon, musk noticed this thread, specially a tweet that highlighted a reference to the story [Tortoise and Hare](https://en.wikipedia.org/wiki/The_Tortoise_and_the_Hare) in comparison to the Blue Origin strategy of approaching space travel, reading:
+In July of 2021, <a href="https://twitter.com/TrungTPhan" rel="nofollow noopener" target="_blank">Trung Phan</a> a developer, writer, and podcaster, produced an <a href="https://twitter.com/TrungTPhan/status/1416416608990294017" rel="nofollow noopener" target="_blank">X/Twitter thread</a> that highlighted the relationship between Elon Musk and Jeff Bezos and their mutual interest in space travel. Elon, musk noticed this thread, specially a tweet that highlighted a reference to the story <a href="https://en.wikipedia.org/wiki/The_Tortoise_and_the_Hare" rel="nofollow noopener" target="_blank">Tortoise and Hare</a> in comparison to the Blue Origin strategy of approaching space travel, reading:
 
 > The lesson from “tortoise & hare” is not that tortoises are faster, but rather that hares should not be complacent
 >
@@ -51,13 +51,9 @@ In July of 2021, [Trung Phan](https://twitter.com/TrungTPhan) a developer, write
 
 ## The Master’s Chamber
 
-Mackenzie Bezos, Jeff’s ex-wife, reportedly had [turtle-themed dreams](https://www.nationalenquirer.com/celebrity/jeff-bezos-shared-wifes-pillow-talk-with-mistress-lauren-sanchez/) before their split, adding a surreal layer to the turtle motif in Bezos’ life.
+Mackenzie Bezos, Jeff’s ex-wife, reportedly had <a href="https://www.nationalenquirer.com/celebrity/jeff-bezos-shared-wifes-pillow-talk-with-mistress-lauren-sanchez/" rel="nofollow noopener" target="_blank">turtle-themed dreams</a> before their split, adding a surreal layer to the turtle motif in Bezos’ life.
 
-> “MacKenzie dreamt I redecorated the bedroom.”
->
-> “I kept doing it and it got weirder and weirder and weirder. Until I was sewing stuffed turtles into the comforter.”
->
-> [https://www.nationalenquirer.com/celebrity/jeff-bezos-shared-wifes-pillow-talk-with-mistress-lauren-sanchez/](https://www.nationalenquirer.com/celebrity/jeff-bezos-shared-wifes-pillow-talk-with-mistress-lauren-sanchez/)
+> “MacKenzie dreamt I redecorated the bedroom.”  “I kept doing it and it got weirder and weirder and weirder. Until I was sewing stuffed turtles into the comforter.”  <a href="https://www.nationalenquirer.com/celebrity/jeff-bezos-shared-wifes-pillow-talk-with-mistress-lauren-sanchez/" rel="nofollow noopener" target="_blank">https://www.nationalenquirer.com/celebrity/jeff-bezos-shared-wifes-pillow-talk-with-mistress-lauren-sanchez/</a>
 
 Jeff Bezos, intentional or coincidental, seems to lean into the appeal of the long-living turtle. And Jeff, in case you are reading this. This isn’t a bad thing at all. We absolutely love turtles. We can only hope that we get even more turtle related content in the future.  
 
