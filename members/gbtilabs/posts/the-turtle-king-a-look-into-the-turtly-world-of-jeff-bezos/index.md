@@ -14,7 +14,7 @@ coverImage: >-
   ./images/atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae-0d20-4135-a587-09d5741a21d4.webp
 featured: false
 publishedAt: '2023-12-29T00:00:00.000Z'
-updatedAt: '2026-09-16T03:15:28.659Z'
+updatedAt: '2026-09-16T03:15:59.292Z'
 redirectFrom:
   - /entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/
 type: post
@@ -25,9 +25,9 @@ In a world where billionaires and tech moguls are often likened to superheroes o
 
 Bezos’ resemblance to other famous turtles has been a playful topic on [social media](https://twitter.com/search?q=bezos%2Bturtle&src=typed_query). We particularly like this rendition played by Dana Carvey in the movie [The Master of Disgu](https://www.imdb.com/title/tt0295427/)[i](https://www.imdb.com/title/tt0295427/)[se](https://www.imdb.com/title/tt0295427/).
 
-![](./images/image-1024x512-1.webp)
+![](./images/image-1024x512-1.webp "Dana Carvey from the movie The Master of Disguise")
 
-Dana Carvey from the movie The Master of Disguise
+  
 
 Listening to Jeff Bezos on the latest [Lex Fridman podcast](https://www.youtube.com/watch?v=DcWqzZ3I2cY) you get a sense of how _tutrly_ Bezos really can be as you can easily imagine this highly interesting conversation being held with the famous turtle from the Pixar movie Finding Nemo:
 
