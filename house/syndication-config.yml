@@ -20,6 +20,17 @@
 # `manual_assist_channels` below is DEPRECATED for routing (per-cell on-manual + the code-level channel
 # capability replaced it); it stays only so an old reader parses.
 #
+#
+# REDDIT, kept here because a save keeps only this block (moved up from beside the reddit key on 2026-09-16).
+# sow-260 (2026-08-26): the stored recruitment-CTA first comment is GONE. It used to append two more
+# gbti.network links and a join-our-community pitch to every submission. Reddit banned the posting account
+# for self-promotion on 2026-08-25 after only 7 automated posts in 25 days, so ratio rather than volume is
+# the likely cause and this comment was the biggest single contributor. No reddit-comment key means the CODE
+# default applies, which since 2026-08-27 is the author note alone, attributed and quoted, with no CTA of any
+# kind. The reddit share title is '{title}' and must NOT carry a url: Reddit puts the link in its own field,
+# so a title holding it too duplicates it in the submission and spends part of the 300-character cap on it.
+# That template said '{title} {shareurl}' until 2026-08-27 and was the last place the defect survived after
+# the code default was fixed.
 # NOTE: an admin settings save rewrites this file and keeps ONLY this leading comment block, so durable
 # documentation belongs HERE, not beside the keys below.
 syndication:
@@ -61,14 +72,23 @@ syndication:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
+      discord: on-manual
+      discord-category: on-manual
+      devto: on-manual
     project:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
+      discord: on-manual
+      discord-category: on-manual
+      devto: on-manual
     prompt:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
+      discord: on-manual
+      discord-category: on-manual
+      devto: on-manual
   channel_templates:
     devto:
       devto-footer: >-
@@ -90,12 +110,12 @@ syndication:
       post: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       project: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
-      share: 'Shared on the GBTI Network: "{title}" {url} {hashtags}'
+      share: '"{title}" {url} {hashtags}'
     bluesky:
       post: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       project: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
-      share: 'Shared on the GBTI Network: "{title}" {url} {hashtags}'
+      share: '"{title}" {url} {hashtags}'
     linkedin:
       post: >-
         New {content-type} by {fullName}:
@@ -106,18 +126,12 @@ syndication:
       prompt: >-
         New {content-type} by {fullName}:
         "{title}"\n\n{short-description}\n\n{url}{author-note-block}\n\n{hashtags}
-      share: 'Shared on the GBTI Network: "{title}"\n\n{short-description}\n\n{url}\n\n{hashtags}'
+      share: '"{title}"\n\n{short-description}\n\n{url}\n\n{hashtags}'
     reddit:
-      # sow-260 (2026-08-26): the stored recruitment-CTA first comment is GONE. It used to append two more
-      # gbti.network links and a join-our-community pitch to every submission. Reddit banned the posting
-      # account for self-promotion on 2026-08-25 after only 7 automated posts in 25 days, so ratio rather
-      # than volume is the likely cause and this comment was the biggest single contributor.
-      #
-      # No reddit-comment key here means the CODE default applies, which since 2026-08-27 is the author note
-      # alone, attributed and quoted, with no CTA of any kind.
-      #
-      # The share title is '{title}' and must NOT carry a url. Reddit puts the link in its own field, so a
-      # title holding it too duplicates it in the submission and spends part of the 300-character cap on it.
-      # This template said '{title} {shareurl}' until 2026-08-27 and was the last place that defect survived
-      # after the code default was fixed.
       share: '{title}'
+    discord:
+      share: '"{title}" {shareurl}'
+    discord-category:
+      share: '"{title}" {shareurl}'
+    dailydev:
+      share: '"{title}" {shareurl}'
