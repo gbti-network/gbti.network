@@ -14,7 +14,7 @@ coverImage: >-
   ./images/atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae-0d20-4135-a587-09d5741a21d4.webp
 featured: false
 publishedAt: '2023-12-29T00:00:00.000Z'
-updatedAt: '2026-09-16T03:15:59.292Z'
+updatedAt: '2026-09-16T03:21:19.608Z'
 redirectFrom:
   - /entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/
 type: post
@@ -37,9 +37,9 @@ Listening to Jeff Bezos on the latest [Lex Fridman podcast](https://www.youtube.
 
 Blue Origin’s coat of arms includes turtles reaching for the stars, symbolizing the company’s philosophy of steady progress in space exploration, mirroring a turtle’s journey.
 
-![](./images/image-1-1024x529-1.webp)
+![](./images/image-1-1024x529-1.webp "Image sourced from Blue Origin brand audit by Cynthia Shen.")
 
-Image sourced from Blue Origin [brand audit](https://cynthiashen.design/blue-origin/blue-origin-process/) by [Cynthia Shen](https://cynthiashen.design/).
+  
 
 The coat of arms features a central shield with a graphical representation of Earth and space, flanked by two turtles looking upwards the celestial kingdom.
 
@@ -65,8 +65,8 @@ Mackenzie Bezos, Jeff’s ex-wife, reportedly had [turtle-themed dreams](https:/
 
 Jeff Bezos, intentional or coincidental, seems to lean into the appeal of the long-living turtle. And Jeff, in case you are reading this. This isn’t a bad thing at all. We can only hope and even request that we get more turtle content in the future.  
 
-For this reason, in the spirit of The Doors, we have lovingly dubbed Jeff Bezos the _Turtle King_.
+For this reason, in the spirit of The Doors, we have lovingly dubbed Jeff Bezos the *Turtle King*.  
 
-- * *
+![](./images/dontyourlovehimmadly.webp "The Turtle King")
 
 Thanks for reading! Please leave your turtle-related comments below. 🐢
