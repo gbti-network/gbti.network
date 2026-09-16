@@ -4,7 +4,7 @@ title: "The Turtle King: A look into the Turtly World of Jeff Bezos"
 slug: the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos
 author: gbtilabs
 status: published
-visibility: members
+visibility: public
 publishedAt: 2023-12-29
 updatedAt: 2025-03-08
 excerpt: "Unravel Jeff Bezos' connections with turtles in 'The Turtle King' by GBTI, highlighting both humorous and strategic parallels."

@@ -4,7 +4,7 @@ title: "Is our future full of MCP servers?"
 slug: is-our-future-full-of-mcp-servers
 author: atwellpub
 status: published
-visibility: members
+visibility: public
 publishedAt: 2025-02-21
 updatedAt: 2025-02-22
 excerpt: "In this recent GBTI member article, Hudson Atwell muses on the advent MCP Server usage for LLM & LLR model agents and how it may affect the future of content."
