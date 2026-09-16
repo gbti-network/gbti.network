@@ -1,7 +1,7 @@
 ---
 title: 'The Turtle King: A look into the Turtly World of Jeff Bezos'
 slug: the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos
-status: draft
+status: published
 visibility: public
 publicStub: false
 excerpt: >-
@@ -13,8 +13,8 @@ layout: journal
 coverImage: >-
   ./images/atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae-0d20-4135-a587-09d5741a21d4.webp
 featured: false
-publishedAt: '2026-09-16T03:24:37.785Z'
-updatedAt: '2026-09-16T03:24:37.633Z'
+publishedAt: '2026-09-16T03:35:21.040Z'
+updatedAt: '2026-09-16T03:35:20.880Z'
 redirectFrom:
   - /entertainment/the-turtle-king-a-look-into-the-turtly-world-of-jeff-bezos/
 type: post
