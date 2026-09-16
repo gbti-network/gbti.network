@@ -3,7 +3,7 @@
 // hands the four arrays here with the localStorage watermark to compute the unread badge + grouped lists. No DOM,
 // no client -> node-testable (the SOW P5 contract: an errored source contributes ZERO, never a phantom unread).
 //
-// Unread model: replies / following / review use a per-source ms watermark (their items carry a real timestamp);
+// Unread model: replies / following use a per-source ms watermark (their items carry a real timestamp);
 // Your-PRs has no reliable timestamp in both host modes (classic search-issues vs the App my-pulls proxy), so it
 // uses a seen-SET of resolved PR numbers instead. A Locked/unknown account never reaches here (the element hides).
 
@@ -14,7 +14,7 @@ export const BELL_GROUPS = [
   { key: 'replies', label: 'Replies' },
   { key: 'following', label: 'Following' },
   { key: 'prs', label: 'Your PRs' },
-  { key: 'review', label: 'To review' },
+  // sow-274: the 'To review' group (incoming contributions) is gone with the contribution review surface.
 ];
 
 /** The unread items of one group given the seen watermark. PRs compare against a seen-SET of ids; the timestamped
@@ -43,5 +43,5 @@ export function buildBell(sources = {}, seen = {}) {
  *  sources advance to `now`; PRs record the current resolved set so only LATER resolutions re-badge. */
 export function markSeen(sources = {}, now = Date.now()) {
   const prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
-  return { replies: now, following: now, review: now, prsSeen };
+  return { replies: now, following: now, prsSeen };
 }

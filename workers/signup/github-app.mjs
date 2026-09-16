@@ -368,44 +368,6 @@ export async function listOpenPullsForReview(request, env, deps = {}) {
   return { status: 200, body: { ok: true, items } };
 }
 
-/** GET /membership/pr?number=N -> the PR ({ number, title, body, html_url, state, headSha, author }). */
-export async function reviewPrDetail(request, env, deps = {}) {
-  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
-  const who = await authMemberLogin(request, env, { fetchImpl, fetchUser });
-  if (!who.ok) return { status: who.status, body: who.body };
-  const number = Number(new URL(request.url).searchParams.get('number'));
-  if (!Number.isInteger(number) || number <= 0) return { status: 400, body: { error: 'bad_request', message: 'a positive PR number is required' } };
-  let instToken;
-  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
-  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls/${number}`, { headers: GH_HEADERS(instToken) });
-  if (res && res.status === 404) return { status: 404, body: { error: 'not_found', message: 'no such pull request' } };
-  if (!res || !res.ok) return { status: 502, body: { error: 'pr_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
-  const pr = await res.json().catch(() => ({}));
-  return { status: 200, body: { ok: true, number: pr.number, title: pr.title, body: pr.body ?? '', html_url: pr.html_url, state: pr.state, headSha: pr.head?.sha ?? null, author: authorOf(pr) } };
-}
-
-/** GET /membership/pr-files?number=N[&patch=1] -> { ok, files }: a PR's changed files (with patch when asked). */
-export async function reviewPrFiles(request, env, deps = {}) {
-  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
-  const who = await authMemberLogin(request, env, { fetchImpl, fetchUser });
-  if (!who.ok) return { status: who.status, body: who.body };
-  const url = new URL(request.url);
-  const number = Number(url.searchParams.get('number'));
-  if (!Number.isInteger(number) || number <= 0) return { status: 400, body: { error: 'bad_request', message: 'a positive PR number is required' } };
-  const wantPatch = url.searchParams.get('patch') === '1';
-  let instToken;
-  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
-  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls/${number}/files?per_page=100`, { headers: GH_HEADERS(instToken) });
-  if (res && res.status === 404) return { status: 404, body: { error: 'not_found', message: 'no such pull request' } };
-  if (!res || !res.ok) return { status: 502, body: { error: 'files_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
-  const list = await res.json().catch(() => []);
-  const files = (Array.isArray(list) ? list : []).map((f) => ({
-    filename: f.filename, status: f.status, additions: f.additions ?? 0, deletions: f.deletions ?? 0,
-    ...(wantPatch ? { patch: f.patch ?? null } : {}),
-  }));
-  return { status: 200, body: { ok: true, files } };
-}
-
 /** GET /membership/file?path=P&ref=R -> { ok, text, base64 }: a content file at a ref (the PR head), for preview-as-merged.
  *  Restricted to clean members/** paths so it can never be a general repo-file oracle (even though the repo is
  *  public). Returns text:null for a missing file. */

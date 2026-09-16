@@ -110,7 +110,7 @@ import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SO
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
 import { membershipDeployStatus } from './membership-deploy-status.mjs'; // sow-185: public "still deploying" status check
 import { handleDiscordInvite } from './discord-invite.mjs';
-import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent, itemRevisions } from './github-app.mjs';
+import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewFileContent, itemRevisions } from './github-app.mjs';
 import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner-scoped repo-draft listing
 import { listSharesFeed, listMyShares } from './membership-shares.mjs';
 import { listNetworkContent, listNetworkShares } from './membership-network.mjs'; // sow-317: every member's content, superadmin-only // sow-158 Part 3: tier-gated community Shares feed; sow-304: the caller's own shares
@@ -1702,29 +1702,14 @@ export default {
         }
       }
 
-      // SOW-028: read proxies for the in-client contribution review INBOX in app mode. A fork-scoped member token
-      // cannot read the upstream, so the Worker reads it with GBTI's installation token. Unlike my-pulls/pr-status
-      // these are NOT head-owner-scoped (the inbox is about OTHER members' PRs against the caller's folder), which
-      // is safe because the canonical repo is public; the client filters to the caller's folder. Reads only;
-      // approving still happens on github.com in app mode (the gate needs the owner's own github_id as author).
+      // Read proxies with GBTI's installation token. /membership/open-pulls feeds the superadmin open-PR queue
+      // (SOW-038) and /membership/file feeds publishing and the reader. They are not head-owner-scoped, which is
+      // safe because the canonical repo is public. sow-274 removed the two that only the contribution review
+      // inbox used (/membership/pr and /membership/pr-files) along with the inbox.
       if (pathname === '/membership/open-pulls') {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await listOpenPullsForReview(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-      if (pathname === '/membership/pr') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'GET') {
-          const r = await reviewPrDetail(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-      if (pathname === '/membership/pr-files') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'GET') {
-          const r = await reviewPrFiles(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

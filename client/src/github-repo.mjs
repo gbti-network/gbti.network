@@ -226,9 +226,8 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
     },
 
     /** Open upstream PRs ({ number, title, html_url, author:{login,id}, headSha, createdAt, updatedAt }), newest
-     *  first. SOW-028: the owner's contribution inbox lists these and keeps only the PRs whose files fall
-     *  entirely inside the owner's folder. App mode (SOW-026): the fork-scoped token cannot read the upstream, so
-     *  the Worker lists them (GBTI's App installation); classic reads the upstream directly. */
+     *  first. The superadmin open-PR queue (SOW-038) reads these. (SOW-028's contribution inbox used them too; it
+     *  was removed in sow-274.) Through the network, GBTI's App installation reads the upstream. */
     async listOpenPulls() {
       if (appMode) {
         const p = await callWorker('GET', '/membership/open-pulls');
@@ -243,23 +242,6 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
         headSha: p.head?.sha ?? null,
         createdAt: p.created_at ?? null,
         updatedAt: p.updated_at ?? null,
-      }));
-    },
-
-    /** The changed files of a PR ([{ filename, status, additions, deletions }]). SOW-028: used to scope an open
-     *  PR to the owner's folder (the inbox filter) and to render the diff. App mode (SOW-026): the Worker reads
-     *  the upstream files; classic reads them directly. */
-    async listPullFiles(prNumber) {
-      if (appMode) {
-        const p = await callWorker('GET', `/membership/pr-files?number=${encodeURIComponent(prNumber)}`);
-        return p.files ?? [];
-      }
-      const files = await req('GET', `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
-      return (files ?? []).map((f) => ({
-        filename: f.filename,
-        status: f.status,
-        additions: f.additions ?? 0,
-        deletions: f.deletions ?? 0,
       }));
     },
 
@@ -279,47 +261,12 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       return { state, meaning: interpretGateState(state), sha, description: gate?.description };
     },
 
-    // ----- SOW-028 P2/P3: the owner-side contribution review (read one PR, render its diff, decide) -----
-
-    /** One PR's review metadata: { number, title, body, html_url, state, headSha, author:{login,id} }. App mode
-     *  (SOW-026): the Worker reads it with GBTI's installation; classic reads the upstream directly. */
-    async getPull(prNumber) {
-      if (appMode) return callWorker('GET', `/membership/pr?number=${encodeURIComponent(prNumber)}`);
-      const p = await req('GET', `/repos/${upstream}/pulls/${prNumber}`);
-      return {
-        number: p.number,
-        title: p.title,
-        body: p.body ?? '',
-        html_url: p.html_url,
-        state: p.state,
-        headSha: p.head?.sha ?? null,
-        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null },
-      };
-    },
-
-    /** A PR's changed files WITH the unified `patch` for the diff view ([{ filename, status, additions,
-     *  deletions, patch }]). Heavier than listPullFiles (which omits patch for the inbox list). */
-    async getPullDiffFiles(prNumber) {
-      if (appMode) {
-        const p = await callWorker('GET', `/membership/pr-files?number=${encodeURIComponent(prNumber)}&patch=1`);
-        return p.files ?? [];
-      }
-      const files = await req('GET', `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
-      return (files ?? []).map((f) => ({
-        filename: f.filename,
-        status: f.status,
-        additions: f.additions ?? 0,
-        deletions: f.deletions ?? 0,
-        patch: f.patch ?? null,
-      }));
-    },
-
-    /** The decoded text of a file at a ref (the PR head SHA), or null if it does not exist there (a removed file).
-     *  Used to render the "preview as merged" view of the proposed content. */
     // sow-232: the commits on a ref that touched one path (newest first, capped at 100 by per_page).
     async listCommits(path, { ref = 'main', perPage = 100 } = {}) {
       return req('GET', `/repos/${upstream}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(ref)}&per_page=${perPage}`);
     },
+    /** The decoded text of a canonical file at a ref, or null if it does not exist there. Publishing reads the
+     *  prior version through this (a collision check, a re-publish's original publishedAt). */
     async getFileContent(path, ref) {
       if (appMode) {
         const p = await callWorker('GET', `/membership/file?path=${encodeURIComponent(path)}&ref=${encodeURIComponent(ref)}`);
@@ -368,21 +315,6 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
         if (err instanceof GitHubError && err.status === 404) return null;
         throw err;
       }
-    },
-
-    /** Submit a PR review as the signed-in owner (CLASSIC mode only). The gate honors an APPROVE only when
-     *  commit_id is the current head SHA (a later push invalidates a stale approval), so the caller passes the
-     *  freshly-read headSha. There is deliberately no app-mode proxy: a fork-scoped token cannot post to the
-     *  upstream, and the installation token would author as GBTI's app (which the gate must not trust as a
-     *  universal approver), so in app mode the owner approves on github.com (operations guards this). */
-    async submitReview(prNumber, { event, body = '', commitId } = {}) {
-      return req('POST', `/repos/${upstream}/pulls/${prNumber}/reviews`, { event, body, ...(commitId ? { commit_id: commitId } : {}) });
-    },
-
-    /** Close a PR without merging. Best-effort: a non-collaborator owner cannot close another member's PR, so the
-     *  caller treats a failure as non-fatal (the declining review still stands). Classic mode only. */
-    async closePull(prNumber) {
-      return req('PATCH', `/repos/${upstream}/pulls/${prNumber}`, { state: 'closed' });
     },
   };
 }

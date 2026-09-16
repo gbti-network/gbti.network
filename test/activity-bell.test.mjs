@@ -31,12 +31,20 @@ test('buildBell sorts each group newest-first', () => {
 });
 
 test('an errored/missing/non-array source contributes ZERO (no phantom unread)', () => {
-  const out = buildBell({ replies: null, following: undefined, prs: 'oops', review: [{ id: 'c1', ts: T1 }] }, {});
+  const out = buildBell({ replies: null, following: undefined, prs: 'oops', approvals: [{ id: 'c1', ts: T1 }] }, {});
   assert.equal(out.groups.find((g) => g.key === 'replies').unread, 0);
   assert.equal(out.groups.find((g) => g.key === 'following').unread, 0);
   assert.equal(out.groups.find((g) => g.key === 'prs').unread, 0);
-  assert.equal(out.groups.find((g) => g.key === 'review').unread, 1); // the one valid item
+  assert.equal(out.groups.find((g) => g.key === 'approvals').unread, 1); // the one valid item
   assert.equal(out.total, 1);
+});
+
+// sow-274: the contribution review lane is gone with the feature. A source still named `review` (an old caller)
+// is ignored rather than shown under a heading nothing feeds.
+test('there is no To review group, and a stray review source counts for nothing', () => {
+  const out = buildBell({ review: [{ id: 'c1', ts: T1 }] }, {});
+  assert.equal(out.groups.some((g) => g.key === 'review'), false);
+  assert.equal(out.total, 0);
 });
 
 test('PRs use a seen-SET of ids, not a ms watermark', () => {
@@ -55,11 +63,11 @@ test('an empty watermark makes every timestamped item unread', () => {
 });
 
 test('markSeen advances the ms sources to now and records the current PR ids', () => {
-  const sources = { replies: [reply('a', T0)], following: [], review: [], prs: [{ id: 7, ts: 7 }, { id: 8, ts: 8 }] };
+  const sources = { replies: [reply('a', T0)], following: [], prs: [{ id: 7, ts: 7 }, { id: 8, ts: 8 }] };
   const seen = markSeen(sources, T1);
   assert.equal(seen.replies, T1);
   assert.equal(seen.following, T1);
-  assert.equal(seen.review, T1);
+  assert.equal('review' in seen, false);
   assert.deepEqual(seen.prsSeen, ['7', '8']);
   // After marking seen, nothing is unread.
   assert.equal(buildBell(sources, seen).total, 0);

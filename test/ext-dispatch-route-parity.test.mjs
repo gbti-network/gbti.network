@@ -56,7 +56,7 @@ const WEBSITE_ONLY = {
       '/api/publish', '/api/validate', '/api/form-fields', '/api/image',
       '/api/content/status', '/api/content/rename',
       '/api/drafts', '/api/draft/discard', '/api/draft/publish',
-      '/api/contributions', '/api/contribution', '/api/contribution-review',
+      // sow-274: /api/contributions, /api/contribution and /api/contribution-review are gone from every host.
       '/api/item-stats', // sow-232: the editor's Live revisions tile; the editor is an authoring surface the extension no longer hosts
       '/api/my-shares', // sow-304: the WorkBench Shares tab lists the member's own shares for editing; the extension has no such tab
     ],

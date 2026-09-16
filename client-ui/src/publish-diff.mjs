@@ -12,8 +12,8 @@
 // line diff reports rewraps as edits. Reusing `parseBlocks` also means an item's `index` IS the index of the
 // block on screen, which is what lets the list scroll to it and flash it.
 //
-// Not to be confused with contrib-diff.mjs, which RENDERS a unified patch GitHub already computed for a
-// contribution review. This one computes a diff locally because no server has ever seen the staged draft.
+// It computes a diff locally because no server has ever seen the staged draft. (A sibling that rendered a patch
+// GitHub had computed, for contribution review, was removed with that feature in sow-274.)
 import { parseBlocks, serializeBlocks } from './markdown-blocks.mjs';
 
 /**

@@ -4,10 +4,9 @@
 //
 // Split out of operations.mjs, which re-exports the public surface unchanged.
 
-import { parseContentFile, NETWORK_CONTENT_OWNER } from './content-ops.mjs';
+import { NETWORK_CONTENT_OWNER } from './content-ops.mjs';
 import { fetchStripeStatus } from './membership.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
-import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
@@ -246,127 +245,6 @@ export async function prStatus(ctx, { number } = {}) {
   const n = Number(number);
   if (!Number.isInteger(n) || n <= 0) throw new OperationError('bad-request', 'a positive PR number is required');
   return repo.gateStatus(n);
-}
-
-
-/**
- * SOW-028 P1: the signed-in member's contribution inbox. Returns the OPEN upstream PRs that another member
- * opened against THIS member's folder (the gate's `contribution-pending-owner` set), awaiting this owner's
- * review. It reuses the gate's own owner-side classifier (isContributionToFolder), so the inbox shows exactly
- * the PRs the gate treats as a contribution to this folder, never a mixed or privilege-escalating PR. The
- * owner's own PRs are excluded (those are the workspace "Pull requests" tab). Fail-soft per PR: a PR whose
- * files cannot be read is skipped, not fatal. Read-only; approve/request-changes/decline is P3.
- */
-export async function listIncomingContributions(ctx) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  const open = await repo.listOpenPulls();
-  const myId = id.githubId != null ? String(id.githubId) : null;
-  const myLogin = String(id.login || '').toLowerCase();
-  const out = [];
-  for (const pr of open) {
-    // Exclude the owner's own PRs (own-folder edits live in the workspace PR tab, not the review inbox).
-    const aId = pr.author?.id != null ? String(pr.author.id) : null;
-    const aLogin = String(pr.author?.login || '').toLowerCase();
-    if ((myId && aId && aId === myId) || (myLogin && aLogin && aLogin === myLogin)) continue;
-    let files;
-    try {
-      files = await repo.listPullFiles(pr.number);
-    } catch {
-      continue; // cannot read this PR's files -> skip it rather than fail the whole inbox
-    }
-    const paths = files.map((f) => f.filename);
-    if (!isContributionToFolder(paths, id.username)) continue;
-    out.push({
-      number: pr.number,
-      title: pr.title,
-      html_url: pr.html_url,
-      author: pr.author ?? null,
-      headSha: pr.headSha ?? null,
-      createdAt: pr.createdAt ?? null,
-      updatedAt: pr.updatedAt ?? null,
-      files,
-      fileCount: files.length,
-      additions: files.reduce((s, f) => s + (f.additions || 0), 0),
-      deletions: files.reduce((s, f) => s + (f.deletions || 0), 0),
-    });
-  }
-  return { contributions: out };
-}
-
-
-/**
- * SOW-028 P2/P3: load ONE incoming contribution, fail-closed. Resolves the PR by number and confirms it is a
- * reviewable contribution to the signed-in owner: another member opened it (not the owner) AND every changed
- * path sits inside members/<owner>/ (isContributionToFolder, the gate's own classifier). Anything else throws
- * `forbidden`, so the client review/decide path can only ever touch the owner's legitimate inbox items, never
- * an arbitrary PR. Returns { id, repo, n, pr, files } (files carry the unified patch).
- */
-export async function loadOwnContribution(ctx, number) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  const n = Number(number);
-  if (!Number.isInteger(n) || n <= 0) throw new OperationError('bad-request', 'a positive PR number is required');
-  const pr = await repo.getPull(n);
-  const aId = pr.author?.id != null ? String(pr.author.id) : null;
-  const aLogin = String(pr.author?.login || '').toLowerCase();
-  const myId = id.githubId != null ? String(id.githubId) : null;
-  const myLogin = String(id.login || '').toLowerCase();
-  if ((myId && aId && aId === myId) || (myLogin && aLogin && aLogin === myLogin)) {
-    throw new OperationError('forbidden', 'this is your own pull request, not an incoming contribution');
-  }
-  const files = await repo.getPullDiffFiles(n);
-  if (!isContributionToFolder(files.map((f) => f.filename), id.username)) {
-    throw new OperationError('forbidden', 'this pull request is not a contribution to your folder');
-  }
-  return { id, repo, n, pr, files };
-}
-
-
-/**
- * SOW-028 P2: the full review payload for one incoming contribution: its metadata, the per-file unified diff,
- * and the proposed NEW body of each changed markdown file at the PR head (so the owner can "preview as merged"
- * by passing `proposed[].body` to client.preview(), the same renderer the editor uses). Fail-closed via
- * loadOwnContribution.
- */
-export async function getContributionReview(ctx, { number } = {}) {
-  const { repo, n, pr, files } = await loadOwnContribution(ctx, number);
-  const proposed = [];
-  for (const f of files) {
-    if (!/\.md$/i.test(f.filename) || f.status === 'removed') continue;
-    let text = null;
-    try { text = await repo.getFileContent(f.filename, pr.headSha); } catch { text = null; }
-    if (text == null) continue;
-    const { body } = parseContentFile(text);
-    proposed.push({ filename: f.filename, body });
-  }
-  return {
-    number: n,
-    title: pr.title,
-    html_url: pr.html_url,
-    headSha: pr.headSha,
-    author: pr.author,
-    files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
-    proposed,
-    // sow-274: no client can post a review the gate honours any more; the decision is taken on github.com.
-    canActInClient: false,
-  };
-}
-
-
-export const DECLINE_NOTE =
-  'Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.';
-
-
-/**
- * SOW-028 P3: the owner's decision on an incoming contribution. It used to post a GitHub review with the owner's
- * own account-wide token, which the gate read by github_id. sow-274 retired that token's write access along with
- * the fork path, so a decision is taken on github.com, where the gate records the reviewer. Part 3 of sow-274
- * removes this operation and the screens around it; until then it refuses every decision, loudly, rather than
- * appearing to do something. The UI already hides the decide buttons (canActInClient is false).
- */
-export async function reviewContribution() {
-  throw new OperationError('forbidden', 'approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)');
 }
 
 

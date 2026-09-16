@@ -11,7 +11,7 @@
 // carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
 import { canonicalType } from './content-types.mjs';
 
-const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'share', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs); sow-304: 'share' (the member's own shares)
+const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'project', 'share', 'prs', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs); sow-304: 'share' (the member's own shares)
 export function parseWorkspaceTab(hash) {
   const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
   // sow-196: #tab=product still resolves. The avatar menu and the extension have been emitting that link
@@ -66,14 +66,14 @@ export function parseWorkspaceDraft(hash) {
  * review pane is open is an explicit EXIT (matching the Back button); otherwise a #new= opens the editor and a
  * different plain tab switches. Returns { action: 'exit' | 'openNew' | 'switchTab' | 'none', tab?, type? }.
  */
-export function planHashRoute(hash, { editing = false, reviewing = false, tab = 'overview' } = {}) {
+export function planHashRoute(hash, { editing = false, tab = 'overview' } = {}) {
   const newType = parseWorkspaceNew(hash) || null;
   const edit = parseWorkspaceEdit(hash) || null;
   const draft = parseWorkspaceDraft(hash) || null;
   const tabHash = parseWorkspaceTab(hash) || 'overview';
-  if ((editing || reviewing) && !newType && !edit && !draft) return { action: 'exit', tab: tabHash };
-  if (newType && !editing && !reviewing) return { action: 'openNew', type: newType };
-  if (tabHash !== tab && !editing && !reviewing) return { action: 'switchTab', tab: tabHash };
+  if (editing && !newType && !edit && !draft) return { action: 'exit', tab: tabHash };
+  if (newType && !editing) return { action: 'openNew', type: newType };
+  if (tabHash !== tab && !editing) return { action: 'switchTab', tab: tabHash };
   return { action: 'none' };
 }
 

@@ -408,7 +408,9 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
       return pass('contribution-accepted', false, `owner ${c.otherOwners[0]} approved the contribution`);
     }
     // Not yet approved, or the owner is not paid: hold (the existing pending-owner behavior is unchanged).
-    return fail('contribution-pending-owner', `awaiting an approving review from the folder owner (${c.otherOwners[0]})`);
+    // sow-274: this hold is the fail-closed backstop against a cross-folder pull request opened by hand on GitHub.
+    // No GBTI surface can create one or approve one any more, so the message no longer promises an in-app review.
+    return fail('contribution-pending-owner', `a change to another member's folder (${c.otherOwners[0]}) is held; a superadmin decides whether it merges`);
   }
   // Any remaining cross-folder PR (own mixed with other, or multiple other owners) is an escalation.
   if (c.otherMemberPaths.length > 0) {

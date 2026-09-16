@@ -102,9 +102,6 @@ export {
   listPRs,
   prStatus,
   itemStats, // sow-232: the editor's Live revisions tile
-  listIncomingContributions,
-  getContributionReview,
-  reviewContribution,
   itemImagesDir,
   stageImage,
 } from './operations-admin.mjs';

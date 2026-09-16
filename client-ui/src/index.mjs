@@ -12,8 +12,6 @@ import './elements/gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG bod
 import './elements/gbti-content-editor.mjs';
 import './elements/gbti-content-list.mjs';
 import './elements/gbti-pr-list.mjs';
-import './elements/gbti-contrib-inbox.mjs';
-import './elements/gbti-contrib-review.mjs';
 import './elements/gbti-members-portal.mjs';
 import './elements/gbti-settings.mjs';
 import './elements/gbti-account.mjs';

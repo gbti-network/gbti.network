@@ -1,7 +1,6 @@
 // <gbti-activity-bell> (SOW-042 P3): the shell top-bar activity bell. v1 is a CLIENT-SIDE aggregator (no new Worker
 // route): it fans out IN PARALLEL to four existing per-member reads, each fail-closed to [], normalizes them, and
 // (via activity-bell.mjs) computes an unread badge + a grouped dropdown that deep-links into the relevant surface.
-//   - To review  -> RETIRED in the extension (sow-204); buildBell still accepts the source, nothing feeds it
 //   - Your PRs    -> client.listPRs() (resolved only)  -> the PR's GitHub URL
 //   - Replies     -> replies on the caller's OWN Shares -> the Shares filter on the unified feed (newtab.html#tab=share)
 //   - Following   -> getFollows() ∩ the activity-index -> the in-extension reader (newtab feed deep-link)
@@ -67,8 +66,8 @@ class GbtiActivityBell extends GbtiElement {
     this._busy = false;
     this.render();
     this._load();
-    // Poll only while the tab is visible: the To-review source walks each open PR's files, so a blind background
-    // poll on every parked new-tab would waste GitHub API budget. Refresh when the tab regains focus too.
+    // Poll only while the tab is visible: a blind background poll on every parked new-tab would waste request
+    // budget. Refresh when the tab regains focus too.
     this._timer = setInterval(() => { if (!this._open && !this._hidden()) this._load(); }, POLL_MS);
     this._onVis = () => { if (!this._hidden() && !this._open) this._load(); };
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVis);
@@ -108,13 +107,7 @@ class GbtiActivityBell extends GbtiElement {
   }
 
   async _fetchSources(login) {
-    const [review, prs, following, replies, approvals] = await Promise.all([
-      // sow-204: ALWAYS EMPTY in this host, and this element is mounted only by the extension shell.
-      // Contribution review is authoring: the Inbox tab is flagged `authoring` (hidden in the extension) and
-      // /api/contributions is no longer routed here, so fetching it would 404 and the lane's deep-link
-      // (workspace.html#tab=inbox) would land on a tab resolveTab redirects away from. buildBell is left
-      // generic and still understands a `review` source, so a host that keeps authoring can feed it again.
-      Promise.resolve([]),
+    const [prs, following, replies, approvals] = await Promise.all([
       this._safe(() => this._prs()),
       this._safe(() => this._following(login)),
       this._safe(() => this._replies(login)),
@@ -122,7 +115,7 @@ class GbtiActivityBell extends GbtiElement {
       // superadmin-gated anyway, and _safe fails closed to []).
       this._role === 'superadmin' ? this._safe(() => this._approvals()) : Promise.resolve([]),
     ]);
-    return { review, prs, following, replies, approvals };
+    return { prs, following, replies, approvals };
   }
 
   // SOW-088: syndication items HOLDING (pending: still in the cancel window, or a flagged item awaiting

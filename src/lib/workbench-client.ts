@@ -9,7 +9,7 @@
 // Scope (the ~15 methods gbti-workspace + gbti-content-editor actually call): status, listContent, getContentItem,
 // readItem, validateContent (pure), formFields (pure), preview (pure), publish, saveDraft, listDrafts, readDraft,
 // discardDraft, publishDraft, setContentStatus, decrypt, listPRs, prStatus. Everything else the components call is
-// OPTIONAL-CHAINED there (getActivity, getFollows, listContributions, listComments, admin, ...), so its absence
+// OPTIONAL-CHAINED there (getActivity, getFollows, listComments, admin, ...), so its absence
 // degrades gracefully to an empty state — deferred to a later phase per the SOW.
 //
 // Now live on the web (earlier phases): members-only PUBLISH (via the cookie /membership/encrypt), IMAGE upload

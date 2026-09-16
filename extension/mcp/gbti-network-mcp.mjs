@@ -18225,9 +18225,8 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
       }));
     },
     /** Open upstream PRs ({ number, title, html_url, author:{login,id}, headSha, createdAt, updatedAt }), newest
-     *  first. SOW-028: the owner's contribution inbox lists these and keeps only the PRs whose files fall
-     *  entirely inside the owner's folder. App mode (SOW-026): the fork-scoped token cannot read the upstream, so
-     *  the Worker lists them (GBTI's App installation); classic reads the upstream directly. */
+     *  first. The superadmin open-PR queue (SOW-038) reads these. (SOW-028's contribution inbox used them too; it
+     *  was removed in sow-274.) Through the network, GBTI's App installation reads the upstream. */
     async listOpenPulls() {
       if (appMode) {
         const p = await callWorker("GET", "/membership/open-pulls");
@@ -18242,22 +18241,6 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
         headSha: p.head?.sha ?? null,
         createdAt: p.created_at ?? null,
         updatedAt: p.updated_at ?? null
-      }));
-    },
-    /** The changed files of a PR ([{ filename, status, additions, deletions }]). SOW-028: used to scope an open
-     *  PR to the owner's folder (the inbox filter) and to render the diff. App mode (SOW-026): the Worker reads
-     *  the upstream files; classic reads them directly. */
-    async listPullFiles(prNumber) {
-      if (appMode) {
-        const p = await callWorker("GET", `/membership/pr-files?number=${encodeURIComponent(prNumber)}`);
-        return p.files ?? [];
-      }
-      const files = await req("GET", `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
-      return (files ?? []).map((f) => ({
-        filename: f.filename,
-        status: f.status,
-        additions: f.additions ?? 0,
-        deletions: f.deletions ?? 0
       }));
     },
     /** The gate status for a PR: { state, meaning, sha }. App mode (SOW-026): the Worker reads the upstream PR +
@@ -18275,44 +18258,12 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
       const state = gate?.state ?? status.state ?? "unknown";
       return { state, meaning: interpretGateState(state), sha, description: gate?.description };
     },
-    // ----- SOW-028 P2/P3: the owner-side contribution review (read one PR, render its diff, decide) -----
-    /** One PR's review metadata: { number, title, body, html_url, state, headSha, author:{login,id} }. App mode
-     *  (SOW-026): the Worker reads it with GBTI's installation; classic reads the upstream directly. */
-    async getPull(prNumber) {
-      if (appMode) return callWorker("GET", `/membership/pr?number=${encodeURIComponent(prNumber)}`);
-      const p = await req("GET", `/repos/${upstream}/pulls/${prNumber}`);
-      return {
-        number: p.number,
-        title: p.title,
-        body: p.body ?? "",
-        html_url: p.html_url,
-        state: p.state,
-        headSha: p.head?.sha ?? null,
-        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null }
-      };
-    },
-    /** A PR's changed files WITH the unified `patch` for the diff view ([{ filename, status, additions,
-     *  deletions, patch }]). Heavier than listPullFiles (which omits patch for the inbox list). */
-    async getPullDiffFiles(prNumber) {
-      if (appMode) {
-        const p = await callWorker("GET", `/membership/pr-files?number=${encodeURIComponent(prNumber)}&patch=1`);
-        return p.files ?? [];
-      }
-      const files = await req("GET", `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
-      return (files ?? []).map((f) => ({
-        filename: f.filename,
-        status: f.status,
-        additions: f.additions ?? 0,
-        deletions: f.deletions ?? 0,
-        patch: f.patch ?? null
-      }));
-    },
-    /** The decoded text of a file at a ref (the PR head SHA), or null if it does not exist there (a removed file).
-     *  Used to render the "preview as merged" view of the proposed content. */
     // sow-232: the commits on a ref that touched one path (newest first, capped at 100 by per_page).
     async listCommits(path4, { ref = "main", perPage = 100 } = {}) {
       return req("GET", `/repos/${upstream}/commits?path=${encodeURIComponent(path4)}&sha=${encodeURIComponent(ref)}&per_page=${perPage}`);
     },
+    /** The decoded text of a canonical file at a ref, or null if it does not exist there. Publishing reads the
+     *  prior version through this (a collision check, a re-publish's original publishedAt). */
     async getFileContent(path4, ref) {
       if (appMode) {
         const p = await callWorker("GET", `/membership/file?path=${encodeURIComponent(path4)}&ref=${encodeURIComponent(ref)}`);
@@ -18357,19 +18308,6 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
         if (err instanceof GitHubError && err.status === 404) return null;
         throw err;
       }
-    },
-    /** Submit a PR review as the signed-in owner (CLASSIC mode only). The gate honors an APPROVE only when
-     *  commit_id is the current head SHA (a later push invalidates a stale approval), so the caller passes the
-     *  freshly-read headSha. There is deliberately no app-mode proxy: a fork-scoped token cannot post to the
-     *  upstream, and the installation token would author as GBTI's app (which the gate must not trust as a
-     *  universal approver), so in app mode the owner approves on github.com (operations guards this). */
-    async submitReview(prNumber, { event, body = "", commitId } = {}) {
-      return req("POST", `/repos/${upstream}/pulls/${prNumber}/reviews`, { event, body, ...commitId ? { commit_id: commitId } : {} });
-    },
-    /** Close a PR without merging. Best-effort: a non-collaborator owner cannot close another member's PR, so the
-     *  caller treats a failure as non-fatal (the declining review still stands). Classic mode only. */
-    async closePull(prNumber) {
-      return req("PATCH", `/repos/${upstream}/pulls/${prNumber}`, { state: "closed" });
     }
   };
 }
@@ -19564,31 +19502,6 @@ var TIER_LABEL = Object.freeze({
 });
 var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 
-// membership/path-rank.mjs
-var ROLE_RANK = Object.freeze({ [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 });
-var SUPERADMIN_HOUSE_DIRS = Object.freeze(["house/applets/", "house/images/ctas/"]);
-
-// membership/classify-pr.mjs
-var CONTENT_DIRS = ["posts", "projects", "products", "prompts", "comments"];
-var ROLE_RANK2 = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
-function isCleanPath(p) {
-  if (typeof p !== "string" || p.length === 0) return false;
-  if (p.startsWith("/")) return false;
-  if (p.includes("\\")) return false;
-  if (p.includes("\0")) return false;
-  return p.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..");
-}
-var OVERRIDES_GIT_FILES = Object.freeze(["house/bans.yml", "house/grandfathered.yml", "house/coupons.yml"]);
-function isContributionToFolder(paths, ownerFolder) {
-  if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
-  const prefix = `members/${ownerFolder}/`;
-  return paths.every((p) => {
-    if (!isCleanPath(p) || !p.startsWith(prefix)) return false;
-    return CONTENT_DIRS.includes(p.slice(prefix.length).split("/")[0]);
-  });
-}
-var REVIEWED_TYPES = Object.freeze(["post", "project", "product", "prompt", "share"]);
-
 // membership/checkout-prices.mjs
 var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);
 var PRICE_ENV = Object.freeze({
@@ -19611,90 +19524,6 @@ async function prStatus(ctx2, { number: number4 } = {}) {
   const n = Number(number4);
   if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
   return repo.gateStatus(n);
-}
-async function listIncomingContributions(ctx2) {
-  const id = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
-  const open = await repo.listOpenPulls();
-  const myId = id.githubId != null ? String(id.githubId) : null;
-  const myLogin = String(id.login || "").toLowerCase();
-  const out = [];
-  for (const pr of open) {
-    const aId = pr.author?.id != null ? String(pr.author.id) : null;
-    const aLogin = String(pr.author?.login || "").toLowerCase();
-    if (myId && aId && aId === myId || myLogin && aLogin && aLogin === myLogin) continue;
-    let files;
-    try {
-      files = await repo.listPullFiles(pr.number);
-    } catch {
-      continue;
-    }
-    const paths = files.map((f) => f.filename);
-    if (!isContributionToFolder(paths, id.username)) continue;
-    out.push({
-      number: pr.number,
-      title: pr.title,
-      html_url: pr.html_url,
-      author: pr.author ?? null,
-      headSha: pr.headSha ?? null,
-      createdAt: pr.createdAt ?? null,
-      updatedAt: pr.updatedAt ?? null,
-      files,
-      fileCount: files.length,
-      additions: files.reduce((s, f) => s + (f.additions || 0), 0),
-      deletions: files.reduce((s, f) => s + (f.deletions || 0), 0)
-    });
-  }
-  return { contributions: out };
-}
-async function loadOwnContribution(ctx2, number4) {
-  const id = requireIdentity(ctx2);
-  const repo = requireRepo(ctx2);
-  const n = Number(number4);
-  if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
-  const pr = await repo.getPull(n);
-  const aId = pr.author?.id != null ? String(pr.author.id) : null;
-  const aLogin = String(pr.author?.login || "").toLowerCase();
-  const myId = id.githubId != null ? String(id.githubId) : null;
-  const myLogin = String(id.login || "").toLowerCase();
-  if (myId && aId && aId === myId || myLogin && aLogin && aLogin === myLogin) {
-    throw new OperationError("forbidden", "this is your own pull request, not an incoming contribution");
-  }
-  const files = await repo.getPullDiffFiles(n);
-  if (!isContributionToFolder(files.map((f) => f.filename), id.username)) {
-    throw new OperationError("forbidden", "this pull request is not a contribution to your folder");
-  }
-  return { id, repo, n, pr, files };
-}
-async function getContributionReview(ctx2, { number: number4 } = {}) {
-  const { repo, n, pr, files } = await loadOwnContribution(ctx2, number4);
-  const proposed = [];
-  for (const f of files) {
-    if (!/\.md$/i.test(f.filename) || f.status === "removed") continue;
-    let text = null;
-    try {
-      text = await repo.getFileContent(f.filename, pr.headSha);
-    } catch {
-      text = null;
-    }
-    if (text == null) continue;
-    const { body } = parseContentFile(text);
-    proposed.push({ filename: f.filename, body });
-  }
-  return {
-    number: n,
-    title: pr.title,
-    html_url: pr.html_url,
-    headSha: pr.headSha,
-    author: pr.author,
-    files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
-    proposed,
-    // sow-274: no client can post a review the gate honours any more; the decision is taken on github.com.
-    canActInClient: false
-  };
-}
-async function reviewContribution() {
-  throw new OperationError("forbidden", "approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)");
 }
 
 // client/src/mcp-auth.mjs
@@ -19954,27 +19783,6 @@ var TOOLS = [
     description: "Read the gate status (held vs mergeable) for one of the member PRs by `number`.",
     inputSchema: obj({ number: { type: "integer" } }, ["number"]),
     handler: (ctx2, args) => prStatus(ctx2, { number: args?.number })
-  },
-  {
-    name: "list_contributions",
-    description: "List incoming contributions to review: open pull requests another member opened against the signed-in member's own folder, awaiting their approval (SOW-028).",
-    inputSchema: obj({}),
-    handler: (ctx2) => listIncomingContributions(ctx2)
-  },
-  {
-    name: "get_contribution",
-    description: "Read one incoming contribution by PR `number`: its per-file unified diff and the proposed new body of each changed markdown file (SOW-028).",
-    inputSchema: obj({ number: { type: "integer" } }, ["number"]),
-    handler: (ctx2, args) => getContributionReview(ctx2, { number: args?.number })
-  },
-  {
-    name: "review_contribution",
-    description: "Decide an incoming contribution to your folder: approve (merges + awards), request-changes, or decline (closes it). The client never merges directly; approve submits a GitHub review the gate reads. Args: number, decision ('approve'|'request-changes'|'decline'), optional message (SOW-028).",
-    inputSchema: obj(
-      { number: { type: "integer" }, decision: { type: "string", enum: ["approve", "request-changes", "decline"] }, message: { type: "string" } },
-      ["number", "decision"]
-    ),
-    handler: (ctx2, args) => reviewContribution(ctx2, { number: args?.number, decision: args?.decision, message: args?.message })
   },
   // SOW-072: commenting via MCP — author the SAME members-only (encrypted) comment + author-intro flow the CMS UI
   // uses, through the gated PR pipeline. targetSlug: the content slug for a post/product/prompt; "<author>/<shareId>"

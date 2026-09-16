@@ -17,9 +17,6 @@ import {
   authorContent,
   listPRs,
   prStatus,
-  listIncomingContributions,
-  getContributionReview,
-  reviewContribution,
   publishComment,
   editComment,
   listComments,
@@ -206,27 +203,6 @@ export const TOOLS = [
     description: 'Read the gate status (held vs mergeable) for one of the member PRs by `number`.',
     inputSchema: obj({ number: { type: 'integer' } }, ['number']),
     handler: (ctx, args) => prStatus(ctx, { number: args?.number }),
-  },
-  {
-    name: 'list_contributions',
-    description: "List incoming contributions to review: open pull requests another member opened against the signed-in member's own folder, awaiting their approval (SOW-028).",
-    inputSchema: obj({}),
-    handler: (ctx) => listIncomingContributions(ctx),
-  },
-  {
-    name: 'get_contribution',
-    description: 'Read one incoming contribution by PR `number`: its per-file unified diff and the proposed new body of each changed markdown file (SOW-028).',
-    inputSchema: obj({ number: { type: 'integer' } }, ['number']),
-    handler: (ctx, args) => getContributionReview(ctx, { number: args?.number }),
-  },
-  {
-    name: 'review_contribution',
-    description: "Decide an incoming contribution to your folder: approve (merges + awards), request-changes, or decline (closes it). The client never merges directly; approve submits a GitHub review the gate reads. Args: number, decision ('approve'|'request-changes'|'decline'), optional message (SOW-028).",
-    inputSchema: obj(
-      { number: { type: 'integer' }, decision: { type: 'string', enum: ['approve', 'request-changes', 'decline'] }, message: { type: 'string' } },
-      ['number', 'decision'],
-    ),
-    handler: (ctx, args) => reviewContribution(ctx, { number: args?.number, decision: args?.decision, message: args?.message }),
   },
   // SOW-072: commenting via MCP — author the SAME members-only (encrypted) comment + author-intro flow the CMS UI
   // uses, through the gated PR pipeline. targetSlug: the content slug for a post/product/prompt; "<author>/<shareId>"

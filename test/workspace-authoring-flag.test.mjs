@@ -13,8 +13,8 @@ const TABS = [
   { id: 'post', label: 'Articles', authoring: true },
   { id: 'prompt', label: 'Prompts', authoring: true },
   { id: 'project', label: 'Projects', authoring: true },
+  { id: 'share', label: 'Shares', authoring: true }, // sow-274: the contribution Inbox is gone; Shares is the fourth authoring tab
   { id: 'prs', label: 'Pull requests' },
-  { id: 'inbox', label: 'Inbox', authoring: true },
   { id: 'saved', label: 'Saved' },
   { id: 'subs', label: 'Following' },
   { id: 'earnings', label: 'Earnings' },
@@ -40,7 +40,7 @@ test('sow-204: with authoring OFF, Saved and Following SURVIVE and the authoring
   // The load-bearing assertion of this whole SOW increment.
   assert.ok(vis.includes('saved'), 'Saved must survive: favorites and collections live nowhere else');
   assert.ok(vis.includes('subs'), 'Following must survive: follows live nowhere else');
-  for (const gone of ['post', 'prompt', 'project', 'inbox']) {
+  for (const gone of ['post', 'prompt', 'project', 'share']) {
     assert.ok(!vis.includes(gone), `${gone} is authoring and must be hidden`);
   }
   // Control: the filter must actually remove something, or this test passes on a no-op implementation.
@@ -81,13 +81,13 @@ test('sow-204: the component TABS actually carry the flags this fixture assumes'
   const entries = [...block[1].matchAll(/\{\s*id:\s*'([a-z]+)'[^}]*\}/g)]
     .map((m) => ({ id: m[1], authoring: /authoring:\s*true/.test(m[0]) }));
   // Control: a regex that matched nothing would make every assertion below vacuous.
-  assert.equal(entries.length, 10, `parsed ${entries.length} tabs, expected 10`); // sow-304: + the Shares tab
+  assert.equal(entries.length, 9, `parsed ${entries.length} tabs, expected 9`); // sow-304: + Shares; sow-274: - Inbox
 
   const flagged = entries.filter((e) => e.authoring).map((e) => e.id).sort();
   // sow-304: the Shares tab (the member's own shares, edited through the composer) is authoring too: the
   // extension keeps its Share composer but has no WorkBench list to edit from.
-  assert.deepEqual(flagged, ['inbox', 'post', 'project', 'prompt', 'share'],
-    'exactly the four Option A authoring tabs plus the sow-304 Shares tab are flagged');
+  assert.deepEqual(flagged, ['post', 'project', 'prompt', 'share'],
+    'exactly the three Option A authoring tabs still standing plus the sow-304 Shares tab are flagged (the Inbox went in sow-274)');
 
   for (const id of ['saved', 'subs']) {
     const t = entries.find((e) => e.id === id);
@@ -137,7 +137,7 @@ const TILE_FIXTURE = [
 ];
 const TAB_FIXTURE = [
   { id: 'overview' }, { id: 'post', authoring: true }, { id: 'prompt', authoring: true },
-  { id: 'project', authoring: true }, { id: 'prs' }, { id: 'inbox', authoring: true }, { id: 'saved' },
+  { id: 'project', authoring: true }, { id: 'prs' }, { id: 'share', authoring: true }, { id: 'saved' },
 ];
 
 test('sow-204: with authoring OFF the authoring tiles go, and everything else survives in order', () => {

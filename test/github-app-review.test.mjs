@@ -1,11 +1,13 @@
-// SOW-028: the app-mode read proxies for the in-client contribution review inbox (workers/signup/github-app.mjs).
-// They read the PUBLIC canonical repo with GBTI's installation token (a fork-scoped member token cannot), gated
-// by a valid member token. Unlike my-pulls/pr-status they are NOT head-owner scoped (the inbox is about OTHER
-// members' PRs), which is safe because the data is public; the client filters to the caller's folder. All
-// injectable: fake KV, fake fetch, fake JWT, stubbed user. No network, no secrets.
+// The Worker's public-repo read proxies (workers/signup/github-app.mjs): the open pull request list the superadmin
+// queue reads, and the content file read that publishing and the reader use. They read the PUBLIC canonical repo
+// with GBTI's installation token, gated by a valid member token, and are not head-owner scoped because the data
+// is public. All injectable: fake KV, fake fetch, fake JWT, stubbed user. No network, no secrets.
+//
+// sow-274: SOW-028 added these for the contribution review inbox, with two more (a single pull request and its
+// changed files) that only the inbox used. The inbox is gone and so are those two, with their tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from '../workers/signup/github-app.mjs';
+import { listOpenPullsForReview, reviewFileContent } from '../workers/signup/github-app.mjs';
 
 const env = { GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM', UPSTREAM_REPO: 'gbti-network/gbti.network' };
 const fakeKv = (init = {}) => {
@@ -37,29 +39,6 @@ test('the read proxies are unauthorized without a resolvable member token', asyn
   const fetchImpl = async (u) => instOk(u) || { ok: true, async json() { return []; } };
   const r = await listOpenPullsForReview(getReq(), env, { ...base, fetchUser: badUser, fetchImpl });
   assert.equal(r.status, 401);
-});
-
-test('reviewPrDetail returns the PR with headSha + author; 404 for a missing PR', async () => {
-  const ok = async (url) => instOk(url) || (/\/pulls\/7$/.test(url)
-    ? { ok: true, status: 200, async json() { return { number: 7, title: 'T', body: 'B', html_url: 'u7', state: 'open', head: { sha: 'abc' }, user: { login: 'bob', id: 2 } }; } }
-    : { ok: false, status: 404, async json() { return {}; } });
-  const r = await reviewPrDetail(getReq('https://w/membership/pr?number=7'), env, { ...base, fetchImpl: ok });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.headSha, 'abc');
-  assert.deepEqual(r.body.author, { login: 'bob', id: '2' });
-
-  const miss = await reviewPrDetail(getReq('https://w/membership/pr?number=9'), env, { ...base, fetchImpl: async (u) => instOk(u) || { ok: false, status: 404, async json() { return {}; } } });
-  assert.equal(miss.status, 404);
-});
-
-test('reviewPrFiles includes patch only when patch=1', async () => {
-  const files = [{ filename: 'members/alice/posts/x/index.md', status: 'modified', additions: 2, deletions: 1, patch: '@@ -1 +1 @@\n-a\n+b' }];
-  const fetchImpl = async (u) => instOk(u) || { ok: true, async json() { return files; } };
-  const withP = await reviewPrFiles(getReq('https://w/membership/pr-files?number=7&patch=1'), env, { ...base, fetchImpl });
-  assert.equal(withP.body.files[0].patch, '@@ -1 +1 @@\n-a\n+b');
-  const noP = await reviewPrFiles(getReq('https://w/membership/pr-files?number=7'), env, { ...base, fetchImpl });
-  assert.equal('patch' in noP.body.files[0], false, 'no patch unless asked');
-  assert.equal(noP.body.files[0].additions, 2);
 });
 
 test('reviewFileContent decodes base64, rejects non-members paths, and reports a missing file as null', async () => {

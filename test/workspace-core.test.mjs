@@ -140,7 +140,9 @@ test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, ext
   assert.equal(parseWorkspaceTab('#tab=prompt'), 'prompt');
   assert.equal(parseWorkspaceTab('tab=project'), 'project');
   assert.equal(parseWorkspaceTab('#tab=prs&foo=1'), 'prs');
-  assert.equal(parseWorkspaceTab('#x=1&tab=inbox'), 'inbox');
+  assert.equal(parseWorkspaceTab('#x=1&tab=subs'), 'subs');
+  // sow-274: the contribution Inbox tab is gone. An old bookmark to it is not a tab any more, so it falls back.
+  assert.equal(parseWorkspaceTab('#tab=inbox'), null);
   assert.equal(parseWorkspaceTab('#tab=post'), 'post');
   // SOW-037: the Saved + Subscriptions tabs are deep-linkable too.
   assert.equal(parseWorkspaceTab('#tab=saved'), 'saved');
@@ -215,9 +217,7 @@ test('planHashRoute: editing + a plain DIFFERENT tab route exits to that tab', (
 test('planHashRoute: editing + the SAME section route still exits (Articles while editing a post)', () => {
   assert.deepEqual(planHashRoute('#tab=post', { editing: true, tab: 'post' }), { action: 'exit', tab: 'post' });
 });
-test('planHashRoute: reviewing + a plain tab route exits the review pane', () => {
-  assert.deepEqual(planHashRoute('#tab=prs', { reviewing: true, tab: 'overview' }), { action: 'exit', tab: 'prs' });
-});
+// sow-274 removed the contribution review pane, so there is no `reviewing` state for a route to exit.
 test('planHashRoute: while editing, a hash that still carries &edit= does NOT exit', () => {
   assert.deepEqual(planHashRoute('#tab=post&edit=members/a/posts/x/index.md', { editing: true, tab: 'post' }), { action: 'none' });
 });

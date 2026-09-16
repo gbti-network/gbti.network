@@ -15,9 +15,7 @@ const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'project']); // SOW-073: typ
 const SITE = 'https://gbti.network'; // SOW-173: the live site origin, prefixed onto a View link from the extension host
 import { glyphFor } from '../cat-glyph.mjs'; // SOW-062: the SOW-049 type glyph, reused on the WorkBench list rows
 import './gbti-content-editor.mjs';
-import './gbti-contrib-inbox.mjs';
 import './gbti-share-list.mjs'; // sow-304: the Shares tab
-import './gbti-contrib-review.mjs';
 import './gbti-saved.mjs';
 import './gbti-subscriptions.mjs';
 
@@ -30,14 +28,13 @@ const TABS = [
   // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
   // type's list (a draft article under Articles), reached by the per-type Drafts filter.
   { id: 'prs', label: 'Pull requests' },
-  { id: 'inbox', label: 'Inbox', authoring: true },
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
   { id: 'subs', label: 'Following' }, // SOW-037: follows + membership (network members + news channels)
   { id: 'earnings', label: 'Earnings' }, // SOW-052: placeholder for referrals + rewards (SOW-007/008)
 ];
 
-// sow-204: `authoring: true` above marks the four tabs the owner's Option A removes from the EXTENSION
-// (Articles, Prompts, Projects, Inbox). Saved and Following are deliberately NOT flagged: they are the
+// sow-204: `authoring: true` above marks the tabs the owner's Option A removes from the EXTENSION
+// (Articles, Prompts, Projects, Shares; the contribution Inbox that was also flagged is gone, sow-274). Saved and Following are deliberately NOT flagged: they are the
 // curation surface the same ruling keeps, and they exist nowhere else in the extension, so flagging them
 // would delete favorites, collections and follows from that host entirely. The decision logic is pure and
 // lives in workspace-core (authoringEnabled / visibleTabs / resolveTab) so it is testable without a browser.
@@ -191,8 +188,6 @@ class GbtiWorkspace extends GbtiElement {
     // (an empty-personal superadmin defaults to house). Persisted device-local like the sort pref.
     this._scope = null;
     this._scopeResolved = false;
-    this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
-    this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
     // sow-304: a live Shares list has looked for the deep-link id (found or not): stop re-issuing it.
     this.shadowRoot?.addEventListener('gbti-share-list-loaded', (e) => {
@@ -214,22 +209,21 @@ class GbtiWorkspace extends GbtiElement {
     // the superadmin toggle. _ensureTab loads it only on the Overview tab, so a deep-link straight to a content
     // tab (the avatar menu's "My prompts" etc.) would never resolve the scope — load it eagerly in that case.
     if (this._tab !== 'overview') this._ensureOverview();
-    if (this._authoring()) this._loadInboxCount(); // sow-204: Inbox is authoring; no tab AND no route where it is off
     // SOW-052: the WorkBench rail deep-links to #tab=<id>; switch the tab on a same-document hash change.
     this._onHash = () => {
       const h = typeof location !== 'undefined' ? location.hash : '';
-      // SOW-104: planHashRoute (pure, tested) decides the action. A rail nav to a plain tab while an editor/review
+      // SOW-104: planHashRoute (pure, tested) decides the action. A rail nav to a plain tab while an editor
       // pane is open is an explicit EXIT (matching the Back button, which also discards silently); a #new= opens the
       // editor; a different plain tab switches. The editor encodes &edit= in the hash, so a rail click to #tab=<t>
       // is a real hashchange even for the current tab.
-      const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
+      const plan = planHashRoute(h, { editing: !!this._editing, tab: this._tab });
       this._editShareId = parseWorkspaceEditShare(h); // sow-304: consumed by the Shares tab render
       // sow-304: a deep link arriving on the Shares tab from the SAME document (the share page opened in this
       // tab, or a bookmarked link pasted while here) is a plain hash change the planner reads as "none"; the
       // list must still be re-mounted so it hands the id to the composer.
-      if (plan.action === 'none' && this._editShareId && this._tab === 'share' && !this._editing && !this._reviewing) { this.render(); return; }
+      if (plan.action === 'none' && this._editShareId && this._tab === 'share' && !this._editing) { this.render(); return; }
       if (plan.action === 'exit') {
-        this._editing = null; this._reviewing = null;
+        this._editing = null;
         this._tab = plan.tab; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(plan.tab);
       } else if (plan.action === 'openNew') {
         this._editing = { type: plan.type, frontmatter: {}, body: '' }; this.render();
@@ -341,14 +335,6 @@ class GbtiWorkspace extends GbtiElement {
     }
   }
 
-  // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
-  // Inbox tab carries a "N to review" badge without the member having to open it. Fail-soft to no badge.
-  async _loadInboxCount() {
-    try { this._inboxCount = (await this.client?.listContributions?.())?.contributions?.length ?? 0; }
-    catch { this._inboxCount = 0; }
-    if (!this._editing && this._reviewing == null) this.render();
-  }
-
   // ----- data loaders (each fail-soft to an empty state, like gbti-content-list/gbti-pr-list) -----
   async _loadProfile() {
     try {
@@ -391,9 +377,9 @@ class GbtiWorkspace extends GbtiElement {
     if (!tab) return;
     if (id === 'overview') { this._ensureOverview(); return; } // SOW-052
     if (id === 'earnings') { await this._loadEarnings(); return; } // SOW-083 P2: the member's earnings ledger
-    // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
+    // The Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
-    if (id === 'inbox' || id === 'saved' || id === 'subs') return;
+    if (id === 'saved' || id === 'subs') return;
     if (tab.type) { await this._swrContent(id, tab.type); this._loadDrafts(id); return; } // SOW-106 QA + SOW-085: drafts feed the staged-edits chips AND merge into the list
     if (id === 'prs') { await this._swrPrs(id); }
   }
@@ -534,7 +520,7 @@ class GbtiWorkspace extends GbtiElement {
         const removed = Object.entries(changes || {}).some(([k, c]) => k.startsWith(prefix) && c && c.newValue === undefined);
         if (!removed) return;
         this._cache = {}; this._prs = null; this._overview = null;
-        if (!this._editing && this._reviewing == null) this._ensureTab(this._tab);
+        if (!this._editing) this._ensureTab(this._tab);
       };
       oc.addListener(this._onStorage);
     } catch { /* no chrome.storage: nothing to sync */ }
@@ -665,21 +651,12 @@ class GbtiWorkspace extends GbtiElement {
       ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082
       return;
     }
-    if (this._reviewing != null) {
-      // SOW-028 drill-in: review one incoming contribution. On a decision the review element emits
-      // `contrib-decided`; we return to the Inbox, which remounts <gbti-contrib-inbox> and refetches, so the
-      // decided PR drops off the list.
-      this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
-      this.on('[data-back]', 'click', () => { this._reviewing = null; this.render(); });
-      this.$('gbti-contrib-review')?.addEventListener('contrib-decided', () => { this._reviewing = null; this.render(); this._loadInboxCount(); });
-      return;
-    }
     const shown = visibleTabs(TABS, this._authoring());
     // A deep link (#tab=post) or a persisted tab can name a tab this host no longer shows; landing on
     // it would paint an empty body, which reads as a broken page rather than a removed feature.
     this._tab = resolveTab(this._tab, TABS, this._authoring()) ?? this._tab;
     const tabs = shown.map((t) => {
-      // SOW-085: count badges on the content tabs + Pull requests (+ the existing Inbox), from already-loaded
+      // SOW-085: count badges on the content tabs + Pull requests, from already-loaded
       // data only; hidden while unknown or 0.
       const n = this._tabCount(t);
       const badge = n ? `<span class="tbadge">${esc(n)}</span>` : '';
@@ -712,9 +689,6 @@ class GbtiWorkspace extends GbtiElement {
     const tab = TABS.find((t) => t.id === this._tab);
     if (this._tab === 'overview') return this._overviewHtml(); // SOW-052
     if (this._tab === 'earnings') return this._renderEarnings(); // SOW-083 P2: the member revenue dashboard
-    // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
-    // independently (and is inert with no client), so the workspace just mounts the tag.
-    if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
     // sow-304: the member's own shares; a pending `edit-share=<id>` deep link rides as an attribute the list consumes once.
     // The id is NOT cleared here: every render re-mounts the list, and the first instance is usually replaced
     // (client arrival, the overview load) before its request returns. The list announces each completed load and
@@ -801,10 +775,9 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   // SOW-085: a tab's count badge value, from data ALREADY loaded (no fetch just for a badge). Content tabs use
-  // the exact merged count once their list is cached, else the eager Overview count; PRs use the loaded PR list;
-  // Inbox keeps its awaiting-review count. 0 / unknown -> the caller hides the badge.
+  // the exact merged count once their list is cached, else the eager Overview count; PRs use the loaded PR list.
+  // 0 / unknown -> the caller hides the badge.
   _tabCount(t) {
-    if (t.id === 'inbox') return this._inboxCount || 0;
     const counts = this._overview?.counts;
     if (t.id === 'prs') return Array.isArray(this._prs) ? this._prs.length : (counts?.prs ?? 0);
     if (t.type) {
@@ -993,11 +966,6 @@ class GbtiWorkspace extends GbtiElement {
       }
       this._openItem(this._profile?.path, 'profile');
     });
-    // SOW-028: the Inbox tab's <gbti-contrib-inbox> emits `contrib-open` (composed) when a Review button is
-    // clicked; open the review drill-in. The listener sits on the element node the bubbling event passes through.
-    if (this._tab === 'inbox') {
-      this.$('gbti-contrib-inbox')?.addEventListener('contrib-open', (e) => { this._reviewing = e.detail?.number ?? null; this.render(); });
-    }
     const tab = TABS.find((t) => t.id === this._tab);
     if (tab?.type) {
       // SOW-085: all row actions index into this._viewList (the merged + sorted + filtered list).
