@@ -541,3 +541,37 @@ test('sow-291 Phase 2: the coupon pool read is NOT blanked by a stale registry (
   assert.equal(okr.status, 200);
   assert.equal(okr.body.coupons.length, 1);
 });
+
+// sow-274: the moderation word lists, asserted here because the client copy of this rule went with the client's
+// writers. A typo in the list name must be a refusal, never a quietly created list: a misspelled list is a list
+// nothing reads, so the terms filed into it would silently stop being moderated.
+test('sow-274: a flag term for a list that does not exist is refused, and creates nothing', async () => {
+  const FLAGS_YML = '# moderation word lists\nlists:\n  political: []\n  profanity: []\n';
+  const seen = [];
+  const fetchImpl = async (url, init = {}) => {
+    const method = init.method || 'GET';
+    if (/\/access_tokens$/.test(url)) return { ok: true, status: 201, async json() { return { token: 'ghs_inst', expires_at: new Date(Date.now() + 3600e3).toISOString() }; } };
+    if (/\/contents\/house\/moderation-flags\.yml\?ref=main$/.test(url)) return { ok: true, status: 200, async json() { return { content: b64(FLAGS_YML) }; } };
+    if (/\/git\/ref\/heads\/main$/.test(url)) return { ok: true, status: 200, async json() { return { object: { sha: 'mainsha' } }; } };
+    if (/\/git\/refs$/.test(url) && method === 'POST') return { ok: true, status: 201, async json() { return {}; } };
+    if (/\/contents\//.test(url) && method === 'GET') return { ok: false, status: 404, async json() { return {}; } };
+    if (/\/contents\//.test(url) && method === 'PUT') { seen.push(JSON.parse(init.body)); return { ok: true, status: 201, async json() { return {}; } }; }
+    if (/\/pulls$/.test(url) && method === 'POST') return { ok: true, status: 201, async json() { return { number: 42, html_url: 'https://x/pull/42' }; } };
+    return { ok: false, status: 500, async json() { return {}; } };
+  };
+
+  const typo = await run({ action: 'flag-term-add', list: 'poltical', term: 'ballot' }, { fetchImpl, authorize: staffSuper });
+  assert.equal(typo.status, 400, JSON.stringify(typo.body));
+  // The MESSAGE matters, not only the status. The endpoint turns any thrown error into a 400, so asserting the
+  // status alone cannot tell a deliberate refusal from a crash on an undefined list, and a deleted guard would
+  // still look refused.
+  assert.match(typo.body?.message || '', /no such flag list: poltical/);
+  assert.deepEqual(seen, [], 'a misspelled list name wrote a file');
+
+  // The positive control: the same term on a list that DOES exist lands, so the refusal is about the name.
+  const good = await run({ action: 'flag-term-add', list: 'political', term: 'ballot' }, { fetchImpl, authorize: staffSuper });
+  assert.equal(good.status, 200, JSON.stringify(good.body));
+  assert.equal(seen.length, 1);
+  assert.match(deB64(seen[0].content), /ballot/);
+  assert.match(deB64(seen[0].content), /^# moderation word lists\n/, 'the doc header survives the rewrite');
+});

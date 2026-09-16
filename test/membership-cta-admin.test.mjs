@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { membershipAdminAuthor } from '../workers/signup/membership-admin-author.mjs';
 import { membershipAdminCtaPool, ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput } from '../workers/signup/membership-admin-ctas.mjs';
 import { CTA_LIMITS } from '../membership/cta-edits.mjs';
+import { WORKER_ADMIN_ACTIONS } from '../client/src/admin-worker-actions.mjs'; // sow-274: the one action table both hosts read
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const env = { GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM', UPSTREAM_REPO: 'gbti-network/gbti.network', MEMBERSHIP_AUTHOR_ENABLED: 'true' };
@@ -186,10 +187,14 @@ test('every CTA op row in the Worker is ranked superadmin and points at house/ct
   assert.match(idx.slice(at, at + 600), /'Cache-Control': 'no-store'/);
 });
 
-test('both hosts route the five write actions and the pool read (npm api.mjs + extension ext-dispatch.mjs)', () => {
+test('the five write actions reach the network, and both hosts serve the pool read', () => {
+  // sow-274: the hosts no longer hold a per-action table of their own. One shared table decides what may be
+  // sent, and both hosts read it, so this asserts the five are in that table rather than in two copies of it.
+  for (const op of ['cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign']) {
+    assert.ok(WORKER_ADMIN_ACTIONS.has(op), `${op} is not an action the client may send`);
+  }
   for (const rel of ['client/src/api.mjs', 'extension/src/ext-dispatch.mjs']) {
     const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-    for (const op of ['cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign']) assert.match(src, new RegExp(`'${op}':\\s*\\w+`), `${rel} routes ${op}`);
     assert.match(src, /'\/api\/cta-pool'/, `${rel} serves the pool read`);
   }
   const wb = fs.readFileSync(path.join(ROOT, 'src/lib/workbench-client.ts'), 'utf8');

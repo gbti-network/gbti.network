@@ -67,46 +67,21 @@ import { getSettings, updateSettings, getBilling, getReferral } from './settings
 import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import {
-  setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, markStale, unmarkStale, markUnindexed, unmarkUnindexed, // sow-189 // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
-  getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
+  // sow-274: READS only. Every admin WRITE goes to the Worker (admin-worker-actions.mjs), so the local
+  // writers this used to import are retired with the path that carried them.
+  getTaxonomy, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
-  setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
-  getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings,
-  getCouponPool, getSiteSettings, // sow-291 Phase 2: addCoupon/updateCoupon retired (coupon writes -> the Worker via WORKER_CONFIG_ACTIONS)
-  getCtaPool, addCta, updateCta, setCtaEnabled, assignCta, unassignCta, // sow-281: the CTA registry (superadmin)
+  getNewsEngagementSettings, getSyndicationSettings,
+  getCouponPool, getSiteSettings, getCtaPool,
 } from './admin-ops.mjs';
+import { toWorkerRequest } from './admin-worker-actions.mjs'; // sow-274: the one admin action table
 
 export { CLIENT_VERSION } from './operations.mjs';
 
-// sow-213 Phase 2b: served by the Worker (see the '/api/admin' route), not by ADMIN_ACTIONS.
-const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
-// sow-291 Phase 2: coupon writes are KV-native too, so they go to the Worker (the same /membership/admin/author
-// endpoint governanceAdminOp posts to), NOT the local git-PR writers, which are retired. Kept a separate set
-// from GOVERNANCE_ACTIONS because coupons are config, not governance, but they share the transport.
-const WORKER_CONFIG_ACTIONS = new Set(['coupon-add', 'coupon-update']);
-const ADMIN_ACTIONS = {
-  // sow-213 Step 3: ban/unban/grandfather/ungrandfather are served by the Worker (the GOVERNANCE_ACTIONS
-  // short-circuit above, which runs before this map), so their local writers are retired and no longer listed.
-  role: setMemberRole,
-  deplatform: deplatformContent,
-  remove: removeContent,
-  'category-batch': applyCategoryBatch, // SOW-100: N pending workspace edits -> ONE house PR
-  'tag-edit': applyTagEdit, // SOW-100: rename/merge/retire a tag across the items carrying it
-  republish: republishContent, // SOW-071: the inverse of deplatform (un-hide)
-  stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, // sow-189: superadmin content flags (house/content-flags.yml)
-  'category-add': addContentCategory, // SOW-055: category manager (add a category/subcategory)
-  'category-rename': renameContentCategoryLabel, // SOW-055: rename a category's display label
-  'content-channel-set': setContentChannel, // SOW-087: map a category to a Discord channel
-  'content-channel-remove': removeContentChannel, // SOW-087
-  'flag-term-add': addModerationFlagTerm, // SOW-087: moderation word lists
-  'flag-term-remove': removeModerationFlagTerm, // SOW-087
-  'syndication-template-set': setSyndicationTemplate, // SOW-087: the per-type Discord template
-  'syndication-templates-set': setSyndicationTemplates, // SOW-088: the admin card batch (one PR per Save)
-  'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
-  'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
-  'cta-add': addCta, 'cta-update': updateCta, 'cta-toggle': setCtaEnabled, 'cta-assign': assignCta, 'cta-unassign': unassignCta, // sow-281: the CTA registry (superadmin at editHouseYaml)
-  // sow-291 Phase 2: coupon-add / coupon-update are in WORKER_CONFIG_ACTIONS above (served by the Worker).
-};
+// sow-274: EVERY admin action goes to the Worker now. The two sets this replaces (governance from sow-213,
+// coupons from sow-291) were the start of exactly this move; what stopped it being finished was that the
+// remaining writers worked, right up until the moment they did not. The table and the translation for the few
+// actions the Worker spells differently live in admin-worker-actions.mjs, pure and tested.
 
 const STATUS_FOR = {
   'no-identity': 409,
@@ -239,17 +214,13 @@ export async function handleApi(reqInfo, ctx) {
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).
   if (method === 'POST' && pathname === '/api/admin') {
-    // sow-213 Phase 2b: the five GOVERNANCE actions go to the Worker, exactly as in the extension host. The
-    // local writer holds a GitHub token and no KV credential, so it writes the git half of a ban or grant and
-    // cannot write the KV half at all, and it cannot write the private moderation log either. Both hosts must
-    // take the same path or the gap simply moves to whichever host was left behind.
-    if (GOVERNANCE_ACTIONS.has(body?.action)) return run(() => governanceAdminOp(ctx, body ?? {}));
-    // sow-291 Phase 2: coupon writes are KV-native, so they take the same Worker path (a local git-PR writer
-    // would recreate house/coupons.yml, which is exactly what this move removes).
-    if (WORKER_CONFIG_ACTIONS.has(body?.action)) return run(() => governanceAdminOp(ctx, body ?? {}));
-    const fn = ADMIN_ACTIONS[body?.action];
-    if (!fn) return { status: 400, json: { error: 'bad-request', message: `unknown admin action: ${body?.action}` } };
-    return run(() => fn(ctx, body ?? {}));
+    // sow-274: one path for all of them. The Worker commits with GBTI's own installation token against live
+    // main, so there is no fork to go stale and no member token that needs write access to GitHub. An action
+    // the Worker does not serve is REFUSED rather than falling back to a local writer: the fallback is how the
+    // retired path would survive, and it would only be exercised on whichever surface nobody tested.
+    const wreq = toWorkerRequest(body ?? {});
+    if (!wreq) return { status: 400, json: { error: 'bad-request', message: `unknown admin action: ${body?.action}` } };
+    return run(() => governanceAdminOp(ctx, { action: wreq.action, ...wreq.payload }));
   }
 
   return { status: 404, json: { error: 'not-found' } };

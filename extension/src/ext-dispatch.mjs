@@ -16,16 +16,15 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
-import { markStale, unmarkStale, markUnindexed, unmarkUnindexed } from '../../client/src/admin-ops.mjs'; // sow-189: superadmin content flags
-import { setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates, getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings, getCouponPool, getSiteSettings, setSiteToggle, getCtaPool, addCta, updateCta, setCtaEnabled, assignCta, unassignCta } from '../../client/src/admin-ops.mjs'; // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
+import { toWorkerRequest } from '../../client/src/admin-worker-actions.mjs'; // sow-274: the one admin action table
+import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings, getSyndicationSettings, getCouponPool, getSiteSettings, getCtaPool } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
 // host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
 // gate + CODEOWNERS stay the real boundary (an extension can no more merge a forbidden PR than the npm host can).
-// sow-213 Phase 2b: these five are served by the Worker (see the '/api/admin' case), not by ADMIN_ACTIONS.
-const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
-const ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, 'category-batch': applyCategoryBatch, 'tag-edit': applyTagEdit, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'syndication-templates-set': setSyndicationTemplates, 'news-engagement-set': setNewsEngagementSettings, 'syndication-settings-set': setSyndicationSettings, 'site-setting-set': setSiteToggle, 'cta-add': addCta, 'cta-update': updateCta, 'cta-toggle': setCtaEnabled, 'cta-assign': assignCta, 'cta-unassign': unassignCta }; // sow-281: the CTA registry (superadmin at editHouseYaml)
+// sow-274: every admin action goes to the Worker. The table and the few translations live in
+// client/src/admin-worker-actions.mjs, shared with the npm host so the two cannot drift.
 
 const CODE_STATUS = Object.freeze({
   'no-identity': 409,
@@ -232,23 +231,18 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await requireRepo(ctx).gateStatus(n));
       }
       case '/api/admin': {
-        // sow-213 Phase 2b: the five GOVERNANCE actions go to the Worker, not to the local writer.
+        // EVERY admin action goes to the Worker. sow-213 moved the five governance ones because only the
+        // Worker holds SIGNUP_KV and can write the private moderation log; sow-274 moved the rest, because the
+        // local writer based its branch on the acting member's own copy of the repository, which goes stale the
+        // moment upstream moves, and a stalled pull request tells nobody.
         //
-        // The local writer holds a GitHub token and no KV credential, so it can write the git half of a ban or
-        // grant and cannot write the KV half at all. Through this transition both halves must land, and only
-        // the Worker can write the private moderation log. Routing all five rather than only the two the
-        // owner asked about keeps one write path for five sibling actions: `role` has no KV half (roles.yml
-        // stays git-native by owner ruling) but it still earns a moderation-log record.
-        if (GOVERNANCE_ACTIONS.has(body?.action)) return ok(await governanceAdminOp(ctx, body ?? {}));
-
-        // SOW-036/038: governance from the extension. admin-ops expects a SYNC role() and a configured repoPath;
-        // the extension computes role async (from the GitHub-read roles.yml) and has no local clone (it commits
-        // via the repo client), so wrap ctx with a precomputed role() + a repoPath sentinel for this one call.
-        const role = await computeRole(ctx);
-        const adminCtx = { ...ctx, role: () => role, store: { get: (k) => (k === 'repoPath' ? 'extension' : ctx.store?.get(k)) } };
-        const fn = ADMIN_ACTIONS[body?.action];
-        if (!fn) throw new OperationError('bad-request', `unknown admin action: ${body?.action}`);
-        return ok(await fn(adminCtx, body ?? {}));
+        // sow-274: ONE path, the same one the npm host takes. The role wrapper this used to build (a sync
+        // role() and a repoPath sentinel, because admin-ops wanted a local clone the extension never had) is
+        // gone with the local writers: the Worker re-checks the caller's rank server-side, which is where that
+        // check belonged. An action the Worker does not serve is refused rather than falling back.
+        const wreq = toWorkerRequest(body ?? {});
+        if (!wreq) throw new OperationError('bad-request', `unknown admin action: ${body?.action}`);
+        return ok(await governanceAdminOp(ctx, { action: wreq.action, ...wreq.payload }));
       }
       default:
         return { status: 404, json: { error: 'not_found' } };

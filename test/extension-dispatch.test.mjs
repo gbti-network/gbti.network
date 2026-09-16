@@ -295,9 +295,32 @@ test('pr-status: rejects non-positive-integer PR numbers before hitting GitHub (
   assert.deepEqual(calls, [7], 'a valid number reaches gateStatus coerced to an integer');
 });
 
-// ---- SOW-087: the channel-map / template / flag-word editors from the extension ----
+// ---- SOW-087 + sow-274: the channel-map / template / flag-word editors from the extension ----
+//
+// The READS are public git data and still come from the reader, with no identity needed. The WRITES no longer
+// happen here at all: sow-274 retired the local writers, so the dispatcher's whole job on a write is to look the
+// action up in the shared table and hand it to the network. That is what these assert. Whether the network then
+// ALLOWS the write (these three surfaces are superadmin-pinned) is decided there and tested there, against the
+// real endpoint, in test/membership-admin-author.test.mjs: asserting a role gate here would only be testing a
+// copy of the rule that no longer exists.
 
-test('SOW-087: the channel-map public reads load WITHOUT identity; a superadmin write opens the house PR', async () => {
+/** A fetch that records what the dispatcher sent to the admin endpoint and answers as the Worker would. */
+function recordingWorker(response = { ok: true, number: 88, html_url: 'u' }) {
+  const sent = [];
+  return {
+    sent,
+    fetch: async (url, init = {}) => {
+      const u = String(url);
+      if (u.includes('/membership/admin/author')) {
+        sent.push(JSON.parse(init.body));
+        return { ok: true, status: 200, json: async () => response };
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    },
+  };
+}
+
+test('SOW-087: the channel-map public reads load WITHOUT identity', async () => {
   const files = {
     'house/content-channels.yml': '# SOW-087 doc header\nchannels:\n  - category: ai\n    channelId: "11111"\n',
     'house/moderation-flags.yml': 'lists:\n  political:\n    - election\n  profanity: []\n',
@@ -314,37 +337,39 @@ test('SOW-087: the channel-map public reads load WITHOUT identity; a superadmin 
   assert.equal(tmpl.status, 200);
   assert.equal(tmpl.json.templates.share, 'Shared by {memberdiscord} {shareurl}');
   assert.ok(tmpl.json.types.includes('share'));
+});
 
-  // a SUPERADMIN maps a category -> a house/content-channels.yml PR
+test('sow-274: a channel-map write is handed to the network under the name the network knows', async () => {
+  const worker = recordingWorker();
+  const files = { 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
   const repo = adminRepo();
-  const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
-  const r = await dispatch(ctxFor({ repo, files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'content-channel-set', category: 'devops', channelId: '22222' } });
+  const r = await dispatch(ctxFor({ repo, files, fetch: worker.fetch }), { pathname: '/api/admin', method: 'POST', body: { action: 'content-channel-set', category: 'devops', channelId: '22222' } });
   assert.equal(r.status, 200);
   assert.equal(r.json.prNumber, 88);
-  assert.equal(repo.puts[0].path, 'house/content-channels.yml');
-  assert.match(repo.puts[0].content, /devops/);
-  assert.match(repo.puts[0].content, /22222/);
-  assert.match(repo.puts[0].content, /^# SOW-087 doc header\n/, 'the yaml doc header is preserved');
+  // The channel map is edited through the batch op, which is the network's only spelling of that write.
+  assert.equal(worker.sent.length, 1);
+  assert.equal(worker.sent[0].action, 'category-batch');
+  assert.deepEqual(worker.sent[0].ops, [{ kind: 'channel-set', args: { category: 'devops', channelId: '22222' } }]);
+  assert.deepEqual(repo.puts, [], 'nothing was written with the member own token');
 });
 
-test('SOW-087: the editor writes are superadmin-only (an admin is forbidden) and flag typos never create lists', async () => {
-  const files = {
-    'house/roles.yml': 'admins:\n  - github_id: "1"\n', // the caller is only an ADMIN
-    'house/content-channels.yml': 'channels: []\n',
-    'house/moderation-flags.yml': 'lists:\n  political: []\n',
-  };
-  const admin = await dispatch(ctxFor({ repo: adminRepo(), files }), { pathname: '/api/admin', method: 'POST', body: { action: 'content-channel-set', category: 'ai', channelId: '11111' } });
-  assert.equal(admin.status, 403);
-  const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
-  const typo = await dispatch(ctxFor({ repo: adminRepo(), files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'flag-term-add', list: 'poltical', term: 'x' } });
-  assert.equal(typo.status, 400); // unknown list = bad-request, never a silently created list
-  const termAdd = await dispatch(ctxFor({ repo: adminRepo(), files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'flag-term-add', list: 'political', term: 'ballot' } });
-  assert.equal(termAdd.status, 200);
-  const tmplSet = await dispatch(ctxFor({ repo: adminRepo(), files: { ...superFiles, 'house/syndication-config.yml': 'syndication:\n  enabled: true\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'syndication-template-set', type: 'post', template: '{title} {url}' } });
-  assert.equal(tmplSet.status, 200);
+test('sow-274: a flag term and a template edit are handed over the same way', async () => {
+  const files = { 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
+  const term = recordingWorker();
+  const t = await dispatch(ctxFor({ repo: adminRepo(), files, fetch: term.fetch }), { pathname: '/api/admin', method: 'POST', body: { action: 'flag-term-add', list: 'political', term: 'ballot' } });
+  assert.equal(t.status, 200);
+  assert.deepEqual(term.sent[0], { action: 'flag-term-add', list: 'political', term: 'ballot' });
+
+  const tmpl = recordingWorker();
+  const w = await dispatch(ctxFor({ repo: adminRepo(), files, fetch: tmpl.fetch }), { pathname: '/api/admin', method: 'POST', body: { action: 'syndication-template-set', type: 'post', template: '{title} {url}' } });
+  assert.equal(w.status, 200);
+  // The singular template action is translated to the batch the network serves, carrying the one edit.
+  assert.equal(tmpl.sent[0].action, 'syndication-templates-set');
+  // No channel: an absent per-channel override is absent on the wire, not a null the network has to interpret.
+  assert.deepEqual(tmpl.sent[0].edits, [{ type: 'post', template: '{title} {url}', stub: false }]);
 });
 
-test('SOW-111: the news-engagement settings read is public; the write is superadmin-gated', async () => {
+test('SOW-111: the news-engagement settings read is public; the write goes to the network', async () => {
   const files = {
     'house/syndication-config.yml': 'syndication:\n  enabled: true\n  news_engagement:\n    enabled: true\n    open_threshold: 3\n    tier: paid-trial\n',
   };
@@ -353,16 +378,12 @@ test('SOW-111: the news-engagement settings read is public; the write is superad
   assert.deepEqual(pool.json.settings, { enabled: true, open_threshold: 3, tier: 'paid-trial', comment_autopost: true });
   assert.ok(pool.json.tiers.includes('signed-in'));
 
+  const worker = recordingWorker();
   const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
-  const repo = adminRepo();
-  const w = await dispatch(ctxFor({ repo, files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'news-engagement-set', openThreshold: 5 } });
+  const w = await dispatch(ctxFor({ repo: adminRepo(), files: superFiles, fetch: worker.fetch }), { pathname: '/api/admin', method: 'POST', body: { action: 'news-engagement-set', openThreshold: 5 } });
   assert.equal(w.status, 200);
   assert.equal(w.json.prNumber, 88);
-  assert.match(repo.puts[0].content, /open_threshold: 5/);
-  assert.match(repo.puts[0].content, /tier: paid-trial/, 'the unpatched fields survive');
-
-  const adminOnly = await dispatch(ctxFor({ repo: adminRepo(), files: { ...files, 'house/roles.yml': 'admins:\n  - github_id: "1"\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'news-engagement-set', openThreshold: 5 } });
-  assert.equal(adminOnly.status, 403);
+  assert.deepEqual(worker.sent[0], { action: 'news-engagement-set', openThreshold: 5 });
 });
 
 test('sow-291 Phase 2: /api/coupon-pool is admin-gated and reads the registry from KV via the Worker', async () => {

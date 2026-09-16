@@ -1,17 +1,13 @@
 // sow-275: a house config edit is acknowledged with what actually happens to it. A superadmin's edit merges on its
 // own (sow-108), an admin's waits for code-owner review, and the managers used to tell everyone the second thing.
-// The outcome is reported by whichever side opened the PR (the Worker, or the extension's admin-ops), and one
-// helper turns it into the sentence.
+// sow-274: there is now only ONE side that opens the pull request. Every host sends its edit to the network, so
+// the outcome the managers report comes from the endpoint's answer, and one helper turns it into the sentence.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 
 import { houseEditAck } from '../client-ui/src/workspace-core.mjs';
 import { membershipAdminAuthor } from '../workers/signup/membership-admin-author.mjs';
-import { addQuote } from '../client/src/admin-ops.mjs';
-import { createReader } from '../client/src/repo-fs.mjs';
 
 const MERGES = /merges automatically/;
 const REVIEW = /awaiting review/;
@@ -57,44 +53,6 @@ test('the Worker reports autoMerge true for a superadmin quote edit and false fo
   const adm = await quoteAddAs('admin');
   assert.equal(adm.status, 200, JSON.stringify(adm.body));
   assert.equal(adm.body.autoMerge, false);
-});
-
-// The extension / npm host path: admin-ops opens the PR with the editor's own token.
-function fakeRepo() {
-  return {
-    upstream: 'gbti-network/gbti.network',
-    async ensureFork() { return { full_name: 'hudson/gbti.network', owner: 'hudson' }; },
-    async getDefaultBranch() { return 'main'; },
-    async getBranchSha() { return 'sha'; },
-    async ensureBranch() {},
-    async getFileSha() { return null; },
-    async putFile() {},
-    async deleteFile() {},
-    async findOpenPull() { return null; },
-    async openPull() { return { number: 77, html_url: 'u' }; },
-  };
-}
-function ctxFor(role) {
-  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-quote-ack-'));
-  fs.mkdirSync(path.join(repoPath, 'house'), { recursive: true });
-  fs.writeFileSync(path.join(repoPath, 'house', 'quotes.yml'), '# quotes\nquotes: []\n');
-  fs.writeFileSync(path.join(repoPath, 'house', 'roles.yml'), 'superadmins: []\nadmins: []\nmoderators: []\n');
-  return {
-    role: () => role, getRepoClient: () => fakeRepo(), reader: createReader(repoPath),
-    store: { get: (k) => ({ repoPath, githubToken: 't' })[k] }, now: () => '2026-09-14T12:00:00Z',
-    identity: () => ({ githubId: '1', login: 'hudson' }),
-    fetch: async () => ({ ok: true, json: async () => ({ synced: true }) }),
-  };
-}
-
-test('admin-ops reports autoMerge true for a superadmin quote edit and false for an admin one', async () => {
-  const sup = await addQuote(ctxFor('superadmin'), { text: 'Hello world', author: 'Ada' });
-  assert.equal(sup.prNumber, 77);
-  assert.equal(sup.autoMerge, true);
-  assert.match(houseEditAck(sup), MERGES);
-  const adm = await addQuote(ctxFor('admin'), { text: 'Hello world', author: 'Ada' });
-  assert.equal(adm.autoMerge, false);
-  assert.match(houseEditAck(adm), REVIEW);
 });
 
 test('no house config manager hardcodes the review wording any more', () => {

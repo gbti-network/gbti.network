@@ -1,10 +1,15 @@
-// sow-213 Phase 2b: the five governance actions are served by the WORKER, not by the local git-only writer.
+// The five governance actions are served by the WORKER, not by a local writer (sow-213 Phase 2b), and as of
+// sow-274 so is every other admin action.
 //
-// WHY THIS GUARD EXISTS. client/src/admin-ops.mjs holds a GitHub token and no KV credential, so it can write
-// the git half of a ban or grant and cannot write the KV half at all. A ban issued through it was therefore
+// WHY THIS GUARD EXISTS. The local writer held a GitHub token and no KV credential, so it could write the git
+// half of a ban or grant and could not write the KV half at all. A ban issued through it was therefore
 // invisible to the paid oracle and the PR gate until the next scheduled mirror sync, up to six hours later,
 // with nothing reporting the gap. Only the Worker holds SIGNUP_KV, and only the Worker can write the private
-// moderation log, so these five actions must not silently fall back to the local writer.
+// moderation log.
+//
+// sow-274 REMOVED the local writers entirely, so the fall-through this guarded no longer exists to be taken.
+// The routing tests at the foot changed accordingly: they used to assert that the governance branch came first,
+// and now assert that there is no second branch on either host for anything to come before.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -92,36 +97,24 @@ test('sow-213: a Worker refusal surfaces as an error, never as a silent success'
 
 const extDispatch = readFileSync(fileURLToPath(new URL('../extension/src/ext-dispatch.mjs', import.meta.url)), 'utf8');
 
-test('sow-213 routing: ext-dispatch sends the five governance actions to the Worker op', () => {
-  const set = extDispatch.match(/const GOVERNANCE_ACTIONS = new Set\(\[([^\]]*)\]\)/);
-  assert.ok(set, 'GOVERNANCE_ACTIONS is declared');
-  for (const a of ['ban', 'unban', 'grandfather', 'ungrandfather', 'role']) {
-    assert.match(set[1], new RegExp(`'${a}'`), `${a} is routed to the Worker`);
-  }
-});
-
-test('sow-213 routing: the governance branch is reached BEFORE the local ADMIN_ACTIONS fallback', () => {
-  const branch = extDispatch.indexOf('GOVERNANCE_ACTIONS.has(body?.action)');
-  const fallback = extDispatch.indexOf('const fn = ADMIN_ACTIONS[body?.action];');
-  assert.ok(branch > 0 && fallback > 0, 'both branches are present');
-  assert.ok(branch < fallback, 'a governance action must never fall through to the local git-only writer');
-});
-
 const apiHost = readFileSync(fileURLToPath(new URL('../client/src/api.mjs', import.meta.url)), 'utf8');
 
-test('sow-213 routing: the npm/website host reroutes governance too, or the gap just moves hosts', () => {
-  const set = apiHost.match(/const GOVERNANCE_ACTIONS = new Set\(\[([^\]]*)\]\)/);
-  assert.ok(set, 'GOVERNANCE_ACTIONS is declared in the website host');
-  for (const a of ['ban', 'unban', 'grandfather', 'ungrandfather', 'role']) {
-    assert.match(set[1], new RegExp(`'${a}'`), `${a} is routed to the Worker in the website host`);
+test('every admin action on both hosts goes to the Worker, because neither host has anywhere else to send one', () => {
+  for (const [name, src] of [['the extension', extDispatch], ['the website and command line host', apiHost]]) {
+    // One table, imported rather than restated, so the two hosts cannot drift apart into different vocabularies.
+    assert.match(src, /import \{ toWorkerRequest \} from '[^']*admin-worker-actions\.mjs'/, `${name} no longer reads the shared action table`);
+    assert.match(src, /toWorkerRequest\(body \?\? \{\}\)/, `${name} no longer routes its admin body through the table`);
+    assert.match(src, /governanceAdminOp\(ctx, \{ action: wreq\.action/, `${name} no longer sends the result to the Worker`);
+
+    // And no second path: the table that used to hold the local writers, and the fall-through that reached it.
+    assert.doesNotMatch(src, /ADMIN_ACTIONS\[/, `${name} has a local admin writer table again`);
+    assert.doesNotMatch(src, /GOVERNANCE_ACTIONS/, `${name} sorts admin actions into routed and not-routed again`);
+    assert.doesNotMatch(src, /WORKER_CONFIG_ACTIONS/, `${name} sorts admin actions into routed and not-routed again`);
   }
-  const branch = apiHost.indexOf('GOVERNANCE_ACTIONS.has(body?.action)');
-  const fallback = apiHost.indexOf('const fn = ADMIN_ACTIONS[body?.action];');
-  assert.ok(branch > 0 && fallback > 0);
-  assert.ok(branch < fallback, 'governance must not fall through to the local git-only writer');
 });
 
-test('sow-213 routing: BOTH hosts route the SAME five actions, so neither can drift', () => {
-  const pick = (src) => (src.match(/const GOVERNANCE_ACTIONS = new Set\(\[([^\]]*)\]\)/)[1].match(/'[a-z]+'/g) || []).sort();
-  assert.deepEqual(pick(extDispatch), pick(apiHost), 'the extension and website hosts must agree on the governance set');
+test('an action neither host knows is refused, so nothing falls back', () => {
+  // Stated on the hosts rather than only on the table, because a host is free to ignore a null and carry on.
+  assert.match(apiHost, /if \(!wreq\) return \{ status: 400/);
+  assert.match(extDispatch, /if \(!wreq\) throw new OperationError\('bad-request'/);
 });

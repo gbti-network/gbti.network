@@ -1,69 +1,48 @@
-// Admin/superadmin operations (SOW-006; SOW-038 P4). Each reads the current LOCAL file, applies the consolidated
-// pure governance core (membership/superadmin-actions.mjs), and opens the appropriate house/cross-folder PR
-// (publishFiles). SOW-038 P4 converged this path off the parallel admin-edits.mjs onto superadmin-actions, so the
-// SAME module the effective-status precedence reads (overrides-core) is the module the panel writes, and every
-// governance action now gains (1) idempotency — a no-op when already in that state, no redundant PR — and (2) an
-// identity-minimal audit entry, folded into the PR body (the PR is the audit trail).
+// Admin/superadmin READS for the manager screens (SOW-006; SOW-038 P4).
 //
-// Capability is checked against the signed-in role from the LOCAL roles.yml, but that is UX gating only: the
-// SOW-005 gate + CODEOWNERS are the real boundary (a member who fakes a role locally still cannot merge the PR).
-// Errors use OperationError so every transport (CLI/MCP/UI) maps them consistently.
+// sow-274: THIS MODULE NO LONGER WRITES ANYTHING. Every admin write it used to perform (roles, content flags,
+// moderation, taxonomy, news sources, quotes, site toggles, call-to-action cards, channel maps, moderation
+// terms, syndication templates and settings, tag curation, category batches) now goes to the signup Worker,
+// which commits with GBTI's own App installation token. The client's own writers are gone, along with the
+// `adminPublish` helper that force-reset a branch on the acting member's copy of the repository.
+//
+// WHY THE WRITERS WENT, stated as what broke rather than as a principle. The old write path based its branch on
+// the fork's main, which is stale the moment upstream moves. The merge then conflicts, the gate refuses to
+// auto-merge a conflicted pull request, and the change sits open with nobody told. That is not hypothetical:
+// the owner's syndication settings and templates stalled exactly that way on 13 and 14 September, and the
+// mitigation in front of it was fail-soft, so the write proceeded onto the stale base anyway. The Worker path
+// commits on upstream directly and has no fork in it to go stale.
+//
+// What is LEFT here is the read half, and only the read half. Each function reads one house file through
+// ctx.reader (working copy on the command line tool, GitHub Contents API in the extension) and normalizes it
+// for a manager screen. None of them needs a token, a role beyond the screen's own gate, or a branch. The one
+// exception is the coupon pool, which is admin-gated because coupon codes are bearer credentials and the
+// registry lives in the edge store rather than in git.
 
 import yaml from 'js-yaml';
 
-import { OperationError, syncForkIfCreatingBranch } from './operations.mjs';
-import { canModerate, canBanGrandfather, canManageRoles } from './roles.mjs';
-import { grantRole, SuperadminActionError } from '../../membership/superadmin-actions.mjs'; // sow-213 Step 3: ban/unban/grandfather/revokeGrandfather retired here (governance routes through the Worker now)
-import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs';
-import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSourceEnabled as setSourceEnabledEdit, NewsSourceEditError } from '../../membership/news-source-edits.mjs'; // SOW-056 P2
-import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
-import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
-import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs';
-import { setContentFlag as setContentFlagEdit, flagKeyForPath, ContentFlagEditError } from '../../membership/content-flags.mjs'; // sow-189: stale / unindexed // SOW-087
-import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
+import { OperationError } from './operations.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs'; // sow-291 Phase 2: the coupon pool read proxies the Worker (KV-native)
 import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'; // sow-291 Phase 2
 import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
-import { setSiteToggle as setSiteToggleEdit, readAllToggles, SITE_TOGGLES, SiteSettingsEditError } from '../../membership/site-settings-edits.mjs'; // sow-271
-import { addCta as addCtaEdit, updateCta as updateCtaEdit, setCtaEnabled as setCtaEnabledEdit, assignCta as assignCtaEdit, unassignCta as unassignCtaEdit, ctasOf, CTA_ITEM_TYPES, CtaEditError } from '../../membership/cta-edits.mjs'; // sow-281
-import { ctaImageUpload, ctaImageFileChanges } from '../../membership/cta-image.mjs'; // sow-337: the card image, the same check the Worker route runs
+import { readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
+import { ctasOf, CTA_ITEM_TYPES } from '../../membership/cta-edits.mjs'; // sow-281
+import { SYNDICATION_CHANNEL_NAMES } from '../../membership/syndication-template-edits.mjs'; // SOW-088
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
-import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
-import { publishFiles } from './publish.mjs';
 
-// SOW-152: fresh-base the fork branch before an admin CONFIG write, exactly like the content publish path
-// (operations.mjs callers of syncForkIfCreatingBranch). Without this, an admin write force-resets its branch
-// onto the fork's POSSIBLY-STALE main, whose merge-base can predate the file on upstream -> an add/add
-// ("new file mode") conflict that a superadmin-automerge PR then stalls on forever. The sync is fail-soft (its
-// own try/catch), so a miss never breaks the write; it only ensures commitToBranchOnFork bases on a fresh main.
-// EVERY admin write goes through here so none is skipped.
-async function adminPublish(ctx, opts) {
-  await syncForkIfCreatingBranch(ctx, opts.repo, opts.branch);
-  const pr = await publishFiles(opts);
-  // sow-275: the PR is opened with the editor's own token, so the gate rules on the editor's role: a superadmin's
-  // edit auto-merges (sow-108), an admin's house edit waits for code-owner review. The managers read this.
-  return { ...pr, autoMerge: ctx.role?.() === 'superadmin' };
-}
-
-function requireRole(ctx, check, need) {
-  const role = ctx.role?.() ?? 'member';
-  if (!check(role)) throw new OperationError('forbidden', `requires ${need} (you are ${role})`);
-  return role;
-}
-
-// Host-agnostic: read the CURRENT house/content file through ctx.reader (node = working copy, extension =
-// GitHub Contents API) so an edit never clobbers the rest of the file. The repoPath guard ensures the node
-// host has a local clone to read from (the extension host satisfies it with a sentinel).
-function requireRepo(ctx) {
-  const repo = ctx.getRepoClient?.();
-  if (!repo) throw new OperationError('not-authenticated', 'run `gbti login` first');
-  if (!ctx.store?.get('repoPath')) throw new OperationError('bad-request', 'no local repoPath configured');
-  return { repo };
-}
+const TAXONOMY_PATH = 'house/taxonomy.yml';
+const NEWS_SOURCES_PATH = 'house/news-sources.yml';
+const QUOTES_PATH = 'house/quotes.yml';
+const CONTENT_CHANNELS_PATH = 'house/content-channels.yml';
+const MODERATION_FLAGS_PATH = 'house/moderation-flags.yml';
+const SYNDICATION_CONFIG_PATH = 'house/syndication-config.yml';
+const SITE_SETTINGS_PATH = 'house/site-settings.yml';
+const CTAS_PATH = 'house/ctas.yml';
 
 // Host-portable read: the npm host's reader.readFile is sync (returns a string); the extension's is async
-// (GitHub Contents API). `await` handles both (awaiting a plain string yields the string), so the same admin
-// ops run in either host.
+// (GitHub Contents API). `await` handles both (awaiting a plain string yields the string), so the same reads
+// run in either host. A missing or unparseable file reads as empty rather than throwing: a manager screen
+// showing an empty pool is the honest answer, and every one of these files is optional.
 const readYaml = async (ctx, rel) => {
   try {
     return yaml.load((await ctx.reader?.readFile?.(rel)) || '') ?? {};
@@ -71,261 +50,27 @@ const readYaml = async (ctx, rel) => {
     return {};
   }
 };
-const dumpYaml = (obj) => yaml.dump(obj, { lineWidth: 100, noRefs: true });
-const slugOf = (rel) => rel.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 48);
-
-// SOW-038 P4: the action context for the governance core — the signed-in actor (for the identity-minimal audit
-// entry) + the deterministic clock. Actor is null when the host did not attach an identity (the audit allows it).
-function actionCtx(ctx) {
-  const id = ctx.identity?.();
-  return {
-    actor: id ? { githubId: id.githubId ?? id.github_id ?? null, login: id.login ?? null } : null,
-    now: ctx.now ? ctx.now() : undefined,
-  };
-}
-// Fold the identity-minimal audit entry into the PR body (the PR is the audit trail) as a parseable, low-noise
-// HTML comment, under an optional human-readable reason line.
-function prBody(reason, auditEntry) {
-  const head = reason ? `Reason: ${reason}\n\n` : '';
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry)} -->`;
-}
-// A governance action that did not change anything (already in that state) -> a graceful idempotent no-op, no PR.
-const noop = (message, auditEntry) => ({ changed: false, noop: true, message, audit: auditEntry });
-
-function requireId(githubId) {
-  if (githubId === undefined || githubId === null || String(githubId).trim() === '') {
-    throw new OperationError('bad-request', 'githubId is required');
-  }
-  return String(githubId);
-}
-function requirePath(rel) {
-  if (!rel || typeof rel !== 'string' || rel.includes('\\') || rel.startsWith('/')) {
-    throw new OperationError('bad-request', 'a valid in-repo content path is required');
-  }
-  // Reject any non-canonical segment. Note `.` matters: path.join normalizes a `./` prefix away, so a
-  // bare `rel.includes('..')` check is not enough to keep a path inside its intended scope.
-  const segments = rel.split('/');
-  if (segments.some((s) => s === '' || s === '.' || s === '..')) {
-    throw new OperationError('bad-request', 'a valid in-repo content path is required');
-  }
-  return rel;
-}
-
-/** Moderation (deplatform/remove) is content-only: restrict to a member content folder. */
-function requireMemberContentPath(rel) {
-  requirePath(rel);
-  if (!rel.startsWith('members/')) {
-    throw new OperationError('forbidden', 'moderation is limited to member content (members/<user>/...)');
-  }
-  return rel;
-}
-
-// ---- admin: ban / grandfather ----
-//
-// sow-213 Step 3: the local ban / unban / grandfather / ungrandfather writers are RETIRED. house/bans.yml and
-// house/grandfathered.yml no longer exist (person-keyed entitlement state must not live in the public,
-// forkable, CDN-cached repo), and the client holds only a GitHub token, so it cannot write the KV mirror these
-// records now live in. All four member-status actions route through the WORKER instead
-// (client/src/operations-admin.mjs governanceAdminOp -> POST /membership/admin/author), which holds SIGNUP_KV
-// and writes the private moderation log; see the GOVERNANCE_ACTIONS short-circuit in api.mjs / ext-dispatch.mjs
-// and the cli.mjs commands. Only role assignment (house/roles.yml, the root of trust) stays git-native, below.
-
-// ---- superadmin: role management (house/roles.yml) ----
-
-export async function setMemberRole(ctx, { githubId, role, login } = {}) {
-  requireRole(ctx, canManageRoles, 'superadmin');
-  const { repo } = requireRepo(ctx);
-  const id = requireId(githubId);
-  if (!role) throw new OperationError('bad-request', 'role is required (member|moderator|admin|superadmin)');
-  let result;
-  try {
-    result = grantRole(await readYaml(ctx, 'house/roles.yml'), { githubId: id, role, login }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof SuperadminActionError) throw new OperationError('bad-request', err.message);
-    throw err;
-  }
-  if (!result.changed) return noop(`already ${role}: ${id}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/role-${id}`, files: [{ path: 'house/roles.yml', content: dumpYaml(result.next) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}`, body: prBody(`role: ${role}`, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-// ---- superadmin: stale / unindexed content flags (house/content-flags.yml, sow-189) ----
-// A flag is a statement ABOUT a member's content that the member must not be able to flip back, so it lives in
-// the house registry rather than the post's frontmatter (the gate is path-scoped and never reads a field). One
-// writer, four thin entries in the action tables. Superadmin only, as the owner asked.
-
-async function setContentFlagOp(ctx, { path: rel, reason } = {}, flag, on) {
-  requireRole(ctx, canManageRoles, 'superadmin');
-  const { repo } = requireRepo(ctx);
-  requireMemberContentPath(rel);
-  const key = flagKeyForPath(rel);
-  if (!key) throw new OperationError('bad-request', `not a flaggable content path: ${rel}`);
-  let result;
-  try {
-    result = setContentFlagEdit(await readYaml(ctx, 'house/content-flags.yml'), { key, flag, on, reason }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof ContentFlagEditError) throw new OperationError('bad-request', err.message);
-    throw err;
-  }
-  const verb = on ? flag : 'un' + flag;
-  if (!result.changed) return noop(`already ${verb}: ${key}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/content-flag-${key.replace(':', '-')}`, files: [{ path: 'house/content-flags.yml', content: dumpYaml(result.next) }], message: `Content flag: ${verb} ${key}`, title: `Content flag: ${verb} ${key}`, body: `Superadmin content flag (sow-189): ${verb} ${key}.${reason ? ' Reason: ' + String(reason).slice(0, 200) : ''}\n\nAudit: ${JSON.stringify(result.audit)}` });
-  return { ...pr, changed: true, audit: result.audit };
-}
-export const markStale = (ctx, args) => setContentFlagOp(ctx, args, 'stale', true);
-export const unmarkStale = (ctx, args) => setContentFlagOp(ctx, args, 'stale', false);
-export const markUnindexed = (ctx, args) => setContentFlagOp(ctx, args, 'unindexed', true);
-export const unmarkUnindexed = (ctx, args) => setContentFlagOp(ctx, args, 'unindexed', false);
-
-// ---- moderator: deplatform / remove any content ----
-
-export async function deplatformContent(ctx, { path: rel } = {}) {
-  requireRole(ctx, canModerate, 'moderator');
-  const { repo } = requireRepo(ctx);
-  requireMemberContentPath(rel);
-  const text = await ctx.reader?.readFile?.(rel);
-  if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
-  // SOW-038: deplatform = status -> draft (excludes it from the build, indexes, and feeds). Visibility is left
-  // intact (not forced to members) so a later restore keeps the content's original public/members audience.
-  const flip = flipContentStatus(text, 'draft'); // SOW-106: the shared status-flip core
-  const content = flip.changed ? flip.content : text;
-  return adminPublish(ctx, { repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: 'Moderation: set status to draft.' });
-}
-
-// SOW-071: the inverse of deplatform (status -> published); visibility is left untouched. Moderator+, members content
-// only. The unhideContent pure core (superadmin-actions.mjs) also flips visibility, which is NOT the inverse of what
-// deplatform does, so this inlines the status flip to mirror deplatformContent exactly.
-export async function republishContent(ctx, { path: rel } = {}) {
-  requireRole(ctx, canModerate, 'moderator');
-  const { repo } = requireRepo(ctx);
-  requireMemberContentPath(rel);
-  const text = await ctx.reader?.readFile?.(rel);
-  if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
-  const flip = flipContentStatus(text, 'published'); // SOW-106: the shared status-flip core
-  const content = flip.changed ? flip.content : text;
-  return adminPublish(ctx, { repo, branch: `gbti/republish-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Republish ${rel}`, title: `Republish ${rel}`, body: 'Moderation: set status to published.' });
-}
-
-// SOW-071: Remove is a destructive file delete, so it is gated heavier than Hide -> admin+ (was moderator+), so the
-// enforced boundary matches the displayed UI tier. CODEOWNERS + the SOW-005 gate remain the real merge boundary.
-export async function removeContent(ctx, { path: rel } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  requireMemberContentPath(rel);
-  return adminPublish(ctx, { repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: 'Moderation: remove content.' });
-}
-
-// ---- admin: category manager (house/taxonomy.yml) — SOW-055 v1 (add + rename-label, the safe ops) ----
-
-const TAXONOMY_PATH = 'house/taxonomy.yml';
-// yaml.dump drops comments; taxonomy.yml carries a load-bearing documentation header (the SOW-012 contract), so
-// preserve the leading comment block and re-prepend it on write.
-function leadingComment(raw) {
-  const out = [];
-  for (const line of String(raw || '').split('\n')) {
-    if (/^\s*#/.test(line) || line.trim() === '') out.push(line);
-    else break;
-  }
-  const block = out.join('\n').replace(/\s+$/, '');
-  return block ? `${block}\n` : '';
-}
 
 /** Read the current canonical taxonomy ({ tree }) for the category-manager UI. Public data; read-only. */
 export async function getTaxonomy(ctx) {
-  const raw = (await ctx.reader?.readFile?.(TAXONOMY_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  const parsed = await readYaml(ctx, TAXONOMY_PATH);
   return { tree: parsed.tree || {} };
 }
 
-export async function addContentCategory(ctx, { parentPath, key, label } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin'); // house/taxonomy.yml is admin-owned (CODEOWNERS); the gate is the real boundary
-  const { repo } = requireRepo(ctx);
-  const raw = (await ctx.reader?.readFile?.(TAXONOMY_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  let result;
-  try { result = addCategoryEdit(parsed, { parentPath, key, label }, actionCtx(ctx)); }
-  catch (err) { if (err instanceof TaxonomyEditError) throw new OperationError('bad-request', err.message); throw err; }
-  const fullPath = [...(Array.isArray(parentPath) ? parentPath : []), key].filter(Boolean);
-  if (!result.changed) return noop(`category already exists: ${fullPath.join(' > ')}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/category-add-${slugOf(fullPath.join('-'))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Add category ${fullPath.join('/')}`, title: `Add category: ${label}`, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-export async function renameContentCategoryLabel(ctx, { path, label } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const raw = (await ctx.reader?.readFile?.(TAXONOMY_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  let result;
-  try { result = renameLabelEdit(parsed, { path, label }, actionCtx(ctx)); }
-  catch (err) { if (err instanceof TaxonomyEditError) throw new OperationError('bad-request', err.message); throw err; }
-  const p = Array.isArray(path) ? path : [];
-  if (!result.changed) return noop(`label unchanged: ${p.join(' > ')}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/category-rename-${slugOf(p.join('-'))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Rename category ${p.join('/')} -> ${label}`, title: `Rename category: ${label}`, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-// SOW-056 Phase 2: the superadmin news-source-pool manager. Each edit applies the pure news-source-edits core to the
-// parsed house/news-sources.yml and opens an auto-merged house PR (admin-owned via CODEOWNERS; the gate is the real
-// boundary), exactly like the category manager. Edits go live at the Pages-deploy cadence (the worker reads the
-// rebuilt /news-sources.json next cron).
-const NEWS_SOURCES_PATH = 'house/news-sources.yml';
-
 /** Read the current news-source pool for the manager UI. Public data; read-only. */
 export async function getNewsSourcePool(ctx) {
-  const raw = (await ctx.reader?.readFile?.(NEWS_SOURCES_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  const parsed = await readYaml(ctx, NEWS_SOURCES_PATH);
   return { sources: Array.isArray(parsed.sources) ? parsed.sources : [] };
 }
 
-async function editNewsSources(ctx, edit, { branch, message, title, noopMsg }) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const raw = (await ctx.reader?.readFile?.(NEWS_SOURCES_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  let result;
-  try { result = edit(parsed); }
-  catch (err) { if (err instanceof NewsSourceEditError) throw new OperationError('bad-request', err.message); throw err; }
-  if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: NEWS_SOURCES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-export async function addNewsSource(ctx, { id, name, url, description } = {}) {
-  const sid = slugOf(String(id || name || ''));
-  return editNewsSources(ctx, (parsed) => addSourceEdit(parsed, { id, name, url, description }, actionCtx(ctx)),
-    { branch: `gbti/news-source-add-${sid}`, message: `Add news source ${id || name}`, title: `Add news source: ${name || id}`, noopMsg: `news source already present: ${id || name}` });
-}
-
-export async function removeNewsSource(ctx, { id } = {}) {
-  const sid = slugOf(String(id || ''));
-  return editNewsSources(ctx, (parsed) => removeSourceEdit(parsed, { id }, actionCtx(ctx)),
-    { branch: `gbti/news-source-remove-${sid}`, message: `Remove news source ${id}`, title: `Remove news source: ${id}`, noopMsg: `no such news source: ${id}` });
-}
-
-export async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
-  const sid = slugOf(String(id || ''));
-  const on = !!enabled;
-  return editNewsSources(ctx, (parsed) => setSourceEnabledEdit(parsed, { id, enabled: on }, actionCtx(ctx)),
-    { branch: `gbti/news-source-${on ? 'enable' : 'disable'}-${sid}`, message: `${on ? 'Enable' : 'Disable'} news source ${id}`, title: `${on ? 'Enable' : 'Disable'} news source: ${id}`, noopMsg: `news source already ${on ? 'enabled' : 'disabled'}: ${id}` });
-}
-
 // SOW-119 + sow-291 Phase 2: the coupon registry has MOVED OFF the public repository. house/coupons.yml was a
-// tracked file and a coupon code is a bearer credential, so the registry now lives in KV coupons:config. The
-// WRITES (add/update) are served by the signup Worker (api.mjs routes coupon-add/coupon-update to
-// /membership/admin/author, which writes KV marked source:'kv'), so the local git-PR writers are retired here.
-// This READ proxies the Worker's admin coupon-pool route, which reads the RAW blob so a stale mirror sync does
-// not blank the manager. The runtime half (usage counts + invite links) is already Worker/KV via
-// member-admin-client (operations.mjs), and this brings the pool onto the same transport.
+// tracked file and a coupon code is a bearer credential, so the registry now lives in KV coupons:config. This
+// READ proxies the Worker's admin coupon-pool route, which reads the RAW blob so a stale mirror sync does not
+// blank the manager.
 
 /** Read the current coupon pool (incl. inactive) for the manager UI, from KV via the Worker. Admin-gated. */
 export async function getCouponPool(ctx) {
-  await requireAdmin(ctx); // async role resolution via the reader (the sync requireRole is unpopulated on a GET ctx)
+  await requireAdmin(ctx); // async role resolution via the reader (the sync role getter is unpopulated on a GET ctx)
   const token = ctx.store?.get?.('githubToken');
   if (!token) throw new OperationError('not-authenticated', 'sign in first');
   try {
@@ -335,58 +80,11 @@ export async function getCouponPool(ctx) {
   }
 }
 
-// SOW-063 Phase 3: the superadmin quote-pool manager. Each edit applies the pure quote-edits core to the parsed
-// house/quotes.yml and opens an auto-merged house PR (admin-owned via CODEOWNERS; the gate is the real boundary),
-// exactly like the news-source manager. Edits go live at the Pages-deploy cadence (the extension reads the rebuilt
-// /quotes.json). Quotes are keyed by their text (no id).
-const QUOTES_PATH = 'house/quotes.yml';
-const quoteSlug = (text) => slugOf(String(text || '').slice(0, 40)) || 'quote';
-
-/** Read the current quote pool for the manager UI. Public data; read-only. */
+/** Read the current quote pool for the manager UI. Public data; read-only. Quotes are keyed by their text. */
 export async function getQuotePool(ctx) {
-  const raw = (await ctx.reader?.readFile?.(QUOTES_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  const parsed = await readYaml(ctx, QUOTES_PATH);
   return { quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [] };
 }
-
-async function editQuotes(ctx, edit, { branch, message, title, noopMsg }) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const raw = (await ctx.reader?.readFile?.(QUOTES_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  let result;
-  try { result = edit(parsed); }
-  catch (err) { if (err instanceof QuoteEditError) throw new OperationError('bad-request', err.message); throw err; }
-  if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: QUOTES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-export async function addQuote(ctx, { text, author } = {}) {
-  return editQuotes(ctx, (parsed) => addQuoteEdit(parsed, { text, author }, actionCtx(ctx)),
-    { branch: `gbti/quote-add-${quoteSlug(text)}`, message: `Add quote (${author || 'unknown'})`, title: `Add quote: ${author || 'unknown'}`, noopMsg: 'quote already present' });
-}
-
-export async function removeQuote(ctx, { text } = {}) {
-  return editQuotes(ctx, (parsed) => removeQuoteEdit(parsed, { text }, actionCtx(ctx)),
-    { branch: `gbti/quote-remove-${quoteSlug(text)}`, message: 'Remove quote', title: 'Remove quote', noopMsg: 'no such quote' });
-}
-
-export async function setQuoteEnabled(ctx, { text, enabled } = {}) {
-  const on = !!enabled;
-  return editQuotes(ctx, (parsed) => setQuoteEnabledEdit(parsed, { text, enabled: on }, actionCtx(ctx)),
-    { branch: `gbti/quote-${on ? 'enable' : 'disable'}-${quoteSlug(text)}`, message: `${on ? 'Enable' : 'Disable'} quote`, title: `${on ? 'Enable' : 'Disable'} quote`, noopMsg: `quote already ${on ? 'enabled' : 'disabled'}` });
-}
-
-// SOW-087: the superadmin channel-map + template + flag-word editors. Same shape as the news-source manager
-// (a pure edit core over the parsed house yaml + a publishFiles PR preserving the doc header), but gated
-// SUPERADMIN (canManageRoles): house/content-channels.yml and house/moderation-flags.yml are
-// superadmin-CODEOWNED, and the template lives in house/syndication-config.yml (same ownership tier).
-const CONTENT_CHANNELS_PATH = 'house/content-channels.yml';
-const MODERATION_FLAGS_PATH = 'house/moderation-flags.yml';
-const SYNDICATION_CONFIG_PATH = 'house/syndication-config.yml';
 
 /** Read the category -> Discord-channel map for the manager UI. Public data; read-only. */
 export async function getContentChannelPool(ctx) {
@@ -401,8 +99,6 @@ export async function getModerationFlagPool(ctx) {
   return { lists };
 }
 
-const SITE_SETTINGS_PATH = 'house/site-settings.yml'; // sow-271, superadmin-CODEOWNED
-
 /**
  * Read the site-wide presentation toggles for the manager UI (sow-271). Public data; read-only. Returns every
  * known toggle RESOLVED to a boolean plus its registry metadata, so the UI never has to decide what a missing
@@ -416,66 +112,10 @@ export async function getSiteSettings(ctx) {
   };
 }
 
-/**
- * Flip one site-wide toggle (sow-271). SUPERADMIN, enforced three ways that do not depend on each other:
- * editHouseYaml calls requireRole(canManageRoles, 'superadmin'), the Worker route carries ROLE_RANK.superadmin,
- * and house/site-settings.yml is superadmin-CODEOWNED so the SOW-005 gate rejects anyone else's PR outright.
- */
-export async function setSiteToggle(ctx, { key, enabled } = {}) {
-  const k = String(key || '').trim().toLowerCase();
-  const on = enabled === true || enabled === 'true' || enabled === 1 || enabled === '1';
-  return editHouseYaml(ctx, SITE_SETTINGS_PATH, (parsed) => setSiteToggleEdit(parsed, { key: k, enabled: on }, actionCtx(ctx)), {
-    branch: `gbti/site-setting-${slugOf(k) || 'toggle'}`,
-    message: `Turn site setting ${k} ${on ? 'on' : 'off'}`,
-    title: `Site setting: ${k} ${on ? 'on' : 'off'}`,
-    noopMsg: `site setting already ${on ? 'on' : 'off'}: ${k}`,
-    errType: SiteSettingsEditError,
-  });
-}
-
-// sow-281: the CTA registry (house/ctas.yml). SUPERADMIN, enforced the same three ways as the site toggles above:
-// editHouseYaml's requireRole(canManageRoles, 'superadmin'), ROLE_RANK.superadmin on the Worker ops, and the
-// CODEOWNERS pin on the file. The read is public git data (the built site publishes the same registry as /ctas.json).
-const CTAS_PATH = 'house/ctas.yml';
-const ctaSlug = (a) => slugOf(String(a || '').slice(0, 60)) || 'cta';
-async function editCtas(ctx, edit, { branch, message, title, noopMsg, files }) {
-  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError, files });
-}
-// sow-337: split a card add or update into the edit core's fields and the image to commit beside the registry.
-// The file name comes from the card id, never from the caller, exactly as the Worker route does it.
-function ctaImagePlan(fields, { adding }) {
-  const { imageBase64, removeImage, image: _callerNamed, ...rest } = fields || {};
-  const img = ctaImageUpload({ id: rest.id, imageBase64, removeImage });
-  if (!img.ok) throw new OperationError('bad-request', img.problem);
-  if (adding && img.fields.image === null) throw new OperationError('bad-request', 'a new CTA has no image to remove');
-  return { fields: { ...rest, ...img.fields }, files: (before, after) => ctaImageFileChanges(before, after, img.upload) };
-}
+/** Read the call-to-action registry for the manager UI. Public git data (the site publishes /ctas.json). */
 export async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
-}
-export async function addCta(ctx, fields = {}) {
-  const plan = ctaImagePlan(fields, { adding: true });
-  return editCtas(ctx, (parsed) => addCtaEdit(parsed, plan.fields, actionCtx(ctx)),
-    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: 'no change', files: plan.files });
-}
-export async function updateCta(ctx, fields = {}) {
-  const plan = ctaImagePlan(fields, { adding: false });
-  return editCtas(ctx, (parsed) => updateCtaEdit(parsed, plan.fields, actionCtx(ctx)),
-    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: 'no change', files: plan.files });
-}
-export async function setCtaEnabled(ctx, { id, enabled } = {}) {
-  const on = enabled === true;
-  return editCtas(ctx, (parsed) => setCtaEnabledEdit(parsed, { id, enabled: on }, actionCtx(ctx)),
-    { branch: `gbti/cta-toggle-${ctaSlug(id)}`, message: `${on ? 'Enable' : 'Disable'} CTA ${id}`, title: `${on ? 'Enable' : 'Disable'} CTA: ${id}`, noopMsg: `CTA already ${on ? 'enabled' : 'disabled'}` });
-}
-export async function assignCta(ctx, { id, type, ref } = {}) {
-  return editCtas(ctx, (parsed) => assignCtaEdit(parsed, { id, type, ref }, actionCtx(ctx)),
-    { branch: `gbti/cta-assign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Assign CTA ${id} to ${type}:${ref}`, title: `Assign CTA: ${id} to ${type}:${ref}`, noopMsg: 'already assigned' });
-}
-export async function unassignCta(ctx, { id, type, ref } = {}) {
-  return editCtas(ctx, (parsed) => unassignCtaEdit(parsed, { id, type, ref }, actionCtx(ctx)),
-    { branch: `gbti/cta-unassign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Unassign CTA ${id} from ${type}:${ref}`, title: `Unassign CTA: ${id} from ${type}:${ref}`, noopMsg: 'not assigned' });
 }
 
 /** Read the per-type templates (+ SOW-088 per-channel overrides) for the manager UI. Read-only. */
@@ -484,213 +124,6 @@ export async function getSyndicationTemplatePool(ctx) {
   const cfg = syndicationConfigFromParsed(parsed);
   return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
-
-async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType, files }) {
-  requireRole(ctx, canManageRoles, 'superadmin');
-  const { repo } = requireRepo(ctx);
-  const raw = (await ctx.reader?.readFile?.(relPath)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  let result;
-  try { result = edit(parsed); }
-  catch (err) { if (err instanceof errType) throw new OperationError('bad-request', err.message); throw err; }
-  // sow-337: files committed beside the house file (a call-to-action image, or the delete of one no card names).
-  // A replaced image leaves the registry unchanged, so the edit is a no-op only when there is no file either.
-  const extra = files ? files(parsed, result.next) : [];
-  if (!result.changed && !extra.length) return noop(noopMsg, result.audit);
-  const out = [...(result.changed ? [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }] : []), ...extra];
-  // clobberOpenPull: a house-config branch's open PR is always this same edit, so a stale CONFLICTING
-  // PR self-heals to fresh content on the next save (hit live 2026-07-12, PR #107).
-  const pr = await adminPublish(ctx, { repo, branch, files: out, message, title, body: prBody(null, result.audit), clobberOpenPull: true });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-// SOW-100: apply a BATCH of pending category-workspace edits as ONE house PR. Ops are the pending-set
-// vocabulary from client-ui/src/categories-core.mjs: label / add (house/taxonomy.yml) and channel-set /
-// channel-remove (house/content-channels.yml). Each op applies its EXISTING pure edit core over fresh reads;
-// an op that no-ops is skipped (idempotent); the first invalid op aborts the whole batch (nothing published).
-// Key renames / moves / removes are review-gated CI migrations and are NEVER accepted here. Gate: admin for a
-// taxonomy-only batch, superadmin when any channel op is present (matching the per-action gates).
-// SOW-100 tag curation: rename / merge / retire a free-form tag across the items carrying it. `paths` come
-// from the client's index aggregation but are NEVER trusted: each file is read fresh and only rewritten when
-// it actually carries the tag (retagContent no-ops otherwise). One PR for the whole edit; admin-gated (a
-// superadmin's PR auto-merges per SOW-108, a plain admin's falls to the review lane). rename == merge when
-// the destination already exists (the helper dedupes).
-export async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  // `mode` is the wire name (client.admin spreads args into { action: 'tag-edit', ...args }, so an inner
-  // `action` key would clobber the route); `action` stays accepted for direct API callers.
-  const act = String(mode || action || '');
-  if (!['rename', 'merge', 'retire'].includes(act)) throw new OperationError('bad-request', 'mode must be rename, merge, or retire');
-  const src = String(tag || '').trim().toLowerCase();
-  if (!src) throw new OperationError('bad-request', 'a tag is required');
-  const dest = act === 'retire' ? null : String(to || '').trim().toLowerCase();
-  if (act !== 'retire' && !dest) throw new OperationError('bad-request', `${act} needs a destination tag`);
-  if (dest === src) throw new OperationError('bad-request', 'the destination equals the source');
-  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
-  if (!list.length || list.length > 100) throw new OperationError('bad-request', 'between 1 and 100 content paths are required');
-  const files = [];
-  for (const rel of list) {
-    const text = await ctx.reader?.readFile?.(rel);
-    if (text == null) continue;
-    const r = retagContent(text, { tag: src, to: dest });
-    if (r.changed) files.push({ path: rel, content: r.content });
-  }
-  if (!files.length) return noop(`no item carries the tag "${src}"`);
-  const verb = act === 'retire' ? `Retire tag ${src}` : `${act === 'merge' ? 'Merge' : 'Rename'} tag ${src} -> ${dest}`;
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/tag-${act}-${slugOf(src)}`, files, message: verb, title: verb, body: `Tag curation (SOW-100): ${verb} across ${files.length} item${files.length === 1 ? '' : 's'}.` });
-  return { ...pr, changed: true, rewritten: files.length };
-}
-
-export async function applyCategoryBatch(ctx, { ops, descriptions } = {}) {
-  const list = Array.isArray(ops) ? ops : [];
-  if (!list.length) throw new OperationError('bad-request', 'the batch is empty');
-  const kinds = new Set(list.map((o) => o?.kind));
-  for (const k of kinds) {
-    if (!['label', 'add', 'channel-set', 'channel-remove'].includes(k)) {
-      throw new OperationError('bad-request', `op kind "${k}" cannot batch (migrations are review-gated dispatches)`);
-    }
-  }
-  const hasChannel = list.some((o) => o.kind === 'channel-set' || o.kind === 'channel-remove');
-  if (hasChannel) requireRole(ctx, canManageRoles, 'superadmin');
-  else requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-
-  const files = [];
-  const applied = [];
-  const applyFile = async (relPath, opsForFile, applyOne, errType) => {
-    if (!opsForFile.length) return;
-    const raw = (await ctx.reader?.readFile?.(relPath)) || '';
-    let parsed;
-    try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-    let changed = false;
-    for (const op of opsForFile) {
-      let result;
-      try { result = applyOne(parsed, op); }
-      catch (err) { if (err instanceof errType) throw new OperationError('bad-request', `${op.kind} ${JSON.stringify(op.args)}: ${err.message}`); throw err; }
-      if (result.changed) { parsed = result.next; changed = true; applied.push(op); }
-    }
-    if (changed) files.push({ path: relPath, content: leadingComment(raw) + dumpYaml(parsed) });
-  };
-
-  await applyFile(TAXONOMY_PATH, list.filter((o) => o.kind === 'label' || o.kind === 'add'), (parsed, op) => (
-    op.kind === 'add'
-      ? addCategoryEdit(parsed, { parentPath: op.args?.parentPath ?? [], key: op.args?.key, label: op.args?.label }, actionCtx(ctx))
-      : renameLabelEdit(parsed, { path: op.args?.path, label: op.args?.label }, actionCtx(ctx))
-  ), TaxonomyEditError);
-  await applyFile(CONTENT_CHANNELS_PATH, list.filter((o) => o.kind === 'channel-set' || o.kind === 'channel-remove'), (parsed, op) => (
-    op.kind === 'channel-set'
-      ? setChannelEdit(parsed, { category: op.args?.category, channelId: op.args?.channelId }, actionCtx(ctx))
-      : removeChannelEdit(parsed, { category: op.args?.category }, actionCtx(ctx))
-  ), ContentChannelEditError);
-
-  if (!files.length) return noop('every batched edit was already applied', { ops: list.length });
-  const lines = Array.isArray(descriptions) && descriptions.length ? descriptions : list.map((o) => `${o.kind}: ${JSON.stringify(o.args)}`);
-  const stamp = (ctx.now?.() ?? new Date().toISOString()).replace(/[^0-9]/g, '').slice(0, 14);
-  const pr = await adminPublish(ctx, {
-    repo,
-    branch: `gbti/category-batch-${stamp}`,
-    files,
-    message: `Categories: ${applied.length} change${applied.length === 1 ? '' : 's'}`,
-    title: `Categories: ${applied.length} change${applied.length === 1 ? '' : 's'}`,
-    body: `Batched category-workspace edits (SOW-100):\n\n${lines.map((d) => `- ${d}`).join('\n')}`,
-  });
-  return { ...pr, changed: true, applied: applied.length, skipped: list.length - applied.length };
-}
-
-export async function setContentChannel(ctx, { category, channelId } = {}) {
-  const slug = slugOf(String(category || ''));
-  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => setChannelEdit(parsed, { category, channelId }, actionCtx(ctx)), {
-    branch: `gbti/content-channel-set-${slug}`,
-    message: `Map category ${category} to Discord channel ${channelId}`,
-    title: `Map category to Discord channel: ${category}`,
-    noopMsg: `category already mapped to that channel: ${category}`,
-    errType: ContentChannelEditError,
-  });
-}
-
-export async function removeContentChannel(ctx, { category } = {}) {
-  const slug = slugOf(String(category || ''));
-  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => removeChannelEdit(parsed, { category }, actionCtx(ctx)), {
-    branch: `gbti/content-channel-remove-${slug}`,
-    message: `Unmap category ${category} from its Discord channel`,
-    title: `Unmap category channel: ${category}`,
-    noopMsg: `no channel mapping for category: ${category}`,
-    errType: ContentChannelEditError,
-  });
-}
-
-export async function addModerationFlagTerm(ctx, { list, term } = {}) {
-  const slug = slugOf(`${list}-${String(term || '').slice(0, 24)}`);
-  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => addFlagTermEdit(parsed, { list, term }, actionCtx(ctx)), {
-    branch: `gbti/flag-term-add-${slug}`,
-    message: `Add a ${list} moderation term`,
-    title: `Add moderation term (${list})`,
-    noopMsg: `term already in ${list}`,
-    errType: ModerationFlagEditError,
-  });
-}
-
-export async function removeModerationFlagTerm(ctx, { list, term } = {}) {
-  const slug = slugOf(`${list}-${String(term || '').slice(0, 24)}`);
-  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => removeFlagTermEdit(parsed, { list, term }, actionCtx(ctx)), {
-    branch: `gbti/flag-term-remove-${slug}`,
-    message: `Remove a ${list} moderation term`,
-    title: `Remove moderation term (${list})`,
-    noopMsg: `term not in ${list}`,
-    errType: ModerationFlagEditError,
-  });
-}
-
-/** SOW-088: apply a BATCH of template edits as ONE house PR (the admin card's Save; per-field PRs raced
- *  each other on the same file). Each edit applies the pure setTemplate core over the same parsed doc;
- *  no-ops are skipped; the first invalid edit aborts the batch (nothing published). Superadmin. */
-export async function setSyndicationTemplates(ctx, { edits } = {}) {
-  requireRole(ctx, canManageRoles, 'superadmin');
-  const { repo } = requireRepo(ctx);
-  const list = Array.isArray(edits) ? edits : [];
-  if (!list.length) return noop('no template edits', null);
-  const raw = (await ctx.reader?.readFile?.(SYNDICATION_CONFIG_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  const audits = [];
-  let doc = parsed;
-  let changed = 0;
-  for (const e of list) {
-    let result;
-    try { result = setTemplateEdit(doc, { type: e?.type, template: e?.template, channel: e?.channel, stub: e?.stub === true }, actionCtx(ctx)); }
-    catch (err) { if (err instanceof TemplateEditError) throw new OperationError('bad-request', err.message); throw err; }
-    doc = result.next;
-    audits.push(result.audit);
-    if (result.changed) changed++;
-  }
-  if (!changed) return noop('no template changes', audits);
-  const pr = await adminPublish(ctx, {
-    repo,
-    branch: 'gbti/syndication-templates',
-    files: [{ path: SYNDICATION_CONFIG_PATH, content: leadingComment(raw) + dumpYaml(doc) }],
-    message: `Set ${changed} syndication template${changed === 1 ? '' : 's'}`,
-    title: `Set syndication templates (${changed})`,
-    body: prBody(null, audits),
-    clobberOpenPull: true,
-  });
-  return { ...pr, changed: true, count: changed, audit: audits };
-}
-
-export async function setSyndicationTemplate(ctx, { type, template, channel, stub } = {}) {
-  const slug = slugOf(`${channel ? `${channel}-` : ''}${stub ? 'stub-' : ''}${String(type || '')}`);
-  const label = channel ? `${channel} ${type}` : type;
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplateEdit(parsed, { type, template, channel, stub }, actionCtx(ctx)), {
-    branch: `gbti/syndication-template-${slug}`,
-    message: `Set the ${label} syndication template`,
-    title: `Set syndication template: ${label}`,
-    noopMsg: `template unchanged: ${label}`,
-    errType: TemplateEditError,
-  });
-}
-
-// SOW-088: the syndication pipeline settings (master switch, approval mode, hold window, channel switches).
 
 /** Read the normalized pipeline settings for the manager UI. Public house data; read-only. */
 export async function getSyndicationSettings(ctx) {
@@ -714,31 +147,8 @@ export async function getSyndicationSettings(ctx) {
   };
 }
 
-export async function setSyndicationSettings(ctx, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettingsEdit(parsed, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes }, actionCtx(ctx)), {
-    branch: 'gbti/syndication-settings',
-    message: 'Set the syndication pipeline settings',
-    title: 'Set syndication settings',
-    noopMsg: 'syndication settings unchanged',
-    errType: TemplateEditError,
-  });
-}
-
-// SOW-111: the news engagement auto-share settings (house/syndication-config.yml `news_engagement`).
-
 /** Read the normalized news engagement settings for the manager UI. Public data; read-only. */
 export async function getNewsEngagementSettings(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
 }
-
-export async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, commentAutopost } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setNewsEngagementEdit(parsed, { enabled, openThreshold, tier, commentAutopost }, actionCtx(ctx)), {
-    branch: 'gbti/news-engagement-set',
-    message: 'Set the news engagement auto-share settings',
-    title: 'Set news auto-share settings',
-    noopMsg: 'news engagement settings unchanged',
-    errType: TemplateEditError,
-  });
-}
-

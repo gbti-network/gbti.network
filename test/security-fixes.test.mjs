@@ -7,7 +7,7 @@ import http from 'node:http';
 import { grandfatherActive } from '../membership/overrides.mjs';
 import { planReconcile } from '../scripts/lib/reconcile-plan.mjs';
 import { buildContentFile, ContentValidationError } from '../client/src/content-ops.mjs';
-import { deplatformContent, removeContent } from '../client/src/admin-ops.mjs';
+import { membershipAdminAuthor } from '../workers/signup/membership-admin-author.mjs';
 import { startServer, send } from '../client/src/server.mjs';
 
 // #5 trust-core: unparseable grandfather `until` must FAIL CLOSED (expire), not grant permanent access.
@@ -43,15 +43,44 @@ test('buildContentFile: body over the size cap is rejected', () => {
   );
 });
 
-// #1/#8 admin-ops: moderation rejects ./ traversal and out-of-scope (house/) paths.
-test('deplatform/remove: ./ prefix and non-member paths are rejected', async () => {
-  const repoPath = '/nope';
-  const ctx = { role: () => 'moderator', getRepoClient: () => ({}), store: { get: (k) => ({ repoPath })[k] } };
-  const adminCtx = { role: () => 'admin', getRepoClient: () => ({}), store: { get: (k) => ({ repoPath })[k] } }; // SOW-071: remove is admin+
-  await assert.rejects(deplatformContent(ctx, { path: './members/bob/posts/x.md' }), (e) => e.code === 'bad-request');
-  await assert.rejects(removeContent(adminCtx, { path: 'members/bob/../alice/posts/x.md' }), (e) => e.code === 'bad-request');
-  await assert.rejects(removeContent(adminCtx, { path: 'house/bans.yml' }), (e) => e.code === 'forbidden');
-  await assert.rejects(deplatformContent(ctx, { path: 'CODEOWNERS' }), (e) => e.code === 'forbidden');
+// #1/#8 moderation rejects ./ traversal and any path that is not a content item.
+//
+// sow-274 moved this guard. It used to live in the client, which opened the pull request itself; the client no
+// longer writes anything, so the endpoint is the only thing enforcing it and the test has to ask the endpoint.
+// The rule also widened in the move: the client admitted members/ only, while the endpoint admits house/ content
+// too, because a superadmin moderating GBTI's own posts is legitimate and the role rank plus the CODEOWNERS pin
+// decide who may. What must NOT widen is the shape: a traversal, a governance file or a bare root file.
+test('deplatform/remove: a traversal or a non-content path is refused before anything is read', async () => {
+  const reached = [];
+  const fetchImpl = async (url) => { reached.push(String(url)); return { ok: false, status: 500, json: async () => ({}) }; };
+  const deps = {
+    fetchImpl,
+    authorize: async () => ({ ok: true, role: 'superadmin', githubId: '999' }), // the highest role, so a refusal is about the PATH
+    kv: { get: async () => ({ token: 'inst-token', expiresAt: Date.now() + 3600e3 }), put: async () => {} },
+    limiter: async () => ({ allowed: true }),
+    allowCookie: false,
+  };
+  const ENV = { MEMBERSHIP_AUTHOR_ENABLED: 'true', GITHUB_APP_INSTALLATION_ID: '123', UPSTREAM_REPO: 'gbti-network/gbti.network' };
+  const call = (action, path) => membershipAdminAuthor({ json: async () => ({ action, path }) }, ENV, deps);
+
+  for (const [action, path] of [
+    ['deplatform', './members/bob/posts/x/index.md'],
+    ['remove', 'members/bob/../alice/posts/x/index.md'],
+    ['remove', 'house/bans.yml'],
+    ['deplatform', 'CODEOWNERS'],
+    ['deplatform', 'members/bob/posts/x.md'], // a file, not an item folder
+  ]) {
+    const res = await call(action, path);
+    assert.equal(res.status, 400, `${action} ${path} should be refused, got ${res.status}`);
+  }
+  // Nothing was fetched from GitHub: every refusal happened on the path alone.
+  assert.deepEqual(reached.filter((u) => u.includes('/contents/')), []);
+
+  // The positive control. A well-formed item passes the path check and goes on to READ the file, which is what
+  // proves the five refusals above are about their paths rather than a blanket refusal.
+  const ok = await call('deplatform', 'members/bob/posts/x/index.md');
+  assert.notEqual(ok.status, 400);
+  assert.ok(reached.some((u) => u.includes('/contents/members/bob/posts/x/index.md')));
 });
 
 // #7 server: the per-install token is stripped from the URL before the handler sees it.

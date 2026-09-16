@@ -1993,8 +1993,8 @@ var require_dumper = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   function generateNextLine(state, level) {
     return "\n" + common.repeat(" ", state.indent * level);
   }
-  function testImplicitResolving(state, str2) {
-    for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str2)) return true;
+  function testImplicitResolving(state, str) {
+    for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str)) return true;
     return false;
   }
   function isWhitespace(c) {
@@ -3172,14 +3172,14 @@ function promiseAllObject(promisesObj) {
 }
 function randomString(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str2 = "";
+  let str = "";
   for (let i = 0; i < length; i++) {
-    str2 += chars[Math.floor(Math.random() * chars.length)];
+    str += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str2;
+  return str;
 }
-function esc(str2) {
-  return JSON.stringify(str2);
+function esc(str) {
+  return JSON.stringify(str);
 }
 function slugify(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -3293,8 +3293,8 @@ var primitiveTypes = /* @__PURE__ */ new Set([
   "symbol",
   "undefined"
 ]);
-function escapeRegex(str2) {
-  return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -17349,31 +17349,6 @@ function shareId(createdAt, title) {
   const stamp = ts || "00000000000000";
   return slug ? `${stamp}-${slug}` : `${stamp}-share`;
 }
-function retagContent(text, { tag, to = null } = {}) {
-  const { frontmatter, body } = parseContentFile(text);
-  const fm = { ...frontmatter ?? {} };
-  const tags = Array.isArray(fm.tags) ? fm.tags.map((t) => String(t)) : [];
-  const target = String(tag).toLowerCase();
-  if (!tags.some((t) => t.toLowerCase() === target)) return { changed: false, content: text };
-  let next = tags.filter((t) => t.toLowerCase() !== target);
-  if (to && !next.some((t) => t.toLowerCase() === String(to).toLowerCase())) next.push(String(to));
-  fm.tags = next;
-  if (!next.length) delete fm.tags;
-  return { changed: true, content: serializeContentFile(fm, body) };
-}
-function flipContentStatus(text, status) {
-  const { frontmatter, body } = parseContentFile(text);
-  const current = frontmatter?.status ?? null;
-  if (current === status) return { changed: false, current, content: null };
-  const updated = { ...frontmatter ?? {}, status };
-  const content = `---
-${index_vite_proxy_tmp_default.dump(updated, { lineWidth: 100, noRefs: true }).trimEnd()}
----
-
-${String(body).trim()}
-`;
-  return { changed: true, current, content };
-}
 function buildShareFile({ username, input, body = "" }) {
   if (!username) throw new Error("buildShareFile: username is required");
   const cleaned = stripUndefined({ status: "published", ...input ?? {}, type: "share", author: username });
@@ -17508,8 +17483,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean7 = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean7), (c) => c.charCodeAt(0));
+  const clean2 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean2), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -17747,9 +17722,9 @@ function toBase64(text) {
   return btoa(bin);
 }
 function fromBase64(b64) {
-  const clean7 = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean7, "base64").toString("utf8");
-  const bin = atob(clean7);
+  const clean2 = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean2, "base64").toString("utf8");
+  const bin = atob(clean2);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -18095,9 +18070,6 @@ function rolesFromText(text) {
     return /* @__PURE__ */ new Map();
   }
 }
-var canModerate = (role) => rank(role) >= RANK.moderator;
-var canBanGrandfather = (role) => rank(role) >= RANK.admin;
-var canManageRoles = (role) => rank(role) >= RANK.superadmin;
 function newsEditorsFromText(text) {
   const set2 = /* @__PURE__ */ new Set();
   if (!text) return set2;
@@ -18167,8 +18139,8 @@ var SECRET_KEY = /token|secret|authorization|bearer|password|refresh|api[_-]?key
 var MAX_STRING = 200;
 var MAX_DEPTH = 3;
 function clip(s) {
-  const str2 = String(s);
-  return str2.length > MAX_STRING ? `${str2.slice(0, MAX_STRING)}…(${str2.length})` : str2;
+  const str = String(s);
+  return str.length > MAX_STRING ? `${str.slice(0, MAX_STRING)}…(${str.length})` : str;
 }
 function redactDeep(value, depth = 0) {
   if (value == null) return value;
@@ -18954,7 +18926,7 @@ async function decryptMemberAsset(ctx, { encPath } = {}) {
 }
 
 // client/src/operations-social.mjs
-async function publishShare(ctx, { input = {}, body = "", removeEnc = null, message, title, prBody: prBody2 } = {}) {
+async function publishShare(ctx, { input = {}, body = "", removeEnc = null, message, title, prBody } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await membershipOf(ctx);
@@ -18965,8 +18937,8 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, mess
   const id_ = input.id ?? shareId(createdAt, input.title);
   let built;
   try {
-    const { encryptedBody: _stale, ...clean7 } = input;
-    built = buildShareFile({ username: id.username, input: { ...clean7, id: id_, createdAt }, body });
+    const { encryptedBody: _stale, ...clean2 } = input;
+    built = buildShareFile({ username: id.username, input: { ...clean2, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -18992,12 +18964,12 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, mess
     files,
     message: message ?? `Share: ${built.frontmatter.title || id_}`,
     title: shareTitle,
-    body: prBody2
+    body: prBody
   });
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
-async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody: prBody2, removeEnc = null } = {}) {
+async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody, removeEnc = null } = {}) {
   const token = ctx.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   let plan;
@@ -19011,10 +18983,10 @@ async function planAndPublishComment(ctx, repo, built, body, { message, title, p
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   if (!plan?.encPath && typeof removeEnc === "string" && removeEnc) files.push({ path: removeEnc, content: null });
-  const pr = isHostedCtx(ctx) ? await hostedPublishFiles(ctx, { branch: `gbti/comment-${built.id}`, files, title }) : await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody2 });
+  const pr = isHostedCtx(ctx) ? await hostedPublishFiles(ctx, { branch: `gbti/comment-${built.id}`, files, title }) : await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
   return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
 }
-async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody: prBody2 } = {}) {
+async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await membershipOf(ctx);
@@ -19037,7 +19009,7 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const r = await planAndPublishComment(ctx, repo, built, body, {
     message: message ?? `Comment on ${targetType} ${targetSlug}`,
     title: title ?? `Comment on ${targetType}: ${targetSlug}`,
-    prBody: prBody2
+    prBody
   });
   const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
   const echoToken = ctx.store?.get?.("githubToken");
@@ -20842,438 +20814,171 @@ function renderDoc(md, ids, opts = {}) {
   return { html, blocks: ranges };
 }
 
-// membership/superadmin-actions.mjs
-var SuperadminActionError = class extends Error {
-};
-var idOf2 = (e) => String(e?.github_id ?? "");
-var ROLE_LIST = Object.freeze({ [ROLE2.superadmin]: "superadmins", [ROLE2.admin]: "admins", [ROLE2.moderator]: "moderators" });
-var ALL_LISTS = ["superadmins", "admins", "moderators"];
-function reqId(githubId) {
-  const id = githubId != null ? String(githubId) : "";
-  if (!id) throw new SuperadminActionError("githubId is required");
-  return id;
-}
-function isoOf(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new SuperadminActionError("invalid timestamp");
-  return d.toISOString();
-}
-function audit({ actor, action, target, detail = null, now } = {}) {
-  return {
-    at: isoOf(now),
-    actor: actor ? { github_id: actor.githubId != null ? String(actor.githubId) : actor.github_id != null ? String(actor.github_id) : null, login: actor.login ?? null } : null,
-    action,
-    target: target ? { github_id: target.githubId != null ? String(target.githubId) : null, login: target.login ?? null } : null,
-    detail
-  };
-}
-var cloneList = (list) => Array.isArray(list) ? list.map((e) => structuredClone(e)) : [];
-var cloneRoles = (r) => ({ superadmins: cloneList(r?.superadmins), admins: cloneList(r?.admins), moderators: cloneList(r?.moderators), ...stripLists(r) });
-function stripLists(r) {
-  const o = { ...r || {} };
-  for (const l of ALL_LISTS) delete o[l];
-  return o;
-}
-function grantRole(parsedRoles, { githubId, login, role = ROLE2.member }, ctx = {}) {
-  const id = reqId(githubId);
-  if (role !== ROLE2.member && !ROLE_LIST[role]) throw new SuperadminActionError(`unknown role: ${role}`);
-  const next = cloneRoles(parsedRoles);
-  let changed = false;
-  for (const list of ALL_LISTS) {
-    const target = ROLE_LIST[role] === list;
-    const has = next[list].some((e) => idOf2(e) === id);
-    if (target && !has) {
-      next[list].push({ github_id: id, ...login ? { login } : {} });
-      changed = true;
-    } else if (!target && has) {
-      next[list] = next[list].filter((e) => idOf2(e) !== id);
-      changed = true;
-    }
-  }
-  return { next, changed, audit: audit({ ...ctx, action: "role.grant", target: { githubId: id, login }, detail: { role } }) };
-}
-
-// membership/taxonomy-edits.mjs
-var TaxonomyEditError = class extends Error {
-};
-var KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-var MAX_LABEL = 60;
-function isoOf2(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new TaxonomyEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry(ctx, action, path, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf2(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { path: [...path] },
-    detail: detail ?? null
-  };
-}
-function nodeAt(taxonomy, path) {
-  if (!Array.isArray(path) || path.length === 0) return null;
-  let map2 = taxonomy?.tree;
-  let node = null;
-  for (const key of path) {
-    if (!map2 || typeof map2 !== "object") return null;
-    node = map2[key];
-    if (!node || typeof node !== "object") return null;
-    map2 = node.children;
-  }
-  return node;
-}
-function cleanLabel(label) {
-  const lab = typeof label === "string" ? label.trim() : "";
-  if (!lab) throw new TaxonomyEditError("a category label is required");
-  return lab.slice(0, MAX_LABEL);
-}
-function cleanTaxonomy(taxonomy) {
-  const tx = structuredClone(taxonomy && typeof taxonomy === "object" ? taxonomy : {});
-  if (!tx.tree || typeof tx.tree !== "object" || Array.isArray(tx.tree)) tx.tree = {};
-  return tx;
-}
-function addCategory(taxonomy, { parentPath = [], key, label } = {}, ctx = {}) {
-  const tx = cleanTaxonomy(taxonomy);
-  const k = typeof key === "string" ? key.trim() : "";
-  if (!KEY_RE.test(k)) throw new TaxonomyEditError("a category key must be kebab-case (lowercase letters, digits, single hyphens)");
-  const lab = cleanLabel(label);
-  let childrenMap;
-  if (Array.isArray(parentPath) && parentPath.length) {
-    const parent = nodeAt(tx, parentPath);
-    if (!parent) throw new TaxonomyEditError(`parent category not found: ${parentPath.join(" > ")}`);
-    if (!parent.children || typeof parent.children !== "object" || Array.isArray(parent.children)) parent.children = {};
-    childrenMap = parent.children;
-  } else {
-    childrenMap = tx.tree;
-  }
-  const fullPath = [...Array.isArray(parentPath) ? parentPath : [], k];
-  const existing = childrenMap[k];
-  if (existing) {
-    if ((existing.label ?? "") === lab) return { next: tx, changed: false, audit: auditEntry(ctx, "taxonomy.add", fullPath, { label: lab, noop: true }) };
-    throw new TaxonomyEditError(`a category "${k}" already exists here; use rename to change its label`);
-  }
-  childrenMap[k] = { label: lab };
-  return { next: tx, changed: true, audit: auditEntry(ctx, "taxonomy.add", fullPath, { label: lab }) };
-}
-function renameLabel(taxonomy, { path, label } = {}, ctx = {}) {
-  const tx = cleanTaxonomy(taxonomy);
-  if (!Array.isArray(path) || path.length === 0) throw new TaxonomyEditError("a category path is required");
-  const lab = cleanLabel(label);
-  const node = nodeAt(tx, path);
-  if (!node) throw new TaxonomyEditError(`category not found: ${path.join(" > ")}`);
-  if ((node.label ?? "") === lab) return { next: tx, changed: false, audit: auditEntry(ctx, "taxonomy.rename", path, { label: lab, noop: true }) };
-  node.label = lab;
-  return { next: tx, changed: true, audit: auditEntry(ctx, "taxonomy.rename", path, { label: lab }) };
+// client/src/admin-worker-actions.mjs
+var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
+  // governance (sow-213) and coupons (sow-291), which already took this path
+  "ban",
+  "unban",
+  "grandfather",
+  "ungrandfather",
+  "role",
+  "coupon-add",
+  "coupon-update",
+  // house config
+  "quote-add",
+  "quote-remove",
+  "quote-toggle",
+  "news-source-add",
+  "news-source-remove",
+  "news-source-toggle",
+  "site-setting-set",
+  "cta-add",
+  "cta-update",
+  "cta-toggle",
+  "cta-assign",
+  "cta-unassign",
+  "flag-term-add",
+  "flag-term-remove",
+  "syndication-templates-set",
+  "news-engagement-set",
+  "syndication-settings-set",
+  // content moderation, and the multi-file batches
+  "deplatform",
+  "remove",
+  "republish",
+  "category-batch",
+  "tag-edit",
+  // sow-274: the content flags, added to the Worker in this change
+  "stale",
+  "unstale",
+  "unindex",
+  "reindex"
+]));
+var TRANSLATED = Object.freeze({
+  "category-add": (p) => ({
+    action: "category-batch",
+    payload: { ops: [{ kind: "add", args: { parentPath: Array.isArray(p?.parentPath) ? p.parentPath : [], key: p?.key, label: p?.label } }] }
+  }),
+  "category-rename": (p) => ({
+    action: "category-batch",
+    payload: { ops: [{ kind: "label", args: { path: p?.path, label: p?.label } }] }
+  }),
+  "content-channel-set": (p) => ({
+    action: "category-batch",
+    payload: { ops: [{ kind: "channel-set", args: { category: p?.category, channelId: p?.channelId } }] }
+  }),
+  "content-channel-remove": (p) => ({
+    action: "category-batch",
+    payload: { ops: [{ kind: "channel-remove", args: { category: p?.category } }] }
+  }),
+  "syndication-template-set": (p) => ({
+    action: "syndication-templates-set",
+    payload: { edits: [{ type: p?.type, template: p?.template, channel: p?.channel, stub: p?.stub === true }] }
+  })
+});
+function toWorkerRequest(body) {
+  const { action, ...payload } = body ?? {};
+  const a = String(action ?? "");
+  if (Object.prototype.hasOwnProperty.call(TRANSLATED, a)) return TRANSLATED[a](payload);
+  if (WORKER_ADMIN_ACTIONS.has(a)) return { action: a, payload };
+  return null;
 }
 
-// membership/news-source-edits.mjs
-var NewsSourceEditError = class extends Error {
+// membership/site-settings-edits.mjs
+var SiteSettingsEditError = class extends Error {
 };
-var ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-var MAX_NAME = 80;
-var MAX_DESC = 120;
-function isoOf3(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new NewsSourceEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry2(ctx, action, id, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf3(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { id },
-    detail: detail ?? null
-  };
-}
-function hostOf(url2) {
-  try {
-    return new URL(url2).hostname;
-  } catch {
-    return String(url2 || "").replace(/^https?:\/\//i, "").split("/")[0] || "";
+var SITE_TOGGLES = {
+  extension_cta: {
+    label: "Chrome extension call to action",
+    // Shown in the manager UI. Says what the switch governs AND what it deliberately does not, because the
+    // distinction is the whole reason this toggle is narrow (see sow-271: adverts are not capability notices).
+    description: 'The header nav item, the homepage Add-to-Chrome banner, the sign-in modal footnote, and the archived v1 homepage button. Does NOT hide the "Extension required" notices that explain a control the extension implements, and does not take the /extension/ install page down.',
+    fallback: true
   }
-}
-function slugify2(name, url2 = "") {
-  let s = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  if (!s) s = hostOf(url2).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return s.slice(0, 60).replace(/-+$/g, "");
-}
+};
+var TOGGLE_KEYS = Object.keys(SITE_TOGGLES);
+var normKey = (k) => String(k || "").trim().toLowerCase();
 function clean(doc) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!Array.isArray(d.sources)) d.sources = [];
+  if (!d.settings || typeof d.settings !== "object" || Array.isArray(d.settings)) d.settings = {};
   return d;
 }
-var normUrl = (u) => String(u || "").trim();
-function addSource(doc, { id, name, url: url2, description, enabled } = {}, ctx = {}) {
-  const d = clean(doc);
-  const nm = String(name || "").trim().slice(0, MAX_NAME);
-  const u = normUrl(url2);
-  if (!nm) throw new NewsSourceEditError("a source name is required");
-  if (!/^https?:\/\//i.test(u)) throw new NewsSourceEditError("a source needs an http(s) feed url");
-  const sid = typeof id === "string" && id.trim() ? id.trim() : slugify2(nm, u);
-  if (!ID_RE.test(sid)) throw new NewsSourceEditError("the source id must be kebab-case (lowercase letters, digits, single hyphens)");
-  const byId = d.sources.find((s) => s.id === sid);
-  const byUrl = d.sources.find((s) => normUrl(s.url) === u);
-  if (byId) {
-    if (normUrl(byId.url) === u) return { next: d, changed: false, audit: auditEntry2(ctx, "news-source.add", sid, { url: u, noop: true }) };
-    throw new NewsSourceEditError(`a source "${sid}" already exists with a different url; pick another id`);
-  }
-  if (byUrl) throw new NewsSourceEditError(`that feed url is already in the pool as "${byUrl.id}"`);
-  const desc = String(description ?? "").trim().slice(0, MAX_DESC) || hostOf(u);
-  d.sources.push({ id: sid, name: nm, url: u, description: desc, enabled: enabled !== false });
-  return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.add", sid, { name: nm, url: u }) };
+function readToggle(doc, key) {
+  const k = normKey(key);
+  const spec = SITE_TOGGLES[k];
+  if (!spec) throw new SiteSettingsEditError(`unknown site setting: ${key}`);
+  const raw = clean(doc).settings[k];
+  if (raw === void 0 || raw === null) return spec.fallback;
+  if (typeof raw !== "boolean") throw new SiteSettingsEditError(`site setting ${k} must be true or false, got ${typeof raw}`);
+  return raw;
 }
-function setSourceEnabled(doc, { id, enabled } = {}, ctx = {}) {
-  const d = clean(doc);
-  const sid = String(id || "").trim();
-  const want = enabled !== false;
-  const s = d.sources.find((x) => x.id === sid);
-  if (!s) throw new NewsSourceEditError(`source not found: ${sid}`);
-  if (s.enabled !== false === want) return { next: d, changed: false, audit: auditEntry2(ctx, "news-source.enable", sid, { enabled: want, noop: true }) };
-  s.enabled = want;
-  return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.enable", sid, { enabled: want }) };
-}
-function removeSource(doc, { id } = {}, ctx = {}) {
-  const d = clean(doc);
-  const sid = String(id || "").trim();
-  const i = d.sources.findIndex((x) => x.id === sid);
-  if (i < 0) throw new NewsSourceEditError(`source not found: ${sid}`);
-  d.sources.splice(i, 1);
-  return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.remove", sid, null) };
+function readAllToggles(doc) {
+  return Object.fromEntries(TOGGLE_KEYS.map((k) => [k, readToggle(doc, k)]));
 }
 
-// membership/quote-edits.mjs
-var QuoteEditError = class extends Error {
-};
-var MAX_TEXT = 280;
-var MAX_AUTHOR = 80;
-var normText = (t) => String(t || "").trim();
-var keyOf = (t) => normText(t).toLowerCase();
-function isoOf4(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new QuoteEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry3(ctx, action, text, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf4(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { text },
-    detail: detail ?? null
-  };
-}
-function clean2(doc) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!Array.isArray(d.quotes)) d.quotes = [];
-  return d;
-}
-function addQuote(doc, { text, author, enabled } = {}, ctx = {}) {
-  const d = clean2(doc);
-  const t = normText(text).slice(0, MAX_TEXT);
-  const a = normText(author).slice(0, MAX_AUTHOR);
-  if (!t) throw new QuoteEditError("a quote needs text");
-  if (!a) throw new QuoteEditError("a quote needs an author");
-  const exists = d.quotes.find((q) => keyOf(q.text) === keyOf(t));
-  if (exists) return { next: d, changed: false, audit: auditEntry3(ctx, "quote.add", t, { noop: true }) };
-  d.quotes.push({ text: t, author: a, enabled: enabled !== false });
-  return { next: d, changed: true, audit: auditEntry3(ctx, "quote.add", t, { author: a }) };
-}
-function setQuoteEnabled(doc, { text, enabled } = {}, ctx = {}) {
-  const d = clean2(doc);
-  const want = enabled !== false;
-  const q = d.quotes.find((x) => keyOf(x.text) === keyOf(text));
-  if (!q) throw new QuoteEditError(`quote not found: ${normText(text)}`);
-  if (q.enabled !== false === want) return { next: d, changed: false, audit: auditEntry3(ctx, "quote.enable", q.text, { enabled: want, noop: true }) };
-  q.enabled = want;
-  return { next: d, changed: true, audit: auditEntry3(ctx, "quote.enable", q.text, { enabled: want }) };
-}
-function removeQuote(doc, { text } = {}, ctx = {}) {
-  const d = clean2(doc);
-  const i = d.quotes.findIndex((x) => keyOf(x.text) === keyOf(text));
-  if (i < 0) throw new QuoteEditError(`quote not found: ${normText(text)}`);
-  const [gone] = d.quotes.splice(i, 1);
-  return { next: d, changed: true, audit: auditEntry3(ctx, "quote.remove", gone?.text ?? normText(text), null) };
-}
+// membership/cta-icon.mjs
+var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
+var ICON_LIMITS = Object.freeze({ name: 64, set: 40, nodes: 200, depth: 4, value: 2e4, total: 6e4 });
+var NUM = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?$/i;
+var LEN = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?(px|%)?$/i;
+var PATH_DATA = /^[0-9eE.,\s+\-MmLlHhVvCcSsQqTtAaZz]*$/;
+var POINTS = /^[0-9eE.,\s+\-]*$/;
+var PAINT = /^(none|currentColor|inherit|#[0-9a-fA-F]{3,8})$/;
+var TRANSFORM = /^(\s*(translate|scale|rotate|matrix|skewX|skewY)\(\s*[0-9eE.,\s+\-]*\)\s*)+$/;
+var ATTRS = Object.freeze({
+  d: PATH_DATA,
+  points: POINTS,
+  cx: LEN,
+  cy: LEN,
+  r: LEN,
+  rx: LEN,
+  ry: LEN,
+  x: LEN,
+  y: LEN,
+  x1: LEN,
+  y1: LEN,
+  x2: LEN,
+  y2: LEN,
+  width: LEN,
+  height: LEN,
+  fill: PAINT,
+  stroke: PAINT,
+  "stroke-width": LEN,
+  "stroke-linecap": /^(butt|round|square)$/,
+  "stroke-linejoin": /^(miter|round|bevel|arcs|miter-clip)$/,
+  "stroke-miterlimit": NUM,
+  "fill-rule": /^(nonzero|evenodd)$/,
+  "clip-rule": /^(nonzero|evenodd)$/,
+  opacity: NUM,
+  "fill-opacity": NUM,
+  "stroke-opacity": NUM,
+  transform: TRANSFORM
+});
+var ROOT_ATTRS = Object.freeze(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "clip-rule", "opacity"]);
 
-// membership/content-channels-edits.mjs
-var ContentChannelEditError = class extends Error {
-};
-var KEY_RE2 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-var CHANNEL_ID_RE = /^[0-9]{5,25}$/;
-function isoOf5(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new ContentChannelEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry4(ctx, action, category, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf5(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { category },
-    detail: detail ?? null
-  };
-}
-function clean3(doc) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!Array.isArray(d.channels)) d.channels = [];
-  return d;
-}
-function setChannel(doc, { category, channelId } = {}, ctx = {}) {
-  const d = clean3(doc);
-  const cat = String(category || "").trim().toLowerCase();
-  const ch = String(channelId || "").trim();
-  if (!KEY_RE2.test(cat)) throw new ContentChannelEditError("the category must be a kebab-case key (a topic key or a top-level taxonomy key)");
-  if (!CHANNEL_ID_RE.test(ch)) throw new ContentChannelEditError("the channelId must be a numeric Discord channel id");
-  const existing = d.channels.find((e) => String(e?.category || "").trim().toLowerCase() === cat);
-  if (existing) {
-    if (String(existing.channelId ?? "").trim() === ch) return { next: d, changed: false, audit: auditEntry4(ctx, "content-channel.set", cat, { channelId: ch, noop: true }) };
-    existing.channelId = ch;
-    return { next: d, changed: true, audit: auditEntry4(ctx, "content-channel.set", cat, { channelId: ch, updated: true }) };
-  }
-  d.channels.push({ category: cat, channelId: ch });
-  d.channels.sort((a, b) => String(a.category).localeCompare(String(b.category)));
-  return { next: d, changed: true, audit: auditEntry4(ctx, "content-channel.set", cat, { channelId: ch }) };
-}
-function removeChannel(doc, { category } = {}, ctx = {}) {
-  const d = clean3(doc);
-  const cat = String(category || "").trim().toLowerCase();
-  const i = d.channels.findIndex((e) => String(e?.category || "").trim().toLowerCase() === cat);
-  if (i < 0) throw new ContentChannelEditError(`no channel mapping for category: ${cat}`);
-  d.channels.splice(i, 1);
-  return { next: d, changed: true, audit: auditEntry4(ctx, "content-channel.remove", cat, null) };
-}
+// membership/cta-card-render.mjs
+var CTA_LAYOUTS = Object.freeze(["below", "first", "compact", "image", "html", "text"]);
+var CTA_LAYOUT_NAMES = Object.freeze({ below: "Image below", first: "Image first", compact: "Compact", image: "Image only", html: "HTML block", text: "Text only" });
+var CTA_TOKENS = Object.freeze({
+  light: "--paper:#ffffff;--paper-2:#faf9f8;--fg:#24222a;--fg-soft:#57545e;--fg-mute:#6c6976;--line:#e7e4e0;--line-2:#ddd9d4;--green-600:#178a51;--tint-warm:#f3f1ee;--ink:#25232b;--pcta-btn-hover:#ffffff",
+  dark: "--paper:#2d2a34;--paper-2:#1c1a21;--fg:#f3f2f0;--fg-soft:rgba(243,242,240,.72);--fg-mute:rgba(243,242,240,.50);--line:rgba(255,255,255,.12);--line-2:rgba(255,255,255,.20);--green-600:#46c089;--tint-warm:#25232b;--ink:rgba(255,255,255,.4);--pcta-btn-hover:rgba(255,255,255,.06)"
+});
 
-// membership/moderation-flags-edits.mjs
-var ModerationFlagEditError = class extends Error {
-};
-var LIST_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-var MAX_TERM = 64;
-function isoOf6(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new ModerationFlagEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry5(ctx, action, list, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf6(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { list },
-    detail: detail ?? null
-  };
-}
-function clean4(doc) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!d.lists || typeof d.lists !== "object" || Array.isArray(d.lists)) d.lists = {};
-  for (const [name, terms] of Object.entries(d.lists)) {
-    if (!Array.isArray(terms)) d.lists[name] = [];
-  }
-  return d;
-}
-var normTerm = (t) => String(t || "").replace(/\s+/g, " ").trim();
-function requireListAndTerm(d, list, term) {
-  const name = String(list || "").trim();
-  if (!LIST_RE.test(name)) throw new ModerationFlagEditError("the list name must be kebab-case");
-  if (!(name in d.lists)) throw new ModerationFlagEditError(`no such flag list: ${name} (lists: ${Object.keys(d.lists).join(", ") || "none"})`);
-  const t = normTerm(term);
-  if (!t) throw new ModerationFlagEditError("a non-empty term is required");
-  if (t.length > MAX_TERM) throw new ModerationFlagEditError(`a term is capped at ${MAX_TERM} characters`);
-  return { name, t };
-}
-function addFlagTerm(doc, { list, term } = {}, ctx = {}) {
-  const d = clean4(doc);
-  const { name, t } = requireListAndTerm(d, list, term);
-  if (d.lists[name].some((x) => normTerm(x).toLowerCase() === t.toLowerCase())) {
-    return { next: d, changed: false, audit: auditEntry5(ctx, "flag-term.add", name, { term: t, noop: true }) };
-  }
-  d.lists[name].push(t);
-  d.lists[name].sort((a, b) => String(a).localeCompare(String(b)));
-  return { next: d, changed: true, audit: auditEntry5(ctx, "flag-term.add", name, { term: t }) };
-}
-function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
-  const d = clean4(doc);
-  const { name, t } = requireListAndTerm(d, list, term);
-  const i = d.lists[name].findIndex((x) => normTerm(x).toLowerCase() === t.toLowerCase());
-  if (i < 0) throw new ModerationFlagEditError(`term not in ${name}: ${t}`);
-  d.lists[name].splice(i, 1);
-  return { next: d, changed: true, audit: auditEntry5(ctx, "flag-term.remove", name, { term: t }) };
-}
+// membership/cta-image.mjs
+var CTA_IMAGE_MAX_BYTES = 4e5;
+var MAX_BASE64 = Math.ceil(CTA_IMAGE_MAX_BYTES / 3) * 4 + 4;
 
-// membership/content-flags.mjs
-var ContentFlagEditError = class extends Error {
-};
-var CONTENT_FLAGS = Object.freeze(["stale", "unindexed"]);
-var KEY_RE3 = /^(post|project|prompt):[a-z0-9][a-z0-9-]*$/;
-var TYPE_OF_DIR = { posts: "post", projects: "project", prompts: "prompt" };
-function isoOf7(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new ContentFlagEditError("invalid timestamp");
-  return d.toISOString();
+// membership/cta-edits.mjs
+var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
+var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200 });
+var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
+function ctasOf(parsed) {
+  return Array.isArray(parsed?.ctas) ? parsed.ctas : [];
 }
-function contentFlagsFromParsed(parsed) {
-  const out = {};
-  const src = parsed && typeof parsed === "object" && parsed.flags && typeof parsed.flags === "object" && !Array.isArray(parsed.flags) ? parsed.flags : {};
-  for (const [key, v] of Object.entries(src)) {
-    if (!KEY_RE3.test(key) || !v || typeof v !== "object") continue;
-    const e = {};
-    for (const f of CONTENT_FLAGS) if (v[f] === true) e[f] = true;
-    if (!Object.keys(e).length) continue;
-    if (v.at) e.at = String(v.at);
-    if (v.by) e.by = String(v.by);
-    if (v.reason) e.reason = String(v.reason);
-    out[key] = e;
-  }
-  return out;
-}
-var flagKey = (type, slug) => `${type}:${slug}`;
-function flagKeyForPath(path) {
-  const m = /^(?:members\/[A-Za-z0-9_-]+|house)\/(posts|projects|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/.exec(String(path || ""));
-  return m ? flagKey(TYPE_OF_DIR[m[1]], m[2]) : null;
-}
-function audit2(ctx, action, key, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf7(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { key },
-    detail: detail ?? null
-  };
-}
-function setContentFlag(parsed, { key, flag, on = true, reason } = {}, ctx = {}) {
-  const k = String(key || "");
-  if (!KEY_RE3.test(k)) throw new ContentFlagEditError("key must be <post|project|prompt>:<slug>");
-  if (!CONTENT_FLAGS.includes(flag)) throw new ContentFlagEditError(`flag must be one of ${CONTENT_FLAGS.join(", ")}`);
-  const flags = contentFlagsFromParsed(parsed);
-  const cur = flags[k] || {};
-  const already = cur[flag] === true;
-  const action = `content.${on ? flag : "un" + flag}`;
-  if (on === already) return { next: { flags }, changed: false, audit: audit2(ctx, action, k, { noop: true }) };
-  const next = { ...cur };
-  if (on) {
-    next[flag] = true;
-    next.at = isoOf7(ctx?.now);
-    if (ctx?.actor?.login) next.by = String(ctx.actor.login);
-    else if (ctx?.actor?.githubId != null) next.by = String(ctx.actor.githubId);
-    const r = String(reason || "").trim();
-    if (r) next.reason = r.slice(0, 200);
-  } else {
-    delete next[flag];
-  }
-  const out = { ...flags };
-  if (CONTENT_FLAGS.some((f) => next[f] === true)) out[k] = next;
-  else delete out[k];
-  return { next: { flags: out }, changed: true, audit: audit2(ctx, action, k, reason ? { reason: String(reason).slice(0, 200) } : null) };
-}
+var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
+var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
+var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
 
 // membership/syndication-config-core.mjs
 var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
@@ -21590,781 +21295,17 @@ function newsEngagement(cfg) {
 }
 
 // membership/syndication-template-edits.mjs
-var TemplateEditError = class extends Error {
-};
-var MAX_TEMPLATE = 500;
-var MAX_BODY_TEMPLATE = 4e3;
-var BODY_TYPES = /* @__PURE__ */ new Set(["devto-body", "hashnode-body"]);
-function isoOf8(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new TemplateEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry6(ctx, type, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf8(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action: "syndication-template.set",
-    target: { type },
-    detail: detail ?? null
-  };
-}
-function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost } = {}, ctx = {}) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
-  const cur = newsEngagement({ news_engagement: d.syndication.news_engagement });
-  const next = { ...cur };
-  if (enabled !== void 0) {
-    if (typeof enabled !== "boolean") throw new TemplateEditError("enabled must be true or false");
-    next.enabled = enabled;
-  }
-  if (openThreshold !== void 0) {
-    const n = Number(openThreshold);
-    if (!Number.isInteger(n) || n < 1 || n > 1e3) throw new TemplateEditError("openThreshold must be an integer from 1 to 1000");
-    next.open_threshold = n;
-  }
-  if (tier !== void 0) {
-    const t = String(tier || "").trim().toLowerCase();
-    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(", ")}`);
-    next.tier = t;
-  }
-  if (commentAutopost !== void 0) {
-    if (typeof commentAutopost !== "boolean") throw new TemplateEditError("commentAutopost must be true or false");
-    next.comment_autopost = commentAutopost;
-  }
-  const audit3 = (detail) => {
-    const a = ctx?.actor || null;
-    return {
-      at: isoOf8(ctx?.now),
-      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-      action: "news-engagement.set",
-      target: { file: "house/syndication-config.yml" },
-      detail
-    };
-  };
-  const same2 = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
-  if (same2) return { next: d, changed: false, audit: audit3({ ...next, noop: true }) };
-  d.syndication.news_engagement = {
-    enabled: next.enabled,
-    open_threshold: next.open_threshold,
-    tier: next.tier,
-    comment_autopost: next.comment_autopost
-  };
-  return { next: d, changed: true, audit: audit3({ ...next }) };
-}
-function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
-  const t = String(type || "").trim();
-  if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(", ")}`);
-  const value = String(template ?? "").trim();
-  const cap = BODY_TYPES.has(t) ? MAX_BODY_TEMPLATE : MAX_TEMPLATE;
-  if (value.length > cap) throw new TemplateEditError(`a template is capped at ${cap} characters`);
-  const isStub = stub === true;
-  const chField = isStub ? "channel_templates_stub" : "channel_templates";
-  const sharedField = isStub ? "stub_templates" : "templates";
-  const ch = String(channel || "").trim();
-  if (ch) {
-    if (!SYNDICATION_CHANNEL_NAMES.includes(ch)) throw new TemplateEditError(`unknown channel "${ch}"`);
-    const all = d.syndication[chField] && typeof d.syndication[chField] === "object" && !Array.isArray(d.syndication[chField]) ? d.syndication[chField] : {};
-    const curCh = all[ch] && typeof all[ch] === "object" && !Array.isArray(all[ch]) ? all[ch] : {};
-    const existing2 = typeof curCh[t] === "string" ? curCh[t].trim() : "";
-    if (existing2 === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { channel: ch, stub: isStub || void 0, template: value || null, noop: true }) };
-    const nextCh = { ...curCh };
-    if (value) nextCh[t] = value;
-    else delete nextCh[t];
-    const nextAll = { ...all };
-    if (Object.keys(nextCh).length) nextAll[ch] = nextCh;
-    else delete nextAll[ch];
-    if (Object.keys(nextAll).length) d.syndication[chField] = nextAll;
-    else delete d.syndication[chField];
-    return { next: d, changed: true, audit: auditEntry6(ctx, t, { channel: ch, stub: isStub || void 0, template: value || null }) };
-  }
-  const cur = d.syndication[sharedField] && typeof d.syndication[sharedField] === "object" && !Array.isArray(d.syndication[sharedField]) ? d.syndication[sharedField] : {};
-  const existing = typeof cur[t] === "string" ? cur[t].trim() : "";
-  if (existing === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { stub: isStub || void 0, template: value || null, noop: true }) };
-  const nextTemplates = { ...cur };
-  if (value) nextTemplates[t] = value;
-  else delete nextTemplates[t];
-  d.syndication[sharedField] = nextTemplates;
-  return { next: d, changed: true, audit: auditEntry6(ctx, t, { stub: isStub || void 0, template: value || null }) };
-}
 var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
-function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}, ctx = {}) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
-  const cur = syndicationConfigFromParsed(doc);
-  let changed = false;
-  const detail = {};
-  if (enabled !== void 0) {
-    if (typeof enabled !== "boolean") throw new TemplateEditError("enabled must be a boolean");
-    if (enabled !== cur.enabled) {
-      d.syndication.enabled = enabled;
-      changed = true;
-      detail.enabled = enabled;
-    }
-  }
-  if (requireApproval !== void 0) {
-    if (typeof requireApproval !== "boolean") throw new TemplateEditError("requireApproval must be a boolean");
-    if (requireApproval !== cur.require_approval) {
-      d.syndication.require_approval = requireApproval;
-      changed = true;
-      detail.require_approval = requireApproval;
-    }
-  }
-  if (holdMinutes !== void 0) {
-    const h = Number(holdMinutes);
-    if (!Number.isInteger(h) || h < 0 || h > 1440) throw new TemplateEditError("holdMinutes must be an integer between 0 and 1440");
-    if (h !== cur.hold_minutes) {
-      d.syndication.hold_minutes = h;
-      changed = true;
-      detail.hold_minutes = h;
-    }
-  }
-  if (channels !== void 0) {
-    if (!channels || typeof channels !== "object" || Array.isArray(channels)) throw new TemplateEditError("channels must be an object of { name: boolean }");
-    for (const [name, on] of Object.entries(channels)) {
-      if (!SYNDICATION_CHANNEL_NAMES.includes(name)) throw new TemplateEditError(`unknown channel "${name}"`);
-      if (typeof on !== "boolean") throw new TemplateEditError(`channel "${name}" must be a boolean`);
-      if (Boolean(cur.channels?.[name]) !== on) {
-        if (!d.syndication.channels || typeof d.syndication.channels !== "object") d.syndication.channels = {};
-        d.syndication.channels[name] = on;
-        changed = true;
-        (detail.channels ??= {})[name] = on;
-      }
-    }
-  }
-  if (autoMatrix !== void 0) {
-    if (!autoMatrix || typeof autoMatrix !== "object" || Array.isArray(autoMatrix)) throw new TemplateEditError("autoMatrix must be an object of { type: { channel: mode } }");
-    for (const [type, row] of Object.entries(autoMatrix)) {
-      if (!AUTO_TYPES.includes(type)) throw new TemplateEditError(`unknown auto-share type "${type}"`);
-      if (!row || typeof row !== "object" || Array.isArray(row)) throw new TemplateEditError(`autoMatrix.${type} must be an object of { channel: mode }`);
-      for (const [ch, mode] of Object.entries(row)) {
-        if (!MATRIX_CHANNELS.includes(ch)) throw new TemplateEditError(`"${ch}" is not an auto-share channel`);
-        if (!AUTO_MODES.includes(mode)) throw new TemplateEditError(`auto-share mode for ${type}/${ch} must be one of ${AUTO_MODES.join(", ")}`);
-        if (mode === "on" && channelCapability(ch) === "manual") {
-          throw new TemplateEditError(`${ch} cannot post automatically; use on-manual (the Social Queue)`);
-        }
-        if ((cur.auto_matrix?.[type]?.[ch] ?? "off") !== mode) {
-          if (!d.syndication.auto_matrix || typeof d.syndication.auto_matrix !== "object") d.syndication.auto_matrix = {};
-          if (!d.syndication.auto_matrix[type] || typeof d.syndication.auto_matrix[type] !== "object") d.syndication.auto_matrix[type] = {};
-          d.syndication.auto_matrix[type][ch] = mode;
-          changed = true;
-          ((detail.auto_matrix ??= {})[type] ??= {})[ch] = mode;
-        }
-      }
-    }
-  }
-  if (channelHoldMinutes !== void 0) {
-    if (!channelHoldMinutes || typeof channelHoldMinutes !== "object" || Array.isArray(channelHoldMinutes)) throw new TemplateEditError("channelHoldMinutes must be an object of { channel: minutes }");
-    for (const [name, mins] of Object.entries(channelHoldMinutes)) {
-      if (!SYNDICATION_CHANNEL_NAMES.includes(name)) throw new TemplateEditError(`unknown channel "${name}"`);
-      const clear = mins === "" || mins === null;
-      let h = null;
-      if (!clear) {
-        h = Number(mins);
-        if (!Number.isInteger(h) || h < 0 || h > 1440) throw new TemplateEditError(`channelHoldMinutes.${name} must be an integer between 0 and 1440`);
-      }
-      const curVal = cur.channel_hold_minutes?.[name];
-      if (clear ? curVal !== void 0 : curVal !== h) {
-        if (!d.syndication.channel_hold_minutes || typeof d.syndication.channel_hold_minutes !== "object") d.syndication.channel_hold_minutes = {};
-        if (clear) delete d.syndication.channel_hold_minutes[name];
-        else d.syndication.channel_hold_minutes[name] = h;
-        changed = true;
-        (detail.channel_hold_minutes ??= {})[name] = clear ? null : h;
-      }
-    }
-  }
-  if (!changed) return { next: doc, changed: false, audit: null };
-  return { next: d, changed: true, audit: { ...auditEntry6(ctx, "settings", detail), action: "syndication-settings.set" } };
-}
-
-// membership/site-settings-edits.mjs
-var SiteSettingsEditError = class extends Error {
-};
-var SITE_TOGGLES = {
-  extension_cta: {
-    label: "Chrome extension call to action",
-    // Shown in the manager UI. Says what the switch governs AND what it deliberately does not, because the
-    // distinction is the whole reason this toggle is narrow (see sow-271: adverts are not capability notices).
-    description: 'The header nav item, the homepage Add-to-Chrome banner, the sign-in modal footnote, and the archived v1 homepage button. Does NOT hide the "Extension required" notices that explain a control the extension implements, and does not take the /extension/ install page down.',
-    fallback: true
-  }
-};
-var TOGGLE_KEYS = Object.keys(SITE_TOGGLES);
-var normKey = (k) => String(k || "").trim().toLowerCase();
-function isoOf9(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new SiteSettingsEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry7(ctx, action, key, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf9(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { key },
-    detail: detail ?? null
-  };
-}
-function clean5(doc) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!d.settings || typeof d.settings !== "object" || Array.isArray(d.settings)) d.settings = {};
-  return d;
-}
-function readToggle(doc, key) {
-  const k = normKey(key);
-  const spec = SITE_TOGGLES[k];
-  if (!spec) throw new SiteSettingsEditError(`unknown site setting: ${key}`);
-  const raw = clean5(doc).settings[k];
-  if (raw === void 0 || raw === null) return spec.fallback;
-  if (typeof raw !== "boolean") throw new SiteSettingsEditError(`site setting ${k} must be true or false, got ${typeof raw}`);
-  return raw;
-}
-function readAllToggles(doc) {
-  return Object.fromEntries(TOGGLE_KEYS.map((k) => [k, readToggle(doc, k)]));
-}
-function setSiteToggle(doc, { key, enabled } = {}, ctx = {}) {
-  const d = clean5(doc);
-  const k = normKey(key);
-  if (!SITE_TOGGLES[k]) throw new SiteSettingsEditError(`unknown site setting: ${key || "(none)"}`);
-  if (typeof enabled !== "boolean") throw new SiteSettingsEditError("enabled must be true or false");
-  const current = readToggle(d, k);
-  const alreadyPinned = Object.prototype.hasOwnProperty.call(d.settings, k);
-  if (current === enabled && alreadyPinned) {
-    return { next: d, changed: false, audit: auditEntry7(ctx, "site-setting.set", k, { noop: true, enabled }) };
-  }
-  d.settings[k] = enabled;
-  return { next: d, changed: true, audit: auditEntry7(ctx, "site-setting.set", k, { enabled, was: current }) };
-}
-
-// membership/cta-icon.mjs
-var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
-var ICON_LIMITS = Object.freeze({ name: 64, set: 40, nodes: 200, depth: 4, value: 2e4, total: 6e4 });
-var NUM = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?$/i;
-var LEN = /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?(px|%)?$/i;
-var PATH_DATA = /^[0-9eE.,\s+\-MmLlHhVvCcSsQqTtAaZz]*$/;
-var POINTS = /^[0-9eE.,\s+\-]*$/;
-var PAINT = /^(none|currentColor|inherit|#[0-9a-fA-F]{3,8})$/;
-var TRANSFORM = /^(\s*(translate|scale|rotate|matrix|skewX|skewY)\(\s*[0-9eE.,\s+\-]*\)\s*)+$/;
-var VIEWBOX = /^\s*-?[\d.]+([\s,]+-?[\d.]+){3}\s*$/;
-var NAME_RE = /^[A-Z][A-Za-z0-9]*$/;
-var SET_RE = /^[A-Za-z0-9 .\-]+$/;
-var ATTRS = Object.freeze({
-  d: PATH_DATA,
-  points: POINTS,
-  cx: LEN,
-  cy: LEN,
-  r: LEN,
-  rx: LEN,
-  ry: LEN,
-  x: LEN,
-  y: LEN,
-  x1: LEN,
-  y1: LEN,
-  x2: LEN,
-  y2: LEN,
-  width: LEN,
-  height: LEN,
-  fill: PAINT,
-  stroke: PAINT,
-  "stroke-width": LEN,
-  "stroke-linecap": /^(butt|round|square)$/,
-  "stroke-linejoin": /^(miter|round|bevel|arcs|miter-clip)$/,
-  "stroke-miterlimit": NUM,
-  "fill-rule": /^(nonzero|evenodd)$/,
-  "clip-rule": /^(nonzero|evenodd)$/,
-  opacity: NUM,
-  "fill-opacity": NUM,
-  "stroke-opacity": NUM,
-  transform: TRANSFORM
-});
-var ROOT_ATTRS = Object.freeze(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "clip-rule", "opacity"]);
-var isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
-function attrProblems(attrs, allowed, at, budget) {
-  const problems = [];
-  if (attrs === void 0) return problems;
-  if (!isMap(attrs)) return [`${at}: attrs must be a map`];
-  for (const [k, raw] of Object.entries(attrs)) {
-    if (!allowed.includes(k)) {
-      problems.push(`${at}: attribute "${k}" is not allowed in an icon`);
-      continue;
-    }
-    if (typeof raw !== "string" && typeof raw !== "number") {
-      problems.push(`${at}: attribute "${k}" must be a string or number`);
-      continue;
-    }
-    const v = String(raw);
-    budget.total += v.length;
-    if (v.length > ICON_LIMITS.value) problems.push(`${at}: attribute "${k}" is too long`);
-    else if (!ATTRS[k].test(v)) problems.push(`${at}: attribute "${k}" has a value an icon may not carry`);
-  }
-  return problems;
-}
-function shapeProblems(shapes, at, depth, budget) {
-  if (!Array.isArray(shapes)) return [`${at}: shapes must be a list`];
-  if (depth > ICON_LIMITS.depth) return [`${at}: shapes are nested too deeply`];
-  const problems = [];
-  shapes.forEach((s, i) => {
-    const here = `${at}[${i}]`;
-    budget.nodes += 1;
-    if (!isMap(s)) {
-      problems.push(`${here}: must be a map of { tag, attrs }`);
-      return;
-    }
-    for (const k of Object.keys(s)) if (!["tag", "attrs", "children"].includes(k)) problems.push(`${here}: key "${k}" is not allowed`);
-    if (!ICON_TAGS.includes(s.tag)) {
-      problems.push(`${here}: element "${s.tag}" is not allowed in an icon`);
-      return;
-    }
-    problems.push(...attrProblems(s.attrs, Object.keys(ATTRS), here, budget));
-    if (s.children !== void 0) {
-      if (s.tag !== "g") problems.push(`${here}: only a group (g) may have children`);
-      else problems.push(...shapeProblems(s.children, `${here}.children`, depth + 1, budget));
-    }
-  });
-  return problems;
-}
-function iconProblems(icon, where = "icon") {
-  if (!isMap(icon)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
-  const problems = [];
-  for (const k of Object.keys(icon)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
-  if (typeof icon.name !== "string" || !NAME_RE.test(icon.name) || icon.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
-  if (typeof icon.set !== "string" || !SET_RE.test(icon.set) || icon.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
-  if (typeof icon.viewBox !== "string" || !VIEWBOX.test(icon.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
-  const budget = { nodes: 0, total: 0 };
-  problems.push(...attrProblems(icon.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
-  if (!Array.isArray(icon.shapes) || icon.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
-  else problems.push(...shapeProblems(icon.shapes, `${where}.shapes`, 1, budget));
-  if (budget.nodes > ICON_LIMITS.nodes) problems.push(`${where}: too many shapes (max ${ICON_LIMITS.nodes})`);
-  if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
-  return problems;
-}
-
-// membership/cta-card-render.mjs
-var CTA_LAYOUTS = Object.freeze(["below", "first", "compact", "image", "html", "text"]);
-var CTA_LAYOUT_NAMES = Object.freeze({ below: "Image below", first: "Image first", compact: "Compact", image: "Image only", html: "HTML block", text: "Text only" });
-function layoutUses(layout) {
-  const L = CTA_LAYOUTS.includes(layout) ? layout : "text";
-  const words = L === "below" || L === "first" || L === "compact" || L === "text";
-  return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
-}
-var CTA_TOKENS = Object.freeze({
-  light: "--paper:#ffffff;--paper-2:#faf9f8;--fg:#24222a;--fg-soft:#57545e;--fg-mute:#6c6976;--line:#e7e4e0;--line-2:#ddd9d4;--green-600:#178a51;--tint-warm:#f3f1ee;--ink:#25232b;--pcta-btn-hover:#ffffff",
-  dark: "--paper:#2d2a34;--paper-2:#1c1a21;--fg:#f3f2f0;--fg-soft:rgba(243,242,240,.72);--fg-mute:rgba(243,242,240,.50);--line:rgba(255,255,255,.12);--line-2:rgba(255,255,255,.20);--green-600:#46c089;--tint-warm:#25232b;--ink:rgba(255,255,255,.4);--pcta-btn-hover:rgba(255,255,255,.06)"
-});
-
-// membership/cta-image.mjs
-var CTA_IMAGE_DIR = "house/images/ctas";
-var CTA_IMAGE_MAX_BYTES = 4e5;
-var CTA_IMAGE_FILE_RE = /^[a-z0-9][a-z0-9-]*\.webp$/;
-var METADATA_CHUNKS = { EXIF: "EXIF (camera) data", "XMP ": "XMP metadata", ICCP: "an ICC colour profile" };
-var ctaImageFile = (id) => `${String(id || "").trim()}.webp`;
-function ctaImagePath(file2) {
-  const f = String(file2 || "");
-  return CTA_IMAGE_FILE_RE.test(f) ? `${CTA_IMAGE_DIR}/${f}` : null;
-}
-var fourcc = (b, at) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
-var u32 = (b, at) => (b[at] | b[at + 1] << 8 | b[at + 2] << 16 | b[at + 3] << 24) >>> 0;
-var u24 = (b, at) => b[at] | b[at + 1] << 8 | b[at + 2] << 16;
-function webpInfo(bytes) {
-  const b = bytes instanceof Uint8Array ? bytes : null;
-  if (!b) return { ok: false, problem: "the image is not binary data" };
-  if (b.length > CTA_IMAGE_MAX_BYTES) return { ok: false, problem: `the image is ${Math.ceil(b.length / 1024)} KB; the limit is ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB` };
-  if (b.length < 20 || fourcc(b, 0) !== "RIFF" || fourcc(b, 8) !== "WEBP") return { ok: false, problem: "the image is not a WebP file" };
-  if (u32(b, 4) + 8 > b.length) return { ok: false, problem: "the WebP file is truncated" };
-  let at = 12, width = 0, height = 0, image = false;
-  while (at + 8 <= b.length) {
-    const id = fourcc(b, at);
-    const size = u32(b, at + 4);
-    const body = at + 8;
-    if (body + size > b.length) return { ok: false, problem: `the WebP ${id.trim()} chunk is truncated` };
-    if (METADATA_CHUNKS[id]) return { ok: false, problem: `the image still carries ${METADATA_CHUNKS[id]}; re-encode it so it is removed` };
-    if (id === "ANIM" || id === "ANMF") return { ok: false, problem: "animated images are not supported on a card" };
-    if (id === "VP8X") {
-      if (size < 10) return { ok: false, problem: "the WebP header is malformed" };
-      const flags = b[body];
-      if (flags & 2) return { ok: false, problem: "animated images are not supported on a card" };
-      if (flags & 44) return { ok: false, problem: "the image still announces metadata (EXIF, XMP or a colour profile); re-encode it so it is removed" };
-      width = u24(b, body + 4) + 1;
-      height = u24(b, body + 7) + 1;
-    } else if (id === "VP8 ") {
-      if (size < 10 || b[body + 3] !== 157 || b[body + 4] !== 1 || b[body + 5] !== 42) return { ok: false, problem: "the WebP image data is malformed" };
-      if (!width) {
-        width = (b[body + 6] | b[body + 7] << 8) & 16383;
-        height = (b[body + 8] | b[body + 9] << 8) & 16383;
-      }
-      image = true;
-    } else if (id === "VP8L") {
-      if (size < 5 || b[body] !== 47) return { ok: false, problem: "the WebP image data is malformed" };
-      if (!width) {
-        const bits = u32(b, body + 1);
-        width = (bits & 16383) + 1;
-        height = (bits >>> 14 & 16383) + 1;
-      }
-      image = true;
-    }
-    at = body + size + size % 2;
-  }
-  if (!image) return { ok: false, problem: "the WebP file has no image data" };
-  if (!width || !height) return { ok: false, problem: "the WebP file has no dimensions" };
-  return { ok: true, width, height };
-}
-function bytesFromBase64(b64) {
-  const s = String(b64 || "").replace(/\s+/g, "");
-  if (!s || s.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(s)) return null;
-  let bin;
-  try {
-    bin = atob(s);
-  } catch {
-    return null;
-  }
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-var MAX_BASE64 = Math.ceil(CTA_IMAGE_MAX_BYTES / 3) * 4 + 4;
-function ctaImageUpload({ id, imageBase64, removeImage } = {}) {
-  const hasUpload = imageBase64 !== void 0 && imageBase64 !== null;
-  if (hasUpload && removeImage === true) return { ok: false, problem: "send a new image or remove the image, not both" };
-  if (removeImage !== void 0 && typeof removeImage !== "boolean") return { ok: false, problem: "removeImage must be true or false" };
-  if (removeImage === true) return { ok: true, fields: { image: null }, upload: null };
-  if (!hasUpload) return { ok: true, fields: {}, upload: null };
-  if (typeof imageBase64 !== "string") return { ok: false, problem: "the image must be sent as base64 text" };
-  const b64 = imageBase64.replace(/\s+/g, "");
-  if (b64.length > MAX_BASE64) return { ok: false, problem: `the image is over the ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB limit` };
-  const bytes = bytesFromBase64(b64);
-  if (!bytes) return { ok: false, problem: "the image is not valid base64" };
-  const info = webpInfo(bytes);
-  if (!info.ok) return { ok: false, problem: info.problem };
-  const path = ctaImagePath(ctaImageFile(id));
-  if (!path) return { ok: false, problem: "the card needs a kebab-case id before it can have an image" };
-  return { ok: true, fields: { image: ctaImageFile(id) }, upload: { path, contentBase64: b64 } };
-}
-function ctaImageFileChanges(before, after, upload = null) {
-  const names = (doc) => new Set((Array.isArray(doc?.ctas) ? doc.ctas : []).map((c) => c?.image).filter((f) => typeof f === "string"));
-  const kept = names(after);
-  const files = upload ? [{ path: upload.path, contentBase64: upload.contentBase64 }] : [];
-  for (const f of names(before)) {
-    const path = ctaImagePath(f);
-    if (path && !kept.has(f) && path !== upload?.path) files.push({ path, content: null });
-  }
-  return files;
-}
-
-// membership/cta-edits.mjs
-var CtaEditError = class extends Error {
-};
-var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
-var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200 });
-var ID_RE2 = /^[a-z0-9][a-z0-9-]*$/;
-var SLUG_RE2 = /^[a-z0-9][a-z0-9-]*$/;
-var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
-var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
-var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
-var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
-var str = (v) => typeof v === "string" ? v.trim() : "";
-function isoOf10(now) {
-  const d = now instanceof Date ? now : new Date(now ?? Date.now());
-  if (Number.isNaN(d.getTime())) throw new CtaEditError("invalid timestamp");
-  return d.toISOString();
-}
-function auditEntry8(ctx, action, id, detail) {
-  const a = ctx?.actor || null;
-  return {
-    at: isoOf10(ctx?.now),
-    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
-    action,
-    target: { id },
-    detail: detail ?? null
-  };
-}
-function clean6(doc) {
-  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
-  if (!Array.isArray(d.ctas)) d.ctas = [];
-  return d;
-}
-function ctasOf(parsed) {
-  return Array.isArray(parsed?.ctas) ? parsed.ctas : [];
-}
-function validRef(type, ref) {
-  const r = str(ref);
-  if (!r || r.length > CTA_LIMITS.ref) return false;
-  return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE2.test(r);
-}
-function amazonDestinationProblem(destination) {
-  let u;
-  try {
-    u = new URL(String(destination || ""));
-  } catch {
-    return "an amazon destination must be an absolute URL";
-  }
-  if (!AMAZON_HOST_RE.test(u.hostname)) return "an amazon CTA must link straight to an amazon domain (no /outbound/ path or other intermediate site: a redirected purchase earns nothing)";
-  if (!u.searchParams.get("tag")) return "an amazon destination must carry the Associates tag= parameter (without it the purchase earns nothing)";
-  return null;
-}
-function htmlHrefs(html) {
-  const out = [];
-  const re = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
-  let m;
-  while (m = re.exec(String(html || ""))) out.push((m[1] ?? m[2] ?? m[3] ?? "").replace(/&amp;/g, "&").trim());
-  return out;
-}
-function amazonHtmlProblems(html) {
-  const problems = [];
-  for (const href of htmlHrefs(html)) {
-    let u = null;
-    try {
-      u = new URL(href, "https://gbti.network");
-    } catch {
-      continue;
-    }
-    if (/(^|\/)outbound\//.test(u.pathname) && (u.hostname === "gbti.network" || u.hostname.endsWith(".gbti.network"))) {
-      problems.push(`the HTML links through /outbound/ (${href}); an amazon link must go straight to amazon`);
-    } else if (AMAZON_HOST_RE.test(u.hostname) && !u.searchParams.get("tag")) {
-      problems.push(`the HTML links to amazon without the Associates tag= parameter (${href})`);
-    }
-  }
-  return problems;
-}
-function validateCta(e, where = "cta") {
-  const problems = [];
-  if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
-  const id = str(e.id);
-  if (!id || !ID_RE2.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
-  if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
-  const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
-  const uses = layoutUses(layout);
-  for (const [k, max, need] of [["label", CTA_LIMITS.label, true], ["line", CTA_LIMITS.line, uses.line], ["button", CTA_LIMITS.button, uses.button]]) {
-    if (e[k] !== void 0 && e[k] !== null && typeof e[k] !== "string") {
-      problems.push(`${where}: ${k} must be text`);
-      continue;
-    }
-    const v = str(e[k]);
-    if (!v) {
-      if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
-    } else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
-  }
-  const dest = str(e.destination);
-  let u = null;
-  if (dest || uses.link) {
-    try {
-      u = new URL(dest);
-    } catch {
-      u = null;
-    }
-    if (!u || u.protocol !== "https:" || !u.hostname) {
-      u = null;
-      problems.push(`${where}: destination must be an absolute https URL, got ${JSON.stringify(e.destination ?? null)}`);
-    } else if (dest.length > CTA_LIMITS.destination) problems.push(`${where}: destination is too long (max ${CTA_LIMITS.destination} chars)`);
-  }
-  if (e.image !== void 0) {
-    if (typeof e.image !== "string" || !CTA_IMAGE_FILE_RE.test(e.image) || e.image.length > CTA_LIMITS.image) problems.push(`${where}: image must be a WebP file name in house/images/ctas/ (like ${id || "my-card"}.webp), got ${JSON.stringify(e.image)}`);
-  } else if (uses.image) problems.push(`${where}: image is required for the ${layout} layout`);
-  if (e.icon !== void 0) problems.push(...iconProblems(e.icon, `${where}.icon`));
-  if (e.html !== void 0) {
-    if (typeof e.html !== "string") problems.push(`${where}: html must be text`);
-    else if (e.html.length > CTA_LIMITS.html) problems.push(`${where}: html is too long (max ${CTA_LIMITS.html} chars)`);
-  }
-  if (uses.html && !str(e.html)) problems.push(`${where}: html is required for the html layout`);
-  if (e.showTitle !== void 0 && typeof e.showTitle !== "boolean") problems.push(`${where}: showTitle must be true or false`);
-  if (e.hosts !== void 0) {
-    if (!Array.isArray(e.hosts)) problems.push(`${where}: hosts must be a list of https origins`);
-    else {
-      if (e.hosts.length > CTA_LIMITS.hosts) problems.push(`${where}: at most ${CTA_LIMITS.hosts} hosts`);
-      const seenHost = /* @__PURE__ */ new Set();
-      e.hosts.forEach((h, i) => {
-        if (typeof h !== "string" || h.length > CTA_LIMITS.host || !CTA_HOST_RE.test(h)) problems.push(`${where}.hosts[${i}]: must be a bare https origin like https://widgets.example.com (no path, quotes, spaces or semicolons), got ${JSON.stringify(h)}`);
-        else if (seenHost.has(h)) problems.push(`${where}.hosts[${i}]: ${h} is listed twice`);
-        else seenHost.add(h);
-      });
-    }
-  }
-  const partner = str(e.partner);
-  if (!partner || !ID_RE2.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
-  if (partner === "amazon" && u) {
-    const why = amazonDestinationProblem(dest);
-    if (why) problems.push(`${where}: ${why}`);
-  }
-  if (partner === "amazon" && typeof e.html === "string") for (const why of amazonHtmlProblems(e.html)) problems.push(`${where}: ${why}`);
-  if (e.enabled !== void 0 && typeof e.enabled !== "boolean") problems.push(`${where}: enabled must be true or false`);
-  if (e.note !== void 0 && e.note !== null && (typeof e.note !== "string" || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
-  if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
-  const seen = /* @__PURE__ */ new Set();
-  for (const [i, it] of (Array.isArray(e.items) ? e.items : []).entries()) {
-    const at = `${where}.items[${i}]`;
-    if (!it || typeof it !== "object") {
-      problems.push(`${at}: must be a map of { type, ref }`);
-      continue;
-    }
-    if (!CTA_ITEM_TYPES.includes(it.type)) {
-      problems.push(`${at}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it.type ?? null)}`);
-      continue;
-    }
-    if (!validRef(it.type, it.ref)) {
-      problems.push(`${at}: ref must be a ${it.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it.ref ?? null)}`);
-      continue;
-    }
-    const key = `${it.type}:${str(it.ref)}`;
-    if (seen.has(key)) problems.push(`${at}: ${key} is assigned to this CTA twice`);
-    seen.add(key);
-  }
-  return problems;
-}
-function validateCtas(parsed) {
-  if (parsed === null || parsed === void 0) return ["the registry is empty (expected a ctas: list)"];
-  if (typeof parsed !== "object" || Array.isArray(parsed)) return ["the registry must be a map with a ctas: list"];
-  if (parsed.ctas !== void 0 && !Array.isArray(parsed.ctas)) return ["ctas must be a list"];
-  const problems = [];
-  const ids = /* @__PURE__ */ new Map();
-  ctasOf(parsed).forEach((e, i) => {
-    const where = `ctas[${i}]`;
-    problems.push(...validateCta(e, where));
-    const id = str(e?.id);
-    if (id) {
-      if (ids.has(id)) problems.push(`${where}: duplicate id "${id}" (also ${ids.get(id)})`);
-      else ids.set(id, where);
-    }
-  });
-  return problems;
-}
-function findCta(d, id) {
-  const k = str(id);
-  const e = d.ctas.find((x) => x && typeof x === "object" && str(x.id) === k);
-  if (!e) throw new CtaEditError(`no CTA with id "${k}"`);
-  return e;
-}
-function assertValid(d, where) {
-  const problems = validateCtas(d);
-  if (problems.length) throw new CtaEditError(`${where}: ${problems[0]}`);
-}
-var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
-var CLEARABLE = ["line", "button", "destination", "note", "layout", "html"];
-var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
-var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
-var KEY_ORDER = ["id", "label", "layout", "line", "button", "destination", "partner", "image", "icon", "html", "showTitle", "hosts", "enabled", "note", "items"];
-function canonical(e) {
-  const out = {};
-  for (const k of KEY_ORDER) if (e[k] !== void 0) out[k] = e[k];
-  for (const k of Object.keys(e)) if (!(k in out)) out[k] = e[k];
-  return out;
-}
-var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-var itemsOf = (items) => Array.isArray(items) ? items.map((it) => ({ type: it?.type, ref: typeof it?.ref === "string" ? it.ref.trim() : it?.ref })) : void 0;
-function addCta(doc, fields = {}, ctx = {}) {
-  const d = clean6(doc);
-  const id = str(fields.id);
-  if (!id) throw new CtaEditError("a CTA needs an id");
-  if (d.ctas.some((x) => x && str(x.id) === id)) throw new CtaEditError(`a CTA with id "${id}" already exists`);
-  let entry = { id };
-  for (const k of EDITABLE) {
-    if (fields[k] === void 0 || fields[k] === null) continue;
-    const v = String(fields[k]).trim();
-    if (v || !CLEARABLE.includes(k)) entry[k] = v;
-  }
-  for (const k of STRUCTURED) if (fields[k] !== void 0 && fields[k] !== null) entry[k] = structuredClone(fields[k]);
-  entry.enabled = fields.enabled === true;
-  entry.items = itemsOf(fields.items) ?? [];
-  entry = canonical(entry);
-  d.ctas.push(entry);
-  assertValid(d, "add");
-  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.add", id, { partner: entry.partner, destination: entry.destination }) };
-}
-function updateCta(doc, fields = {}, ctx = {}) {
-  const d = clean6(doc);
-  const i = d.ctas.indexOf(findCta(d, fields.id));
-  const e = d.ctas[i];
-  const changed = [];
-  for (const k of EDITABLE) {
-    if (fields[k] === void 0) continue;
-    const v = fields[k] === null ? "" : String(fields[k]).trim();
-    if (CLEARABLE.includes(k) && !v) {
-      if (e[k] !== void 0) {
-        delete e[k];
-        changed.push(k);
-      }
-      continue;
-    }
-    if (typeof e[k] === "string" && e[k].trim() === v) continue;
-    e[k] = v;
-    changed.push(k);
-  }
-  for (const k of STRUCTURED) {
-    if (fields[k] === void 0) continue;
-    if (fields[k] === null) {
-      if (e[k] !== void 0) {
-        delete e[k];
-        changed.push(k);
-      }
-      continue;
-    }
-    if (same(e[k], fields[k])) continue;
-    e[k] = structuredClone(fields[k]);
-    changed.push(k);
-  }
-  if (typeof fields.enabled === "boolean" && e.enabled === true !== fields.enabled) {
-    e.enabled = fields.enabled;
-    changed.push("enabled");
-  }
-  const items = itemsOf(fields.items);
-  if (items && !same(Array.isArray(e.items) ? e.items : [], items)) {
-    e.items = items;
-    changed.push("items");
-  }
-  if (!changed.length) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.update", e.id, { noop: true }) };
-  d.ctas[i] = canonical(e);
-  assertValid(d, "update");
-  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.update", e.id, { fields: changed }) };
-}
-function setCtaEnabled(doc, { id, enabled } = {}, ctx = {}) {
-  const d = clean6(doc);
-  const e = findCta(d, id);
-  const want = enabled === true;
-  if (e.enabled === true === want) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.enable", e.id, { enabled: want, noop: true }) };
-  e.enabled = want;
-  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.enable", e.id, { enabled: want }) };
-}
-function assignCta(doc, { id, type, ref } = {}, ctx = {}) {
-  const d = clean6(doc);
-  const e = findCta(d, id);
-  if (!CTA_ITEM_TYPES.includes(type)) throw new CtaEditError(`type must be one of ${CTA_ITEM_TYPES.join(", ")}`);
-  const r = str(ref);
-  if (!validRef(type, r)) throw new CtaEditError(`ref must be a ${type === "share" ? "author/id pair" : "slug"}`);
-  if (!Array.isArray(e.items)) e.items = [];
-  if (e.items.some((it) => it && it.type === type && str(it.ref) === r)) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.assign", e.id, { type, ref: r, noop: true }) };
-  e.items.push({ type, ref: r });
-  assertValid(d, "assign");
-  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.assign", e.id, { type, ref: r }) };
-}
-function unassignCta(doc, { id, type, ref } = {}, ctx = {}) {
-  const d = clean6(doc);
-  const e = findCta(d, id);
-  const r = str(ref);
-  const i = Array.isArray(e.items) ? e.items.findIndex((it) => it && it.type === type && str(it.ref) === r) : -1;
-  if (i < 0) return { next: d, changed: false, audit: auditEntry8(ctx, "cta.unassign", e.id, { type, ref: r, noop: true }) };
-  e.items.splice(i, 1);
-  return { next: d, changed: true, audit: auditEntry8(ctx, "cta.unassign", e.id, { type, ref: r }) };
-}
 
 // client/src/admin-ops.mjs
-async function adminPublish(ctx, opts) {
-  await syncForkIfCreatingBranch(ctx, opts.repo, opts.branch);
-  const pr = await publishFiles(opts);
-  return { ...pr, autoMerge: ctx.role?.() === "superadmin" };
-}
-function requireRole(ctx, check2, need) {
-  const role = ctx.role?.() ?? "member";
-  if (!check2(role)) throw new OperationError("forbidden", `requires ${need} (you are ${role})`);
-  return role;
-}
-function requireRepo2(ctx) {
-  const repo = ctx.getRepoClient?.();
-  if (!repo) throw new OperationError("not-authenticated", "run `gbti login` first");
-  if (!ctx.store?.get("repoPath")) throw new OperationError("bad-request", "no local repoPath configured");
-  return { repo };
-}
+var TAXONOMY_PATH = "house/taxonomy.yml";
+var NEWS_SOURCES_PATH = "house/news-sources.yml";
+var QUOTES_PATH = "house/quotes.yml";
+var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
+var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
+var SYNDICATION_CONFIG_PATH = "house/syndication-config.yml";
+var SITE_SETTINGS_PATH = "house/site-settings.yml";
+var CTAS_PATH = "house/ctas.yml";
 var readYaml = async (ctx, rel) => {
   try {
     return index_vite_proxy_tmp_default.load(await ctx.reader?.readFile?.(rel) || "") ?? {};
@@ -22372,232 +21313,13 @@ var readYaml = async (ctx, rel) => {
     return {};
   }
 };
-var dumpYaml = (obj) => index_vite_proxy_tmp_default.dump(obj, { lineWidth: 100, noRefs: true });
-var slugOf = (rel) => rel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-function actionCtx(ctx) {
-  const id = ctx.identity?.();
-  return {
-    actor: id ? { githubId: id.githubId ?? id.github_id ?? null, login: id.login ?? null } : null,
-    now: ctx.now ? ctx.now() : void 0
-  };
-}
-function prBody(reason, auditEntry9) {
-  const head = reason ? `Reason: ${reason}
-
-` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry9)} -->`;
-}
-var noop = (message, auditEntry9) => ({ changed: false, noop: true, message, audit: auditEntry9 });
-function requireId(githubId) {
-  if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
-    throw new OperationError("bad-request", "githubId is required");
-  }
-  return String(githubId);
-}
-function requirePath(rel) {
-  if (!rel || typeof rel !== "string" || rel.includes("\\") || rel.startsWith("/")) {
-    throw new OperationError("bad-request", "a valid in-repo content path is required");
-  }
-  const segments = rel.split("/");
-  if (segments.some((s) => s === "" || s === "." || s === "..")) {
-    throw new OperationError("bad-request", "a valid in-repo content path is required");
-  }
-  return rel;
-}
-function requireMemberContentPath(rel) {
-  requirePath(rel);
-  if (!rel.startsWith("members/")) {
-    throw new OperationError("forbidden", "moderation is limited to member content (members/<user>/...)");
-  }
-  return rel;
-}
-async function setMemberRole(ctx, { githubId, role, login } = {}) {
-  requireRole(ctx, canManageRoles, "superadmin");
-  const { repo } = requireRepo2(ctx);
-  const id = requireId(githubId);
-  if (!role) throw new OperationError("bad-request", "role is required (member|moderator|admin|superadmin)");
-  let result;
-  try {
-    result = grantRole(await readYaml(ctx, "house/roles.yml"), { githubId: id, role, login }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof SuperadminActionError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  if (!result.changed) return noop(`already ${role}: ${id}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/role-${id}`, files: [{ path: "house/roles.yml", content: dumpYaml(result.next) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}`, body: prBody(`role: ${role}`, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-async function setContentFlagOp(ctx, { path: rel, reason } = {}, flag, on) {
-  requireRole(ctx, canManageRoles, "superadmin");
-  const { repo } = requireRepo2(ctx);
-  requireMemberContentPath(rel);
-  const key = flagKeyForPath(rel);
-  if (!key) throw new OperationError("bad-request", `not a flaggable content path: ${rel}`);
-  let result;
-  try {
-    result = setContentFlag(await readYaml(ctx, "house/content-flags.yml"), { key, flag, on, reason }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof ContentFlagEditError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  const verb = on ? flag : "un" + flag;
-  if (!result.changed) return noop(`already ${verb}: ${key}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/content-flag-${key.replace(":", "-")}`, files: [{ path: "house/content-flags.yml", content: dumpYaml(result.next) }], message: `Content flag: ${verb} ${key}`, title: `Content flag: ${verb} ${key}`, body: `Superadmin content flag (sow-189): ${verb} ${key}.${reason ? " Reason: " + String(reason).slice(0, 200) : ""}
-
-Audit: ${JSON.stringify(result.audit)}` });
-  return { ...pr, changed: true, audit: result.audit };
-}
-var markStale = (ctx, args) => setContentFlagOp(ctx, args, "stale", true);
-var unmarkStale = (ctx, args) => setContentFlagOp(ctx, args, "stale", false);
-var markUnindexed = (ctx, args) => setContentFlagOp(ctx, args, "unindexed", true);
-var unmarkUnindexed = (ctx, args) => setContentFlagOp(ctx, args, "unindexed", false);
-async function deplatformContent(ctx, { path: rel } = {}) {
-  requireRole(ctx, canModerate, "moderator");
-  const { repo } = requireRepo2(ctx);
-  requireMemberContentPath(rel);
-  const text = await ctx.reader?.readFile?.(rel);
-  if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
-  const flip = flipContentStatus(text, "draft");
-  const content = flip.changed ? flip.content : text;
-  return adminPublish(ctx, { repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: "Moderation: set status to draft." });
-}
-async function republishContent(ctx, { path: rel } = {}) {
-  requireRole(ctx, canModerate, "moderator");
-  const { repo } = requireRepo2(ctx);
-  requireMemberContentPath(rel);
-  const text = await ctx.reader?.readFile?.(rel);
-  if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
-  const flip = flipContentStatus(text, "published");
-  const content = flip.changed ? flip.content : text;
-  return adminPublish(ctx, { repo, branch: `gbti/republish-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Republish ${rel}`, title: `Republish ${rel}`, body: "Moderation: set status to published." });
-}
-async function removeContent(ctx, { path: rel } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  requireMemberContentPath(rel);
-  return adminPublish(ctx, { repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: "Moderation: remove content." });
-}
-var TAXONOMY_PATH = "house/taxonomy.yml";
-function leadingComment(raw) {
-  const out = [];
-  for (const line of String(raw || "").split("\n")) {
-    if (/^\s*#/.test(line) || line.trim() === "") out.push(line);
-    else break;
-  }
-  const block = out.join("\n").replace(/\s+$/, "");
-  return block ? `${block}
-` : "";
-}
 async function getTaxonomy(ctx) {
-  const raw = await ctx.reader?.readFile?.(TAXONOMY_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
+  const parsed = await readYaml(ctx, TAXONOMY_PATH);
   return { tree: parsed.tree || {} };
 }
-async function addContentCategory(ctx, { parentPath, key, label } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const raw = await ctx.reader?.readFile?.(TAXONOMY_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
-  let result;
-  try {
-    result = addCategory(parsed, { parentPath, key, label }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof TaxonomyEditError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  const fullPath = [...Array.isArray(parentPath) ? parentPath : [], key].filter(Boolean);
-  if (!result.changed) return noop(`category already exists: ${fullPath.join(" > ")}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/category-add-${slugOf(fullPath.join("-"))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Add category ${fullPath.join("/")}`, title: `Add category: ${label}`, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-async function renameContentCategoryLabel(ctx, { path, label } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const raw = await ctx.reader?.readFile?.(TAXONOMY_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
-  let result;
-  try {
-    result = renameLabel(parsed, { path, label }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof TaxonomyEditError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  const p = Array.isArray(path) ? path : [];
-  if (!result.changed) return noop(`label unchanged: ${p.join(" > ")}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/category-rename-${slugOf(p.join("-"))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Rename category ${p.join("/")} -> ${label}`, title: `Rename category: ${label}`, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-var NEWS_SOURCES_PATH = "house/news-sources.yml";
 async function getNewsSourcePool(ctx) {
-  const raw = await ctx.reader?.readFile?.(NEWS_SOURCES_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
+  const parsed = await readYaml(ctx, NEWS_SOURCES_PATH);
   return { sources: Array.isArray(parsed.sources) ? parsed.sources : [] };
-}
-async function editNewsSources(ctx, edit, { branch, message, title, noopMsg }) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const raw = await ctx.reader?.readFile?.(NEWS_SOURCES_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
-  let result;
-  try {
-    result = edit(parsed);
-  } catch (err) {
-    if (err instanceof NewsSourceEditError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: NEWS_SOURCES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-async function addNewsSource(ctx, { id, name, url: url2, description } = {}) {
-  const sid = slugOf(String(id || name || ""));
-  return editNewsSources(
-    ctx,
-    (parsed) => addSource(parsed, { id, name, url: url2, description }, actionCtx(ctx)),
-    { branch: `gbti/news-source-add-${sid}`, message: `Add news source ${id || name}`, title: `Add news source: ${name || id}`, noopMsg: `news source already present: ${id || name}` }
-  );
-}
-async function removeNewsSource(ctx, { id } = {}) {
-  const sid = slugOf(String(id || ""));
-  return editNewsSources(
-    ctx,
-    (parsed) => removeSource(parsed, { id }, actionCtx(ctx)),
-    { branch: `gbti/news-source-remove-${sid}`, message: `Remove news source ${id}`, title: `Remove news source: ${id}`, noopMsg: `no such news source: ${id}` }
-  );
-}
-async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
-  const sid = slugOf(String(id || ""));
-  const on = !!enabled;
-  return editNewsSources(
-    ctx,
-    (parsed) => setSourceEnabled(parsed, { id, enabled: on }, actionCtx(ctx)),
-    { branch: `gbti/news-source-${on ? "enable" : "disable"}-${sid}`, message: `${on ? "Enable" : "Disable"} news source ${id}`, title: `${on ? "Enable" : "Disable"} news source: ${id}`, noopMsg: `news source already ${on ? "enabled" : "disabled"}: ${id}` }
-  );
 }
 async function getCouponPool2(ctx) {
   await requireAdmin(ctx);
@@ -22609,64 +21331,10 @@ async function getCouponPool2(ctx) {
     throw new OperationError("admin-op-failed", err?.message || "could not read the coupon pool");
   }
 }
-var QUOTES_PATH = "house/quotes.yml";
-var quoteSlug = (text) => slugOf(String(text || "").slice(0, 40)) || "quote";
 async function getQuotePool(ctx) {
-  const raw = await ctx.reader?.readFile?.(QUOTES_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
+  const parsed = await readYaml(ctx, QUOTES_PATH);
   return { quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [] };
 }
-async function editQuotes(ctx, edit, { branch, message, title, noopMsg }) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const raw = await ctx.reader?.readFile?.(QUOTES_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
-  let result;
-  try {
-    result = edit(parsed);
-  } catch (err) {
-    if (err instanceof QuoteEditError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: QUOTES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-async function addQuote2(ctx, { text, author } = {}) {
-  return editQuotes(
-    ctx,
-    (parsed) => addQuote(parsed, { text, author }, actionCtx(ctx)),
-    { branch: `gbti/quote-add-${quoteSlug(text)}`, message: `Add quote (${author || "unknown"})`, title: `Add quote: ${author || "unknown"}`, noopMsg: "quote already present" }
-  );
-}
-async function removeQuote2(ctx, { text } = {}) {
-  return editQuotes(
-    ctx,
-    (parsed) => removeQuote(parsed, { text }, actionCtx(ctx)),
-    { branch: `gbti/quote-remove-${quoteSlug(text)}`, message: "Remove quote", title: "Remove quote", noopMsg: "no such quote" }
-  );
-}
-async function setQuoteEnabled2(ctx, { text, enabled } = {}) {
-  const on = !!enabled;
-  return editQuotes(
-    ctx,
-    (parsed) => setQuoteEnabled(parsed, { text, enabled: on }, actionCtx(ctx)),
-    { branch: `gbti/quote-${on ? "enable" : "disable"}-${quoteSlug(text)}`, message: `${on ? "Enable" : "Disable"} quote`, title: `${on ? "Enable" : "Disable"} quote`, noopMsg: `quote already ${on ? "enabled" : "disabled"}` }
-  );
-}
-var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
-var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
-var SYNDICATION_CONFIG_PATH = "house/syndication-config.yml";
 async function getContentChannelPool(ctx) {
   const parsed = await readYaml(ctx, CONTENT_CHANNELS_PATH);
   return { channels: Array.isArray(parsed.channels) ? parsed.channels : [] };
@@ -22676,7 +21344,6 @@ async function getModerationFlagPool(ctx) {
   const lists = parsed.lists && typeof parsed.lists === "object" && !Array.isArray(parsed.lists) ? parsed.lists : {};
   return { lists };
 }
-var SITE_SETTINGS_PATH = "house/site-settings.yml";
 async function getSiteSettings(ctx) {
   const parsed = await readYaml(ctx, SITE_SETTINGS_PATH);
   return {
@@ -22684,270 +21351,14 @@ async function getSiteSettings(ctx) {
     toggles: Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description }))
   };
 }
-async function setSiteToggle2(ctx, { key, enabled } = {}) {
-  const k = String(key || "").trim().toLowerCase();
-  const on = enabled === true || enabled === "true" || enabled === 1 || enabled === "1";
-  return editHouseYaml(ctx, SITE_SETTINGS_PATH, (parsed) => setSiteToggle(parsed, { key: k, enabled: on }, actionCtx(ctx)), {
-    branch: `gbti/site-setting-${slugOf(k) || "toggle"}`,
-    message: `Turn site setting ${k} ${on ? "on" : "off"}`,
-    title: `Site setting: ${k} ${on ? "on" : "off"}`,
-    noopMsg: `site setting already ${on ? "on" : "off"}: ${k}`,
-    errType: SiteSettingsEditError
-  });
-}
-var CTAS_PATH = "house/ctas.yml";
-var ctaSlug = (a) => slugOf(String(a || "").slice(0, 60)) || "cta";
-async function editCtas(ctx, edit, { branch, message, title, noopMsg, files }) {
-  return editHouseYaml(ctx, CTAS_PATH, edit, { branch, message, title, noopMsg, errType: CtaEditError, files });
-}
-function ctaImagePlan(fields, { adding }) {
-  const { imageBase64, removeImage, image: _callerNamed, ...rest } = fields || {};
-  const img = ctaImageUpload({ id: rest.id, imageBase64, removeImage });
-  if (!img.ok) throw new OperationError("bad-request", img.problem);
-  if (adding && img.fields.image === null) throw new OperationError("bad-request", "a new CTA has no image to remove");
-  return { fields: { ...rest, ...img.fields }, files: (before, after) => ctaImageFileChanges(before, after, img.upload) };
-}
 async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
-}
-async function addCta2(ctx, fields = {}) {
-  const plan = ctaImagePlan(fields, { adding: true });
-  return editCtas(
-    ctx,
-    (parsed) => addCta(parsed, plan.fields, actionCtx(ctx)),
-    { branch: `gbti/cta-add-${ctaSlug(fields.id)}`, message: `Add CTA ${fields.id}`, title: `Add CTA: ${fields.id}`, noopMsg: "no change", files: plan.files }
-  );
-}
-async function updateCta2(ctx, fields = {}) {
-  const plan = ctaImagePlan(fields, { adding: false });
-  return editCtas(
-    ctx,
-    (parsed) => updateCta(parsed, plan.fields, actionCtx(ctx)),
-    { branch: `gbti/cta-update-${ctaSlug(fields.id)}`, message: `Update CTA ${fields.id}`, title: `Update CTA: ${fields.id}`, noopMsg: "no change", files: plan.files }
-  );
-}
-async function setCtaEnabled2(ctx, { id, enabled } = {}) {
-  const on = enabled === true;
-  return editCtas(
-    ctx,
-    (parsed) => setCtaEnabled(parsed, { id, enabled: on }, actionCtx(ctx)),
-    { branch: `gbti/cta-toggle-${ctaSlug(id)}`, message: `${on ? "Enable" : "Disable"} CTA ${id}`, title: `${on ? "Enable" : "Disable"} CTA: ${id}`, noopMsg: `CTA already ${on ? "enabled" : "disabled"}` }
-  );
-}
-async function assignCta2(ctx, { id, type, ref } = {}) {
-  return editCtas(
-    ctx,
-    (parsed) => assignCta(parsed, { id, type, ref }, actionCtx(ctx)),
-    { branch: `gbti/cta-assign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Assign CTA ${id} to ${type}:${ref}`, title: `Assign CTA: ${id} to ${type}:${ref}`, noopMsg: "already assigned" }
-  );
-}
-async function unassignCta2(ctx, { id, type, ref } = {}) {
-  return editCtas(
-    ctx,
-    (parsed) => unassignCta(parsed, { id, type, ref }, actionCtx(ctx)),
-    { branch: `gbti/cta-unassign-${ctaSlug(`${id}-${type}-${ref}`)}`, message: `Unassign CTA ${id} from ${type}:${ref}`, title: `Unassign CTA: ${id} from ${type}:${ref}`, noopMsg: "not assigned" }
-  );
 }
 async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   const cfg = syndicationConfigFromParsed(parsed);
   return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
-}
-async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType, files }) {
-  requireRole(ctx, canManageRoles, "superadmin");
-  const { repo } = requireRepo2(ctx);
-  const raw = await ctx.reader?.readFile?.(relPath) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
-  let result;
-  try {
-    result = edit(parsed);
-  } catch (err) {
-    if (err instanceof errType) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  const extra = files ? files(parsed, result.next) : [];
-  if (!result.changed && !extra.length) return noop(noopMsg, result.audit);
-  const out = [...result.changed ? [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }] : [], ...extra];
-  const pr = await adminPublish(ctx, { repo, branch, files: out, message, title, body: prBody(null, result.audit), clobberOpenPull: true });
-  return { ...pr, changed: true, audit: result.audit };
-}
-async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const act = String(mode || action || "");
-  if (!["rename", "merge", "retire"].includes(act)) throw new OperationError("bad-request", "mode must be rename, merge, or retire");
-  const src = String(tag || "").trim().toLowerCase();
-  if (!src) throw new OperationError("bad-request", "a tag is required");
-  const dest = act === "retire" ? null : String(to || "").trim().toLowerCase();
-  if (act !== "retire" && !dest) throw new OperationError("bad-request", `${act} needs a destination tag`);
-  if (dest === src) throw new OperationError("bad-request", "the destination equals the source");
-  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
-  if (!list.length || list.length > 100) throw new OperationError("bad-request", "between 1 and 100 content paths are required");
-  const files = [];
-  for (const rel of list) {
-    const text = await ctx.reader?.readFile?.(rel);
-    if (text == null) continue;
-    const r = retagContent(text, { tag: src, to: dest });
-    if (r.changed) files.push({ path: rel, content: r.content });
-  }
-  if (!files.length) return noop(`no item carries the tag "${src}"`);
-  const verb = act === "retire" ? `Retire tag ${src}` : `${act === "merge" ? "Merge" : "Rename"} tag ${src} -> ${dest}`;
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/tag-${act}-${slugOf(src)}`, files, message: verb, title: verb, body: `Tag curation (SOW-100): ${verb} across ${files.length} item${files.length === 1 ? "" : "s"}.` });
-  return { ...pr, changed: true, rewritten: files.length };
-}
-async function applyCategoryBatch(ctx, { ops, descriptions } = {}) {
-  const list = Array.isArray(ops) ? ops : [];
-  if (!list.length) throw new OperationError("bad-request", "the batch is empty");
-  const kinds = new Set(list.map((o) => o?.kind));
-  for (const k of kinds) {
-    if (!["label", "add", "channel-set", "channel-remove"].includes(k)) {
-      throw new OperationError("bad-request", `op kind "${k}" cannot batch (migrations are review-gated dispatches)`);
-    }
-  }
-  const hasChannel = list.some((o) => o.kind === "channel-set" || o.kind === "channel-remove");
-  if (hasChannel) requireRole(ctx, canManageRoles, "superadmin");
-  else requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const files = [];
-  const applied = [];
-  const applyFile = async (relPath, opsForFile, applyOne, errType) => {
-    if (!opsForFile.length) return;
-    const raw = await ctx.reader?.readFile?.(relPath) || "";
-    let parsed;
-    try {
-      parsed = index_vite_proxy_tmp_default.load(raw) || {};
-    } catch {
-      parsed = {};
-    }
-    let changed = false;
-    for (const op of opsForFile) {
-      let result;
-      try {
-        result = applyOne(parsed, op);
-      } catch (err) {
-        if (err instanceof errType) throw new OperationError("bad-request", `${op.kind} ${JSON.stringify(op.args)}: ${err.message}`);
-        throw err;
-      }
-      if (result.changed) {
-        parsed = result.next;
-        changed = true;
-        applied.push(op);
-      }
-    }
-    if (changed) files.push({ path: relPath, content: leadingComment(raw) + dumpYaml(parsed) });
-  };
-  await applyFile(TAXONOMY_PATH, list.filter((o) => o.kind === "label" || o.kind === "add"), (parsed, op) => op.kind === "add" ? addCategory(parsed, { parentPath: op.args?.parentPath ?? [], key: op.args?.key, label: op.args?.label }, actionCtx(ctx)) : renameLabel(parsed, { path: op.args?.path, label: op.args?.label }, actionCtx(ctx)), TaxonomyEditError);
-  await applyFile(CONTENT_CHANNELS_PATH, list.filter((o) => o.kind === "channel-set" || o.kind === "channel-remove"), (parsed, op) => op.kind === "channel-set" ? setChannel(parsed, { category: op.args?.category, channelId: op.args?.channelId }, actionCtx(ctx)) : removeChannel(parsed, { category: op.args?.category }, actionCtx(ctx)), ContentChannelEditError);
-  if (!files.length) return noop("every batched edit was already applied", { ops: list.length });
-  const lines = Array.isArray(descriptions) && descriptions.length ? descriptions : list.map((o) => `${o.kind}: ${JSON.stringify(o.args)}`);
-  const stamp = (ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString()).replace(/[^0-9]/g, "").slice(0, 14);
-  const pr = await adminPublish(ctx, {
-    repo,
-    branch: `gbti/category-batch-${stamp}`,
-    files,
-    message: `Categories: ${applied.length} change${applied.length === 1 ? "" : "s"}`,
-    title: `Categories: ${applied.length} change${applied.length === 1 ? "" : "s"}`,
-    body: `Batched category-workspace edits (SOW-100):
-
-${lines.map((d) => `- ${d}`).join("\n")}`
-  });
-  return { ...pr, changed: true, applied: applied.length, skipped: list.length - applied.length };
-}
-async function setContentChannel(ctx, { category, channelId } = {}) {
-  const slug = slugOf(String(category || ""));
-  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => setChannel(parsed, { category, channelId }, actionCtx(ctx)), {
-    branch: `gbti/content-channel-set-${slug}`,
-    message: `Map category ${category} to Discord channel ${channelId}`,
-    title: `Map category to Discord channel: ${category}`,
-    noopMsg: `category already mapped to that channel: ${category}`,
-    errType: ContentChannelEditError
-  });
-}
-async function removeContentChannel(ctx, { category } = {}) {
-  const slug = slugOf(String(category || ""));
-  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => removeChannel(parsed, { category }, actionCtx(ctx)), {
-    branch: `gbti/content-channel-remove-${slug}`,
-    message: `Unmap category ${category} from its Discord channel`,
-    title: `Unmap category channel: ${category}`,
-    noopMsg: `no channel mapping for category: ${category}`,
-    errType: ContentChannelEditError
-  });
-}
-async function addModerationFlagTerm(ctx, { list, term } = {}) {
-  const slug = slugOf(`${list}-${String(term || "").slice(0, 24)}`);
-  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => addFlagTerm(parsed, { list, term }, actionCtx(ctx)), {
-    branch: `gbti/flag-term-add-${slug}`,
-    message: `Add a ${list} moderation term`,
-    title: `Add moderation term (${list})`,
-    noopMsg: `term already in ${list}`,
-    errType: ModerationFlagEditError
-  });
-}
-async function removeModerationFlagTerm(ctx, { list, term } = {}) {
-  const slug = slugOf(`${list}-${String(term || "").slice(0, 24)}`);
-  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => removeFlagTerm(parsed, { list, term }, actionCtx(ctx)), {
-    branch: `gbti/flag-term-remove-${slug}`,
-    message: `Remove a ${list} moderation term`,
-    title: `Remove moderation term (${list})`,
-    noopMsg: `term not in ${list}`,
-    errType: ModerationFlagEditError
-  });
-}
-async function setSyndicationTemplates(ctx, { edits } = {}) {
-  requireRole(ctx, canManageRoles, "superadmin");
-  const { repo } = requireRepo2(ctx);
-  const list = Array.isArray(edits) ? edits : [];
-  if (!list.length) return noop("no template edits", null);
-  const raw = await ctx.reader?.readFile?.(SYNDICATION_CONFIG_PATH) || "";
-  let parsed;
-  try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
-  }
-  const audits = [];
-  let doc = parsed;
-  let changed = 0;
-  for (const e of list) {
-    let result;
-    try {
-      result = setTemplate(doc, { type: e?.type, template: e?.template, channel: e?.channel, stub: e?.stub === true }, actionCtx(ctx));
-    } catch (err) {
-      if (err instanceof TemplateEditError) throw new OperationError("bad-request", err.message);
-      throw err;
-    }
-    doc = result.next;
-    audits.push(result.audit);
-    if (result.changed) changed++;
-  }
-  if (!changed) return noop("no template changes", audits);
-  const pr = await adminPublish(ctx, {
-    repo,
-    branch: "gbti/syndication-templates",
-    files: [{ path: SYNDICATION_CONFIG_PATH, content: leadingComment(raw) + dumpYaml(doc) }],
-    message: `Set ${changed} syndication template${changed === 1 ? "" : "s"}`,
-    title: `Set syndication templates (${changed})`,
-    body: prBody(null, audits),
-    clobberOpenPull: true
-  });
-  return { ...pr, changed: true, count: changed, audit: audits };
-}
-async function setSyndicationTemplate(ctx, { type, template, channel, stub } = {}) {
-  const slug = slugOf(`${channel ? `${channel}-` : ""}${stub ? "stub-" : ""}${String(type || "")}`);
-  const label = channel ? `${channel} ${type}` : type;
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplate(parsed, { type, template, channel, stub }, actionCtx(ctx)), {
-    branch: `gbti/syndication-template-${slug}`,
-    message: `Set the ${label} syndication template`,
-    title: `Set syndication template: ${label}`,
-    noopMsg: `template unchanged: ${label}`,
-    errType: TemplateEditError
-  });
 }
 async function getSyndicationSettings(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
@@ -22978,32 +21389,12 @@ async function getSyndicationSettings(ctx) {
     capability: { ...CHANNEL_CAPABILITY }
   };
 }
-async function setSyndicationSettings2(ctx, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettings(parsed, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes }, actionCtx(ctx)), {
-    branch: "gbti/syndication-settings",
-    message: "Set the syndication pipeline settings",
-    title: "Set syndication settings",
-    noopMsg: "syndication settings unchanged",
-    errType: TemplateEditError
-  });
-}
 async function getNewsEngagementSettings(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
 }
-async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, commentAutopost } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setNewsEngagement(parsed, { enabled, openThreshold, tier, commentAutopost }, actionCtx(ctx)), {
-    branch: "gbti/news-engagement-set",
-    message: "Set the news engagement auto-share settings",
-    title: "Set news auto-share settings",
-    noopMsg: "news engagement settings unchanged",
-    errType: TemplateEditError
-  });
-}
 
 // extension/src/ext-dispatch.mjs
-var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
-var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, stale: markStale, unstale: unmarkStale, unindex: markUnindexed, reindex: unmarkUnindexed, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2, "cta-add": addCta2, "cta-update": updateCta2, "cta-toggle": setCtaEnabled2, "cta-assign": assignCta2, "cta-unassign": unassignCta2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -23028,7 +21419,7 @@ async function computeRoleAndCurate(ctx) {
   const role = roleOf(id.githubId, rolesFromText(text));
   return { role, canCurate: canEditNews(role, newsEditorsFromText(text).has(String(id.githubId))) };
 }
-function requireRepo3(ctx) {
+function requireRepo2(ctx) {
   const repo = ctx.getRepoClient?.();
   if (!repo) throw new OperationError("not-authenticated", "sign in first");
   return repo;
@@ -23151,7 +21542,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/referral":
         return ok(getReferral(ctx));
       case "/api/prs":
-        return ok({ prs: await requireRepo3(ctx).listMyPulls(id.login) });
+        return ok({ prs: await requireRepo2(ctx).listMyPulls(id.login) });
       case "/api/overrides":
         return ok(await getOverridesRoster(ctx));
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
@@ -23192,15 +21583,12 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/pr-status": {
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
-        return ok(await requireRepo3(ctx).gateStatus(n));
+        return ok(await requireRepo2(ctx).gateStatus(n));
       }
       case "/api/admin": {
-        if (GOVERNANCE_ACTIONS.has(body?.action)) return ok(await governanceAdminOp(ctx, body ?? {}));
-        const role = await computeRole(ctx);
-        const adminCtx = { ...ctx, role: () => role, store: { get: (k) => k === "repoPath" ? "extension" : ctx.store?.get(k) } };
-        const fn = ADMIN_ACTIONS[body?.action];
-        if (!fn) throw new OperationError("bad-request", `unknown admin action: ${body?.action}`);
-        return ok(await fn(adminCtx, body ?? {}));
+        const wreq = toWorkerRequest(body ?? {});
+        if (!wreq) throw new OperationError("bad-request", `unknown admin action: ${body?.action}`);
+        return ok(await governanceAdminOp(ctx, { action: wreq.action, ...wreq.payload }));
       }
       default:
         return { status: 404, json: { error: "not_found" } };

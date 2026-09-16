@@ -80,61 +80,13 @@ test('setNewsEngagement patches only the supplied fields, validates hard, and is
   assert.throws(() => setNewsEngagement(doc, { enabled: 'yes' }, ctx), TemplateEditError);
 });
 
-// SOW-100: the batch apply (N pending workspace edits -> ONE house PR). Uses the admin-ops surface.
-import { applyCategoryBatch } from '../client/src/admin-ops.mjs';
+// sow-274: the batch apply and the tag curation op MOVED to the network with the rest of the admin writes.
+// Their guards (a migration kind refused, an empty batch, an unchanged batch, the tag mode/destination
+// rules) are asserted against the real endpoint in test/admin-multifile-gate.test.mjs. What stays here is
+// what is still pure: the edit cores above, and the retag helper below.
 
-function batchCtx({ role = 'superadmin', taxonomy = 'tree:\n  devops:\n    label: DevOps\n', channels = 'channels: []\n' } = {}) {
-  const puts = []; const pulls = [];
-  return {
-    puts, pulls,
-    identity: () => ({ username: 'root', githubId: '1' }),
-    role: () => role,
-    reader: { readFile: async (rel) => (rel === 'house/taxonomy.yml' ? taxonomy : rel === 'house/content-channels.yml' ? channels : null) },
-    getRepoClient: () => ({
-      upstream: 'gbti-network/gbti.network',
-      ensureFork: async () => ({ full_name: 'root/gbti.network', owner: 'root' }),
-      getDefaultBranch: async () => 'main',
-      getBranchSha: async (r, b) => (b === 'main' ? 'sha' : (() => { throw new Error('404'); })()),
-      ensureBranch: async () => {},
-      getFileSha: async () => null,
-      putFile: async (_r, p, opts) => { puts.push({ path: p, content: Buffer.from(opts.contentBase64, 'base64').toString('utf8') }); },
-      deleteFile: async () => {},
-      findOpenPull: async () => null,
-      openPull: async (o) => { pulls.push(o); return { number: 3, html_url: 'u' }; },
-    }),
-    store: { get: (k) => (k === 'repoPath' ? 'extension' : null) },
-    now: () => '2026-07-07T12:00:00.000Z',
-  };
-}
-
-test('applyCategoryBatch: mixed ops land as ONE PR touching both house files', async () => {
-  const ctx = batchCtx({});
-  const r = await applyCategoryBatch(ctx, { ops: [
-    { kind: 'label', args: { path: ['devops'], label: 'DevOps and Cloud' } },
-    { kind: 'add', args: { parentPath: ['devops'], key: 'observability', label: 'Observability' } },
-    { kind: 'channel-set', args: { category: 'devops', channelId: '12345678' } },
-  ] });
-  assert.equal(r.changed, true);
-  assert.equal(r.applied, 3);
-  assert.equal(ctx.pulls.length, 1); // ONE PR
-  assert.deepEqual(ctx.puts.map((f) => f.path).sort(), ['house/content-channels.yml', 'house/taxonomy.yml']);
-  assert.match(ctx.puts.find((f) => f.path === 'house/taxonomy.yml').content, /DevOps and Cloud/);
-  assert.match(ctx.puts.find((f) => f.path === 'house/taxonomy.yml').content, /observability/);
-  assert.match(ctx.pulls[0].head ?? '', /gbti\/category-batch-20260707/);
-});
-
-test('applyCategoryBatch guards: migration kinds refused; channel ops need superadmin; empty refused; full noop', async () => {
-  await assert.rejects(applyCategoryBatch(batchCtx({}), { ops: [{ kind: 'key-rename', args: {} }] }), /cannot batch/);
-  await assert.rejects(applyCategoryBatch(batchCtx({ role: 'admin' }), { ops: [{ kind: 'channel-set', args: { category: 'devops', channelId: '123456' } }] }), /superadmin/);
-  await assert.rejects(applyCategoryBatch(batchCtx({}), { ops: [] }), /empty/);
-  // an admin CAN batch taxonomy-only
-  const r = await applyCategoryBatch(batchCtx({ role: 'admin' }), { ops: [{ kind: 'label', args: { path: ['devops'], label: 'DevOps' } }] });
-  assert.equal(r.noop, true); // label unchanged -> nothing published
-});
-
-// SOW-100 tag curation: the pure retag helper + the admin op's guard rails.
+// SOW-100 tag curation: the pure retag helper.
 import { retagContent } from '../client/src/content-ops.mjs';
-import { applyTagEdit } from '../client/src/admin-ops.mjs';
 
 test('retagContent renames, merges (dedupe), retires, and no-ops when absent', () => {
   const doc = '---\ntitle: X\ntags:\n  - claude-code\n  - workflow\n---\n\nBody\n';
@@ -147,27 +99,6 @@ test('retagContent renames, merges (dedupe), retires, and no-ops when absent', (
   const retired = retagContent(doc, { tag: 'workflow', to: null });
   assert.ok(!/workflow/.test(retired.content));
   assert.equal(retagContent(doc, { tag: 'ghost', to: 'x' }).changed, false);
-});
-
-test('applyTagEdit: one PR rewrites only the files that carry the tag; guards hold', async () => {
-  const A = 'members/alice/prompts/a/index.md';
-  const B = 'house/posts/b/index.md';
-  const files = {
-    [A]: '---\ntitle: A\ntags:\n  - old-tag\n---\nx',
-    [B]: '---\ntitle: B\ntags:\n  - unrelated\n---\nx',
-  };
-  const ctx = batchCtx({ role: 'admin' });
-  ctx.reader = { readFile: async (rel) => files[rel] ?? null };
-  const r = await applyTagEdit(ctx, { mode: 'rename', tag: 'old-tag', to: 'new-tag', paths: [A, B, '../evil.md'] }); // `mode` is the wire name (the admin wrapper spreads args over the route action)
-  assert.equal(r.rewritten, 1); // only A carried it; the evil path was filtered by shape
-  assert.equal(ctx.pulls.length, 1);
-  assert.match(ctx.puts[0].content, /new-tag/);
-  await assert.rejects(applyTagEdit(ctx, { mode: 'retire', tag: '', paths: [A] }), /tag is required/);
-  await assert.rejects(applyTagEdit(ctx, { mode: 'merge', tag: 'x', paths: [A] }), /destination/);
-  await assert.rejects(applyTagEdit(ctx, { mode: 'explode', tag: 'x', paths: [A] }), /mode/);
-  // the legacy `action` key still works for direct API callers
-  const legacy = await applyTagEdit(ctx, { action: 'retire', tag: 'ghost-tag', paths: [B] });
-  assert.equal(legacy.noop, true);
 });
 
 // SOW-100 tag policy: member input normalizes to dash-connected tags at build time.

@@ -36,6 +36,7 @@ import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../m
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { addCta, updateCta, setCtaEnabled, assignCta, unassignCta } from '../../membership/cta-edits.mjs'; // sow-281
 import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput, ctaImageFiles } from './membership-admin-ctas.mjs'; // sow-281: the validators (this file is at the size cap); sow-337 the card image
+import { contentFlagOps } from './membership-admin-flags.mjs'; // sow-274: the content-flag ops (this file is at the size cap)
 import { applyFile, decodeContent } from './membership-admin-files.mjs'; // sow-337: moved out for the size cap; writes a binary entry too
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
@@ -216,6 +217,8 @@ const CONFIG_ACTIONS = new Set([
   // sow-161 B (channel-map manager, superadmin): moderation flag terms + the syndication config surfaces.
   'flag-term-add', 'flag-term-remove',
   'syndication-templates-set', 'news-engagement-set', 'syndication-settings-set',
+  // sow-274: the content flags, the last admin actions that had no Worker equivalent.
+  'stale', 'unstale', 'unindex', 'reindex',
 ]);
 const CONFIG_OP = {
   'quote-add': { path: 'house/quotes.yml', rank: ROLE_RANK.admin, fn: addQuote, input: quoteInput, slug: (a) => idSlug(a.text) },
@@ -253,6 +256,8 @@ const CONFIG_OP = {
   'syndication-templates-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setTemplatesBatch, input: templatesBatchInput, slug: () => 'syndication-templates' },
   'news-engagement-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setNewsEngagementEdit, input: newsEngagementInput, slug: () => 'news-engagement' },
   'syndication-settings-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setSyndicationSettingsEdit, input: syndicationSettingsInput, slug: () => 'syndication-settings' },
+  // sow-274: stale / unstale / unindex / reindex. Superadmin, matching the CODEOWNERS pin on the file.
+  ...contentFlagOps(ROLE_RANK.superadmin),
 };
 // sow-161 A: MULTI-FILE ops. Unlike a single-file CONFIG_OP (one {path, rank} pair), these can touch several
 // files at different tiers in one PR, so a single declared rank cannot express their real requirement. The
@@ -265,6 +270,12 @@ const MULTI_OP = {
   'tag-edit': { rank: ROLE_RANK.admin, build: buildTagEdit },
   'category-batch': { rank: ROLE_RANK.admin, build: buildCategoryBatch },
 };
+
+// sow-274: every action name this endpoint serves, DERIVED from the live tables rather than restated beside
+// them. Now that the client has no writer of its own, an action the screens send and this endpoint does not
+// know is a dead button, and the failure is invisible until someone clicks it. The census test compares this
+// against what the client can send, so a table edited on one side without the other reds a test.
+export const ADMIN_ACTIONS_SERVED = Object.freeze([...CONTENT_ACTIONS, ...GOV_ACTIONS, ...CONFIG_ACTIONS, ...MULTI_ACTIONS].sort());
 
 // The minimum role rank an action requires at the endpoint (the gate is the independent backstop). For a
 // multi-file op this is the FLOOR only; the dispatch re-checks the resolved file set against maxRankForPaths.
