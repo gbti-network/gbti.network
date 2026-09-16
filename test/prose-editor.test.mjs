@@ -46,8 +46,9 @@ test('what the browser leaves while typing reads back as the markdown the author
 });
 
 test('quotes, lists and code blocks keep their shape, including what the browser nests', () => {
-  assert.equal(domToMarkdown(surface('<blockquote>a<div>b</div></blockquote>')), '> a\n> b');
-  assert.equal(domToMarkdown(surface('<blockquote>a</blockquote><blockquote>b</blockquote>')), '> a\n> b', 'the renderer draws one quote per line; they fuse back');
+  // sow-350: Enter inside a quote is a new paragraph, as it is at the root. The old `> a\n> b` published as ONE line.
+  assert.equal(domToMarkdown(surface('<blockquote>a<div>b</div></blockquote>')), '> a\n>\n> b');
+  assert.equal(domToMarkdown(surface('<blockquote>a</blockquote><blockquote>b</blockquote>')), '> a\n>\n> b', 'adjacent quotes are drawn as one, so they save as one quote of two paragraphs');
   assert.equal(domToMarkdown(surface('<blockquote>p1</blockquote><blockquote></blockquote><blockquote>p2</blockquote>')), '> p1\n>\n> p2', 'an empty quote line separates paragraphs');
   assert.equal(domToMarkdown(surface('<blockquote></blockquote><p>after</p>')), 'after', 'a lone empty quote is nothing');
   assert.equal(domToMarkdown(surface('<ul><li>one</li><li>two <b>b</b></li></ul>')), '- one\n- two **b**');
@@ -74,7 +75,7 @@ test('every construct the comment vocabulary allows round-trips through the rend
     'Hello **bold** and *it* and `c` [l](https://x.test)',
     'https://www.youtube.com/watch?v=abc123DEF45',
     'Before\n\nhttps://youtu.be/abc123DEF45\n\nAfter',
-    '> a quote\n> two lines',
+    '> a quote  \n> two lines', // sow-350: a line break inside a quote is a hard break; a soft one joins, as published
     '> p1\n>\n> p2',
     '- one\n- two',
     '1. a\n2. b',

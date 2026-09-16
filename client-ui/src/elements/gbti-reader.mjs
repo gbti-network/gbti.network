@@ -141,6 +141,7 @@ const CSS = `
   .body li > ul,.body li > ol { margin:.25em 0 0; }
   ${listStyleProseCss('.body')}
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
+  .body blockquote > :last-child { margin-bottom:0; } /* sow-350: a quote holds its paragraphs */
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
      their own horizontal scroll rather than pushing the article wider than the viewport. */
   .body table { display:block; overflow-x:auto; max-width:100%; border-collapse:collapse; margin:0 0 1.2em; font-size:14.5px; }

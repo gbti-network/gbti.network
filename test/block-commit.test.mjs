@@ -15,6 +15,8 @@ const CORPUS = [
   '## A heading',
   '',
   '> a quoted line',
+  '>',
+  '> and its second paragraph', // sow-350: one quote block for the whole run
   '',
   '- first item',
   '- second **bold** item',

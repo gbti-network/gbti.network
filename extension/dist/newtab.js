@@ -4108,6 +4108,377 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
   }
+  function textBlockToHtml(text) {
+    return String(text ?? "").split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join("<br><br>");
+  }
+  function textBlockFromHtml(html) {
+    const parts = String(html ?? "").split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ""));
+    return parts.length === 1 ? parts[0] : parts.filter((p) => p.trim()).join("\n\n");
+  }
+
+  // client/src/video-embed.mjs
+  function embedUrl(v) {
+    const s = String(v || "").trim();
+    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return `https://player.vimeo.com/video/${m[1]}`;
+    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
+    if (m) return `https://rumble.com/embed/${m[1]}/`;
+    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+    return null;
+  }
+  function bareVideoLine(line) {
+    const s = String(line ?? "").trim();
+    if (!/^https?:\/\/\S+$/.test(s)) return null;
+    return embedUrl(s) ? s : null;
+  }
+  function embedPoster(url) {
+    const src = embedUrl(url);
+    if (!src) return null;
+    const yt = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+    const provider = yt ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
+    return { src, thumb: yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+  }
+  var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  function embedPosterHtml(url, { frameSrc } = {}) {
+    const p = embedPoster(url);
+    if (!p) return "";
+    const src = frameSrc || p.src;
+    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr2(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr2(p.provider)}</span>`;
+    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr2(src)}" data-embed-url="${escAttr2(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
+  }
+  function isPortraitEmbed(src) {
+    return /tiktok\.com\/embed\//.test(String(src || ""));
+  }
+
+  // client/src/markdown.mjs
+  var EMBED_RELAY = "https://gbti.network/embed/";
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  }
+  var REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
+  var DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
+  function decodeEntities(s) {
+    let p = String(s ?? "");
+    for (let i = 0; i < 4; i++) {
+      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
+        try {
+          return String.fromCodePoint(parseInt(h, 16));
+        } catch {
+          return "";
+        }
+      }).replace(/&#(\d+);?/g, (_m, d) => {
+        try {
+          return String.fromCodePoint(parseInt(d, 10));
+        } catch {
+          return "";
+        }
+      }).replace(/&amp;/gi, "&");
+      if (n === p) break;
+      p = n;
+    }
+    return p;
+  }
+  var isDangerousAnchorHref = (url) => {
+    const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
+    return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
+  };
+  var attrOf2 = (attrs, name) => {
+    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
+    return m ? m[1] : "";
+  };
+  var escAttr3 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function emphasis(t) {
+    return String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  }
+  var SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
+  var sanitizeAnchorInner = (html) => String(html ?? "").replace(
+    /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
+    (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
+  );
+  function rawAnchorHtml(attrs, inner) {
+    const href = decodeEntities(attrOf2(attrs, "href"));
+    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
+    const rel = [];
+    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
+    const blank = attrOf2(attrs, "target").toLowerCase() === "_blank";
+    if (blank && !rel.includes("noopener")) rel.push("noopener");
+    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
+    const tgtAttr = blank ? ' target="_blank"' : "";
+    return `<a href="${escAttr3(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
+  }
+  function escapeKeepingLinks(s, keep) {
+    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+      keep.push(rawAnchorHtml(attrs, inner));
+      return `${keep.length - 1}`;
+    });
+    return escapeHtml(stripped);
+  }
+  var FN_ID = "[A-Za-z0-9_-]+";
+  function collectFootnoteIds(lines) {
+    const ids = /* @__PURE__ */ new Set();
+    let fence = 0;
+    for (const line of lines) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
+      if (d) ids.add(d[1]);
+    }
+    return ids;
+  }
+  function inline(escaped, fn = null) {
+    let t = escaped;
+    const codes = [];
+    t = t.replace(/`([^`]+)`/g, (_m, c) => {
+      codes.push(c);
+      return `${codes.length - 1}`;
+    });
+    if (fn) {
+      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
+        if (!fn.ids.has(id)) return m;
+        const n = (fn.counts.get(id) ?? 0) + 1;
+        fn.counts.set(id, n);
+        return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
+      });
+    }
+    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
+      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
+      const titleAttr = title ? ` title="${title}"` : "";
+      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
+      const cls = imageLayoutClasses(layout);
+      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
+    });
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+    t = emphasis(t);
+    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
+    return t;
+  }
+  function codeOpen(lang) {
+    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
+    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
+  }
+  var CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
+  function renderFence(lang, buf, fn = null, { poster = false } = {}) {
+    const info = String(lang || "").trim().split(/\s+/);
+    const body = buf.join("\n");
+    if (info[0] === "callout") {
+      const v = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
+      const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
+      return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+    }
+    if (info[0] === "embed") {
+      const url = body.trim();
+      const src = embedUrl(url);
+      if (src && poster) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
+      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
+      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
+    }
+    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
+  }
+  function splitTableRow2(line) {
+    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
+    const cells = [];
+    let cur = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "\\" && s[i + 1] === "|") {
+        cur += "|";
+        i++;
+        continue;
+      }
+      if (ch === "|") {
+        cells.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+  function tableAlignments(line) {
+    if (!/\|/.test(String(line ?? ""))) return null;
+    const cells = splitTableRow2(line);
+    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
+    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
+  }
+  var QUOTE_LINE = /^\s*>\s?/;
+  function hardBreak(escaped, raw) {
+    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
+  }
+  function renderMarkdown(md, opts = {}) {
+    return renderDoc(md, false, opts).html;
+  }
+  function renderDoc(md, ids, opts = {}, nest = null) {
+    const autoEmbed = !!opts.autoEmbed;
+    const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+    const ranges = [];
+    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
+    const emit = (html2, start, end) => {
+      out.push(stamp(html2, out.length));
+      ranges.push(start == null ? null : { start, end });
+    };
+    let codeFence = 3;
+    let fenceStart = 0;
+    let inCode = false;
+    let codeBuf = [];
+    let codeLang2 = "";
+    const footnotes = nest ? nest.footnotes : [];
+    const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
+    const linkKeep = nest ? nest.linkKeep : [];
+    const flushList = () => {
+    };
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const fence = /^(`{3,})(.*)$/.exec(line);
+      if (fence) {
+        if (!inCode) {
+          inCode = true;
+          fenceStart = i;
+          codeBuf = [];
+          codeFence = fence[1].length;
+          codeLang2 = fence[2];
+          i++;
+          continue;
+        }
+        if (fence[1].length >= codeFence && !fence[2].trim()) {
+          inCode = false;
+          flushList();
+          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed }), fenceStart, i);
+          codeLang2 = "";
+          i++;
+          continue;
+        }
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      if (inCode) {
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
+      if (def) {
+        flushList();
+        const parts = [def[2].trim()];
+        i++;
+        while (i < lines.length && /^ {4,}\S/.test(lines[i])) {
+          parts.push(lines[i].trim());
+          i++;
+        }
+        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join("<br/>") });
+        continue;
+      }
+      if (autoEmbed) {
+        const videoUrl = bareVideoLine(line);
+        if (videoUrl) {
+          flushList();
+          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
+          i++;
+          continue;
+        }
+      }
+      const esc6 = escapeKeepingLinks(line, linkKeep);
+      let m;
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc6)) {
+        flushList();
+        emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i);
+        i++;
+        continue;
+      }
+      if (isListLine(line)) {
+        const run = takeListRun(lines, i);
+        emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+        i = run.next;
+        continue;
+      }
+      if (QUOTE_LINE.test(line)) {
+        flushList();
+        const quoteStart = i;
+        const inner = [];
+        while (i < lines.length && QUOTE_LINE.test(lines[i])) {
+          inner.push(lines[i].replace(QUOTE_LINE, ""));
+          i++;
+        }
+        const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes }).html;
+        emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
+        continue;
+      }
+      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+        flushList();
+        emit("<hr/>", i, i);
+        i++;
+        continue;
+      }
+      const aligns = i + 1 < lines.length ? tableAlignments(lines[i + 1]) : null;
+      if (aligns && line.includes("|")) {
+        const tableStart = i;
+        flushList();
+        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn);
+        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
+        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) {
+          rows.push(splitTableRow2(lines[i]));
+          i++;
+        }
+        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
+        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
+        continue;
+      }
+      if (/^\s*$/.test(line)) {
+        flushList();
+        i++;
+        continue;
+      }
+      const fig = parseImageLine(line);
+      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
+        flushList();
+        const cls = imageLayoutClasses(fig.layout);
+        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
+        i++;
+        continue;
+      }
+      flushList();
+      const paraStart = i;
+      const para = [hardBreak(esc6, line)];
+      i++;
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
+        para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
+        i++;
+      }
+      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
+      emit(`<p>${inline(joined2, fn).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
+    }
+    flushList();
+    if (inCode) emit(renderFence(codeLang2, codeBuf, fn), fenceStart, lines.length - 1);
+    if (nest) return { html: out.join("\n"), blocks: ranges };
+    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
+    if (referenced.length) {
+      const items = referenced.map((f) => {
+        const n = fn.counts.get(f.id);
+        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
+        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
+      }).join("");
+      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
+    }
+    const joined = out.join("\n");
+    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
+    return { html, blocks: ranges };
+  }
 
   // client-ui/src/elements/gbti-share-composer.mjs
   var SITE2 = "https://gbti.network";
@@ -4670,9 +5041,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const lv = Math.min(3, Math.max(1, b.level || 2));
           return `<h${lv}>${inlineMdToHtml(b.text || "")}</h${lv}>`;
         }
+        // sow-350: a quote renders through the renderer the feed uses for the published note, so its paragraphs (and
+        // any list inside it) show exactly as they will publish. A callout keeps the quote look, with the published
+        // callout's line breaks: every line its own, so a blank line stays a blank line.
         case "quote":
+          return renderMarkdown(serializeBlocks([b]));
         case "callout":
-          return `<blockquote>${inlineMdToHtml(b.text || "")}</blockquote>`;
+          return `<blockquote>${String(b.text || "").split("\n").map((l) => inlineMdToHtml(l)).join("<br>")}</blockquote>`;
         case "code":
           return `<pre><code>${esc(b.code || "")}</code></pre>`;
         case "list": {
@@ -5745,7 +6120,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
     return String(text).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
   }
-  function inline(text, { bold, italic, strike, link }) {
+  function inline2(text, { bold, italic, strike, link }) {
     return String(text).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
   }
   function blocks(md) {
@@ -5830,7 +6205,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const store2 = [];
       const masked = maskRuns(text, store2);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
-      const done = inline(masked, {
+      const done = inline2(masked, {
         bold: (t) => t,
         italic: (t) => t,
         strike: (t) => t,
@@ -5878,7 +6253,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const masked = maskRuns(text, store2);
       const safe = esc2(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
-      const done = inline(safe, {
+      const done = inline2(safe, {
         bold: (t) => `<strong>${t}</strong>`,
         italic: (t) => `<em>${t}</em>`,
         strike: (t) => `<del>${t}</del>`,
@@ -9579,7 +9954,7 @@ ${listStyleProseCss(".doc-blocks")}
         onCommit: (ce, reason) => {
           const b = this._byId(ce.dataset.id);
           if (!b) return;
-          b.text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, "");
+          b.text = textBlockFromHtml(ce.innerHTML);
           if (reason === "link") {
             this._render();
             this._focusBlock(b._id);
@@ -9593,7 +9968,7 @@ ${listStyleProseCss(".doc-blocks")}
         onRetype: (ce, toType, level) => {
           const b = this._byId(ce.dataset.id);
           if (!b || b.type !== "paragraph" && b.type !== "heading") return;
-          const text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, "");
+          const text = textBlockFromHtml(ce.innerHTML);
           if (toType === "heading") {
             if (text.includes("\n")) return;
             b.type = "heading";
@@ -9698,7 +10073,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<div class="blk blk-${esc(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
     }
     _ce(cls, edit, b, ph) {
-      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${inlineMdToHtml(b.text || "")}</div>`;
+      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${textBlockToHtml(b.text || "")}</div>`;
     }
     _bodyHtml(b) {
       switch (b.type) {
@@ -9795,7 +10170,7 @@ ${listStyleProseCss(".doc-blocks")}
               if (plain.startsWith("/")) this._openSlash(el, plain.slice(1));
               else this._closeSlash();
             }
-            b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, "");
+            b.text = textBlockFromHtml(el.innerHTML);
           } else if (f === "code") b.code = el.innerText.replace(/\n$/, "");
           else if (f === "list") {
             const items = readListDom(el, (h) => inlineHtmlToMd(h));
@@ -10864,362 +11239,6 @@ ${listStyleProseCss(".doc-blocks")}
     await rawDel(types2.map((t) => wbKey(memberKey, t)));
   }
 
-  // client/src/video-embed.mjs
-  function embedUrl(v) {
-    const s = String(v || "").trim();
-    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
-    if (m) return `https://www.youtube.com/embed/${m[1]}`;
-    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (m) return `https://player.vimeo.com/video/${m[1]}`;
-    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
-    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
-    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
-    if (m) return `https://rumble.com/embed/${m[1]}/`;
-    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
-    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
-    return null;
-  }
-  function bareVideoLine(line) {
-    const s = String(line ?? "").trim();
-    if (!/^https?:\/\/\S+$/.test(s)) return null;
-    return embedUrl(s) ? s : null;
-  }
-  function embedPoster(url) {
-    const src = embedUrl(url);
-    if (!src) return null;
-    const yt = src.match(/youtube\.com\/embed\/([\w-]{11})/);
-    const provider = yt ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
-    return { src, thumb: yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
-  }
-  var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  function embedPosterHtml(url, { frameSrc } = {}) {
-    const p = embedPoster(url);
-    if (!p) return "";
-    const src = frameSrc || p.src;
-    const face = p.thumb ? `<img class="md-embed-thumb" src="${escAttr2(p.thumb)}" alt="" loading="lazy" decoding="async" />` : `<span class="md-embed-panel">${escAttr2(p.provider)}</span>`;
-    return `<div class="md-embed md-embed-poster${p.portrait ? " md-embed-portrait" : ""}" data-embed-src="${escAttr2(src)}" data-embed-url="${escAttr2(String(url).trim())}"><button type="button" class="md-embed-open" aria-label="Play video">${face}<span class="md-embed-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></button></div>`;
-  }
-  function isPortraitEmbed(src) {
-    return /tiktok\.com\/embed\//.test(String(src || ""));
-  }
-
-  // client/src/markdown.mjs
-  var EMBED_RELAY = "https://gbti.network/embed/";
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  }
-  var REL_ALLOWED2 = /* @__PURE__ */ new Set(["nofollow", "noopener", "noreferrer"]);
-  var DANGEROUS_SCHEME2 = /^\s*(?:javascript|data|vbscript):/i;
-  function decodeEntities(s) {
-    let p = String(s ?? "");
-    for (let i = 0; i < 4; i++) {
-      const n = p.replace(/&#x([0-9a-f]+);?/gi, (_m, h) => {
-        try {
-          return String.fromCodePoint(parseInt(h, 16));
-        } catch {
-          return "";
-        }
-      }).replace(/&#(\d+);?/g, (_m, d) => {
-        try {
-          return String.fromCodePoint(parseInt(d, 10));
-        } catch {
-          return "";
-        }
-      }).replace(/&amp;/gi, "&");
-      if (n === p) break;
-      p = n;
-    }
-    return p;
-  }
-  var isDangerousAnchorHref = (url) => {
-    const decoded = decodeEntities(url).replace(/[\x00-\x20]+/g, "");
-    return DANGEROUS_SCHEME2.test(decoded) || DANGEROUS_SCHEME2.test(String(url ?? ""));
-  };
-  var attrOf2 = (attrs, name) => {
-    const m = new RegExp(`\\b${name}="([^"]*)"`, "i").exec(String(attrs || ""));
-    return m ? m[1] : "";
-  };
-  var escAttr3 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  function emphasis(t) {
-    return String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-  }
-  var SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
-  var sanitizeAnchorInner = (html) => String(html ?? "").replace(
-    /<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
-    (_m, slash, tag) => SAFE_INNER_TAG2.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
-  );
-  function rawAnchorHtml(attrs, inner) {
-    const href = decodeEntities(attrOf2(attrs, "href"));
-    if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
-    const rel = [];
-    for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
-    const blank = attrOf2(attrs, "target").toLowerCase() === "_blank";
-    if (blank && !rel.includes("noopener")) rel.push("noopener");
-    const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
-    const tgtAttr = blank ? ' target="_blank"' : "";
-    return `<a href="${escAttr3(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
-  }
-  function escapeKeepingLinks(s, keep) {
-    const stripped = String(s ?? "").replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
-      keep.push(rawAnchorHtml(attrs, inner));
-      return `${keep.length - 1}`;
-    });
-    return escapeHtml(stripped);
-  }
-  var FN_ID = "[A-Za-z0-9_-]+";
-  function collectFootnoteIds(lines) {
-    const ids = /* @__PURE__ */ new Set();
-    let fence = 0;
-    for (const line of lines) {
-      const f = /^(`{3,})(.*)$/.exec(line);
-      if (f) {
-        if (!fence) fence = f[1].length;
-        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
-        continue;
-      }
-      if (fence) continue;
-      const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
-      if (d) ids.add(d[1]);
-    }
-    return ids;
-  }
-  function inline2(escaped, fn = null) {
-    let t = escaped;
-    const codes = [];
-    t = t.replace(/`([^`]+)`/g, (_m, c) => {
-      codes.push(c);
-      return `${codes.length - 1}`;
-    });
-    if (fn) {
-      t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
-        if (!fn.ids.has(id)) return m;
-        const n = (fn.counts.get(id) ?? 0) + 1;
-        fn.counts.set(id, n);
-        return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
-      });
-    }
-    t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
-      const layout = suffix ? parseImageLayout(suffix.slice(1, -1)) : {};
-      const titleAttr = title ? ` title="${title}"` : "";
-      if (!layout) return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">${suffix}`;
-      const cls = imageLayoutClasses(layout);
-      return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
-    });
-    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
-    t = emphasis(t);
-    t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
-    return t;
-  }
-  function codeOpen(lang) {
-    const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
-    return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
-  }
-  var CALLOUT_VARIANTS2 = ["info", "note", "warning", "tip"];
-  function renderFence(lang, buf, fn = null, { poster = false } = {}) {
-    const info = String(lang || "").trim().split(/\s+/);
-    const body = buf.join("\n");
-    if (info[0] === "callout") {
-      const v = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
-      const html = body.split("\n").map((l) => inline2(escapeHtml(l), fn)).join("<br/>");
-      return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
-    }
-    if (info[0] === "embed") {
-      const url = body.trim();
-      const src = embedUrl(url);
-      if (src && poster) return embedPosterHtml(url, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(url)}` });
-      if (src) return `<div class="md-embed"><iframe src="${escapeHtml(`${EMBED_RELAY}?u=${encodeURIComponent(url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="Embedded video"></iframe></div>`;
-      return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
-    }
-    return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
-  }
-  function splitTableRow2(line) {
-    const s = String(line).trim().replace(/^\|/, "").replace(/\|$/, "");
-    const cells = [];
-    let cur = "";
-    for (let i = 0; i < s.length; i++) {
-      const ch = s[i];
-      if (ch === "\\" && s[i + 1] === "|") {
-        cur += "|";
-        i++;
-        continue;
-      }
-      if (ch === "|") {
-        cells.push(cur.trim());
-        cur = "";
-        continue;
-      }
-      cur += ch;
-    }
-    cells.push(cur.trim());
-    return cells;
-  }
-  function tableAlignments(line) {
-    if (!/\|/.test(String(line ?? ""))) return null;
-    const cells = splitTableRow2(line);
-    if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
-    return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
-  }
-  function hardBreak(escaped, raw) {
-    return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
-  }
-  function renderMarkdown(md, opts = {}) {
-    return renderDoc(md, false, opts).html;
-  }
-  function renderDoc(md, ids, opts = {}) {
-    const autoEmbed = !!opts.autoEmbed;
-    const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const out = [];
-    const ranges = [];
-    const stamp = (html2, n) => ids ? String(html2).replace(/^(\s*<[a-zA-Z][a-zA-Z0-9-]*)/, `$1 data-blk="${n}"`) : html2;
-    const emit = (html2, start, end) => {
-      out.push(stamp(html2, out.length));
-      ranges.push(start == null ? null : { start, end });
-    };
-    let codeFence = 3;
-    let fenceStart = 0;
-    let inCode = false;
-    let codeBuf = [];
-    let codeLang2 = "";
-    const footnotes = [];
-    const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
-    const linkKeep = [];
-    const flushList = () => {
-    };
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      const fence = /^(`{3,})(.*)$/.exec(line);
-      if (fence) {
-        if (!inCode) {
-          inCode = true;
-          fenceStart = i;
-          codeBuf = [];
-          codeFence = fence[1].length;
-          codeLang2 = fence[2];
-          i++;
-          continue;
-        }
-        if (fence[1].length >= codeFence && !fence[2].trim()) {
-          inCode = false;
-          flushList();
-          emit(renderFence(codeLang2, codeBuf, fn, { poster: autoEmbed }), fenceStart, i);
-          codeLang2 = "";
-          i++;
-          continue;
-        }
-        codeBuf.push(line);
-        i++;
-        continue;
-      }
-      if (inCode) {
-        codeBuf.push(line);
-        i++;
-        continue;
-      }
-      const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
-      if (def) {
-        flushList();
-        const parts = [def[2].trim()];
-        i++;
-        while (i < lines.length && /^ {4,}\S/.test(lines[i])) {
-          parts.push(lines[i].trim());
-          i++;
-        }
-        footnotes.push({ id: def[1], html: parts.map((p) => inline2(escapeHtml(p), fn)).join("<br/>") });
-        continue;
-      }
-      if (autoEmbed) {
-        const videoUrl = bareVideoLine(line);
-        if (videoUrl) {
-          flushList();
-          emit(embedPosterHtml(videoUrl, { frameSrc: `${EMBED_RELAY}?u=${encodeURIComponent(videoUrl)}` }), i, i);
-          i++;
-          continue;
-        }
-      }
-      const esc6 = escapeKeepingLinks(line, linkKeep);
-      let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc6)) {
-        flushList();
-        emit(`<h${m[1].length}>${inline2(m[2], fn)}</h${m[1].length}>`, i, i);
-        i++;
-        continue;
-      }
-      if (isListLine(line)) {
-        const run = takeListRun(lines, i);
-        emit(listHtml(run.items, (t) => inline2(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
-        i = run.next;
-        continue;
-      }
-      if (/^\s*>\s?/.test(line)) {
-        flushList();
-        emit(`<blockquote>${inline2(escapeKeepingLinks(line.replace(/^\s*>\s?/, ""), linkKeep), fn)}</blockquote>`, i, i);
-        i++;
-        continue;
-      }
-      if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
-        flushList();
-        emit("<hr/>", i, i);
-        i++;
-        continue;
-      }
-      const aligns = i + 1 < lines.length ? tableAlignments(lines[i + 1]) : null;
-      if (aligns && line.includes("|")) {
-        const tableStart = i;
-        flushList();
-        const cell = (c) => inline2(escapeKeepingLinks(c, linkKeep), fn);
-        const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
-        const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
-        i += 2;
-        const rows = [];
-        while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) {
-          rows.push(splitTableRow2(lines[i]));
-          i++;
-        }
-        const body = rows.length ? `<tbody>${rows.map((r) => `<tr>${cols(r, "td")}</tr>`).join("")}</tbody>` : "";
-        emit(`<table>${head}${body}</table>`, tableStart, i - 1);
-        continue;
-      }
-      if (/^\s*$/.test(line)) {
-        flushList();
-        i++;
-        continue;
-      }
-      const fig = parseImageLine(line);
-      if (fig && fig.caption && /^(https?:\/\/|\.?\/)/.test(fig.url)) {
-        flushList();
-        const cls = imageLayoutClasses(fig.layout);
-        emit(`<figure${cls.length ? ` class="${cls.join(" ")}"` : ""}><img src="${escapeHtml(fig.url)}" alt="${escapeHtml(fig.alt)}" loading="lazy"><figcaption>${escapeHtml(fig.caption)}</figcaption></figure>`, i, i);
-        i++;
-        continue;
-      }
-      flushList();
-      const paraStart = i;
-      const para = [hardBreak(esc6, line)];
-      i++;
-      while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
-        para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
-        i++;
-      }
-      const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
-      emit(`<p>${inline2(joined2, fn).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
-    }
-    flushList();
-    if (inCode) emit(renderFence(codeLang2, codeBuf, fn), fenceStart, lines.length - 1);
-    const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
-    if (referenced.length) {
-      const items = referenced.map((f) => {
-        const n = fn.counts.get(f.id);
-        const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
-        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
-      }).join("");
-      emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
-    }
-    const joined = out.join("\n");
-    const html = linkKeep.length ? joined.replace(/(\d+)/g, (_m, i2) => linkKeep[Number(i2)] ?? "") : joined;
-    return { html, blocks: ranges };
-  }
-
   // client-ui/src/prose-editor-core.mjs
   var COMMENT_MAX_BYTES = 8e3;
   function commentBodyTooLong(md) {
@@ -11316,8 +11335,8 @@ ${listStyleProseCss(".doc-blocks")}
         const text = inline3(n.innerHTML);
         if (text.trim()) inner.push(text);
       }
-      const lines = flat(inner);
-      out.push({ quote: true, text: lines.length ? lines.join("\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : ">" });
+      const paras = flat(inner);
+      out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
       return;
     }
     if (t === "UL" || t === "OL") {
@@ -11368,14 +11387,13 @@ ${listStyleProseCss(".doc-blocks")}
     let run = null;
     const closeRun = () => {
       if (!run) return;
-      while (run.length && run[0] === ">") run.shift();
-      while (run.length && run[run.length - 1] === ">") run.pop();
-      if (run.length) blocks2.push(run.join("\n"));
+      if (run.length) blocks2.push(run.join("\n>\n"));
       run = null;
     };
     for (const b of out) {
       if (b && typeof b === "object" && b.quote) {
-        (run ||= []).push(b.text);
+        run ||= [];
+        if (b.text) run.push(b.text);
         continue;
       }
       closeRun();
@@ -11421,6 +11439,7 @@ ${listStyleProseCss(".doc-blocks")}
   .surface > :last-child { margin-bottom: 0; }
   .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
   .surface blockquote + blockquote { margin-top: -.7em; }
+  .surface blockquote > :last-child { margin-bottom: 0; }
   .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
   .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
   .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
@@ -11598,7 +11617,42 @@ ${listStyleProseCss(".doc-blocks")}
     _formatBlock(tag) {
       const sel = this._sel();
       const inside = sel && this._closest(sel.anchorNode, tag);
+      const line = inside && tag === "BLOCKQUOTE" ? this._quoteLine(inside, sel.anchorNode) : null;
+      if (line) {
+        this._liftLine(inside, line);
+        return;
+      }
       document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
+    }
+    /** The P or DIV directly inside `quote` that holds `node`, or null. */
+    _quoteLine(quote, node) {
+      let n = node;
+      while (n && n.parentNode !== quote) n = n.parentNode;
+      return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
+    }
+    /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
+     *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
+     *  back to markdown (measured in Chrome, 2026-09-16). */
+    _liftLine(quote, line) {
+      const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
+      const rest = document.createElement("blockquote");
+      while (line.nextSibling) rest.appendChild(line.nextSibling);
+      const p = document.createElement("p");
+      while (line.firstChild) p.appendChild(line.firstChild);
+      if (!p.firstChild) p.innerHTML = "<br>";
+      line.remove();
+      quote.after(p);
+      if (has(rest)) p.after(rest);
+      if (!has(quote)) quote.remove();
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(p);
+        r.collapse(false);
+        const s = this._sel();
+        s.removeAllRanges();
+        s.addRange(r);
+      } catch {
+      }
     }
     /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
     _toggleCode() {
@@ -11659,10 +11713,16 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
       if (quote && sel.isCollapsed) {
-        const line = this._closest(sel.anchorNode, "DIV") || this._closest(sel.anchorNode, "P") || quote;
-        if (!String(line.textContent || "").trim()) {
+        const line = this._quoteLine(quote, sel.anchorNode);
+        if (!String((line || quote).textContent || "").trim()) {
           e.preventDefault();
-          document.execCommand("outdent");
+          if (line) this._liftLine(quote, line);
+          else {
+            const p = document.createElement("p");
+            p.innerHTML = "<br>";
+            quote.replaceWith(p);
+            this._caretIn(p);
+          }
           this._changed();
         }
       }
@@ -21980,6 +22040,10 @@ ${listStyleProseCss(".doc-blocks")}
   .body { margin-top:10px; font-size:14.5px; line-height:1.6; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
+  /* sow-350: a quote had no style here, so a published note's quote took the browser's indent while the composer
+     previewed a ruled quote. It now draws as the preview does, one rule around all of its paragraphs. */
+  .body blockquote { margin:0 0 .7em; padding:2px 0 2px 12px; border-left:3px solid var(--line); color:var(--muted); }
+  .body blockquote > :last-child { margin-bottom:0; }
   .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--bg, rgba(0,0,0,.05)); padding:10px; border-radius:8px; overflow:auto; }
   .link { display:inline-flex; align-items:center; gap:6px; margin-top:10px; font-size:12.5px; color:var(--brand); text-decoration:none; }
@@ -25931,6 +25995,7 @@ From the author:
   .body li > ul,.body li > ol { margin:.25em 0 0; }
   ${listStyleProseCss(".body")}
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
+  .body blockquote > :last-child { margin-bottom:0; } /* sow-350: a quote holds its paragraphs */
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
      their own horizontal scroll rather than pushing the article wider than the viewport. */
   .body table { display:block; overflow-x:auto; max-width:100%; border-collapse:collapse; margin:0 0 1.2em; font-size:14.5px; }

@@ -7,7 +7,7 @@
 // divider render as the "Members-only" section. In-house, node-free, CSP-safe, shadow-DOM. Phase 5c layers the slash
 // menu + selection toolbar + drag reorder on top of this engine.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd } from '../markdown-blocks.mjs';
+import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd, textBlockToHtml, textBlockFromHtml } from '../markdown-blocks.mjs';
 import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: the toolbar + link manager, shared with the WorkBench Preview
 import { listHtml, isFlatList } from '../../../client/src/list-items.mjs'; // nested lists: depth and marker per item
 import { readListDom } from '../block-commit.mjs'; // the list read-back, shared with the Preview
@@ -127,7 +127,7 @@ class GbtiDocEditor extends GbtiElement {
       onCommit: (ce, reason) => {
         const b = this._byId(ce.dataset.id);
         if (!b) return;
-        b.text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, '');
+        b.text = textBlockFromHtml(ce.innerHTML); // sow-350: a quote's paragraphs stay paragraphs
         if (reason === 'link') { this._render(); this._focusBlock(b._id); }
         this._change();
       },
@@ -138,7 +138,7 @@ class GbtiDocEditor extends GbtiElement {
       onRetype: (ce, toType, level) => {
         const b = this._byId(ce.dataset.id);
         if (!b || (b.type !== 'paragraph' && b.type !== 'heading')) return;
-        const text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, '');
+        const text = textBlockFromHtml(ce.innerHTML);
         if (toType === 'heading') {
           if (text.includes('\n')) return;                 // a heading is a single line
           b.type = 'heading'; b.level = Math.min(6, Math.max(1, Number(level) || 2)); b.text = text;
@@ -227,7 +227,7 @@ class GbtiDocEditor extends GbtiElement {
   }
 
   _ce(cls, edit, b, ph) {
-    return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || '')}">${inlineMdToHtml(b.text || '')}</div>`;
+    return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || '')}">${textBlockToHtml(b.text || '')}</div>`; // sow-350: a blank line shows as one
   }
 
   _bodyHtml(b) {
@@ -331,7 +331,7 @@ class GbtiDocEditor extends GbtiElement {
             if (sc) { const i = this._indexOf(b._id); this._blocks[i] = withId(sc); this._render(); this._focusBlock(this._blocks[i]._id); this._change(); return; }
             if (plain.startsWith('/')) this._openSlash(el, plain.slice(1)); else this._closeSlash(); // SOW-062 5c-2: slash menu
           }
-          b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, ''); // SOW-062 P6: store the .ce's inline HTML as Markdown
+          b.text = textBlockFromHtml(el.innerHTML); // SOW-062 P6: store the .ce's inline HTML as Markdown (sow-350: paragraphs kept)
         }
         else if (f === 'code') b.code = el.innerText.replace(/\n$/, ''); // code stays literal
         else if (f === 'list') { const items = readListDom(el, (h) => inlineHtmlToMd(h)); b.items = isFlatList(items) ? items.map((it) => it.text) : items; }

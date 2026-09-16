@@ -74,7 +74,7 @@ export function readBlockDom(el) {
     const rows = kids(el, 'tr').map((tr) => Array.from(tr.children).map((c) => md(c.innerHTML)));
     return { kind: 'table', head: rows[0] || [], rows: rows.slice(1) };
   }
-  if (tag === 'BLOCKQUOTE') return { kind: 'quote', text: md(el.innerHTML) };
+  if (tag === 'BLOCKQUOTE') { const text = readQuoteDom(el, md); return text == null ? null : { kind: 'quote', text }; }
   if (/^H[1-6]$/.test(tag)) return { kind: 'heading', text: md(el.innerHTML) };
   if (tag === 'P') return { kind: 'paragraph', text: md(el.innerHTML) };
   return null;
@@ -222,6 +222,39 @@ export function planImageCaption(sourceText, caption) {
  * committed from either surface keeps the style. Shared by the Preview and the block editor so the two cannot
  * drift. `md(html)` turns inline HTML into markdown.
  */
+/**
+ * sow-350: a quote's text, read out of its rendered element. The renderer draws a quote as ONE <blockquote> holding a
+ * small document, as the site build does, and a bare `>` line is what the source carries between its paragraphs, so
+ * paragraphs are joined here with a blank line. Reading the whole element as inline HTML ran them together, and one
+ * edit then saved a quote of three paragraphs as a single paragraph. A DIV (what a browser's Enter adds) and bare
+ * text are paragraphs too; a list goes through the list block's own reader and serializer. Anything else inside a
+ * quote (code, a table, a heading, a nested quote) cannot be rebuilt from this read, so it returns null and the
+ * caller commits nothing rather than flattening it.
+ */
+const QUOTE_REFUSED = new Set(['PRE', 'TABLE', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'FIGURE', 'SECTION']);
+const escapeText = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export function readQuoteDom(el, md) {
+  const parts = [];
+  let buf = '';
+  const flush = () => { const t = md(buf); if (t) parts.push(t); buf = ''; };
+  for (const n of Array.from(el?.childNodes || [])) {
+    if (n.nodeType === 3) { buf += escapeText(n.textContent); continue; }
+    if (n.nodeType !== 1) continue;
+    const t = String(n.tagName || '').toUpperCase();
+    if (t === 'P' || t === 'DIV') { flush(); const x = md(n.innerHTML); if (x) parts.push(x); continue; }
+    if (t === 'UL' || t === 'OL') {
+      flush();
+      const items = readListDom(n, md);
+      if (items.length) parts.push(serializeListItems(items, t === 'OL').join('\n'));
+      continue;
+    }
+    if (QUOTE_REFUSED.has(t) || /(^|\s)md-(embed|callout)(\s|$)/.test(String(n.getAttribute?.('class') || ''))) return null;
+    buf += String(n.outerHTML ?? '');
+  }
+  flush();
+  return parts.join('\n\n');
+}
+
 export function readListDom(el, md) {
   const out = [];
   const tagOf = (n) => String(n?.tagName || '').toUpperCase();

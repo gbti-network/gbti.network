@@ -192,7 +192,8 @@ test('reader: GFM footnote refs render superscript anchors; defs collect into an
 
 test('reader: a footnote ref inside a blockquote works; a def-less document emits no section', () => {
   const quoted = renderMarkdown('> Wise words.[^3]\n\n[^3]: The source.');
-  assert.match(quoted, /<blockquote>Wise words\.<sup class="md-fnref"><a href="#fn-3"/);
+  // sow-350: a quote holds its paragraph, as the site build draws it (it was bare text in a quote per line).
+  assert.match(quoted, /<blockquote><p>Wise words\.<sup class="md-fnref"><a href="#fn-3"/);
   assert.doesNotMatch(renderMarkdown('Plain text, no footnotes.'), /md-footnotes/);
 });
 

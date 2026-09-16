@@ -344,3 +344,17 @@ export function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? ''); // restore anchors AFTER the decode
 }
+
+// sow-350: a text block's markdown as the HTML of an editable field, and back, keeping paragraph breaks. A quote or
+// a callout can hold several paragraphs (a bare `>` line, or a blank line in the fence), and the inline converters
+// above turn the blank line between them into a space, so the block editor showed a quote of three paragraphs as
+// one and SAVED it as one the moment the author typed in it. A blank line is shown as two line breaks and read back
+// as a blank line. With no blank line in play both are exactly the inline converters, so a paragraph or a heading
+// reads back as it always did.
+export function textBlockToHtml(text) {
+  return String(text ?? '').split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join('<br><br>');
+}
+export function textBlockFromHtml(html) {
+  const parts = String(html ?? '').split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ''));
+  return parts.length === 1 ? parts[0] : parts.filter((p) => p.trim()).join('\n\n');
+}

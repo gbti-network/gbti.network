@@ -1012,6 +1012,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
   }
+  function textBlockToHtml(text) {
+    return String(text ?? "").split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join("<br><br>");
+  }
+  function textBlockFromHtml(html) {
+    const parts = String(html ?? "").split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ""));
+    return parts.length === 1 ? parts[0] : parts.filter((p) => p.trim()).join("\n\n");
+  }
 
   // client-ui/src/image-layout-ui.mjs
   var IMAGE_LAYOUT_GROUPS = Object.freeze([
@@ -2189,7 +2196,7 @@ ${listStyleProseCss(".doc-blocks")}
         onCommit: (ce, reason) => {
           const b = this._byId(ce.dataset.id);
           if (!b) return;
-          b.text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, "");
+          b.text = textBlockFromHtml(ce.innerHTML);
           if (reason === "link") {
             this._render();
             this._focusBlock(b._id);
@@ -2203,7 +2210,7 @@ ${listStyleProseCss(".doc-blocks")}
         onRetype: (ce, toType, level) => {
           const b = this._byId(ce.dataset.id);
           if (!b || b.type !== "paragraph" && b.type !== "heading") return;
-          const text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, "");
+          const text = textBlockFromHtml(ce.innerHTML);
           if (toType === "heading") {
             if (text.includes("\n")) return;
             b.type = "heading";
@@ -2308,7 +2315,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<div class="blk blk-${esc(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
     }
     _ce(cls, edit, b, ph) {
-      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${inlineMdToHtml(b.text || "")}</div>`;
+      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${textBlockToHtml(b.text || "")}</div>`;
     }
     _bodyHtml(b) {
       switch (b.type) {
@@ -2405,7 +2412,7 @@ ${listStyleProseCss(".doc-blocks")}
               if (plain.startsWith("/")) this._openSlash(el, plain.slice(1));
               else this._closeSlash();
             }
-            b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, "");
+            b.text = textBlockFromHtml(el.innerHTML);
           } else if (f === "code") b.code = el.innerText.replace(/\n$/, "");
           else if (f === "list") {
             const items = readListDom(el, (h) => inlineHtmlToMd(h));
@@ -4012,13 +4019,14 @@ ${listStyleProseCss(".doc-blocks")}
     if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
     return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
   }
+  var QUOTE_LINE = /^\s*>\s?/;
   function hardBreak(escaped, raw) {
     return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
   }
   function renderMarkdown(md, opts = {}) {
     return renderDoc(md, false, opts).html;
   }
-  function renderDoc(md, ids, opts = {}) {
+  function renderDoc(md, ids, opts = {}, nest = null) {
     const autoEmbed = !!opts.autoEmbed;
     const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
     const out = [];
@@ -4033,9 +4041,9 @@ ${listStyleProseCss(".doc-blocks")}
     let inCode = false;
     let codeBuf = [];
     let codeLang2 = "";
-    const footnotes = [];
-    const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
-    const linkKeep = [];
+    const footnotes = nest ? nest.footnotes : [];
+    const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
+    const linkKeep = nest ? nest.linkKeep : [];
     const flushList = () => {
     };
     let i = 0;
@@ -4104,10 +4112,16 @@ ${listStyleProseCss(".doc-blocks")}
         i = run.next;
         continue;
       }
-      if (/^\s*>\s?/.test(line)) {
+      if (QUOTE_LINE.test(line)) {
         flushList();
-        emit(`<blockquote>${inline(escapeKeepingLinks(line.replace(/^\s*>\s?/, ""), linkKeep), fn)}</blockquote>`, i, i);
-        i++;
+        const quoteStart = i;
+        const inner = [];
+        while (i < lines.length && QUOTE_LINE.test(lines[i])) {
+          inner.push(lines[i].replace(QUOTE_LINE, ""));
+          i++;
+        }
+        const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes }).html;
+        emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
         continue;
       }
       if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
@@ -4159,6 +4173,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     flushList();
     if (inCode) emit(renderFence(codeLang2, codeBuf, fn), fenceStart, lines.length - 1);
+    if (nest) return { html: out.join("\n"), blocks: ranges };
     const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
     if (referenced.length) {
       const items = referenced.map((f) => {
@@ -4269,8 +4284,8 @@ ${listStyleProseCss(".doc-blocks")}
         const text = inline2(n.innerHTML);
         if (text.trim()) inner.push(text);
       }
-      const lines = flat(inner);
-      out.push({ quote: true, text: lines.length ? lines.join("\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : ">" });
+      const paras = flat(inner);
+      out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
       return;
     }
     if (t === "UL" || t === "OL") {
@@ -4321,14 +4336,13 @@ ${listStyleProseCss(".doc-blocks")}
     let run = null;
     const closeRun = () => {
       if (!run) return;
-      while (run.length && run[0] === ">") run.shift();
-      while (run.length && run[run.length - 1] === ">") run.pop();
-      if (run.length) blocks2.push(run.join("\n"));
+      if (run.length) blocks2.push(run.join("\n>\n"));
       run = null;
     };
     for (const b of out) {
       if (b && typeof b === "object" && b.quote) {
-        (run ||= []).push(b.text);
+        run ||= [];
+        if (b.text) run.push(b.text);
         continue;
       }
       closeRun();
@@ -4374,6 +4388,7 @@ ${listStyleProseCss(".doc-blocks")}
   .surface > :last-child { margin-bottom: 0; }
   .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
   .surface blockquote + blockquote { margin-top: -.7em; }
+  .surface blockquote > :last-child { margin-bottom: 0; }
   .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
   .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
   .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
@@ -4551,7 +4566,42 @@ ${listStyleProseCss(".doc-blocks")}
     _formatBlock(tag) {
       const sel = this._sel();
       const inside = sel && this._closest(sel.anchorNode, tag);
+      const line = inside && tag === "BLOCKQUOTE" ? this._quoteLine(inside, sel.anchorNode) : null;
+      if (line) {
+        this._liftLine(inside, line);
+        return;
+      }
       document.execCommand("formatBlock", false, inside ? "p" : tag.toLowerCase());
+    }
+    /** The P or DIV directly inside `quote` that holds `node`, or null. */
+    _quoteLine(quote, node) {
+      let n = node;
+      while (n && n.parentNode !== quote) n = n.parentNode;
+      return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
+    }
+    /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
+     *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
+     *  back to markdown (measured in Chrome, 2026-09-16). */
+    _liftLine(quote, line) {
+      const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
+      const rest = document.createElement("blockquote");
+      while (line.nextSibling) rest.appendChild(line.nextSibling);
+      const p = document.createElement("p");
+      while (line.firstChild) p.appendChild(line.firstChild);
+      if (!p.firstChild) p.innerHTML = "<br>";
+      line.remove();
+      quote.after(p);
+      if (has(rest)) p.after(rest);
+      if (!has(quote)) quote.remove();
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(p);
+        r.collapse(false);
+        const s = this._sel();
+        s.removeAllRanges();
+        s.addRange(r);
+      } catch {
+      }
     }
     /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
     _toggleCode() {
@@ -4612,10 +4662,16 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const quote = sel && this._closest(sel.anchorNode, "BLOCKQUOTE");
       if (quote && sel.isCollapsed) {
-        const line = this._closest(sel.anchorNode, "DIV") || this._closest(sel.anchorNode, "P") || quote;
-        if (!String(line.textContent || "").trim()) {
+        const line = this._quoteLine(quote, sel.anchorNode);
+        if (!String((line || quote).textContent || "").trim()) {
           e.preventDefault();
-          document.execCommand("outdent");
+          if (line) this._liftLine(quote, line);
+          else {
+            const p = document.createElement("p");
+            p.innerHTML = "<br>";
+            quote.replaceWith(p);
+            this._caretIn(p);
+          }
           this._changed();
         }
       }
@@ -15424,9 +15480,13 @@ ${listStyleProseCss(".doc-blocks")}
           const lv = Math.min(3, Math.max(1, b.level || 2));
           return `<h${lv}>${inlineMdToHtml(b.text || "")}</h${lv}>`;
         }
+        // sow-350: a quote renders through the renderer the feed uses for the published note, so its paragraphs (and
+        // any list inside it) show exactly as they will publish. A callout keeps the quote look, with the published
+        // callout's line breaks: every line its own, so a blank line stays a blank line.
         case "quote":
+          return renderMarkdown(serializeBlocks([b]));
         case "callout":
-          return `<blockquote>${inlineMdToHtml(b.text || "")}</blockquote>`;
+          return `<blockquote>${String(b.text || "").split("\n").map((l) => inlineMdToHtml(l)).join("<br>")}</blockquote>`;
         case "code":
           return `<pre><code>${esc(b.code || "")}</code></pre>`;
         case "list": {
@@ -16240,6 +16300,10 @@ ${listStyleProseCss(".doc-blocks")}
   .body { margin-top:10px; font-size:14.5px; line-height:1.6; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
+  /* sow-350: a quote had no style here, so a published note's quote took the browser's indent while the composer
+     previewed a ruled quote. It now draws as the preview does, one rule around all of its paragraphs. */
+  .body blockquote { margin:0 0 .7em; padding:2px 0 2px 12px; border-left:3px solid var(--line); color:var(--muted); }
+  .body blockquote > :last-child { margin-bottom:0; }
   .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--bg, rgba(0,0,0,.05)); padding:10px; border-radius:8px; overflow:auto; }
   .link { display:inline-flex; align-items:center; gap:6px; margin-top:10px; font-size:12.5px; color:var(--brand); text-decoration:none; }
@@ -24473,6 +24537,7 @@ From the author:
   .body li > ul,.body li > ol { margin:.25em 0 0; }
   ${listStyleProseCss(".body")}
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
+  .body blockquote > :last-child { margin-bottom:0; } /* sow-350: a quote holds its paragraphs */
   /* sow-062 review feedback: GFM tables now render as real tables, so they need borders and, on a phone,
      their own horizontal scroll rather than pushing the article wider than the viewport. */
   .body table { display:block; overflow-x:auto; max-width:100%; border-collapse:collapse; margin:0 0 1.2em; font-size:14.5px; }

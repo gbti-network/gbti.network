@@ -97,13 +97,15 @@ function blockOf(n, out) {
     return;
   }
   if (t === 'BLOCKQUOTE') {
-    // The client renderer draws every `> ` line as its own <blockquote>, so consecutive quotes here are ONE quote
-    // in the markdown (joined with a newline, not a blank line); an empty quote is the `>` line between two
-    // paragraphs of a quote. domToMarkdown fuses the run.
+    // sow-350: the client renderer draws a quote as ONE <blockquote> holding its paragraphs (and any list), as the
+    // site build does. Each block inside is a paragraph of the quote, so they are joined with a bare `>` line, which
+    // is also what a browser's Enter inside a quote (a new DIV or P) means: a new paragraph, as it is at the root.
+    // Joining them with a plain newline, as this did when the renderer drew one quote per line, reads back as ONE
+    // paragraph on the published page. A line break inside a paragraph (<br>) stays a hard break.
     const inner = [];
     if (hasBlockChild(n)) walk(n, inner); else { const text = inline(n.innerHTML); if (text.trim()) inner.push(text); }
-    const lines = flat(inner);
-    out.push({ quote: true, text: lines.length ? lines.join('\n').split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n') : '>' });
+    const paras = flat(inner);
+    out.push({ quote: true, text: paras.length ? paras.join('\n\n').split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n') : '' });
     return;
   }
   if (t === 'UL' || t === 'OL') {
@@ -147,18 +149,18 @@ function blockOf(n, out) {
 export function domToMarkdown(root) {
   const out = [];
   walk(root, out);
-  // Fuse a run of quote blocks into one quote, dropping the empty `>` lines at either end of the run.
+  // Fuse a run of adjacent quote elements into one quote of several paragraphs, dropping the empty ones. The
+  // surface draws adjacent quotes as one (the stylesheet pulls them together), so that is what is saved. A browser
+  // can leave two quotes side by side while editing, and an empty quote is what a cleared quote line leaves.
   const blocks = [];
   let run = null;
   const closeRun = () => {
     if (!run) return;
-    while (run.length && run[0] === '>') run.shift();
-    while (run.length && run[run.length - 1] === '>') run.pop();
-    if (run.length) blocks.push(run.join('\n'));
+    if (run.length) blocks.push(run.join('\n>\n'));
     run = null;
   };
   for (const b of out) {
-    if (b && typeof b === 'object' && b.quote) { (run ||= []).push(b.text); continue; }
+    if (b && typeof b === 'object' && b.quote) { run ||= []; if (b.text) run.push(b.text); continue; }
     closeRun();
     if (typeof b === 'string' && b.trim()) blocks.push(b);
   }

@@ -59,6 +59,10 @@ const CSS = `
   .body { margin-top:10px; font-size:14.5px; line-height:1.6; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
+  /* sow-350: a quote had no style here, so a published note's quote took the browser's indent while the composer
+     previewed a ruled quote. It now draws as the preview does, one rule around all of its paragraphs. */
+  .body blockquote { margin:0 0 .7em; padding:2px 0 2px 12px; border-left:3px solid var(--line); color:var(--muted); }
+  .body blockquote > :last-child { margin-bottom:0; }
   .body a { color:var(--accent, var(--brand)); }
   .body pre { background:var(--bg, rgba(0,0,0,.05)); padding:10px; border-radius:8px; overflow:auto; }
   .link { display:inline-flex; align-items:center; gap:6px; margin-top:10px; font-size:12.5px; color:var(--brand); text-decoration:none; }

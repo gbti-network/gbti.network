@@ -20121,13 +20121,14 @@ function tableAlignments(line) {
   if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
   return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
 }
+var QUOTE_LINE = /^\s*>\s?/;
 function hardBreak(escaped, raw) {
   return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
 }
 function renderMarkdown(md, opts = {}) {
   return renderDoc(md, false, opts).html;
 }
-function renderDoc(md, ids, opts = {}) {
+function renderDoc(md, ids, opts = {}, nest = null) {
   const autoEmbed = !!opts.autoEmbed;
   const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
@@ -20142,9 +20143,9 @@ function renderDoc(md, ids, opts = {}) {
   let inCode = false;
   let codeBuf = [];
   let codeLang = "";
-  const footnotes = [];
-  const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
-  const linkKeep = [];
+  const footnotes = nest ? nest.footnotes : [];
+  const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
+  const linkKeep = nest ? nest.linkKeep : [];
   const flushList = () => {
   };
   let i = 0;
@@ -20213,10 +20214,16 @@ function renderDoc(md, ids, opts = {}) {
       i = run.next;
       continue;
     }
-    if (/^\s*>\s?/.test(line)) {
+    if (QUOTE_LINE.test(line)) {
       flushList();
-      emit(`<blockquote>${inline(escapeKeepingLinks(line.replace(/^\s*>\s?/, ""), linkKeep), fn)}</blockquote>`, i, i);
-      i++;
+      const quoteStart = i;
+      const inner = [];
+      while (i < lines.length && QUOTE_LINE.test(lines[i])) {
+        inner.push(lines[i].replace(QUOTE_LINE, ""));
+        i++;
+      }
+      const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes }).html;
+      emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
       continue;
     }
     if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
@@ -20268,6 +20275,7 @@ function renderDoc(md, ids, opts = {}) {
   }
   flushList();
   if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);
+  if (nest) return { html: out.join("\n"), blocks: ranges };
   const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
   if (referenced.length) {
     const items = referenced.map((f) => {

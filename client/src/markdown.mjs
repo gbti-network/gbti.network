@@ -229,6 +229,9 @@ export function tableAlignments(line) {
  * @returns {{ html: string, blocks: Array<{start:number,end:number}|null> }} null range = synthesized
  *          (the footnotes section), which has no source lines and is not editable.
  */
+/** A quote line: optional indent, `>`, and one optional space that belongs to the marker. */
+const QUOTE_LINE = /^\s*>\s?/;
+
 export function renderMarkdownWithBlocks(md) {
   return renderDoc(md, true);
 }
@@ -249,7 +252,10 @@ export function renderMarkdown(md, opts = {}) {
   return renderDoc(md, false, opts).html;
 }
 
-function renderDoc(md, ids, opts = {}) {
+// sow-350: `nest` is set only for the document INSIDE a quote. It shares the footnote state and the link store with
+// the document around it, so a reference inside a quote resolves and counts, and it leaves the footnote section
+// and the link restore to the outer call, which runs them once for the whole document.
+function renderDoc(md, ids, opts = {}, nest = null) {
   const autoEmbed = !!opts.autoEmbed;
   const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
@@ -263,9 +269,9 @@ function renderDoc(md, ids, opts = {}) {
   let inCode = false;
   let codeBuf = [];
   let codeLang = '';
-  const footnotes = []; // GFM footnote definitions, rendered as one section at the end (like the site build)
-  const fn = { ids: collectFootnoteIds(lines), counts: new Map() }; // known def ids + per-id reference counts
-  const linkKeep = []; // attributed <a> tags extracted by escapeKeepingLinks, restored in one pass at the end
+  const footnotes = nest ? nest.footnotes : []; // GFM footnote definitions, rendered as one section at the end (like the site build)
+  const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: new Map() }; // known def ids + per-id reference counts
+  const linkKeep = nest ? nest.linkKeep : []; // attributed <a> tags extracted by escapeKeepingLinks, restored in one pass at the end
   // Lists are taken as whole runs where they start (see the list branch below), so there is nothing left to flush
   // at a block boundary; the calls stay as the seams they mark.
   const flushList = () => {};
@@ -313,7 +319,22 @@ function renderDoc(md, ids, opts = {}) {
       emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
       i = run.next; continue;
     }
-    if (/^\s*>\s?/.test(line)) { flushList(); emit(`<blockquote>${inline(escapeKeepingLinks(line.replace(/^\s*>\s?/, ''), linkKeep), fn)}</blockquote>`, i, i); i++; continue; }
+    // sow-350: a quote is ONE block for its whole run of `>` lines, and what it holds is a document of its own, as
+    // CommonMark and the site build have it: a bare `>` line separates paragraphs exactly as a blank line does
+    // outside a quote, and a list or a nested quote inside it renders as one. This used to emit one <blockquote> per
+    // LINE, so a quote of three paragraphs drew as five boxes, two of them empty, everywhere this renderer runs (the
+    // Shares feed, the reader, the comment editor, the WorkBench Preview). The run's source range is the block's
+    // range, as a list's is; the blocks inside carry no stamp of their own. A bare video line inside a quote stays
+    // a line (autoEmbed is off in there), as it always was.
+    if (QUOTE_LINE.test(line)) {
+      flushList();
+      const quoteStart = i;
+      const inner = [];
+      while (i < lines.length && QUOTE_LINE.test(lines[i])) { inner.push(lines[i].replace(QUOTE_LINE, '')); i++; }
+      const body = renderDoc(inner.join('\n'), false, {}, { fn, linkKeep, footnotes }).html;
+      emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
+      continue;
+    }
     if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushList(); emit('<hr/>', i, i); i++; continue; }
     // GFM table: a header row followed by a delimiter row, then body rows until a blank line or a row with
     // no pipe. Without this the pipes fell through to the paragraph gather and rendered as literal text,
@@ -366,6 +387,7 @@ function renderDoc(md, ids, opts = {}) {
   }
   flushList();
   if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);
+  if (nest) return { html: out.join('\n'), blocks: ranges }; // sow-350: the outer document finishes the job
   // The footnote section: only REFERENCED definitions render (GFM drops the rest), with one back arrow per
   // reference occurrence (matching the disambiguated fnref ids), so every jump down has a jump back.
   const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);

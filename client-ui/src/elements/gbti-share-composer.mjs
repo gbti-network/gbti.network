@@ -15,7 +15,8 @@ import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagI
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
-import { parseBlocks, inlineMdToHtml, isDangerousUrl } from '../markdown-blocks.mjs';
+import { parseBlocks, serializeBlocks, inlineMdToHtml, isDangerousUrl } from '../markdown-blocks.mjs';
+import { renderMarkdown } from '../../../client/src/markdown.mjs'; // sow-350: a quote previews as the feed draws it
 
 // sow-204: the locked-state list moved to SHARE_LOCKED_STATES in share-post-core.mjs with the branch
 // decision that read it. Two copies of a membership-state list is how the affordance and the gate drift apart.
@@ -583,7 +584,11 @@ class GbtiShareComposer extends GbtiElement {
     switch (b.type) {
       case 'members': return ''; // the members-only split marker is meaningless in a short share note
       case 'heading': { const lv = Math.min(3, Math.max(1, b.level || 2)); return `<h${lv}>${inlineMdToHtml(b.text || '')}</h${lv}>`; }
-      case 'quote': case 'callout': return `<blockquote>${inlineMdToHtml(b.text || '')}</blockquote>`;
+      // sow-350: a quote renders through the renderer the feed uses for the published note, so its paragraphs (and
+      // any list inside it) show exactly as they will publish. A callout keeps the quote look, with the published
+      // callout's line breaks: every line its own, so a blank line stays a blank line.
+      case 'quote': return renderMarkdown(serializeBlocks([b]));
+      case 'callout': return `<blockquote>${String(b.text || '').split('\n').map((l) => inlineMdToHtml(l)).join('<br>')}</blockquote>`;
       case 'code': return `<pre><code>${esc(b.code || '')}</code></pre>`;
       case 'list': {
         const items = (Array.isArray(b.items) ? b.items : []).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join('');

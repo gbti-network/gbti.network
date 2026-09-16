@@ -46,6 +46,7 @@ const CSS = `
   .surface > :last-child { margin-bottom: 0; }
   .surface blockquote { margin: 0 0 .7em; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
   .surface blockquote + blockquote { margin-top: -.7em; }
+  .surface blockquote > :last-child { margin-bottom: 0; }
   .surface ul, .surface ol { margin: 0 0 .7em 1.3em; padding: 0; }
   .surface pre { margin: 0 0 .7em; padding: 10px 12px; border-radius: 8px; background: var(--ink-2, #25232b); color: #e6e4ee; font: 13px/1.5 var(--f-mono, ui-monospace, monospace); white-space: pre-wrap; }
   .surface code { font-family: var(--f-mono, ui-monospace, monospace); font-size: .92em; background: var(--tint, rgba(127,127,127,.15)); padding: .1em .35em; border-radius: 4px; }
@@ -175,7 +176,37 @@ class GbtiProseEditor extends GbtiElement {
   _formatBlock(tag) {
     const sel = this._sel();
     const inside = sel && this._closest(sel.anchorNode, tag);
+    // sow-350: a rendered quote holds its paragraphs as <p> elements, and formatBlock('p') on a line that is already
+    // a <p> changes nothing (measured in Chrome), so the control could not take a quote off. That line is lifted out
+    // here instead. A quote the control has just made holds bare text, and formatBlock still lifts that cleanly.
+    const line = inside && tag === 'BLOCKQUOTE' ? this._quoteLine(inside, sel.anchorNode) : null;
+    if (line) { this._liftLine(inside, line); return; }
     document.execCommand('formatBlock', false, inside ? 'p' : tag.toLowerCase());
+  }
+  /** The P or DIV directly inside `quote` that holds `node`, or null. */
+  _quoteLine(quote, node) {
+    let n = node;
+    while (n && n.parentNode !== quote) n = n.parentNode;
+    return n && n.nodeType === 1 && /^(P|DIV)$/.test(String(n.tagName).toUpperCase()) ? n : null;
+  }
+  /** Take one paragraph out of a quote; the paragraphs after it stay quoted, below it. Moved on the DOM rather than
+   *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
+   *  back to markdown (measured in Chrome, 2026-09-16). */
+  _liftLine(quote, line) {
+    const has = (el) => !!(el.textContent.trim() || el.querySelector('img, [data-embed-url]'));
+    const rest = document.createElement('blockquote');
+    while (line.nextSibling) rest.appendChild(line.nextSibling);
+    const p = document.createElement('p');
+    while (line.firstChild) p.appendChild(line.firstChild);
+    if (!p.firstChild) p.innerHTML = '<br>';
+    line.remove();
+    quote.after(p);
+    if (has(rest)) p.after(rest);
+    if (!has(quote)) quote.remove();
+    try {
+      const r = document.createRange(); r.selectNodeContents(p); r.collapse(false);
+      const s = this._sel(); s.removeAllRanges(); s.addRange(r);
+    } catch { /* focus alone is enough */ }
   }
   /** Inline code has no execCommand: wrap the selection in <code>, or unwrap the <code> the caret sits in. */
   _toggleCode() {
@@ -223,9 +254,16 @@ class GbtiProseEditor extends GbtiElement {
     }
     const quote = sel && this._closest(sel.anchorNode, 'BLOCKQUOTE');
     if (quote && sel.isCollapsed) {
-      // Enter on an empty quote line leaves the quote (outdent is how a browser lifts a line out of a blockquote).
-      const line = this._closest(sel.anchorNode, 'DIV') || this._closest(sel.anchorNode, 'P') || quote;
-      if (!String(line.textContent || '').trim()) { e.preventDefault(); document.execCommand('outdent'); this._changed(); }
+      // Enter on an empty quote line leaves the quote. sow-350: a paragraph line is lifted on the DOM, because
+      // outdent left the text typed next wrapped in the quote's muted colour and a stray break in the paragraph
+      // below. An empty quote with no paragraph inside (the button makes those) becomes an empty paragraph.
+      const line = this._quoteLine(quote, sel.anchorNode);
+      if (!String((line || quote).textContent || '').trim()) {
+        e.preventDefault();
+        if (line) this._liftLine(quote, line);
+        else { const p = document.createElement('p'); p.innerHTML = '<br>'; quote.replaceWith(p); this._caretIn(p); }
+        this._changed();
+      }
     }
   }
   _caretIn(el) {
