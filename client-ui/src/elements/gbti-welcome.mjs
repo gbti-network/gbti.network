@@ -582,11 +582,11 @@ class GbtiWelcome extends GbtiElement {
   _railHtml() {
     // sow-207 QA: the rail was PURELY positional (`_step > i`), which resume makes visibly wrong. A member who
     // skipped socials but followed members and picked topics now resumes ON socials, and a positional rail would
-    // then show Members and Topics as still to-do, re-asking for work already finished. Mixing in the real
-    // per-step flags keeps a check meaning "this is done" rather than "you walked past this".
+    // then show Members and Topics as still to-do, re-asking for work already finished. sow-343: the real flags
+    // ALONE decide, so a check means "this is done", never "you walked past this" or "the link opened a later step".
     const done = this._stepDone();
     const rows = STEPS.map((s, i) => {
-      const isDone = this._done || this._step > i || Boolean(done[i]);
+      const isDone = Boolean(done[i]);
       const isActive = !this._done && this._step === i;
       const cls = `rstep${isDone ? ' done' : ''}${isActive ? ' active' : ''}`;
       const mark = isDone ? '&#10003;' : String(i + 1);
@@ -778,7 +778,7 @@ class GbtiWelcome extends GbtiElement {
     const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? 'Close' : '+ More platforms'}</button>` : '';
     return `
       <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. ${this._membership === 'paid' ? 'Continue adds them to your public profile.' : 'We keep them on your account and add them to your public profile once your membership is paid.'}</p>
-      ${this._socialError ? `<p class="note" role="alert" style="color:var(--accent)">${esc(this._socialError)}</p>` : ''}
+      ${this._socialError ? `<div class="callout" role="alert" style="margin-bottom:12px"><span class="gl">&#9888;</span><span>${esc(this._socialError)}</span></div>` : ''}
       ${rows}
       ${more}
       ${picker}`;

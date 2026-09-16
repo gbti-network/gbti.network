@@ -18,6 +18,7 @@ import './gbti-content-editor.mjs';
 import './gbti-share-list.mjs'; // sow-304: the Shares tab
 import './gbti-saved.mjs';
 import './gbti-subscriptions.mjs';
+import './gbti-onboarding-progress.mjs'; // sow-343: the onboarding card in the Overview banner slot
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
@@ -908,9 +909,8 @@ class GbtiWorkspace extends GbtiElement {
     const tileHtml = visibleTiles(tiles, TABS, this._authoring()) // sow-204: see visibleTiles in workspace-core
       .map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? '' : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join('');
     const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
-    // SOW-075: a trial member can author + save private drafts but cannot publish; the Overview gave no
-    // explanation. This banner makes the drafts-only / paid-to-publish reality clear where the trial member spends time.
-    // sow-316: a paid-but-not-Curator member gets the same banner slot as a trial member. One or the other, never both.
+    // SOW-075 / sow-316: the banner slot. A trial member (drafts only; publishing is paid) or a paid member below Curator
+    // gets ONE banner, never both. sow-343: the onboarding card sits under it and hides itself once setup is done.
     const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring()); // the copy decisions live in workspace-core
     const trialHtml = !tb ? ''
       : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div>`
@@ -920,7 +920,7 @@ class GbtiWorkspace extends GbtiElement {
       : `<p class="muted">No pull requests need your attention.</p>`;
     return `<div class="ov">
       <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
-      ${trialHtml}
+      ${trialHtml}<gbti-onboarding-progress></gbti-onboarding-progress>
       <div class="ov-tiles">${tileHtml}</div>
       <h3 class="ov-h3">Pull requests</h3>
       ${att}

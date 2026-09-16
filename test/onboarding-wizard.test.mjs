@@ -220,6 +220,15 @@ test('a failed save keeps the member on the socials step with the reason', async
   assert.equal(el._socialSaving, false);
 });
 
+test('the rail ticks only finished steps, even when a link opened a later step', () => {
+  const { el } = wizard({ _step: 3, _discordJoined: false, _chanFollowed: new Set(['x']) });
+  const ticks = [...el._railHtml().matchAll(/<button class="rstep([^"]*)"/g)].map((m) => m[1].includes('done'));
+  assert.deepEqual(ticks, [false, true, false, false, false], 'Discord was not done, so it must not show a tick');
+  el._done = true;
+  const atEnd = [...el._railHtml().matchAll(/<button class="rstep([^"]*)"/g)].map((m) => m[1].includes('done'));
+  assert.deepEqual(atEnd, [false, true, false, false, false], 'finishing the wizard does not tick skipped steps');
+});
+
 // ---- wiring that only the source shows ----
 
 const SRC = read('client-ui/src/elements/gbti-welcome.mjs');
