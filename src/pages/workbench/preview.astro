@@ -520,7 +520,11 @@ const labelOf = CATEGORY_LABELS;
         set: (v: string) => void;
       };
       const bodyDoc: PvDoc = { attr: 'blk', ranges: [], get: () => String(draft.body || ''), set: (v) => { draft.body = v; } };
-      const noteDoc: PvDoc = { attr: 'nblk', ranges: [], get: () => String(draft.authorNote || ''), set: (v) => { draft.authorNote = v; } };
+      const noteDoc: PvDoc = { attr: 'nblk', ranges: [], get: () => String(draft.authorNote || ''), set: (v) => { draft.authorNote = noteAfterCommit(v); } };
+      // sow-358: an edit is applied against what the card SHOWS. For an item with no note that is the
+      // placeholder, without which the first note typed into it could not be committed at all (see
+      // noteEditSource). Every read of a document's source for range maths goes through this.
+      const srcOf = (doc: PvDoc) => (doc === noteDoc ? noteEditSource(doc.get(), editing) : doc.get());
       let noteMeta: any = null;
       const renderFromSource = async () => {
         const { renderMarkdownWithBlocks, renderMarkdown } = await import('../../../client/src/markdown.mjs');
@@ -682,7 +686,7 @@ const labelOf = CATEGORY_LABELS;
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
-      const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
+      const { buildAuthorNoteHtml, noteEditSource, noteAfterCommit } = await import('../../lib/author-note.mjs');
       const { planTitleEdit } = await import('../../lib/preview-title.mjs');
 
       const editCtl = $('[data-pv-editctl]') as HTMLElement | null;
@@ -735,7 +739,7 @@ const labelOf = CATEGORY_LABELS;
       const commitInner = async (doc: PvDoc, el: HTMLElement) => {
         const range = doc.ranges[Number(el.dataset[doc.attr])];
         if (!range) return;
-        const lines = doc.get().replace(/\r\n/g, '\n').split('\n');
+        const lines = srcOf(doc).replace(/\r\n/g, '\n').split('\n');
         const before = lines.slice(range.start, range.end + 1);
         const next = applyBlockEdit(before.join('\n'), readBlockDom(el));
         // null means the edit could not be applied safely (the source range is not the shape the DOM claims);
@@ -758,7 +762,7 @@ const labelOf = CATEGORY_LABELS;
         const idx = Number(el.dataset[doc.attr]);
         const range = doc.ranges[idx];
         if (!range) return false;
-        const next = planBlockDelete(doc.get(), range);
+        const next = planBlockDelete(srcOf(doc), range);
         if (!next) return false; // refused: a bad range, or this is the last content in the document
         doc.set(next.join('\n'));
         markDirty();
@@ -790,7 +794,7 @@ const labelOf = CATEGORY_LABELS;
         try {
           const range = doc.ranges[Number(el.dataset[doc.attr])];
           if (!range) return;
-          const lines = doc.get().replace(/\r\n/g, '\n').split('\n');
+          const lines = srcOf(doc).replace(/\r\n/g, '\n').split('\n');
           const before = lines.slice(range.start, range.end + 1);
           const next = computeNext(before);
           if (!next || next.join('\n') === before.join('\n')) return;
@@ -812,7 +816,7 @@ const labelOf = CATEGORY_LABELS;
       const sourceOf = (doc: PvDoc, el: HTMLElement) => {
         const range = doc.ranges[Number(el.dataset[doc.attr])];
         if (!range) return '';
-        return doc.get().replace(/\r\n/g, '\n').split('\n').slice(range.start, range.end + 1).join('\n');
+        return srcOf(doc).replace(/\r\n/g, '\n').split('\n').slice(range.start, range.end + 1).join('\n');
       };
 
       // The identity-scoped client, built once and shared by Save and the image paste. currentIdentity, not
@@ -1198,7 +1202,7 @@ const labelOf = CATEGORY_LABELS;
         if (!src.trim() && !editing) { card.hidden = true; return; }
         let bodyHtml: string;
         if (editing) {
-          const r = mdBlocks(src.trim() ? src : 'Add a note for readers.');
+          const r = mdBlocks(noteEditSource(src, true));
           noteDoc.ranges = r.blocks;
           bodyHtml = String(r.html).replace(/ data-blk="/g, ' data-nblk="');
         } else {

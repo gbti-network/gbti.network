@@ -61,3 +61,33 @@ export function buildAuthorNoteHtml({ name, href, avatarUrl, bodyHtml } = {}) {
     + `<div class="${b.body}" style="${b.bodyStyle}">${bodyHtml ?? ''}</div>`
     + `</article>`;
 }
+
+/**
+ * sow-358: the placeholder the preview shows in edit mode when an item has no note yet, so a note can be
+ * WRITTEN there rather than only edited.
+ */
+export const NOTE_PLACEHOLDER = 'Add a note for readers.';
+
+/**
+ * The source a note edit is applied against. An empty note has no source at all, and a block commit parses the
+ * source range it is given: an empty string parses to zero blocks, so applyBlockEdit refuses the write (its
+ * fail-safe, since a range that does not parse to exactly one block would corrupt a neighbour). The first note
+ * anyone typed into the placeholder was therefore dropped in silence, and because nothing committed, nothing
+ * marked the draft dirty either, so no Save button appeared. Editing against the placeholder gives the commit
+ * exactly the one block the rendered card shows.
+ */
+export function noteEditSource(src, editing) {
+  const s = String(src ?? '');
+  return editing && !s.trim() ? NOTE_PLACEHOLDER : s;
+}
+
+/**
+ * What a note commit stores. The placeholder is prompt text rather than content, so a commit that leaves it
+ * word for word stores nothing: an untouched card must not turn into a note that says "Add a note for readers."
+ * An emptied note stores the empty string, which is how a note is cleared (an ABSENT note preserves, an empty
+ * one clears, and that asymmetry is the draft store's contract).
+ */
+export function noteAfterCommit(next) {
+  const s = String(next ?? '');
+  return s.trim() === NOTE_PLACEHOLDER ? '' : s;
+}
