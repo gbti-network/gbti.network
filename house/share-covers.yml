@@ -288,6 +288,11 @@ covers:
     file: 20260917003922-what-s-new-in-php-8-6-4b0fd53c.webp
     sha256: 4b0fd53c3889d25c8fa23314efd2448f267af4ba33d8632ee3f9e1ee82974578
     copiedAt: '2026-09-17'
+  gbtilabs/20260917235651-running-the-claude-commerce-agent-on-woocommerce:
+    source: https://developer.woocommerce.com/wp-content/uploads/sites/2/2026/09/Introducing-the-WooCommerce-Claude-Commerce-Agent-thumbnail-1789415571.png
+    file: 20260917235651-running-the-claude-commerce-agent-on-woocommerce-c9f44820.webp
+    sha256: c9f4482037aa9fea5a3c7497ba0e1092e96245995875f0f294f56813e6d4037a
+    copiedAt: '2026-09-17'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
