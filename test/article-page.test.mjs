@@ -253,3 +253,28 @@ test('DRIFT: the preview reads the layout from the contract rather than hard-cod
   const preview = fs.readFileSync(new URL('../src/pages/workbench/preview.astro', import.meta.url), 'utf8');
   assert.match(preview, /^\s*applyPreviewShell\(document,/m, 'preview.astro no longer runs the reshape at all');
 });
+
+// sow-352 (owner, 2026-09-16): "on single col mobile view the sidebar arrives after the article content, not before."
+// A one-column grid stacks its children in source order, so the rail has to FOLLOW the article in the source; the
+// two-column page then puts it back on the left by grid position. Both halves are pinned: a rail moved back to the
+// top of the source, or a desktop rule that loses its placement, would each pass the other half alone.
+test('DRIFT: the Journal rail follows the article in the source and is placed left by grid position', () => {
+  const src = componentSrc('ArticleJournal');
+  const col = src.indexOf(`class="${ARTICLE_SHELL.journal.column}"`);
+  const article = src.indexOf('<article id={ART_OVERVIEW_ID}');
+  const rail = src.indexOf(`class="${ARTICLE_SHELL.journal.rail}"`);
+  const close = src.indexOf('class="art-j-close"');
+  const closing = src.indexOf('<slot name="closing" />');
+  assert.ok(col >= 0 && article > col && rail > article && close > rail && closing > close,
+    `expected column, article, rail, then the closing wrapper; got ${JSON.stringify({ col, article, rail, close, closing })}`);
+  const css = fs.readFileSync(new URL('../src/styles/gbti-v3.css', import.meta.url), 'utf8');
+  assert.match(css, /\n\.art-j-rail \{ grid-column: 1; grid-row: 1 \/ span 2;/, 'the two-column page pins the rail to the left, beside both rows');
+  assert.match(css, /\n\.art-j-col, \.art-j-close \{ grid-column: 2; min-width: 0; max-width: 660px; \}/, 'the article and the closing sections share the right column');
+  assert.match(css, /\.art-j-grid \{[^}]*gap: 0 clamp\(/, 'no row gap between the article and the closing sections on the two-column page');
+  const phone = css.match(/@media \(hover: none\) and \(pointer: coarse\) and \(max-width: 640px\), \(max-width: 479px\) \{\n  \.art-j-grid[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(phone, /\.art-j-rail \{[^}]*grid-column: auto; grid-row: auto;/, 'a phone drops the placement, so source order decides');
+  assert.match(phone, /\.art-j-col, \.art-j-close \{ grid-column: auto; \}/);
+  // The WorkBench preview moves the rail after the column only when the contract says so; without it a phone
+  // width preview would still show the rail above the article.
+  assert.equal(ARTICLE_SHELL.journal.railLast, true);
+});

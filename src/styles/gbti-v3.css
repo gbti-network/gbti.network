@@ -1921,12 +1921,14 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
    continuous-compression reasoning as art-e-grid above -- a narrowing desktop browser shrinks this 2-column
    shape smoothly instead of jumping to one column at 900px, a width very much still "usable" for a two-column
    doc shell on a mouse-driven laptop. */
-.art-j-grid { display: grid; grid-template-columns: clamp(160px, 20vw, 212px) minmax(0, 1fr); gap: clamp(20px, 3vw, 34px); padding: 36px clamp(20px, 4vw, 34px) 44px; align-items: start; }
+.art-j-grid { display: grid; grid-template-columns: clamp(160px, 20vw, 212px) minmax(0, 1fr); gap: 0 clamp(20px, 3vw, 34px); padding: 36px clamp(20px, 4vw, 34px) 44px; align-items: start; }
 
-.art-j-rail { position: sticky; top: calc(var(--art-off) + 14px); align-self: start; display: flex; flex-direction: column; gap: 18px; }
+/* sow-352: the rail follows the article in the source (so a phone stacks it after the body); here it is placed by
+   position, left of both the article and the closing sections. */
+.art-j-rail { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: calc(var(--art-off) + 14px); align-self: start; display: flex; flex-direction: column; gap: 18px; }
 .art-j-rail > * + * { padding-top: 16px; border-top: 1px solid var(--line); }
 
-.art-j-col { min-width: 0; max-width: 660px; }
+.art-j-col, .art-j-close { grid-column: 2; min-width: 0; max-width: 660px; }
 /* sow-183: the Edit pill sits in the flow ABOVE the title here (not absolutely positioned like the other
    layouts) -- .art-j-title can wrap to two lines at this column's narrower max-width, and an overlaid pill
    would sit on top of the wrapped text. In normal flow it never collides, at the cost of a little vertical
@@ -1948,7 +1950,8 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
    width; only a real phone/tablet, or the 479px device-agnostic floor, collapses to one column. */
 @media (hover: none) and (pointer: coarse) and (max-width: 640px), (max-width: 479px) {
   .art-j-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-  .art-j-rail { position: static; }
+  .art-j-rail { position: static; grid-column: auto; grid-row: auto; padding-top: 18px; border-top: 1px solid var(--line); }
+  .art-j-col, .art-j-close { grid-column: auto; }
 }
 
 /* ---------------------------------------------------------------------------

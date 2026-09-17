@@ -88,7 +88,9 @@ export function coverDimensions(layout) {
  *     column grid (actions strip, column, aside) and grid children take columns in source order, so a host
  *     rendering only two of them would slot the aside into the 60px actions strip. The preview emits an empty
  *     one rather than pretending the grid is two columns.
- *   - `railLast` records that Editorial's aside is the LAST grid child while Journal's rail is the first.
+ *   - `railLast` records that the rail is the LAST grid child, after the column. Both layouts need it: a phone
+ *     stacks grid children in source order, and Journal's rail follows the article on a phone (sow-352). The
+ *     two-column page places Journal's rail by grid position, so the order changes nothing there.
  *   - `overviewId` is false for Card, whose body wrapper carries no id because it has no rail to anchor.
  */
 export const ARTICLE_SHELL = Object.freeze({
@@ -103,7 +105,7 @@ export const ARTICLE_SHELL = Object.freeze({
     coverBeforeTitle: false, // Journal puts the title first, then the cover inset in the column
     leadIn: 'column',
     spacer: null,
-    railLast: false,
+    railLast: true,
     overviewId: true,
   }),
   editorial: Object.freeze({
