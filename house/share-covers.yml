@@ -283,6 +283,11 @@ covers:
     file: 20260916230629-open-source-infrastructure-deserves-a-business-m-d09184de.webp
     sha256: d09184deeb9d2d6ce0421d1d44e7268aaa73e0d6343359e9d9ce9238a49163c6
     copiedAt: '2026-09-16'
+  gbtilabs/20260917003922-what-s-new-in-php-8-6:
+    source: https://laravelnews.s3.amazonaws.com/featured-images/php-8-6-featured.png
+    file: 20260917003922-what-s-new-in-php-8-6-4b0fd53c.webp
+    sha256: 4b0fd53c3889d25c8fa23314efd2448f267af4ba33d8632ee3f9e1ee82974578
+    copiedAt: '2026-09-17'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
