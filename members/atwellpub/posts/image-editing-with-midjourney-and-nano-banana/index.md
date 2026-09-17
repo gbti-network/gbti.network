@@ -13,6 +13,12 @@ excerpt: >-
 categories:
   - gbti
   - member-tutorials
+tags:
+  - tutorials
+  - image-editing
+  - nano-banana
+  - prompt-engineering
+  - midjourney
 layout: journal
 coverImage: ./images/nice-weather-for-ducks.webp
 redirectFrom:

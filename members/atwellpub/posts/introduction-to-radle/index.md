@@ -10,6 +10,7 @@ publishedAt: 2024-09-21
 updatedAt: 2026-06-13
 excerpt: "In this article we talk about Radle; a WordPress plugin that well help connects WordPress to a Reddit subreddit for synchronized discussion."
 categories: ["devops", "frameworks", "wordpress"]
+tags: ["wordpress-plugins", "gbti", "github-sponsors", "radle", "redditor", "reddit-api"]
 layout: journal
 coverImage: "./images/radle-featured-image-1-1.webp"
 redirectFrom: ["/devops/frameworks/wordpress/introduction-to-radle/"]

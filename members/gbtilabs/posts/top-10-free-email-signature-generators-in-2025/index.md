@@ -10,6 +10,10 @@ excerpt: >-
 categories:
   - business
   - marketing
+tags:
+  - open-source
+  - email-signatures
+  - lists
 layout: journal
 coverImage: ./images/top-free-email-generators-5-.webp
 featured: false

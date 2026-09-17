@@ -9,6 +9,13 @@ excerpt: >-
   humorous and strategic parallels.
 categories:
   - entertainment
+tags:
+  - chelonian
+  - jeff-bezos
+  - blue-origin
+  - elon-musk
+  - entertainment
+  - humor
 layout: journal
 coverImage: >-
   ./images/atwellpub_Jeff_Bezos_on_a_throne_made_of_green_turtle_shell_78ab0eae-0d20-4135-a587-09d5741a21d4.webp

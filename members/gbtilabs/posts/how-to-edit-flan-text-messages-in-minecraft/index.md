@@ -11,6 +11,13 @@ categories:
   - entertainment
   - gaming
   - minecraft
+tags:
+  - tutorials
+  - open-source
+  - minecraft
+  - minecraft-datapack
+  - flan
+  - minecraft-mods
 layout: journal
 coverImage: ./images/flan-datapack-darken-opt-cleanedimized.webp
 featured: false

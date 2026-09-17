@@ -9,6 +9,7 @@ publishedAt: 2025-06-01
 updatedAt: 2025-06-23
 excerpt: "The phrase \"pass the buck\" evolved from 19th-century poker games to everyday language about avoiding responsibility."
 categories: ["entertainment"]
+tags: ["entertainment", "language", "education", "ai-soup-kitchen", "light-reading"]
 layout: journal
 coverImage: "./images/passthebuck.webp"
 redirectFrom: ["/entertainment/what-does-pass-the-buck-mean/"]

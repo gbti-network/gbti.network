@@ -9,6 +9,10 @@ excerpt: >-
   true over time.
 categories:
   - entertainment
+tags:
+  - inspirational
+  - self-help
+  - product-development
 layout: journal
 coverImage: ./images/every-tree-is-a-pipe-dream-1.webp
 featured: false
