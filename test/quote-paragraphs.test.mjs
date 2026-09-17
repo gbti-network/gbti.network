@@ -107,7 +107,7 @@ test('the client renderer agrees with the site build on every quote shape an aut
 
 test('a footnote reference inside a quote still resolves against the document', () => {
   const html = renderMarkdown('> Quoted.[^1]\n>\n> More.\n\n[^1]: The source.');
-  assert.match(html, /<blockquote><p>Quoted\.<sup class="md-fnref"><a href="#fn-1"/);
+  assert.match(html, /<blockquote><p>Quoted\.<sup class="md-fnref" data-fn="1"><a href="#fn-1"/); // sow-355: data-fn
   assert.equal((html.match(/<section class="md-footnotes">/g) || []).length, 1, 'one footnote section, at the end');
   assert.match(html, /<li id="fn-1">The source\./);
 });

@@ -401,12 +401,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return null;
   }
   function isDefaultStyle(word) {
-    const kind = styleKind(word);
-    return !!kind && LIST_STYLE_DEFAULTS[kind] === String(word);
+    const kind2 = styleKind(word);
+    return !!kind2 && LIST_STYLE_DEFAULTS[kind2] === String(word);
   }
   function normalizeListStyle(word, ordered) {
-    const kind = styleKind(word);
-    if (!kind || kind !== (ordered ? "number" : "bullet")) return null;
+    const kind2 = styleKind(word);
+    if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
     return isDefaultStyle(word) ? null : String(word);
   }
   function listStyleClass(style) {
@@ -424,8 +424,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function splitListSuffix(text, ordered, { bare = false } = {}) {
     const m = SUFFIX_RE.exec(String(text ?? ""));
     if (!m) return null;
-    const kind = styleKind(m[2]);
-    if (!kind || kind !== (ordered ? "number" : "bullet")) return null;
+    const kind2 = styleKind(m[2]);
+    if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
     const rest = m[1];
     if (!bare && rest.trim() === "") return null;
     return { style: normalizeListStyle(m[2], !!ordered), rest };
@@ -649,9 +649,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const word = act.slice("style:".length);
       if (word === "default") wantStyle = null;
       else {
-        const kind = styleKind(word);
-        if (!kind) return null;
-        wantOrdered = kind === "number";
+        const kind2 = styleKind(word);
+        if (!kind2) return null;
+        wantOrdered = kind2 === "number";
         wantStyle = normalizeListStyle(word, wantOrdered);
       }
     } else return null;
@@ -667,6 +667,104 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (JSON.stringify(next) === JSON.stringify(norm2)) return null;
     return { ordered: topOrdered, items: next };
   }
+
+  // client/src/underscore-emphasis.mjs
+  var OPAQUE = /\u0000A\d+\u0000|\uE000\d+\uE001|<[^>]*>|&(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);|`[^`\n]*`|\\_/giy;
+  var WS = /\s/u;
+  var PUNCT = /[\p{P}\p{S}]/u;
+  function tokenize(src) {
+    const out = [];
+    let i = 0;
+    while (i < src.length) {
+      OPAQUE.lastIndex = i;
+      const m = OPAQUE.exec(src);
+      if (m) {
+        out.push({ opaque: m[0] });
+        i += m[0].length;
+        continue;
+      }
+      const cp = src.codePointAt(i);
+      const ch = String.fromCodePoint(cp);
+      out.push({ ch });
+      i += ch.length;
+    }
+    return out;
+  }
+  function kind(tok) {
+    if (!tok) return "ws";
+    if (tok.opaque !== void 0) return "punct";
+    if (WS.test(tok.ch)) return "ws";
+    if (PUNCT.test(tok.ch)) return "punct";
+    return "word";
+  }
+  function underscoreEmphasis(html, { em = "<em>", strong = "<strong>", keepEscapes = false } = {}) {
+    const src = String(html ?? "");
+    if (!src.includes("_")) return src;
+    const toks = tokenize(src);
+    const runs = [];
+    for (let i = 0; i < toks.length; i++) {
+      if (toks[i].ch !== "_") continue;
+      let j = i;
+      while (j + 1 < toks.length && toks[j + 1].ch === "_") j++;
+      const before = kind(toks[i - 1]);
+      const after = kind(toks[j + 1]);
+      const left = after !== "ws" && (after !== "punct" || before === "ws" || before === "punct");
+      const right = before !== "ws" && (before !== "punct" || after === "ws" || after === "punct");
+      runs.push({
+        at: i,
+        len: j - i + 1,
+        count: j - i + 1,
+        canOpen: left && (!right || before === "punct"),
+        canClose: right && (!left || after === "punct"),
+        opens: [],
+        closes: []
+      });
+      i = j;
+    }
+    if (!runs.length) return render(toks, /* @__PURE__ */ new Map(), keepEscapes);
+    const emClose = em.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
+    const strongClose = strong.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
+    const stack = [];
+    for (const r of runs) {
+      if (r.canClose) {
+        while (r.count > 0) {
+          let k = stack.length - 1;
+          for (; k >= 0; k--) {
+            const o2 = stack[k];
+            if (o2.count === 0) continue;
+            const oddMatch = (o2.canClose || r.canOpen) && (o2.len + r.len) % 3 === 0 && !(o2.len % 3 === 0 && r.len % 3 === 0);
+            if (!oddMatch) break;
+          }
+          if (k < 0) break;
+          const o = stack[k];
+          const use = o.count >= 2 && r.count >= 2 ? 2 : 1;
+          o.count -= use;
+          r.count -= use;
+          o.opens.unshift(use === 2 ? strong : em);
+          r.closes.push(use === 2 ? strongClose : emClose);
+          stack.length = o.count > 0 ? k + 1 : k;
+        }
+      }
+      if (r.count > 0 && r.canOpen) stack.push(r);
+    }
+    return render(toks, new Map(runs.map((r) => [r.at, r])), keepEscapes);
+  }
+  function render(toks, runAt, keepEscapes) {
+    let out = "";
+    for (let i = 0; i < toks.length; i++) {
+      const r = runAt.get(i);
+      if (r) {
+        out += r.closes.join("") + "_".repeat(r.count) + r.opens.join("");
+        i += r.len - 1;
+        continue;
+      }
+      const t = toks[i];
+      if (t.opaque !== void 0) out += t.opaque === "\\_" && !keepEscapes ? "_" : t.opaque;
+      else out += t.ch;
+    }
+    return out;
+  }
+  var UNDERSCORE_MARK = 'data-md="_"';
 
   // client-ui/src/markdown-blocks.mjs
   var MEMBERS_MARKER = "<!-- members-only -->";
@@ -927,6 +1025,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const tgtAttr = blank ? ' target="_blank"' : "";
     return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${sanitizeInner(inner)}</a>`;
   }
+  var FN_REF_ID = "[A-Za-z0-9_-]+";
+  var FN_REF_RE = new RegExp(`\\[\\^(${FN_REF_ID})\\](?![:(])`, "g");
+  var EM_US = `<em ${UNDERSCORE_MARK}>`;
+  var STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
+  var WORD_CHAR = /[\p{L}\p{N}]/u;
+  function emphasisMark(attrs, all, at, len, star) {
+    if (!/\bdata-md="_"/.test(attrs)) return star;
+    const before = all[at - 1] ?? "";
+    const after = all[at + len] ?? "";
+    return WORD_CHAR.test(before) || WORD_CHAR.test(after) ? star : star.replace(/\*/g, "_");
+  }
   function inlineMdToHtml(md) {
     let src = String(md ?? "");
     const keep = [];
@@ -936,18 +1045,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `\0A${keep.length - 1}\0`;
     });
     let h = src.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    h = h.replace(FN_REF_RE, (_m, id) => {
+      keep.push(`<sup class="md-fnchip" contenteditable="false" data-fn="${id}">${id}</sup>`);
+      return `\0A${keep.length - 1}\0`;
+    });
     h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => isDangerousUrl(url) ? text : `<a href="${String(url).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}">${text}</a>`);
     h = h.replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>");
     h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    h = underscoreEmphasis(h, { em: EM_US, strong: STRONG_US, keepEscapes: true });
     h = h.replace(/~~([^~]+)~~/g, "<s>$1</s>");
     h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
     h = h.replace(/ {2,}\n/g, "<br>");
+    h = h.replace(new RegExp(`\\n(?=\\[\\^${FN_REF_ID}\\]:)`, "g"), '<br data-md="fn">');
     h = h.replace(/\n/g, " ");
     return h.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
   }
   function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
     let s = String(html ?? "");
     const keep = [];
+    s = s.replace(new RegExp(`<sup\\b[^>]*\\bdata-fn="(${FN_REF_ID})"[^>]*>[\\s\\S]*?<\\/sup>`, "gi"), (_m, id) => {
+      keep.push(`[^${id}]`);
+      return `\0A${keep.length - 1}\0`;
+    });
     s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
       const a = parseLinkAttrs(attrs);
       if (!a.href) return inner;
@@ -957,10 +1076,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       keep.push(rawAnchor(a.href, a.rel, a.blank, inner));
       return `\0A${keep.length - 1}\0`;
     });
-    s = s.replace(/<(strong|b)>([\s\S]*?)<\/\1>/gi, "**$2**");
-    s = s.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, "*$2*");
+    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t, attrs, inner, at, all) => {
+      const d = emphasisMark(attrs, all, at, m.length, "**");
+      return `${d}${inner}${d}`;
+    });
+    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t, attrs, inner, at, all) => {
+      const d = emphasisMark(attrs, all, at, m.length, "*");
+      return `${d}${inner}${d}`;
+    });
     s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
     s = s.replace(/<code>([\s\S]*?)<\/code>/gi, "`$1`");
+    s = s.replace(/<br\b[^>]*\bdata-md="fn"[^>]*>/gi, "\n");
     s = s.replace(/<br\s*\/?>/gi, "  \n");
     s = s.replace(/^\s*<div>/i, "");
     s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
@@ -1939,6 +2065,8 @@ ${listStyleProseCss(".doc-blocks")}
   .ce em, .ce i { font-style:italic; }
   .ce s, .ce del { text-decoration:line-through; opacity:.8; }
   .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
+  /* sow-355: a footnote reference is a chip, not text the author types into; it reads back as [^id]. */
+  .md-fnchip { font-family:var(--font-mono, ui-monospace, monospace); font-size:.68em; line-height:1; color:var(--s-green-fg); background:var(--s-surface-2); border:1px solid var(--s-line-2); border-radius:4px; padding:1px 4px; margin:0 1px; vertical-align:super; user-select:all; cursor:default; }
   /* callout */
   .cwrap { margin:8px 0; }
   .cvar { display:inline-flex; align-items:center; gap:5px; margin-bottom:9px; padding:4px 4px 4px 6px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; }
@@ -3596,8 +3724,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/form.mjs
-  function coerceValue(kind, raw) {
-    switch (kind) {
+  function coerceValue(kind2, raw) {
+    switch (kind2) {
       case "boolean":
         return Boolean(raw);
       case "number": {
@@ -3879,7 +4007,8 @@ ${listStyleProseCss(".doc-blocks")}
   };
   var escAttr3 = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   function emphasis(t) {
-    return String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    const starred = String(t).replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
   }
   var SAFE_INNER_TAG2 = /^(?:strong|b|em|i|code|s|del|br)$/i;
   var sanitizeAnchorInner = (html) => String(html ?? "").replace(
@@ -3933,7 +4062,7 @@ ${listStyleProseCss(".doc-blocks")}
         if (!fn.ids.has(id)) return m;
         const n = (fn.counts.get(id) ?? 0) + 1;
         fn.counts.set(id, n);
-        return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
+        return `<sup class="md-fnref" data-fn="${id}"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
       });
     }
     t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)(\{[^}]*\})?/g, (_m, alt, src, title, suffix) => {
@@ -4927,10 +5056,10 @@ ${listStyleProseCss(".doc-blocks")}
       const h = failHint(err);
       this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, "err");
     }
-    _say(el, text, kind) {
+    _say(el, text, kind2) {
       if (el) {
         el.textContent = text;
-        el.className = `msg ${kind || ""}`;
+        el.className = `msg ${kind2 || ""}`;
       }
     }
   };
@@ -6438,8 +6567,8 @@ ${listStyleProseCss(".doc-blocks")}
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(links))}" />`;
     }
     _linkRowHtml(l = {}, i) {
-      const { type, kind, url, label, visibility, ...extra } = l || {};
-      const t = esc(type || kind || "");
+      const { type, kind: kind2, url, label, visibility, ...extra } = l || {};
+      const t = esc(type || kind2 || "");
       const vis = visibility === "members" ? "members" : "public";
       return `<div class="linkrow" data-li="${i}" data-hadvis="${visibility != null ? "1" : "0"}" data-extra="${esc(JSON.stringify(extra))}">
       <div class="lr-top">
@@ -6953,10 +7082,10 @@ ${listStyleProseCss(".doc-blocks")}
     }
     /** Read raw value for a field key from the rendered inputs (DOM side of the pure gatherInput). */
     rawGetter() {
-      return (key, kind) => {
+      return (key, kind2) => {
         const el = this.$(`[data-key="${key}"]`);
         if (!el) return void 0;
-        if (kind === "boolean") return el.checked;
+        if (kind2 === "boolean") return el.checked;
         return el.value;
       };
     }
@@ -8083,11 +8212,11 @@ ${listStyleProseCss(".doc-blocks")}
       this._say("[data-danger-msg]", "Deletion requested. Your private data on this device is cleared. Email privacy@gbti.network to complete erasure of your published content + billing (processed within 30 days). Signing you out…", "ok");
       setTimeout(() => this.emit("gbti:request-signout"), 2500);
     }
-    _say(sel, text, kind) {
+    _say(sel, text, kind2) {
       const el = this.$(sel);
       if (el) {
         el.textContent = text;
-        el.className = `msg ${kind || ""}`;
+        el.className = `msg ${kind2 || ""}`;
       }
     }
   };
@@ -10540,11 +10669,11 @@ ${listStyleProseCss(".doc-blocks")}
     return `${days} days ago`;
   }
   function rowSummary(item, now = /* @__PURE__ */ new Date()) {
-    const kind = typeLabel2(item?.type);
+    const kind2 = typeLabel2(item?.type);
     const who = item?.login ? `by ${item.login}` : "by an unknown member";
     const when = waitedFor(item, now);
     const revised = item?.editedSinceDecision === true ? ", revised since you set it aside" : "";
-    return `${kind} ${who}${when ? `, published ${when}` : ""}${revised}`;
+    return `${kind2} ${who}${when ? `, published ${when}` : ""}${revised}`;
   }
   function decidePrompt(item, decision) {
     const name = item?.title ? `"${item.title}"` : "this item";
@@ -15730,10 +15859,10 @@ ${listStyleProseCss(".doc-blocks")}
         }
       }
     }
-    _say(el, text, kind) {
+    _say(el, text, kind2) {
       if (!el) return;
       el.textContent = text;
-      el.className = `msg ${kind || ""}`;
+      el.className = `msg ${kind2 || ""}`;
     }
   };
   define("gbti-share-composer", GbtiShareComposer);
@@ -21555,28 +21684,28 @@ ${listStyleProseCss(".doc-blocks")}
         this._model[b.dataset.toggle] = b.dataset.val === "on";
         this.render();
       }));
-      const addTag = (kind) => {
-        const inp = this.$(`[data-tag-add="${kind}"]`);
+      const addTag = (kind2) => {
+        const inp = this.$(`[data-tag-add="${kind2}"]`);
         if (!inp) return;
         let raw = inp.value.trim();
         if (!raw) return;
-        const value = kind === "roles" ? slugifyRole(raw) : raw;
-        if (value && !this._model[kind].includes(value)) {
+        const value = kind2 === "roles" ? slugifyRole(raw) : raw;
+        if (value && !this._model[kind2].includes(value)) {
           this._gather();
-          this._model[kind].push(value);
+          this._model[kind2].push(value);
           this.render();
-          this.$(`[data-tag-add="${kind}"]`)?.focus();
+          this.$(`[data-tag-add="${kind2}"]`)?.focus();
         }
       };
-      ["skills", "roles"].forEach((kind) => {
-        const inp = this.$(`[data-tag-add="${kind}"]`);
+      ["skills", "roles"].forEach((kind2) => {
+        const inp = this.$(`[data-tag-add="${kind2}"]`);
         if (inp) inp.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === ",") {
             e.preventDefault();
-            addTag(kind);
+            addTag(kind2);
           }
         });
-        this.$(`[data-tag-btn="${kind}"]`)?.addEventListener("click", () => addTag(kind));
+        this.$(`[data-tag-btn="${kind2}"]`)?.addEventListener("click", () => addTag(kind2));
       });
       this.$$("[data-rm-skill]").forEach((b) => b.addEventListener("click", () => {
         this._gather();
@@ -23377,8 +23506,8 @@ ${listStyleProseCss(".doc-blocks")}
     _openFollow(username) {
       openNotifyModal(username, () => this._reloadFollows());
     }
-    _say(kind, text) {
-      this._msg = { kind, text };
+    _say(kind2, text) {
+      this._msg = { kind: kind2, text };
     }
     render() {
       this._maybeLoad();
@@ -24198,8 +24327,8 @@ From the author:
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
   function maskRuns(text, store2) {
-    const push = (raw, kind) => {
-      store2.push({ raw, kind });
+    const push = (raw, kind2) => {
+      store2.push({ raw, kind: kind2 });
       return `${MASK}${store2.length - 1}${MASK}`;
     };
     return String(text).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
@@ -24285,7 +24414,7 @@ From the author:
     return out;
   }
   function mdToPlain(md) {
-    const render = (text) => {
+    const render2 = (text) => {
       const store2 = [];
       const masked = maskRuns(text, store2);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
@@ -24316,18 +24445,18 @@ From the author:
         continue;
       }
       if (b.kind === "heading") {
-        parts.push(render(b.text));
+        parts.push(render2(b.text));
         continue;
       }
       if (b.kind === "ul") {
-        parts.push(b.items.map((it) => `- ${render(it)}`).join("\n"));
+        parts.push(b.items.map((it) => `- ${render2(it)}`).join("\n"));
         continue;
       }
       if (b.kind === "ol") {
-        parts.push(b.items.map((it, n) => `${n + 1}. ${render(it)}`).join("\n"));
+        parts.push(b.items.map((it, n) => `${n + 1}. ${render2(it)}`).join("\n"));
         continue;
       }
-      parts.push(b.lines.map(render).join("\n"));
+      parts.push(b.lines.map(render2).join("\n"));
     }
     return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
@@ -24666,15 +24795,15 @@ From the author:
       }
       let redditRows = "";
       if (dest === "reddit") {
-        const kind = this._redditKind || "link";
+        const kind2 = this._redditKind || "link";
         const bodyTemplate = this._effectiveBody();
         const bodyPreview = bodyTemplate ? renderTemplate(bodyTemplate, item, { limit: 2e3 }) : "";
         const commentTemplate = this._effectiveComment();
         const commentPreview = commentTemplate ? renderTemplate(commentTemplate, item, { limit: 2e3 }) : "";
         redditRows = `<label>Post kind</label>
         <select data-reddit-kind>
-          <option value="link"${kind === "link" ? " selected" : ""}>Link post (the item URL is the link)</option>
-          <option value="self"${kind === "self" ? " selected" : ""}>Text post (the body below is the content)</option>
+          <option value="link"${kind2 === "link" ? " selected" : ""}>Link post (the item URL is the link)</option>
+          <option value="self"${kind2 === "self" ? " selected" : ""}>Text post (the body below is the content)</option>
         </select>
         <label>Body template <span style="font-weight:400">(the description under the title; optional; same tokens as the title)</span></label>
         <textarea data-reddit-body>${esc(bodyTemplate)}</textarea>

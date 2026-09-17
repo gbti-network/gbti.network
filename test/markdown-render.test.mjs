@@ -182,7 +182,8 @@ test('a 4-backtick fence carries ``` fences as CONTENT (the /ci skill prompt reg
 test('reader: GFM footnote refs render superscript anchors; defs collect into an end section', () => {
   const md = 'Alpha[^1] and beta[^2].\n\n[^1]: First note with [a link](https://x.com).\n[^2]: Second note:  \n    **Song - Title**, extra line\n\n_The end._';
   const html = renderMarkdown(md);
-  assert.match(html, /Alpha<sup class="md-fnref"><a href="#fn-1" id="fnref-1">1<\/a><\/sup>/);
+  // sow-355: the superscript carries data-fn, so an editor reading this HTML back writes `[^1]` rather than a link.
+  assert.match(html, /Alpha<sup class="md-fnref" data-fn="1"><a href="#fn-1" id="fnref-1">1<\/a><\/sup>/);
   assert.ok(html.indexOf('md-footnotes') > html.indexOf('The end.'), 'the footnote section renders at the document end');
   assert.match(html, /<li id="fn-1">First note with <a href="https:\/\/x\.com"/);
   assert.match(html, /<li id="fn-2">Second note:<br\/><strong>Song - Title<\/strong>, extra line/);
@@ -193,7 +194,7 @@ test('reader: GFM footnote refs render superscript anchors; defs collect into an
 test('reader: a footnote ref inside a blockquote works; a def-less document emits no section', () => {
   const quoted = renderMarkdown('> Wise words.[^3]\n\n[^3]: The source.');
   // sow-350: a quote holds its paragraph, as the site build draws it (it was bare text in a quote per line).
-  assert.match(quoted, /<blockquote><p>Wise words\.<sup class="md-fnref"><a href="#fn-3"/);
+  assert.match(quoted, /<blockquote><p>Wise words\.<sup class="md-fnref" data-fn="3"><a href="#fn-3"/); // sow-355: data-fn
   assert.doesNotMatch(renderMarkdown('Plain text, no footnotes.'), /md-footnotes/);
 });
 

@@ -6,6 +6,7 @@
 
 import { parseImageLine, imageLayoutSuffix, imageTitleSuffix } from '../../client/src/image-attrs.mjs'; // the {full} / {left wrap} layout words; the title is the caption
 import { takeListRun, serializeListItems, isFlatList } from '../../client/src/list-items.mjs'; // nested lists: depth and marker per item
+import { underscoreEmphasis, UNDERSCORE_MARK } from '../../client/src/underscore-emphasis.mjs'; // sow-355: _x_ and __x__
 
 export const MEMBERS_MARKER = '<!-- members-only -->';
 export const BLOCK_TYPES = ['paragraph', 'heading', 'code', 'quote', 'list', 'table', 'image', 'embed', 'callout', 'members'];
@@ -263,6 +264,22 @@ function rawAnchor(href, rel, blank, inner) {
   return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${sanitizeInner(inner)}</a>`;
 }
 
+// sow-355: GFM footnote ids (the renderer's FN_ID), and the marked tags an underscore emphasis renders as.
+const FN_REF_ID = '[A-Za-z0-9_-]+';
+const FN_REF_RE = new RegExp(`\\[\\^(${FN_REF_ID})\\](?![:(])`, 'g');
+const EM_US = `<em ${UNDERSCORE_MARK}>`;
+const STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
+// The delimiter to write an emphasis back with. An underscore only works where the author's text allows it: next to
+// a letter or digit an underscore run cannot open or close, so the star is used there instead, which keeps the
+// emphasis on the published page rather than printing the underscores.
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+function emphasisMark(attrs, all, at, len, star) {
+  if (!/\bdata-md="_"/.test(attrs)) return star;
+  const before = all[at - 1] ?? '';
+  const after = all[at + len] ?? '';
+  return WORD_CHAR.test(before) || WORD_CHAR.test(after) ? star : star.replace(/\*/g, '_');
+}
+
 export function inlineMdToHtml(md) {
   let src = String(md ?? '');
   const keep = [];
@@ -275,12 +292,21 @@ export function inlineMdToHtml(md) {
   // Escape the URL before it goes into the href attribute (& < > are already escaped above; the double-quote is
   // not, so an unescaped " would break out of href=""), and neutralize dangerous URL schemes.
   let h = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // sow-355: a footnote reference is a chip the author cannot type into, which reads back as the same `[^id]`.
+  // A definition (`[^id]:`) and a link whose text starts with a caret (`[^x](url)`) stay as they are.
+  h = h.replace(FN_REF_RE, (_m, id) => {
+    keep.push(`<sup class="md-fnchip" contenteditable="false" data-fn="${id}">${id}</sup>`);
+    return `\u0000A${keep.length - 1}\u0000`;
+  });
   h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) =>
     isDangerousUrl(url) ? text : `<a href="${String(url).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}">${text}</a>`);
   // Mirrors emphasis() in client/src/markdown.mjs: a single star may sit inside a strong run, so italic
   // nested in bold parses instead of publishing its asterisks as text. Keep the two in step.
   h = h.replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, '<strong>$1</strong>');
   h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  // sow-355: underscore emphasis, after the star rules as in the renderer. Its tags are marked so the read-back
+  // below writes `_` again, and an escaped `\_` is kept as written so the paragraph reads back unchanged.
+  h = underscoreEmphasis(h, { em: EM_US, strong: STRONG_US, keepEscapes: true });
   h = h.replace(/~~([^~]+)~~/g, '<s>$1</s>');
   h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
   // CommonMark line breaks, matching what actually publishes. A line ending in TWO OR MORE spaces is a HARD
@@ -288,12 +314,22 @@ export function inlineMdToHtml(md) {
   // Astro page renders it. Turning every newline into <br> was wrong and visible: an author whose source had
   // ordinary clause-per-line newlines saw breaks in the editor that the published article does not have.
   h = h.replace(/ {2,}\n/g, '<br>');
+  // sow-355: a newline that starts a footnote definition is a real line, not a soft break: GFM reads each `[^id]:`
+  // line as its own definition. Drawn as a marked break and written back as a bare newline, so a run of
+  // definitions keeps one per line; read back as a space, every definition after the first merged into it.
+  h = h.replace(new RegExp(`\\n(?=\\[\\^${FN_REF_ID}\\]:)`, 'g'), '<br data-md="fn">');
   h = h.replace(/\n/g, ' ');
   return h.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? ''); // restore the protected anchors
 }
 export function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
   let s = String(html ?? '');
   const keep = [];
+  // sow-355: a footnote reference, drawn as the editor's chip or as the renderer's superscript link, is `[^id]`
+  // again. It goes first, so the renderer's inner anchor is never read as a link to "#fn-id".
+  s = s.replace(new RegExp(`<sup\\b[^>]*\\bdata-fn="(${FN_REF_ID})"[^>]*>[\\s\\S]*?<\\/sup>`, 'gi'), (_m, id) => {
+    keep.push(`[^${id}]`);
+    return `\u0000A${keep.length - 1}\u0000`;
+  });
   // Links: a plain link -> `[text](url)`; an attributed link (rel/target) -> the canonical sanitized raw <a> HTML,
   // protected from the tag-strip + entity-decode below by a placeholder so it survives verbatim.
   s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
@@ -310,13 +346,21 @@ export function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
     keep.push(rawAnchor(a.href, a.rel, a.blank, inner));
     return `\u0000A${keep.length - 1}\u0000`;
   });
-  s = s.replace(/<(strong|b)>([\s\S]*?)<\/\1>/gi, '**$2**');
-  s = s.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, '*$2*');
+  // sow-355: the tags may carry attributes now (the underscore marker), and a marked one writes back with `_`.
+  s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t, attrs, inner, at, all) => {
+    const d = emphasisMark(attrs, all, at, m.length, '**');
+    return `${d}${inner}${d}`;
+  });
+  s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t, attrs, inner, at, all) => {
+    const d = emphasisMark(attrs, all, at, m.length, '*');
+    return `${d}${inner}${d}`;
+  });
   s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, '~~$2~~');
   s = s.replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`');
   // A <br> the author actually made is written back as a REAL CommonMark hard break (two trailing spaces),
   // not a bare newline. A bare newline now means "soft break", which the reader above renders as a space, so
   // writing one here would silently discard the break on the next load and on the published page.
+  s = s.replace(/<br\b[^>]*\bdata-md="fn"[^>]*>/gi, '\n'); // sow-355: the line before a footnote definition
   s = s.replace(/<br\s*\/?>/gi, '  \n');
   // contenteditable wraps each visual line in a <div>. The FIRST one opens the block rather than starting a new
   // line, so it contributes no break; emitting one there put a stray hard break at the head of the paragraph.

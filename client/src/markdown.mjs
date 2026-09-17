@@ -7,6 +7,7 @@
 import { embedUrl, bareVideoLine, embedPosterHtml } from './video-embed.mjs';
 import { parseImageLayout, imageLayoutClasses, parseImageLine } from './image-attrs.mjs'; // ![alt](src){full} -> class="img-full"; a title is the caption
 import { takeListRun, listHtml, isListLine } from './list-items.mjs'; // nested lists: one block per run, children inside their parent's <li>
+import { underscoreEmphasis, UNDERSCORE_MARK } from './underscore-emphasis.mjs'; // sow-355: _x_ and __x__
 
 // SOW-092: the https video relay. public/_headers gives /embed the one policy on the site whose
 // frame-ancestors admits chrome-extension:, so an extension page may frame it.
@@ -52,10 +53,14 @@ const escAttr = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&qu
 // The strong run admits a SINGLE star inside it (`\*(?!\*)`) so italic nested in bold parses; a plain
 // `[^*]+` stopped at the inner star, left the run unmatched, and published the asterisks as literal text.
 // The leading `(?!\*)` keeps `***x***` on the italic-of-bold path it already took.
+// sow-355: underscore emphasis runs after the star rules, over the HTML they produced. Its tags carry the
+// UNDERSCORE_MARK so the editors that read this HTML back (the Preview's edit in place, the comment editor) write
+// the author's own delimiter back rather than turning every `_x_` into `*x*`.
 function emphasis(t) {
-  return String(t)
+  const starred = String(t)
     .replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  return underscoreEmphasis(starred, { em: `<em ${UNDERSCORE_MARK}>`, strong: `<strong ${UNDERSCORE_MARK}>` });
 }
 const SAFE_INNER_TAG = /^(?:strong|b|em|i|code|s|del|br)$/i;
 const sanitizeAnchorInner = (html) => String(html ?? '').replace(/<(\/?)([a-z][a-z0-9]*)(?:\s[^>]*)?>/gi,
@@ -126,7 +131,8 @@ function inline(escaped, fn = null) {
       if (!fn.ids.has(id)) return m;
       const n = (fn.counts.get(id) ?? 0) + 1;
       fn.counts.set(id, n);
-      return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ''}">${id}</a></sup>`;
+      // data-fn lets an editor that reads this HTML back write the reference as `[^id]` again (sow-355).
+      return `<sup class="md-fnref" data-fn="${id}"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ''}">${id}</a></sup>`;
     });
   }
   // Images BEFORE links (the syntaxes nest). Alt may be empty (![](...)). Accepted srcs: absolute http(s),

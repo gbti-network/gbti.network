@@ -71,6 +71,8 @@ ${listStyleProseCss('.doc-blocks')}
   .ce em, .ce i { font-style:italic; }
   .ce s, .ce del { text-decoration:line-through; opacity:.8; }
   .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
+  /* sow-355: a footnote reference is a chip, not text the author types into; it reads back as [^id]. */
+  .md-fnchip { font-family:var(--font-mono, ui-monospace, monospace); font-size:.68em; line-height:1; color:var(--s-green-fg); background:var(--s-surface-2); border:1px solid var(--s-line-2); border-radius:4px; padding:1px 4px; margin:0 1px; vertical-align:super; user-select:all; cursor:default; }
   /* callout */
   .cwrap { margin:8px 0; }
   .cvar { display:inline-flex; align-items:center; gap:5px; margin-bottom:9px; padding:4px 4px 4px 6px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; }
