@@ -61,6 +61,13 @@ const faqs = [
   <!-- ============ HERO = THE PLANS ============ -->
   <section class="band tint" id="join">
     <div class="wrap">
+      {/* sow-356: where a refused Discord link lands. The Worker sends a free, lapsed or banned account here
+          instead of to a server invite, and this says why rather than leaving them to guess. Hidden by default
+          and revealed by the script below, because the page is static and the reason arrives in the query. */}
+      <p class="discord-note" id="discord-note" hidden>
+        The Discord community is part of the {memberTier.label} plan. Join below and connect Discord from your
+        welcome steps.
+      </p>
       <MembershipTiers headingLevel="h1" />
     </div>
   </section>
@@ -92,6 +99,8 @@ const faqs = [
     .faq-item summary::after { content: '+'; font-family: var(--f-mono); font-weight: 400; font-size: 22px; color: var(--green-600); flex: none; transition: transform .15s ease; }
     .faq-item[open] summary::after { content: '\2212'; }
     .faq-item p { padding: 0 0 18px; max-width: 68ch; }
+    /* sow-356: the refused-Discord note. Reads as a callout above the plans, not as an error. */
+    .discord-note { max-width: 68ch; margin: 0 auto 24px; padding: 14px 18px; border: 1.5px solid var(--line); border-left: 4px solid var(--green-600); border-radius: 10px; background: var(--bg-soft, transparent); color: var(--fg); font-size: 15px; }
   </style>
 
   <script define:vars={{ cookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, days: REF_COOKIE_DAYS }}>
@@ -101,6 +110,12 @@ const faqs = [
     (function () {
       try {
         var p = new URLSearchParams(location.search);
+        // sow-356: a refused Discord link arrives as ?discord=members-only. Revealed before the referral work
+        // below, which returns early when there is no ?ref.
+        if (p.get('discord') === 'members-only') {
+          var note = document.getElementById('discord-note');
+          if (note) note.hidden = false;
+        }
         var ref = p.get('ref');
         if (!ref) return;
         var has = document.cookie.split('; ').some(function (c) { return c.indexOf(cookie + '=') === 0; });

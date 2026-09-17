@@ -37,9 +37,29 @@ test('the state is read from every host shape, and a missing profile reads as "n
   const website = host();
   const s = await loadOnboardingState(website);
   assert.equal(website.calls.status, 1, 'the identity is read once and passed to the profile read');
-  assert.deepEqual(s, { discordLinked: false, follows: [{ username: 'bob' }], topics: ['ai'], profileSocials: false, record: { skipped: ['discord'] } });
+  assert.deepEqual(s, { discordAvailable: true, discordLinked: false, follows: [{ username: 'bob' }], topics: ['ai'], profileSocials: false, record: { skipped: ['discord'] } });
   const ext = await loadOnboardingState(host({ getFollows: async () => [{ username: 'bob' }] }));
   assert.equal(ext.follows.length, 1, 'the extension returns a bare list');
+});
+
+test('sow-356: the Discord step is offered only to an account that may be in the server', async () => {
+  // A free account cannot connect Discord, so listing the step would make the card permanent and its count
+  // wrong: four of five for ever. An UNREAD or unknown membership keeps the step, because dropping it on a
+  // failed read would show a paying member a short list.
+  const withMembership = (m) => host({ status: async () => ({ authenticated: true, membership: m, identity: { login: 'alice', username: 'alice' } }) });
+  for (const [m, offered] of [['paid', true], ['trialing', true], ['none', false], ['expired', false], ['banned', false], ['unknown', true]]) {
+    const s = await loadOnboardingState(withMembership(m));
+    assert.equal(s.discordAvailable, offered, `membership ${m}`);
+    const keys = onboardingProgress(s).steps.map((x) => x.key);
+    assert.equal(keys.includes('discord'), offered, `the step list for ${m}`);
+    assert.equal(keys.length, offered ? 5 : 4);
+  }
+  // And the count follows: the denominator is 4, not 5, so the card can actually be finished. (This fixture
+  // already follows a member and holds a topic, hence two done.)
+  const free = onboardingProgress(await loadOnboardingState(withMembership('none')));
+  assert.equal(free.known, true, 'a dropped step does not make the view unknown');
+  assert.match(onboardingCardHtml(free), /2 of 4 done/);
+  assert.ok(!onboardingCardHtml(free).includes('Connect Discord'), 'and the row is gone');
 });
 
 test('the profile is read by the member\'s own path when the host lists none, or by the listed path', async () => {

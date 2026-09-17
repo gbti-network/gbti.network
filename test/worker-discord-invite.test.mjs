@@ -10,6 +10,10 @@ import { getDiscordInvite as opGetDiscordInvite, OperationError } from '../clien
 const NOW = 1_000_000_000_000;
 const req = (token) => ({ headers: { get: (h) => (h === 'Authorization' && token ? `Bearer ${token}` : null) } });
 const okUser = async () => ({ githubId: '42', githubLogin: 'alice' });
+// sow-356: the endpoint is gated on the shared Discord join rule, so each handler case declares whether the
+// asker may be in the server. The rule itself is covered in test/discord-paid-only.test.mjs; here it is a
+// fixture, so these cases stay about invites.
+const paid = async () => ({ known: true, eligible: true, reason: 'eligible' });
 // A KV stub backed by a Map.
 function fakeKv(initial = {}) {
   const m = new Map(Object.entries(initial));
@@ -40,7 +44,7 @@ test('handler: reuses a fresh cached invite without minting', async () => {
   const kv = fakeKv({ [INVITE_KV_KEY]: JSON.stringify({ url: 'https://discord.gg/cached', expiresAt: NOW + 5 * 86400_000 }) });
   let minted = false;
   const discord = { createInvite: async () => { minted = true; return { code: 'new', url: 'https://discord.gg/new' }; } };
-  const r = await handleDiscordInvite(req('t'), { DISCORD_INVITE_CHANNEL_ID: 'c1' }, { fetchUser: okUser, discord, kv, now: NOW });
+  const r = await handleDiscordInvite(req('t'), { DISCORD_INVITE_CHANNEL_ID: 'c1' }, { fetchUser: okUser, discord, kv, now: NOW, checkJoin: paid });
   assert.equal(r.status, 200);
   assert.equal(r.body.url, 'https://discord.gg/cached');
   assert.equal(r.body.source, 'cache');
@@ -50,7 +54,7 @@ test('handler: reuses a fresh cached invite without minting', async () => {
 test('handler: mints + caches a fresh invite when the cache is empty', async () => {
   const kv = fakeKv();
   const discord = { createInvite: async (chan, opts) => { assert.equal(chan, 'c1'); assert.equal(opts.maxUses, 0); return { code: 'fresh1', url: 'https://discord.gg/fresh1' }; } };
-  const r = await handleDiscordInvite(req('t'), { DISCORD_INVITE_CHANNEL_ID: 'c1' }, { fetchUser: okUser, discord, kv, now: NOW, ttlSeconds: 604800 });
+  const r = await handleDiscordInvite(req('t'), { DISCORD_INVITE_CHANNEL_ID: 'c1' }, { fetchUser: okUser, discord, kv, now: NOW, ttlSeconds: 604800, checkJoin: paid });
   assert.equal(r.status, 200);
   assert.equal(r.body.url, 'https://discord.gg/fresh1');
   assert.equal(r.body.source, 'fresh');
@@ -62,19 +66,19 @@ test('handler: mints + caches a fresh invite when the cache is empty', async () 
 test('handler: falls back to the static DISCORD_INVITE_URL when minting fails or no channel', async () => {
   const env = { DISCORD_INVITE_URL: 'https://discord.gg/vanity' };
   // no channel/discord configured
-  const r1 = await handleDiscordInvite(req('t'), env, { fetchUser: okUser, kv: fakeKv(), now: NOW });
+  const r1 = await handleDiscordInvite(req('t'), env, { fetchUser: okUser, kv: fakeKv(), now: NOW, checkJoin: paid });
   assert.equal(r1.status, 200);
   assert.equal(r1.body.url, 'https://discord.gg/vanity');
   assert.equal(r1.body.source, 'static');
   // mint throws -> static fallback
   const discord = { createInvite: async () => { throw new Error('discord 403'); } };
-  const r2 = await handleDiscordInvite(req('t'), { ...env, DISCORD_INVITE_CHANNEL_ID: 'c1' }, { fetchUser: okUser, discord, kv: fakeKv(), now: NOW });
+  const r2 = await handleDiscordInvite(req('t'), { ...env, DISCORD_INVITE_CHANNEL_ID: 'c1' }, { fetchUser: okUser, discord, kv: fakeKv(), now: NOW, checkJoin: paid });
   assert.equal(r2.body.url, 'https://discord.gg/vanity');
   assert.equal(r2.body.source, 'static');
 });
 
 test('handler: 502 when neither a mint nor a static fallback is available', async () => {
-  const r = await handleDiscordInvite(req('t'), {}, { fetchUser: okUser, kv: fakeKv(), now: NOW });
+  const r = await handleDiscordInvite(req('t'), {}, { fetchUser: okUser, kv: fakeKv(), now: NOW, checkJoin: paid });
   assert.equal(r.status, 502);
   assert.equal(r.body.error, 'invite_unavailable');
 });

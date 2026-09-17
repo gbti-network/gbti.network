@@ -6,6 +6,7 @@
 // (membership/onboarding.mjs onboardingProgress). Any read that fails makes the whole view unknown, and an
 // unknown view renders nothing: a reminder that lists finished work as unfinished is worse than no reminder.
 import { onboardingProgress, profileHasSocials } from '../../membership/onboarding.mjs';
+import { discordJoinAllowed } from '../../membership/discord-roles.mjs'; // sow-356: the community is a paid perk
 import { SOCIAL_KEYS } from './social-icons.mjs';
 import { esc } from './base.mjs';
 import { readOwnProfile } from './own-profile.mjs'; // sow-346
@@ -32,7 +33,12 @@ export async function loadOnboardingState(client) {
     }),
   ]);
   const followList = follows.ok ? (Array.isArray(follows.v) ? follows.v : follows.v?.following) : null;
+  // sow-356: drop the Discord step only when we POSITIVELY read a membership that may not be in the server. An
+  // unread or unknown membership keeps the step, so a paying member whose status read failed is never shown a
+  // short list; that case resolves through `known` exactly as it always did.
+  const membership = status.ok ? status.v?.membership : null;
   return {
+    discordAvailable: !membership || membership === 'unknown' ? true : discordJoinAllowed(membership),
     discordLinked: discord.ok && typeof discord.v?.linked === 'boolean' ? discord.v.linked : null,
     follows: Array.isArray(followList) ? followList : null,
     topics: prefs.ok && Array.isArray(prefs.v?.categories) ? prefs.v.categories : null,

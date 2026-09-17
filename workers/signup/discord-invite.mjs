@@ -2,9 +2,13 @@
 //
 // Why a Worker endpoint and not a hardcoded link: the bot mints a real invite via the Discord API (the token
 // NEVER leaves the Worker), but Discord invites are not meant to be minted per page-load. So we cache ONE shared
-// invite in SIGNUP_KV and reuse it until it is near expiry, regenerating only "as needed". Auth = a verified
-// GitHub bearer token (the welcome view is post-signup); access to the actual channels is still governed by the
-// reconcile role sync (member/trial/locked), so this endpoint only needs a verified identity, not a paid gate.
+// invite in SIGNUP_KV and reuse it until it is near expiry, regenerating only "as needed".
+//
+// Auth = a verified GitHub bearer token (the welcome view is post-signup) AND, since sow-356, an account that may
+// be in the server at all. The comment here used to read "not a paid gate", and that is what made this endpoint
+// the way around the ruling: an invite is the one route into the guild that never passes through the join
+// decision in runSignup, and an invite join simply arrives holding no role. Refusing the join while handing out
+// the invite would be no gate at all.
 // FAIL-CLOSED to a static DISCORD_INVITE_URL (a vanity link) when the bot/channel are not configured or error.
 
 import { githubFetchUser } from './oauth.mjs';
@@ -38,6 +42,10 @@ export async function handleDiscordInvite(request, env, deps = {}) {
     kv = env?.SIGNUP_KV,
     now = Date.now(),
     ttlSeconds = Number(env?.DISCORD_INVITE_TTL_SECONDS) || DEFAULT_TTL_SECONDS,
+    // sow-356: (githubId) -> { known, eligible, reason }, the shared rule from signup.mjs. Injected rather than
+    // imported so this module keeps its no-network testability. Absent means UNWIRED, and an unwired gate
+    // refuses: a guard that disappears when its wiring is forgotten is not a guard.
+    checkJoin = null,
   } = deps;
 
   // Auth: a valid GitHub bearer token. Fail-closed (the role sync enforces actual channel access downstream).
@@ -47,6 +55,17 @@ export async function handleDiscordInvite(request, env, deps = {}) {
   let user;
   try { user = await fetchUser(token, fetchImpl); } catch { return { status: 401, body: { error: 'unauthorized', message: 'could not verify the GitHub token' } }; }
   if (!user?.githubId) return { status: 401, body: { error: 'unauthorized', message: 'the GitHub token has no user id' } };
+
+  // sow-356: an identity is no longer enough. Both refusal shapes answer the same way, deliberately: "we looked
+  // and you may not join" and "we could not look" are indistinguishable to the caller, and both fail closed,
+  // which is the project rule for every membership check. The member retries; nobody is added by accident.
+  let join = { known: false, eligible: false, reason: 'unknown' };
+  if (typeof checkJoin === 'function') {
+    try { join = await checkJoin(String(user.githubId)); } catch { join = { known: false, eligible: false, reason: 'unknown' }; }
+  }
+  if (!join?.eligible) {
+    return { status: 403, body: { error: 'membership_required', message: 'the Discord community is part of the membership' } };
+  }
 
   const channelId = env?.DISCORD_INVITE_CHANNEL_ID || null;
   const staticUrl = env?.DISCORD_INVITE_URL || null;

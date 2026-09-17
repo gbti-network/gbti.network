@@ -7754,6 +7754,13 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-settings", GbtiSettings);
 
+  // membership/discord-roles.mjs
+  var PUBLISHED_STATUSES = /* @__PURE__ */ new Set(["paid"]);
+  var TRIAL_STATUSES = /* @__PURE__ */ new Set(["trialing"]);
+  function discordJoinAllowed(effectiveStatus) {
+    return PUBLISHED_STATUSES.has(effectiveStatus) || TRIAL_STATUSES.has(effectiveStatus);
+  }
+
   // client-ui/src/storage.mjs
   function browserStorage() {
     try {
@@ -8108,7 +8115,7 @@ ${listStyleProseCss(".doc-blocks")}
     _referrals() {
       const r = this._referral || {};
       const canonical = r.link || (r.code ? `${SITE3}/join?ref=${r.code}` : null);
-      const invite = this._invite?.url || null;
+      const invite = discordJoinAllowed(this._membership) && this._invite?.url || null;
       const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
       return `<section class="sec">
@@ -19717,11 +19724,11 @@ ${listStyleProseCss(".doc-blocks")}
   }
   var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
   var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
-  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record } = {}) {
+  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true } = {}) {
     const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
     const nFollows = count(follows);
     const nTopics = count(topics);
-    const known = typeof discordLinked === "boolean" && nFollows !== null && nTopics !== null && typeof profileSocials === "boolean" && rec !== void 0;
+    const known = (discordAvailable === false || typeof discordLinked === "boolean") && nFollows !== null && nTopics !== null && typeof profileSocials === "boolean" && rec !== void 0;
     const r = rec ?? emptyRecord();
     const done = {
       discord: discordLinked === true,
@@ -19730,7 +19737,8 @@ ${listStyleProseCss(".doc-blocks")}
       follow: (nFollows ?? 0) > 0,
       topics: (nTopics ?? 0) > 0
     };
-    const steps = ONBOARDING_STEPS.map((s) => ({
+    const offered = discordAvailable === false ? ONBOARDING_STEPS.filter((s) => s.key !== "discord") : ONBOARDING_STEPS;
+    const steps = offered.map((s) => ({
       key: s.key,
       label: s.label,
       title: s.title,
@@ -20111,8 +20119,12 @@ ${listStyleProseCss(".doc-blocks")}
      only heading on this panel, and a second one saying nearly the same thing is noise for a screen reader.
      Sized between the old h3 and the old sub-line so it still carries next to a 46px tile. */
   .dhead .dlede { font-family:var(--font-display); font-size:16.5px; font-weight:600; margin:0; line-height:1.25; color:var(--wf-fg); }
+  /* sow-356: text-decoration is here because .dbtn is now worn by an ANCHOR as well (the membership link shown
+     where a free account would see Connect Discord). BASE_CSS styles the bare anchor, and the UA underline survives any
+     rule that does not name it, so without this the link renders as underlined white text on the green pill. */
   .dbtn { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:600; font-size:13.5px;
-    color:#fff; background:var(--wf-green); border:1.5px solid transparent; border-radius:7px; padding:11px 18px; cursor:pointer; }
+    color:#fff; background:var(--wf-green); border:1.5px solid transparent; border-radius:7px; padding:11px 18px;
+    cursor:pointer; text-decoration:none; }
   .dbtn:not(.on):not([disabled]):hover { background:var(--wf-greenhover); }
   .dbtn.on, .dbtn[disabled] { color:var(--wf-soft); background:var(--wf-raise); border-color:var(--wf-line); cursor:default; }
   /* sow-218: the connected row pairs the confirmation with a quiet Disconnect. Deliberately understated: it is
@@ -20432,7 +20444,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (!this._resumed) {
         this._resumed = true;
         const asked = requestedStep(this.getAttribute("start-step"), STEPS);
-        this._step = asked >= 0 ? asked : resumeStep(this._stepDone(), STEPS.length);
+        this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), STEPS.length);
       }
       this.render();
     }
@@ -20458,6 +20470,29 @@ ${listStyleProseCss(".doc-blocks")}
         (this._topicsCount ?? 0) > 0
         // topics    — at least one topic in the stored prefs
       ];
+    }
+    /**
+     * What RESUME treats as settled, which is not the same thing as what the rail ticks.
+     *
+     * sow-356: a free account cannot connect Discord, so resuming would park it on that step forever. Resume steps
+     * past it; the rail still shows it as outstanding rather than done, because the member has not done it and a
+     * tick would say they had.
+     */
+    /**
+     * The step heading. sow-356: "Connect Discord" is an instruction, and it is the wrong one for an account that
+     * may not join. Caught by driving the step, where the card explained that the server is for paying members
+     * under a heading telling the reader to connect. Kept short enough not to clip at phone width (measured).
+     */
+    _headingText() {
+      if (this._done) return DONE_HEADING;
+      const step = STEPS[this._step];
+      if (step?.key === "discord" && !this._mayJoinDiscord()) return "Discord community";
+      return step.heading;
+    }
+    _resumeFlags() {
+      const done = this._stepDone();
+      if (this._membership !== "unknown" && !this._mayJoinDiscord()) done[0] = true;
+      return done;
     }
     // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
     // sow-345: account-scoped browser storage (see accountKey). No account means no key, and these are no-ops rather
@@ -20595,7 +20630,7 @@ ${listStyleProseCss(".doc-blocks")}
       const phase = ph.phase === "coupon" ? "Free membership period" : ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "";
       this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
       const step = STEPS[this._step].key;
-      const heading = this._done ? DONE_HEADING : STEPS[this._step].heading;
+      const heading = this._headingText();
       const stepText = this._done ? "COMPLETE" : `STEP ${this._step + 1} OF ${STEPS.length}`;
       const progress = this._done ? 100 : Math.round(this._step / STEPS.length * 100 + 12);
       const card = this._done ? this._doneCard() : step === "discord" ? this._discordCard() : step === "subreddit" ? this._channelsCard() : step === "socials" ? this._socialsCard() : step === "topics" ? this._topicsCard() : this._membersCard();
@@ -20686,7 +20721,26 @@ ${listStyleProseCss(".doc-blocks")}
         this.$$(".mav img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
       }
     }
+    // sow-356: may this account be in the server at all? The community is a paid perk (owner, 2026-09-17), so a
+    // free or lapsed account is shown what it is rather than a button that now refuses. `unknown` (the status read
+    // failed) is neither: it says so, and offers nothing, because guessing either way is wrong.
+    _mayJoinDiscord() {
+      return discordJoinAllowed(this._membership);
+    }
+    _discordLockedCard() {
+      const unread = this._membership === "unknown";
+      const note = unread ? "We could not check your membership just now. Reload to try again." : "The Discord community is part of the Network Supporter membership.";
+      const link = unread ? "" : `<a class="dbtn" href="${SITE11}/membership/" target="_blank" rel="noopener">See what membership includes</a>`;
+      return `
+      <div class="dhead">
+        <span class="ico-tile">${discordIco}</span>
+        <p class="dlede">Our Discord community is for paying members.</p>
+      </div>
+      <p class="intro" style="max-width:58ch">Announcements and agile discussions happen in the server, and it is the best place to network in real time with network members. ${esc(note)}</p>
+      ${link}`;
+    }
     _discordCard() {
+      if (!this._mayJoinDiscord()) return this._discordLockedCard();
       const joined = this._discordJoined;
       const btn = joined ? `<div class="drow">
            <button class="dbtn on" type="button" disabled>&#10003; Discord connected</button>
@@ -21273,7 +21327,9 @@ ${listStyleProseCss(".doc-blocks")}
       })
     ]);
     const followList2 = follows.ok ? Array.isArray(follows.v) ? follows.v : follows.v?.following : null;
+    const membership = status.ok ? status.v?.membership : null;
     return {
+      discordAvailable: !membership || membership === "unknown" ? true : discordJoinAllowed(membership),
       discordLinked: discord.ok && typeof discord.v?.linked === "boolean" ? discord.v.linked : null,
       follows: Array.isArray(followList2) ? followList2 : null,
       topics: prefs.ok && Array.isArray(prefs.v?.categories) ? prefs.v.categories : null,

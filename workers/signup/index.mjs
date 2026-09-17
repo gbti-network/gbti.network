@@ -48,7 +48,7 @@ import {
 } from './oauth.mjs';
 import { verifyTurnstileDetailed, rateLimit } from './abuse.mjs';
 import { wantsHtml, turnstileRejectedPage } from './turnstile-page.mjs'; // the page a browser gets for a spent token
-import { runSignup } from './signup.mjs';
+import { runSignup, discordJoinEligibility } from './signup.mjs'; // sow-356: the shared Discord join rule
 import { resolveCustomerId, createCheckout } from './checkout.mjs';
 import { buildCheckoutPriceMap, resolveCheckoutPrice } from '../../membership/checkout-prices.mjs'; // sow-185 3b: multi-price allowlist
 import { validateCouponParam } from './coupons.mjs'; // SOW-119
@@ -535,7 +535,7 @@ async function handleDiscordCallback(request, env) {
   const { discordUserId, email } = await discordFetchUser(accessToken, globalThis.fetch);
 
   const { stripe, discord } = clientsFromEnv(env);
-  await runSignup({
+  const linked = await runSignup({
     identity: {
       githubId: state.githubId,
       githubLogin: state.githubLogin,
@@ -557,7 +557,13 @@ async function handleDiscordCallback(request, env) {
   const session = await signSession({ githubId: state.githubId, githubLogin: state.githubLogin }, env.SESSION_SECRET);
   // SOW: land the member in Discord (the community they just joined), NOT back on the marketing site. The flow
   // started from the extension welcome, which polls /discord/link/status and advances itself once the link lands.
-  const dest = env.DISCORD_INVITE_URL || `${env.SITE_BASE_URL}/extension/?linked=discord`;
+  //
+  // sow-356: unless the join was REFUSED, in which case sending them to a server invite would be the one thing
+  // the ruling forbids. They keep their session (they are still signed in, still a member of the network) and
+  // land on the membership page, which explains what the community costs.
+  const dest = linked.discordLinked
+    ? (env.DISCORD_INVITE_URL || `${env.SITE_BASE_URL}/extension/?linked=discord`)
+    : `${env.SITE_BASE_URL}/membership/?discord=members-only`;
   // sow-158 Phase 1b: re-issue the CSRF cookie with the refreshed session (two Set-Cookie headers).
   return redirect(dest, {}, [sessionCookieHeader(session), csrfCookieHeader(generateCsrfToken(), { domain: env.COOKIE_DOMAIN })]);
 }
@@ -682,6 +688,15 @@ async function handleDiscordLinkStart(request, env) {
     // can sign in and retry the Discord step.
     return redirect(`${env.SITE_BASE_URL}/welcome/`);
   }
+  // sow-356: refuse BEFORE the Discord sign-in, so a free account is not walked through an OAuth consent screen
+  // for something it cannot have. An unknown answer continues: the callback resolves again and refuses there.
+  // Unset secrets make clientsFromEnv throw, which must not 500 a route that used to work, so it is inside the
+  // same guard as the lookup: both land on `known: false` and continue.
+  let gate = { known: false, eligible: false };
+  try {
+    gate = await discordJoinEligibility({ kv: env.SIGNUP_KV, stripe: clientsFromEnv(env).stripe, githubId, priceTierMap: buildEnvPriceTierMap(env) });
+  } catch { /* continue; the callback resolves again and refuses there */ }
+  if (gate.known && !gate.eligible) return redirect(`${env.SITE_BASE_URL}/membership/?discord=members-only`);
   const nonce = crypto.randomUUID();
   const state = await packState({ githubId, githubLogin, nonce, link: true }, env);
   const location = discordAuthorizeUrl({
@@ -1776,7 +1791,9 @@ export default {
           // static DISCORD_INVITE_URL rather than 500-ing.
           let discord = null;
           try { discord = clientsFromEnv(env).discord; } catch { discord = null; }
-          const r = await handleDiscordInvite(request, env, { discord });
+          // sow-356: the invite is gated by the same rule as the join; an unwired gate refuses.
+          const checkJoin = (githubId) => discordJoinEligibility({ kv: env.SIGNUP_KV, stripe: clientsFromEnv(env).stripe, githubId, priceTierMap: buildEnvPriceTierMap(env) });
+          const r = await handleDiscordInvite(request, env, { discord, checkJoin });
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

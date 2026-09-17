@@ -4,7 +4,9 @@
 //   2. NEVER resets trial_started_at on an existing Customer (the trial clock is set once, at first
 //      creation, and is sacred),
 //   3. writes the github_id -> customer_id KV index entry for instant, consistent gate lookups,
-//   4. adds the user to the Discord guild with the Trial role (guilds.join via the user's token),
+//   4. adds the user to the Discord guild with their resolved role (guilds.join via the user's token),
+//      but ONLY when they may be there at all: the community is a paid perk (sow-356), so a free, lapsed or
+//      banned account is refused the join and its Discord id is never written to the record,
 //   5. returns the customer id + a flag for the caller to mint a signed session cookie.
 //
 // Pure-ish: all side-effecting collaborators (stripe, discord, kv) are injected, so the whole chain
@@ -33,7 +35,14 @@ import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs
 import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacted, retained via [observability])
 
 /**
- * sow-218: WHICH managed Discord role this member should hold, resolved from what they actually are.
+ * sow-218: WHICH managed Discord role this member should hold, resolved from what they actually are, and
+ * sow-356: WHETHER they may be added to the guild at all.
+ *
+ * `eligible` is not `access !== 'locked'`, and the difference is the point. `locked` is also what every failure
+ * path answers, so reusing it as the join decision would refuse a PAYING member whenever the overrides copy is
+ * stale or unreadable: today that only delays their role until the next daily sync, and it must not become a
+ * lockout. So when the mirror cannot be trusted, Stripe paid or a live invite still joins (with Locked, exactly as
+ * before). `reason` names the refusal for the caller's message: 'free', 'lapsed', 'banned'.
  *
  * Signup used to hand every linking member ONE hardcoded role. That is wrong for everyone it does not describe,
  * and the correction only arrived on the next daily reconcile: a paying subscriber, a grandfathered member, a
@@ -53,6 +62,13 @@ import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacte
  * the fold lands: the same fast path membership-status.mjs uses to report a fresh redeemer as paid.
  */
 export async function resolveSignupRole({ kv, githubId, customer, couponGrant = null, priceTierMap = null, now = new Date() }) {
+  // sow-356: the join answer per resolved role. A role of member or trial is in the community by definition.
+  // `refusal` is the reason to give IF the answer is no; an eligible member always reads 'eligible', because a
+  // caller that logs or displays the reason must not be handed a refusal for someone who was let in.
+  const joinable = (access, refusal) => {
+    const eligible = access === 'member' || access === 'trial';
+    return { eligible, reason: eligible ? 'eligible' : refusal };
+  };
   // READ THE EXISTING GRANT, do not rely on one redeemed in THIS run. `couponGrant` is only populated when a
   // coupon code came in with the request, which happens on the coupon signup and never again. A member who
   // redeemed weeks ago and links Discord later arrives with no code, so trusting only the in-run value made an
@@ -84,17 +100,26 @@ export async function resolveSignupRole({ kv, githubId, customer, couponGrant = 
   const couponCreator = couponLive && grantTier(grant) === TIER.creator;
   try {
     const { status, tier: stripeTier } = deriveMembershipFromCustomer(customer, { priceTierMap, now });
+    // sow-356: with no trustworthy mirror we cannot fold ban, staff or grandfathered, so the ROLE stays as it was
+    // (member for a live invite, else locked) while the JOIN falls back to what Stripe alone says. A paying member
+    // still reaches the community; a free account still does not.
+    const blind = () => ({
+      access: couponLive ? 'member' : 'locked',
+      creator: couponCreator,
+      eligible: couponLive || status === 'paid' || status === 'trialing',
+      reason: couponLive || status === 'paid' || status === 'trialing' ? 'eligible' : (status === 'none' ? 'free' : 'lapsed'),
+    });
     const mirror = await kv?.get(OVERRIDES_KV_KEY, 'json');
-    if (!mirror?.generatedAt) return { access: couponLive ? 'member' : 'locked', creator: couponCreator };
+    if (!mirror?.generatedAt) return blind();
     const ageMs = now.getTime() - new Date(mirror.generatedAt).getTime();
-    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return { access: couponLive ? 'member' : 'locked', creator: couponCreator };
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return blind();
     const overrides = overridesFromMirror(mirror);
-    if (!overrides) return { access: couponLive ? 'member' : 'locked', creator: couponCreator };
+    if (!overrides) return blind();
 
     const eff = effectiveStatus(String(githubId), status, overrides, now);
     // A BAN outranks a coupon, exactly as it does everywhere else. Checked before the coupon is honoured so a
     // banned account cannot buy its way back in with an invite code.
-    if (eff.status === 'banned') return { access: 'locked', creator: false };
+    if (eff.status === 'banned') return { access: 'locked', creator: false, eligible: false, reason: 'banned' };
 
     // The coupon no longer SHORT-CIRCUITS here. It used to `return { access: 'member', creator: true }` before
     // the grandfather entry was read at all, which is what handed the Creator badge to every redeemer. Resolving
@@ -106,10 +131,38 @@ export async function resolveSignupRole({ kv, githubId, customer, couponGrant = 
     const gfGrant = overrides.grandfathers.get(String(githubId));
     const tier = resolveEffectiveTier({ source: eff.source, status: eff.status, stripeTier, grant: gfGrant });
     const creator = couponCreator || discordCreatorTarget(tier);
-    if (couponLive) return { access: 'member', creator };
-    return { access: discordRoleTarget(eff.status), creator };
+    if (couponLive) return { access: 'member', creator, ...joinable('member', 'eligible') };
+    const access = discordRoleTarget(eff.status);
+    return { access, creator, ...joinable(access, eff.status === 'none' ? 'free' : 'lapsed') };
   } catch {
-    return { access: 'locked', creator: false }; // any failure withholds the grant rather than handing one out
+    // Any failure withholds the grant rather than handing one out, and withholds the guild join with it.
+    return { access: 'locked', creator: false, eligible: false, reason: 'unknown' };
+  }
+}
+
+/**
+ * sow-356: may THIS github_id be in the Discord server, asked without a signup in progress.
+ *
+ * Two endpoints need the answer before runSignup ever runs: the link start, which should turn a free account
+ * back before it signs in to Discord rather than after, and the invite endpoint, which hands out a real server
+ * invite and would otherwise be the way around every other gate (an invite join carries no role, but it still
+ * puts the account in the server, which is the thing the ruling forbids).
+ *
+ * ONE RULE, ONE IMPLEMENTATION. Both callers go through resolveSignupRole, so the screens, the invite and the
+ * join can never disagree about who is in the community.
+ *
+ * `known` separates "we looked and the answer is no" from "we could not look". The invite treats both as a
+ * refusal (fail closed, the project rule for every membership check). The link start continues on an unknown,
+ * because the callback resolves again with the Customer in hand and refuses there: a Stripe hiccup should cost
+ * a paying member an extra click, not the ability to join at all.
+ */
+export async function discordJoinEligibility({ kv, stripe, githubId, priceTierMap = null, now = new Date() }) {
+  try {
+    const customer = await stripe.findCustomerByGithubId(String(githubId));
+    const { eligible, reason } = await resolveSignupRole({ kv, githubId, customer, priceTierMap, now });
+    return { known: true, eligible, reason };
+  } catch {
+    return { known: false, eligible: false, reason: 'unknown' };
   }
 }
 
@@ -231,12 +284,43 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
   const existing = await stripe.searchCustomerByGithubId(String(githubId));
   const plan = decideCustomer(existing);
 
+  // SOW-119: redeem the coupon (idempotent; the grant record is the lock, so the GitHub-then-Discord
+  // re-run of this chain cannot double-redeem). Fail closed: any problem means a normal free signup.
+  //
+  // MOVED ABOVE THE CUSTOMER WRITE (sow-356). The join decision below has to be taken before anything durable
+  // records this Discord identity, and a live invite is one of the things that makes an account eligible, so the
+  // grant has to be in hand first. Nothing in the Customer write depends on the grant (the metadata carries the
+  // raw code, not the grant), so the move is an ordering change and not a behaviour one. The one failure mode it
+  // reverses is which half survives a mid-chain failure: a redeemed grant with no Customer yet, instead of a
+  // Customer with no grant yet. Both self-heal on the retry, because redeemCoupon returns the existing grant and
+  // the Customer create is keyed idempotently.
+  let couponGrant = null;
+  if (coupon && kv) {
+    couponGrant = await redeemCoupon({ kv, code: coupon, githubId, login: githubLogin, now, lockSecret: couponLockSecret });
+  }
+
+  // OWNER RULING 2026-09-17 (sow-356): "Free users should not be added to the discord." The community is a paid
+  // perk, so the guild join is now a decision and not a formality. It is taken HERE, before the Customer write,
+  // because a refused link must leave NO trace: no guild member, no role, and no discord_user_id on the record.
+  // Recording it would make every surface that reads the link (the welcome poll, the setup card, the account page)
+  // report a member as being in a server they were never added to.
+  //
+  // Nobody already in the guild is affected. This gates the JOIN alone; the daily role sync still swaps roles for
+  // everyone present, and lapsed members keep their Locked role and stay, exactly as before.
+  const joinDecision = hasDiscord
+    ? await resolveSignupRole({ kv, githubId, customer: existing, couponGrant, priceTierMap: config.priceTierMap ?? null, now })
+    : null;
+  const joinAllowed = Boolean(joinDecision?.eligible);
+  // What the Customer record is allowed to remember. Null on a refusal, so the member can link for real the day
+  // they pay, from a record that never claimed they already had.
+  const discordIdForRecord = joinAllowed ? discordUserId : null;
+
   let customerId;
   let created = false;
   if (plan.action === 'reuse') {
     customerId = plan.customerId;
     // Opportunistic refresh of mutable display fields. trial_started_at is NEVER touched here.
-    const refresh = buildRefreshMetadata({ githubLogin, discordUserId });
+    const refresh = buildRefreshMetadata({ githubLogin, discordUserId: discordIdForRecord });
     const update = { metadata: refresh };
     if (email) update.email = email; // keep Stripe's email current for receipts + day-87 reminder
     if (Object.keys(refresh).length > 0 || email) {
@@ -246,7 +330,7 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
     const metadata = buildNewCustomerMetadata({
       githubId,
       githubLogin,
-      discordUserId,
+      discordUserId: discordIdForRecord,
       // No trialStartedAt: the 90-day trial is RETIRED (owner, 2026-08-11). A new signup is a FREE member.
       // This one omission is the whole retirement; see buildNewCustomerMetadata for why.
       signupSource: config?.signupSource,
@@ -264,13 +348,6 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
   // Write the github_id -> customer_id index for instant, consistent gate lookups (beats Search lag).
   if (kv && customerId) {
     await kv.put(`gh:${githubId}`, customerId);
-  }
-
-  // SOW-119: redeem the coupon (idempotent; the grant record is the lock, so the GitHub-then-Discord
-  // re-run of this chain cannot double-redeem). Fail closed: any problem means a normal trial signup.
-  let couponGrant = null;
-  if (coupon && kv) {
-    couponGrant = await redeemCoupon({ kv, code: coupon, githubId, login: githubLogin, now, lockSecret: couponLockSecret });
   }
 
   // Add the user to the guild (guilds.join uses the user's OAuth access token). The `roles` param is
@@ -299,10 +376,13 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
   // null when this signup had no Discord identity at all (the GitHub-only path), so a caller can tell
   // "never attempted" apart from "attempted and failed" instead of reading both as falsy.
   let discordOutcome = null;
-  if (hasDiscord) {
-    const { access, creator } = await resolveSignupRole({
-      kv, githubId, customer: existing, couponGrant, priceTierMap: config.priceTierMap ?? null, now,
-    });
+  // sow-356: a refused link is an outcome too, and it names its own reason so the callback can say why rather
+  // than reporting a generic failure. `joined: false` with a `refused` reason is distinct from a join that was
+  // attempted and failed, which the callback recovers by sending the member a real invite.
+  if (hasDiscord && !joinAllowed) {
+    discordOutcome = { joined: false, roleAssigned: false, role: null, refused: joinDecision?.reason ?? 'unknown' };
+  } else if (hasDiscord) {
+    const { access, creator } = joinDecision;
     const roleIdFor = { member: config.memberRoleId, trial: config.trialRoleId, locked: config.lockedRoleId };
     // Fail safe on an unset id rather than sending `undefined` to Discord: join with NO role instead of a
     // malformed one. Sending [undefined] is the shape that turns a missing config value into an API error
@@ -374,9 +454,12 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
     customerId,
     created,
     referredBy: created ? (referredBy ?? null) : null,
-    discordLinked: hasDiscord,
-    // What the guild side ACTUALLY did, rather than what it was asked to do. `discordLinked` only ever meant
-    // "a Discord identity was present", and it stays that way; this is the outcome of acting on it.
+    // sow-356: a Discord identity was present AND the account was allowed to use it. A refused link records
+    // nothing and is not a link, so reporting it as one would make the callback land the member on a server
+    // invite they cannot accept.
+    discordLinked: hasDiscord && joinAllowed,
+    // What the guild side ACTUALLY did, rather than what it was asked to do: joined, role assigned, or refused
+    // and why. `discordLinked` above is the one-bit summary; this is the detail behind it.
     discordOutcome,
     couponApplied: Boolean(couponGrant), // SOW-119
     couponUntil: couponGrant?.until ?? null,

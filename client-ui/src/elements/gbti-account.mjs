@@ -8,6 +8,7 @@
 // divided rows (label/description left, control right). Shadow DOM + V3 tokens only; the shell rail/header are NOT
 // part of this element.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { discordJoinAllowed } from '../../../membership/discord-roles.mjs'; // sow-356: the community is a paid perk
 import { currentLayout, currentTheme, applyLayout, applyTheme, currentGlass, applyGlass, currentGlow, applyGlow } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
 
 const SITE = 'https://gbti.network';
@@ -248,7 +249,10 @@ class GbtiAccount extends GbtiElement {
     // human-friendly ?ref=<username> vanity link is a noted follow-up: it needs a join-side username->github_id
     // resolver (the members-index), and shipping it without one would break referral attribution.
     const canonical = r.link || (r.code ? `${SITE}/join?ref=${r.code}` : null);
-    const invite = this._invite?.url || null;
+    // sow-356: only an account that may be in the server is offered the invite. The endpoint refuses a free or
+    // lapsed account on its own, so this row would usually be empty anyway; asserting the rule here as well means
+    // the offer does not depend on a request having failed.
+    const invite = (discordJoinAllowed(this._membership) && this._invite?.url) || null;
     const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ''}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
     const rows = `${canonical ? copyRow('ref-canonical', canonical, 'Your invite link', 'Your personal referral link to share anywhere.') : ''}${invite ? copyRow('discord-invite', invite, 'Discord invite', 'The members-only GBTI community on Discord. Joining needs an active membership.') : ''}`;
     return `<section class="sec">

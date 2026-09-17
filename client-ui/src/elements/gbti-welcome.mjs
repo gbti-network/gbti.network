@@ -14,6 +14,7 @@ import { ONBOARDING_STEPS } from '../../../membership/onboarding.mjs'; // sow-34
 import { saveWizardSocials } from '../welcome-socials.mjs'; // sow-343: Continue on the socials step saves
 import { readOwnProfile } from '../own-profile.mjs'; // sow-346: the one safe read of your own profile
 import { DISCORD_LINK_URL } from '../discord.mjs';
+import { discordJoinAllowed } from '../../../membership/discord-roles.mjs'; // sow-356: the community is a paid perk
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs';
 import { recallProfileSocials } from '../profile-fields.mjs'; // SOW-129 QA: recall saved profile socials into the welcome step
 import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
@@ -253,7 +254,7 @@ class GbtiWelcome extends GbtiElement {
     if (!this._resumed) {
       this._resumed = true;
       const asked = requestedStep(this.getAttribute('start-step'), STEPS); // sow-343: the WorkBench card links to a step
-      this._step = asked >= 0 ? asked : resumeStep(this._stepDone(), STEPS.length);
+      this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), STEPS.length);
     }
     this.render();
   }
@@ -275,6 +276,34 @@ class GbtiWelcome extends GbtiElement {
       (this._follows?.size ?? 0) > 0,        // follow    — following at least one member
       (this._topicsCount ?? 0) > 0,          // topics    — at least one topic in the stored prefs
     ];
+  }
+
+  /**
+   * What RESUME treats as settled, which is not the same thing as what the rail ticks.
+   *
+   * sow-356: a free account cannot connect Discord, so resuming would park it on that step forever. Resume steps
+   * past it; the rail still shows it as outstanding rather than done, because the member has not done it and a
+   * tick would say they had.
+   */
+  /**
+   * The step heading. sow-356: "Connect Discord" is an instruction, and it is the wrong one for an account that
+   * may not join. Caught by driving the step, where the card explained that the server is for paying members
+   * under a heading telling the reader to connect. Kept short enough not to clip at phone width (measured).
+   */
+  _headingText() {
+    if (this._done) return DONE_HEADING;
+    const step = STEPS[this._step];
+    if (step?.key === 'discord' && !this._mayJoinDiscord()) return 'Discord community';
+    return step.heading;
+  }
+
+  _resumeFlags() {
+    const done = this._stepDone();
+    // Only when the membership was READ and says no. An unread one keeps the step: skipping it there would mean a
+    // paying member whose status read failed never lands on Discord at all, and never sees the card saying the
+    // check failed. Caught by driving the wizard: every membership resumed on step two, unread included.
+    if (this._membership !== 'unknown' && !this._mayJoinDiscord()) done[0] = true;
+    return done;
   }
 
   // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
@@ -398,7 +427,7 @@ class GbtiWelcome extends GbtiElement {
     const phase = ph.phase === 'coupon' ? 'Free membership period' : ph.phase === 'paid' ? 'Paid membership' : ph.phase === 'trial' ? 'Trial phase' : '';
     this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
     const step = STEPS[this._step].key;
-    const heading = this._done ? DONE_HEADING : STEPS[this._step].heading;
+    const heading = this._headingText();
     const stepText = this._done ? 'COMPLETE' : `STEP ${this._step + 1} OF ${STEPS.length}`;
     const progress = this._done ? 100 : Math.round((this._step / STEPS.length) * 100 + 12);
     const card = this._done ? this._doneCard()
@@ -496,7 +525,30 @@ class GbtiWelcome extends GbtiElement {
     }
   }
 
+  // sow-356: may this account be in the server at all? The community is a paid perk (owner, 2026-09-17), so a
+  // free or lapsed account is shown what it is rather than a button that now refuses. `unknown` (the status read
+  // failed) is neither: it says so, and offers nothing, because guessing either way is wrong.
+  _mayJoinDiscord() { return discordJoinAllowed(this._membership); }
+
+  _discordLockedCard() {
+    const unread = this._membership === 'unknown';
+    const note = unread
+      ? 'We could not check your membership just now. Reload to try again.'
+      : 'The Discord community is part of the Network Supporter membership.';
+    const link = unread
+      ? ''
+      : `<a class="dbtn" href="${SITE}/membership/" target="_blank" rel="noopener">See what membership includes</a>`;
+    return `
+      <div class="dhead">
+        <span class="ico-tile">${discordIco}</span>
+        <p class="dlede">Our Discord community is for paying members.</p>
+      </div>
+      <p class="intro" style="max-width:58ch">Announcements and agile discussions happen in the server, and it is the best place to network in real time with network members. ${esc(note)}</p>
+      ${link}`;
+  }
+
   _discordCard() {
+    if (!this._mayJoinDiscord()) return this._discordLockedCard();
     const joined = this._discordJoined;
     // sow-218: the connected state used to be a permanently DISABLED button and nothing else, so a member who
     // linked the wrong Discord account had no route back. It now offers Disconnect.

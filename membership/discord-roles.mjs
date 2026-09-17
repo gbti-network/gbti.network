@@ -39,6 +39,26 @@ export function discordRoleTarget(effectiveStatus) {
 }
 
 /**
+ * sow-356 (owner ruling 2026-09-17: "free users should not be added to the discord"): may this effective status be
+ * ADDED to the guild at all? Membership of the server is a paid perk, so only the statuses that hold a real access
+ * role qualify. Everything else is refused: a free account (`none`), a lapsed one (`expired`, `cancelled`), a
+ * banned one, and anything unrecognized.
+ *
+ * SEPARATE FROM discordRoleTarget on purpose. That function answers "which role does this member hold", and it
+ * answers `locked` for two very different situations: a member who may not be in the community, and a paying
+ * member whose overrides copy could not be read (its fail-closed fallback). Joining must not treat those alike,
+ * or a stale mirror would lock a paying member out of the server entirely, where before it only delayed their
+ * role by a day. The Worker therefore resolves eligibility with the Stripe fallback (resolveSignupRole), and the
+ * UI screens use this simpler rule over the effective status they already hold.
+ *
+ * Nobody already in the guild is removed by this rule (owner, same day): a lapsed member keeps their place and
+ * their Locked role, so renewing restores access without rejoining.
+ */
+export function discordJoinAllowed(effectiveStatus) {
+  return PUBLISHED_STATUSES.has(effectiveStatus) || TRIAL_STATUSES.has(effectiveStatus);
+}
+
+/**
  * The three EXCLUSIVE access roles. A member holds exactly one; assigning a target means REMOVING the others.
  *
  * Signup used to only ever ADD, which is how the test account ended up holding Applicant AND Locked at the same

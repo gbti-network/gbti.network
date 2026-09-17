@@ -104,14 +104,19 @@ const emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socia
  * @param {number|Array|null} s.topics     saved topics (a count or the list)
  * @param {boolean|null} s.profileSocials  the saved profile carries a handle (false when there is no profile)
  * @param {object|null} s.record           the stored onboarding block (null when never written; undefined = unread)
+ * @param {boolean} s.discordAvailable     sow-356: false for an account that may not be in the server
  * @returns {{ steps: Array<{key,label,title,state}>, complete: boolean, known: boolean, outstanding: number }}
  */
-export function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record } = {}) {
+export function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true } = {}) {
   // `undefined` = the record was not read; `null` = read, and nothing has been stored yet.
   const rec = record === undefined ? undefined : (normalizeOnboarding(record) ?? emptyRecord());
   const nFollows = count(follows);
   const nTopics = count(topics);
-  const known = typeof discordLinked === 'boolean' && nFollows !== null && nTopics !== null
+  // sow-356: the Discord step is DROPPED for an account that may not be in the server (the community is a paid
+  // perk, owner 2026-09-17), rather than left outstanding. A step nobody can finish makes the card permanent and
+  // its count a lie: a free account would read "0 of 5 done" forever with one of the five impossible. With the
+  // step gone, whether the link landed is no longer part of knowing where they are, so it is not required either.
+  const known = (discordAvailable === false || typeof discordLinked === 'boolean') && nFollows !== null && nTopics !== null
     && typeof profileSocials === 'boolean' && rec !== undefined;
   const r = rec ?? emptyRecord();
   const done = {
@@ -121,7 +126,8 @@ export function onboardingProgress({ discordLinked = null, follows = null, topic
     follow: (nFollows ?? 0) > 0,
     topics: (nTopics ?? 0) > 0,
   };
-  const steps = ONBOARDING_STEPS.map((s) => ({
+  const offered = discordAvailable === false ? ONBOARDING_STEPS.filter((s) => s.key !== 'discord') : ONBOARDING_STEPS;
+  const steps = offered.map((s) => ({
     key: s.key,
     label: s.label,
     title: s.title,

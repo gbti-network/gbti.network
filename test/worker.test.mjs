@@ -320,13 +320,15 @@ test('signup with an existing customer reuses it and does NOT rewrite trial_star
   assert.equal(updateMeta.github_login, 'octocat');
   // KV index written.
   assert.equal(kv.store.get('gh:12345'), 'cus_existing');
-  // Trial role assigned via guilds.join with the user's access token.
-  assert.equal(discord.calls.addGuildMember.length, 1);
-  const join = discord.calls.addGuildMember[0];
-  assert.equal(join.guildId, 'guild-1');
-  assert.equal(join.userId, 'd-987');
-  assert.deepEqual(join.opts.roles, ['role-locked']);
-  assert.equal(join.opts.accessToken, 'discord-user-token');
+  // sow-356: this fixture is a LAPSED account (no subscription, and a trial clock from 2020), so the community
+  // is not theirs and the link is refused. The refusal leaves no trace anywhere: no guild member, no role, and
+  // no discord_user_id on the record. The last one is the part worth pinning, because writing it would make
+  // every surface that reads the link report a member as being in a server they were never added to.
+  assert.ok(!('discord_user_id' in updateMeta), 'a refused link is not recorded on the Customer');
+  assert.equal(discord.calls.addGuildMember.length, 0, 'and the guild join never happens');
+  assert.equal(discord.calls.addRole.length, 0);
+  assert.deepEqual(result.discordOutcome, { joined: false, roleAssigned: false, role: null, refused: 'lapsed' });
+  assert.equal(result.discordLinked, false, 'a refused link is not a link');
 });
 
 test('SOW: GitHub-only signup (Discord deferred) -> Customer omits discord_user_id, no guild join, discordLinked false', async () => {
@@ -354,10 +356,14 @@ test('SOW: GitHub-only signup (Discord deferred) -> Customer omits discord_user_
 test('an UNSET locked role id joins the guild with NO role, never `undefined`', async () => {
   // A missing config value must not become a malformed Discord call. Sending roles:[undefined] turns a
   // config gap into an API error or, worse, a silent partial success, instead of a visible no-op.
+  //
+  // sow-356: the member here is PAYING with no overrides copy in KV, which is the one combination that still
+  // joins holding Locked (the mirror cannot be trusted, so the role falls back and the daily sync corrects it).
+  // A free account no longer joins at all, so it can no longer exercise this guard.
   const discord = fakeDiscord();
   await runSignup({
     identity: IDENTITY,
-    stripe: fakeStripe({ searchHit: null }),
+    stripe: fakeStripe({ searchHit: paidCustomer }),
     discord,
     kv: fakeKv(),
     config: { guildId: 'guild-1', signupSource: 'signup-worker' }, // no lockedRoleId
@@ -371,25 +377,30 @@ test('an UNSET locked role id joins the guild with NO role, never `undefined`', 
 });
 
 test('the signup role EQUALS what reconcile would assign the same member (no drift)', async () => {
-  // Signup and reconcile must never disagree about what a free member holds. Asserting against
-  // discordRoleTarget rather than a hardcoded string means a future change to one side fails here rather
-  // than producing a role that silently gets swapped a day later, which is the bug this replaced.
+  // Signup and reconcile must never disagree about what a member holds. Asserting against discordRoleTarget
+  // rather than a hardcoded string means a future change to one side fails here rather than producing a role
+  // that silently gets swapped a day later, which is the bug this replaced.
+  //
+  // sow-356 narrowed this to the members who actually join. A free or lapsed account is refused the guild, so
+  // its role is only ever assigned by reconcile to someone ALREADY in the server, and that rule is unchanged:
+  // they keep Locked and they stay.
   assert.equal(discordRoleTarget('none'), 'locked');
+  assert.equal(discordRoleTarget('paid'), 'member');
   const discord = fakeDiscord();
   await runSignup({
     identity: IDENTITY,
-    stripe: fakeStripe({ searchHit: null }),
+    stripe: fakeStripe({ searchHit: paidCustomer }),
     discord,
-    kv: fakeKv(),
+    kv: mirrorKv(freshMirror()),
     config: CONFIG,
     refCode: '', via: '',
-    now: new Date('2026-06-02T12:00:00.000Z'),
+    now: NOW,
   });
   const ROLE_ID_FOR = { member: CONFIG.memberRoleId, trial: CONFIG.trialRoleId, locked: CONFIG.lockedRoleId };
-  assert.deepEqual(discord.calls.addGuildMember[0].opts.roles, [ROLE_ID_FOR[discordRoleTarget('none')]]);
+  assert.deepEqual(discord.calls.addGuildMember[0].opts.roles, [ROLE_ID_FOR[discordRoleTarget('paid')]]);
 });
 
-test('signup with no existing customer creates one with full metadata + locked role + KV index', async () => {
+test('signup with no existing customer creates one with full metadata + KV index, and no Discord for a free account', async () => {
   const stripe = fakeStripe({ searchHit: null });
   const discord = fakeDiscord();
   const kv = fakeKv();
@@ -416,7 +427,10 @@ test('signup with no existing customer creates one with full metadata + locked r
   assert.equal(args.email, 'octo@example.com');
   assert.equal(args.metadata.github_id, '12345');
   assert.equal(args.metadata.github_login, 'octocat');
-  assert.equal(args.metadata.discord_user_id, 'd-987');
+  // sow-356: a brand-new account is a FREE account, so the Discord identity it arrived with is refused and
+  // never written. Asserting the ABSENCE here rather than deleting the line: this is the whole ruling, and it
+  // belongs pinned in the test that covers what a fresh signup writes.
+  assert.equal(args.metadata.discord_user_id, undefined, 'the community is a paid perk: a free account records no link');
   // 2026-08-11: the 90-day trial is RETIRED (owner). Signup no longer mints trial_started_at, which was
   // the single tap that produced the `trialing` status, so a new customer must NOT carry the clock.
   // Asserting its ABSENCE rather than deleting the line: this is the whole retirement, and it belongs
@@ -429,12 +443,11 @@ test('signup with no existing customer creates one with full metadata + locked r
   assert.equal(stripe.calls.update.length, 0);
   // KV index written to the new customer id.
   assert.equal(kv.store.get('gh:12345'), 'cus_new');
-  // The signup role is assigned on join AND explicitly via addRole (so existing guild members get it too,
-  // since Discord ignores the join `roles` for a user already in the guild). Both must stay symmetric.
-  assert.deepEqual(discord.calls.addGuildMember[0].opts.roles, ['role-locked']);
-  assert.equal(discord.calls.addRole.length, 1);
-  assert.deepEqual(discord.calls.addRole[0], { guildId: 'guild-1', userId: 'd-987', roleId: 'role-locked' });
-  assert.ok(!discord.calls.addRole.some((c) => c.roleId === 'role-trial'), 'never the trial role: it is retired');
+  // No guild call of any kind for a free account. The symmetry of the join role and the explicit addRole, for
+  // the members who DO join, is pinned by "runSignup ASSIGNS the resolved role" below.
+  assert.equal(discord.calls.addGuildMember.length, 0, 'not added to the server');
+  assert.equal(discord.calls.addRole.length, 0, 'and given no role');
+  assert.equal(discord.calls.removeRole.length, 0, 'nor is anything stripped from someone who is not there');
 });
 
 test('signup rejects a self-referral at creation (no referred_by stored)', async () => {
@@ -826,18 +839,47 @@ test('sow-158 Phase 2 + sow-343: a NEW account carries return_to to the welcome 
   );
 });
 
+// sow-356: the link start now reads the Customer to decide whether this account may be in the server at all, so
+// these cases route Stripe explicitly. Without it the route would reach the real api.stripe.com, and the test
+// would pass on a failed lookup (which continues, by design) rather than on the case it names.
+const stripeSearch = (customer) => (url) => {
+  if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: customer ? [customer] : [] } };
+  return { status: 200, body: '' };
+};
+
 test('SOW Part C: /discord/link/start with a session -> Discord OAuth carrying the verified github_id + a nonce', async () => {
   const env = fakeEnv();
   const session = await signSession({ githubId: '424242', githubLogin: 'octocat' }, env.SESSION_SECRET);
-  const res = await worker.fetch(req('GET', '/discord/link/start', { headers: { Cookie: 'gbti_session=' + session } }), env, {});
-  assert.equal(res.status, 302);
-  const location = res.headers.get('Location');
-  assert.ok(location.startsWith('https://discord.com/api/oauth2/authorize'), 'redirects to Discord authorize');
-  const state = await unpackState(new URL(location).searchParams.get('state'), env);
-  assert.equal(state.githubId, '424242');
-  assert.equal(state.link, true);
-  assert.ok(state.nonce, 'carries a per-browser nonce');
-  assert.match(res.headers.get('Set-Cookie') || '', new RegExp('gbti_oauth_nonce=' + state.nonce));
+  const paying = { id: 'cus_x', metadata: { github_id: '424242' }, subscriptions: { data: [{ status: 'active', items: { data: [{ price: { id: 'price_x' } }] } }] } };
+  await withFetch(stripeSearch(paying), async () => {
+    const res = await worker.fetch(req('GET', '/discord/link/start', { headers: { Cookie: 'gbti_session=' + session } }), env, {});
+    assert.equal(res.status, 302);
+    const location = res.headers.get('Location');
+    assert.ok(location.startsWith('https://discord.com/api/oauth2/authorize'), 'redirects to Discord authorize');
+    const state = await unpackState(new URL(location).searchParams.get('state'), env);
+    assert.equal(state.githubId, '424242');
+    assert.equal(state.link, true);
+    assert.ok(state.nonce, 'carries a per-browser nonce');
+    assert.match(res.headers.get('Set-Cookie') || '', new RegExp('gbti_oauth_nonce=' + state.nonce));
+  });
+});
+
+test('sow-356: /discord/link/start turns a free account back BEFORE the Discord sign-in', async () => {
+  // Refusing at the callback alone would walk a free account through a Discord consent screen for something it
+  // cannot have. A failed Stripe read still continues, because the callback resolves again and refuses there: a
+  // billing hiccup should cost a paying member a click, not the ability to join.
+  const env = fakeEnv();
+  const session = await signSession({ githubId: '424242', githubLogin: 'octocat' }, env.SESSION_SECRET);
+  const free = { id: 'cus_x', metadata: { github_id: '424242' } };
+  await withFetch(stripeSearch(free), async () => {
+    const res = await worker.fetch(req('GET', '/discord/link/start', { headers: { Cookie: 'gbti_session=' + session } }), env, {});
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get('Location'), 'https://gbti.test/membership/?discord=members-only');
+  });
+  await withFetch(() => ({ status: 500, body: 'stripe down' }), async () => {
+    const res = await worker.fetch(req('GET', '/discord/link/start', { headers: { Cookie: 'gbti_session=' + session } }), env, {});
+    assert.ok((res.headers.get('Location') || '').startsWith('https://discord.com/api/oauth2/authorize'), 'an unreadable record continues');
+  });
 });
 
 test('SOW Part C: /discord/link/start with NO session -> no Discord OAuth, lands on the welcome flow', async () => {
@@ -849,27 +891,57 @@ test('SOW Part C: /discord/link/start with NO session -> no Discord OAuth, lands
   assert.ok(!loc.includes('discord.com'), 'never starts Discord OAuth without a verified identity');
 });
 
+// The Discord-link callback, driven end to end through worker.fetch. sow-356 split it in two, because the
+// destination now depends on whether the member may be in the server at all, and the FIXTURE decided the answer:
+// the customer here carried a 2020 trial clock, which is a lapsed account, so the one assertion that existed was
+// the refusal case wearing the success case's name.
+const discordCallback = (customer) => (url) => {
+  if (url.includes('discord.com/api') && url.includes('oauth2/token')) return { status: 200, body: { access_token: 'dtok' } };
+  if (url.includes('discord.com/api') && url.includes('users/@me')) return { status: 200, body: { id: 'd-99', email: 'd@e.com' } };
+  if (url.includes('discord.com/api') && url.includes('guilds')) return { status: 204, body: '' };
+  if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: [customer] } };
+  if (url.includes('api.stripe.com/v1/customers')) return { status: 200, body: { id: customer.id } };
+  return { status: 200, body: '' };
+};
+
 test('SOW Part C: the Discord-link callback links discord_user_id + role to the EXISTING Customer (nonce-checked)', async () => {
   const env = fakeEnv({ DISCORD_INVITE_URL: 'https://discord.gg/test' });
   const startState = await packState({ githubId: '5', githubLogin: 'octocat', nonce: 'n1', link: true }, env);
-  await withFetch(
-    (url) => {
-      if (url.includes('discord.com/api') && url.includes('oauth2/token')) return { status: 200, body: { access_token: 'dtok' } };
-      if (url.includes('discord.com/api') && url.includes('users/@me')) return { status: 200, body: { id: 'd-99', email: 'd@e.com' } };
-      if (url.includes('discord.com/api') && url.includes('guilds')) return { status: 204, body: '' };
-      if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: [{ id: 'cus_x', metadata: { github_id: '5', trial_started_at: '2020-01-01T00:00:00.000Z' } }] } };
-      if (url.includes('api.stripe.com/v1/customers')) return { status: 200, body: { id: 'cus_x' } };
-      return { status: 200, body: '' };
-    },
-    async () => {
-      const res = await worker.fetch(
-        req('GET', '/signup/discord/callback?code=dcode&state=' + encodeURIComponent(startState), { headers: { Cookie: 'gbti_oauth_nonce=n1' } }),
-        env, {},
-      );
-      assert.equal(res.status, 302);
-      assert.equal(res.headers.get('Location'), 'https://discord.gg/test', 'redirects the member INTO Discord, not back to the site');
-    },
-  );
+  const paying = { id: 'cus_x', metadata: { github_id: '5' }, subscriptions: { data: [{ status: 'active', items: { data: [{ price: { id: 'price_x' } }] } }] } };
+  await withFetch(discordCallback(paying), async (calls) => {
+    const res = await worker.fetch(
+      req('GET', '/signup/discord/callback?code=dcode&state=' + encodeURIComponent(startState), { headers: { Cookie: 'gbti_oauth_nonce=n1' } }),
+      env, {},
+    );
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get('Location'), 'https://discord.gg/test', 'redirects the member INTO Discord, not back to the site');
+    const joined = calls.filter((c) => c.url.includes('/guilds/guild-1/members/d-99'));
+    assert.ok(joined.length > 0, 'and the guild join happened');
+    const update = calls.find((c) => c.url.includes('api.stripe.com/v1/customers/cus_x'));
+    assert.ok(String(update?.body || '').includes('discord_user_id'), 'the link is recorded on the Customer');
+  });
+});
+
+test('sow-356: a lapsed account is refused the link, recorded nowhere, and lands on the membership page', async () => {
+  // The whole refusal, end to end, in the order it has to hold: no guild call, nothing written to Stripe, and a
+  // destination that is NOT the server invite. The invite URL is configured here, so landing on the membership
+  // page is a decision rather than a fallback.
+  const env = fakeEnv({ DISCORD_INVITE_URL: 'https://discord.gg/test' });
+  const startState = await packState({ githubId: '5', githubLogin: 'octocat', nonce: 'n1', link: true }, env);
+  const lapsed = { id: 'cus_x', metadata: { github_id: '5', trial_started_at: '2020-01-01T00:00:00.000Z' } };
+  await withFetch(discordCallback(lapsed), async (calls) => {
+    const res = await worker.fetch(
+      req('GET', '/signup/discord/callback?code=dcode&state=' + encodeURIComponent(startState), { headers: { Cookie: 'gbti_oauth_nonce=n1' } }),
+      env, {},
+    );
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get('Location'), 'https://gbti.test/membership/?discord=members-only');
+    assert.equal(calls.filter((c) => c.url.includes('/guilds/')).length, 0, 'never added to the server');
+    const wrote = calls.filter((c) => c.url.includes('api.stripe.com/v1/customers') && String(c.body || '').includes('discord_user_id'));
+    assert.deepEqual(wrote, [], 'and the Discord id reaches the Customer record nowhere');
+    // They stay signed in: a refused perk is not a sign-out.
+    assert.ok((res.headers.get('Set-Cookie') || '').length > 0 || res.headers.has('Set-Cookie'), 'the session is still issued');
+  });
 });
 
 test('SOW: /discord/link/status reports the Customer Discord-link state, fail-closed', async () => {
@@ -1332,7 +1404,7 @@ test('sow-185: a LIVE TIERLESS coupon grant resolves to member and NO creator ba
     kv: mirrorKv(freshMirror()), githubId: '12345', customer: null,
     couponGrant: { until: '2027-08-11T00:00:00.000Z' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'member', creator: false });
+  assert.deepEqual(r, { access: 'member', creator: false, eligible: true, reason: 'eligible' });
 });
 
 test('sow-218: an EXPIRED coupon grant grants nothing', async () => {
@@ -1340,7 +1412,7 @@ test('sow-218: an EXPIRED coupon grant grants nothing', async () => {
     kv: mirrorKv(freshMirror()), githubId: '12345', customer: null,
     couponGrant: { until: '2020-01-01T00:00:00.000Z' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'locked', creator: false });
+  assert.deepEqual(r, { access: 'locked', creator: false, eligible: false, reason: 'free' });
 });
 
 test('sow-218: a paying subscriber linking Discord gets the MEMBER role, not locked', async () => {
@@ -1356,7 +1428,7 @@ test('sow-218: a BANNED member gets locked and NO badge, even holding a live cou
     kv: mirrorKv(mirror), githubId: '12345', customer: paidCustomer,
     couponGrant: { until: '2027-08-11T00:00:00.000Z' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'locked', creator: false });
+  assert.deepEqual(r, { access: 'locked', creator: false, eligible: false, reason: 'banned' });
 });
 
 test('sow-218: a grandfathered member with NO Stripe subscription still gets the member role', async () => {
@@ -1388,7 +1460,7 @@ test('sow-218: an EXISTING coupon grant is read from KV, not just one redeemed i
   const r = await resolveSignupRole({ kv: withGrant, githubId: '12345', customer: trialCustomer, couponGrant: null, now: NOW });
   // `creator: false` since the 2026-08-24 ruling. The ACCESS half is what this test is really about, and it
   // is unchanged: the stored grant still outranks a stale trial clock. Only the badge moved.
-  assert.deepEqual(r, { access: 'member', creator: false }, 'the stored grant outranks a stale trial clock');
+  assert.deepEqual(r, { access: 'member', creator: false, eligible: true, reason: 'eligible' }, 'the stored grant outranks a stale trial clock');
 });
 
 test('sow-218: without a grant, a stale trial clock still resolves to the trial role', async () => {
@@ -1411,7 +1483,7 @@ test('sow-218: a coupon invitee is still admitted when the mirror is unavailable
     kv: mirrorKv(null), githubId: '12345', customer: null,
     couponGrant: { until: '2027-08-11T00:00:00.000Z' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'member', creator: false });
+  assert.deepEqual(r, { access: 'member', creator: false, eligible: true, reason: 'eligible' });
 });
 
 // --- sow-185 (2026-08-24): a coupon confers its OWN tier, and the badge raises but never lowers ----------
@@ -1447,7 +1519,7 @@ test('sow-185: a MEMBER-tier coupon confers no creator badge', async () => {
     kv: mirrorKv(freshMirror()), githubId: '12345', customer: null,
     couponGrant: { until: '2027-08-11T00:00:00.000Z', tier: 'member' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'member', creator: false });
+  assert.deepEqual(r, { access: 'member', creator: false, eligible: true, reason: 'eligible' });
 });
 
 test('sow-185: an EXPLICIT creator-tier coupon still confers the badge', async () => {
@@ -1458,7 +1530,7 @@ test('sow-185: an EXPLICIT creator-tier coupon still confers the badge', async (
     kv: mirrorKv(freshMirror()), githubId: '12345', customer: null,
     couponGrant: { until: '2027-08-11T00:00:00.000Z', tier: 'creator' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'member', creator: true });
+  assert.deepEqual(r, { access: 'member', creator: true, eligible: true, reason: 'eligible' });
 });
 
 test('sow-185: a STAFF member holding a member-tier coupon KEEPS the creator badge', async () => {
@@ -1472,7 +1544,7 @@ test('sow-185: a STAFF member holding a member-tier coupon KEEPS the creator bad
     kv: mirrorKv(mirror), githubId: '12345', customer: null,
     couponGrant: { until: '2027-08-11T00:00:00.000Z', tier: 'member' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'member', creator: true }, 'staff resolves to creator and the coupon must not lower it');
+  assert.deepEqual(r, { access: 'member', creator: true, eligible: true, reason: 'eligible' }, 'staff resolves to creator and the coupon must not lower it');
 });
 
 test('sow-185: a hand-set creator GRANDFATHER keeps the badge while holding a member coupon', async () => {
@@ -1483,11 +1555,11 @@ test('sow-185: a hand-set creator GRANDFATHER keeps the badge while holding a me
   const withCreator = freshMirror({ grandfathered: { grandfathered: [{ github_id: '12345', reason: 'comp', tier: 'creator' }] } });
   const memberCoupon = { until: '2027-08-11T00:00:00.000Z', tier: 'member' };
   const kept = await resolveSignupRole({ kv: mirrorKv(withCreator), githubId: '12345', customer: null, couponGrant: memberCoupon, now: NOW });
-  assert.deepEqual(kept, { access: 'member', creator: true });
+  assert.deepEqual(kept, { access: 'member', creator: true, eligible: true, reason: 'eligible' });
 
   const tierless = freshMirror({ grandfathered: { grandfathered: [{ github_id: '12345', reason: 'comp' }] } });
   const plain = await resolveSignupRole({ kv: mirrorKv(tierless), githubId: '12345', customer: null, couponGrant: memberCoupon, now: NOW });
-  assert.deepEqual(plain, { access: 'member', creator: false }, 'a tierless grandfather is member, so no badge');
+  assert.deepEqual(plain, { access: 'member', creator: false, eligible: true, reason: 'eligible' }, 'a tierless grandfather is member, so no badge');
 });
 
 test('sow-185: an absent or stale mirror reports the COUPON tier, not a hardcoded true', async () => {
@@ -1499,9 +1571,9 @@ test('sow-185: an absent or stale mirror reports the COUPON tier, not a hardcode
   const stale = freshMirror({ generatedAt: '2026-08-01T00:00:00.000Z' });
   for (const [label, kv] of [['absent', mirrorKv(null)], ['stale', mirrorKv(stale)]]) {
     const m = await resolveSignupRole({ kv, githubId: '12345', customer: null, couponGrant: member, now: NOW });
-    assert.deepEqual(m, { access: 'member', creator: false }, `a member coupon gets no badge with a ${label} mirror`);
+    assert.deepEqual(m, { access: 'member', creator: false, eligible: true, reason: 'eligible' }, `a member coupon gets no badge with a ${label} mirror`);
     const c = await resolveSignupRole({ kv, githubId: '12345', customer: null, couponGrant: creator, now: NOW });
-    assert.deepEqual(c, { access: 'member', creator: true }, `a creator coupon keeps its badge with a ${label} mirror`);
+    assert.deepEqual(c, { access: 'member', creator: true, eligible: true, reason: 'eligible' }, `a creator coupon keeps its badge with a ${label} mirror`);
   }
 });
 
@@ -1512,7 +1584,7 @@ test('sow-185: an EXPIRED creator-tier coupon leaks no badge', async () => {
     kv: mirrorKv(freshMirror()), githubId: '12345', customer: null,
     couponGrant: { until: '2020-01-01T00:00:00.000Z', tier: 'creator' }, now: NOW,
   });
-  assert.deepEqual(r, { access: 'locked', creator: false });
+  assert.deepEqual(r, { access: 'locked', creator: false, eligible: false, reason: 'free' });
 });
 
 test('sow-218: runSignup ASSIGNS the resolved role, not a hardcoded one', async () => {
@@ -1550,7 +1622,10 @@ test('sow-218: a coupon invitee is badged Content Creator at link time, not a re
   const CFG = { ...CONFIG, creatorRoleId: 'r-creator' };
   const kv = { get: async (k) => (k === 'overrides:mirror' ? freshMirror() : null), put: async () => {} };
   await runSignup({
-    identity: IDENTITY, stripe: fakeStripe({ searchHit: null, created: { id: 'cus_new' } }), discord, kv,
+    // sow-356: a PAYING member holding the coupon parameter. The fixture used to be a brand-new account, which
+    // is now refused the guild outright, and a refusal makes no Discord calls at all, so the badge claim below
+    // would have passed for the wrong reason.
+    identity: IDENTITY, stripe: fakeStripe({ searchHit: paidCustomer }), discord, kv,
     config: CFG, coupon: 'CODEABLEYEAR', now: NOW,
   });
   // No coupon config is mirrored in this fixture, so redeemCoupon returns null and the member resolves from

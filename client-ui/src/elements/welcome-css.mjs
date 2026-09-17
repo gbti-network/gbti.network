@@ -128,8 +128,12 @@ export const WELCOME_CSS = `
      only heading on this panel, and a second one saying nearly the same thing is noise for a screen reader.
      Sized between the old h3 and the old sub-line so it still carries next to a 46px tile. */
   .dhead .dlede { font-family:var(--font-display); font-size:16.5px; font-weight:600; margin:0; line-height:1.25; color:var(--wf-fg); }
+  /* sow-356: text-decoration is here because .dbtn is now worn by an ANCHOR as well (the membership link shown
+     where a free account would see Connect Discord). BASE_CSS styles the bare anchor, and the UA underline survives any
+     rule that does not name it, so without this the link renders as underlined white text on the green pill. */
   .dbtn { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:600; font-size:13.5px;
-    color:#fff; background:var(--wf-green); border:1.5px solid transparent; border-radius:7px; padding:11px 18px; cursor:pointer; }
+    color:#fff; background:var(--wf-green); border:1.5px solid transparent; border-radius:7px; padding:11px 18px;
+    cursor:pointer; text-decoration:none; }
   .dbtn:not(.on):not([disabled]):hover { background:var(--wf-greenhover); }
   .dbtn.on, .dbtn[disabled] { color:var(--wf-soft); background:var(--wf-raise); border-color:var(--wf-line); cursor:default; }
   /* sow-218: the connected row pairs the confirmation with a quiet Disconnect. Deliberately understated: it is
