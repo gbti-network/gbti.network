@@ -233,7 +233,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
           {/* sow-281: the partner CTA, its own card above the digest. Renders nothing unless an enabled CTA is assigned. */}
           <CtaCard type="prompt" ref={d.slug} wrap="card" pad />
 
-          <div class="card" style="padding:22px">
+          <div class="card rail-digest" style="padding:22px">
             <DigestSubscribe variant="rail" heading="The weekly digest" />
           </div>
         </aside>
@@ -275,6 +275,9 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
       .detail-grid { grid-template-columns: minmax(0, 1fr); row-gap: clamp(20px, 3vw, 32px); }
       /* One column: source order decides, so the sidebar comes after the prompt (owner, 2026-09-16). */
       .detail-aside, .detail-close { grid-column: auto; grid-row: auto; }
+      /* The closing block below carries its own digest signup, so the sidebar copy would repeat it one panel
+         later. Desktop keeps both, far apart. */
+      .rail-digest { display: none; }
     }
   </style>
 

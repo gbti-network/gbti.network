@@ -86,3 +86,23 @@ test('extension page illustration: the search text truncates on one line', () =>
   assert.match(page, /<span class="bw-url bw-url-search">[\s\S]*?<span class="bw-url-text">Search the network or paste a link<\/span><\/span>/);
   assert.match(page, /\.bw-url-text \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
 });
+
+// With the sidebar above the closing sections on a phone, its digest signup would repeat the closing block's one
+// panel later. The sidebar copy is hidden only in each page's one-column block; the closing block's copy is the
+// reason that is safe, so it is pinned too.
+test('phone: the sidebar digest signup gives way to the closing block\'s, on articles, projects and prompts', () => {
+  assert.match(src('src/components/ContentFooter.astro'), /\n<DigestSubscribe variant="inline"/);
+  assert.match(src('src/components/blog/ArticleJournal.astro'), /<div class="rail-digest">\n\s*<DigestSubscribe variant="rail"/);
+  assert.match(src('src/pages/projects/[slug].astro'), /<div class="pd-block rail-digest">\n\s*<DigestSubscribe variant="rail"/);
+  const prompt = src('src/pages/prompts/[slug].astro');
+  assert.match(prompt, /<div class="card rail-digest" style="padding:22px">\n\s*<DigestSubscribe variant="rail"/);
+  assert.match(prompt, /@media \(max-width: 600px\) \{[^@]*?\.rail-digest \{ display: none; \}/);
+  // Two blocks share the article query (the Editorial grid's comes first); the Journal one holds .art-j-grid.
+  const q = '@media (hover: none) and (pointer: coarse) and (max-width: 640px), (max-width: 479px) {\n';
+  const journal = css.slice(css.indexOf(q, css.indexOf('.art-j-grid {')), css.indexOf('\n}\n', css.indexOf(q, css.indexOf('.art-j-grid {'))));
+  assert.match(journal, /\.art-j-grid \{ grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(journal, /\.art-j-rail \.rail-digest \{ display: none; \}/);
+  assert.match(mediaBlock('(hover: none) and (pointer: coarse) and (max-width: 560px), (max-width: 479px)'), /\.pd-rail \.rail-digest \{ display: none; \}/);
+  // Hidden anywhere else, a desktop reader would lose the sidebar signup.
+  assert.equal(css.match(/\.rail-digest \{ display: none; \}/g).length, 2);
+});

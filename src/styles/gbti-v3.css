@@ -1763,6 +1763,8 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
      earns its keep by staying in view, and after the write-up it has nothing left to point at. */
   .pd-rail { position: static; }
   .pd-toc { display: none; }
+  /* The closing sections repeat the digest signup a panel later, so the rail copy goes (as on articles). */
+  .pd-rail .rail-digest { display: none; }
   .pd-shots { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1953,6 +1955,10 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
   .art-j-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .art-j-rail { position: static; grid-column: auto; grid-row: auto; padding-top: 18px; border-top: 1px solid var(--line); }
   .art-j-col, .art-j-close { grid-column: auto; }
+  /* The closing sections carry their own digest signup (ContentFooter), so with the rail now above them the
+     rail copy would repeat it one panel later. Desktop keeps both, far apart. The project and prompt pages do
+     the same. */
+  .art-j-rail .rail-digest { display: none; }
 }
 
 /* ---------------------------------------------------------------------------
