@@ -31,7 +31,7 @@ import { defaultFeatureImage } from '../../lib/feature-image';
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub, contentRepoPath } from '../../lib/content';
 import CategoryCrumbs from '../../components/CategoryCrumbs.astro'; // sow-174: linked hero crumbs
-import { favoriteCount } from '../../lib/favorites';
+import { favoriteCount, favoritedBy } from '../../lib/favorites';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
 import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
@@ -183,64 +183,6 @@ const lockedHint = (l: { encrypted?: boolean }) =>
 
     <div class="pd-wrap">
       <div class="pd-grid" data-side={d.sidebarPosition === 'right' ? 'right' : 'left'}>
-        <aside class="pd-rail">
-          {toc.length > 0 && (
-            <nav class="pd-toc" aria-label="Contents" data-pd-toc>
-              <span class="pd-rail-lab">Contents</span>
-              {toc.map((t, i) => <a href={`#${t.id}`} data-pd-toc-link={t.id} class:list={[i === 0 && 'on']}>{t.label}</a>)}
-            </nav>
-          )}
-
-          {(specs.length > 0 || release) && (
-            <div class="pd-block">
-              <dl class="pd-specs">
-                {specs.map(([k, v]) => (
-                  <div class="pd-spec"><dt>{k}</dt><dd>{v}</dd></div>
-                ))}
-                {release && (
-                  <div class="pd-spec">
-                    <dt>Latest release</dt>
-                    <dd><a href={release.url} rel="noopener" class="pd-release-link">{release.tag}<span class="pd-release-age"> · {releaseAge}</span></a></dd>
-                  </div>
-                )}
-              </dl>
-              {d.tags?.length > 0 && (
-                <div class="pd-tags">
-                  {d.tags.map((tag: string) => <a class="pd-tag" href={`/feeds/?tag=${encodeURIComponent(tag)}`}>{tag}</a>)}
-                </div>
-              )}
-            </div>
-          )}
-
-          {asideLinks.length > 0 && (
-            <div class="pd-block pd-rail-links">
-              <span class="pd-rail-lab">Links</span>
-              {asideLinks.map((l) => (
-                isLockedLink(l) ? (
-                  <span class="pd-rail-link locked" data-tooltip={lockedHint(l)}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-lock" /></svg>{linkLabel(l)}
-                  </span>
-                ) : (
-                  <a class="pd-rail-link" href={l.url} rel="noopener">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-link" /></svg>{linkLabel(l)}
-                  </a>
-                )
-              ))}
-            </div>
-          )}
-
-          <div class="pd-block">
-            <FavoritedBy type="project" slug={d.slug} aliases={aliasSlugsOf(d)} />
-          </div>
-
-          {/* sow-281: the partner CTA above the digest block; nothing renders unless an enabled CTA is assigned. */}
-          <CtaCard type="project" ref={d.slug} wrap="pd-block" />
-
-          <div class="pd-block">
-            <DigestSubscribe variant="rail" heading="The weekly digest" />
-          </div>
-        </aside>
-
         <div class="pd-col">
           <div class="pd-byline">
             <ContentMeta author={d.author} publishedAt={d.publishedAt} updatedAt={d.updatedAt} />
@@ -358,6 +300,74 @@ const lockedHint = (l: { encrypted?: boolean }) =>
             </div>
           )}
 
+        </div>
+
+        {/* sow-353 (owner, 2026-09-16): "on single col mobile view the sidebar arrives after the article content, not
+            before." The rail follows the write-up in the source, so a phone stacks it after the column and before the
+            closing sections; the two-column page places it by grid position (gbti-v3.css, .pd-rail), either side. */}
+        <aside class="pd-rail">
+          {toc.length > 0 && (
+            <nav class="pd-toc" aria-label="Contents" data-pd-toc>
+              <span class="pd-rail-lab">Contents</span>
+              {toc.map((t, i) => <a href={`#${t.id}`} data-pd-toc-link={t.id} class:list={[i === 0 && 'on']}>{t.label}</a>)}
+            </nav>
+          )}
+
+          {(specs.length > 0 || release) && (
+            <div class="pd-block">
+              <dl class="pd-specs">
+                {specs.map(([k, v]) => (
+                  <div class="pd-spec"><dt>{k}</dt><dd>{v}</dd></div>
+                ))}
+                {release && (
+                  <div class="pd-spec">
+                    <dt>Latest release</dt>
+                    <dd><a href={release.url} rel="noopener" class="pd-release-link">{release.tag}<span class="pd-release-age"> · {releaseAge}</span></a></dd>
+                  </div>
+                )}
+              </dl>
+              {d.tags?.length > 0 && (
+                <div class="pd-tags">
+                  {d.tags.map((tag: string) => <a class="pd-tag" href={`/feeds/?tag=${encodeURIComponent(tag)}`}>{tag}</a>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {asideLinks.length > 0 && (
+            <div class="pd-block pd-rail-links">
+              <span class="pd-rail-lab">Links</span>
+              {asideLinks.map((l) => (
+                isLockedLink(l) ? (
+                  <span class="pd-rail-link locked" data-tooltip={lockedHint(l)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-lock" /></svg>{linkLabel(l)}
+                  </span>
+                ) : (
+                  <a class="pd-rail-link" href={l.url} rel="noopener">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-link" /></svg>{linkLabel(l)}
+                  </a>
+                )
+              ))}
+            </div>
+          )}
+
+          {/* FavoritedBy renders nothing when nobody opted in (the common case), so the block and its rule only
+              render when it has names; an empty one drew a stray divider in the rail. */}
+          {favoritedBy('project', d.slug, aliasSlugsOf(d)).length > 0 && (
+            <div class="pd-block">
+              <FavoritedBy type="project" slug={d.slug} aliases={aliasSlugsOf(d)} />
+            </div>
+          )}
+
+          {/* sow-281: the partner CTA above the digest block; nothing renders unless an enabled CTA is assigned. */}
+          <CtaCard type="project" ref={d.slug} wrap="pd-block" />
+
+          <div class="pd-block">
+            <DigestSubscribe variant="rail" heading="The weekly digest" />
+          </div>
+        </aside>
+
+        <div class="pd-close">
           <ContentFooter type="project" slug={d.slug} author={d.author} publishedAt={d.publishedAt} aliases={aliasSlugsOf(d)} />
         </div>
       </div>

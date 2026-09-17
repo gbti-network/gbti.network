@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- sow-215 Check B harness fixture.
      The subset of src/pages/workbench/preview.astro's template that applyPreviewShell actually touches:
-     the product hero and spec bar it hides, and the .pd-wrap > .pd-grid > (.pd-rail, .pd-col) tree it
+     the product hero and spec bar it hides, and the .pd-wrap > .pd-grid > (.pd-col, .pd-rail) tree it
      reshapes, with #pd-overview as the lead anchor for the column layouts.
      The data-h-* attributes are HARNESS HANDLES, not part of the product: applyPreviewShell rewrites
      className on these nodes, so a class selector could not find them again afterwards. They are the only
@@ -13,13 +13,13 @@
     <div class="pd-bar"><div class="pd-wrap pd-bar-in"></div></div>
     <div class="pd-wrap">
       <div class="pd-grid" data-h-grid data-side="right">
-        <aside class="pd-rail" data-h-rail>
-          <nav class="pd-toc" data-pd-toc hidden></nav>
-        </aside>
         <div class="pd-col" data-h-col>
           <div class="pd-byline"></div>
           <article id="pd-overview"><div data-pv-body></div></article>
         </div>
+        <aside class="pd-rail" data-h-rail>
+          <nav class="pd-toc" data-pd-toc hidden></nav>
+        </aside>
       </div>
     </div>
   </div>

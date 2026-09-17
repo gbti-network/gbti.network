@@ -150,9 +150,6 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
               )}
             </div>
           </div>
-          <!-- The author note + discussion live in the MAIN column, full-width to match the prompt block (the
-               author already appears in the sidebar card, so the "Written by" box is hidden here). -->
-          <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} wide hideAuthor aliases={aliasSlugsOf(d)} />
         </div>
 
         <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->
@@ -240,6 +237,14 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
             <DigestSubscribe variant="rail" heading="The weekly digest" />
           </div>
         </aside>
+
+        <!-- The author note + discussion sit under the prompt, full-width to match the prompt block (the author
+             already appears in the sidebar card, so the "Written by" box is hidden here). sow-353: they FOLLOW the
+             aside in the source, so a phone reads the prompt, then the sidebar, then the discussion; the grid
+             below places them back under the prompt on the two-column page. -->
+        <div class="detail-close">
+          <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} wide hideAuthor aliases={aliasSlugsOf(d)} />
+        </div>
       </div>
     </div>
   </section>
@@ -248,7 +253,11 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
 
   <style>
     /* Two columns scale down (sidebar shrinks via clamp) and only collapse to one column below 600px. */
-    .detail-grid { display: grid; gap: clamp(20px, 3vw, 32px); grid-template-columns: minmax(0, 1fr) clamp(220px, 26vw, 320px); align-items: start; }
+    .detail-grid { display: grid; gap: 0 clamp(20px, 3vw, 32px); grid-template-columns: minmax(0, 1fr) clamp(220px, 26vw, 320px); align-items: start; }
+    /* sow-353: placed by position, because the discussion follows the aside in the source. The aside takes the
+       right column beside both rows; the discussion sits under the prompt with no row gap, as it did inside it. */
+    .detail-aside { grid-column: 2; grid-row: 1 / span 2; }
+    .detail-close { grid-column: 1; min-width: 0; }
     /* SOW-115: the author card stat pair (public vs members-only prompt counts, each a deep link). */
     .author-stats { display: flex; gap: 22px; }
     .author-stats .astat { display: flex; flex-direction: column; text-decoration: none; line-height: 1.2; }
@@ -263,7 +272,9 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
     @media (max-width: 600px) {
       /* minmax(0,1fr), not 1fr (=minmax(auto,1fr)), so a long prompt/code line scrolls inside the card
          instead of flooring the track and overflowing the page on mobile. */
-      .detail-grid { grid-template-columns: minmax(0, 1fr); }
+      .detail-grid { grid-template-columns: minmax(0, 1fr); row-gap: clamp(20px, 3vw, 32px); }
+      /* One column: source order decides, so the sidebar comes after the prompt (owner, 2026-09-16). */
+      .detail-aside, .detail-close { grid-column: auto; grid-row: auto; }
     }
   </style>
 

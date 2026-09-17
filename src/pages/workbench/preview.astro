@@ -74,6 +74,22 @@ const labelOf = CATEGORY_LABELS;
 
     <div class="pd-wrap">
       <div class="pd-grid">
+        <div class="pd-col">
+          <div class="pd-byline">
+            <p class="pv-inert" style="margin:0">Byline, save, share and favorite controls appear here on the published page.</p>
+          </div>
+          <div class="pvideo" data-pv-video hidden></div>
+          <article id="pd-overview">
+            <Prose><div data-pv-body></div></Prose>
+          </article>
+          <div data-pv-cta hidden></div>
+          <div id="pd-screenshots" class="pd-gallery pd-anchor" data-pv-gallery hidden></div>
+          <div data-pv-note-card style="margin-top:48px" hidden></div>
+          <p class="pv-inert" style="margin-top:36px" data-pv-inert-foot>The author box and discussion render here on the published page.</p>
+        </div>
+
+        {/* sow-353: the rail follows the column, as on the published project page, so a phone-width preview
+            stacks it after the write-up. The two-column preview places it by grid position. */}
         <aside class="pd-rail">
           <nav class="pd-toc" aria-label="Contents" data-pd-toc hidden>
             <span class="pd-rail-lab">Contents</span>
@@ -92,20 +108,6 @@ const labelOf = CATEGORY_LABELS;
             <div class="pv-fav-skel" aria-hidden="true"><i></i><i></i><i></i></div>
           </div>
         </aside>
-
-        <div class="pd-col">
-          <div class="pd-byline">
-            <p class="pv-inert" style="margin:0">Byline, save, share and favorite controls appear here on the published page.</p>
-          </div>
-          <div class="pvideo" data-pv-video hidden></div>
-          <article id="pd-overview">
-            <Prose><div data-pv-body></div></Prose>
-          </article>
-          <div data-pv-cta hidden></div>
-          <div id="pd-screenshots" class="pd-gallery pd-anchor" data-pv-gallery hidden></div>
-          <div data-pv-note-card style="margin-top:48px" hidden></div>
-          <p class="pv-inert" style="margin-top:36px" data-pv-inert-foot>The author box and discussion render here on the published page.</p>
-        </div>
       </div>
     </div>
   </div>

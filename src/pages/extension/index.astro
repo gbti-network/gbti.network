@@ -121,7 +121,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
         <div class="bw-bar">
           <span class="bw-dots"><i></i><i></i><i></i></span>
           <span class="bw-tab">New Tab</span>
-          <span class="bw-url bw-url-search"><svg viewBox="0 0 24 24"><use href="#ico-search"/></svg> Search the network or paste a link</span>
+          <span class="bw-url bw-url-search"><svg viewBox="0 0 24 24"><use href="#ico-search"/></svg><span class="bw-url-text">Search the network or paste a link</span></span>
           <span class="bw-toolbar"><span class="tb-ico"></span><span class="tb-ico tb-gbti">G</span></span>
         </div>
         <div class="ext-stage ext-activity">
@@ -379,6 +379,8 @@ import { mcpPrompt } from '../../lib/mcp-guide';
     .bw-dots i:nth-child(1) { background: #ed6a5e; } .bw-dots i:nth-child(2) { background: #f4be4f; } .bw-dots i:nth-child(3) { background: #61c454; }
     .bw-url { margin-left: 8px; flex: 1 1 auto; min-width: 0; background: #fff; border: 1px solid #e3e5e8; border-radius: 999px; padding: 6px 14px; font-family: var(--f-mono); font-size: 12.5px; color: #3c4043; display: inline-flex; align-items: center; gap: 9px; }
     .bw-url svg { width: 13px; height: 13px; flex: none; color: #5f6368; }
+    /* sow-353: on a phone the pill is narrow; one line with an ellipsis, not one word per line. */
+    .bw-url-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* ---- trust callout (tokens adapt to dark theme) ---- */
     .dev-note { text-align: center; font-size: 14px; color: var(--fg-mute); margin-top: 18px; }

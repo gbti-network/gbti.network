@@ -1556,13 +1556,16 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 }
 
 /* ---------- grid ---------- */
-.pd-grid { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 30px; align-items: start; padding: 30px 0 40px; }
-/* sidebarPosition: right -- mirror the grid so the 190px rail track sits second; CSS order flips which
-   child renders in which track without touching DOM order (main content stays reachable first regardless
-   of visual side). */
+.pd-grid { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 0 30px; align-items: start; padding: 30px 0 40px; }
+/* sow-353: the rail follows the reading column in the source (so a phone stacks it after the write-up), and the
+   two-column page places it by position beside both the column and the closing sections. No row gap, so the
+   closing sections sit directly under the column as they did inside it. */
+.pd-rail { grid-column: 1; grid-row: 1 / span 2; }
+.pd-col, .pd-close { grid-column: 2; }
+/* sidebarPosition: right -- mirror the grid so the 190px rail track sits second, and swap the placements. */
 .pd-grid[data-side="right"] { grid-template-columns: minmax(0, 1fr) 190px; }
-.pd-grid[data-side="right"] .pd-rail { order: 2; }
-.pd-grid[data-side="right"] .pd-col { order: 1; }
+.pd-grid[data-side="right"] .pd-rail { grid-column: 2; }
+.pd-grid[data-side="right"] :is(.pd-col, .pd-close) { grid-column: 1; }
 /* sow-173 responsive audit: below the design's own 1024px reference width, COMPRESS the two-column shape
    (a smaller rail, a smaller gap) rather than stacking it. `vw`-driven clamp()s track the viewport
    continuously, so this holds for a plain desktop browser narrowed with the mouse AND for a touch tablet in
@@ -1572,7 +1575,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
    audit brief warns against. Only a genuinely narrow, TOUCH-driven viewport (see the gated query below)
    restructures the rail into a horizontal strip; everything in this range stays a two-column doc shell. */
 @media (max-width: 1023px) {
-  .pd-grid { grid-template-columns: clamp(130px, 20vw, 185px) minmax(0, 1fr); gap: clamp(18px, 3vw, 28px); padding: 24px 0 36px; }
+  .pd-grid { grid-template-columns: clamp(130px, 20vw, 185px) minmax(0, 1fr); gap: 0 clamp(18px, 3vw, 28px); padding: 24px 0 36px; }
   .pd-grid[data-side="right"] { grid-template-columns: minmax(0, 1fr) clamp(130px, 20vw, 185px); }
 }
 
@@ -1616,7 +1619,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .pd-rail .card { background: none; border: 0; box-shadow: none; padding: 0 !important; }
 
 /* ---------- reading column ---------- */
-.pd-col { min-width: 0; max-width: 660px; }
+.pd-col, .pd-close { min-width: 0; max-width: 660px; }
 .pd-byline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 18px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
 .pd-byline .content-meta { margin: 0; }
 .pvideo { margin-bottom: 26px; }
@@ -1733,8 +1736,8 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .pd-thumb[aria-current='true'] { border-color: var(--green); }
 
 /* ---------- mobile restructuring ---------- */
-/* sow-173 responsive audit: this is a MOBILE-NATIVE restructuring (stack the grid, turn the sticky rail into
-   a horizontal chip strip, drop the contents list), not a compression. It is gated on TOUCH (`hover:none` +
+/* sow-173 responsive audit: this is a MOBILE-NATIVE restructuring (stack the grid with the rail after the
+   write-up, per sow-353, and drop the contents list), not a compression. It is gated on TOUCH (`hover:none` +
    `pointer:coarse`), which real phones and tablets report and a mouse-driven desktop browser never does
    REGARDLESS of how far its window is narrowed — width alone cannot tell those two apart, so width alone
    must not be the trigger for a structural change like this one (see the `@media (max-width:1023px)` block
@@ -1750,18 +1753,16 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
      override on specificity alone, so without a matching-specificity override here it would win even
      though this media query is active, silently keeping the two-column grid at phone width. */
   .pd-grid[data-side="right"] { grid-template-columns: 1fr; }
-  .pd-grid[data-side="right"] .pd-rail, .pd-grid[data-side="right"] .pd-col { order: 0; }
-  .pd-col { max-width: none; }
-  /* The rail becomes a horizontal strip above the body. The contents list goes with it: a table of contents
-     earns its keep by staying in view, and nothing stays in view here. */
-  .pd-rail { position: static; flex-direction: row; align-items: center; gap: 16px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
-  .pd-rail::-webkit-scrollbar { display: none; }
-  .pd-rail > * { flex: none; }
+  /* sow-353 (owner, 2026-09-16): the sidebar comes after the write-up on a phone. Dropping the placement lets
+     source order decide: the column, then the rail, then the closing sections. It used to become a sideways
+     strip above the body, which clipped the digest form and the partner card once they joined the rail. */
+  .pd-rail, .pd-col, .pd-close,
+  .pd-grid[data-side="right"] .pd-rail, .pd-grid[data-side="right"] :is(.pd-col, .pd-close) { grid-column: auto; grid-row: auto; }
+  .pd-col, .pd-close { max-width: none; }
+  /* The rail stacks as plain blocks, each with its own top rule. The contents list goes: a table of contents
+     earns its keep by staying in view, and after the write-up it has nothing left to point at. */
+  .pd-rail { position: static; }
   .pd-toc { display: none; }
-  .pd-block { padding-top: 0; border-top: 0; }
-  .pd-specs, .pd-rail-links { flex-direction: row; align-items: center; gap: 16px; white-space: nowrap; }
-  .pd-spec { gap: 7px; }
-  .pd-tags { margin-top: 0; flex-wrap: nowrap; }
   .pd-shots { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2017,5 +2018,3 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .detail-aside .chip { text-decoration: none; }
 .detail-aside a.chip { transition: border-color .15s ease, color .15s ease; }
 .detail-aside a.chip:hover { border-color: var(--green); color: var(--green-700); }
-/* On mobile the meta reads better above the long prompt body. */
-@media (max-width: 600px) { .detail-aside { order: -1; } }
