@@ -5,6 +5,7 @@
 // pure form.mjs helpers, so the only DOM concern here is reading raw values + rendering.
 
 import { GbtiElement, define, esc } from '../base.mjs';
+import { SLUG_MAX } from '../../../membership/item-id.mjs'; // sow-354
 import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { publishChanges, changeLabel, formatValue, snippet } from '../publish-diff.mjs'; // sow-327: what exactly is unpublished
 import { oneClickPublicView, makePublicRequest, makePublicPrompt, audienceControl } from '../one-click-public-core.mjs'; // sow-293, sow-323
@@ -1725,7 +1726,7 @@ class GbtiContentEditor extends GbtiElement {
     const note = existing && val && val !== loaded
       ? `<div class="urlprev">/${esc(typePath)}/${esc(loaded)}/ becomes /${esc(typePath)}/${esc(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>`
       : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : '';
-    return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" value="${esc(val)}" /></div>${note}</div>`;
+    return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" maxlength="${SLUG_MAX}" value="${esc(val)}" /></div>${note}</div>`;
   }
 
   _wirePermalinkField() {

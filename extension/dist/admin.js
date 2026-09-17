@@ -2954,6 +2954,12 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-doc-editor", GbtiDocEditor);
 
+  // membership/item-id.mjs
+  var SLUG_MAX = 120;
+  var ITEM_ID_MAX = 128;
+  var SLUG_PATTERN = `[a-z0-9][a-z0-9-]{0,${SLUG_MAX - 1}}`;
+  var ITEM_ID_PATTERN = `[a-z0-9][a-z0-9-]{0,${ITEM_ID_MAX - 1}}`;
+
   // client-ui/src/content-types.mjs
   var LEGACY_TYPE_ALIASES = Object.freeze({
     product: "project"
@@ -7012,7 +7018,7 @@ ${listStyleProseCss(".doc-blocks")}
       const existing = Boolean(this.itemPath);
       const val = this._slugVal ?? loaded;
       const note = existing && val && val !== loaded ? `<div class="urlprev">/${esc(typePath)}/${esc(loaded)}/ becomes /${esc(typePath)}/${esc(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : "";
-      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" value="${esc(val)}" /></div>${note}</div>`;
+      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" maxlength="${SLUG_MAX}" value="${esc(val)}" /></div>${note}</div>`;
     }
     _wirePermalinkField() {
       const input = this.$("#slugfield");

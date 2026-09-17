@@ -4,12 +4,15 @@
 // invariant: nothing trial-authored reaches the canonical repo; trial members may stage here too).
 // Node-free pure transforms; the Worker handler does auth + the KV read-modify-write.
 
+import { SLUG_PATTERN } from './item-id.mjs';
+
 export const DRAFTS_MAX_ITEMS = 50;
 export const DRAFT_MAX_BYTES = 150_000;
 export const DRAFTS_MAX_TOTAL_BYTES = 1_000_000;
 
 const TYPE_RE = /^(post|project|product|prompt|profile)$/;
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
+// sow-354: the shared slug limit, so any slug the content schemas accept can be saved as a draft.
+const SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
 // A github login, matched exactly as the folder segment it becomes. Deliberately the same shape the Author
 // picker's `member:<login>` value carries, so a value that round-trips through the store is one the picker
 // can render back without re-parsing it differently than it was written.

@@ -24,7 +24,11 @@
 const titleText = () => z.string().refine((s) => s.trim().length > 0, 'title must not be empty');
 
 import { z } from 'zod';
+import { SLUG_MAX } from '../../membership/item-id.mjs';
 import { BANNER_PRESET_KEYS } from '../../src/lib/banner-presets.mjs';
+
+// sow-354: every store keyed by the slug (drafts, staged images, the publish branch) is sized for SLUG_MAX.
+const SLUG_TOO_LONG = `the permalink must be at most ${SLUG_MAX} characters`;
 
 export const STATUS = z.enum(['draft', 'published']);
 export const VISIBILITY = z.enum(['public', 'members']);
@@ -116,7 +120,7 @@ const socialLinks = z
 export const postSchema = z.object({
   type: z.literal('post').default('post'),
   title: titleText(),
-  slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique -> /articles/<slug>/'),
+  slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique -> /articles/<slug>/'),
   author: z.string(),
   contributors,
   status: STATUS.default('draft'),
@@ -143,7 +147,7 @@ export const postSchema = z.object({
 export const productSchema = z.object({
   type: z.literal('project').default('project'),
   title: titleText(),
-  slug: z.string().regex(/^[a-z0-9-]+$/),
+  slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   author: z.string(),
   contributors,
   status: STATUS.default('draft'),
@@ -206,7 +210,7 @@ export const profileSchema = z.object({
 export const promptSchema = z.object({
   type: z.literal('prompt').default('prompt'),
   title: titleText(),
-  slug: z.string().regex(/^[a-z0-9-]+$/),
+  slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   shortDescription: z.string(), // REQUIRED, mirrors src/content.config.ts (one-line blurb on cards + the feed).
   // Was missing from this mirror: a prompt published without it passed the client but broke the Astro build (SOW-025).
   author: z.string(),

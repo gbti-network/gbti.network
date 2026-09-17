@@ -16,6 +16,7 @@ import {
   HOSTED_MAX_FILES,
   HOSTED_MAX_FILE_BYTES,
 } from '../membership/hosted-author.mjs';
+import { ITEM_ID_MAX } from '../membership/item-id.mjs';
 
 // ---- members-index parse ----
 
@@ -234,12 +235,15 @@ test('base64DecodedBytes: exact decoded length, -1 on malformed', async () => {
 });
 
 // SOW-157: the id contract is 80 chars so share itemIds (share-<stamp>-<48-char slug> = 69) fit.
-test('id contract: a share-length itemId round-trips; 81+ chars still rejected', () => {
+// sow-354: the bound moved from 80 to the shared ITEM_ID_MAX, because an 85 character imported slug could not be
+// published. The share id still fits, and one character past the bound is still refused.
+test('id contract: a share-length itemId round-trips; past ITEM_ID_MAX is still rejected', () => {
   const shareId = 'share-20260725193000-' + 'a'.repeat(48); // 69 chars
   const branch = hostedBranchFor('2002207', shareId);
   assert.equal(branch, `hosted/2002207/${shareId}`);
   assert.equal(parseHostedRef(branch), '2002207');
-  assert.equal(hostedBranchFor('1', 'a'.repeat(81)), null);
+  assert.equal(hostedBranchFor('1', 'a'.repeat(ITEM_ID_MAX)), `hosted/1/${'a'.repeat(ITEM_ID_MAX)}`);
+  assert.equal(hostedBranchFor('1', 'a'.repeat(ITEM_ID_MAX + 1)), null);
 });
 
 // sow-183: allowAnyFolder additionally permits house/ or another member's folder, for a superadmin content

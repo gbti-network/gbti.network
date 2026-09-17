@@ -1,6 +1,10 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { BANNER_PRESET_KEYS } from './lib/banner-presets.mjs';
+import { SLUG_MAX } from '../membership/item-id.mjs';
+
+// sow-354: every store keyed by the slug (drafts, staged images, the publish branch) is sized for SLUG_MAX.
+const SLUG_TOO_LONG = `the permalink must be at most ${SLUG_MAX} characters`;
 
 /**
  * sow-256: a title that is PRESENT but blank. `z.string()` admits `""`, and a blank title is not caught
@@ -121,7 +125,7 @@ const post = defineCollection({
   schema: ({ image }) => z.object({
     type: z.literal('post').default('post'),
     title: titleText(),
-    slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique → /articles/<slug>/'),
+    slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique → /articles/<slug>/'),
     author: z.string(),
     contributors,
     status: STATUS.default('draft'),
@@ -162,7 +166,7 @@ const post = defineCollection({
 const projectShape = ({ image }: { image: any }) => ({
   type: z.literal('project').default('project'),
   title: titleText(),
-  slug: z.string().regex(/^[a-z0-9-]+$/),
+  slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   author: z.string(),
   contributors,
   status: STATUS.default('draft'),
@@ -281,7 +285,7 @@ const prompt = defineCollection({
   schema: ({ image }) => z.object({
     type: z.literal('prompt').default('prompt'),
     title: titleText(),
-    slug: z.string().regex(/^[a-z0-9-]+$/),
+    slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
     shortDescription: z.string(), // one-line blurb shown on prompt cards + the activity feed
     author: z.string(),
     contributors,

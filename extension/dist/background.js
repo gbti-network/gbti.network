@@ -16902,6 +16902,12 @@ function date4(params) {
 // node_modules/zod/v4/classic/external.js
 config(en_default());
 
+// membership/item-id.mjs
+var SLUG_MAX = 120;
+var ITEM_ID_MAX = 128;
+var SLUG_PATTERN = `[a-z0-9][a-z0-9-]{0,${SLUG_MAX - 1}}`;
+var ITEM_ID_PATTERN = `[a-z0-9][a-z0-9-]{0,${ITEM_ID_MAX - 1}}`;
+
 // src/lib/banner-presets.mjs
 var BANNER_PRESETS = [
   { key: "green", label: "Green", from: "#1f9e5f", to: "#25232b" },
@@ -16918,6 +16924,7 @@ var BANNER_PRESET_KEYS = BANNER_PRESETS.map((p) => p.key);
 
 // client/src/schemas.mjs
 var titleText = () => external_exports.string().refine((s) => s.trim().length > 0, "title must not be empty");
+var SLUG_TOO_LONG = `the permalink must be at most ${SLUG_MAX} characters`;
 var STATUS = external_exports.enum(["draft", "published"]);
 var VISIBILITY = external_exports.enum(["public", "members"]);
 function normalizeTag(t) {
@@ -16993,7 +17000,7 @@ var socialLinks = external_exports.object({
 var postSchema = external_exports.object({
   type: external_exports.literal("post").default("post"),
   title: titleText(),
-  slug: external_exports.string().regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /articles/<slug>/"),
+  slug: external_exports.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /articles/<slug>/"),
   author: external_exports.string(),
   contributors,
   status: STATUS.default("draft"),
@@ -17022,7 +17029,7 @@ var postSchema = external_exports.object({
 var productSchema = external_exports.object({
   type: external_exports.literal("project").default("project"),
   title: titleText(),
-  slug: external_exports.string().regex(/^[a-z0-9-]+$/),
+  slug: external_exports.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   author: external_exports.string(),
   contributors,
   status: STATUS.default("draft"),
@@ -17090,7 +17097,7 @@ var profileSchema = external_exports.object({
 var promptSchema = external_exports.object({
   type: external_exports.literal("prompt").default("prompt"),
   title: titleText(),
-  slug: external_exports.string().regex(/^[a-z0-9-]+$/),
+  slug: external_exports.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   shortDescription: external_exports.string(),
   // REQUIRED, mirrors src/content.config.ts (one-line blurb on cards + the feed).
   // Was missing from this mirror: a prompt published without it passed the client but broke the Astro build (SOW-025).
@@ -18391,6 +18398,7 @@ async function workerPutDraft({ draft, ...opts }) {
 }
 
 // client/src/operations-publish.mjs
+var SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
 function renameOriginOf({ path, username, type }) {
   const m = OWN_STATUS_PATH_RE.exec(String(path || ""));
   if (!m) return null;
@@ -18910,9 +18918,9 @@ function canonicalType(type) {
 // membership/member-activity.mjs
 var CONTENT_TYPES2 = /* @__PURE__ */ new Set(["post", "project", "prompt", "share"]);
 var MAX_NAME_LEN = 80;
-var SLUG_RE = /^[a-z0-9-]+$/;
+var SLUG_RE2 = /^[a-z0-9-]+$/;
 var SHARE_SLUG_RE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
-var slugOk = (type, slug) => (type === "share" ? SHARE_SLUG_RE : SLUG_RE).test(slug);
+var slugOk = (type, slug) => (type === "share" ? SHARE_SLUG_RE : SLUG_RE2).test(slug);
 function emptyActivity() {
   return { favorites: [], collections: [], updatedAt: null };
 }

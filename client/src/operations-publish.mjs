@@ -9,6 +9,7 @@
 // Split out of operations.mjs, which re-exports the public surface unchanged.
 
 import { buildContentFile, flipContentStatus, buildCommentFile, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
+import { SLUG_MAX, SLUG_PATTERN } from '../../membership/item-id.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
 import { workerDeleteDraft } from './drafts-client.mjs'; // sow-326: a publish clears its own staged record
@@ -26,7 +27,7 @@ import { AUTHOR_NOTE_TYPES } from './operations-read.mjs';
 // Paid-only, own-folder, post/project/prompt only. publishedAt is preserved (feeds stay stable).
 export const RENAME_URL_BASE = { post: '/articles', project: '/projects', product: '/projects', prompt: '/prompts' }; // sow-196: the retired type name maps to the SAME current URL
 
-export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+export const SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`); // sow-354: the shared slug limit
 
 
 // SOW-112 v2: resolve the ORIGIN of an edit — the canonical own-folder item the editor loaded (`path` in the
@@ -70,7 +71,7 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
   const type = m[2].slice(0, -1);
   const oldSlug = m[3];
   const slug = String(newSlug || '').trim();
-  if (!SLUG_RE.test(slug)) throw new OperationError('bad-request', 'the new permalink must be lowercase letters, digits, and hyphens');
+  if (!SLUG_RE.test(slug)) throw new OperationError('bad-request', `the new permalink must be lowercase letters, digits, and hyphens, at most ${SLUG_MAX} characters`);
   if (slug === oldSlug) return { ok: true, noop: true, slug };
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {

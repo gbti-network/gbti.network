@@ -15,6 +15,7 @@
 // another member's key.
 
 import { sanitizeImageName, base64Bytes } from '../src/lib/workbench-client-core.mjs';
+import { SLUG_PATTERN } from './item-id.mjs';
 
 /** One image per key. 1 MB decoded, matching MAX_IMAGE_BYTES in workbench-client.ts and the check-media gate. */
 export const DRAFT_IMAGE_MAX_BYTES = 1_048_576;
@@ -31,7 +32,7 @@ export const draftImagePrefix = (githubId) => `draftimg:${String(githubId)}:`;
 // (membership/member-drafts.mjs draftKeyOf). Reusing that identity is deliberate: an image belongs to a draft,
 // applyDraftPut already refuses a draft with no valid slug, and a PENDING rename does not move the draft's key
 // (pendingSlug is a separate field), so images live and die with the draft they were staged for.
-const ITEM_TOKEN_RE = /^(post|project|product|prompt|profile):[a-z0-9][a-z0-9-]{0,79}$/;
+const ITEM_TOKEN_RE = new RegExp(`^(post|project|product|prompt|profile):${SLUG_PATTERN}$`); // sow-354: the shared slug limit
 
 /** The validated item token, or null. Every caller treats null as a refusal rather than a default. */
 export function itemTokenOf(item) {

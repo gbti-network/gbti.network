@@ -17,6 +17,7 @@ import {
   validateDraftImage, checkDraftImageQuota,
 } from '../membership/draft-images.mjs';
 import { handleDraftImage, listStagedImages, eraseMemberDraftImages } from '../workers/signup/membership-draft-images.mjs';
+import { SLUG_MAX } from '../membership/item-id.mjs';
 
 // A fake KV with the two features the handler leans on: json values, and list() carrying key metadata.
 function fakeKv(seed = {}) {
@@ -59,9 +60,11 @@ test('itemTokenOf admits only a real <type>:<slug>, so the key cannot be widened
   assert.equal(itemTokenOf('post:hello-world'), 'post:hello-world');
   assert.equal(itemTokenOf('PROMPT:Grok-Skill'), 'prompt:grok-skill');
   for (const bad of ['', null, 'post:', ':hello', 'article:hello', 'post:Hello World', 'post:hello:extra',
-    'post:../../etc', 'post:hello/world', `post:${'x'.repeat(81)}`]) {
+    // sow-354: the length bound is the shared SLUG_MAX (it was 80, which refused real imported slugs).
+    'post:../../etc', 'post:hello/world', `post:${'x'.repeat(SLUG_MAX + 1)}`]) {
     assert.equal(itemTokenOf(bad), null, `${JSON.stringify(bad)} must be refused`);
   }
+  assert.equal(itemTokenOf(`post:${'x'.repeat(SLUG_MAX)}`), `post:${'x'.repeat(SLUG_MAX)}`);
 });
 
 test('a traversal attempt cannot escape the member prefix, and an svg is refused outright', () => {

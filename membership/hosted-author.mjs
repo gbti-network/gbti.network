@@ -9,6 +9,7 @@
 // own-folder path is.
 
 import { isCleanPath } from './classify-pr.mjs';
+import { ITEM_ID_MAX, ITEM_ID_PATTERN } from './item-id.mjs';
 
 export const HOSTED_MAX_FILES = 20;
 export const HOSTED_MAX_FILE_BYTES = 100_000;
@@ -88,7 +89,8 @@ export function base64DecodedBytes(b64) {
 // The item id becomes a branch segment AFTER the server-inserted github_id, so it must never be able to
 // shift the id parse or produce an illegal git ref: lowercase alphanumeric + hyphen only, bounded length.
 // SOW-157: bounded at 80 (was 64) so a share itemId fits: share-<14-digit stamp>-<slug up to 48> = 69.
-const ITEM_ID_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
+// sow-354: bounded at ITEM_ID_MAX (item-id.mjs), so every slug the schemas accept has an item id that fits.
+const ITEM_ID_RE = new RegExp(`^${ITEM_ID_PATTERN}$`);
 const GITHUB_ID_RE = /^\d{1,20}$/;
 // Folder names are the members-index usernames (lowercase folder/username per house/members-index.yml).
 const FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -118,6 +120,8 @@ export function hostedBranchFor(githubId, itemId) {
   return `${HOSTED_BRANCH_PREFIX}${githubId}/${itemId}`;
 }
 
+const HOSTED_REF_RE = new RegExp(`^hosted\\/(\\d{1,20})\\/${ITEM_ID_PATTERN}$`);
+
 /**
  * The gate-side inverse: resolve the member github_id from a hosted branch ref, or null. Used by
  * scripts/pr-gate.mjs for a bot-opened PR whose head lives on the CANONICAL repo (no fork owner to read).
@@ -125,7 +129,7 @@ export function hostedBranchFor(githubId, itemId) {
  * Fail closed: anything that does not match exactly returns null (the gate hard-fails a null author).
  */
 export function parseHostedRef(ref) {
-  const m = /^hosted\/(\d{1,20})\/[a-z0-9][a-z0-9-]{0,79}$/.exec(String(ref ?? ''));
+  const m = HOSTED_REF_RE.exec(String(ref ?? ''));
   return m ? m[1] : null;
 }
 
@@ -193,7 +197,7 @@ const ANY_MEMBER_FOLDER_RE = /^members\/[a-z0-9][a-z0-9-]{0,63}\//;
 export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = false } = {}) {
   const bad = (error, status = 400) => ({ ok: false, error, status });
   if (!FOLDER_RE.test(String(folder ?? ''))) return bad('no member folder resolved for this account', 409);
-  if (!ITEM_ID_RE.test(String(itemId ?? ''))) return bad('itemId must be lowercase letters, digits, and hyphens (max 80)');
+  if (!ITEM_ID_RE.test(String(itemId ?? ''))) return bad(`itemId must be lowercase letters, digits, and hyphens (max ${ITEM_ID_MAX})`);
   if (!Array.isArray(files) || files.length === 0) return bad('files must be a non-empty array');
   if (files.length > HOSTED_MAX_FILES) return bad(`too many files (max ${HOSTED_MAX_FILES})`);
   const ownPrefix = `members/${folder}/`;
