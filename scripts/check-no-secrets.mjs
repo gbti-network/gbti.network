@@ -226,8 +226,10 @@ export function contextualFindings(text) {
  * coverage, which is the exact failure this file's header warns about one paragraph up. So it parses the
  * central directory and inflates. `zlib` is a node builtin, so the no-dependency rule still holds.
  *
- * The repo ships `public/extension/gbti-network-extension.zip` to the Chrome Web Store. It is built from
- * `extension/dist`, which is now scanned as source too, so this is the second of two locks on the same door.
+ * The extension download (`public/extension/gbti-network-extension.zip`) is built from `extension/dist`, which is
+ * scanned as source too. sow-348: the download is no longer committed, so here it is only a local build; the
+ * copy that ships is scanned with this same function by `scripts/check-extension.mjs` (the deploy and the drift
+ * job) and by `scripts/publish-cws.mjs` before a local store upload.
  */
 export function findingsInZipBuffer(buf) {
   const out = [];
@@ -314,9 +316,10 @@ function walkInto(dir, ROOT, findings, unignored) {
     const ext = path.extname(rel).toLowerCase();
     const allowContextual = CONTEXTUAL_ALLOW.has(rel);
     if (ARCHIVE_EXT.has(ext)) {
-      // `public/extension/gbti-network-extension.zip` is a COMMITTED build artifact that is downloaded and
-      // installed. Its bytes are DEFLATE'd, so the printable-run scan used for images finds nothing in it and
+      // An archive's bytes are DEFLATE'd, so the printable-run scan used for images finds nothing in it and
       // reports clean, which is a guard passing on nothing. Entries are inflated and scanned as real text.
+      // (The extension download was the committed archive this was written for; since sow-348 it is a local
+      // build that git ignores, and any archive someone does commit is still opened.)
       const abs = path.join(dir, e.name);
       let buf;
       try {

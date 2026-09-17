@@ -39,7 +39,7 @@ it carries the MCP server and the WorkBench MCP guide offers it for that, and be
 Loading it unpacked (Build + load, above) is for working on the extension itself, not a supported install.
 
 - **Package:** `npm run build:extension` bundles the extension (it runs `extension/build.mjs` first) and writes
-  two committed artifacts under `public/extension/`:
+  two files under `public/extension/`. Neither is committed (sow-348); every deploy builds them:
   - `gbti-network-extension.zip`. The loadable file set is DISCOVERED from disk (the manifest, every top-level
     `*.html` page, and every built `dist/*.js` bundle), so a page or bundle added by a later SOW is packaged
     automatically and never hand-listed. The MCP server rides along under `mcp/` (sow-225), outside the loadable set.
@@ -52,15 +52,18 @@ Loading it unpacked (Build + load, above) is for working on the extension itself
   event at `document_idle`. The site reads the attribute; absent means "not installed", which routes the visitor
   to download the extension plus read about member benefits (`/membership/`). Caveat: the content script matches
   the production host only, so detection reads "not installed" on localhost or a preview deploy.
-- **Keeping the served zip fresh:** the zip is a committed build artifact, so it can go stale if source changes
-  without a repackage. Three guards keep it honest:
-  - Run `npm run build:extension` after any change to `extension/src`, `client-ui/src`, or the manifest version,
-    and commit `public/extension/`.
+- **How the served zip stays current:** it is built, never committed (sow-348; a committed copy added about 3 MB
+  to the repository on every client change and was never the copy served).
   - The deploy command is `npm run build:pages` (`build:extension && astro build && verify:dist`), so production
-    rebuilds the zip before every site build and is always current.
-  - `npm run check:extension` (a read-only consistency guard, part of `verify:dist`) fails if `latest.json` or
-    the zip disagrees with `extension/manifest.json`, and the "Extension build drift" CI job rebuilds from source
-    and fails on a stale commit.
+    packages the zip from source before every site build.
+  - `npm run check:extension` (part of `verify:dist`, and run by the "Extension build drift" CI job after its own
+    rebuild) fails if `latest.json` or the zip disagrees with `extension/manifest.json`, if any file inside the zip
+    matches a credential pattern, or if the built site serves a different copy than the one it checked.
+  - What IS committed, and rebuilt after any change to `extension/src`, `client-ui/src` or the shared client:
+    `client-ui/dist`, `extension/dist` and `extension/mcp` (`node client-ui/build.mjs && npm run build:extension`).
+    The drift job fails on a stale commit of those.
+  - A local store upload (`npm run publish:extension`) refuses a zip holding any file git does not track, or a
+    credential pattern. The "Publish extension to the Chrome Web Store" workflow builds on a clean runner.
 - **Web Store:** the listing is live (since 2026-07-20). Its URL has one copy, `src/lib/extension-store.mjs`, read by
   the site and by the packager. `check:extension` also fails the build if the install page offers the unpacked
   route again, or if any page but the MCP guide links the package zip.

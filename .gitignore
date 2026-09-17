@@ -7,6 +7,10 @@ dist/
 # ...and the built MV3 extension bundles (loaded unpacked / packed for the Chrome Web Store) ARE tracked.
 !extension/dist/
 !extension/dist/*.js
+# sow-348: the extension download and its version file are NOT tracked. Every deploy builds them from source
+# (`npm run build:pages` runs `build:extension` first), and a committed copy added about 3 MB per client change.
+public/extension/gbti-network-extension.zip
+public/extension/latest.json
 
 # dependencies
 node_modules/

@@ -2,7 +2,7 @@
 // `npm run release`: cut a new extension version that (after review) reaches all extension owners.
 // Interactively asks how to iterate the version (patch / minor / major), where FEATURES drive a minor bump,
 // then syncs both version sources (extension/manifest.json + the src/lib/extension.ts mirror), rebuilds the
-// bundles + repackages the served zip and latest.json, verifies drift, and prints the remaining outward
+// bundles + packages the download (built, never committed: sow-348), verifies it, and prints the remaining outward
 // steps (commit, push, publish to the store). The semver + text-swap helpers are pure and unit-tested; the
 // prompt + build side effects run only under the CLI entry at the bottom.
 //
@@ -100,7 +100,8 @@ export async function main({ argv = process.argv.slice(2) } = {}) {
 
   if (!flags.has('--no-build')) {
     // Canonical full rebuild (the extension-build-artifacts rule): client-ui/dist, then the extension
-    // bundle + the repackaged zip + latest.json, then the drift guard.
+    // bundle + the packaged download, then its guard. sow-348: the download is not committed; the store upload
+    // below refuses it if it holds any file git does not track.
     run('node', ['client-ui/build.mjs']);
     run('npm', ['run', 'build:extension']);
     run('node', ['scripts/check-extension.mjs']);
@@ -114,13 +115,14 @@ export async function main({ argv = process.argv.slice(2) } = {}) {
   // stage sweeps whatever anyone else has in flight; two published articles were once found staged as
   // drafts that way. Print the explicit paths a release actually touches.
   stdout.write('  1. Review the diff, then stage EXPLICIT paths (never `git add -A` in this shared clone):\n');
-  stdout.write('       git add extension/manifest.json src/lib/extension.ts public/extension\n');
+  stdout.write('       git add extension/manifest.json src/lib/extension.ts\n');
   stdout.write(`       git commit -m "Release extension v${next}"\n`);
-  stdout.write('  2. Push (instantly ships the site + the direct-zip channel):  git push\n');
+  stdout.write('  2. Push (the deploy builds and serves the new download):  git push\n');
   if (!flags.has('--publish')) {
-    stdout.write('  3. Publish to the Chrome Web Store (the step that reaches installed owners):\n');
-    stdout.write('       npm run publish:extension        (once the CWS_* creds are set)\n');
-    stdout.write('       or the dashboard Package tab -> upload the zip -> Submit for review\n');
+    stdout.write('  3. Publish to the Chrome Web Store (the step that reaches installed owners), after the push:\n');
+    stdout.write('       the "Publish extension to the Chrome Web Store" workflow (builds on a clean runner; suggested)\n');
+    stdout.write('       or npm run publish:extension     (this machine\'s build; refuses untracked files)\n');
+    stdout.write('       or the dashboard Package tab -> upload public/extension/gbti-network-extension.zip -> Submit for review\n');
   }
   stdout.write('\nOwners auto-update from the store within about a day of approval (manual-review track: ~1-7 days).\n\n');
 }

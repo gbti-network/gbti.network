@@ -1,16 +1,17 @@
-// SOW-019: drift guard for the distributed Chrome extension. The site serves a committed
-// public/extension/gbti-network-extension.zip + latest.json that must stay consistent with extension/manifest.json
-// and must be a structurally valid archive carrying the full loadable file set. This is the cheap, read-only
-// backstop (no rebuild) wired into `npm run verify:dist`; the deploy command rebuilds the zip first (always
-// fresh in production), and the extension-check CI workflow rebuilds + diffs to catch a stale committed zip.
-// What this guard catches without a rebuild: a manifest/version bump that was not repackaged, a truncated or
-// corrupt zip, a latest.json that disagrees with the manifest or the real zip bytes, an incomplete build.
+// SOW-019: guard for the distributed Chrome extension. The site serves public/extension/gbti-network-extension.zip
+// + latest.json, which must stay consistent with extension/manifest.json and must be a structurally valid archive
+// carrying the full loadable file set. sow-348: both files are BUILT, never committed; the deploy's
+// `npm run build:pages` packages them first and this runs in its `verify:dist`, and the extension-check CI job
+// runs it after its own rebuild. What it catches: a manifest/version bump that was not repackaged, a truncated or
+// corrupt zip, a latest.json that disagrees with the manifest or the real zip bytes, an incomplete build, a
+// credential pattern in any file inside the zip, and a served copy that differs from the one checked.
 //   node scripts/check-extension.mjs
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readZipEntries, requiredFiles } from '../extension/package.mjs';
 import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
+import { findingsInZipBuffer } from './check-no-secrets.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -35,6 +36,9 @@ export function checkExtension({ manifest, latest, zipBuf, zipName = 'gbti-netwo
   } catch (e) {
     return [...errors, `the served zip does not parse: ${e.message}`];
   }
+  // sow-348: the download is no longer committed, so the commit-time secret scan never sees it. Every file inside
+  // it is scanned HERE, where it is built. The scanner inflates entries itself and reports an unreadable one.
+  for (const f of findingsInZipBuffer(zipBuf)) errors.push(`the served zip carries a possible credential: ${f.name}, inside ${f.entry ?? 'the archive'}`);
   const names = new Set(entries.map((e) => e.name));
   // Every file the manifest declares (service worker, content scripts, popup, each chrome_url_overrides page)
   // and every <script src> in a packaged HTML page must be in the zip, so a manifest-declared resource that was
@@ -65,6 +69,19 @@ export function checkExtension({ manifest, latest, zipBuf, zipName = 'gbti-netwo
  * path to its HTML. Returns a list of problems; a page that is absent is reported, so a renamed page cannot make
  * this pass on nothing.
  */
+/**
+ * sow-348: the copy the site serves (dist/extension/) must be byte-identical to the one checked above, so every
+ * check, the credential scan included, is about what visitors download. Returns a list of problems.
+ */
+export function checkServedCopies({ zipBuf, latestText, servedZip, servedLatest }) {
+  const errors = [];
+  if (!servedZip) errors.push('dist/extension/gbti-network-extension.zip is missing, so the site serves no download');
+  else if (!zipBuf || !servedZip.equals(zipBuf)) errors.push('dist/extension/gbti-network-extension.zip differs from the checked public/extension copy');
+  if (servedLatest == null) errors.push('dist/extension/latest.json is missing');
+  else if (servedLatest !== latestText) errors.push('dist/extension/latest.json differs from the checked public/extension copy');
+  return errors;
+}
+
 export const UNPACKED_OFFER = /Load unpacked|Developer mode|unpacked (extension|install|ZIP)|chrome:\/\/extensions/i;
 export const ZIP_HREF = /href="\/extension\/gbti-network-extension\.zip"/;
 export const NO_UNPACKED_PAGES = ['extension/index.html'];
@@ -108,26 +125,32 @@ function run() {
     console.error('check:extension FAILED: public/extension/latest.json is missing. Run npm run build:extension.');
     process.exit(1);
   }
-  const latest = JSON.parse(fs.readFileSync(latestPath, 'utf8'));
+  const latestText = fs.readFileSync(latestPath, 'utf8');
+  const latest = JSON.parse(latestText);
   const zipBuf = fs.existsSync(zipPath) ? fs.readFileSync(zipPath) : null;
 
   const errors = checkExtension({ manifest, latest, zipBuf });
   if (errors.length) {
     console.error('check:extension FAILED (the served extension artifacts are stale or inconsistent):');
     for (const e of errors) console.error(`  - ${e}`);
-    console.error('Fix: run `npm run build:extension` and commit public/extension/.');
+    console.error('Fix: run `npm run build:extension`. The download is built, never committed (sow-348).');
     process.exit(1);
   }
   const distDir = path.join(ROOT, 'dist');
   let surfaces = 'no dist, install pages not checked';
   if (fs.existsSync(path.join(distDir, 'index.html'))) {
-    const pageErrors = checkInstallSurfaces(builtHtmlPages(distDir));
+    const readOrNull = (p) => (fs.existsSync(p) ? fs.readFileSync(p) : null);
+    const servedLatest = readOrNull(path.join(distDir, 'extension/latest.json'));
+    const pageErrors = [
+      ...checkServedCopies({ zipBuf, latestText, servedZip: readOrNull(path.join(distDir, 'extension/gbti-network-extension.zip')), servedLatest: servedLatest && servedLatest.toString('utf8') }),
+      ...checkInstallSurfaces(builtHtmlPages(distDir)),
+    ];
     if (pageErrors.length) {
-      console.error('check:extension FAILED (a page offers the retired unpacked install):');
+      console.error('check:extension FAILED (the built site serves a different download, or a page offers the retired unpacked install):');
       for (const e of pageErrors) console.error(`  - ${e}`);
       process.exit(1);
     }
-    surfaces = 'store-only install pages';
+    surfaces = 'served copy matches, store-only install pages';
   }
   const fileCount = readZipEntries(zipBuf).length;
   console.log(`✓ extension distribution guard passed (v${latest.version}, ${(zipBuf.length / 1024).toFixed(0)} KB, ${fileCount} files, latest.json consistent, ${surfaces})`);

@@ -1,7 +1,8 @@
 // SOW-019: package the built MV3 extension into a distributable zip served by the static site, plus a
 // latest.json version manifest. Run AFTER bundling (or via `npm run build:extension`, which builds first).
 // Dependency-free ZIP writer (CRC32 + zlib DEFLATE) so it works in any build/CI environment without a zip
-// binary. Output is committed under public/extension/ so the Cloudflare Pages build serves it verbatim.
+// binary. Output goes to public/extension/, which the site build serves verbatim. sow-348: it is NOT committed;
+// the deploy's `npm run build:pages` runs this first, so production always serves a package built from source.
 //   node extension/package.mjs
 import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
 import fs from 'node:fs';

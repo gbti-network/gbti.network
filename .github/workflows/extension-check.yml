@@ -1,10 +1,11 @@
 name: Extension build drift
 
-# SOW-019: the site serves committed build artifacts (client-ui/dist/gbti-ui.js, extension/dist/*.js,
-# extension/mcp/*.mjs, public/extension/{zip,latest.json}). They are reproducible esbuild + deterministic-zip
-# outputs, so a stale commit (source changed without re-running the build) is a drift bug the site would ship.
-# This secret-free job rebuilds them from source and fails if the committed copies differ, plus runs the
-# read-only consistency guard. Triggers only on changes to the relevant source so unrelated PRs skip it.
+# SOW-019: the repo commits reproducible esbuild outputs (client-ui/dist/gbti-ui.js, extension/dist/*.js,
+# extension/mcp/*.mjs), so a stale commit (source changed without re-running the build) is a drift bug the site
+# or an unpacked install would ship. This secret-free job rebuilds them from source and fails if the committed
+# copies differ, then runs the consistency and credential guard over the freshly built download. sow-348: the
+# download (public/extension/{zip,latest.json}) is no longer committed; every deploy builds it. Triggers only on
+# changes to the relevant source so unrelated PRs skip it.
 
 on:
   pull_request:
@@ -61,12 +62,14 @@ jobs:
       # differ. See scripts/check-extension-hooks.mjs for the incident that prompted it.
       - name: Assert every page's markup hooks are wired by its committed bundle
         run: npm run check:extension-hooks
-      # Rebuild the shared UI bundle + the extension (build:extension bundles then repackages the zip + latest.json).
+      # Rebuild the shared UI bundle + the extension (build:extension bundles, then packages the download).
       - run: node client-ui/build.mjs
       - run: npm run build:extension
       # The committed build artifacts must match a fresh build. A non-empty diff means a source change was not
       # rebuilt + committed; the contributor should run `node client-ui/build.mjs && npm run build:extension`.
       - name: Assert committed build artifacts are fresh
-        run: git diff --exit-code -- client-ui/dist extension/dist extension/mcp public/extension
+        run: git diff --exit-code -- client-ui/dist extension/dist extension/mcp
+      # sow-348: the download is untracked, so a diff could not see it. This validates the fresh build instead,
+      # including a credential scan of every file inside it.
       - run: npm run check:extension
       - run: node --test test/extension-package.test.mjs test/extension-dispatch.test.mjs test/extension-reader.test.mjs

@@ -3,6 +3,13 @@
 // publishes it. It is INERT until the owner provisions the OAuth credentials (see .data/ops/extension-ops/
 // chrome-web-store.md): a missing credential is a clean skip, never a hard failure in CI.
 //
+// sow-348: that zip is a BUILD, never committed, so it holds whatever was on disk when it was packaged. The
+// packager discovers files from disk, so a stray local file would ship to every installed member. Before anything
+// else (even the no-credentials skip), the upload refuses a package holding any file git does not track, any
+// credential pattern, or an unreadable archive. Tracked files with local changes are allowed on purpose: the
+// release script bumps the version and rebuilds before the commit. The Publish extension workflow builds on a
+// clean runner and is the suggested route.
+//
 // The API does NOT manage the store LISTING (screenshots, marquee, description, privacy) — those stay dashboard
 // only. This script only pushes the code package + flips it to published.
 //
@@ -19,7 +26,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { readZipEntries } from '../extension/package.mjs';
+import { findingsInZipBuffer } from './check-no-secrets.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ZIP = path.join(ROOT, 'public/extension/gbti-network-extension.zip');
@@ -76,6 +85,32 @@ export function zipManifestVersion(zipBuf) {
   } catch { return null; }
 }
 
+/** sow-348: the extension files git tracks, as repo-relative paths, or null when git cannot say (the caller
+ *  refuses on null: an unconfirmed package is not uploaded). */
+export function trackedExtensionFiles(root = ROOT) {
+  const r = spawnSync('git', ['ls-files', '-z', '--', 'extension'], { cwd: root, encoding: 'utf8' });
+  if (r.error || r.status !== 0 || typeof r.stdout !== 'string') return null;
+  return new Set(r.stdout.split('\0').filter(Boolean));
+}
+
+/**
+ * sow-348, PURE: what stops a package from being uploaded. Every file in it must come from a tracked
+ * `extension/<name>`, no file may match a credential pattern, and the archive must open and hold something.
+ * `tracked` is a Set of repo-relative paths, or null when git could not list them. Returns a list of problems.
+ */
+export function packageProblems({ zipBuf, tracked }) {
+  if (!(tracked instanceof Set)) return ['git could not list the tracked extension files, so the package cannot be confirmed to hold only committed files'];
+  let entries;
+  try { entries = readZipEntries(zipBuf); } catch (e) { return [`the package does not open: ${e.message}`]; }
+  const problems = [];
+  if (!entries.length) problems.push('the package holds no files');
+  for (const { name } of entries) {
+    if (!tracked.has(`extension/${name}`)) problems.push(`${name} is in the package, but extension/${name} is not a file git tracks`);
+  }
+  for (const f of findingsInZipBuffer(zipBuf)) problems.push(`possible credential: ${f.name}, inside ${f.entry ?? 'the archive'}`);
+  return problems;
+}
+
 /** The version in the working-tree manifest. Used ONLY to cross-check the zip, never as the shipped truth. */
 function manifestVersion() {
   try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8')).version || null; }
@@ -118,7 +153,7 @@ export function decidePublish({ zip, manifest, item }) {
   if (zip && manifest && compareVersions(zip, manifest) !== 0) {
     return { ok: false, error: `refusing to upload: the package is ${zip} but extension/manifest.json is ${manifest}. `
       + 'The zip is stale relative to the manifest, so a build was skipped. '
-      + 'Run `npm run build:extension` (from a worktree at origin) and commit the artifacts before publishing.' };
+      + 'Run `npm run build:extension` (from a worktree at origin) before publishing.' };
   }
   // FAIL OPEN when the item version is unreadable: a failed read must never block a legitimate release.
   if (!zip || !item) return { ok: true, note: 'could not read both versions; proceeding and letting the upload decide.' };
@@ -130,21 +165,27 @@ export function decidePublish({ zip, manifest, item }) {
   return { ok: true, note: `item holds ${item}, shipping ${zip}.` };
 }
 
-export async function main({ env: e = process.env, fetchImpl = globalThis.fetch, checkOnly = CHECK_ONLY, uploadOnly = UPLOAD_ONLY } = {}) {
+export async function main({ env: e = process.env, fetchImpl = globalThis.fetch, checkOnly = CHECK_ONLY, uploadOnly = UPLOAD_ONLY, zipPath = ZIP, tracked = trackedExtensionFiles } = {}) {
   const clientId = (e.CWS_CLIENT_ID || '').trim();
   const clientSecret = (e.CWS_CLIENT_SECRET || '').trim();
   const refreshToken = (e.CWS_REFRESH_TOKEN || '').trim();
   const appId = (e.CWS_APP_ID || '').trim() || DEFAULT_APP_ID;
   const target = (e.CWS_PUBLISH_TARGET || '').trim() || 'default';
 
-  if (!fs.existsSync(ZIP)) { console.error(`publish-cws: missing package ${path.relative(ROOT, ZIP)} (run \`npm run build:extension\` first).`); process.exit(1); }
+  if (!fs.existsSync(zipPath)) throw new Error(`missing package ${path.relative(ROOT, zipPath)} (run \`npm run build:extension\` first).`);
+  const zipBuf = fs.readFileSync(zipPath);
+  // sow-348: before anything else, including the no-credentials skip, so a bad package is reported either way.
+  const problems = packageProblems({ zipBuf, tracked: tracked() });
+  if (problems.length) {
+    throw new Error(`refusing to upload ${path.relative(ROOT, zipPath)}:\n  - ${problems.join('\n  - ')}\n`
+      + 'Remove the stray files and run `npm run build:extension` again, or publish with the Publish extension workflow, which builds on a clean runner.');
+  }
 
   if (!clientId || !clientSecret || !refreshToken) {
     console.log('publish-cws: Chrome Web Store credentials are not set (CWS_CLIENT_ID / CWS_CLIENT_SECRET / CWS_REFRESH_TOKEN); skipping. Publish manually from the dashboard, or provision the creds (see .data/ops/extension-ops/chrome-web-store.md).');
     return { skipped: true };
   }
 
-  const zipBuf = fs.readFileSync(ZIP);
   console.log(`publish-cws: item ${appId}, package ${(zipBuf.length / 1024).toFixed(0)} KB, target ${target}${uploadOnly ? ' (upload only)' : ''}${checkOnly ? ' (check only)' : ''}.`);
 
   const token = await accessTokenFrom({ clientId, clientSecret, refreshToken, fetchImpl });

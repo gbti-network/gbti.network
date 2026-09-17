@@ -8,10 +8,10 @@
 // was missing. Both trees reported version "0.3.0", so nothing anywhere on screen distinguished a current
 // build from a very old one. The drift was invisible at exactly the moment it mattered.
 //
-// Why it stamps the COPY and not the source: `extension/manifest.json` is tracked, and the packaged zip under
-// public/extension is compared by the extension-check drift job with `git diff --exit-code`. A manifest field
-// derived from HEAD would therefore change every commit, and committing that change moves HEAD again, so the
-// tree could never be clean. Staleness is a property of the INSTALLED copy, not of the repository, and this
+// Why it stamps the COPY and not the source: `extension/manifest.json` is tracked, and the extension-check drift
+// job rebuilds and compares the committed bundles with `git diff --exit-code`. A manifest field derived from HEAD
+// would therefore change every commit, and committing that change moves HEAD again, so the tree could never be
+// clean. Staleness is a property of the INSTALLED copy, not of the repository, and this
 // script keeps it there. No tracked file is written.
 //
 // Chrome renders `version_name` in place of `version` on the extensions page, so the stamp lands exactly where

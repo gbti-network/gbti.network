@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildRepoDraftsIndex } from './lib/repo-drafts-index.mjs';
+import { readZipEntries } from '../extension/package.mjs'; // sow-348: the one zip reader
 
 const SITE_ORIGIN = 'https://gbti.network';
 
@@ -53,18 +54,33 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
   if (env.MEMBER_CONTENT_KEY) needles.push(['MEMBER_CONTENT_KEY value', env.MEMBER_CONTENT_KEY]);
   for (const v of (env.SCAN_SECRETS || '').split(/[\s,]+/).filter(Boolean)) needles.push(['SCAN_SECRETS value', v]);
 
+  // The two key checks, shared by plain files and by the files inside an archive.
+  const scanForKey = (txt, where) => {
+    for (const [label, value] of needles) {
+      if (value && value.length >= 8 && txt.includes(value)) errors.push(`leaked ${label} in build output: ${where}`);
+    }
+    if (/MEMBER_CONTENT_KEY\s*[:=]\s*["'][A-Za-z0-9+/=]{20,}/.test(txt)) {
+      errors.push(`an inlined MEMBER_CONTENT_KEY assignment appears in: ${where}`);
+    }
+  };
+
   if (fs.existsSync(distDir)) {
     for (const f of walk(distDir)) {
-      if (BINARY.test(f)) continue;
       const rel = path.relative(root, f);
+      // sow-348: the deploy builds the extension bundles WITH this environment, and they reach dist only inside
+      // the extension download, so an archive is opened and every file in it gets the key checks. An archive
+      // that cannot be read, or holds nothing, is an error: skipping it is how it went unscanned before.
+      if (/\.zip$/i.test(f)) {
+        let entries;
+        try { entries = readZipEntries(fs.readFileSync(f)); } catch (e) { errors.push(`could not open the archive ${rel} to scan it: ${e.message}`); continue; }
+        if (!entries.length) errors.push(`the archive ${rel} holds no files, so its scan proved nothing`);
+        for (const en of entries) scanForKey(en.data.toString('utf8'), `${rel} (inside it: ${en.name})`);
+        continue;
+      }
+      if (BINARY.test(f)) continue;
       const txt = fs.readFileSync(f, 'utf8');
       if (/\.html$/i.test(f)) checked++;
-      for (const [label, value] of needles) {
-        if (value && value.length >= 8 && txt.includes(value)) errors.push(`leaked ${label} in build output: ${rel}`);
-      }
-      if (/MEMBER_CONTENT_KEY\s*[:=]\s*["'][A-Za-z0-9+/=]{20,}/.test(txt)) {
-        errors.push(`an inlined MEMBER_CONTENT_KEY assignment appears in: ${rel}`);
-      }
+      scanForKey(txt, rel);
       // SOW-016: the `<!-- members-only -->` marker is stripped at publish (the gated tail goes to the .enc),
       // so it must NEVER reach RENDERED build output. Its presence there means a publish leaked the gated
       // section. sow-158 Phase 3a: the client-ui authoring bundle is now part of the site build, and it
