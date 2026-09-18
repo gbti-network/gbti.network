@@ -4085,7 +4085,32 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return ids;
   }
-  function inline(escaped, fn = null) {
+  var LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
+  var defKey = (label) => String(label ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  function collectLinkDefs(lines) {
+    const defs = /* @__PURE__ */ new Map();
+    let fence = 0;
+    for (const line of lines) {
+      const f = /^(`{3,})(.*)$/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1].length;
+        else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+        continue;
+      }
+      if (fence) continue;
+      const d = LINK_DEF_RE.exec(line);
+      if (!d || d[1].startsWith("^")) continue;
+      if (!/^https?:\/\//.test(d[2])) continue;
+      const key = defKey(d[1]);
+      if (!defs.has(key)) defs.set(key, { url: d[2], title: d[3] ?? d[4] ?? d[5] ?? "" });
+    }
+    return defs;
+  }
+  function refAnchor(text, def) {
+    const title = def.title ? ` title="${escapeHtml(def.title)}"` : "";
+    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text}</a>`;
+  }
+  function inline(escaped, fn = null, defs = null) {
     let t = escaped;
     const codes = [];
     t = t.replace(/`([^`]+)`/g, (_m, c) => {
@@ -4108,6 +4133,21 @@ ${listStyleProseCss(".doc-blocks")}
       return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(" ")}"` : ""}>`;
     });
     t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+    if (defs && defs.size) {
+      t = t.replace(/!\[([^\]\n]*)\]\[([^\]\n]*)\]/g, (m, alt, label) => {
+        const def = defs.get(defKey(label || alt));
+        return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ""} loading="lazy">` : m;
+      });
+      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text, label) => {
+        const def = defs.get(defKey(label || text));
+        return def ? refAnchor(text, def) : m;
+      });
+      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text) => {
+        if (text.startsWith("^")) return m;
+        const def = defs.get(defKey(text));
+        return def ? refAnchor(text, def) : m;
+      });
+    }
     t = emphasis(t);
     t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
     return t;
@@ -4186,6 +4226,7 @@ ${listStyleProseCss(".doc-blocks")}
     const footnotes = nest ? nest.footnotes : [];
     const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
     const linkKeep = nest ? nest.linkKeep : [];
+    const defs = nest ? nest.defs : collectLinkDefs(lines);
     const flushList = () => {
     };
     let i = 0;
@@ -4228,7 +4269,7 @@ ${listStyleProseCss(".doc-blocks")}
           parts.push(lines[i].trim());
           i++;
         }
-        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join("<br/>") });
+        footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join("<br/>") });
         continue;
       }
       if (autoEmbed) {
@@ -4244,13 +4285,13 @@ ${listStyleProseCss(".doc-blocks")}
       let m;
       if (m = /^(#{1,6})\s+(.*)$/.exec(esc4)) {
         flushList();
-        emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i);
+        emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
         continue;
       }
       if (isListLine(line)) {
         const run = takeListRun(lines, i);
-        emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+        emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn, defs), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
         i = run.next;
         continue;
       }
@@ -4262,7 +4303,7 @@ ${listStyleProseCss(".doc-blocks")}
           inner.push(lines[i].replace(QUOTE_LINE, ""));
           i++;
         }
-        const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes }).html;
+        const body = renderDoc(inner.join("\n"), false, {}, { fn, linkKeep, footnotes, defs }).html;
         emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
         continue;
       }
@@ -4276,7 +4317,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (aligns && line.includes("|")) {
         const tableStart = i;
         flushList();
-        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn);
+        const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn, defs);
         const cols = (row, tag) => row.map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ""}>${cell(c)}</${tag}>`).join("");
         const head = `<thead><tr>${cols(splitTableRow2(line), "th")}</tr></thead>`;
         i += 2;
@@ -4292,6 +4333,11 @@ ${listStyleProseCss(".doc-blocks")}
       if (/^\s*$/.test(line)) {
         flushList();
         i++;
+        continue;
+      }
+      if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
+        flushList();
+        while (i < lines.length && LINK_DEF_RE.test(lines[i]) && !/^ {0,3}\[\^/.test(lines[i])) i++;
         continue;
       }
       const fig = parseImageLine(line);
@@ -4311,7 +4357,7 @@ ${listStyleProseCss(".doc-blocks")}
         i++;
       }
       const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
-      emit(`<p>${inline(joined2, fn).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
+      emit(`<p>${inline(joined2, fn, defs).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
     }
     flushList();
     if (inCode) emit(renderFence(codeLang2, codeBuf, fn), fenceStart, lines.length - 1);

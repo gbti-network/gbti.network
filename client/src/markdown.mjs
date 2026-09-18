@@ -115,9 +115,46 @@ function collectFootnoteIds(lines) {
   return ids;
 }
 
+// sow-361: LINK REFERENCE DEFINITIONS. `[label]: url "title"` lines define a link the text refers to as
+// `[text][label]`, `[text][]` or bare `[label]`. The site build resolves them (CommonMark, via remark) and
+// this renderer did not, so a share note written that way previewed with every reference left as literal text
+// and the definitions printed as a visible paragraph of raw URLs, while the published page showed real links.
+// Only http(s) destinations are taken, matching the inline link rule: a definition pointing anywhere else stays
+// literal rather than becoming an anchor this renderer would not otherwise emit.
+const LINK_DEF_RE = /^ {0,3}\[([^\]\n]+)\]:\s*(\S+)(?:\s+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?\s*$/;
+// CommonMark matches labels case-insensitively with runs of whitespace collapsed.
+const defKey = (label) => String(label ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+function collectLinkDefs(lines) {
+  const defs = new Map();
+  let fence = 0;
+  for (const line of lines) {
+    const f = /^(`{3,})(.*)$/.exec(line);
+    if (f) {
+      if (!fence) fence = f[1].length;
+      else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+      continue;
+    }
+    if (fence) continue;
+    const d = LINK_DEF_RE.exec(line);
+    if (!d || d[1].startsWith('^')) continue; // [^1]: is a footnote definition, not a link
+    if (!/^https?:\/\//.test(d[2])) continue;
+    const key = defKey(d[1]);
+    if (!defs.has(key)) defs.set(key, { url: d[2], title: d[3] ?? d[4] ?? d[5] ?? '' }); // CommonMark: the FIRST wins
+  }
+  return defs;
+}
+
+/** The anchor a resolved reference renders as, matching the inline link rule's attributes. */
+function refAnchor(text, def) {
+  const title = def.title ? ` title="${escapeHtml(def.title)}"` : '';
+  return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text}</a>`;
+}
+
 // Inline formatting. Input is ALREADY HTML-escaped, so only markdown punctuation remains to transform.
 // `fn` = { ids, counts } footnote state threaded from renderMarkdown (null when footnotes are off).
-function inline(escaped, fn = null) {
+// `defs` = the document's link reference definitions (null when there are none).
+function inline(escaped, fn = null, defs = null) {
   let t = escaped;
   // Code spans first, as PLACEHOLDERS: their content must stay literal for every later rule (a `[^1]` or
   // `**x**` inside backticks is being quoted, not used). Restored after all other passes.
@@ -150,6 +187,28 @@ function inline(escaped, fn = null) {
     return `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy"${cls.length ? ` class="${cls.join(' ')}"` : ''}>`;
   });
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+  // Reference links, after the inline form so `[x](url)` is never re-read as a shortcut label. Full and
+  // collapsed first; the bare shortcut last, and only when the label is defined, so ordinary bracketed prose
+  // stays exactly as it was written.
+  if (defs && defs.size) {
+    // An IMAGE reference (![alt][label]) first, or the link rules below would turn it into an anchor with a
+    // stray "!" in front of it. Same accepted sources as the inline image rule.
+    t = t.replace(/!\[([^\]\n]*)\]\[([^\]\n]*)\]/g, (m, alt, label) => {
+      const def = defs.get(defKey(label || alt));
+      return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ''} loading="lazy">` : m;
+    });
+    t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text, label) => {
+      const def = defs.get(defKey(label || text));
+      return def ? refAnchor(text, def) : m;
+    });
+    // The bare shortcut last, and never where a ':' follows: that line IS the definition, and linking its own
+    // label would both look wrong and hand the block editor an anchor to read back as a rewritten source.
+    t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text) => {
+      if (text.startsWith('^')) return m; // a footnote reference, handled above
+      const def = defs.get(defKey(text));
+      return def ? refAnchor(text, def) : m;
+    });
+  }
   t = emphasis(t);
   t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ''}</code>`);
   return t;
@@ -278,6 +337,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
   const footnotes = nest ? nest.footnotes : []; // GFM footnote definitions, rendered as one section at the end (like the site build)
   const fn = nest ? nest.fn : { ids: collectFootnoteIds(lines), counts: new Map() }; // known def ids + per-id reference counts
   const linkKeep = nest ? nest.linkKeep : []; // attributed <a> tags extracted by escapeKeepingLinks, restored in one pass at the end
+  const defs = nest ? nest.defs : collectLinkDefs(lines); // sow-361: link reference definitions, shared with a quote's inner document
   // Lists are taken as whole runs where they start (see the list branch below), so there is nothing left to flush
   // at a block boundary; the calls stay as the seams they mark.
   const flushList = () => {};
@@ -303,7 +363,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       const parts = [def[2].trim()];
       i++;
       while (i < lines.length && /^ {4,}\S/.test(lines[i])) { parts.push(lines[i].trim()); i++; }
-      footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join('<br/>') });
+      footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn, defs)).join('<br/>') });
       continue;
     }
 
@@ -316,13 +376,13 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     }
     const esc = escapeKeepingLinks(line, linkKeep);
     let m;
-    if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i); i++; continue; }
+    if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i); i++; continue; }
     // A list is one block for the whole run, nested by indentation (client/src/list-items.mjs): children render inside
     // their parent's <li>, bullets under a numbered item stay bullets, and a marker change at the top level starts
     // a new list. The run's source range is the block's range, as the Preview's stamps expect.
     if (isListLine(line)) {
       const run = takeListRun(lines, i);
-      emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
+      emit(listHtml(run.items, (t) => inline(escapeKeepingLinks(t, linkKeep), fn, defs), { ordered: !!run.items[0]?.ordered }), i, run.next - 1);
       i = run.next; continue;
     }
     // sow-350: a quote is ONE block for its whole run of `>` lines, and what it holds is a document of its own, as
@@ -337,7 +397,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       const quoteStart = i;
       const inner = [];
       while (i < lines.length && QUOTE_LINE.test(lines[i])) { inner.push(lines[i].replace(QUOTE_LINE, '')); i++; }
-      const body = renderDoc(inner.join('\n'), false, {}, { fn, linkKeep, footnotes }).html;
+      const body = renderDoc(inner.join('\n'), false, {}, { fn, linkKeep, footnotes, defs }).html;
       emit(`<blockquote>${body}</blockquote>`, quoteStart, i - 1);
       continue;
     }
@@ -349,7 +409,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     if (aligns && line.includes('|')) {
       const tableStart = i;
       flushList();
-      const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn);
+      const cell = (c) => inline(escapeKeepingLinks(c, linkKeep), fn, defs);
       const cols = (row, tag) => row
         .map((c, n) => `<${tag}${aligns[n] ? ` style="text-align:${aligns[n]}"` : ''}>${cell(c)}</${tag}>`)
         .join('');
@@ -362,6 +422,14 @@ function renderDoc(md, ids, opts = {}, nest = null) {
       continue;
     }
     if (/^\s*$/.test(line)) { flushList(); i++; continue; }
+    // sow-361: the definitions themselves are not content. The published page consumes them, so the read view
+    // does too; the block editor keeps them as an ordinary paragraph, since a block with no element is a block
+    // nobody can edit and the next commit would splice over it.
+    if (!ids && LINK_DEF_RE.test(line) && !/^ {0,3}\[\^/.test(line)) {
+      flushList();
+      while (i < lines.length && LINK_DEF_RE.test(lines[i]) && !/^ {0,3}\[\^/.test(lines[i])) i++;
+      continue;
+    }
     // A lone image line WITH a caption (its title) is a figure of its own: the caption strip under the image, the
     // layout classes on the figure so a float or full width carries the caption along. Without a caption the line
     // stays a paragraph holding an image, exactly as before (client/src/image-attrs.mjs owns the line's grammar).
@@ -389,7 +457,7 @@ function renderDoc(md, ids, opts = {}, nest = null) {
     }
     // A trailing hard break at the very end of a paragraph is not a break, per CommonMark, so it is dropped.
     const joined = para.join(' ').replace(/\u0000BR\u0000\s*$/, '').replace(/\s+$/, '');
-    emit(`<p>${inline(joined, fn).replace(/\u0000BR\u0000\s*/g, '<br />')}</p>`, paraStart, i - 1);
+    emit(`<p>${inline(joined, fn, defs).replace(/\u0000BR\u0000\s*/g, '<br />')}</p>`, paraStart, i - 1);
   }
   flushList();
   if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);

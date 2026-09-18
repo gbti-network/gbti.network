@@ -3,7 +3,7 @@
 // callout bodies are escaped, and only a normalized provider URL becomes an iframe src.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown } from '../client/src/markdown.mjs';
+import { renderMarkdown, renderMarkdownWithBlocks } from '../client/src/markdown.mjs';
 import { embedUrl, isPortraitEmbed, bareVideoLine } from '../client/src/video-embed.mjs';
 import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
 import { unified } from 'unified';
@@ -365,4 +365,58 @@ test('build: a comment file frames a bare video line (gfm autolink or plain text
   const kept = await unified().use(remarkParse).use(remarkGfm).use(remarkContentBlocks).use(remarkRehype, { allowDangerousHtml: true }).use(rehypeRaw).use(rehypeStringify)
     .process({ value: '[watch](https://youtu.be/56f2Pn8KPDE)\n\nsee https://youtu.be/56f2Pn8KPDE now', path: '/r/members/a/comments/c.md' }).then(String);
   assert.doesNotMatch(kept, /embed-wrap/);
+});
+
+// sow-361 (owner, 2026-09-18, with a screenshot of the share composer): a note written with link reference
+// definitions previewed as literal text, every `[SoundCloud][1]` left as written and the `[1]: https://...`
+// lines printed as a paragraph of raw URLs, while the published share page resolved them into links. The site
+// build is the authority (CommonMark via remark), so these compare this renderer against the published
+// pipeline rather than against a fixture of what it happens to emit.
+const linkOf = (html) => (/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/.exec(html) ?? []).slice(1, 3);
+
+test('a link reference resolves in all three forms, as the published page resolves it', async () => {
+  for (const [form, md] of [
+    ['full', 'see ([SoundCloud][1])\n\n[1]: https://example.com/a "T"'],
+    ['collapsed', 'see [SoundCloud][]\n\n[SoundCloud]: https://example.com/a'],
+    ['shortcut', 'see [SoundCloud]\n\n[SoundCloud]: https://example.com/a'],
+    ['label case and spacing are folded', 'see [sound   Cloud][]\n\n[Sound Cloud]: https://example.com/a'],
+  ]) {
+    const mine = renderMarkdown(md);
+    assert.deepEqual(linkOf(mine), linkOf(await published(md)), `${form}: the preview link differs from the published one`);
+    assert.doesNotMatch(mine, /\]:/, `${form}: the definition line is still printed as content`);
+  }
+});
+
+test('an undefined reference, a bracketed aside and a code span stay exactly as written', async () => {
+  for (const md of ['see [SoundCloud][9] please', 'an array[0] and a [note] with no definition', 'literal `[x][1]` in code\n\n[1]: https://example.com/a']) {
+    const mine = renderMarkdown(md);
+    assert.doesNotMatch(mine, /<a\b/, `a link was invented for: ${md}`);
+    // The published pipeline agrees: no anchor either.
+    assert.doesNotMatch(await published(md), /<a\b/);
+  }
+});
+
+test('an image reference renders as an image, not an anchor with a stray bang', () => {
+  const html = renderMarkdown('![a cover][1]\n\n[1]: https://example.com/a.png "Cover"');
+  assert.match(html, /<img src="https:\/\/example\.com\/a\.png" alt="a cover" title="Cover" loading="lazy">/);
+  assert.doesNotMatch(html, /!</, 'the bang leaked into the output');
+});
+
+test('only http(s) definitions become links, so a javascript: definition stays text', () => {
+  const html = renderMarkdown('see [x][1]\n\n[1]: javascript:alert(1)');
+  assert.doesNotMatch(html, /<a\b/);
+  assert.doesNotMatch(html, /javascript:[^<]*"/, 'a script URL reached an attribute');
+});
+
+test('the block editor still sees the definition lines, because it can only edit what it renders', () => {
+  const { html, blocks } = renderMarkdownWithBlocks('see ([SoundCloud][1])\n\n[1]: https://example.com/a "T"');
+  assert.equal(blocks.length, 2, 'the definitions must stay a block of their own in the editor');
+  assert.match(html, /<p data-blk="1">\[1\]: https:\/\/example\.com\/a &quot;T&quot;<\/p>/);
+  // The read view drops them; the editor must not, or a commit would splice over a block with no element.
+  assert.doesNotMatch(renderMarkdown('see ([SoundCloud][1])\n\n[1]: https://example.com/a "T"'), /\]:/);
+});
+
+test('a reference inside a quote resolves against the document that contains it', async () => {
+  const md = '> see [SoundCloud][1]\n\n[1]: https://example.com/a';
+  assert.deepEqual(linkOf(renderMarkdown(md)), linkOf(await published(md)));
 });
