@@ -264,11 +264,13 @@ test('sow-356: the invite ROUTE is wired to the gate, not just the handler', asy
 // 4. The screens
 // ---------------------------------------------------------------------------
 
-// The wizard's methods call each other, so a prototype-level receiver needs the prototype behind it.
-const self = (membership) => Object.assign(Object.create(GbtiWelcome.prototype), {
-  _membership: membership,
-  _stepDone: () => [false, false, false, false, false],
-});
+// The wizard's methods call each other, so a prototype-level receiver needs the prototype behind it. Deriving the
+// step list is what load() does as soon as the membership is read (sow-357), so a receiver must do it too.
+const self = (membership) => {
+  const el = Object.assign(Object.create(GbtiWelcome.prototype), { _membership: membership });
+  el._deriveSteps();
+  return el;
+};
 
 test('sow-356: the welcome Discord step offers a membership link instead of a connect button', () => {
   const card = (membership) => GbtiWelcome.prototype._discordCard.call(Object.assign(Object.create(GbtiWelcome.prototype), { _membership: membership }));
@@ -290,32 +292,42 @@ test('sow-356: the welcome Discord step offers a membership link instead of a co
   assert.ok(!paid.includes('Network Supporter membership'));
 });
 
-test('sow-356: resuming the welcome steps does not park a free account on Discord for ever', () => {
-  // The rail still shows the step as outstanding, because they have not done it. Resume is what moves past it:
-  // a step nobody can finish would otherwise be where every visit lands.
-  const free = GbtiWelcome.prototype._resumeFlags.call(self('none'));
-  assert.deepEqual(free, [true, false, false, false, false], 'the Discord slot is settled for resume');
-  const paid = GbtiWelcome.prototype._resumeFlags.call(self('paid'));
-  assert.deepEqual(paid, [false, false, false, false, false], 'and untouched for a member who can do it');
-  // An UNREAD membership keeps the step. Skipping it there would mean a paying member whose status read failed
-  // never lands on Discord and never sees the card saying the check failed. Found by driving the wizard: every
-  // membership, unread included, resumed on step two.
-  const unread = GbtiWelcome.prototype._resumeFlags.call(self('unknown'));
-  assert.deepEqual(unread, [false, false, false, false, false], 'an unread membership still lands on the step');
+test('sow-356/357: resuming never parks an account on a step it cannot finish', () => {
+  // sow-356 forced the Discord slot "done" for resume, because a free account would otherwise land there every
+  // visit. sow-357 removes the special case at the root: such an account is not OFFERED the step, so there is
+  // nothing to step past, and the rail no longer has to show an outstanding step nobody can do.
+  const keys = (m) => self(m)._steps.map((s) => s.key);
+  assert.ok(!keys('none').includes('discord'), 'a free account is not offered the step at all');
+  assert.ok(!keys('expired').includes('discord'), 'nor a lapsed one');
+  assert.ok(keys('paid').includes('discord'), 'a member who can join is');
+  assert.ok(keys('trialing').includes('discord'), 'and so is a trial');
+  // An UNREAD membership keeps the step AND lands on it, which is how they learn the check failed. Found by
+  // driving the wizard: before this, every membership, unread included, resumed on step two.
+  const unread = self('unknown');
+  assert.ok(keys('unknown').includes('discord'));
+  assert.deepEqual(GbtiWelcome.prototype._resumeFlags.call(unread), [false, false, false, false, false]);
+  // Resume is now simply "what is done, in this account's order": nothing is pre-settled for anybody.
+  assert.deepEqual(GbtiWelcome.prototype._resumeFlags.call(self('none')), [false, false, false]);
+  assert.deepEqual(GbtiWelcome.prototype._resumeFlags.call(self('paid')), [false, false, false, false, false]);
 });
 
-test('sow-356: the step heading does not tell a free account to connect Discord', () => {
-  // Driven in a browser before it was pinned here: the card said the server is for paying members under a
-  // heading reading "Connect Discord".
-  const heading = (membership, step = 0, done = false) => GbtiWelcome.prototype._headingText.call(
-    Object.assign(self(membership), { _step: step, _done: done }),
-  );
-  assert.equal(heading('none'), 'Discord community');
-  assert.equal(heading('expired'), 'Discord community');
-  assert.equal(heading('unknown'), 'Discord community', 'an unread membership does not get an instruction either');
+test('sow-356/357: no account is told to connect Discord unless it can', () => {
+  // Driven in a browser before it was pinned: the card said the server is for paying members under a heading
+  // reading "Connect Discord". The override now matters for exactly one account, the one whose membership could
+  // not be read: every other account that cannot join is not offered the step at all (sow-357).
+  const heading = (membership, step = 0, done = false) => {
+    const el = self(membership);
+    el._step = step;
+    el._done = done;
+    return GbtiWelcome.prototype._headingText.call(el);
+  };
+  assert.equal(heading('unknown'), 'Discord community', 'shown, but not as an instruction');
   assert.equal(heading('paid'), ONBOARDING_STEPS[0].heading, 'a member who can connect is told to');
-  assert.equal(heading('none', 1), ONBOARDING_STEPS[1].heading, 'and no other step is touched');
-  assert.equal(heading('none', 0, true), 'You are all set', 'nor the finished state');
+  assert.equal(heading('trialing'), ONBOARDING_STEPS[0].heading);
+  for (const m of ['none', 'expired', 'banned']) {
+    assert.equal(heading(m), 'Follow the channels', `${m} opens on a step it can actually do`);
+  }
+  assert.equal(heading('none', 0, true), 'You are all set', 'the finished state is untouched');
 });
 
 test('sow-356: the account page offers the Discord invite only to an account that may join', () => {

@@ -2368,6 +2368,9 @@
 
   // client/src/membership.mjs
   var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
+  function canPublish(membership) {
+    return membership === "paid";
+  }
   var READ_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none", "banned"]);
   function canSeeNews(membership) {
     return READ_TIER.has(membership);
@@ -7047,12 +7050,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // membership/onboarding.mjs
   var ONBOARDING_STEPS = Object.freeze([
     Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
-    Object.freeze({ key: "subreddit", label: "Follow", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
+    Object.freeze({ key: "subreddit", label: "Channels", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
     Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
     Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
     Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
   ]);
   var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
+  function onboardingStepsFor({ discordAvailable = true, canPublish: canPublish2 = true } = {}) {
+    return Object.freeze(ONBOARDING_STEPS.filter((s) => {
+      if (s.key === "discord") return discordAvailable !== false;
+      if (s.key === "socials") return canPublish2 !== false;
+      return true;
+    }));
+  }
   var KEY = /^[a-z][a-z0-9-]{0,39}$/;
   var MAX_NETWORK_FOLLOWS = 40;
   var MAX_SOCIALS = 30;
@@ -7099,11 +7109,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
   var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
-  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true } = {}) {
+  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true, canPublish: canPublish2 = true } = {}) {
     const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
     const nFollows = count(follows);
     const nTopics = count(topics);
-    const known = (discordAvailable === false || typeof discordLinked === "boolean") && nFollows !== null && nTopics !== null && typeof profileSocials === "boolean" && rec !== void 0;
+    const offered = onboardingStepsFor({ discordAvailable, canPublish: canPublish2 });
+    const offers = (k) => offered.some((s) => s.key === k);
+    const known = (!offers("discord") || typeof discordLinked === "boolean") && nFollows !== null && nTopics !== null && (!offers("socials") || typeof profileSocials === "boolean") && rec !== void 0;
     const r = rec ?? emptyRecord();
     const done = {
       discord: discordLinked === true,
@@ -7112,7 +7124,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       follow: (nFollows ?? 0) > 0,
       topics: (nTopics ?? 0) > 0
     };
-    const offered = discordAvailable === false ? ONBOARDING_STEPS.filter((s) => s.key !== "discord") : ONBOARDING_STEPS;
     const steps = offered.map((s) => ({
       key: s.key,
       label: s.label,
@@ -7476,6 +7487,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pbtn { font:inherit; font-weight:600; font-size:13.5px; color:#fff; background:var(--wf-green);
     border:1.5px solid transparent; border-radius:7px; padding:11px 24px; cursor:pointer; }
   /* The base hover colour is a LIGHT green in dark mode, which drops white text below 3:1; use our own darker one. */
+  /* sow-357: the finish card's primary is an ANCHOR for a free account. Scoped to a.pbtn so no existing button
+     changes, and text-decoration is named for the reason the sow-356 note gives under .dbtn: BASE_CSS styles the
+     bare anchor and the UA underline survives any rule that does not mention it. */
+  a.pbtn { text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
   .pbtn:hover { background:var(--wf-green); }
   .pbtn:not([disabled]):hover { background:var(--wf-greenhover); }
   .pbtn[disabled] { opacity:.55; cursor:default; }
@@ -7575,6 +7590,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .stat { text-align:center; }
   .stat b { display:block; font-family:var(--font-mono); font-weight:700; font-size:20px; color:var(--wf-greenfg); }
   .stat span { display:block; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--wf-mute); }
+  /* sow-357: the ONE membership case a free account meets in the welcome, at the end (owner, 2026-09-17). */
+  .offer { margin-top:10px; max-width:52ch; text-align:left; border:1.5px solid var(--wf-line); border-radius:10px;
+    background:var(--wf-raise); padding:14px 16px; display:flex; flex-direction:column; gap:7px; }
+  .offer b { font-family:var(--font-display); font-size:14.5px; font-weight:600; color:var(--wf-fg); }
+  .offer p { margin:0; font-size:13px; line-height:1.55; color:var(--wf-soft); max-width:none; }
+  .offer a { align-self:flex-start; font-size:13px; font-weight:600; color:var(--wf-greenfg); text-decoration:underline;
+    text-underline-offset:3px; }
 
   /* Small screens: the rail collapses to a horizontal step strip under a hairline. The track segments go with
      it, since they only make sense stacked. Responsive block last on purpose: source order, not specificity. */
@@ -7615,6 +7637,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-welcome.mjs
   var SITE5 = "https://gbti.network";
+  var MEMBER_PLAN = "Network Supporter";
   var PAGE_SIZE2 = 12;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var CHAN_FOLLOWED_KEY = "gbti-welcome-chan-followed";
@@ -7691,7 +7714,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._stopDiscordPoll();
       this._discordJoined = true;
       this._lsSet("discord", "1");
-      if (STEPS[this._step]?.key === "discord" && this._step < STEPS.length - 1) this._step++;
+      if (this._steps[this._step]?.key === "discord" && this._step < this._steps.length - 1) this._step++;
       this.render();
     }
     /**
@@ -7747,6 +7770,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._own = "";
       }
       this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
+      this._deriveSteps();
       this._keys = { discord: accountKey(DISCORD_DONE_KEY, s?.identity), chan: accountKey(CHAN_FOLLOWED_KEY, s?.identity), socials: accountKey(SOCIALS_STAGE_KEY, s?.identity) };
       for (const k of [DISCORD_DONE_KEY, CHAN_FOLLOWED_KEY, SOCIALS_STAGE_KEY]) {
         try {
@@ -7825,33 +7849,64 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._loaded = true;
       if (!this._resumed) {
         this._resumed = true;
-        const asked = requestedStep(this.getAttribute("start-step"), STEPS);
-        this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), STEPS.length);
+        const asked = requestedStep(this.getAttribute("start-step"), this._steps);
+        this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), this._steps.length);
       }
       this.render();
     }
     /**
-     * Per-step "already done", in STEPS order. Each flag reads REAL state rather than a remembered click, so
-     * work done outside this wizard counts (see resumeStep).
+     * The steps THIS account is offered (sow-357). Derived from the membership once it has been read, and the full
+     * list until then, so a failed read never hides a step a paying member has to do.
+     *
+     * `canPublish` decides the handles step because that step ends in a PUBLISHED profile: a free or trial member's
+     * handles are kept on the account and flushed by nothing (welcome-socials.mjs), so offering it was asking for
+     * work that goes nowhere they can see.
+     */
+    get _steps() {
+      return this._stepList || STEPS;
+    }
+    _deriveSteps() {
+      const m = this._membership;
+      const unread = !m || m === "unknown";
+      this._stepList = unread ? STEPS : onboardingStepsFor({ discordAvailable: this._mayJoinDiscord(), canPublish: canPublish(m) });
+    }
+    /**
+     * Per-step "already done", by step KEY. Each flag reads REAL state rather than a remembered click, so work
+     * done outside this wizard counts (see resumeStep).
      *
      * Every unknown resolves to NOT done. `_follows` is null when the read failed and `_topicsCount` is 0 when
      * prefs were unreadable, and in both cases showing the step again is the harmless direction: the member
      * sees a step they may not need, instead of being skipped past one they do.
+     *
+     * sow-357: the handles step counts done on the same rule the WorkBench card uses (a saved profile carries a
+     * handle, or the save succeeded), not on a typed value. The two surfaces disagreed, so a member could see a
+     * tick here and the step still outstanding on the card, which is the half that can never complete.
      */
     _stepDone() {
-      const socials = this._socialDraft && Object.values(this._socialDraft).some((v) => String(v ?? "").trim());
-      return [
-        Boolean(this._discordJoined),
-        // discord  — the link landed (localStorage, set by the poll)
-        (this._chanFollowed?.size ?? 0) > 0,
-        // subreddit — at least one network channel followed
-        Boolean(socials),
-        // socials   — a staged or already-saved handle
-        (this._follows?.size ?? 0) > 0,
-        // follow    — following at least one member
-        (this._topicsCount ?? 0) > 0
-        // topics    — at least one topic in the stored prefs
-      ];
+      return {
+        discord: Boolean(this._discordJoined),
+        // the link landed (localStorage, set by the poll)
+        subreddit: (this._chanFollowed?.size ?? 0) > 0,
+        // at least one network channel followed
+        socials: profileHasSocials(this._profile?.frontmatter?.links, SOCIAL_KEYS) || this._record?.socialsSaved === true,
+        follow: (this._follows?.size ?? 0) > 0,
+        // following at least one member
+        topics: (this._topicsCount ?? 0) > 0
+        // at least one topic in the stored prefs
+      };
+    }
+    /**
+     * Whether this step offers Skip: never the first (the primary ask) and never the last (which already finishes
+     * with "I am all set"). sow-357 writes it against the list's LENGTH rather than the old fixed indexes 1 to 3,
+     * which were those same two exclusions only while every account met five steps.
+     */
+    _showSkip() {
+      return !this._done && this._step >= 1 && this._step < this._steps.length - 1;
+    }
+    /** `_stepDone` in the order this account meets the steps, which is what the rail ticks and resume reads. */
+    _doneFlags() {
+      const done = this._stepDone();
+      return this._steps.map((s) => Boolean(done[s.key]));
     }
     /**
      * What RESUME treats as settled, which is not the same thing as what the rail ticks.
@@ -7867,14 +7922,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
      */
     _headingText() {
       if (this._done) return DONE_HEADING;
-      const step = STEPS[this._step];
+      const step = this._steps[this._step];
       if (step?.key === "discord" && !this._mayJoinDiscord()) return "Discord community";
       return step.heading;
     }
+    /**
+     * What RESUME treats as settled. sow-356 had to force the Discord slot true for an account that may not join,
+     * or resume parked there for ever. sow-357 removes that special case at the root instead: such an account is
+     * not OFFERED the step, so there is nothing to step past. The one account that still sees it and cannot use it
+     * is one whose membership could not be read, and that account must land on it, to be told the check failed.
+     */
     _resumeFlags() {
-      const done = this._stepDone();
-      if (this._membership !== "unknown" && !this._mayJoinDiscord()) done[0] = true;
-      return done;
+      return this._doneFlags();
     }
     // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
     // sow-345: account-scoped browser storage (see accountKey). No account means no key, and these are no-ops rather
@@ -7930,7 +7989,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a>. The trial is free.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
       this.on("[data-copy]", "click", () => {
@@ -7943,16 +8002,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _goto(i) {
       this._stopDiscordPoll();
       this._done = false;
-      this._step = Math.min(Math.max(i, 0), STEPS.length - 1);
+      this._step = Math.min(Math.max(i, 0), this._steps.length - 1);
       this.render();
     }
     async _next({ skip = false } = {}) {
       this._stopDiscordPoll();
-      const key = STEPS[this._step]?.key;
+      const key = this._steps[this._step]?.key;
       if (this._socialSaving) return;
       if (key === "socials" && !skip && !await this._saveSocials()) return;
-      if (key && !this._stepDone()[this._step]) this._prefs({ onboardingSkip: { step: key } });
-      if (this._step >= STEPS.length - 1) this._done = true;
+      if (key && !this._stepDone()[key]) this._prefs({ onboardingSkip: { step: key } });
+      if (this._step >= this._steps.length - 1) this._done = true;
       else this._step++;
       this.render();
     }
@@ -7982,8 +8041,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
     }
     _railHtml() {
-      const done = this._stepDone();
-      const rows = STEPS.map((s, i) => {
+      const done = this._doneFlags();
+      const rows = this._steps.map((s, i) => {
         const isDone = Boolean(done[i]);
         const isActive = !this._done && this._step === i;
         const cls = `rstep${isDone ? " done" : ""}${isActive ? " active" : ""}`;
@@ -8010,17 +8069,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const ph = phaseLabel(this._membership, { couponUntil: this._couponUntil });
       const phase = ph.phase === "coupon" ? "Free membership period" : ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "";
-      this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
-      const step = STEPS[this._step].key;
+      this._step = Math.min(Math.max(this._step, 0), this._steps.length - 1);
+      const step = this._steps[this._step].key;
       const heading = this._headingText();
-      const stepText = this._done ? "COMPLETE" : `STEP ${this._step + 1} OF ${STEPS.length}`;
-      const progress = this._done ? 100 : Math.round(this._step / STEPS.length * 100 + 12);
+      const stepText = this._done ? "COMPLETE" : `STEP ${this._step + 1} OF ${this._steps.length}`;
+      const progress = this._done ? 100 : Math.round(this._step / this._steps.length * 100 + 12);
       const card = this._done ? this._doneCard() : step === "discord" ? this._discordCard() : step === "subreddit" ? this._channelsCard() : step === "socials" ? this._socialsCard() : step === "topics" ? this._topicsCard() : this._membersCard();
-      const isLast = this._step >= STEPS.length - 1;
+      const isLast = this._step >= this._steps.length - 1;
       const backOff = this._step === 0 && !this._done;
-      const showSkip = !this._done && this._step >= 1 && this._step <= 3;
+      const showSkip = this._showSkip();
       const footR = this._done ? `<button class="gbtn" data-review type="button">Review steps</button>
-         <button class="pbtn" data-done type="button">Go to your profile</button>` : `${showSkip ? `<button class="skipbtn" data-step-skip type="button">Skip</button>` : ""}
+         ${canPublish(this._membership) ? `<button class="pbtn" data-done type="button">Go to your profile</button>` : ""}` : `${showSkip ? `<button class="skipbtn" data-step-skip type="button">Skip</button>` : ""}
          <button class="pbtn" data-step-next type="button"${this._socialSaving ? " disabled" : ""}>${this._socialSaving ? "Saving&hellip;" : isLast ? "I am all set" : "Continue &rarr;"}</button>`;
       this.set(this.css(WELCOME_CSS) + `<div class="wf">
       ${this._railHtml()}
@@ -8111,7 +8170,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _discordLockedCard() {
       const unread = this._membership === "unknown";
-      const note = unread ? "We could not check your membership just now. Reload to try again." : "The Discord community is part of the Network Supporter membership.";
+      const note = unread ? "We could not check your membership just now. Reload to try again." : `The Discord community is part of the ${MEMBER_PLAN} membership.`;
       const link = unread ? "" : `<a class="dbtn" href="${SITE5}/membership/" target="_blank" rel="noopener">See what membership includes</a>`;
       return `
       <div class="dhead">
@@ -8221,16 +8280,41 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <button class="sbtn${followed ? " on" : ""}" data-follow="${esc(u)}" type="button">${followed ? "&#10003; Following" : "Follow"}</button>
     </div>`;
     }
+    /**
+     * The finish card. sow-357 gave it a second version, because the first told a free account that its handles
+     * were saved (they were kept, and nothing flushes them), that it was time to publish (paid only), and offered
+     * a button that lands on a page reading "Your access is locked".
+     *
+     * The free version claims only what happened, sends them to the feed they just built, and makes the membership
+     * case ONCE, here, beside the finish rather than in place of it (owner, 2026-09-17).
+     */
     _doneCard() {
       const follows = this._follows?.size ?? 0;
       const topics = this._topicsCount ?? 0;
-      return `<div class="donewrap">
+      const stats = `<div class="stats">
+        <div class="stat"><b>${follows}</b><span>Following</span></div>
+        <div class="stat"><b>${topics}</b><span>Topics</span></div>
+      </div>`;
+      if (canPublish(this._membership)) {
+        return `<div class="donewrap">
       <span class="donecheck">&#10003;</span>
       <h3>${esc(DONE_HEADING)}</h3>
       <p>Welcome to the co-op. Your channels are followed, your handles are saved, and your feed is tuned. Time to publish.</p>
-      <div class="stats">
-        <div class="stat"><b>${follows}</b><span>Following</span></div>
-        <div class="stat"><b>${topics}</b><span>Topics</span></div>
+      ${stats}
+    </div>`;
+      }
+      return `<div class="donewrap">
+      <span class="donecheck">&#10003;</span>
+      <h3>${esc(DONE_HEADING)}</h3>
+      <p>Your feed is yours now. It fills with what the members and topics you follow publish, and it keeps filling as they do.</p>
+      ${stats}
+      <a class="pbtn" href="${SITE5}/" target="_blank" rel="noopener">Go to my feed</a>
+      <p class="note">The GBTI new tab shows the same feed every time you open a browser tab.</p>
+      <div class="offer">
+        <b>Ready for more?</b>
+        <p>A ${esc(MEMBER_PLAN)} membership adds comments across the network, our Discord community, publishing your
+        own articles, projects and prompts, and a share of what the network earns from work that brings members in.</p>
+        <a href="${SITE5}/membership/" target="_blank" rel="noopener">See what membership includes</a>
       </div>
     </div>`;
     }
@@ -23339,8 +23423,10 @@ ${listStyleProseCss(".doc-blocks")}
     ]);
     const followList2 = follows.ok ? Array.isArray(follows.v) ? follows.v : follows.v?.following : null;
     const membership = status.ok ? status.v?.membership : null;
+    const unread = !membership || membership === "unknown";
     return {
-      discordAvailable: !membership || membership === "unknown" ? true : discordJoinAllowed(membership),
+      discordAvailable: unread ? true : discordJoinAllowed(membership),
+      canPublish: unread ? true : canPublish(membership),
       discordLinked: discord.ok && typeof discord.v?.linked === "boolean" ? discord.v.linked : null,
       follows: Array.isArray(followList2) ? followList2 : null,
       topics: prefs.ok && Array.isArray(prefs.v?.categories) ? prefs.v.categories : null,

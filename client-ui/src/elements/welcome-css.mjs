@@ -103,6 +103,10 @@ export const WELCOME_CSS = `
   .pbtn { font:inherit; font-weight:600; font-size:13.5px; color:#fff; background:var(--wf-green);
     border:1.5px solid transparent; border-radius:7px; padding:11px 24px; cursor:pointer; }
   /* The base hover colour is a LIGHT green in dark mode, which drops white text below 3:1; use our own darker one. */
+  /* sow-357: the finish card's primary is an ANCHOR for a free account. Scoped to a.pbtn so no existing button
+     changes, and text-decoration is named for the reason the sow-356 note gives under .dbtn: BASE_CSS styles the
+     bare anchor and the UA underline survives any rule that does not mention it. */
+  a.pbtn { text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
   .pbtn:hover { background:var(--wf-green); }
   .pbtn:not([disabled]):hover { background:var(--wf-greenhover); }
   .pbtn[disabled] { opacity:.55; cursor:default; }
@@ -202,6 +206,13 @@ export const WELCOME_CSS = `
   .stat { text-align:center; }
   .stat b { display:block; font-family:var(--font-mono); font-weight:700; font-size:20px; color:var(--wf-greenfg); }
   .stat span { display:block; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--wf-mute); }
+  /* sow-357: the ONE membership case a free account meets in the welcome, at the end (owner, 2026-09-17). */
+  .offer { margin-top:10px; max-width:52ch; text-align:left; border:1.5px solid var(--wf-line); border-radius:10px;
+    background:var(--wf-raise); padding:14px 16px; display:flex; flex-direction:column; gap:7px; }
+  .offer b { font-family:var(--font-display); font-size:14.5px; font-weight:600; color:var(--wf-fg); }
+  .offer p { margin:0; font-size:13px; line-height:1.55; color:var(--wf-soft); max-width:none; }
+  .offer a { align-self:flex-start; font-size:13px; font-weight:600; color:var(--wf-greenfg); text-decoration:underline;
+    text-underline-offset:3px; }
 
   /* Small screens: the rail collapses to a horizontal step strip under a hairline. The track segments go with
      it, since they only make sense stacked. Responsive block last on purpose: source order, not specificity. */

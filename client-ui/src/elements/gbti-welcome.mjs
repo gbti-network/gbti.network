@@ -10,7 +10,8 @@
 // the extension now and the npm CMS later. Emits gbti:welcome-done when the member finishes.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill, mergeChannelFollows, requestedStep } from '../welcome-core.mjs';
-import { ONBOARDING_STEPS } from '../../../membership/onboarding.mjs'; // sow-343: the one step list (the WorkBench card reads it too)
+import { ONBOARDING_STEPS, onboardingStepsFor, profileHasSocials } from '../../../membership/onboarding.mjs'; // sow-343/357: the one step list (the WorkBench card reads it too)
+import { canPublish } from '../../../client/src/membership.mjs'; // sow-357: publishing, and so the handles step, is paid
 import { saveWizardSocials } from '../welcome-socials.mjs'; // sow-343: Continue on the socials step saves
 import { readOwnProfile } from '../own-profile.mjs'; // sow-346: the one safe read of your own profile
 import { DISCORD_LINK_URL } from '../discord.mjs';
@@ -21,6 +22,10 @@ import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 import { WELCOME_CSS as CSS } from './welcome-css.mjs'; // sow-349: the stylesheet lives in its own module
 
 const SITE = 'https://gbti.network';
+// The paid plan's name as the reader meets it. house/membership-tiers.yml owns this label and the site builds its
+// copy from there; the extension has no build step that can read the registry, so this is the client-ui copy of
+// it. One constant rather than a string per surface, so a rename is one edit and cannot half-land.
+const MEMBER_PLAN = 'Network Supporter';
 const PAGE_SIZE = 12;
 // sow-345: these are key BASES. Every read and write goes through _lsGet/_lsSet, which scope them by the signed-in
 // account (accountKey), because a bare key leaks between the accounts that share one browser. The bare keys are
@@ -28,8 +33,13 @@ const PAGE_SIZE = 12;
 const DISCORD_DONE_KEY = 'gbti-welcome-discord-joined';
 const CHAN_FOLLOWED_KEY = 'gbti-welcome-chan-followed'; // channels the member opened Follow on (local, best-effort)
 
-// The five steps. sow-343 moved the list to membership/onboarding.mjs, because the WorkBench progress card and the
+// The steps. sow-343 moved the list to membership/onboarding.mjs, because the WorkBench progress card and the
 // stored skips must agree with the wizard on what the steps are: `label` + `sub` feed the rail, `heading` the pane.
+//
+// sow-357: the list is now PER ACCOUNT (onboardingStepsFor), so this is only the fallback used before the
+// membership has been read. Everything that walks the steps reads `this._steps`, never this constant: a free
+// account is offered three steps and a paying one five, and indexing the wrong list would put the rail, the
+// heading and the progress bar on different steps from each other.
 const STEPS = ONBOARDING_STEPS;
 const DONE_HEADING = 'You are all set';
 
@@ -107,7 +117,7 @@ class GbtiWelcome extends GbtiElement {
     this._discordJoined = true;
     this._lsSet('discord', '1');
     // Auto-advance off the Discord step to the next to-do.
-    if (STEPS[this._step]?.key === 'discord' && this._step < STEPS.length - 1) this._step++;
+    if (this._steps[this._step]?.key === 'discord' && this._step < this._steps.length - 1) this._step++;
     this.render();
   }
 
@@ -165,6 +175,10 @@ class GbtiWelcome extends GbtiElement {
       this._own = '';
     }
     this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
+    // sow-357: which steps this account is offered, decided as soon as the membership is known and before
+    // anything walks the list (the resume position, the rail, the heading). A failed read leaves it unknown,
+    // which offers the full list.
+    this._deriveSteps();
     // sow-345: per-account storage keys, then purge the bare keys this browser may still hold from ANY account.
     this._keys = { discord: accountKey(DISCORD_DONE_KEY, s?.identity), chan: accountKey(CHAN_FOLLOWED_KEY, s?.identity), socials: accountKey(SOCIALS_STAGE_KEY, s?.identity) };
     for (const k of [DISCORD_DONE_KEY, CHAN_FOLLOWED_KEY, SOCIALS_STAGE_KEY]) { try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
@@ -253,29 +267,61 @@ class GbtiWelcome extends GbtiElement {
     // (the setClient fan-out can re-run it) never yanks a member out of the step they are reading.
     if (!this._resumed) {
       this._resumed = true;
-      const asked = requestedStep(this.getAttribute('start-step'), STEPS); // sow-343: the WorkBench card links to a step
-      this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), STEPS.length);
+      const asked = requestedStep(this.getAttribute('start-step'), this._steps); // sow-343: the WorkBench card links to a step
+      this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), this._steps.length);
     }
     this.render();
   }
 
   /**
-   * Per-step "already done", in STEPS order. Each flag reads REAL state rather than a remembered click, so
-   * work done outside this wizard counts (see resumeStep).
+   * The steps THIS account is offered (sow-357). Derived from the membership once it has been read, and the full
+   * list until then, so a failed read never hides a step a paying member has to do.
+   *
+   * `canPublish` decides the handles step because that step ends in a PUBLISHED profile: a free or trial member's
+   * handles are kept on the account and flushed by nothing (welcome-socials.mjs), so offering it was asking for
+   * work that goes nowhere they can see.
+   */
+  get _steps() { return this._stepList || STEPS; }
+
+  _deriveSteps() {
+    const m = this._membership;
+    const unread = !m || m === 'unknown';
+    this._stepList = unread ? STEPS : onboardingStepsFor({ discordAvailable: this._mayJoinDiscord(), canPublish: canPublish(m) });
+  }
+
+  /**
+   * Per-step "already done", by step KEY. Each flag reads REAL state rather than a remembered click, so work
+   * done outside this wizard counts (see resumeStep).
    *
    * Every unknown resolves to NOT done. `_follows` is null when the read failed and `_topicsCount` is 0 when
    * prefs were unreadable, and in both cases showing the step again is the harmless direction: the member
    * sees a step they may not need, instead of being skipped past one they do.
+   *
+   * sow-357: the handles step counts done on the same rule the WorkBench card uses (a saved profile carries a
+   * handle, or the save succeeded), not on a typed value. The two surfaces disagreed, so a member could see a
+   * tick here and the step still outstanding on the card, which is the half that can never complete.
    */
   _stepDone() {
-    const socials = this._socialDraft && Object.values(this._socialDraft).some((v) => String(v ?? '').trim());
-    return [
-      Boolean(this._discordJoined),          // discord  — the link landed (localStorage, set by the poll)
-      (this._chanFollowed?.size ?? 0) > 0,   // subreddit — at least one network channel followed
-      Boolean(socials),                      // socials   — a staged or already-saved handle
-      (this._follows?.size ?? 0) > 0,        // follow    — following at least one member
-      (this._topicsCount ?? 0) > 0,          // topics    — at least one topic in the stored prefs
-    ];
+    return {
+      discord: Boolean(this._discordJoined),          // the link landed (localStorage, set by the poll)
+      subreddit: (this._chanFollowed?.size ?? 0) > 0, // at least one network channel followed
+      socials: profileHasSocials(this._profile?.frontmatter?.links, SOCIAL_KEYS) || this._record?.socialsSaved === true,
+      follow: (this._follows?.size ?? 0) > 0,         // following at least one member
+      topics: (this._topicsCount ?? 0) > 0,           // at least one topic in the stored prefs
+    };
+  }
+
+  /**
+   * Whether this step offers Skip: never the first (the primary ask) and never the last (which already finishes
+   * with "I am all set"). sow-357 writes it against the list's LENGTH rather than the old fixed indexes 1 to 3,
+   * which were those same two exclusions only while every account met five steps.
+   */
+  _showSkip() { return !this._done && this._step >= 1 && this._step < this._steps.length - 1; }
+
+  /** `_stepDone` in the order this account meets the steps, which is what the rail ticks and resume reads. */
+  _doneFlags() {
+    const done = this._stepDone();
+    return this._steps.map((s) => Boolean(done[s.key]));
   }
 
   /**
@@ -292,19 +338,18 @@ class GbtiWelcome extends GbtiElement {
    */
   _headingText() {
     if (this._done) return DONE_HEADING;
-    const step = STEPS[this._step];
+    const step = this._steps[this._step];
     if (step?.key === 'discord' && !this._mayJoinDiscord()) return 'Discord community';
     return step.heading;
   }
 
-  _resumeFlags() {
-    const done = this._stepDone();
-    // Only when the membership was READ and says no. An unread one keeps the step: skipping it there would mean a
-    // paying member whose status read failed never lands on Discord at all, and never sees the card saying the
-    // check failed. Caught by driving the wizard: every membership resumed on step two, unread included.
-    if (this._membership !== 'unknown' && !this._mayJoinDiscord()) done[0] = true;
-    return done;
-  }
+  /**
+   * What RESUME treats as settled. sow-356 had to force the Discord slot true for an account that may not join,
+   * or resume parked there for ever. sow-357 removes that special case at the root instead: such an account is
+   * not OFFERED the step, so there is nothing to step past. The one account that still sees it and cannot use it
+   * is one whose membership could not be read, and that account must land on it, to be told the check failed.
+   */
+  _resumeFlags() { return this._doneFlags(); }
 
   // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
   // sow-345: account-scoped browser storage (see accountKey). No account means no key, and these are no-ops rather
@@ -346,7 +391,7 @@ class GbtiWelcome extends GbtiElement {
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a>. The trial is free.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
     this.on('[data-auth-signin]', 'click', () => this.emit('gbti:welcome-signin'));
     this.on('[data-copy]', 'click', () => { try { navigator.clipboard?.writeText(code); } catch { /* clipboard blocked */ } });
@@ -355,18 +400,18 @@ class GbtiWelcome extends GbtiElement {
   _goto(i) {
     this._stopDiscordPoll();
     this._done = false;
-    this._step = Math.min(Math.max(i, 0), STEPS.length - 1);
+    this._step = Math.min(Math.max(i, 0), this._steps.length - 1);
     this.render();
   }
 
   async _next({ skip = false } = {}) {
     this._stopDiscordPoll();
-    const key = STEPS[this._step]?.key;
+    const key = this._steps[this._step]?.key;
     if (this._socialSaving) return;
     if (key === 'socials' && !skip && !(await this._saveSocials())) return;
     // sow-343: moving on from a step that is not done is a skip, and the account remembers it. A rail jump is not.
-    if (key && !this._stepDone()[this._step]) this._prefs({ onboardingSkip: { step: key } });
-    if (this._step >= STEPS.length - 1) this._done = true;
+    if (key && !this._stepDone()[key]) this._prefs({ onboardingSkip: { step: key } });
+    if (this._step >= this._steps.length - 1) this._done = true;
     else this._step++;
     this.render();
   }
@@ -399,8 +444,8 @@ class GbtiWelcome extends GbtiElement {
     // skipped socials but followed members and picked topics now resumes ON socials, and a positional rail would
     // then show Members and Topics as still to-do, re-asking for work already finished. sow-343: the real flags
     // ALONE decide, so a check means "this is done", never "you walked past this" or "the link opened a later step".
-    const done = this._stepDone();
-    const rows = STEPS.map((s, i) => {
+    const done = this._doneFlags();
+    const rows = this._steps.map((s, i) => {
       const isDone = Boolean(done[i]);
       const isActive = !this._done && this._step === i;
       const cls = `rstep${isDone ? ' done' : ''}${isActive ? ' active' : ''}`;
@@ -425,23 +470,27 @@ class GbtiWelcome extends GbtiElement {
     if (this._authGate && !this._authenticated) { this._renderSignedOut(); return; } // SOW-048 login splash
     const ph = phaseLabel(this._membership, { couponUntil: this._couponUntil });
     const phase = ph.phase === 'coupon' ? 'Free membership period' : ph.phase === 'paid' ? 'Paid membership' : ph.phase === 'trial' ? 'Trial phase' : '';
-    this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
-    const step = STEPS[this._step].key;
+    this._step = Math.min(Math.max(this._step, 0), this._steps.length - 1);
+    const step = this._steps[this._step].key;
     const heading = this._headingText();
-    const stepText = this._done ? 'COMPLETE' : `STEP ${this._step + 1} OF ${STEPS.length}`;
-    const progress = this._done ? 100 : Math.round((this._step / STEPS.length) * 100 + 12);
+    const stepText = this._done ? 'COMPLETE' : `STEP ${this._step + 1} OF ${this._steps.length}`;
+    const progress = this._done ? 100 : Math.round((this._step / this._steps.length) * 100 + 12);
     const card = this._done ? this._doneCard()
       : step === 'discord' ? this._discordCard()
         : step === 'subreddit' ? this._channelsCard()
           : step === 'socials' ? this._socialsCard()
             : step === 'topics' ? this._topicsCard()
               : this._membersCard();
-    const isLast = this._step >= STEPS.length - 1;
+    const isLast = this._step >= this._steps.length - 1;
     const backOff = this._step === 0 && !this._done;
-    const showSkip = !this._done && this._step >= 1 && this._step <= 3;
+    const showSkip = this._showSkip();
+    // sow-357: "Go to your profile" is the paying member's ending. It fires gbti:welcome-done, which each host
+    // routes to a place a free account cannot use (the WorkBench in the extension renders "Your access is
+    // locked"), and a free account has no profile to go to in any case. Their ending is the feed link inside the
+    // finish card, so the footer keeps only the way back to the steps. Caught by driving the finish.
     const footR = this._done
       ? `<button class="gbtn" data-review type="button">Review steps</button>
-         <button class="pbtn" data-done type="button">Go to your profile</button>`
+         ${canPublish(this._membership) ? `<button class="pbtn" data-done type="button">Go to your profile</button>` : ''}`
       : `${showSkip ? `<button class="skipbtn" data-step-skip type="button">Skip</button>` : ''}
          <button class="pbtn" data-step-next type="button"${this._socialSaving ? ' disabled' : ''}>${this._socialSaving ? 'Saving&hellip;' : isLast ? 'I am all set' : 'Continue &rarr;'}</button>`;
     this.set(this.css(CSS) + `<div class="wf">
@@ -534,7 +583,7 @@ class GbtiWelcome extends GbtiElement {
     const unread = this._membership === 'unknown';
     const note = unread
       ? 'We could not check your membership just now. Reload to try again.'
-      : 'The Discord community is part of the Network Supporter membership.';
+      : `The Discord community is part of the ${MEMBER_PLAN} membership.`;
     const link = unread
       ? ''
       : `<a class="dbtn" href="${SITE}/membership/" target="_blank" rel="noopener">See what membership includes</a>`;
@@ -674,16 +723,41 @@ class GbtiWelcome extends GbtiElement {
     </div>`;
   }
 
+  /**
+   * The finish card. sow-357 gave it a second version, because the first told a free account that its handles
+   * were saved (they were kept, and nothing flushes them), that it was time to publish (paid only), and offered
+   * a button that lands on a page reading "Your access is locked".
+   *
+   * The free version claims only what happened, sends them to the feed they just built, and makes the membership
+   * case ONCE, here, beside the finish rather than in place of it (owner, 2026-09-17).
+   */
   _doneCard() {
     const follows = this._follows?.size ?? 0;
     const topics = this._topicsCount ?? 0;
-    return `<div class="donewrap">
+    const stats = `<div class="stats">
+        <div class="stat"><b>${follows}</b><span>Following</span></div>
+        <div class="stat"><b>${topics}</b><span>Topics</span></div>
+      </div>`;
+    if (canPublish(this._membership)) {
+      return `<div class="donewrap">
       <span class="donecheck">&#10003;</span>
       <h3>${esc(DONE_HEADING)}</h3>
       <p>Welcome to the co-op. Your channels are followed, your handles are saved, and your feed is tuned. Time to publish.</p>
-      <div class="stats">
-        <div class="stat"><b>${follows}</b><span>Following</span></div>
-        <div class="stat"><b>${topics}</b><span>Topics</span></div>
+      ${stats}
+    </div>`;
+    }
+    return `<div class="donewrap">
+      <span class="donecheck">&#10003;</span>
+      <h3>${esc(DONE_HEADING)}</h3>
+      <p>Your feed is yours now. It fills with what the members and topics you follow publish, and it keeps filling as they do.</p>
+      ${stats}
+      <a class="pbtn" href="${SITE}/" target="_blank" rel="noopener">Go to my feed</a>
+      <p class="note">The GBTI new tab shows the same feed every time you open a browser tab.</p>
+      <div class="offer">
+        <b>Ready for more?</b>
+        <p>A ${esc(MEMBER_PLAN)} membership adds comments across the network, our Discord community, publishing your
+        own articles, projects and prompts, and a share of what the network earns from work that brings members in.</p>
+        <a href="${SITE}/membership/" target="_blank" rel="noopener">See what membership includes</a>
       </div>
     </div>`;
   }

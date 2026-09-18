@@ -20,13 +20,42 @@
  *  wording; `label`, `sub` and `heading` are the wizard's rail and page heading. */
 export const ONBOARDING_STEPS = Object.freeze([
   Object.freeze({ key: 'discord', label: 'Discord', sub: 'Join the community', heading: 'Connect Discord', title: 'Connect Discord' }),
-  Object.freeze({ key: 'subreddit', label: 'Follow', sub: 'Network channels', heading: 'Follow the channels', title: 'Follow the network channels' }),
+  Object.freeze({ key: 'subreddit', label: 'Channels', sub: 'Network channels', heading: 'Follow the channels', title: 'Follow the network channels' }),
   Object.freeze({ key: 'socials', label: 'Socials', sub: 'Your handles', heading: 'Add your socials', title: 'Add your social handles' }),
   Object.freeze({ key: 'follow', label: 'Members', sub: 'People to follow', heading: 'Follow members', title: 'Follow other members' }),
   Object.freeze({ key: 'topics', label: 'Topics', sub: 'Tune your feed', heading: 'Follow topics', title: 'Pick your topics' }),
 ]);
 
 export const ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
+
+/**
+ * sow-357: the steps THIS account is offered, in the order it should meet them.
+ *
+ * The five above are the paying member's list, and they were everyone's list until the trial was retired in
+ * August made "free" the normal new account. A free account was then walked through Discord, which it may not
+ * join (sow-356), and through the handles step, which saves to a profile it cannot publish: two of five steps
+ * that exist only to tell it what it cannot have. Owner, 2026-09-17: the welcome sets up the FREE perks, and
+ * makes the membership case once, at the end.
+ *
+ * TWO INDEPENDENT FLAGS, because the two steps are gated differently and always were:
+ *   discordAvailable - the community is paid or trialing (membership/discord-roles.mjs discordJoinAllowed).
+ *   canPublish       - publishing is PAID only, so a trial member is offered no handles step either; their
+ *                      handles would be kept on the account and flushed by nothing (welcome-socials.mjs keeps
+ *                      them, and only a later paid run writes them to a profile).
+ * Both default TRUE, so an unread membership is offered the whole list: hiding a step on a failed read is the
+ * one direction that loses work a paying member has to do.
+ *
+ * Every list keeps the ORDER above. A free account opens on the channels step (owner, 2026-09-18), which is where
+ * that order already puts it once the two paid steps are gone. Step KEYS never change, so a stored skip stays
+ * valid whichever list an account is offered.
+ */
+export function onboardingStepsFor({ discordAvailable = true, canPublish = true } = {}) {
+  return Object.freeze(ONBOARDING_STEPS.filter((s) => {
+    if (s.key === 'discord') return discordAvailable !== false;
+    if (s.key === 'socials') return canPublish !== false;
+    return true;
+  }));
+}
 
 // A channel key (reddit, x, bluesky...) or a social key (website, linkedin...): lowercase, short, no punctuation
 // beyond a hyphen. Bounded so a stored value can never carry anything but a key.
@@ -105,19 +134,22 @@ const emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socia
  * @param {boolean|null} s.profileSocials  the saved profile carries a handle (false when there is no profile)
  * @param {object|null} s.record           the stored onboarding block (null when never written; undefined = unread)
  * @param {boolean} s.discordAvailable     sow-356: false for an account that may not be in the server
+ * @param {boolean} s.canPublish           sow-357: false for an account that cannot publish a profile
  * @returns {{ steps: Array<{key,label,title,state}>, complete: boolean, known: boolean, outstanding: number }}
  */
-export function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true } = {}) {
+export function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true, canPublish = true } = {}) {
   // `undefined` = the record was not read; `null` = read, and nothing has been stored yet.
   const rec = record === undefined ? undefined : (normalizeOnboarding(record) ?? emptyRecord());
   const nFollows = count(follows);
   const nTopics = count(topics);
-  // sow-356: the Discord step is DROPPED for an account that may not be in the server (the community is a paid
-  // perk, owner 2026-09-17), rather than left outstanding. A step nobody can finish makes the card permanent and
-  // its count a lie: a free account would read "0 of 5 done" forever with one of the five impossible. With the
-  // step gone, whether the link landed is no longer part of knowing where they are, so it is not required either.
-  const known = (discordAvailable === false || typeof discordLinked === 'boolean') && nFollows !== null && nTopics !== null
-    && typeof profileSocials === 'boolean' && rec !== undefined;
+  // A step this account is not offered is DROPPED rather than left outstanding, and what it would have needed is
+  // not part of knowing where they are. A step nobody can finish makes the card permanent and its count a lie:
+  // before sow-356 a free account read "0 of 5 done" for ever with one of the five impossible, and sow-357 says
+  // the same of the handles step, which saves to a profile only a paying member can publish.
+  const offered = onboardingStepsFor({ discordAvailable, canPublish });
+  const offers = (k) => offered.some((s) => s.key === k);
+  const known = (!offers('discord') || typeof discordLinked === 'boolean') && nFollows !== null && nTopics !== null
+    && (!offers('socials') || typeof profileSocials === 'boolean') && rec !== undefined;
   const r = rec ?? emptyRecord();
   const done = {
     discord: discordLinked === true,
@@ -126,7 +158,6 @@ export function onboardingProgress({ discordLinked = null, follows = null, topic
     follow: (nFollows ?? 0) > 0,
     topics: (nTopics ?? 0) > 0,
   };
-  const offered = discordAvailable === false ? ONBOARDING_STEPS.filter((s) => s.key !== 'discord') : ONBOARDING_STEPS;
   const steps = offered.map((s) => ({
     key: s.key,
     label: s.label,

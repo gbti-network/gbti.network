@@ -37,29 +37,36 @@ test('the state is read from every host shape, and a missing profile reads as "n
   const website = host();
   const s = await loadOnboardingState(website);
   assert.equal(website.calls.status, 1, 'the identity is read once and passed to the profile read');
-  assert.deepEqual(s, { discordAvailable: true, discordLinked: false, follows: [{ username: 'bob' }], topics: ['ai'], profileSocials: false, record: { skipped: ['discord'] } });
+  assert.deepEqual(s, { discordAvailable: true, canPublish: true, discordLinked: false, follows: [{ username: 'bob' }], topics: ['ai'], profileSocials: false, record: { skipped: ['discord'] } });
   const ext = await loadOnboardingState(host({ getFollows: async () => [{ username: 'bob' }] }));
   assert.equal(ext.follows.length, 1, 'the extension returns a bare list');
 });
 
-test('sow-356: the Discord step is offered only to an account that may be in the server', async () => {
-  // A free account cannot connect Discord, so listing the step would make the card permanent and its count
-  // wrong: four of five for ever. An UNREAD or unknown membership keeps the step, because dropping it on a
-  // failed read would show a paying member a short list.
+test('sow-356/357: a step is listed only for an account that can actually finish it', async () => {
+  // A step nobody can finish makes the card permanent and its count a lie. Discord is paid or trialing
+  // (sow-356); the handles step ends in a published profile, which is paid only (sow-357). An UNREAD or unknown
+  // membership keeps everything, because dropping a step on a failed read shows a paying member a short list.
   const withMembership = (m) => host({ status: async () => ({ authenticated: true, membership: m, identity: { login: 'alice', username: 'alice' } }) });
-  for (const [m, offered] of [['paid', true], ['trialing', true], ['none', false], ['expired', false], ['banned', false], ['unknown', true]]) {
+  const matrix = [
+    ['paid', ['discord', 'subreddit', 'socials', 'follow', 'topics']],
+    ['trialing', ['discord', 'subreddit', 'follow', 'topics']],
+    ['unknown', ['discord', 'subreddit', 'socials', 'follow', 'topics']],
+    ['none', ['subreddit', 'follow', 'topics']],
+    ['expired', ['subreddit', 'follow', 'topics']],
+    ['banned', ['subreddit', 'follow', 'topics']],
+  ];
+  for (const [m, keys] of matrix) {
     const s = await loadOnboardingState(withMembership(m));
-    assert.equal(s.discordAvailable, offered, `membership ${m}`);
-    const keys = onboardingProgress(s).steps.map((x) => x.key);
-    assert.equal(keys.includes('discord'), offered, `the step list for ${m}`);
-    assert.equal(keys.length, offered ? 5 : 4);
+    assert.deepEqual(onboardingProgress(s).steps.map((x) => x.key), keys, `the step list for ${m}`);
   }
-  // And the count follows: the denominator is 4, not 5, so the card can actually be finished. (This fixture
-  // already follows a member and holds a topic, hence two done.)
+  // And the count follows: the denominator is 3, not 5, so a free account's card can actually be finished. (This
+  // fixture already follows a member and holds a topic, hence two done.)
   const free = onboardingProgress(await loadOnboardingState(withMembership('none')));
   assert.equal(free.known, true, 'a dropped step does not make the view unknown');
-  assert.match(onboardingCardHtml(free), /2 of 4 done/);
-  assert.ok(!onboardingCardHtml(free).includes('Connect Discord'), 'and the row is gone');
+  assert.match(onboardingCardHtml(free), /2 of 3 done/);
+  for (const gone of ['Connect Discord', 'Add your social handles']) {
+    assert.ok(!onboardingCardHtml(free).includes(gone), `${gone} is not listed`);
+  }
 });
 
 test('the profile is read by the member\'s own path when the host lists none, or by the listed path', async () => {
