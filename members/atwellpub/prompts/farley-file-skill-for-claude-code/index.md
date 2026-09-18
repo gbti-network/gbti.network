@@ -23,7 +23,7 @@ tags:
   - relationship-management
 image: ./images/farleyfile.jpg
 publishedAt: '2026-09-17T20:05:27.945Z'
-updatedAt: '2026-09-17T23:11:30.852Z'
+updatedAt: '2026-09-18T00:14:28.540Z'
 type: prompt
 author: atwellpub
 ---
