@@ -15,8 +15,8 @@ tags:
   - python
   - agents
   - ecommerce
-image: >-
-  https://developer.woocommerce.com/wp-content/uploads/sites/2/2026/09/Introducing-the-WooCommerce-Claude-Commerce-Agent-thumbnail-1789415571.png
+image: https://gbti.network/media/shares/gbtilabs/20260917235651-running-the-claude-commerce-agent-on-woocommerce-c9f44820.webp
+imageSource: https://developer.woocommerce.com/wp-content/uploads/sites/2/2026/09/Introducing-the-WooCommerce-Claude-Commerce-Agent-thumbnail-1789415571.png
 id: 20260917235651-running-the-claude-commerce-agent-on-woocommerce
 createdAt: '2026-09-17T23:56:51.105Z'
 type: share
