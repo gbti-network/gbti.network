@@ -2,7 +2,7 @@
 id: intro-farley-file-skill-for-claude-code
 targetType: prompt
 targetSlug: farley-file-skill-for-claude-code
-createdAt: '2026-09-18T00:14:29.047Z'
+createdAt: '2026-09-18T17:01:16.892Z'
 status: published
 visibility: public
 authorNote: true
