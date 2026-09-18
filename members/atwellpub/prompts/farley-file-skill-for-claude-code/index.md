@@ -23,7 +23,7 @@ tags:
   - relationship-management
 image: ./images/farleyfile.jpg
 publishedAt: '2026-09-17T20:05:27.945Z'
-updatedAt: '2026-09-18T00:14:28.540Z'
+updatedAt: '2026-09-18T17:01:16.461Z'
 type: prompt
 author: atwellpub
 ---
@@ -46,7 +46,8 @@ I came across this concept while reading Robert Heinlein's *Double Star*, where 
 | `/farley brief <name>` | Reads the notes back as a pre-meeting brief: names, last conversation, open threads, what to raise, what to avoid. |
 | `/farley search <query>` | Finds people by text (`fly fishing`) or by tag (`tag:role/donor tag:place/austin`). Local only, plain grep. |
 | `/farley research <name>` | Searches the web for their public footprint and records confirmed findings with sources, in their own section. |
-| `/farley list`, `/farley autotag`, `/farley init` | Everyone on file; re-tag one dossier or all of them; set where the file lives. |
+| `/farley list`,  | Everyone on file; re-tag one dossier or all of them; set where the file lives. |
+|  /farley init | Run this once after dropping the skill into your Claude |
 
 ## Install
 
