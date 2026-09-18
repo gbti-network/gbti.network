@@ -9,7 +9,8 @@ tags:
   - piano-cover
   - jacob-collier
   - warit-tonnam
-image: https://i.ytimg.com/vi/QkgeFVQS0ww/hqdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260918174020-one-day-jacob-collier-piano-cover-746d1de3.webp
+imageSource: https://i.ytimg.com/vi/QkgeFVQS0ww/hqdefault.jpg
 id: 20260918174020-one-day-jacob-collier-piano-cover
 createdAt: '2026-09-18T17:40:20.009Z'
 type: share
