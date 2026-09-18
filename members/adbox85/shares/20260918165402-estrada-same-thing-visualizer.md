@@ -10,7 +10,8 @@ category: music
 tags:
   - estrada
   - music
-image: https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg
+image: https://gbti.network/media/shares/adbox85/20260918165402-estrada-same-thing-visualizer-0c76c677.webp
+imageSource: https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg
 id: 20260918165402-estrada-same-thing-visualizer
 createdAt: '2026-09-18T16:54:02.136Z'
 type: share
