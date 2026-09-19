@@ -3394,6 +3394,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       input.imageSource = share.imageSource;
     }
     if (!input.image && fields.imageRemoved === true) input.imageRemoved = true;
+    if (Array.isArray(share.redirectFrom) && share.redirectFrom.length) input.redirectFrom = share.redirectFrom.filter((x) => typeof x === "string" && x.trim());
     if (typeof share.creatorUrl === "string" && share.creatorUrl) input.creatorUrl = share.creatorUrl;
     if (typeof share.creatorName === "string" && share.creatorName) input.creatorName = share.creatorName;
     if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;

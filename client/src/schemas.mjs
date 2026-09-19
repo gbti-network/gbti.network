@@ -261,6 +261,7 @@ export const shareSchema = z.object({
   image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
   imageSource: z.string().optional(), // sow-283: the original image URL, kept when `image` points at our hosted copy
   imageRemoved: z.boolean().optional(), // sow-272: the author removed the link preview; never look one up
+  redirectFrom: z.array(z.string()).optional(), // sow-365: urls this share used to live at (an author move); the build 301s them
   creatorUrl: z.string().optional(), // sow-222: the channel behind the link (oEmbed author_url; YouTube + Vimeo only)
   creatorName: z.string().max(120).optional(), // sow-222: what that channel is called, for the Subscribe card
   category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post

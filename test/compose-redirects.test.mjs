@@ -38,3 +38,52 @@ test('a non-public destination retargets to /membership/ (never a 301 to a 404)'
   assert.match(text, /\/prompts\/old-secret\/ \/membership\/ 301/);
   assert.match(text, /\/prompts\/old-stub\/ \/prompts\/stub\/ 301/); // a Mode B stub is a real public page
 });
+
+// sow-365: a share's public url carries its AUTHOR, so moving a share to another member retires that url the
+// way a rename retires a slug. Before this, the old url was simply no longer built: a 404 for anyone holding
+// the link, and for as long as the edge cache had left, the page as it was before the move, unstyled because
+// its stylesheet hash no longer existed. Measured ten hours after a real move with seven days still to run.
+import { scanContent } from '../scripts/compose-redirects.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+test('sow-365: a moved share 301s from its old author url to its new one', () => {
+  const items = [
+    { seg: 'shares', slug: 'x', dest: '/shares/gbtilabs/x/', status: 'published', visibility: 'public', publicStub: false, redirectFrom: ['/shares/adbox85/x/'] },
+    { seg: 'shares', slug: 'y', dest: '/shares/gbtilabs/y/', status: 'published', visibility: 'members', publicStub: false, redirectFrom: ['/shares/adbox85/y/'] },
+    { seg: 'shares', slug: 'z', dest: '/shares/gbtilabs/z/', status: 'draft', visibility: 'public', publicStub: false, redirectFrom: ['/shares/adbox85/z/'] },
+  ];
+  const { text, added } = composeRedirects('', items);
+  assert.equal(added, 2, 'a draft share contributes nothing');
+  assert.match(text, /\n\/shares\/adbox85\/x\/ \/shares\/gbtilabs\/x\/ 301/);
+  // A members-only share has no public page, so its old url points at the membership page rather than at a
+  // destination the build never writes.
+  assert.match(text, /\n\/shares\/adbox85\/y\/ \/membership\/ 301/);
+  assert.equal(/\/shares\/adbox85\/z\//.test(text), false);
+});
+
+test('sow-365: scanContent reads a share file, which is flat rather than a folder with an index', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sow365-'));
+  const dir = path.join(root, 'members', 'gbtilabs', 'shares');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '20260918-x.md'), [
+    '---', 'status: published', 'visibility: public', 'type: share', 'author: gbtilabs',
+    'id: 20260918-x', 'redirectFrom:', '  - /shares/adbox85/20260918-x/', '---', '', 'note', '',
+  ].join('\n'));
+  // A share with nothing to redirect is not an item at all, so the scan does not grow with the corpus.
+  fs.writeFileSync(path.join(dir, '20260918-y.md'), '---\nstatus: published\nvisibility: public\ntype: share\nauthor: gbtilabs\nid: 20260918-y\n---\n\nnote\n');
+  const items = scanContent(root).filter((i) => i.seg === 'shares');
+  assert.equal(items.length, 1);
+  assert.deepEqual(
+    [items[0].dest, items[0].status, items[0].visibility, items[0].redirectFrom],
+    ['/shares/gbtilabs/20260918-x/', 'published', 'public', ['/shares/adbox85/20260918-x/']],
+  );
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sow-365: the share that was actually moved carries its old url', () => {
+  const real = new URL('../members/gbtilabs/shares/20260918165402-estrada-same-thing-visualizer.md', import.meta.url);
+  const txt = fs.readFileSync(real, 'utf8');
+  assert.match(txt, /redirectFrom:\n {2}- \/shares\/adbox85\/20260918165402-estrada-same-thing-visualizer\//);
+});

@@ -51,6 +51,31 @@ export function scanContent(root = ROOT) {
       }
     }
   };
+  // sow-365: a SHARE's public url carries its author (/shares/<author>/<id>/), so moving a share to another
+  // member retires the old url exactly as a rename retires a slug. Shares are flat files rather than a folder
+  // with an index.md, and their destination is two segments, so they carry their own `dest` rather than a
+  // seg/slug pair.
+  const scanShares = (user, baseDir) => {
+    const dir = path.join(baseDir, 'shares');
+    if (!fs.existsSync(dir)) return;
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.md')) continue;
+      const fm = frontmatter(fs.readFileSync(path.join(dir, f), 'utf8'));
+      if (!fm) continue;
+      const redirectFrom = Array.isArray(fm.redirectFrom) ? fm.redirectFrom.filter((x) => typeof x === 'string') : [];
+      if (!redirectFrom.length) continue;
+      const id = String(fm.id ?? f.replace(/\.md$/, ''));
+      items.push({
+        seg: 'shares',
+        slug: id,
+        dest: `/shares/${String(fm.author ?? user)}/${id}/`,
+        status: String(fm.status ?? 'draft'),
+        visibility: String(fm.visibility ?? 'members'),
+        publicStub: fm.publicStub === true,
+        redirectFrom,
+      });
+    }
+  };
   scanBase(path.join(root, 'house'));
   const membersDir = path.join(root, 'members');
   if (fs.existsSync(membersDir)) {
@@ -58,6 +83,7 @@ export function scanContent(root = ROOT) {
       const b = path.join(membersDir, u);
       try { if (!fs.statSync(b).isDirectory()) continue; } catch { continue; }
       scanBase(b);
+      scanShares(u, b);
     }
   }
   return items;
@@ -79,7 +105,9 @@ export function composeRedirects(committedText, items) {
   for (const it of items) {
     if (it.status !== 'published' || !it.redirectFrom.length) continue;
     const isPublic = it.visibility === 'public' || it.publicStub;
-    const dest = isPublic ? `/${it.seg}/${it.slug}/` : MEMBERSHIP;
+    // An item may name its own destination (a share, whose url carries the author as well as the id). A
+    // non-public destination still retargets to /membership/ rather than 301-ing to a page that is not built.
+    const dest = isPublic ? (it.dest || `/${it.seg}/${it.slug}/`) : MEMBERSHIP;
     for (const src of it.redirectFrom) {
       const from = String(src).trim();
       if (!from.startsWith('/') || from === dest || taken.has(from)) continue;

@@ -374,6 +374,9 @@ const share = defineCollection({
     imageSource: z.string().optional(),
     // sow-272: the author removed the link preview. The share-covers workflow never looks one up for this share.
     imageRemoved: z.boolean().optional(),
+    // sow-365: urls this share used to live at. An author move retires /shares/<old-author>/<id>/, so it is
+    // recorded here and composed into a 301 by scripts/compose-redirects.mjs, exactly as a content rename is.
+    redirectFrom: z.array(z.string()).default([]),
     // sow-222: the creator behind the link, recorded at publish time for the two platforms that carry it
     // nowhere in the url (YouTube, Vimeo). The source card turns it into a Subscribe or Follow action; the
     // other eight platforms are derived from `url` at render time and store nothing. Mirrors client/src/schemas.mjs.

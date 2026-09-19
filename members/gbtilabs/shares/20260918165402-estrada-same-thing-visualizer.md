@@ -19,6 +19,8 @@ tags:
 visibility: public
 type: share
 author: gbtilabs
+redirectFrom:
+  - /shares/adbox85/20260918165402-estrada-same-thing-visualizer/
 ---
 
 **Erick Estrada**, performing as **Estrada**, is a Los Angeles-area Guatemalan-American musician associated with shoegaze, dream pop, darkwave, and alternative rock. He is especially known for originating the term **“foogaze,”** which he began using around 2020 to describe both his sound and a Latino presence within the shoegaze scene. His shoegaze-style cover of Foo Fighters’ “Everlong” helped the term gain attention online. Estrada writes, records, and produces his own music, including the 2023 EP *Public Secret*.¹ ²

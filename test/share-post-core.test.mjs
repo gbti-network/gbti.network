@@ -154,8 +154,45 @@ test('coverAfterAuthorMove hands a moved share back its original image, and leav
 
 test('the website share transport applies the move cover rule before it builds the file', () => {
   const src = readFileSync(new URL('../src/lib/workbench-client.ts', import.meta.url), 'utf8');
-  assert.match(src, /import \{ coverAfterAuthorMove \} from '\.\.\/\.\.\/client-ui\/src\/share-post-core\.mjs'/);
+  assert.match(src, /import \{ coverAfterAuthorMove, redirectAfterAuthorMove \} from '\.\.\/\.\.\/client-ui\/src\/share-post-core\.mjs'/);
   const post = src.slice(src.indexOf('async postShare('), src.indexOf('async myShares('));
-  assert.match(post, /moving \? coverAfterAuthorMove\(/, 'the move branch runs the rule');
+  assert.match(post, /moving\s*\n?\s*\? redirectAfterAuthorMove\(coverAfterAuthorMove\(/, 'the move branch runs the rule (sow-365 composed the redirect rule around it)');
   assert.ok(post.indexOf('coverAfterAuthorMove(') < post.indexOf('buildShareFile('), 'and it runs BEFORE the file is built');
+});
+
+// sow-365: a share's public url carries its author, so a move retires the old url. The owner met this as a
+// page that still named the old owner and had lost its stylesheet: a cached copy from before the move, served
+// because the new build no longer writes that path at all.
+import { redirectAfterAuthorMove, editInputFor } from '../client-ui/src/share-post-core.mjs';
+
+test('redirectAfterAuthorMove records the url the move retires, and keeps any earlier one', () => {
+  const moved = redirectAfterAuthorMove({ id: 'x', title: 'T' }, { fromUser: 'adbox85', toUser: 'gbtilabs' });
+  assert.deepEqual(moved.redirectFrom, ['/shares/adbox85/x/']);
+  assert.deepEqual(Object.keys(moved), ['id', 'title', 'redirectFrom']);
+
+  const twice = redirectAfterAuthorMove({ id: 'x', redirectFrom: ['/shares/first/x/'] }, { fromUser: 'adbox85', toUser: 'gbtilabs', id: 'x' });
+  assert.deepEqual(twice.redirectFrom, ['/shares/first/x/', '/shares/adbox85/x/'], 'a share moved twice keeps both');
+
+  const again = redirectAfterAuthorMove(twice, { fromUser: 'adbox85', toUser: 'gbtilabs', id: 'x' });
+  assert.deepEqual(again.redirectFrom, twice.redirectFrom, 'recording the same move twice adds nothing');
+
+  const same = { id: 'x' };
+  assert.equal(redirectAfterAuthorMove(same, { fromUser: 'a', toUser: 'a' }), same, 'not a move');
+  assert.equal(redirectAfterAuthorMove(same, { fromUser: '', toUser: 'b' }), same, 'no old author');
+  assert.equal(redirectAfterAuthorMove({ title: 'no id' }, { fromUser: 'a', toUser: 'b' }).redirectFrom, undefined);
+});
+
+test('sow-365: an edit carries the redirects a move left, so the old url keeps working', () => {
+  const share = { id: '20260918165402-x', author: 'gbtilabs', createdAt: '2026-09-18T16:54:02.136Z', status: 'published', visibility: 'public', redirectFrom: ['/shares/adbox85/20260918165402-x/'] };
+  const input = editInputFor({ share, fields: { title: 'A new title' }, now: '2026-09-19T00:00:00.000Z' });
+  assert.deepEqual(input.redirectFrom, ['/shares/adbox85/20260918165402-x/']);
+  assert.equal('redirectFrom' in editInputFor({ share: { ...share, redirectFrom: [] }, fields: {}, now: '2026-09-19T00:00:00.000Z' }), false);
+});
+
+test('sow-365: the website share transport records the retired url on a move', () => {
+  const src = readFileSync(new URL('../src/lib/workbench-client.ts', import.meta.url), 'utf8');
+  assert.match(src, /import \{ coverAfterAuthorMove, redirectAfterAuthorMove \}/);
+  const post = src.slice(src.indexOf('async postShare('), src.indexOf('async myShares('));
+  assert.match(post, /moving\s*\n?\s*\? redirectAfterAuthorMove\(coverAfterAuthorMove\(/);
+  assert.ok(post.indexOf('redirectAfterAuthorMove(') < post.indexOf('buildShareFile('), 'it runs BEFORE the file is built');
 });

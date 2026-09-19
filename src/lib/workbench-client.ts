@@ -30,7 +30,7 @@ import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
 import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
-import { coverAfterAuthorMove } from '../../client-ui/src/share-post-core.mjs';
+import { coverAfterAuthorMove, redirectAfterAuthorMove } from '../../client-ui/src/share-post-core.mjs';
 import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, resolvePublishedAt, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, draftRecordForEditor, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
@@ -837,7 +837,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       // ORIGINAL image and lets the covers workflow re-host it under the new owner. Carrying the old url
       // instead left the Estrada share pointing at a copy that was then reaped, and the og:image guard failed
       // every production deploy until the file was repaired by hand.
-      const shareInput = moving ? coverAfterAuthorMove({ ...clean, id: id_, createdAt }, { fromUser: from, toUser: owner }) : { ...clean, id: id_, createdAt };
+      // sow-365: and the url it is leaving behind is recorded, so the build 301s it to the new one. A share's
+      // public url carries the author, so a move retires it exactly as a rename retires a slug.
+      const shareInput = moving
+        ? redirectAfterAuthorMove(coverAfterAuthorMove({ ...clean, id: id_, createdAt }, { fromUser: from, toUser: owner }), { fromUser: from, toUser: owner, id: id_ })
+        : { ...clean, id: id_, createdAt };
       let built: any;
       try { built = buildShareFile({ username: owner, input: shareInput, body }); }
       catch (e: any) { throw new WorkbenchClientError('invalid-content', e?.message || 'the share is invalid'); }

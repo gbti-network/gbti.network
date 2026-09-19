@@ -168,6 +168,9 @@ export function editInputFor({ share, fields = {}, now = null, status = null } =
   }
   // sow-272: a removed preview stays removed across edits, so the share-covers workflow never looks one up.
   if (!input.image && fields.imageRemoved === true) input.imageRemoved = true;
+  // sow-365: a redirect left by an earlier move survives every later edit. Dropping it would turn the old
+  // url back into a 404 the moment the member touches the share again.
+  if (Array.isArray(share.redirectFrom) && share.redirectFrom.length) input.redirectFrom = share.redirectFrom.filter((x) => typeof x === 'string' && x.trim());
   // sow-222: the stored creator survives an edit. It is learned once, from the link preview at publish time,
   // and an edit that dropped it would silently turn Subscribe back into Visit with nothing to relearn it from.
   if (typeof share.creatorUrl === 'string' && share.creatorUrl) input.creatorUrl = share.creatorUrl;
@@ -243,6 +246,28 @@ export function coverAfterAuthorMove(input, { fromUser, toUser } = {}) {
   const source = typeof input.imageSource === 'string' && input.imageSource.trim() ? input.imageSource.trim() : '';
   if (source) next.image = source; else delete next.image;
   delete next.imageSource;
+  return next;
+}
+
+/**
+ * sow-365: the redirect a share MOVE leaves behind. A share's public url carries the author
+ * (/shares/<author>/<id>/), so moving it to another member retires that url: the page stops being built and
+ * anyone holding the link gets a 404, or worse, whatever the edge cached before the move, which is a page
+ * that has lost its stylesheet and still names the old owner. Measured on 2026-09-19, ten hours after the
+ * Estrada move, with seven days of cache left to run.
+ *
+ * So a move records the old url in `redirectFrom`, the same field a content rename has always used, and the
+ * build turns it into a 301 to the new one. Existing entries are kept, so a share moved twice keeps both.
+ */
+export function redirectAfterAuthorMove(input, { fromUser, toUser, id } = {}) {
+  const from = String(fromUser || '').trim().toLowerCase();
+  const to = String(toUser || '').trim().toLowerCase();
+  const key = String(id || input?.id || '').trim();
+  if (!input || !from || !to || from === to || !key) return input;
+  const oldUrl = `/shares/${from}/${key}/`;
+  const keep = Array.isArray(input.redirectFrom) ? input.redirectFrom.filter((x) => typeof x === 'string' && x.trim()) : [];
+  const next = { ...input };
+  next.redirectFrom = [...new Set([...keep, oldUrl])];
   return next;
 }
 

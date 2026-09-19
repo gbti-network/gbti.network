@@ -17148,6 +17148,8 @@ var shareSchema = external_exports.object({
   // sow-283: the original image URL, kept when `image` points at our hosted copy
   imageRemoved: external_exports.boolean().optional(),
   // sow-272: the author removed the link preview; never look one up
+  redirectFrom: external_exports.array(external_exports.string()).optional(),
+  // sow-365: urls this share used to live at (an author move); the build 301s them
   creatorUrl: external_exports.string().optional(),
   // sow-222: the channel behind the link (oEmbed author_url; YouTube + Vimeo only)
   creatorName: external_exports.string().max(120).optional(),
@@ -17436,6 +17438,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     // sow-283/sow-272: carried so an edit can keep them (see editInputFor in client-ui/src/share-post-core.mjs).
     imageSource: typeof fm.imageSource === "string" && fm.imageSource.trim() ? fm.imageSource.trim() : null,
     imageRemoved: fm.imageRemoved === true,
+    // sow-365: the urls this share used to live at, so an edit can carry them (see editInputFor).
+    redirectFrom: Array.isArray(fm.redirectFrom) ? fm.redirectFrom.filter((x) => typeof x === "string" && x.trim()) : [],
     // sow-222: the stored channel, so the extension reader's source card can offer Subscribe from this summary
     // alone, and so an edit can carry it (editInputFor drops any field it does not name).
     creatorUrl: typeof fm.creatorUrl === "string" && fm.creatorUrl.trim() ? fm.creatorUrl.trim() : null,
