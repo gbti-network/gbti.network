@@ -136,6 +136,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addNewsSource: ({ id, name, url, description }) => request('POST', '/api/admin', { action: 'news-source-add', id, name, url, description }), // SOW-056 P2
     removeNewsSource: ({ id }) => request('POST', '/api/admin', { action: 'news-source-remove', id }), // SOW-056 P2
     setNewsSourceEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'news-source-toggle', id, enabled }), // SOW-056 P2
+    // sow-372: the words that keep a story out of the news stream (superadmin; the same pool read carries them).
+    addNewsBanword: ({ word }) => request('POST', '/api/admin', { action: 'news-banword-add', word }),
+    removeNewsBanword: ({ word }) => request('POST', '/api/admin', { action: 'news-banword-remove', word }),
     couponPool: () => request('GET', '/api/coupon-pool'), // SOW-119: the coupon registry { coupons } for the manager
     addCoupon: ({ code, freeDays, note, maxRedemptions, expiresAt }) => request('POST', '/api/admin', { action: 'coupon-add', code, freeDays, note, maxRedemptions, expiresAt }), // SOW-119
     updateCoupon: ({ code, patch }) => request('POST', '/api/admin', { action: 'coupon-update', code, patch }), // SOW-119

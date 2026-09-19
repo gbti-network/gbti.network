@@ -27,11 +27,13 @@ import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'
 import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
 import { readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { ctasOf, CTA_ITEM_TYPES } from '../../membership/cta-edits.mjs'; // sow-281
+import { readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 import { SYNDICATION_CHANNEL_NAMES } from '../../membership/syndication-template-edits.mjs'; // SOW-088
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 
 const TAXONOMY_PATH = 'house/taxonomy.yml';
 const NEWS_SOURCES_PATH = 'house/news-sources.yml';
+const NEWS_BANWORDS_PATH = 'house/news-banwords.yml'; // sow-372: the words that keep a story out of the stream
 const QUOTES_PATH = 'house/quotes.yml';
 const CONTENT_CHANNELS_PATH = 'house/content-channels.yml';
 const MODERATION_FLAGS_PATH = 'house/moderation-flags.yml';
@@ -60,7 +62,10 @@ export async function getTaxonomy(ctx) {
 /** Read the current news-source pool for the manager UI. Public data; read-only. */
 export async function getNewsSourcePool(ctx) {
   const parsed = await readYaml(ctx, NEWS_SOURCES_PATH);
-  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [] };
+  // sow-372: the blocked words ride back with the pool so one manager screen shows both. readYaml answers {} for
+  // a file that is not there, and readBanwords answers [] for that, which is the state a fork starts in.
+  const bans = await readYaml(ctx, NEWS_BANWORDS_PATH).catch(() => ({}));
+  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [], banwords: readBanwords(bans) };
 }
 
 // SOW-119 + sow-291 Phase 2: the coupon registry has MOVED OFF the public repository. house/coupons.yml was a

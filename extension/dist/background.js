@@ -20514,6 +20514,9 @@ var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
   "news-source-add",
   "news-source-remove",
   "news-source-toggle",
+  "news-banword-add",
+  "news-banword-remove",
+  // sow-372: superadmin, forwarded unchanged
   "site-setting-set",
   "cta-add",
   "cta-update",
@@ -20662,6 +20665,29 @@ function ctasOf(parsed) {
 var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
 var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
 var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
+
+// membership/news-banwords.mjs
+var BANWORD_MIN = 2;
+var BANWORD_MAX = 40;
+var BANWORD_LIMIT = 200;
+var WORD_RE = /^[a-z0-9]+(?:[ -][a-z0-9]+)*$/;
+function normalizeBanword(raw) {
+  const w = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (w.length < BANWORD_MIN || w.length > BANWORD_MAX) return "";
+  if (!/[a-z]/.test(w)) return "";
+  return WORD_RE.test(w) ? w : "";
+}
+function readBanwords(doc) {
+  const raw = doc?.words ?? doc?.banwords;
+  const list = Array.isArray(raw) ? raw : [];
+  const out = /* @__PURE__ */ new Set();
+  for (const entry of list) {
+    const w = normalizeBanword(entry);
+    if (w) out.add(w);
+    if (out.size >= BANWORD_LIMIT) break;
+  }
+  return [...out].sort();
+}
 
 // membership/syndication-config-core.mjs
 var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
@@ -20983,6 +21009,7 @@ var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x
 // client/src/admin-ops.mjs
 var TAXONOMY_PATH = "house/taxonomy.yml";
 var NEWS_SOURCES_PATH = "house/news-sources.yml";
+var NEWS_BANWORDS_PATH = "house/news-banwords.yml";
 var QUOTES_PATH = "house/quotes.yml";
 var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
 var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
@@ -21002,7 +21029,8 @@ async function getTaxonomy(ctx) {
 }
 async function getNewsSourcePool(ctx) {
   const parsed = await readYaml(ctx, NEWS_SOURCES_PATH);
-  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [] };
+  const bans = await readYaml(ctx, NEWS_BANWORDS_PATH).catch(() => ({}));
+  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [], banwords: readBanwords(bans) };
 }
 async function getCouponPool2(ctx) {
   await requireAdmin(ctx);

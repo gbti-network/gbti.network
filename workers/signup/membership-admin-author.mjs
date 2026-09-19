@@ -32,6 +32,7 @@ import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { setSourceWeight, weightInput } from '../../membership/news-source-weight-edits.mjs'; // sow-338: how much we take from a source
+import { addBanword, removeBanword, banwordInput, readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
@@ -213,6 +214,7 @@ const CONFIG_ACTIONS = new Set([
   'quote-add', 'quote-remove', 'quote-toggle',
   'news-source-add', 'news-source-remove', 'news-source-toggle',
   'news-source-weight', // sow-338: superadmin, and its own file (see the row below)
+  'news-banword-add', 'news-banword-remove', // sow-372: superadmin, and its own file (see the rows below)
   'coupon-add', 'coupon-update',
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign', // sow-281
@@ -234,6 +236,12 @@ const CONFIG_OP = {
   // hand weights to admins or take source edits away from them. house/news-source-weights.yml is pinned to the
   // superadmins in CODEOWNERS and in SUPERADMIN_HOUSE_FILES, so rankForPath agrees with this row.
   'news-source-weight': { path: 'house/news-source-weights.yml', rank: ROLE_RANK.superadmin, fn: setSourceWeight, input: weightInput, slug: (a) => idSlug(a.id) },
+  // sow-372: the words that keep a story out of the news stream. Superadmin for the same reason as the weights
+  // above, and in its own file because one file cannot be owned at two ranks: admins own which publications we
+  // read (house/news-sources.yml), superadmins own what we refuse to republish. rankForPath agrees, and
+  // test/path-rank.test.mjs holds this hardcode and CODEOWNERS in lockstep with it.
+  'news-banword-add': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: addBanword, input: banwordInput, slug: (a) => idSlug(a.word) },
+  'news-banword-remove': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: removeBanword, input: banwordInput, slug: (a) => idSlug(a.word) },
   // Coupons (KV-native as of sow-291 Phase 2: house/coupons.yml leaves the public repository because a coupon
   // code is a bearer credential). `kvKey` diverts the WRITE to coupons:config in the dispatch below; `path` is
   // kept as the retired git location for the record, and `slug` is unused for a KV op (no branch/PR). Add creates
@@ -776,7 +784,15 @@ export async function membershipAdminNewsSourcePool(request, env, deps = {}) {
   const load = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/news-sources.yml');
   if (!load.ok) return { status: load.status, body: load.body };
   const sources = Array.isArray(load.parsed?.sources) ? load.parsed.sources : [];
-  return { status: 200, body: { ok: true, sources } };
+  // sow-372: the blocked words ride back with the pool, so the one manager screen shows both without a second
+  // round trip from the browser. A failure to read that file is NOT fatal here: the sources are what this route
+  // is for, and an empty list plus a visible "could not read" beats a blank screen.
+  let banwords = [];
+  try {
+    const bans = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/news-banwords.yml');
+    if (bans.ok) banwords = readBanwords(bans.parsed);
+  } catch { /* the pool still answers */ }
+  return { status: 200, body: { ok: true, sources, banwords } };
 }
 
 // sow-161 increment 4 + sow-291 Phase 2: the coupon-manager CONFIG pool READ (admin-gated). The FULL registry

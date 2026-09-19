@@ -50,6 +50,10 @@
 # house/news-sources.yml; the weighting is a superadmin's call, which is why it is a separate file: one file cannot
 # be owned at two ranks. Pinned here and in SUPERADMIN_HOUSE_FILES, and the Worker's action carries the same rank.
 /house/news-source-weights.yml  @atwellpub @gbtilabs
+# sow-372: the words that keep a story out of the news stream. Same split as the weights above: admins own which
+# publications we read, superadmins own what we refuse to republish. A word added here silences every story
+# carrying it, in the feed and in the digest, so it is pinned at the top tier and mirrored in SUPERADMIN_HOUSE_FILES.
+/house/news-banwords.yml     @atwellpub @gbtilabs
 # sow-337: the call-to-action card images, committed beside house/ctas.yml in the same PR. An image shows on every
 # page its card is assigned to, so it is pinned at the registry's tier. membership/path-rank.mjs carries the row.
 /house/images/ctas/          @atwellpub @gbtilabs

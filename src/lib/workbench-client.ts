@@ -919,6 +919,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     async addNewsSource(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async removeNewsSource(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setNewsSourceEnabled(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-toggle', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-372: the words that keep a story out of the news stream (superadmin; newsSourcePool carries the list).
+    async addNewsBanword(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-banword-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async removeNewsBanword(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-banword-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     // sow-161 increment 4: the coupons config manager. couponPool reads house/coupons.yml (config); couponUsage reads
     // the KV redemption counts; add/update land as auto-gated house PRs. A coupon is deactivated, never deleted.
     couponPool() { return workerGet('/membership/admin/coupon-pool'); }, // { ok, coupons }

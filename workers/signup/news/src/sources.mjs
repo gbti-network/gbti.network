@@ -10,6 +10,7 @@
 // which it will, once superadmins curate house/news-sources.yml. Replaces the old wall-clock `now/3600` scheme.
 
 import { SOURCES } from '../config/sources.mjs';
+import { readBanwords } from '../../../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 
 // sow-338: a superadmin's weight on a source, five steps. It changes how much we TAKE from that source (owner,
 // 2026-09-18), never how its stories rank: the stream stays newest-first and every surface inherits the effect
@@ -84,8 +85,24 @@ export function cleanSources(list) {
 }
 
 /**
+ * sow-372: the cached blob used to be a bare array of sources. It is now { sources, banwords }, and a deploy lands
+ * while the old shape is still in KV, so both are read. An old cache simply carries no blocked words, which is the
+ * behaviour that shape had, rather than a parse failure that would blank the pool.
+ */
+function readCache(raw) {
+  let v; try { v = raw ? JSON.parse(raw) : null; } catch { return null; }
+  if (Array.isArray(v)) return { sources: cleanSources(v), banwords: [] };
+  if (v && Array.isArray(v.sources)) return { sources: cleanSources(v.sources), banwords: readBanwords({ words: v.banwords }) };
+  return null;
+}
+
+/**
  * Resolve the live source pool. Prefers the published artifact (NEWS_SOURCES_URL), caches it to KV for fail-soft,
- * then falls back to the last cache, then the bundled config seed. Returns { sources, origin }.
+ * then falls back to the last cache, then the bundled config seed. Returns { sources, banwords, origin }.
+ *
+ * sow-372: `banwords` rides along rather than being fetched separately, because the free Workers plan counts every
+ * fetch and KV operation against a 50-subrequest budget per ingest run. It is EMPTY on every fallback that cannot
+ * see the artifact: a stale or bundled pool must not silently start blocking, or un-blocking, on its own.
  */
 export async function loadSourceList(env, { fetchImpl = fetch, timeoutMs = 8000 } = {}) {
   const url = env?.NEWS_SOURCES_URL;
@@ -102,19 +119,19 @@ export async function loadSourceList(env, { fetchImpl = fetch, timeoutMs = 8000 
       if (res && res.ok) {
         const data = await res.json();
         const list = cleanSources(data?.sources);
+        const banwords = readBanwords({ words: data?.banwords });
         if (list.length) {
-          try { await env.NEWS_KV.put(K_CACHE, JSON.stringify(list)); } catch { /* cache is best-effort */ }
-          return { sources: list, origin: 'remote' };
+          try { await env.NEWS_KV.put(K_CACHE, JSON.stringify({ sources: list, banwords })); } catch { /* cache is best-effort */ }
+          return { sources: list, banwords, origin: 'remote' };
         }
       }
     } catch { /* fall through to cache/bundled */ }
     try {
-      const raw = await env.NEWS_KV.get(K_CACHE);
-      const cached = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(cached) && cached.length) return { sources: cleanSources(cached), origin: 'cache' };
+      const cached = readCache(await env.NEWS_KV.get(K_CACHE));
+      if (cached && cached.sources.length) return { ...cached, origin: 'cache' };
     } catch { /* fall through to bundled */ }
   }
-  return { sources: cleanSources(SOURCES), origin: 'bundled' };
+  return { sources: cleanSources(SOURCES), banwords: [], origin: 'bundled' };
 }
 
 /**

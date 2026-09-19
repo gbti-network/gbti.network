@@ -41,6 +41,10 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   // remove) and superadmins own the weighting, which is why this is a separate file rather than a field inside
   // house/news-sources.yml: one file cannot be owned at two ranks.
   'house/news-source-weights.yml',
+  // sow-372: the words that keep a story out of the news stream. Same split as the weights above, and the same
+  // reason it is its own file: admins own which publications we read, superadmins own what we refuse to
+  // republish. A word here silences every story carrying it, on the site and in the digest.
+  'house/news-banwords.yml',
   // sow-266: the digest's membership pitch and its sponsor slot. Same tier as mail-settings.yml beside it: it
   // decides what reaches other people's inboxes, and the sponsor block is a paid third-party placement.
   'house/digest-config.yml',

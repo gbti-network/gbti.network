@@ -7,18 +7,27 @@
 //   feed:v2:guids             -> { "<guid>": "<YYYY-MM-DD>" }  dedupe map across the whole window
 //   feed:v2:index             -> { days:[...], counts:{category:{},source:{}}, total, updatedAt }
 //   feed:v2:removed           -> { "<guid>": { at, by, source, day, item } }  sow-338 tombstones
+//   feed:v2:banwords          -> ["trump", ...]  sow-372, refreshed from the published artifact by each ingest
 //
 // 30-day retention = keep the last 30 day-shards (prune older). /feed reads newest shards first and
 // stops once it has enough items, so the common case parses only a shard or two. All KV access is
 // isolated here, so swapping to R2 later is a one-file change. Pure helpers are exported for tests.
 
 import { matchesFilter } from './api.mjs';
+import { banwordMatcher, blockedBy } from '../../../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 
 const PREFIX = 'feed:v2';
 const K_INDEX = `${PREFIX}:index`;
 const K_GUIDS = `${PREFIX}:guids`;
 const kDay = (d) => `${PREFIX}:day:${d}`;
 const K_REMOVED = `${PREFIX}:removed`;
+const K_BANWORDS = `${PREFIX}:banwords`;
+
+// sow-372: the blocked words, mirrored into KV by each ingest run from the published artifact it already fetches.
+// The READ path needs them and cannot afford the artifact fetch on every feed request, and it has to see them at
+// all: without a read-side filter, seeding the list would leave a month of matching stories in the window.
+export const loadBanwords = (env) => getJSON(env, K_BANWORDS, []);
+export const saveBanwords = (env, words) => env.NEWS_KV.put(K_BANWORDS, JSON.stringify(words));
 
 // sow-338: a superadmin pulling a story writes a TOMBSTONE rather than deleting the record, for two reasons.
 // Removing the item and its guid would let the next fetch of that source store it again (ingest skips only what
@@ -215,11 +224,15 @@ export async function queryItems(env, filter = {}) {
   // sow-338: removed stories are filtered on the way out as well as skipped on the way in. The two are not the
   // same guard: an ingest run can write the same day a removal is landing in, and this covers that window.
   const removed = await loadRemoved(env);
+  // sow-372: the second of the two blocking points. Ingest refuses a matching story before it is stored, and this
+  // refuses one on the way out, so a word added today hides the stories already inside the 30-day window instead
+  // of waiting a month for them to age out. Built once per query, not per story.
+  const banned = banwordMatcher(await loadBanwords(env));
   const days = [...index.days].sort().reverse(); // newest day first
   const out = [];
   for (const d of days) {
     const shard = await loadDay(env, d);
-    for (const it of shard) if (!removed[it.guid] && matchesFilter(it, filter)) out.push(it);
+    for (const it of shard) if (!removed[it.guid] && !blockedBy(it, banned) && matchesFilter(it, filter)) out.push(it);
     if (out.length >= limit) break; // enough recent matches; deeper shards not needed
   }
   out.sort((a, b) => ts(b) - ts(a));

@@ -16,6 +16,7 @@ import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the cou
 import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the followed-topic -> news-category map
 import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
 import { targetProblems, aiToolEntries } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
+import { normalizeBanword, BANWORD_LIMIT, BANWORD_MIN, BANWORD_MAX } from '../membership/news-banwords.mjs'; // sow-372: the blocked-word list
 import { validateTierDisplay } from '../membership/tiers-display.mjs'; // sow-185: the membership tier display data
 import { PAID_GRANT_TIERS } from '../membership/tier-gate.mjs'; // sow-185: the paid tiers a grandfather grant may name
 import { CATEGORY_NAMES } from '../workers/signup/news/config/categories.mjs'; // SOW-054: the canonical news category labels
@@ -658,6 +659,35 @@ function validateAiToolsVocabulary() {
   }
 }
 validateAiToolsVocabulary();
+
+// sow-372: the blocked-word list (house/news-banwords.yml). The runtime cores DROP a malformed entry rather
+// than throwing, because they run inside the hourly ingest and the feed read where the only alternatives are
+// blocking everything or blocking nothing. That is right there and wrong here: a word silently dropped is a
+// word the superadmin believes is blocking and is not. So the build is where a bad entry is an ERROR.
+function validateNewsBanwords() {
+  const rel = 'house/news-banwords.yml';
+  if (!has(path.join(ROOT, rel))) return; // optional: absent means nothing is blocked, which is where a fork starts
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { errors.push(`${rel}: must be a mapping with a words list`); return; }
+  const raw = parsed.words;
+  if (raw === undefined || raw === null) return; // an empty file blocks nothing, which is a legitimate state
+  if (!Array.isArray(raw)) { errors.push(`${rel}: words must be a list`); return; }
+  if (raw.length > BANWORD_LIMIT) errors.push(`${rel}: ${raw.length} words, over the limit of ${BANWORD_LIMIT}`);
+  const seen = new Set();
+  for (const entry of raw) {
+    const word = normalizeBanword(entry);
+    if (!word) {
+      errors.push(`${rel}: ${JSON.stringify(entry)} is not a blocked word. Use ${BANWORD_MIN} to ${BANWORD_MAX} characters, lowercase letters and digits with at least one letter, single spaces or hyphens between them.`);
+      continue;
+    }
+    if (word !== String(entry)) errors.push(`${rel}: write ${JSON.stringify(entry)} as "${word}". It is stored lowercase and matched case-insensitively, so two spellings are one word and only one of them is readable here.`);
+    if (seen.has(word)) errors.push(`${rel}: "${word}" is listed twice`);
+    seen.add(word);
+  }
+}
+validateNewsBanwords();
 
 // SOW-119: the coupon registry (house/coupons.yml). A malformed coupon fails CI rather than silently
 // granting nothing at signup (the runtime core also fails closed, but the author should know).

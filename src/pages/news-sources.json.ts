@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { mergeMemberSources } from '../lib/member-news-sources.mjs';
+import { readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out of the stream
 
 export const prerender = true;
 
@@ -52,6 +53,19 @@ function loadWeights(): Record<string, number> {
   return out;
 }
 
+// sow-372: the superadmin's blocked words, published in THIS artifact rather than one of their own. The ingest
+// already fetches this file every hour, and the free Workers plan counts every fetch and KV operation against a
+// 50-subrequest budget per run, so a second artifact would buy nothing and cost one. A missing or malformed file
+// means an EMPTY list, which is the behaviour the pipeline had before blocking existed: fail OPEN here is right,
+// because the alternative is a broken parse silently blocking every story in the feed.
+function loadBanwords(): string[] {
+  const file = path.resolve(process.cwd(), 'house', 'news-banwords.yml');
+  try {
+    const parsed = yaml.load(fs.readFileSync(file, 'utf8')) as { words?: unknown } | null;
+    return readBanwords(parsed);
+  } catch { return []; }
+}
+
 // sow-140: admin-approved MEMBER sources (an RSS feed declared on a member-owned project and approved in
 // the admin-owned house/member-news-sources.yml) merge into the same pool. Fail closed in the pure helper:
 // only an approved slug resolving to a published + public project with an https newsFeed is emitted.
@@ -76,6 +90,7 @@ export const GET: APIRoute = async () => {
   const weights = loadWeights();
   const sources = mergeMemberSources(houseSources, approvals, projects)
     .map((s: Source) => ({ ...s, weight: weights[s.id] ?? 0 }));
-  const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: sources.length, sources });
+  const banwords = loadBanwords();
+  const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: sources.length, sources, banwords });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 };

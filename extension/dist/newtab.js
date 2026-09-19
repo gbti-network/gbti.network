@@ -17432,6 +17432,17 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-tag-explorer", GbtiTagExplorer);
 
+  // membership/news-banwords.mjs
+  var BANWORD_MIN = 2;
+  var BANWORD_MAX = 40;
+  var WORD_RE = /^[a-z0-9]+(?:[ -][a-z0-9]+)*$/;
+  function normalizeBanword(raw) {
+    const w = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    if (w.length < BANWORD_MIN || w.length > BANWORD_MAX) return "";
+    if (!/[a-z]/.test(w)) return "";
+    return WORD_RE.test(w) ? w : "";
+  }
+
   // client-ui/src/elements/gbti-news-source-manager.mjs
   var hostOf2 = (url) => {
     try {
@@ -17465,6 +17476,16 @@ ${listStyleProseCss(".doc-blocks")}
   .lk:hover { border-color:var(--accent); color:var(--accent); }
   .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
   .muted { color:var(--muted); }
+  /* sow-372: the blocked-word list. Its own block under the sources, with a rule above it, because it is a
+     different decision (what we refuse to republish) on the same screen as which publications we read. */
+  .bw { border-top:1px solid var(--line); margin:22px 0 0; padding:18px 0 0; }
+  .bw h4 { margin:0 0 4px; font-family:var(--font-display, inherit); font-size:15px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0; }
+  .chip { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:999px; padding:3px 3px 3px 12px; font-size:13px; color:var(--fg); }
+  /* 26px square, not the 19px the padding alone gave it: measured in a browser at 25x19, which is under the
+     24px minimum a thumb can hit. The chip's own padding shrinks on the button side to keep the pill compact. */
+  .chip button { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; flex:none; border:0; background:transparent; color:var(--muted); font:inherit; font-size:15px; line-height:1; padding:0; border-radius:999px; cursor:pointer; }
+  .chip button:hover { background:var(--danger, #e06c6c); color:#fff; }
 `;
   var GbtiNewsSourceManager = class extends GbtiElement {
     // SOW-070 fix: this element is in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client.
@@ -17478,9 +17499,12 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       try {
-        this._sources = (await this.client.newsSourcePool())?.sources || [];
+        const pool = await this.client.newsSourcePool();
+        this._sources = pool?.sources || [];
+        this._banwords = Array.isArray(pool?.banwords) ? pool.banwords : [];
       } catch {
         this._sources = [];
+        this._banwords = [];
         this._msg = "Could not load the news sources.";
       }
       this._loading = false;
@@ -17515,10 +17539,41 @@ ${listStyleProseCss(".doc-blocks")}
       </div>
       <p class="hint" style="margin:-6px 0 14px">The next news ingest confirms the feed fetches; a source that never returns items can be removed here.</p>
       <ul class="list">${rows || '<li class="muted">No sources yet.</li>'}</ul>
+      ${this._banwordsBlock()}
     </div>`);
       this._wire();
     }
+    // sow-372: the superadmin's blocked-word list. A word here keeps every story carrying it out of the stream,
+    // in the hourly ingest and in what the feed serves, so the note says both and says what it does NOT touch.
+    _banwordsBlock() {
+      const words = this._banwords || [];
+      const chips = words.map((w) => `<span class="chip">${esc(w)}<button type="button" data-unban="${esc(w)}" aria-label="Stop blocking ${esc(w)}" title="Stop blocking ${esc(w)}">&times;</button></span>`).join("");
+      return `<div class="bw">
+      <h4>Blocked words</h4>
+      <p class="hint">A story whose headline or summary carries one of these never enters the stream, and any already in the window stop showing. Whole words only, so "trump" leaves a trumpet alone. This is what we republish from other publications; it never touches member writing.</p>
+      <div class="add" style="margin-top:12px">
+        <input data-bw-word type="text" placeholder="word or short phrase" />
+        <button class="btn" type="button" data-bw-add>Block word</button>
+      </div>
+      <div class="chips">${chips || '<span class="muted">No blocked words.</span>'}</div>
+    </div>`;
+    }
     _wire() {
+      this.on("[data-bw-add]", "click", () => {
+        const raw = this.$("[data-bw-word]")?.value || "";
+        const word = normalizeBanword(raw);
+        if (!word) {
+          this._msg = "A blocked word is 2 to 40 characters: letters and digits with at least one letter, single spaces or hyphens between them.";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.addNewsBanword({ word }));
+      });
+      this.$$("[data-unban]").forEach((b) => b.addEventListener("click", () => {
+        const word = b.dataset.unban;
+        if (typeof confirm === "function" && !confirm(`Stop blocking "${word}"? Stories carrying it come back on the next hourly fetch.`)) return;
+        this._run(() => this.client.removeNewsBanword({ word }));
+      }));
       this.on("[data-add]", "click", () => {
         const id = (this.$("[data-add-id]")?.value || "").trim();
         const name = (this.$("[data-add-name]")?.value || "").trim();
@@ -28076,6 +28131,9 @@ From the author:
       // SOW-056 P2
       setNewsSourceEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "news-source-toggle", id, enabled }),
       // SOW-056 P2
+      // sow-372: the words that keep a story out of the news stream (superadmin; the same pool read carries them).
+      addNewsBanword: ({ word }) => request("POST", "/api/admin", { action: "news-banword-add", word }),
+      removeNewsBanword: ({ word }) => request("POST", "/api/admin", { action: "news-banword-remove", word }),
       couponPool: () => request("GET", "/api/coupon-pool"),
       // SOW-119: the coupon registry { coupons } for the manager
       addCoupon: ({ code, freeDays, note, maxRedemptions, expiresAt }) => request("POST", "/api/admin", { action: "coupon-add", code, freeDays, note, maxRedemptions, expiresAt }),

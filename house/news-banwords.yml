@@ -1,0 +1,28 @@
+# sow-372: words that keep a story OUT of the news stream. Superadmin-owned, like house/news-source-weights.yml
+# and for the same reason: which publications we read is an admin call, what we refuse to republish is not.
+#
+# The pool is 126 general technology and security feeds and several of them carry national politics. Measured on
+# 60 live stories on 2026-09-19, three were American election coverage sitting under a technology tag. This list
+# is how that stops, and the six words below are the owner's, given on that date.
+#
+# HOW IT MATCHES: case-insensitive, WHOLE WORD. "trump" does not silence a story about a trumpet, and "covid"
+# still catches "COVID-19", because the boundary is any character that is not a letter or a digit. The headline
+# and both summaries are read, the publisher's blurb and the one we generate.
+#
+# WHERE IT APPLIES: the hourly ingest refuses a matching story before it is stored, so it is never classified or
+# summarised, and the feed refuses one on the way out, so adding a word here hides the stories already inside the
+# 30-day window instead of waiting a month for them to age out. Removing a word lets those stories back in on
+# the next ingest, because a refusal is never recorded.
+#
+# WHAT IT IS NOT: this is editorial scope for an aggregator, applied to other publications' stories. It is not
+# moderation and it never touches anything a member wrote.
+#
+# Each word: 2 to 40 characters, lowercase letters and digits, single spaces or hyphens between them, so a
+# phrase works and a regular expression does not. The build refuses anything else.
+words:
+  - covid
+  - democrat
+  - maga
+  - pandemic
+  - republican
+  - trump

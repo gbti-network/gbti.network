@@ -5,6 +5,7 @@
 // /news-sources.json next cron). Inert in public (no injected client). Host-agnostic.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { houseEditAck } from '../workspace-core.mjs'; // SOW-072 P2 + sow-275: the one consistent ack, reporting whether the edit merges on its own
+import { normalizeBanword } from '../../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 
 const hostOf = (url) => { try { return new URL(url).host; } catch { return url || ''; } };
 
@@ -33,6 +34,16 @@ const CSS = `
   .lk:hover { border-color:var(--accent); color:var(--accent); }
   .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
   .muted { color:var(--muted); }
+  /* sow-372: the blocked-word list. Its own block under the sources, with a rule above it, because it is a
+     different decision (what we refuse to republish) on the same screen as which publications we read. */
+  .bw { border-top:1px solid var(--line); margin:22px 0 0; padding:18px 0 0; }
+  .bw h4 { margin:0 0 4px; font-family:var(--font-display, inherit); font-size:15px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0; }
+  .chip { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:999px; padding:3px 3px 3px 12px; font-size:13px; color:var(--fg); }
+  /* 26px square, not the 19px the padding alone gave it: measured in a browser at 25x19, which is under the
+     24px minimum a thumb can hit. The chip's own padding shrinks on the button side to keep the pill compact. */
+  .chip button { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; flex:none; border:0; background:transparent; color:var(--muted); font:inherit; font-size:15px; line-height:1; padding:0; border-radius:999px; cursor:pointer; }
+  .chip button:hover { background:var(--danger, #e06c6c); color:#fff; }
 `;
 
 class GbtiNewsSourceManager extends GbtiElement {
@@ -42,8 +53,11 @@ class GbtiNewsSourceManager extends GbtiElement {
 
   async load() {
     if (!this.client) { this.render(); return; }
-    try { this._sources = (await this.client.newsSourcePool())?.sources || []; }
-    catch { this._sources = []; this._msg = 'Could not load the news sources.'; }
+    try {
+      const pool = await this.client.newsSourcePool();
+      this._sources = pool?.sources || [];
+      this._banwords = Array.isArray(pool?.banwords) ? pool.banwords : [];
+    } catch { this._sources = []; this._banwords = []; this._msg = 'Could not load the news sources.'; }
     this._loading = false;
     this.render();
   }
@@ -73,11 +87,40 @@ class GbtiNewsSourceManager extends GbtiElement {
       </div>
       <p class="hint" style="margin:-6px 0 14px">The next news ingest confirms the feed fetches; a source that never returns items can be removed here.</p>
       <ul class="list">${rows || '<li class="muted">No sources yet.</li>'}</ul>
+      ${this._banwordsBlock()}
     </div>`);
     this._wire();
   }
 
+  // sow-372: the superadmin's blocked-word list. A word here keeps every story carrying it out of the stream,
+  // in the hourly ingest and in what the feed serves, so the note says both and says what it does NOT touch.
+  _banwordsBlock() {
+    const words = this._banwords || [];
+    const chips = words.map((w) => `<span class="chip">${esc(w)}<button type="button" data-unban="${esc(w)}" aria-label="Stop blocking ${esc(w)}" title="Stop blocking ${esc(w)}">&times;</button></span>`).join('');
+    return `<div class="bw">
+      <h4>Blocked words</h4>
+      <p class="hint">A story whose headline or summary carries one of these never enters the stream, and any already in the window stop showing. Whole words only, so "trump" leaves a trumpet alone. This is what we republish from other publications; it never touches member writing.</p>
+      <div class="add" style="margin-top:12px">
+        <input data-bw-word type="text" placeholder="word or short phrase" />
+        <button class="btn" type="button" data-bw-add>Block word</button>
+      </div>
+      <div class="chips">${chips || '<span class="muted">No blocked words.</span>'}</div>
+    </div>`;
+  }
+
   _wire() {
+    this.on('[data-bw-add]', 'click', () => {
+      const raw = this.$('[data-bw-word]')?.value || '';
+      // Normalized here for immediate feedback, and again server-side, where it is the boundary.
+      const word = normalizeBanword(raw);
+      if (!word) { this._msg = 'A blocked word is 2 to 40 characters: letters and digits with at least one letter, single spaces or hyphens between them.'; this.render(); return; }
+      this._run(() => this.client.addNewsBanword({ word }));
+    });
+    this.$$('[data-unban]').forEach((b) => b.addEventListener('click', () => {
+      const word = b.dataset.unban;
+      if (typeof confirm === 'function' && !confirm(`Stop blocking "${word}"? Stories carrying it come back on the next hourly fetch.`)) return;
+      this._run(() => this.client.removeNewsBanword({ word }));
+    }));
     this.on('[data-add]', 'click', () => {
       const id = (this.$('[data-add-id]')?.value || '').trim();
       const name = (this.$('[data-add-name]')?.value || '').trim();
