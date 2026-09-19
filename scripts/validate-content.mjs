@@ -15,6 +15,7 @@ import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-0
 import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the coupon registry
 import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the followed-topic -> news-category map
 import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
+import { targetProblems, aiToolEntries } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
 import { validateTierDisplay } from '../membership/tiers-display.mjs'; // sow-185: the membership tier display data
 import { PAID_GRANT_TIERS } from '../membership/tier-gate.mjs'; // sow-185: the paid tiers a grandfather grant may name
 import { CATEGORY_NAMES } from '../workers/signup/news/config/categories.mjs'; // SOW-054: the canonical news category labels
@@ -46,6 +47,17 @@ const TOPIC_KEYS = (() => {
   } catch {
     return new Set();
   }
+})();
+
+// sow-368: the controlled list of AI tools a prompt may say it runs on (house/ai-tools.yml). Unlike the topic
+// vocabulary above, the LABEL is the canonical form: a target is written into the content, rendered as the
+// chip and carried in the filter link, so the displayed string is the stored value.
+//
+// An unreadable or empty file leaves this null and the check below reports THAT, rather than silently passing
+// every prompt. A guard that cannot read its own vocabulary has proved nothing (sow-245).
+const AI_TOOLS_DOC = (() => {
+  try { return yaml.load(fs.readFileSync(path.join(ROOT, 'house/ai-tools.yml'), 'utf8')); }
+  catch { return null; }
 })();
 
 function validCategoryPath(arr) {
@@ -251,6 +263,12 @@ function checkContent(file, owner, type) {
   if (type === 'post' || type === 'project' || type === 'prompt' || type === 'applet') {
     const fm = frontmatter(txt);
     checkTitle(fm, rel, type); // sow-256
+    // sow-368: a prompt's `targets` names the AI tools it runs on, from the controlled list in
+    // house/ai-tools.yml. Free text here is how one tool becomes two filter buttons on the prompts
+    // directory, each showing half the prompts, with nothing anywhere reporting it.
+    if (type === 'prompt' && fm && fm.targets !== undefined) {
+      for (const problem of targetProblems(fm.targets, AI_TOOLS_DOC)) errors.push(`${rel}: ${problem}`);
+    }
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
     if (type === 'project') checkNewsFeed(fm, rel); // sow-140
@@ -621,6 +639,25 @@ function validateDigestConfig() {
   }
 }
 validateDigestConfig();
+
+// sow-368 + sow-245: the AI-tool vocabulary has to be READABLE for the per-prompt check above to mean
+// anything. Without this, deleting or breaking house/ai-tools.yml turns every targets check into a silent
+// pass and the validator still prints a green tick.
+function validateAiToolsVocabulary() {
+  const rel = 'house/ai-tools.yml';
+  if (!has(path.join(ROOT, rel))) { errors.push(`${rel}: missing, so no prompt's targets were checked against anything`); return; }
+  if (!AI_TOOLS_DOC || typeof AI_TOOLS_DOC !== 'object') { errors.push(`${rel}: not valid YAML, so no prompt's targets were checked`); return; }
+  const entries = aiToolEntries(AI_TOOLS_DOC);
+  if (!entries.length) { errors.push(`${rel}: lists no usable tools (every entry needs a label), so no prompt's targets were checked`); return; }
+  const seen = new Map();
+  for (const { key, label } of entries) {
+    const lower = label.toLowerCase();
+    if (seen.has(lower)) errors.push(`${rel}: "${label}" (${key}) and "${seen.get(lower)}" differ only by case, which is the drift this list exists to prevent`);
+    else seen.set(lower, label);
+    if (/[\u2014\u2013]/.test(label)) errors.push(`${rel}: "${label}" carries a dash our writing conventions do not use`);
+  }
+}
+validateAiToolsVocabulary();
 
 // SOW-119: the coupon registry (house/coupons.yml). A malformed coupon fails CI rather than silently
 // granting nothing at signup (the runtime core also fails closed, but the author should know).

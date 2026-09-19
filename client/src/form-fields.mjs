@@ -75,7 +75,13 @@ export const FIELDS = Object.freeze({
     STATUS, VISIBILITY,
     f('publicStub', 'Public stub (when members-only)', 'boolean'), // SOW-016
     f('pricing', 'Pricing', 'enum', { options: ['free', 'freemium', 'paid'] }),
-    f('targets', 'Targets (models/tools)', 'array'),
+    // sow-368: the value must be one of the labels in house/ai-tools.yml, checked at build. The list is not
+    // repeated here because this module is bundled into the browser and cannot read the file; the build
+    // message names the correct spelling when an author gets one wrong, which teaches it better than a hint.
+    f('targets', 'Targets (models/tools)', 'array', {
+      placeholder: 'Claude Code, Nano Banana',
+      hint: 'Which AI tools this runs on. Use the exact names from our tool list; the build tells you the right spelling if one is off.',
+    }),
     TAGS,
     f('variables', 'Variables', 'array'),
     f('exampleOutput', 'Example output', 'textarea'),

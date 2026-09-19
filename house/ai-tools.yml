@@ -1,0 +1,40 @@
+# sow-368: the AI tools a prompt can say it RUNS ON. Admin-owned, like the topic vocabulary it copies.
+#
+# WHY THIS EXISTS, AND WHAT IT IS NOT FIXING. A prompt's `targets` field has always been free text, and today
+# the data is clean: 26 prompt files carry 5 values between them, every one spelled consistently. Nothing is
+# broken right now. This is preventive. The moment somebody writes "claude code" beside "Claude Code" the
+# prompts directory grows two filter buttons for one tool, each showing half the prompts, and nothing
+# anywhere reports it. A controlled list is what stops that, and it is cheapest to add while the data is
+# still clean.
+#
+# THE LABEL IS THE CANONICAL FORM, which is unusual here and deliberate. house/topics.yml keys by a slug
+# because a topic is STORED in a member's preferences, so it has to survive a rename. A target is different:
+# it is written into the content file, rendered as the chip a reader sees, and carried in the filter link
+# (/prompts/?target=Claude%20Code). Keying by slug would mean migrating 26 files, three render sites and
+# every existing link to buy a rename we have never needed. So the key below is documentation, and the
+# `label` is what a prompt writes and what scripts/validate-content.mjs checks, exactly.
+#
+# TO ADD A TOOL: add a line. To rename one: change the label here AND in every prompt that names it, in the
+# same pull request, or the build fails and tells you which files disagree. That failure is the point.
+#
+# No em or en dashes anywhere in a label.
+tools:
+  # Assistants and agents
+  claude: { label: Claude }
+  claude-code: { label: Claude Code }
+  chatgpt: { label: ChatGPT }
+  gemini: { label: Gemini }
+  copilot: { label: GitHub Copilot }
+  cursor: { label: Cursor }
+  codex: { label: Codex }
+
+  # Image and media
+  nano-banana: { label: Nano Banana }
+  midjourney: { label: Midjourney }
+  dall-e: { label: DALL-E }
+  stable-diffusion: { label: Stable Diffusion }
+  sora: { label: Sora }
+
+  # Anything, rather than a specific tool. Use it sparingly: "works everywhere" tells a reader less than
+  # naming the two tools you actually tested it on.
+  any-llm: { label: Any LLM }
