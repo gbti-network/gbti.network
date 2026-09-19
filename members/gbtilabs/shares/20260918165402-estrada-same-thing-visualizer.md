@@ -9,7 +9,8 @@ shortDescription: >-
   Erick Estrada, performing as Estrada, is a Los Angeles-area Guatemalan-American musician
   associated with shoegaze, dream pop, darkwave, and alternative rock.
 category: music
-image: https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260918165402-estrada-same-thing-visualizer-0c76c677.webp
+imageSource: https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg
 tags:
   - estrada
   - music
