@@ -146,7 +146,21 @@ test('switch and restore change ONLY the image lines, on every real share file, 
       assert.equal(fmOf(restored).image, fm.imageSource, f);
       assert.equal('imageSource' in fmOf(restored), false, f);
       assert.equal(withoutImageLines(restored), withoutImageLines(text), `${f}: nothing else changed`);
-      assert.equal(switchToCopy(restored, { url: fm.image, source: fm.imageSource }), text, `${f}: the round trip is byte-identical`);
+      const again = switchToCopy(restored, { url: fm.image, source: fm.imageSource });
+      // sow-363: byte equality is the bar ONLY while the file's image line is the single line this switcher
+      // writes. Another writer can legitimately leave a FOLDED one: moving a share to another member
+      // re-serializes the whole frontmatter, and js-yaml folds a long value onto a continuation line (the
+      // Estrada move, PR #533, red main for over an hour). The switcher replaces a folded value with one line
+      // on purpose, which the next test pins, so the invariant that survives a re-serialization is value
+      // equality plus every other byte unchanged.
+      const folded = /^image: *[>|]/m.test(/^---\n([\s\S]*?)\n---/.exec(text)[1]);
+      if (!folded) {
+        assert.equal(again, text, `${f}: the round trip is byte-identical`);
+      } else {
+        assert.equal(fmOf(again).image, fm.image, `${f}: the copy url survives the round trip`);
+        assert.equal(fmOf(again).imageSource, fm.imageSource, `${f}: the original survives the round trip`);
+        assert.equal(withoutImageLines(again), withoutImageLines(text), `${f}: nothing outside the image lines changed`);
+      }
     } else {
       const url = shareCoverUrl(fm.author || 'ann', copy('s1'));
       const switched = switchToCopy(text, { url, source: fm.image });
