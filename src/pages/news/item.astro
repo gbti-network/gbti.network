@@ -82,6 +82,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
 
   <script>
     import { newsTargetSlug } from '../../lib/home-feed.mjs';
+    import { newsSummary } from '../../lib/news-summary.mjs'; // sow-367
     import { SITE_NAME } from '../../lib/brand';
     import { onMemberSignal, currentIdentity, readMemberSignal } from '../../lib/member-signal';
 
@@ -181,12 +182,10 @@ import { SIGNUP_BASE } from '../../lib/membership';
         if (typeof it.publishedAt === 'number') meta.append(el('span', 'tmeta', relTime(it.publishedAt)));
         target.append(meta);
 
-        // title + summary
+        // title + summary (sow-367: the publisher's blurb, or ours when theirs stops mid-sentence)
         target.append(el('h1', 'h1 share-title mt12', String(it.title || 'Untitled')));
-        if (it.summary) {
-          const sum = String(it.summary).trim();
-          target.append(el('p', 'lead mt16', /[.!?]["')\]]?$/.test(sum) ? sum : sum + '...'));
-        }
+        const sum = newsSummary(it);
+        if (sum) target.append(el('p', 'lead mt16', sum));
 
         // hero
         const imgUrl = it.image ? fixUrl(String(it.image)) : '';

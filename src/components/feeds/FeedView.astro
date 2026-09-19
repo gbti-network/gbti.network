@@ -181,6 +181,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
 <script>
   import { catKey, rowMatchesCat } from '../../lib/feed-filter.mjs';
   import { newsFeatureImage, GENERIC_FEATURE_IMAGE } from '../../../client-ui/src/news-feature-image.mjs'; // sow-149: one branded banner per news category
+  import { newsSummary } from '../../lib/news-summary.mjs'; // sow-367: the publisher's blurb, or ours when theirs is cut off
   // Per-view chrome: visibility chips, the ?tag= and ?cat= drilldowns, and the persisted density toggle. While a
   // filter is active the ladder flattens (chunks all visible via .feed-flat CSS, pagers hidden); when
   // the filter clears, the chunk/pager hidden attributes are untouched, so the ladder state restores.
@@ -315,10 +316,9 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
             a.setAttribute('href', detailHref);
             h2.append(a);
             main.append(meta, h2);
-            if (it.summary) {
-              const sum = String(it.summary).trim();
-              main.append(el('p', 'feed-ex', /[.!?]["')\]]?$/.test(sum) ? sum : sum + '...'));
-            }
+            // sow-367: the publisher's blurb, or ours when theirs stops mid-sentence
+            const sum = newsSummary(it);
+            if (sum) main.append(el('p', 'feed-ex', sum));
             const foot = el('div', 'feed-foot');
             foot.append(el('span', 'fsp'));
             main.append(foot);
