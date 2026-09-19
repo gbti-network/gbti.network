@@ -30,6 +30,7 @@ import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
 import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
+import { coverAfterAuthorMove } from '../../client-ui/src/share-post-core.mjs';
 import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, resolvePublishedAt, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, draftRecordForEditor, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
@@ -828,20 +829,25 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       const id_ = (input && input.id) || makeShareId(createdAt, input?.title);
       const { encryptedBody: _stale, ...clean } = input || {};
       const owner = typeof authorTarget === 'string' && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : user;
+      // A MOVE names the old files in removePaths (the composer computed them from the share's current folder); an
+      // in-place edit of another member's share (sow-317) carries none, so nothing is deleted.
+      const moving = isEdit && Array.isArray(removePaths) && removePaths.length > 0;
+      const from = moving ? ((/^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(removePaths[0] || '')) || [])[1] || user).toLowerCase() : user;
+      // sow-363: a hosted cover belongs to the folder it is stored under, so a move hands the share back its
+      // ORIGINAL image and lets the covers workflow re-host it under the new owner. Carrying the old url
+      // instead left the Estrada share pointing at a copy that was then reaped, and the og:image guard failed
+      // every production deploy until the file was repaired by hand.
+      const shareInput = moving ? coverAfterAuthorMove({ ...clean, id: id_, createdAt }, { fromUser: from, toUser: owner }) : { ...clean, id: id_, createdAt };
       let built: any;
-      try { built = buildShareFile({ username: owner, input: { ...clean, id: id_, createdAt }, body }); }
+      try { built = buildShareFile({ username: owner, input: shareInput, body }); }
       catch (e: any) { throw new WorkbenchClientError('invalid-content', e?.message || 'the share is invalid'); }
       const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });
       const files: any[] = plan ? plan.files : [{ path: built.path, content: built.markdown }];
       // The ciphertext to drop on a members-to-public flip sits under the share's OWN folder: the caller's for their own
       // share, the owner's for a superadmin editing another member's share in place (sow-317).
       if (isEdit && typeof removeEnc === 'string' && (removeEnc.startsWith(`members/${user}/_enc/`) || removeEnc.startsWith(`members/${owner}/_enc/`)) && !plan?.encPath) files.push({ path: removeEnc, content: null });
-      // A MOVE names the old files in removePaths (the composer computed them from the share's current folder); an
-      // in-place edit of another member's share (sow-317) carries none, so nothing is deleted.
-      const moving = isEdit && Array.isArray(removePaths) && removePaths.length > 0;
       if (moving) {
         const already = new Set(files.map((f: any) => f.path));
-        const from = (/^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(removePaths[0] || '')) || [])[1]?.toLowerCase() || user;
         for (const d of shareMoveDeletions({ user: from, removePaths })) if (!already.has(d.path)) files.push(d);
       }
       const title = `${isEdit ? (moving ? 'Move Share' : 'Update Share') : 'New Share'}${built.frontmatter?.title ? `: ${built.frontmatter.title}` : ''}`;

@@ -215,6 +215,33 @@ export function authorMoveRemovals({ share, authorTarget } = {}) {
   return out;
 }
 
+/**
+ * sow-363: the cover a share carries when it MOVES to another member. A hosted cover is stored under the
+ * author's own folder (members/<author>/shares/images/...) and served from /media/shares/<author>/..., so the
+ * old url stops being the new owner's to point at: the covers workflow reaps a copy whose share has left,
+ * and the share is then left declaring an image nobody serves. That took production down on 2026-09-18, because
+ * the og:image size guard cannot measure a same-host image that is not there.
+ *
+ * So a move drops the hosted url and hands back the ORIGINAL (imageSource), which is the state the covers
+ * workflow re-hosts from, under the new owner. A cover with no original recorded is dropped rather than
+ * carried, because a broken image is worse than none and the guard fails the build on it. An outside image
+ * (any url we do not serve) is left exactly as it is. Key order is preserved, so a move does not reshuffle
+ * the frontmatter beyond the fields it changes.
+ */
+export function coverAfterAuthorMove(input, { fromUser, toUser } = {}) {
+  const from = String(fromUser || '').trim().toLowerCase();
+  const to = String(toUser || '').trim().toLowerCase();
+  if (!input || !from || !to || from === to) return input;
+  const image = typeof input.image === 'string' ? input.image : '';
+  const m = /^https?:\/\/gbti\.network\/media\/shares\/([a-z0-9][a-z0-9-]*)\//i.exec(image);
+  if (!m || m[1].toLowerCase() === to) return input; // not ours to move, or already the new owner's
+  const next = { ...input };
+  const source = typeof input.imageSource === 'string' && input.imageSource.trim() ? input.imageSource.trim() : '';
+  if (source) next.image = source; else delete next.image;
+  delete next.imageSource;
+  return next;
+}
+
 /** One line under the audience cards when an edit changes the audience; '' when it does not. */
 export function audienceChangeNote(from, to) {
   const f = from === 'public' ? 'public' : 'members';

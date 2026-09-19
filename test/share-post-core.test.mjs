@@ -120,3 +120,42 @@ test('authorMoveRemovals names the old stub and ciphertext, only inside the curr
   const fromPath = { id: 'w', path: 'members/alice/shares/w.md' };
   assert.deepEqual(authorMoveRemovals({ share: fromPath, authorTarget: 'bob' }), ['members/alice/shares/w.md'], 'the author is read from the path when the item carries none');
 });
+
+// sow-363: a move must not carry a hosted cover url across folders. The cover lives under the author's own
+// folder and the covers workflow reaps a copy whose share has left, so the moved share would declare an image
+// nobody serves and the og:image build guard would fail every deploy (2026-09-18, production down for an hour).
+import { coverAfterAuthorMove } from '../client-ui/src/share-post-core.mjs';
+
+test('coverAfterAuthorMove hands a moved share back its original image, and leaves everything else alone', () => {
+  const hosted = {
+    id: '20260918165402-estrada', createdAt: '2026-09-18T16:54:02.136Z', title: 'Estrada',
+    image: 'https://gbti.network/media/shares/adbox85/20260918165402-estrada-0c76c677.webp',
+    imageSource: 'https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg', tags: ['music'],
+  };
+  const moved = coverAfterAuthorMove(hosted, { fromUser: 'adbox85', toUser: 'gbtilabs' });
+  assert.equal(moved.image, 'https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg', 'the original comes back');
+  assert.equal('imageSource' in moved, false, 'the switched state goes with it');
+  assert.deepEqual(Object.keys(moved), ['id', 'createdAt', 'title', 'image', 'tags'], 'key order is preserved');
+  assert.deepEqual(hosted.tags, ['music'], 'the caller’s input is not mutated');
+
+  assert.equal(coverAfterAuthorMove(hosted, { fromUser: 'adbox85', toUser: 'adbox85' }), hosted, 'not a move');
+  assert.equal(coverAfterAuthorMove(hosted, { fromUser: '', toUser: 'gbtilabs' }), hosted, 'no old author');
+
+  const outside = { image: 'https://img.example.com/a.jpg', imageSource: 'https://img.example.com/a.jpg' };
+  assert.equal(coverAfterAuthorMove(outside, { fromUser: 'adbox85', toUser: 'gbtilabs' }), outside, 'an image we do not serve is untouched');
+
+  const alreadyTheirs = { image: 'https://gbti.network/media/shares/gbtilabs/x-0c76c677.webp', imageSource: 'https://i.ytimg.com/vi/a/max.jpg' };
+  assert.equal(coverAfterAuthorMove(alreadyTheirs, { fromUser: 'adbox85', toUser: 'gbtilabs' }), alreadyTheirs, 'a copy already under the new owner stays');
+
+  const noSource = { id: 's1', image: 'https://gbti.network/media/shares/adbox85/x-0c76c677.webp' };
+  const dropped = coverAfterAuthorMove(noSource, { fromUser: 'adbox85', toUser: 'gbtilabs' });
+  assert.equal('image' in dropped, false, 'with no original recorded the cover is dropped, never left broken');
+});
+
+test('the website share transport applies the move cover rule before it builds the file', () => {
+  const src = readFileSync(new URL('../src/lib/workbench-client.ts', import.meta.url), 'utf8');
+  assert.match(src, /import \{ coverAfterAuthorMove \} from '\.\.\/\.\.\/client-ui\/src\/share-post-core\.mjs'/);
+  const post = src.slice(src.indexOf('async postShare('), src.indexOf('async myShares('));
+  assert.match(post, /moving \? coverAfterAuthorMove\(/, 'the move branch runs the rule');
+  assert.ok(post.indexOf('coverAfterAuthorMove(') < post.indexOf('buildShareFile('), 'and it runs BEFORE the file is built');
+});
