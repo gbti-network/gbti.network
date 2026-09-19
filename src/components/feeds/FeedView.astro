@@ -51,15 +51,9 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
     content collection whether a member has a profile page. The built set rides along here instead. A share
     author who has not written a profile yet gets their name as plain text, exactly as the built cards do. */}
 <div class="wrap feedwrap feed-page" data-feedview data-narrow={narrow} data-view="card" data-signup-base={SIGNUP_BASE} data-cat-labels={JSON.stringify(catLabels)} data-profile-pages={profilePageUsernames().join(' ')}>
-  {!isNews && (
-    <div class="feed-topbar">
-      <button type="button" class="members-toggle" data-members-toggle aria-pressed="false">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><use href="#ico-lock"/></svg>
-        Member content only
-        <span class="mt-switch" aria-hidden="true"><span class="mt-knob"></span></span>
-      </button>
-    </div>
-  )}
+  {/* sow-370 (owner, 2026-09-19): the "Member content only" toggle is GONE. It filtered the built cards down
+      to the gated ones, which for a signed-out reader is a page of things they cannot open, and the count card
+      below already says what is in the member stream. The members-only CTA that rode with it went with it. */}
   <FeedChrome narrow={narrow} />
 
   <div class="feed-toolbar">
@@ -75,21 +69,6 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
     <span>Filtered by <b data-tag-label></b></span>
     <a href={currentHref} data-tag-clear>Clear</a>
   </div>
-
-  {!isNews && (
-    <aside class="feed-cta feed-members-cta" data-members-cta hidden aria-label="Become a member">
-      <div class="feed-cta-inner">
-        <div>
-          <div class="fc-t"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-lock"/></svg> This is member-only content</div>
-          <p class="fc-d">Become a member to read the gated articles, projects, prompts, and shares across the network.</p>
-        </div>
-        <div class="fc-a">
-          <a href="/membership/" class="btn btn-primary">Become a member</a>
-          <span class="fc-n">Reading is free · membership unlocks the rest</span>
-        </div>
-      </div>
-    </aside>
-  )}
 
   {showLockedShares && (
     <aside class="feed-locked-shares" data-locked-shares aria-label="Member-only shares">
@@ -152,8 +131,15 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       </section>
     </>
   ) : (
-    <FeedList items={narrowed} membersItems={membersNarrowed} avatarIndex={avatarIndex} ctaAfter={4}>
-      <div slot="cta" class="feed-cta-inner">
+    <FeedList items={narrowed} membersItems={membersNarrowed} avatarIndex={avatarIndex} />
+  )}
+
+  {/* sow-370 (owner, 2026-09-19): the join panel sits at the FOOT of the feed rather than after the fourth
+      card. It reads as an ask once someone has scrolled the feed, instead of interrupting it. It is rendered
+      here rather than through FeedList's cta slot, so its position is not tied to a row index. */}
+  {!isNews && (
+    <aside class="feed-cta feed-join-foot" aria-label="Join the GBTI Network">
+      <div class="feed-cta-inner">
         <div>
           <div class="fc-t">Join the co-op</div>
           <p class="fc-d">Publish articles, projects &amp; prompts, build with peers in a private Discord, and earn up to {FIRST_TOUCH_PCT} from members your work brings in.</p>
@@ -163,7 +149,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
           <span class="fc-n">Reading is free · membership unlocks the rest</span>
         </div>
       </div>
-    </FeedList>
+    </aside>
   )}
 
   {/* sow-166: a full-width digest signup at the foot of the prompts grid only. Container-level, so it carries
@@ -197,15 +183,12 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
     const banner = view.querySelector<HTMLElement>('[data-tag-banner]');
     const bannerLabel = view.querySelector<HTMLElement>('[data-tag-label]');
 
-    const membersToggle = view.querySelector<HTMLButtonElement>('[data-members-toggle]');
-    const membersCta = view.querySelector<HTMLElement>('[data-members-cta]');
-    let vis = 'all'; // 'all' | 'members' (the top-right member-content toggle)
     let tag = '';
     let cat = ''; // sow-174: the ?cat= breadcrumb drilldown (project + article crumbs link here)
     let catLabel = '';
 
     function apply() {
-      const filtered = vis !== 'all' || !!tag || !!cat;
+      const filtered = !!tag || !!cat; // sow-370: the member-content toggle is gone; tag + category remain
       view.classList.toggle('feed-flat', filtered);
       // Flatten the ladder by lifting the chunks' hidden attribute (and restoring it on clear).
       // CSS cannot do this: Tailwind's preflight sets [hidden]{display:none !important} inside
@@ -221,8 +204,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       let shown = 0;
       rows.forEach((r) => {
         let ok = true;
-        if (vis === 'members') ok = r.getAttribute('data-visibility') === 'members';
-        if (ok && tag) ok = (' ' + (r.getAttribute('data-tags') || '') + ' ').includes(' ' + tag + ' ');
+        if (tag) ok = (' ' + (r.getAttribute('data-tags') || '') + ' ').includes(' ' + tag + ' ');
         // sow-174: matched against the row's DATA, never against a sidebar control, so a leaf crumb
         // (`?cat=ide-plugins`) filters exactly like a top-level one instead of silently doing nothing.
         if (ok && cat) ok = rowMatchesCat(r.getAttribute('data-cats'), cat);
@@ -232,19 +214,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       if (empty) empty.hidden = !(filtered && shown === 0);
       if (banner) banner.hidden = !tag && !cat;
       if (bannerLabel) bannerLabel.textContent = tag ? '#' + tag : cat ? catLabel || cat : '';
-      // The become-a-member CTA rides with the toggle (active members never see it via the
-      // is-gbti-member-active CSS hide).
-      if (membersCta) membersCta.hidden = vis !== 'members';
-      if (membersToggle) {
-        membersToggle.setAttribute('aria-pressed', String(vis === 'members'));
-        membersToggle.classList.toggle('on', vis === 'members');
-      }
     }
-
-    membersToggle?.addEventListener('click', () => {
-      vis = vis === 'members' ? 'all' : 'members';
-      apply();
-    });
 
     view.querySelector('[data-tag-clear]')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -255,7 +225,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       apply();
     });
 
-    // Deep links: /feeds/?tag=x (the homepage trending-tag chips) and ?vis=members (the toggle).
+    // Deep links: /feeds/?tag=x (the homepage trending-tag chips) and /feeds/?cat=<key> (a breadcrumb).
     const params = new URLSearchParams(location.search);
     const qTag = (params.get('tag') || '').trim().toLowerCase();
     if (qTag) tag = qTag;
@@ -271,7 +241,6 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
       try { catLabel = (JSON.parse(view.getAttribute('data-cat-labels') || '{}') || {})[cat] || ''; }
       catch { catLabel = ''; }
     }
-    if (params.get('vis') === 'members' && membersToggle) vis = 'members';
     apply();
 
     // sow-139: the News view. Client-rendered from the anonymous worker endpoint (the static build

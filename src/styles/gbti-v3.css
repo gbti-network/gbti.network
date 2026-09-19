@@ -1097,6 +1097,7 @@ a.hp-model:hover, a.hp-kind:hover { filter: brightness(.97); }
 
 /* sow-192 Phase F: the homepage pricing accordion (bound to TIER_DISPLAY). */
 .price-acc { margin: 0 0 22px; border: 1.5px solid var(--line); border-radius: var(--r-lg, 12px); background: var(--paper); overflow: hidden; }
+@media (max-width: 620px) { .price-acc { display: none; } } /* sow-370: not on a phone, where it costs a screenful above the feed */
 .price-sum { display: flex; align-items: center; gap: 12px; padding: 13px 16px; cursor: pointer; list-style: none; }
 .price-sum::-webkit-details-marker { display: none; }
 .price-sum-i { width: 17px; height: 17px; color: var(--green-700); flex: none; }
@@ -1219,7 +1220,7 @@ a.hp-model:hover, a.hp-kind:hover { filter: brightness(.97); }
 .feed-tag-banner a:hover { color: var(--fg); }
 
 /* the aggregate members-only-shares card (no share titles ever; see check-build-secrets) */
-.feed-locked-shares { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; padding: 12px 16px;
+.feed-locked-shares { display: flex; align-items: center; gap: 10px; margin: 14px 0 20px; padding: 12px 16px;
   border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); font-size: 14px; color: var(--fg-soft); }
 .feed-locked-shares svg { color: var(--fg-mute); flex: none; }
 .feed-locked-shares b { color: var(--fg); }
@@ -1321,23 +1322,10 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .kt-news { color: #b3661e; background: #fdf1e4; }
 [data-theme="dark"] .kt-news { color: #e8b079; background: rgba(179,102,30,.2); }
 
-/* the top-right member-content toggle (above THE FEED) */
-.feed-topbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-.members-toggle { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 12px;
-  font-weight: 600; color: var(--fg-soft); background: var(--paper); border: 1.5px solid var(--line-2);
-  border-radius: 999px; padding: 7px 9px 7px 13px; cursor: pointer; }
-.members-toggle svg { color: var(--fg-mute); }
-.members-toggle:hover { border-color: var(--fg); color: var(--fg); }
-.members-toggle.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
-.members-toggle.on svg { color: var(--green-700); }
-.mt-switch { width: 30px; height: 17px; border-radius: 999px; background: var(--line-2); position: relative; transition: background .15s ease; flex: none; }
-.mt-knob { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--paper); transition: left .15s ease; }
-.members-toggle.on .mt-switch { background: var(--green); }
-.members-toggle.on .mt-knob { left: 15px; }
-
-/* the become-a-member banner while the toggle is on */
-.feed-members-cta { margin: 14px 0 4px; }
-.feed-members-cta[hidden] { display: none; }
+/* sow-370: the member-content toggle (.feed-topbar / .members-toggle / .mt-switch) and the become-a-member
+   banner that rode with it (.feed-members-cta) were removed by the owner on 2026-09-19, markup and styles
+   together. The join panel now sits at the foot of the feed instead. */
+.feed-join-foot { margin-top: 26px; }
 .feed-members-cta .fc-t { display: flex; align-items: center; gap: 8px; }
 .feed-members-cta .fc-t svg { color: var(--green-700); }
 
