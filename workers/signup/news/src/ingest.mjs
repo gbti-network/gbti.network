@@ -10,7 +10,7 @@ import { DEFAULT_CATEGORY } from '../config/categories.mjs';
 import { parseFeed, contentRichness } from './feeds.mjs';
 import { classifyItem, analyzeItem, keywordCategory } from './classify.mjs';
 import { loadIndex, loadGuids, loadDay, loadRemoved, dayOf, commitIngest } from './store.mjs';
-import { loadSourceList, nextChunk } from './sources.mjs'; // SOW-056: git-native pool + sequential KV cursor
+import { loadSourceList, nextChunk, rotationOrder, fetchCap } from './sources.mjs'; // SOW-056: git-native pool + sequential KV cursor
 
 const FETCH_TIMEOUT_MS = 8000;
 // Free Workers plan allows 50 subrequests per invocation, and fetches + AI calls + KV ops all count.
@@ -73,6 +73,30 @@ export function isNewItem(guid, { guids = {}, localSeen = new Set(), removed = {
 }
 
 /**
+ * Which of a batch's parsed stories we actually keep: the ones new to us, and no more of any one source than
+ * its weight allows (sow-338). Neutral and above are uncapped, which is exactly today's behaviour, so nothing
+ * changes for a source nobody has weighted.
+ *
+ * Feeds list newest first and the fetches preserve that order, so taking the first N of a capped source keeps
+ * its NEWEST N. Pure, and separated from the cycle so the cap is assertable on its own.
+ */
+export function selectFresh(parsed, { guids = {}, removed = {}, capFor = new Map(), now = 0 } = {}) {
+  const localSeen = new Set();
+  const keptPerSource = new Map();
+  const fresh = [];
+  for (const it of parsed) {
+    if (!isNewItem(it.guid, { guids, localSeen, removed })) continue;
+    const cap = capFor.get(it.source) ?? Infinity;
+    const kept = keptPerSource.get(it.source) || 0;
+    if (kept >= cap) continue;
+    keptPerSource.set(it.source, kept + 1);
+    localSeen.add(it.guid);
+    fresh.push({ ...it, fetchedAt: now });
+  }
+  return fresh;
+}
+
+/**
  * Run one ingest cycle. `now` is epoch seconds (inject in tests; defaults to wall clock).
  * Returns a summary object (also logged) describing what happened.
  */
@@ -91,18 +115,16 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
   // 1. Resolve the live pool (git-native artifact -> KV cache -> bundled seed) and pick the next sequential chunk
   //    via the persisted cursor, then fetch + parse in parallel (allSettled => one failure can't abort).
   const { sources: pool, origin: sourcesOrigin } = await loadSourceList(env);
-  const sources = await nextChunk(env, pool, chunkSize);
+  // sow-338: the cursor walks a WEIGHTED rotation rather than the pool itself, so a source a superadmin voted up
+  // comes round more often and one voted down less. Every enabled source still appears in every cycle.
+  const sources = await nextChunk(env, rotationOrder(pool), chunkSize);
   const settled = await Promise.allSettled(sources.map((s) => fetchSource(s)));
   const parsed = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
 
-  // 2. Keep only items we've never seen (dedupe against the window + within this batch).
-  const localSeen = new Set();
-  const fresh = [];
-  for (const it of parsed) {
-    if (!isNewItem(it.guid, { guids, localSeen, removed })) continue;
-    localSeen.add(it.guid);
-    fresh.push({ ...it, fetchedAt: now });
-  }
+  // 2. Keep only items we've never seen (dedupe against the window + within this batch), and no more of any one
+  //    source than its sow-338 weight allows.
+  const capFor = new Map(sources.map((s) => [s.id, fetchCap(s.weight)]));
+  const fresh = selectFresh(parsed, { guids, removed, capFor, now });
 
   // 2b. SOW-046 A diagnostics: tally how many fresh items arrived with FULL inline article text vs only a THIN
   //     blurb (per source + overall), BEFORE contentText is stripped. This measures the blurb-only gap that a

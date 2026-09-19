@@ -31,6 +31,7 @@ import { appendModerationLog, KV_SOURCE, OVERRIDES_KV_KEY } from './membership-o
 import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 Phase 2b: the post-role-change mirror refresh
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
+import { setSourceWeight, weightInput } from '../../membership/news-source-weight-edits.mjs'; // sow-338: how much we take from a source
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
@@ -211,6 +212,7 @@ function setTemplatesBatch(parsed, { edits } = {}, ctx = {}) {
 const CONFIG_ACTIONS = new Set([
   'quote-add', 'quote-remove', 'quote-toggle',
   'news-source-add', 'news-source-remove', 'news-source-toggle',
+  'news-source-weight', // sow-338: superadmin, and its own file (see the row below)
   'coupon-add', 'coupon-update',
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign', // sow-281
@@ -227,6 +229,11 @@ const CONFIG_OP = {
   'news-source-add': { path: 'house/news-sources.yml', rank: ROLE_RANK.admin, fn: addSource, input: sourceAddInput, slug: (a) => idSlug(a.id || a.name) },
   'news-source-remove': { path: 'house/news-sources.yml', rank: ROLE_RANK.admin, fn: removeSource, input: (p) => sourceIdInput(p), slug: (a) => idSlug(a.id) },
   'news-source-toggle': { path: 'house/news-sources.yml', rank: ROLE_RANK.admin, fn: setSourceEnabled, input: (p) => sourceIdInput(p, { enabled: true }), slug: (a) => idSlug(a.id) },
+  // sow-338: how much the pipeline takes from a source. SUPERADMIN, and therefore a SEPARATE file: the three rows
+  // above are admin actions on house/news-sources.yml, and a superadmin-only field inside that file would either
+  // hand weights to admins or take source edits away from them. house/news-source-weights.yml is pinned to the
+  // superadmins in CODEOWNERS and in SUPERADMIN_HOUSE_FILES, so rankForPath agrees with this row.
+  'news-source-weight': { path: 'house/news-source-weights.yml', rank: ROLE_RANK.superadmin, fn: setSourceWeight, input: weightInput, slug: (a) => idSlug(a.id) },
   // Coupons (KV-native as of sow-291 Phase 2: house/coupons.yml leaves the public repository because a coupon
   // code is a bearer credential). `kvKey` diverts the WRITE to coupons:config in the dispatch below; `path` is
   // kept as the retired git location for the record, and `slug` is unused for a KV op (no branch/PR). Add creates

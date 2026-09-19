@@ -37,6 +37,10 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   // daily_cap: 0 is the switch that stops sending altogether, so it belongs at the same tier as the files
   // above rather than inheriting /house/'s admin rank.
   'house/mail-settings.yml',
+  // sow-338: how much the news pipeline takes from each source. Admins own the source POOL (add, disable,
+  // remove) and superadmins own the weighting, which is why this is a separate file rather than a field inside
+  // house/news-sources.yml: one file cannot be owned at two ranks.
+  'house/news-source-weights.yml',
 ]);
 // sow-337: directories pinned the same way. A call-to-action card image renders on every page the card is
 // assigned to, so writing one is the same decision as writing house/ctas.yml. Kept in lockstep with CODEOWNERS by

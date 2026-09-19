@@ -13,7 +13,7 @@ import { mergeMemberSources } from '../lib/member-news-sources.mjs';
 
 export const prerender = true;
 
-type Source = { id: string; name: string; url: string; description: string; enabled: boolean };
+type Source = { id: string; name: string; url: string; description: string; enabled: boolean; weight: number };
 
 function loadSources(): Source[] {
   const file = path.resolve(process.cwd(), 'house', 'news-sources.yml');
@@ -28,7 +28,26 @@ function loadSources(): Source[] {
     if (!id || !/^https?:\/\//i.test(url)) throw new Error(`news-sources.yml: each source needs an id and an http(s) url (got id="${id}", url="${url}")`);
     if (seen.has(id)) throw new Error(`news-sources.yml: duplicate source id "${id}"`);
     seen.add(id);
-    out.push({ id, name: String(s?.name || id), url, description: String(s?.description || ''), enabled: s?.enabled !== false });
+    out.push({ id, name: String(s?.name || id), url, description: String(s?.description || ''), enabled: s?.enabled !== false, weight: 0 });
+  }
+  return out;
+}
+
+// sow-338: the superadmin weights, from their own file. Merged here rather than stored beside the source, because
+// house/news-sources.yml is admin-owned and a weight is a superadmin's call. A missing file, a malformed one or an
+// id nobody recognises all mean NEUTRAL, which is the behaviour the pipeline had before weights existed.
+function loadWeights(): Record<string, number> {
+  const file = path.resolve(process.cwd(), 'house', 'news-source-weights.yml');
+  let parsed: { weights?: unknown } | null = null;
+  try { parsed = yaml.load(fs.readFileSync(file, 'utf8')) as { weights?: unknown } | null; } catch { return {}; }
+  const raw = parsed?.weights;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n) || n === 0) continue;
+    if (n < -2 || n > 2) throw new Error(`news-source-weights.yml: "${id}" is ${n}; a weight is a step from -2 to +2`);
+    out[id] = n;
   }
   return out;
 }
@@ -54,7 +73,9 @@ export const GET: APIRoute = async () => {
     visibility: p.data.visibility,
     newsFeed: p.data.newsFeed,
   }));
-  const sources = mergeMemberSources(houseSources, approvals, projects);
+  const weights = loadWeights();
+  const sources = mergeMemberSources(houseSources, approvals, projects)
+    .map((s: Source) => ({ ...s, weight: weights[s.id] ?? 0 }));
   const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: sources.length, sources });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 };

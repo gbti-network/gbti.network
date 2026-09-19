@@ -11,6 +11,57 @@
 
 import { SOURCES } from '../config/sources.mjs';
 
+// sow-338: a superadmin's weight on a source, five steps. It changes how much we TAKE from that source (owner,
+// 2026-09-18), never how its stories rank: the stream stays newest-first and every surface inherits the effect
+// without knowing about it.
+//
+//   step | checked                     | new stories kept per check
+//   +2   | twice per cycle             | all
+//   +1   | three times per two cycles  | all
+//    0   | once per cycle (today)      | all (today)
+//   -1   | once per cycle              | 6
+//   -2   | once every two cycles       | 3
+//
+// The bottom step is "rarely", never "off": muting is the explicit Disable toggle, so a weight can never silently
+// drop a source. An unweighted source behaves EXACTLY as it did before this existed, which is why neutral has no
+// cap: nothing changes until somebody votes.
+export const WEIGHT_MIN = -2;
+export const WEIGHT_MAX = 2;
+
+/** A stored weight as a step: an integer in range, and 0 for anything unreadable. Pure. */
+export function clampWeight(w) {
+  const n = Math.round(Number(w));
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n));
+}
+
+// Appearances per SUPERCYCLE (two cycles), which is how a half-step is expressed without a wall clock.
+const APPEARANCES = { '-2': 1, '-1': 2, 0: 2, 1: 3, 2: 4 };
+/** New stories one check may keep. Neutral and above keep everything, which is today's behaviour. */
+const CAPS = { '-2': 3, '-1': 6 };
+
+/** How many stories one fetch of this source may keep. Infinity for neutral and above. Pure. */
+export function fetchCap(weight) {
+  return CAPS[String(clampWeight(weight))] ?? Infinity;
+}
+
+/**
+ * The rotation the cursor walks: every source once, then the ones weighted up again, in passes.
+ *
+ * Built in PASSES rather than by repeating each source in place, so a source's repeats are spread across the
+ * supercycle instead of landing in the same chunk. With 125 sources and a chunk of 16 that puts any two
+ * appearances of one source at least a full pass apart.
+ *
+ * Pure. Every enabled source keeps at least one appearance, whatever its weight.
+ */
+export function rotationOrder(sources) {
+  const list = Array.isArray(sources) ? sources : [];
+  const times = (s) => APPEARANCES[String(clampWeight(s?.weight))] ?? 2;
+  const out = [];
+  for (let pass = 1; pass <= 4; pass += 1) for (const s of list) if (times(s) >= pass) out.push(s);
+  return out;
+}
+
 const PREFIX = 'feed:v2';
 const K_CURSOR = `${PREFIX}:source-cursor`;
 const K_CACHE = `${PREFIX}:sources-cache`;
@@ -25,7 +76,9 @@ export function cleanSources(list) {
     const url = String(s?.url || '').trim();
     if (!id || !/^https?:\/\//i.test(url) || s?.enabled === false || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, name: s?.name || id, url, description: s?.description || '' });
+    // sow-338: `weight` is kept, deliberately, where `enabled` is consumed as a filter and dropped. It is read on
+    // every run (the rotation and the per-fetch cap), so it has to survive this normalization.
+    out.push({ id, name: s?.name || id, url, description: s?.description || '', weight: clampWeight(s?.weight) });
   }
   return out;
 }
@@ -79,5 +132,8 @@ export async function nextChunk(env, sources, chunkSize, { save = true } = {}) {
   const picked = sources.slice(cursor, cursor + chunkSize);
   const next = cursor + chunkSize >= n ? 0 : cursor + chunkSize;
   if (save) { try { await env.NEWS_KV.put(K_CURSOR, String(next)); } catch { /* best-effort */ } }
-  return picked;
+  // sow-338: the list this walks can carry a weighted source more than once, so a chunk is deduped before it is
+  // fetched. The passes put repeats a full pass apart, so this only ever fires on a pool smaller than a chunk.
+  const seen = new Set();
+  return picked.filter((s) => { const id = s?.id; if (!id || seen.has(id)) return false; seen.add(id); return true; });
 }

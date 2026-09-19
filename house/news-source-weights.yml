@@ -1,0 +1,25 @@
+# sow-338: how much the news pipeline should take from each source. SUPERADMIN-owned.
+#
+# A weight is a step from -2 to +2, and it changes how much we TAKE from a source, never how its stories rank
+# (owner, 2026-09-18). The stream stays newest-first and every surface inherits the effect without knowing about
+# it. A source listed here at 0, or not listed at all, behaves exactly as it did before weights existed.
+#
+#   step | checked                     | new stories kept per check
+#   +2   | twice per cycle             | all
+#   +1   | three times per two cycles  | all
+#    0   | once per cycle (today)      | all
+#   -1   | once per cycle              | 6
+#   -2   | once every two cycles       | 3
+#
+# The bottom step is "rarely", never "off". Muting a source is the explicit `enabled: false` in
+# house/news-sources.yml, so a weight can never silently drop one.
+#
+# WHY THIS IS ITS OWN FILE. house/news-sources.yml is ADMIN-owned: admins add, disable and remove sources. A
+# weight is a superadmin's call, and a superadmin-only field inside an admin-owned file would either hand weights
+# to admins or take source edits away from them. This file is pinned to the superadmins in CODEOWNERS and in
+# membership/path-rank.mjs, and test/path-rank.test.mjs fails if those two and the Worker's action table ever
+# disagree.
+#
+# Written by the superadmin controls on a news item page (a pull request that auto-merges), read by the site build
+# into /news-sources.json, which the news worker fetches each hour. Edit by hand only in a pinch.
+weights: {}
