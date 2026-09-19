@@ -80,6 +80,30 @@ export function setSourceWeight(doc, { id, weight } = {}, ctx = {}) {
   return { next: { ...(doc || {}), weights: sorted }, changed: true, audit: auditEntry(ctx, sourceId, from, n) };
 }
 
+// ---------------------------------------------------------------------------
+// What a superadmin reads on the page
+// ---------------------------------------------------------------------------
+
+// A step says what it DOES, not what number it is: a superadmin looking at a story wants "take less from this
+// publication", and -1 is only meaningful to whoever wrote the table. Neutral is the default, so it says so.
+const LABELS = Object.freeze({ '-2': 'Much less', '-1': 'Less', 0: 'Normal', 1: 'More', 2: 'Much more' });
+
+/** The label for a step, for a control a person reads. Pure. */
+export const weightLabel = (weight) => LABELS[String(clamp(weight))];
+
+/** One nudge up or down, held inside the scale. Pure, so the arrows cannot walk a source out of range. */
+export function stepToward(current, direction) {
+  const d = Number(direction) > 0 ? 1 : -1;
+  return clamp(clamp(current) + d);
+}
+
+/** A step held inside the scale, 0 for anything unreadable. Shared by the labels and the arrows. */
+function clamp(w) {
+  const n = Math.round(Number(w));
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n));
+}
+
 /** Validate the action payload the Worker received. Throws, like the other config-action inputs. */
 export function weightInput(payload) {
   const id = String(payload?.id ?? '').trim();

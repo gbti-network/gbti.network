@@ -13,7 +13,7 @@ import fs from 'node:fs';
 
 import { clampWeight, fetchCap, rotationOrder, cleanSources, nextChunk, WEIGHT_MIN, WEIGHT_MAX } from '../workers/signup/news/src/sources.mjs';
 import { selectFresh } from '../workers/signup/news/src/ingest.mjs';
-import { setSourceWeight, weightInput, readWeights, weightOf, NewsWeightEditError } from '../membership/news-source-weight-edits.mjs';
+import { setSourceWeight, weightInput, readWeights, weightOf, weightLabel, stepToward, NewsWeightEditError } from '../membership/news-source-weight-edits.mjs';
 import { SUPERADMIN_HOUSE_FILES, rankForPath, ROLE_RANK } from '../membership/path-rank.mjs';
 
 const src = (id, weight) => ({ id, name: id, url: `https://${id}.test/feed`, description: '', ...(weight === undefined ? {} : { weight }) });
@@ -246,4 +246,33 @@ test('sow-338: the same story from two feeds still counts once', () => {
   const parsed = [story('node-js', 1), story('node-js', 1), story('node-js', 2)];
   const kept = selectFresh(parsed, { capFor: new Map([['node-js', 2]]) });
   assert.deepEqual(kept.map((it) => it.guid), ['node-js-1', 'node-js-2']);
+});
+
+// ---------------------------------------------------------------------------
+// The control a superadmin reads
+// ---------------------------------------------------------------------------
+
+test('sow-338: a step says what it does, not what number it is', () => {
+  // A superadmin looking at a story wants "take less from this publication". -1 is only meaningful to whoever
+  // wrote the table.
+  assert.equal(weightLabel(-2), 'Much less');
+  assert.equal(weightLabel(-1), 'Less');
+  assert.equal(weightLabel(0), 'Normal');
+  assert.equal(weightLabel(1), 'More');
+  assert.equal(weightLabel(2), 'Much more');
+  assert.equal(weightLabel(undefined), 'Normal', 'a source nobody has weighted reads as normal, never blank');
+  assert.equal(weightLabel('nonsense'), 'Normal');
+  assert.equal(weightLabel(9), 'Much more', 'and a stored value out of range still has a label');
+});
+
+test('sow-338: the arrows cannot walk a source out of the scale', () => {
+  assert.equal(stepToward(0, 1), 1);
+  assert.equal(stepToward(0, -1), -1);
+  assert.equal(stepToward(2, 1), 2, 'the top step is the top');
+  assert.equal(stepToward(-2, -1), -2, 'and the bottom is "rarely", with nothing below it');
+  assert.equal(stepToward(undefined, -1), -1, 'an unweighted source starts from normal');
+  assert.equal(stepToward(9, -1), 1, 'a stored value out of range is pulled into the scale first');
+  // The arrows disable themselves on the step that would not move, which is this equality.
+  assert.equal(stepToward(2, 1) === 2, true);
+  assert.equal(stepToward(1, 1) === 1, false);
 });

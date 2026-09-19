@@ -10,6 +10,7 @@
 // news tab (follow-channel is an extension pref); otherwise the shared join/extension CTA dialog.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-202: the weekly-digest sidebar CTA
+import NewsAdminControls from '../../components/news/NewsAdminControls.astro'; // sow-338: pull a story, weight a source
 import { SIGNUP_BASE } from '../../lib/membership';
 ---
 <BaseLayout title="News" description="A story from the curated GBTI Network news stream." noindex={true}>
@@ -24,6 +25,10 @@ import { SIGNUP_BASE } from '../../lib/membership';
           sidebars. It is static, so the sidebar is no longer hidden while the story loads, and a reader who lands
           on a story that has left the stream still gets it. Shown to every state, like its siblings. */}
       <aside class="detail-side" data-news-side>
+        {/* sow-338: the superadmin controls sit directly under the source card, which the script PREPENDS, so
+            this being first in the aside is what puts it second on the page. Hidden until the signal says
+            superadmin and a story has loaded. */}
+        <NewsAdminControls />
         <div class="card side-card">
           <DigestSubscribe variant="rail" heading="The weekly digest" />
         </div>
@@ -223,7 +228,20 @@ import { SIGNUP_BASE } from '../../lib/membership';
         follow.setAttribute('type', 'button');
         follow.setAttribute('data-follow-source', String(it.source || ''));
         card.append(fav, info, follow);
-        if (side) side.prepend(card); else target.append(card); // above the static digest card
+        if (side) side.prepend(card); else target.append(card); // above the superadmin card and the static digest
+
+        // sow-338: hand the story to the superadmin controls, which decide for themselves whether to appear.
+        // An event rather than a shared dataset, because this script and that component load in whichever
+        // order the bundler picks and neither can wait on the other.
+        document.dispatchEvent(new CustomEvent('gbti:news-story', {
+          detail: {
+            guid,
+            title: String(it.title || ''),
+            source: String(it.source || ''),
+            sourceName: String(srcMeta?.name || it.source || ''),
+            weight: Number(srcMeta?.weight) || 0,
+          },
+        }));
 
         // the gated discussion from the public comments index (members bodies are stripped at build)
         const slug = newsTargetSlug(guid);

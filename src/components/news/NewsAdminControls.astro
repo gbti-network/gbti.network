@@ -1,0 +1,233 @@
+---
+// sow-338: the superadmin controls on a news story, in the sidebar under the source card.
+//
+// Requested by the owner on 2026-09-15, looking at a news item page: a way to pull a bad story out of the index,
+// and a way to say we want more or less from the publication that sent it. A superadmin decides both by READING
+// the story, so the controls belong where the story is rather than in a queue somewhere else.
+//
+// The two controls run on DIFFERENT CLOCKS, and the copy says which is which. Removal writes the edge store, so
+// it lands within the feed's five-minute cache. A weight is a pull request against a superadmin-pinned file, so
+// it lands with the next deploy. Presenting them as one instant action would be a lie about the second.
+//
+// The card is static, hidden, and revealed client-side from the member signal, exactly as ApprovePill.astro is:
+// these pages are cached, so nothing about the viewer can be baked in at build. This is presentation only. The
+// Worker re-checks superadmin on every call, and an admin, a news editor or a forged signal gets a 403 and
+// changes nothing.
+---
+
+<div class="card news-admin" data-news-admin hidden>
+  <p class="na-eyebrow">Superadmin</p>
+
+  <div class="na-block">
+    {/* The source card sits directly above this one and names the publication, so naming it again here only
+        made the label long. Owner, 2026-09-18. */}
+    <div class="na-label">Modify source weight</div>
+    <div class="na-steps">
+      <button type="button" class="na-arrow" data-na-down aria-label="Take less from this source">&minus;</button>
+      <span class="na-step" data-na-step>Normal</span>
+      <button type="button" class="na-arrow" data-na-up aria-label="Take more from this source">+</button>
+    </div>
+    <p class="na-note" data-na-weight-note>A change is saved as a pull request and takes effect on the next deploy.</p>
+  </div>
+
+  <div class="na-block">
+    <button type="button" class="na-remove" data-na-remove>Remove this story</button>
+    <p class="na-note" data-na-remove-note>It leaves the news index within five minutes. The post in Discord stays.</p>
+  </div>
+</div>
+
+<style>
+  .news-admin { padding: 16px; }
+  .news-admin[hidden] { display: none !important; }
+  .na-eyebrow {
+    margin: 0 0 12px; font-size: 11px; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--green-700, #1f9e5f);
+  }
+  .na-block + .na-block { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line, #e6e4ea); }
+  .na-label { font-size: 13px; font-weight: 700; color: var(--fg, inherit); }
+  .na-steps { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .na-arrow {
+    width: 30px; height: 30px; flex: none; border-radius: 8px; cursor: pointer;
+    font: inherit; font-size: 17px; line-height: 1;
+    background: none; border: 1.5px solid var(--line, #e6e4ea); color: var(--fg, inherit);
+  }
+  .na-arrow:hover:not([disabled]) { border-color: var(--green, #1f9e5f); color: var(--green-fg, #1f9e5f); }
+  .na-arrow[disabled] { opacity: .35; cursor: default; }
+  .na-step { font-size: 13.5px; font-weight: 700; min-width: 84px; text-align: center; }
+  .na-note { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg-mute, #6c6976); }
+  .na-remove {
+    width: 100%; font: inherit; font-size: 13px; font-weight: 700; line-height: 1;
+    padding: 9px 12px; border-radius: 999px; cursor: pointer;
+    background: none; border: 1.5px solid var(--line, #e6e4ea); color: var(--fg-soft, inherit);
+  }
+  .na-remove:hover:not([disabled]) { border-color: #c2413b; color: #c2413b; }
+  .na-remove[disabled] { opacity: .55; cursor: default; }
+  /* GLOBAL on purpose: the removed-story notice is built by the script below with createElement, so it never
+     carries Astro's scoping attribute and a scoped rule would not reach it. The Undo button would render
+     unstyled, which is how a control stops looking like one. */
+  :global(.news-removed) { text-align: center; padding: 48px 0; }
+  :global(.news-removed .nr-undo) {
+    font: inherit; font-size: 13px; font-weight: 700; margin-top: 14px;
+    padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    background: none; border: 1.5px solid var(--green, #1f9e5f); color: var(--green-fg, #1f9e5f);
+  }
+  :global(.news-removed .nr-undo:hover:not([disabled])) { background: var(--green, #1f9e5f); color: #fff; }
+  :global(.news-removed .nr-undo[disabled]) { opacity: .55; cursor: default; }
+  /* AT THE END on purpose: a responsive override adds no specificity, so placed above the base rules it would
+     silently lose on source order. On a phone these are thumbs on a stepper, so they get a real tap target. */
+  @media (max-width: 640px) {
+    .na-arrow { width: 44px; height: 44px; font-size: 19px; }
+    .na-remove { padding: 13px 12px; }
+    .na-step { min-width: 96px; font-size: 14.5px; }
+  }
+</style>
+
+<script>
+  import { readMemberSignal, currentIdentity, onMemberSignal } from '../../lib/member-signal';
+  import { weightLabel, stepToward } from '../../../membership/news-source-weight-edits.mjs';
+
+  const card = document.querySelector<HTMLElement>('[data-news-admin]');
+  if (card) {
+    const stepEl = card.querySelector<HTMLElement>('[data-na-step]');
+    const noteEl = card.querySelector<HTMLElement>('[data-na-weight-note]');
+    const removeBtn = card.querySelector<HTMLButtonElement>('[data-na-remove]');
+    const removeNote = card.querySelector<HTMLElement>('[data-na-remove-note]');
+    const arrows = [...card.querySelectorAll<HTMLButtonElement>('.na-arrow')];
+    const readCookie = (name: string) => document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1) || '';
+
+    let story: any = null;   // { guid, source, sourceName, weight, title } once the page has loaded one
+    let saved = 0;           // the step the weights file holds, as far as we know
+    let step = 0;            // what the arrows show, which may be ahead of it
+    let timer: any = null;
+
+    // A superadmin signed in ON THE WEBSITE. An extension-only signal carries no web session, so the call could
+    // not authenticate; and the controls only make sense once a story has actually loaded.
+    const isSuperadmin = () => {
+      const identity: any = currentIdentity(readMemberSignal());
+      return !!(identity && identity.role === 'superadmin' && readCookie('gbti_csrf'));
+    };
+    const apply = () => { card.hidden = !(story && isSuperadmin()); };
+    onMemberSignal(apply);
+
+    // The page script owns the fetch, so it hands the story over when it has one. Listening rather than reading
+    // a dataset avoids the race: this module and the page script run in whichever order the bundler picks.
+    document.addEventListener('gbti:news-story', (e: any) => {
+      story = e?.detail || null;
+      saved = Number(story?.weight) || 0;
+      step = saved;
+      render();
+      apply();
+    });
+
+    const render = () => {
+      if (stepEl) stepEl.textContent = weightLabel(step);
+      for (const a of arrows) {
+        const dir = a.hasAttribute('data-na-up') ? 1 : -1;
+        a.disabled = stepToward(step, dir) === step;
+      }
+    };
+
+    const client = async () => {
+      const signal: any = currentIdentity(readMemberSignal());
+      const { createWorkbenchClient } = await import('../../lib/workbench-client');
+      return createWorkbenchClient({
+        signupBase: document.documentElement.dataset.signupBase || '',
+        login: String(signal?.login || ''),
+        githubId: signal?.githubId != null ? String(signal.githubId) : null,
+        isSuperadmin: true,
+      });
+    };
+
+    // The arrows move at once and the write follows after a pause, so holding the button down to move two steps
+    // sends ONE change rather than one per click. A failure puts the control back where it was and says why,
+    // because a control that keeps a step it did not save is worse than one that refuses.
+    const save = async () => {
+      const target = step;
+      const before = saved;
+      if (target === before || !story?.source) return;
+      if (noteEl) noteEl.textContent = 'Saving...';
+      try {
+        const c = await client();
+        await c.setNewsSourceWeight({ id: String(story.source), weight: target });
+        saved = target;
+        if (noteEl) {
+          noteEl.textContent = target === 0
+            ? 'Back to normal. It takes effect on the next deploy.'
+            : `Saved. We will take ${weightLabel(target).toLowerCase()} from this source on the next deploy.`;
+        }
+      } catch (err: any) {
+        step = before;
+        render();
+        if (noteEl) noteEl.textContent = err?.message || 'That did not save. Try again in a minute.';
+      }
+    };
+
+    for (const a of arrows) {
+      a.addEventListener('click', () => {
+        const next = stepToward(step, a.hasAttribute('data-na-up') ? 1 : -1);
+        if (next === step) return;
+        step = next;
+        render();
+        clearTimeout(timer);
+        timer = setTimeout(save, 900);
+      });
+    }
+
+    // Removing replaces the story with a notice and an Undo, in place. The reader of this page is the person who
+    // just removed it, so sending them back to the feed would hide whether it worked.
+    const removed = () => {
+      const target = document.querySelector<HTMLElement>('[data-news-target]');
+      if (!target) return;
+      target.replaceChildren();
+      const box = document.createElement('div');
+      box.className = 'news-removed';
+      const p = document.createElement('p');
+      p.className = 'feed-empty';
+      p.textContent = 'Removed from the news index. Readers stop seeing it within five minutes.';
+      const undo = document.createElement('button');
+      undo.type = 'button';
+      undo.className = 'nr-undo';
+      undo.textContent = 'Undo';
+      undo.addEventListener('click', async () => {
+        undo.disabled = true;
+        undo.textContent = 'Putting it back...';
+        try {
+          const c = await client();
+          await c.restoreNewsItem(String(story?.guid || ''));
+          p.textContent = 'Back in the news index. Reload to read it again.';
+          undo.remove();
+          // And put the sidebar back too. Leaving it reading "Removed" next to a story that is no longer removed
+          // is the same control disagreeing with itself, and the sidebar is the half a superadmin acts on next.
+          if (removeBtn) { removeBtn.disabled = false; removeBtn.textContent = 'Remove this story'; }
+          if (removeNote) removeNote.textContent = 'It leaves the news index within five minutes. The post in Discord stays.';
+        } catch (err: any) {
+          undo.disabled = false;
+          undo.textContent = 'Undo';
+          p.textContent = err?.message || 'That did not go through. Try again in a minute.';
+        }
+      });
+      box.append(p, undo);
+      target.append(box);
+    };
+
+    removeBtn?.addEventListener('click', async () => {
+      const title = story?.title ? `"${story.title}"` : 'this story';
+      if (!confirm(`Remove ${title} from the news index? You can put it back from this page.`)) return;
+      removeBtn.disabled = true;
+      removeBtn.textContent = 'Removing...';
+      try {
+        const c = await client();
+        await c.removeNewsItem(String(story?.guid || ''));
+        removeBtn.textContent = 'Removed';
+        if (removeNote) removeNote.textContent = 'Use Undo beside the story to put it back.';
+        removed();
+      } catch (err: any) {
+        removeBtn.disabled = false;
+        removeBtn.textContent = 'Remove this story';
+        if (removeNote) removeNote.textContent = err?.message || 'That did not go through. Try again in a minute.';
+      }
+    });
+
+    render();
+  }
+</script>

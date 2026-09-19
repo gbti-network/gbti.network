@@ -623,6 +623,12 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     async setSyndicationTemplates(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-templates-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setNewsEngagement(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setSyndicationSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-settings-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-338: the news item controls. Pulling a story writes KV and takes effect within the feed's five-minute
+    // cache; weighting a source is a pull request against the superadmin-pinned weights file like its neighbours
+    // above, so it lands with the next deploy. Two different clocks, and the page says which is which.
+    removeNewsItem(guid: string) { return workerPost('/membership/admin/news-item', { action: 'remove', guid }); },
+    restoreNewsItem(guid: string) { return workerPost('/membership/admin/news-item', { action: 'restore', guid }); },
+    async setNewsSourceWeight(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-weight', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
   } : {};
 
   return {
