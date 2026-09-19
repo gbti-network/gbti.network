@@ -630,3 +630,8 @@ sources:
     url: https://deepmind.google/blog/rss.xml
     description: deepmind.google
     enabled: true
+  - id: science-alert
+    name: Science Alert
+    url: https://www.sciencealert.com/feed
+    description: www.sciencealert.com
+    enabled: true
