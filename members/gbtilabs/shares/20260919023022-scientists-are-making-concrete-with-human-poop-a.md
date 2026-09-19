@@ -12,7 +12,8 @@ tags:
   - science
   - engineering
   - building
-image: https://www.sciencealert.com/images/2026/09/glorp.gif
+image: https://gbti.network/media/shares/gbtilabs/20260919023022-scientists-are-making-concrete-with-human-poop-a-3379fdd2.webp
+imageSource: https://www.sciencealert.com/images/2026/09/glorp.gif
 id: 20260919023022-scientists-are-making-concrete-with-human-poop-a
 createdAt: '2026-09-19T02:30:22.638Z'
 type: share
