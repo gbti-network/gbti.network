@@ -4,6 +4,8 @@ visibility: public
 title: Paul McCartney | The Backyard (Full Audio Tape/30th August 1974)
 shortDescription: Rare Paul McCartney recording session.
 url: https://www.youtube.com/watch?v=npZZgHcfHqM
+creatorUrl: https://www.youtube.com/@theOGBeatleMirko
+creatorName: Mirko
 category: music
 tags:
   - paul-mccartney

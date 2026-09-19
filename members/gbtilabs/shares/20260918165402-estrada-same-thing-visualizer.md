@@ -4,6 +4,8 @@ id: 20260918165402-estrada-same-thing-visualizer
 createdAt: '2026-09-18T16:54:02.136Z'
 updatedAt: '2026-09-19T03:14:09.819Z'
 url: https://www.youtube.com/watch?v=sXvmcWWBsFM
+creatorUrl: https://www.youtube.com/@estradafoo
+creatorName: estrada
 title: Estrada - same thing (visualizer)
 shortDescription: >-
   Erick Estrada, performing as Estrada, is a Los Angeles-area Guatemalan-American musician

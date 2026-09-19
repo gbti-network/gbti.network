@@ -293,6 +293,10 @@ export async function addShare(ctx, args = {}) {
     title: args.title ?? og?.title,
     shortDescription: args.shortDescription ?? og?.description,
     image: args.image ?? og?.image,
+    // sow-222: an agent-authored share carries the creator too, so its source card offers Subscribe like any
+    // other. https only, and only when the provider named the channel as well, so no card is left unnamed.
+    creatorUrl: /^https:\/\//i.test(String(og?.creatorUrl || '')) ? og.creatorUrl : undefined,
+    creatorName: /^https:\/\//i.test(String(og?.creatorUrl || '')) ? og?.creatorName : undefined,
     category: args.category,
     tags: Array.isArray(args.tags) ? args.tags : undefined,
   });

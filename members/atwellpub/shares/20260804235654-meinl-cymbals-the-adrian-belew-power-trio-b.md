@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/V4WW3urYrlg
+creatorUrl: https://www.youtube.com/@meinlcymbals
+creatorName: MEINL Cymbals
 visibility: public
 title: Meinl Cymbals - The Adrian Belew Power Trio - "B"
 shortDescription: A video by MEINL Cymbals on YouTube

@@ -4,6 +4,8 @@ visibility: members
 title: We Hacked Flock Safety Cameras in under 30 Seconds. 🫥
 shortDescription: A video by Benn Jordan on YouTube
 url: https://www.youtube.com/watch?v=uB0gr7Fh6lY
+creatorUrl: https://www.youtube.com/@BennJordan
+creatorName: Benn Jordan
 category: gaming
 image: https://i.ytimg.com/vi/uB0gr7Fh6lY/maxresdefault.jpg
 id: 20260728172540-we-hacked-flock-safety-cameras-in-under-30-secon

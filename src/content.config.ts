@@ -374,6 +374,11 @@ const share = defineCollection({
     imageSource: z.string().optional(),
     // sow-272: the author removed the link preview. The share-covers workflow never looks one up for this share.
     imageRemoved: z.boolean().optional(),
+    // sow-222: the creator behind the link, recorded at publish time for the two platforms that carry it
+    // nowhere in the url (YouTube, Vimeo). The source card turns it into a Subscribe or Follow action; the
+    // other eight platforms are derived from `url` at render time and store nothing. Mirrors client/src/schemas.mjs.
+    creatorUrl: z.string().optional(),
+    creatorName: z.string().max(120).optional(),
     category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
     tags: z.array(z.string()).default([]),
     createdAt: z.coerce.date(),

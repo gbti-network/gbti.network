@@ -4,6 +4,8 @@ visibility: public
 title: Guided By Voices Medley Recorded on 4 Track
 shortDescription: Owoso performs Guided By Voices on a 4 track circa 2016
 url: https://www.youtube.com/watch?v=xqGjfMLInBE
+creatorUrl: https://www.youtube.com/@owoso4080
+creatorName: Owoso
 category: music
 tags:
   - guidedbyvoices

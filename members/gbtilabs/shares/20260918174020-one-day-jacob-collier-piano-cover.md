@@ -4,6 +4,8 @@ visibility: public
 title: One day - Jacob Collier [Piano cover]
 shortDescription: Piano cover of “One Day,” the 2015 song by Jacob Collier and Nikki Yanofsky.
 url: https://www.youtube.com/watch?v=QkgeFVQS0ww
+creatorUrl: https://www.youtube.com/@WaritTonnam
+creatorName: Warit Tonnam
 category: music
 tags:
   - piano-cover

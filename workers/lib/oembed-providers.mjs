@@ -34,8 +34,13 @@ export function oembedEndpointFor(rawUrl) {
 }
 
 /** Map an oEmbed JSON response onto the preview shape membership-og returns ({ image, title, description,
- *  tags }). The description is a factual by-line (oEmbed carries no description field); tags stay empty so
- *  the topic suggester works from the title alone. Returns null when the JSON has no usable title/thumb. */
+ *  tags, creatorUrl, creatorName }). The description is a factual by-line (oEmbed carries no description
+ *  field); tags stay empty so the topic suggester works from the title alone. Returns null when the JSON has
+ *  no usable title/thumb.
+ *
+ *  sow-222: `author_url` is the CHANNEL, and it was read from this response and dropped for a year while the
+ *  by-line beside it was kept. A YouTube or Vimeo link carries its creator nowhere in the url, so this is the
+ *  only chance to learn it, and the share stores it at publish time. https only: it ends up as an href. */
 export function previewFromOembed(json) {
   const j = json && typeof json === 'object' ? json : {};
   const title = typeof j.title === 'string' && j.title.trim() ? j.title.trim() : null;
@@ -45,7 +50,8 @@ export function previewFromOembed(json) {
   const provider = typeof j.provider_name === 'string' && j.provider_name.trim() ? j.provider_name.trim() : null;
   const kind = typeof j.type === 'string' && j.type.trim() ? j.type.trim() : 'link';
   const description = author ? `A ${kind} by ${author}${provider ? ` on ${provider}` : ''}` : null;
-  return { image, title, description, tags: [] };
+  const creatorUrl = typeof j.author_url === 'string' && /^https:\/\//.test(j.author_url.trim()) ? j.author_url.trim() : null;
+  return { image, title, description, tags: [], creatorUrl, creatorName: author };
 }
 
 /** YouTube's oEmbed only ever hands back the 480x360 `hqdefault` thumbnail. That is under the minimum-width

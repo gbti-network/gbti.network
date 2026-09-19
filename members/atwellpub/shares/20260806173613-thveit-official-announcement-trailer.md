@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/c5uI80Nevhk
+creatorUrl: https://www.youtube.com/@GameTrailers
+creatorName: GameTrailers
 visibility: public
 title: 'Thveit: Official Announcement Trailer'
 shortDescription: >-

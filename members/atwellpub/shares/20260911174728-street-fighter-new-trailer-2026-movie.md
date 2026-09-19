@@ -4,6 +4,8 @@ visibility: members
 title: Street Fighter | New Trailer (2026 Movie)
 shortDescription: A video by Paramount Pictures on YouTube
 url: https://www.youtube.com/watch?v=U6sbm1OaJb8
+creatorUrl: https://www.youtube.com/@paramountpictures
+creatorName: Paramount Pictures
 category: gaming
 tags:
   - street-fighter

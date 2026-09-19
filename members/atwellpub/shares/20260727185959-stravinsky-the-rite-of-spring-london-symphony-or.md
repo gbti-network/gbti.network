@@ -6,6 +6,8 @@ shortDescription: >-
   ir Simon Rattle conducts the London Symphony Orchestra in Stravinsky's The Rite of Spring,
   recorded live at the Barbican Centre on Sunday 24 September 2017.
 url: https://www.youtube.com/watch?v=EkwqPJZe8ms
+creatorUrl: https://www.youtube.com/@LondonSymphonyOrchestra
+creatorName: London Symphony Orchestra
 category: video
 image: https://gbti.network/media/shares/atwellpub/20260727185959-stravinsky-the-rite-of-spring-london-symphony-or-23c6b293.webp
 imageSource: https://i.ytimg.com/vi/EkwqPJZe8ms/maxresdefault.jpg

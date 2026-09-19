@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/MsFYd8EdAXw
+creatorUrl: https://www.youtube.com/@remakebench
+creatorName: RemakeBench
 visibility: public
 title: Claude Opus 5 Took 7 Hours to Build This Game
 shortDescription: A video by RemakeBench on YouTube

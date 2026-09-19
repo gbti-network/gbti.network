@@ -4,6 +4,8 @@ visibility: public
 title: Don't Become A Content Creator, Build A Content Business.
 shortDescription: A video by Codie Sanchez on YouTube
 url: https://www.youtube.com/watch?v=ZvAwqGH_79Q
+creatorUrl: https://www.youtube.com/@CodieSanchezCT
+creatorName: Codie Sanchez
 category: entrepreneurship
 image: https://gbti.network/media/shares/gbtilabs/20260725175210-don-t-become-a-content-creator-build-a-content-b-31c8b6a1.webp
 imageSource: https://i.ytimg.com/vi/ZvAwqGH_79Q/maxresdefault.jpg

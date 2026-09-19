@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/FL2cCHJtiDk
+creatorUrl: https://www.youtube.com/@gazorpian
+creatorName: Gazorpian
 visibility: public
 title: How One Programmer Created The Most Complex Zombie Game
 shortDescription: A video by Gazorpian on YouTube

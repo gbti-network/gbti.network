@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/JPS2bAx80rk
+creatorUrl: https://www.youtube.com/@joescott
+creatorName: Joe Scott
 visibility: public
 title: The New “Impossible” Engine
 shortDescription: A video by Joe Scott on YouTube

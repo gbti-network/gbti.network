@@ -6,6 +6,8 @@ visibility: public
 title: Old TVs Were Particle Accelerators
 shortDescription: An impressive presentation on the technology of television screens and monitor screens.
 url: https://youtu.be/20ZhzyT2HR0
+creatorUrl: https://www.youtube.com/@Atomicc-Knowledge
+creatorName: Atomic Knowledge
 image: https://gbti.network/media/shares/gbtilabs/20260824034822-old-tvs-were-particle-accelerators-56b5ed96.webp
 imageSource: https://i.ytimg.com/vi/20ZhzyT2HR0/maxresdefault.jpg
 category: hardware

@@ -15,6 +15,7 @@ import VideoEmbed from '../../../components/VideoEmbed.astro';
 import DigestSubscribe from '../../../components/mail/DigestSubscribe.astro'; // sow-166/sow-202: the weekly-digest sidebar CTA
 import CtaCard from '../../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { embedUrl } from '../../../../client/src/video-embed.mjs';
+import { sourceCardModel } from '../../../../client/src/share-source.mjs'; // sow-222: who the source card points at
 import { getCollection } from 'astro:content';
 import { authorDisplay, formatDate, authorAvatar } from '../../../lib/authors';
 import { profileHref } from '../../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
@@ -53,6 +54,13 @@ const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
 // (embedUrl fails closed to null). No relay needed here: unlike a chrome-extension:// page, this site sends
 // a valid Referer, so it frames the provider directly. CSP frame-src already allows all four providers.
 const videoSrc = d.url ? embedUrl(d.url) : null;
+// sow-222: the sidebar source card, decided in one shared module so this page and the extension reader cannot
+// drift apart on it. When a creator resolves (a stored YouTube or Vimeo channel, or a profile derived from the
+// link itself) the card names them and the action becomes Subscribe or Follow; otherwise it is exactly the
+// domain card with Visit that it has always been.
+const srcCard = d.url ? sourceCardModel({ url: d.url, memberName: authorDisplay(d.author), creatorUrl: d.creatorUrl, creatorName: d.creatorName }) : null;
+// The action keeps this page's own outbound decoration, as the Visit link always had.
+const srcActionHref = srcCard ? utmUrl(srcCard.action.href, { campaign: 'shares' }) : undefined;
 // sow-283: when the share points at our hosted copy, declare its real pixel size to link-preview scrapers, read
 // from the committed file (a measurement, never a guess; see src/lib/og-image-size.mjs for why a wrong size is
 // worse than none). Any read failure declares nothing.
@@ -142,14 +150,14 @@ if (cover && cover.author === d.author && cover.id === d.id) {
         </a>
         <SubscribeButton name={authorDisplay(d.author)} username={d.author} variant="ghost" />
       </div>
-      {srcDomain && (
+      {srcCard && (
         <div class="card news-source-card">
-          <img class="nsc-fav" alt="" width="40" height="40" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" />
+          <img class="nsc-fav" alt="" width="40" height="40" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcCard.host)}&sz=64`} onerror="this.remove()" />
           <div class="nsc-info">
-            <div class="nsc-name">{srcDomain}</div>
-            <div class="nsc-desc">The source {authorDisplay(d.author)} shared this from.</div>
+            <div class="nsc-name">{srcCard.name}</div>
+            <div class="nsc-desc">{srcCard.credit}</div>
           </div>
-          {d.url && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-ghost nsc-follow">Visit</a>}
+          <a href={srcActionHref} target="_blank" rel="noopener nofollow" class="btn btn-ghost nsc-follow" title={srcCard.action.title}>{srcCard.action.text}</a>
         </div>
       )}
 

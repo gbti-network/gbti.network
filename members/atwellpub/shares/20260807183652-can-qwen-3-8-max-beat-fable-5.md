@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/yzNl4SLoSDI
+creatorUrl: https://www.youtube.com/@PursuingAi
+creatorName: Pursuing AI
 visibility: public
 title: Can Qwen 3.8 Max Beat Fable 5?
 shortDescription: Side-by-side comparisons people actually posted on X, rather than vendor benchmark charts.

@@ -75,7 +75,7 @@ export function safeFetchTarget(raw) {
 // could not reach it, it is not a web page at all, or it timed out. The route still NEVER throws and still
 // never 500s, so this is additive: `reason: null` is the genuine no-data case and keeps today's behaviour.
 // The composer turns each into its own sentence (ogPreviewState in gbti-share-composer.mjs).
-const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null, suggestedTags: [], reason: null };
+const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null, suggestedTags: [], creatorUrl: null, creatorName: null, reason: null };
 
 export async function handleOgPreview(request, env, {
   fetchImpl = globalThis.fetch,
@@ -215,6 +215,10 @@ export async function handleOgPreview(request, env, {
         // sow-303: free-form tags for the composer's tags field. Always an array, never null, so the client
         // never has to distinguish "no suggestion" from "not supported".
         suggestedTags,
+        // sow-222: the creator behind the link, when the provider told us (oEmbed only, so YouTube and Vimeo).
+        // The composer carries it into the share, where the source card turns it into Subscribe or Follow.
+        creatorUrl: preview.creatorUrl || null,
+        creatorName: preview.creatorName || null,
         // We reached the page and read it. If it yielded nothing, that IS the genuine no-data case.
         reason: null,
       },

@@ -4,6 +4,8 @@ visibility: members
 title: The Next Subprime Crisis Was Just Triggered...And It's Bigger Than 2008
 shortDescription: A video by George Gammon on YouTube
 url: https://www.youtube.com/watch?v=42cunoNk_HA
+creatorUrl: https://www.youtube.com/@GeorgeGammon
+creatorName: George Gammon
 category: finance
 image: https://i.ytimg.com/vi/42cunoNk_HA/maxresdefault.jpg
 id: 20260713175319-the-next-subprime-crisis-was-just-triggered-and-

@@ -4,6 +4,8 @@ visibility: members
 title: My Soundscape for Sleeping at the Edge of the Universe
 shortDescription: A video by Polarity Music Only on YouTube
 url: https://www.youtube.com/watch?v=fsxvm6W4EoY
+creatorUrl: https://www.youtube.com/@PolarityMusicOnly
+creatorName: Polarity Music Only
 category: music
 image: https://i.ytimg.com/vi/fsxvm6W4EoY/maxresdefault.jpg
 id: 20260714022631-my-soundscape-for-sleeping-at-the-edge-of-the-un

@@ -4,6 +4,8 @@ visibility: public
 title: AI plays Age of Empires II
 shortDescription: A video by Emergent Garden on YouTube
 url: https://www.youtube.com/watch?v=ZBdAe3ZwKds
+creatorUrl: https://www.youtube.com/@EmergentGarden
+creatorName: Emergent Garden
 category: gaming
 image: https://gbti.network/media/shares/atwellpub/20260815180104-ai-plays-age-of-empires-ii-a04a6429.webp
 imageSource: https://i.ytimg.com/vi/ZBdAe3ZwKds/maxresdefault.jpg

@@ -4,6 +4,8 @@ visibility: public
 title: 'The Legend of Zelda: A Link to the Past -  Musical Playthrough Experience'
 shortDescription: A video by ☨ ᴀ ᴠ ᴇ ʀ ɴ on YouTube
 url: https://www.youtube.com/watch?v=tDBVo59Od30
+creatorUrl: https://www.youtube.com/@tavern-ost
+creatorName: ☨ ᴀ ᴠ ᴇ ʀ ɴ
 category: gaming
 image: https://gbti.network/media/shares/atwellpub/20260814155751-the-legend-of-zelda-a-link-to-the-past-musical-p-5f23bb4d.webp
 imageSource: https://i.ytimg.com/vi/tDBVo59Od30/maxresdefault.jpg

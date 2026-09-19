@@ -7,6 +7,8 @@ shortDescription: >-
   By comparing the performance of this specialized crystal against a standard rod, Les' Lab
   demonstrate
 url: https://www.youtube.com/watch?v=fp-jHYiTUVY
+creatorUrl: https://www.youtube.com/@LesLaboratory
+creatorName: Les' Lab
 category: energy
 image: https://gbti.network/media/shares/atwellpub/20260812155206-the-most-powerful-laser-you-ve-never-heard-of-20fe6648.webp
 imageSource: https://i.ytimg.com/vi/fp-jHYiTUVY/maxresdefault.jpg

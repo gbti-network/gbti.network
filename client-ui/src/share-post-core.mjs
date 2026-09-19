@@ -168,6 +168,10 @@ export function editInputFor({ share, fields = {}, now = null, status = null } =
   }
   // sow-272: a removed preview stays removed across edits, so the share-covers workflow never looks one up.
   if (!input.image && fields.imageRemoved === true) input.imageRemoved = true;
+  // sow-222: the stored creator survives an edit. It is learned once, from the link preview at publish time,
+  // and an edit that dropped it would silently turn Subscribe back into Visit with nothing to relearn it from.
+  if (typeof share.creatorUrl === 'string' && share.creatorUrl) input.creatorUrl = share.creatorUrl;
+  if (typeof share.creatorName === 'string' && share.creatorName) input.creatorName = share.creatorName;
   if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
   const vis = fields.visibility ?? share.visibility;
   input.visibility = vis === 'public' ? 'public' : 'members';

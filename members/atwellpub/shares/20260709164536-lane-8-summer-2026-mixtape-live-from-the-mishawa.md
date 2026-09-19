@@ -4,6 +4,8 @@ visibility: public
 title: Lane 8 - Summer 2026 Mixtape (Live from the Mishawaka, Bellvue CO)
 shortDescription: A video by This Never Happened on YouTube
 url: https://www.youtube.com/watch?v=N_GfH09iP9c&list=RDN_GfH09iP9c&start_radio=1
+creatorUrl: https://www.youtube.com/@thisneverhappened
+creatorName: This Never Happened
 category: music
 image: https://gbti.network/media/shares/atwellpub/20260709164536-lane-8-summer-2026-mixtape-live-from-the-mishawa-b4e28e64.webp
 imageSource: https://i.ytimg.com/vi/N_GfH09iP9c/maxresdefault.jpg

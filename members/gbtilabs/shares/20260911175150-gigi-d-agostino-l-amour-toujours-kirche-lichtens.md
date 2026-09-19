@@ -4,6 +4,8 @@ id: 20260911175150-gigi-d-agostino-l-amour-toujours-kirche-lichtens
 createdAt: '2026-09-11T17:51:50.713Z'
 updatedAt: '2026-09-11T18:48:47.989Z'
 url: https://www.youtube.com/watch?v=iLlZz_DMa4U
+creatorUrl: https://www.youtube.com/@Sven_h_bpm
+creatorName: Sven H. BPM
 title: Gigi D' Agostino, L' Amour Toujours, Kirche Lichtenstein/Sa. (organ/Orgel)
 shortDescription: '---"I''ll fly with you" on organ.---'
 category: music

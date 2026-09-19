@@ -1,6 +1,8 @@
 ---
 status: published
 url: https://youtu.be/yc0rwKXB1fo
+creatorUrl: https://www.youtube.com/@Tubputers
+creatorName: Tubputers
 visibility: public
 title: How I Host 800k Free Minecraft Servers!
 shortDescription: A video by Tubputers on YouTube

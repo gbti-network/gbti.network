@@ -13,6 +13,7 @@
 // revealed on inspection), and the discussion thread beneath it. Fenced code blocks upgrade into code cards with
 // a language label + Copy button.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { sourceCardModel } from '../../../client/src/share-source.mjs'; // sow-222: the shared source-card decision
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
@@ -526,8 +527,15 @@ class GbtiReader extends GbtiElement {
       : '';
     // Owner QA 2026-07-22: the sidebar SOURCE card (favicon, domain, credit line) wraps the
     // open-the-link action, mirroring the site share page's source card.
-    const sideLink = (it.type === 'share' && it.url)
-      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName(it.author))} shared this from.</p><a class="side-open" href="${esc(utmLink(it.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Visit</a></div>`
+    // sow-222: WHO the card names and WHAT the action says now come from the shared model, so this copy and
+    // the site's cannot drift apart on the decision. A resolved creator turns Visit into Subscribe or Follow;
+    // an unresolved one renders exactly what it rendered before. The favicon service, the outbound decoration
+    // and the escaping stay this surface's own.
+    const srcCard = (it.type === 'share' && it.url)
+      ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName })
+      : null;
+    const sideLink = srcCard
+      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>`
       : '';
     // SOW-088: the superadmin Manually Syndicate control (self-gates to superadmin; the Worker enforces).
     // The category attribute carries the RAW top-level taxonomy key (a share's flat topic, or the first

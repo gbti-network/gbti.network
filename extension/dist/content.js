@@ -15054,6 +15054,8 @@ ${listStyleProseCss(".doc-blocks")}
       input.imageSource = share.imageSource;
     }
     if (!input.image && fields.imageRemoved === true) input.imageRemoved = true;
+    if (typeof share.creatorUrl === "string" && share.creatorUrl) input.creatorUrl = share.creatorUrl;
+    if (typeof share.creatorName === "string" && share.creatorName) input.creatorName = share.creatorName;
     if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
     const vis = fields.visibility ?? share.visibility;
     input.visibility = vis === "public" ? "public" : "members";
@@ -15386,6 +15388,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div>`);
       this._image = null;
       this._imageRemoved = false;
+      this._creator = null;
       this._suggested = null;
       this._suggestedTags = [];
       this.$(".card")?.addEventListener("click", (e) => this._onCardClick(e));
@@ -15551,6 +15554,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (cat) cat.value = item.category || "";
       this._suggested = item.category || null;
       this._image = item.image || null;
+      this._creator = item.creatorUrl ? { url: item.creatorUrl, name: item.creatorName || "" } : null;
       this._imageRemoved = item.imageRemoved === true;
       this._lastOgUrl = item.url || null;
       const box = this.$("[data-og]");
@@ -15643,6 +15647,7 @@ ${listStyleProseCss(".doc-blocks")}
         box.innerHTML = "";
       }
       this._image = null;
+      this._creator = null;
       this._lastOgUrl = null;
       const note = this.$("[data-edit-note]");
       if (note) note.textContent = "The link is removed when you save; the share keeps its note and its discussion.";
@@ -15789,6 +15794,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) {
         this._lastOgUrl = null;
         this._image = null;
+        this._creator = null;
         box.hidden = true;
         box.innerHTML = "";
         return;
@@ -15817,6 +15823,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._applySuggested();
         this._image = og?.image || null;
         if (this._image) this._imageRemoved = false;
+        this._creator = og?.creatorUrl && /^https:\/\//i.test(String(og.creatorUrl)) ? { url: String(og.creatorUrl), name: String(og.creatorName || "") } : null;
         let domain = "";
         try {
           domain = new URL(url).hostname.replace(/^www\./, "");
@@ -15835,6 +15842,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       this._image = null;
+      this._creator = null;
       if (state.kind === "error") {
         this._lastOgUrl = null;
         this._suggested = null;
@@ -15896,6 +15904,10 @@ ${listStyleProseCss(".doc-blocks")}
         if (tags.length) input.tags = tags;
         if (this._image) input.image = this._image;
         else if (this._imageRemoved) input.imageRemoved = true;
+        if (url && this._creator) {
+          input.creatorUrl = this._creator.url;
+          if (this._creator.name) input.creatorName = this._creator.name;
+        }
         const authorTarget = this._authorTarget();
         const res = await this.client.postShare({ input, body, ...authorTarget ? { authorTarget } : {} });
         this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ""}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, "ok");
@@ -15910,6 +15922,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._paintAuthorRow();
         const postedImage = this._image;
         this._image = null;
+        this._creator = null;
         this._imageRemoved = false;
         this._removedUrl = null;
         this._suggested = null;
@@ -24260,6 +24273,135 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-news-reader", GbtiNewsReader);
 
+  // client/src/share-source.mjs
+  var PLATFORMS = {
+    youtube: { label: "YouTube", verb: "Subscribe", hosts: ["youtube.com", "music.youtube.com"] },
+    vimeo: { label: "Vimeo", verb: "Follow", hosts: ["vimeo.com"] },
+    substack: { label: "Substack", verb: "Subscribe" },
+    x: { label: "X", verb: "Follow" },
+    bluesky: { label: "Bluesky", verb: "Follow" },
+    mastodon: { label: "Mastodon", verb: "Follow" },
+    mixcloud: { label: "Mixcloud", verb: "Follow" },
+    github: { label: "GitHub", verb: "Follow" },
+    devto: { label: "DEV", verb: "Follow" },
+    medium: { label: "Medium", verb: "Follow" }
+  };
+  var X_RESERVED = /* @__PURE__ */ new Set(["i", "home", "search", "explore", "settings", "messages", "notifications", "compose", "intent"]);
+  var GITHUB_RESERVED = /* @__PURE__ */ new Set(["orgs", "features", "about", "pricing", "marketplace", "sponsors", "collections", "topics", "explore", "settings", "notifications", "login", "join", "blog", "security", "readme", "enterprise", "apps", "contact", "site", "search", "trending", "new", "codespaces"]);
+  var SUBSTACK_RESERVED = /* @__PURE__ */ new Set(["open", "www", "about", "help", "on", "support"]);
+  var HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
+  var DIGITS_RE = /^\d+$/;
+  var hostOf3 = (u) => u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
+  function parse(raw) {
+    let u;
+    try {
+      u = new URL(String(raw || ""));
+    } catch {
+      return null;
+    }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u;
+  }
+  function storedCreator(raw, platform) {
+    const u = parse(raw);
+    if (!u || u.protocol !== "https:") return null;
+    const hosts = PLATFORMS[platform]?.hosts || [];
+    const host = hostOf3(u);
+    if (!hosts.some((h) => host === h || host.endsWith(`.${h}`))) return null;
+    return u.toString();
+  }
+  function creatorFrom(rawUrl, stored = {}) {
+    const u = parse(rawUrl);
+    if (!u) return null;
+    const host = hostOf3(u);
+    const seg = u.pathname.split("/").filter(Boolean);
+    const stamped = typeof stored?.creatorName === "string" && stored.creatorName.trim() ? stored.creatorName.trim() : "";
+    const made = (platform, url, handle = "") => url ? { url, name: stamped || handle || "", platform, label: PLATFORMS[platform].label, verb: PLATFORMS[platform].verb } : null;
+    if (host === "youtube.com" || host === "music.youtube.com" || host === "youtu.be") {
+      return made("youtube", storedCreator(stored?.creatorUrl, "youtube"));
+    }
+    if (host === "vimeo.com" || host === "player.vimeo.com") {
+      return made("vimeo", storedCreator(stored?.creatorUrl, "vimeo"));
+    }
+    if (host === "x.com" || host === "twitter.com") {
+      if (seg.length >= 3 && seg[1] === "status" && HANDLE_RE.test(seg[0]) && !X_RESERVED.has(seg[0].toLowerCase())) {
+        return made("x", `https://x.com/${seg[0]}`, `@${seg[0]}`);
+      }
+      return null;
+    }
+    if (host === "bsky.app") {
+      if (seg.length >= 2 && seg[0] === "profile" && /^[A-Za-z0-9][A-Za-z0-9.:-]{0,79}$/.test(seg[1])) {
+        return made("bluesky", `https://bsky.app/profile/${seg[1]}`, `@${seg[1]}`);
+      }
+      return null;
+    }
+    if (host.endsWith(".substack.com")) {
+      const sub = host.slice(0, -".substack.com".length);
+      if (SUBSTACK_RESERVED.has(sub)) {
+        if (seg.length >= 2 && seg[0] === "pub" && HANDLE_RE.test(seg[1])) {
+          return made("substack", `https://${seg[1].toLowerCase()}.substack.com/`, `${seg[1].toLowerCase()}.substack.com`);
+        }
+        return null;
+      }
+      return made("substack", `https://${host}/`, host);
+    }
+    if (host === "mixcloud.com") {
+      if (seg.length >= 2 && HANDLE_RE.test(seg[0])) return made("mixcloud", `https://www.mixcloud.com/${seg[0]}/`, seg[0]);
+      return null;
+    }
+    if (host === "github.com") {
+      if (seg.length >= 2 && HANDLE_RE.test(seg[0]) && !GITHUB_RESERVED.has(seg[0].toLowerCase())) {
+        return made("github", `https://github.com/${seg[0]}`, seg[0]);
+      }
+      return null;
+    }
+    if (host === "dev.to") {
+      if (seg.length >= 2 && HANDLE_RE.test(seg[0])) return made("devto", `https://dev.to/${seg[0]}`, `@${seg[0]}`);
+      return null;
+    }
+    if (host === "medium.com") {
+      if (seg.length >= 2 && seg[0].startsWith("@") && HANDLE_RE.test(seg[0].slice(1))) {
+        return made("medium", `https://medium.com/${seg[0]}`, seg[0]);
+      }
+      return null;
+    }
+    if (host.endsWith(".medium.com")) {
+      return made("medium", `https://${host}/`, host);
+    }
+    if (seg.length === 2 && seg[0].startsWith("@") && DIGITS_RE.test(seg[1])) {
+      const handle = seg[0].slice(1);
+      const local = handle.split("@")[0];
+      if (HANDLE_RE.test(local)) return made("mastodon", `https://${host}/@${handle}`, `@${handle}`);
+    }
+    return null;
+  }
+  function sourceCardModel({ url, memberName, creatorUrl = "", creatorName = "" } = {}) {
+    const u = parse(url);
+    if (!u) return null;
+    const host = hostOf3(u);
+    const who = String(memberName || "").trim();
+    const creator = creatorFrom(url, { creatorUrl, creatorName });
+    if (!creator) {
+      return {
+        host,
+        name: host,
+        credit: who ? `The source ${who} shared this from.` : "The source of this share.",
+        creator: null,
+        action: { href: u.toString(), text: "Visit", title: `Open ${host}` }
+      };
+    }
+    const shown = creator.name || host;
+    return {
+      host,
+      name: shown,
+      credit: who ? `On ${creator.label}, shared by ${who}.` : `On ${creator.label}.`,
+      creator,
+      // The verb is what the platform's own audience says. The action OPENS the creator's page, where the
+      // reader subscribes or follows themselves, so the title says open rather than implying one click does it.
+      action: { href: creator.url, text: creator.verb, title: `Open ${shown} on ${creator.label}` }
+    };
+  }
+
   // client-ui/src/members-index.mjs
   var SITE19 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
@@ -25672,7 +25814,8 @@ From the author:
       const resolved = this._html !== null;
       const slug = targetSlugFor(it);
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
-      const sideLink = it.type === "share" && it.url ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf2(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName4(it.author))} shared this from.</p><a class="side-open" href="${esc(utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Visit</a></div>` : "";
+      const srcCard = it.type === "share" && it.url ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName4(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName }) : null;
+      const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>` : "";
       const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE20 + it.url : "";

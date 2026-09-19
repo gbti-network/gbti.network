@@ -4,6 +4,8 @@ visibility: public
 title: What's even Graph and Loop Engineering?
 shortDescription: A video by lustoykov on YouTube
 url: https://www.youtube.com/watch?v=w2HL2RauMwE
+creatorUrl: https://www.youtube.com/@lustoykov
+creatorName: lustoykov
 category: video
 image: https://gbti.network/media/shares/atwellpub/20260806144002-what-s-even-graph-and-loop-engineering-04aa68f4.webp
 imageSource: https://i.ytimg.com/vi/w2HL2RauMwE/maxresdefault.jpg

@@ -4,6 +4,8 @@ visibility: public
 title: ANA VIDOVIC - 2025 Classical Guitar Concert | Siccas Guitars | BACH, Piazzolla,
 shortDescription: A classical guitar performance by Ana Vidovic
 url: https://www.youtube.com/watch?v=lL9Mabl1Hzo
+creatorUrl: https://www.youtube.com/@SiccasGuitars
+creatorName: SiccasGuitars
 category: music
 image: https://gbti.network/media/shares/atwellpub/20260812203354-ana-vidovic-2025-classical-guitar-concert-siccas-3acf130a.webp
 imageSource: https://i.ytimg.com/vi/lL9Mabl1Hzo/maxresdefault.jpg

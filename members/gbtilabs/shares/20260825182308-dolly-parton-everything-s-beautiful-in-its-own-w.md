@@ -4,6 +4,8 @@ visibility: public
 title: Dolly Parton - Everything's Beautiful (In Its Own Way) | Live
 shortDescription: An old recording of Dolly Parton singing "Everything's Beutiful"
 url: https://www.youtube.com/watch?v=QAwKI_buYuo
+creatorUrl: https://www.youtube.com/@HistoryOfCountryMusic
+creatorName: 'When The Cowboy Sings: History Of Country Music'
 category: music
 image: https://gbti.network/media/shares/gbtilabs/20260825182308-dolly-parton-everything-s-beautiful-in-its-own-w-22522e92.webp
 imageSource: https://i.ytimg.com/vi/QAwKI_buYuo/maxresdefault.jpg

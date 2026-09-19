@@ -308,6 +308,10 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
     // sow-283/sow-272: carried so an edit can keep them (see editInputFor in client-ui/src/share-post-core.mjs).
     imageSource: typeof fm.imageSource === 'string' && fm.imageSource.trim() ? fm.imageSource.trim() : null,
     imageRemoved: fm.imageRemoved === true,
+    // sow-222: the stored channel, so the extension reader's source card can offer Subscribe from this summary
+    // alone, and so an edit can carry it (editInputFor drops any field it does not name).
+    creatorUrl: typeof fm.creatorUrl === 'string' && fm.creatorUrl.trim() ? fm.creatorUrl.trim() : null,
+    creatorName: typeof fm.creatorName === 'string' && fm.creatorName.trim() ? fm.creatorName.trim() : null,
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? 'members',
     status: fm.status ?? null,
