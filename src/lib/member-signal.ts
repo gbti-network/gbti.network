@@ -14,6 +14,8 @@
 
 import { memberSignalFromStatus, selectIdentity, isActiveMember } from './member-signal-core.mjs'; // sow-158 Phase 2: pure core
 
+import { isGithubLogin } from './github-login.mjs';
+
 export interface MemberSignal {
   authenticated: true;
   login: string | null;
@@ -32,11 +34,15 @@ function coerce(o: unknown): MemberSignal | null {
   const r = o as Record<string, unknown>;
   if (r.authenticated !== true) return null;
   const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  // sow-369: a login and a member folder are both GitHub-login shaped, and both are RENDERED (the handle, an
+  // avatar url, a profile href). A malformed one is dropped rather than displayed, so no producer of this
+  // signal can put arbitrary text in the header.
+  const name = (v: unknown): string | null => (isGithubLogin(v) ? (v as string) : null);
   return {
     authenticated: true,
-    login: str(r.login),
+    login: name(r.login),
     githubId: str(r.githubId),
-    username: str(r.username),
+    username: name(r.username),
     role: typeof r.role === 'string' ? r.role : 'member',
     membership: typeof r.membership === 'string' ? r.membership : 'unknown',
     paidTier: typeof r.paidTier === 'string' ? r.paidTier : 'none', // sow-185: fail-closed to 'none'

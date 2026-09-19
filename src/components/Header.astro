@@ -176,6 +176,7 @@ const signedOutExtra = extensionCtaShown
 
 <script>
   import { readMemberSignal, onMemberSignal, currentIdentity, signOutWeb } from '../lib/member-signal';
+import { isGithubLogin } from '../lib/github-login.mjs'; // sow-369: the hint is a LOGIN, and only a login
 
   // SOW-030/036: reflect the extension's signed-in signal into the header. When a member signal is present we show
   // the avatar account menu and hide the "Sign in" button; otherwise the header stays in its logged-out state.
@@ -218,12 +219,21 @@ const signedOutExtra = extensionCtaShown
   // SOW: a DISPLAY-ONLY signed-in hint for the window between trial signup and installing the extension. The signup
   // redirect carries ?u=<github_login> (the PUBLIC login, NOT auth); we stash it in localStorage and show the avatar
   // so the header reflects "signed in". The real extension signal (once installed) always overrides the hint.
+  // sow-369: `u` is a GITHUB LOGIN and nothing else. It was taken verbatim, stored forever and printed as the
+  // handle, so a link carrying `?u=<a video url>` put that url in the header (owner, 2026-09-19) and a link
+  // carrying `?u=<someone-else>` printed their name and avatar to whoever opened it. Anything that is not
+  // login-shaped is ignored, and a stored value that is not login-shaped is DELETED on the way past, so a
+  // browser already carrying one heals itself on the next page it loads.
   function readHint() {
     let login = null;
     try {
       const u = new URLSearchParams(location.search).get('u');
-      if (u) { localStorage.setItem('gbti_hello', u); login = u; }
-      else login = localStorage.getItem('gbti_hello');
+      if (u && isGithubLogin(u)) { localStorage.setItem('gbti_hello', u); login = u; }
+      else if (!u) {
+        const stored = localStorage.getItem('gbti_hello');
+        if (stored && isGithubLogin(stored)) login = stored;
+        else if (stored) localStorage.removeItem('gbti_hello');
+      }
     } catch { /* no storage */ }
     return login ? { login, hintOnly: true } : null;
   }
