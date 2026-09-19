@@ -3546,8 +3546,8 @@ ${listStyleProseCss(".doc-blocks")}
     return s ? truncate(s, max) : empty;
   }
   function truncate(s, max = 120) {
-    const str3 = String(s ?? "");
-    return str3.length > max ? `${str3.slice(0, max - 1).trimEnd()}…` : str3;
+    const str4 = String(s ?? "");
+    return str4.length > max ? `${str4.slice(0, max - 1).trimEnd()}…` : str4;
   }
   function snippet(md, max = 120) {
     const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
@@ -18781,8 +18781,8 @@ ${listStyleProseCss(".doc-blocks")}
     function generateNextLine(state, level) {
       return "\n" + common.repeat(" ", state.indent * level);
     }
-    function testImplicitResolving(state, str3) {
-      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str3)) return true;
+    function testImplicitResolving(state, str4) {
+      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str4)) return true;
       return false;
     }
     function isWhitespace(c) {
@@ -21773,19 +21773,19 @@ ${listStyleProseCss(".doc-blocks")}
       }
     }
     _modelFromFm(fm, body) {
-      const str3 = (v) => v == null ? "" : String(v);
+      const str4 = (v) => v == null ? "" : String(v);
       const links = {};
-      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str3(v);
+      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str4(v);
       return {
-        displayName: str3(fm.displayName),
-        headline: str3(fm.headline),
-        avatar: str3(fm.avatar),
-        location: str3(fm.location),
+        displayName: str4(fm.displayName),
+        headline: str4(fm.headline),
+        avatar: str4(fm.avatar),
+        location: str4(fm.location),
         // preserved, never surfaced (owner decision)
         forHire: fm.forHire === true,
         directory: fm.directory === true,
-        skills: Array.isArray(fm.skills) ? fm.skills.map(str3) : [],
-        roles: Array.isArray(fm.roles) ? fm.roles.map(str3) : [],
+        skills: Array.isArray(fm.skills) ? fm.skills.map(str4) : [],
+        roles: Array.isArray(fm.roles) ? fm.roles.map(str4) : [],
         links,
         visibility: fm.visibility || "public",
         body: body || ""
@@ -23869,6 +23869,25 @@ ${listStyleProseCss(".doc-blocks")}
     return [...followed, ...rest];
   }
 
+  // membership/news-source-name.mjs
+  var str3 = (v) => typeof v === "string" ? v.trim() : "";
+  function sourceNameMap(sources) {
+    const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
+    const map = /* @__PURE__ */ new Map();
+    for (const s of list) {
+      const id = str3(s?.id);
+      const name = str3(s?.name);
+      if (id && name) map.set(id, name);
+    }
+    return map;
+  }
+  function newsSourceName(id, names) {
+    const key = str3(id);
+    if (!key) return "";
+    const map = names instanceof Map ? names : sourceNameMap(names);
+    return map.get(key) || key;
+  }
+
   // client-ui/src/elements/gbti-news.mjs
   var SITE18 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE18}/membership/">Become a member</a> to unlock the news feed.</div>`;
@@ -24101,7 +24120,7 @@ ${listStyleProseCss(".doc-blocks")}
       const host = this.$("[data-body]");
       if (!host) return;
       const it = this._open;
-      const by = [it.source, it.category].filter(Boolean).map((s) => esc(String(s))).join(" · ");
+      const by = [newsSourceName(it.source, this._sources || []), it.category].filter(Boolean).map((s) => esc(String(s))).join(" · ");
       const src = it.openHref ? `<a class="src" href="${esc(it.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : "";
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";

@@ -106,7 +106,7 @@ sources:
     description: security.apple.com
     enabled: true
   - id: about-fb-com
-    name: about.fb.com
+    name: Meta Newsroom
     url: https://about.fb.com/feed/
     description: about.fb.com
     enabled: true
@@ -146,7 +146,7 @@ sources:
     description: devblogs.microsoft.com
     enabled: true
   - id: bytecodealliance-org
-    name: bytecodealliance.org
+    name: Bytecode Alliance
     url: https://bytecodealliance.org/feed.xml
     description: bytecodealliance.org
     enabled: true
@@ -166,12 +166,12 @@ sources:
     description: github.blog
     enabled: true
   - id: thehackernews-com
-    name: thehackernews.com
+    name: The Hacker News
     url: https://feeds.feedburner.com/TheHackersNews
     description: thehackernews.com
     enabled: true
   - id: lobsters
-    name: Lobsters
+    name: Servo
     url: https://servo.org/blog/feed.xml
     description: servo.org
     enabled: true
@@ -191,12 +191,12 @@ sources:
     description: thenewstack.io
     enabled: true
   - id: lobsters-2
-    name: Lobsters
+    name: Iroh
     url: https://www.iroh.computer/rss.xml
     description: www.iroh.computer
     enabled: true
   - id: rubyland
-    name: RUBYLAND
+    name: André Arko
     url: https://andre.arko.net/index.xml
     description: andre.arko.net
     enabled: true
@@ -206,7 +206,7 @@ sources:
     description: www.aikido.dev
     enabled: true
   - id: blog-gitbutler-com
-    name: blog.gitbutler.com
+    name: GitButler
     url: https://blog.gitbutler.com/rss
     description: blog.gitbutler.com
     enabled: true
@@ -251,7 +251,7 @@ sources:
     description: blog.vuejs.org
     enabled: true
   - id: svelte-dev
-    name: svelte.dev
+    name: Svelte
     url: https://svelte.dev/blog/rss.xml
     description: svelte.dev
     enabled: true
@@ -261,7 +261,7 @@ sources:
     description: nextjs.org
     enabled: true
   - id: djangoproject-com
-    name: djangoproject.com
+    name: Django
     url: https://www.djangoproject.com/rss/weblog/
     description: www.djangoproject.com
     enabled: true
@@ -271,12 +271,12 @@ sources:
     description: laravel-news.com
     enabled: true
   - id: spring-io
-    name: spring.io
+    name: Spring
     url: https://spring.io/blog.atom
     description: spring.io
     enabled: true
   - id: kubernetes-io
-    name: kubernetes.io
+    name: Kubernetes
     url: https://kubernetes.io/feed.xml
     description: kubernetes.io
     enabled: true
@@ -296,7 +296,7 @@ sources:
     description: css-tricks.com
     enabled: true
   - id: articles-on-smashing-magazine-for-web-de
-    name: Articles on Smashing Magazine — For Web Designers And Developers
+    name: Smashing Magazine
     url: https://www.smashingmagazine.com/feed/
     description: www.smashingmagazine.com
     enabled: true
@@ -306,12 +306,12 @@ sources:
     description: stackoverflow.blog
     enabled: true
   - id: coindesk-bitcoin-ethereum-crypto-news-an
-    name: 'CoinDesk: Bitcoin, Ethereum, Crypto News and Price Data'
+    name: CoinDesk
     url: https://www.coindesk.com/arc/outboundfeeds/rss/
     description: www.coindesk.com
     enabled: true
   - id: cointelegraph-com-news
-    name: Cointelegraph.com News
+    name: Cointelegraph
     url: https://cointelegraph.com/rss
     description: cointelegraph.com
     enabled: true
@@ -346,7 +346,7 @@ sources:
     description: www.wired.com
     enabled: true
   - id: engadget-technology-news-expert-reviews
-    name: Engadget - Technology News & Expert Reviews
+    name: Engadget
     url: https://www.engadget.com/rss.xml
     description: www.engadget.com
     enabled: true
@@ -361,7 +361,7 @@ sources:
     description: www.techspot.com
     enabled: true
   - id: latest-from-tom-s-hardware
-    name: Latest from Tom's Hardware
+    name: Tom's Hardware
     url: https://www.tomshardware.com/feeds/all
     description: www.tomshardware.com
     enabled: true
@@ -396,7 +396,7 @@ sources:
     description: www.canarymedia.com
     enabled: true
   - id: insideevs-articles
-    name: InsideEVs - Articles
+    name: InsideEVs
     url: https://insideevs.com/rss/articles/all/
     description: insideevs.com
     enabled: true
@@ -406,7 +406,7 @@ sources:
     description: writings.stephenwolfram.com
     enabled: true
   - id: newsletter-pragmaticengineer-com
-    name: newsletter.pragmaticengineer.com
+    name: The Pragmatic Engineer
     url: https://newsletter.pragmaticengineer.com/feed
     description: newsletter.pragmaticengineer.com
     enabled: true
@@ -451,7 +451,7 @@ sources:
     description: www.databricks.com
     enabled: true
   - id: devops-daily-com
-    name: devops-daily.com
+    name: DevOps Daily
     url: https://devops-daily.com/feed.xml
     description: devops-daily.com
     enabled: true
@@ -466,7 +466,7 @@ sources:
     description: clickhouse.com
     enabled: true
   - id: lobsters-3
-    name: Lobsters
+    name: Lan Tian
     url: https://lantian.pub/rss2.xml
     description: lantian.pub
     enabled: true
@@ -486,7 +486,7 @@ sources:
     description: www.infoworld.com
     enabled: true
   - id: blog-trailofbits-com
-    name: blog.trailofbits.com
+    name: Trail of Bits
     url: https://blog.trailofbits.com/feed/
     description: blog.trailofbits.com
     enabled: true
@@ -536,17 +536,17 @@ sources:
     description: blog.python.org
     enabled: true
   - id: planet-python
-    name: Planet Python
+    name: PyPy
     url: https://www.pypy.org/rss.xml
     description: www.pypy.org
     enabled: true
   - id: planet-python-2
-    name: Planet Python
+    name: Graham Dumpleton
     url: https://grahamdumpleton.me/feed
     description: grahamdumpleton.me
     enabled: true
   - id: planet-python-3
-    name: Planet Python
+    name: Nuitka
     url: https://nuitka.net/blog/atom.xml
     description: nuitka.net
     enabled: true
@@ -566,7 +566,7 @@ sources:
     description: openssf.org
     enabled: true
   - id: zero-to-mastery-april-2026
-    name: Zero To Mastery - April 2026
+    name: Zero To Mastery
     url: https://safedep.io/rss.xml
     description: safedep.io
     enabled: true
@@ -586,7 +586,7 @@ sources:
     description: godotengine.org
     enabled: true
   - id: brew-sh
-    name: brew.sh
+    name: Homebrew
     url: https://brew.sh/atom.xml
     description: brew.sh
     enabled: true
@@ -596,12 +596,12 @@ sources:
     description: nesbitt.io
     enabled: true
   - id: rubyland-2
-    name: RUBYLAND
+    name: Ruby Central
     url: https://rubycentral.org/news/rss/
     description: rubycentral.org
     enabled: true
   - id: lobsters-4
-    name: Lobsters
+    name: Alpine Linux
     url: https://alpinelinux.org/atom.xml
     description: alpinelinux.org
     enabled: true
@@ -616,7 +616,7 @@ sources:
     description: tailscale.com
     enabled: true
   - id: marcelschmitz-com
-    name: MarcelSchmitz.com
+    name: Marcel Schmitz
     url: https://marcelschmitz.com/
     description: marcelschmitz.com
     enabled: true

@@ -559,6 +559,8 @@ const SHOPTALK = {
   // of the blended feed. Rows mirror the /feeds/news renderer (same feed-item vocabulary, internal
   // /news/item/ deep links). A failed fetch or an empty feed leaves the page exactly as built.
   import { newsInsertionPlan } from '../lib/home-feed.mjs';
+  import { newsSummary } from '../lib/news-summary.mjs'; // sow-367 via sow-371: the one summary rule, not a fourth copy
+  import { newsSourceName, sourceNameMap } from '../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
   (() => {
     const main = document.querySelector('main[aria-label="The network feed"]');
     const base = main?.getAttribute('data-signup-base') || '';
@@ -579,14 +581,18 @@ const SHOPTALK = {
       if (text !== undefined) n.textContent = text;
       return n;
     };
+    // sow-371: id -> publication name, filled by the fetch below. Declared here because newsRow is built before
+    // the request resolves; empty until then, and an empty map falls back to the id, which is what shipped before.
+    let srcNames = new Map<string, string>();
     const newsRow = (it: any) => {
       const art = el('article', 'feed-item news-row' + (it.image ? '' : ' nocover'));
       art.setAttribute('data-fi', '');
       art.setAttribute('data-kind', 'news'); // sow-192: so a content tab filter hides peppered news rows
       const main2 = el('div', 'feed-main');
       const meta = el('div', 'feed-meta');
+      const srcLabel = newsSourceName(it.source, srcNames); // sow-371: "The Verge", not "object-object"
       meta.append(
-        el('span', 'kind-tag kt-news', 'news' + (it.source ? ' · ' + it.source : '')),
+        el('span', 'kind-tag kt-news', 'news' + (srcLabel ? ' · ' + srcLabel : '')),
         el('span', 'tmeta', typeof it.publishedAt === 'number' ? relTime(it.publishedAt) : ''),
       );
       const detailHref = '/news/item/?g=' + encodeURIComponent(String(it.guid || '')) + (it.source ? '&s=' + encodeURIComponent(String(it.source)) : '');
@@ -595,10 +601,11 @@ const SHOPTALK = {
       a.setAttribute('href', detailHref);
       h2.append(a);
       main2.append(meta, h2);
-      if (it.summary) {
-        const sum = String(it.summary).trim();
-        main2.append(el('p', 'feed-ex', /[.!?]["')\]]?$/.test(sum) ? sum : sum + '...'));
-      }
+      // sow-371: the homepage was MISSED by sow-367 and kept its own copy of the rule, so the same story read
+      // one way here and another on /feeds/. Worse, the copy here treated the final dot of an ellipsis as a
+      // finished sentence, which is the exact defect sow-367 found and fixed in the other two.
+      const sum = newsSummary(it);
+      if (sum) main2.append(el('p', 'feed-ex', sum));
       const foot = el('div', 'feed-foot');
       foot.append(el('span', 'fsp'));
       main2.append(foot);
@@ -626,11 +633,14 @@ const SHOPTALK = {
     const lnSection = document.querySelector('[data-latest-news]');
     const lnList = document.querySelector('[data-latest-news-list]');
     const dropLatestNews = () => { if (lnSection) lnSection.remove(); };
-    fetch(base + '/news/feed?limit=60')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
-      .then((data) => {
+    Promise.all([
+      fetch(base + '/news/feed?limit=60').then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status')))),
+      fetch('/news-sources.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ])
+      .then(([data, sources]) => {
         const items = Array.isArray(data?.items) ? data.items : [];
         if (!items.length) { dropLatestNews(); return; }
+        srcNames = sourceNameMap(sources);
         // Fill the Latest news section with the freshest items (each newsRow() is a fresh node).
         if (lnList) {
           const chunk = el('div', 'feed-chunk');

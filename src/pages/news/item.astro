@@ -83,6 +83,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
   <script>
     import { newsTargetSlug } from '../../lib/home-feed.mjs';
     import { newsSummary } from '../../lib/news-summary.mjs'; // sow-367
+    import { newsSourceName, sourceNameMap } from '../../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
     import { SITE_NAME } from '../../lib/brand';
     import { onMemberSignal, currentIdentity, readMemberSignal } from '../../lib/member-signal';
 
@@ -175,9 +176,15 @@ import { SIGNUP_BASE } from '../../lib/membership';
         document.title = String(it.title || 'News') + ` | ${SITE_NAME}`;
         target.replaceChildren();
 
+        // sow-371: resolved ONCE, above the meta row, because the meta row is where it was missing. The sidebar
+        // card below already read the publication's name out of this list; the tag under the headline printed the
+        // raw id, which is how "NEWS · OBJECT-OBJECT" reached a reader on a story from The Verge.
+        const srcNames = sourceNameMap(sources);
+        const srcLabel = newsSourceName(it.source, srcNames);
+
         // meta row
         const meta = el('div', 'feed-meta');
-        meta.append(el('span', 'kind-tag kt-news', 'news' + (it.source ? ' · ' + it.source : '')));
+        meta.append(el('span', 'kind-tag kt-news', 'news' + (srcLabel ? ' · ' + srcLabel : '')));
         if (it.category) meta.append(el('span', 'kind-tag kt-share', String(it.category)));
         if (typeof it.publishedAt === 'number') meta.append(el('span', 'tmeta', relTime(it.publishedAt)));
         target.append(meta);
@@ -215,6 +222,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
         // the source meta card + follow (rendered into the right sidebar, extension reader style)
         const side = document.querySelector<HTMLElement>('[data-news-side]');
         const srcMeta = Array.isArray(sources?.sources) ? sources.sources.find((s: any) => s?.id === it.source) : null;
+        // The card keeps its own lookup because it needs the url and the description too, not only the name.
         const card = el('div', 'card news-source-card');
         const fav = document.createElement('img');
         fav.className = 'nsc-fav'; fav.alt = ''; fav.width = 40; fav.height = 40;

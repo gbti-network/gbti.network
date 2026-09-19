@@ -168,6 +168,7 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
   import { catKey, rowMatchesCat } from '../../lib/feed-filter.mjs';
   import { newsFeatureImage, GENERIC_FEATURE_IMAGE } from '../../../client-ui/src/news-feature-image.mjs'; // sow-149: one branded banner per news category
   import { newsSummary } from '../../lib/news-summary.mjs'; // sow-367: the publisher's blurb, or ours when theirs is cut off
+  import { newsSourceName, sourceNameMap } from '../../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
   // Per-view chrome: visibility chips, the ?tag= and ?cat= drilldowns, and the persisted density toggle. While a
   // filter is active the ladder flattens (chunks all visible via .feed-flat CSS, pagers hidden); when
   // the filter clears, the chunk/pager hidden attributes are untouched, so the ladder state restores.
@@ -263,19 +264,27 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
         if (text !== undefined) n.textContent = text;
         return n;
       };
-      fetch(base + '/news/feed?limit=60')
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
-        .then((data) => {
+      // sow-371: the source list is fetched alongside the stories, because a story carries only its source ID and
+      // some of those IDs are not readable ("object-object" is The Verge). It is a same-origin build artifact behind
+      // the CDN, and its failure is survivable: sourceNameMap of null is empty, and every row falls back to the id,
+      // which is exactly what it printed before. So this second request can never cost us the feed.
+      Promise.all([
+        fetch(base + '/news/feed?limit=60').then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status')))),
+        fetch('/news-sources.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ])
+        .then(([data, sources]) => {
           const items = Array.isArray(data?.items) ? data.items : [];
           newsBox.replaceChildren();
           if (!items.length) { newsBox.append(el('p', 'feed-empty', 'No news right now.')); return; }
+          const srcNames = sourceNameMap(sources);
           const chunk = el('div', 'feed-chunk');
           for (const it of items) {
             const art = el('article', 'feed-item news-row' + (it.image ? '' : ' nocover'));
             art.setAttribute('data-fi', '');
             const main = el('div', 'feed-main');
             const meta = el('div', 'feed-meta');
-            const tagEl = el('span', 'kind-tag kt-news', 'news' + (it.source ? ' · ' + it.source : ''));
+            const srcLabel = newsSourceName(it.source, srcNames); // sow-371: "The Verge", not "object-object"
+            const tagEl = el('span', 'kind-tag kt-news', 'news' + (srcLabel ? ' · ' + srcLabel : ''));
             const when = el('span', 'tmeta', typeof it.publishedAt === 'number' ? relTime(it.publishedAt) : '');
             meta.append(tagEl, when);
             // sow-139 QA: the row deep-links to the item's expanded view; the external link lives there.

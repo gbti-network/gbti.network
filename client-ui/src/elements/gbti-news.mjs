@@ -11,6 +11,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { newsToItem, newsTargetSlug } from '../news.mjs';
 import './gbti-card-list.mjs';
 import { newsCategoriesForTopics, prioritizeNewsByTopics } from '../../../membership/topic-map.mjs'; // SOW-054 P4: news defaults to followed topics
+import { newsSourceName } from '../../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
 import './gbti-discussion.mjs';
 
 const SITE = 'https://gbti.network';
@@ -224,7 +225,9 @@ class GbtiNews extends GbtiElement {
   _renderReader() {
     const host = this.$('[data-body]'); if (!host) return;
     const it = this._open;
-    const by = [it.source, it.category].filter(Boolean).map((s) => esc(String(s))).join(' · ');
+    // sow-371: the channel list this element already loaded carries each source's real name, so print that rather
+    // than the id. Falls back to the id when the list has not arrived, which is the line this replaces.
+    const by = [newsSourceName(it.source, this._sources || []), it.category].filter(Boolean).map((s) => esc(String(s))).join(' · ');
     const src = it.openHref ? `<a class="src" href="${esc(it.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : '';
     const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : '';
     const note = this._postNote ? `<p class="note ${this._postNote.ok ? 'ok' : 'err'}">${esc(this._postNote.msg)}</p>` : '';
