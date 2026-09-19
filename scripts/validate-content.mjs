@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { isSanctionedAvatar } from '../client-ui/src/profile-fields.mjs'; // SOW-129: the avatar host allowlist (shared)
+import { stripTrackingParamsInText } from '../client/src/url-normalize.mjs'; // sow-364: the body tracking-parameter rule
 import { membersIndexFromParsed, overrideConsistencyErrors } from '../membership/overrides-core.mjs';
 import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-043: the news-category -> Discord channel map
 import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the coupon registry
@@ -482,6 +483,40 @@ function validateTagShape() {
   }
 }
 validateTagShape();
+
+// sow-364 (2026-09-18): a share note and an author note reach the site with no tracking parameters on their
+// links. The client strips them at the publish chokepoints, so this is the backstop for a body that arrives
+// another way: a hand-written pull request, or an agent writing files straight into the repository, which is
+// how the three that shipped got in. Diff-scoped like the rules above, so existing content is grandfathered.
+//
+// THE RULE IS THE FUNCTION, not a pattern of its own. Anything stripTrackingParamsInText deliberately leaves
+// alone (a url inside a code fence, a url whose parentheses cut the run short) is something this cannot then
+// reject, so a body the client cannot clean can never be refused here either.
+function validateBodyTracking() {
+  const raw = (process.env.CHANGED_FILES || '').trim();
+  if (!raw) return;
+  const found = [];
+  for (const rel of raw.split(/[\s,]+/).filter(Boolean)) {
+    const isShare = /^members\/[^/]+\/shares\/[^/]+\.md$/.test(rel);
+    const isComment = /^(?:house|members\/[^/]+)\/comments\/[^/]+\.mdx?$/.test(rel);
+    if (!isShare && !isComment) continue;
+    const abs = path.join(ROOT, rel);
+    if (!has(abs)) continue; // deleted in the PR
+    const txt = fs.readFileSync(abs, 'utf8');
+    const body = txt.replace(/^---\n[\s\S]*?\n---\n?/, '');
+    const cleaned = stripTrackingParamsInText(body);
+    if (cleaned === body) continue;
+    const urls = (t) => new Set((t.match(/https?:\/\/[^\s<>"'`)\]]+/g) || []).map((u) => u.replace(/[.,;:!?*_~]+$/, '')));
+    const before = urls(body);
+    const after = urls(cleaned);
+    const changed = [...before].filter((u) => !after.has(u));
+    found.push(`${rel}: a link carries a tracking parameter: ${changed.slice(0, 3).join(', ')}${changed.length > 3 ? ` (+${changed.length - 3} more)` : ''}`);
+  }
+  if (found.length) {
+    errors.push(...found.map((f) => f + '. Publish through the client, or strip the parameter by hand. See sow-364.'));
+  }
+}
+validateBodyTracking();
 
 // Override grants (bans / grandfathered / roles) must reference github_ids consistent with members-index.yml.
 // A typo'd or swapped github_id<->login otherwise FAILS CLOSED silently (the wrong id never matches the member,

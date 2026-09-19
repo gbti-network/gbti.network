@@ -50,3 +50,67 @@ export function stripTrackingParams(input) {
   u.search = qs ? `?${qs}` : ''; // drop a now-empty '?' so a fully-cleaned url is bare
   return u.toString();
 }
+
+// sow-364: the same denylist, run over the URLs inside a BODY. An assistant hands its citations back carrying
+// its own tag (`?utm_source=chatgpt.com`, and the same shape from gemini, grok, claude and perplexity), so a
+// note pasted out of one publishes with a tracking parameter on every link. `utm_` was already in the denylist
+// above; the gap was that nothing ever ran it on text. ONE denylist, so a link in a note and the share's own
+// url are cleaned by the same rule and there is no second list to drift.
+//
+// Fenced code and inline code spans are LEFT ALONE: a note may be documenting a URL rather than linking to it,
+// and rewriting inside a code block changes what the author wrote. The build guard is defined as "this function
+// changes nothing", so anything this deliberately skips is something the guard cannot then reject.
+
+// A URL run inside markdown. It stops at whitespace and at the characters that close a markdown construct, so
+// `](url)`, `<url>` and `[1]: url "title"` all yield the url and nothing else. A URL containing a literal `)`
+// (a Wikipedia article) is cut short at that paren, which fails open: the truncated run carries no query, so
+// nothing is rewritten and the line is preserved exactly.
+const TEXT_URL_RE = /https?:\/\/[^\s<>"'`)\]]+/gi;
+// Sentence punctuation that follows a bare URL rather than belonging to it. Without this, a trailing full stop
+// is parsed as part of the query and swallowed when the parameter is stripped.
+const TRAILING_PUNCT_RE = /[.,;:!?*_~]+$/;
+// An inline code span, kept whole. Backtick runs of any length, as CommonMark allows.
+const CODE_SPAN_RE = /(`+)(?:[^`]|(?!\1)`)*\1/g;
+
+function cleanUrlsInProse(text) {
+  return text.replace(TEXT_URL_RE, (run) => {
+    const punct = (TRAILING_PUNCT_RE.exec(run) || [''])[0];
+    const url = punct ? run.slice(0, run.length - punct.length) : run;
+    const cleaned = stripTrackingParams(url);
+    return cleaned === url ? run : cleaned + punct;
+  });
+}
+
+/**
+ * Strip tracking parameters from every URL in a markdown body. Returns the text unchanged, byte for byte, when
+ * nothing is stripped. Pure, node-free, and safe on any input: it never throws and never drops content.
+ */
+export function stripTrackingParamsInText(input) {
+  const src = String(input ?? '');
+  if (!src || !/https?:\/\//i.test(src)) return src;
+  const lines = src.split('\n');
+  let fence = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const f = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+    if (f) {
+      if (!fence) fence = f[1].length;
+      else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+      continue;
+    }
+    if (fence) continue;
+    const line = lines[i];
+    if (!/https?:\/\//i.test(line)) continue;
+    // Split the line into code spans (kept) and prose (cleaned), so a documented URL survives inside backticks.
+    let out = '';
+    let last = 0;
+    CODE_SPAN_RE.lastIndex = 0;
+    let m;
+    while ((m = CODE_SPAN_RE.exec(line))) {
+      out += cleanUrlsInProse(line.slice(last, m.index)) + m[0];
+      last = m.index + m[0].length;
+    }
+    out += cleanUrlsInProse(line.slice(last));
+    lines[i] = out;
+  }
+  return lines.join('\n');
+}

@@ -27,5 +27,5 @@ If Warit’s version catches your attention, **listen to the original as well**.
 
 **Footnotes**
 
-1. Asia Pillars, “Warit Techakanont (Tonnam),” and Princess Galyani Vadhana Institute of Music, “Warit Techakanont.” ([Asia Pillars](https://asiapillars.com/pillar/warit-techakanont-tonnam/?utm_source=chatgpt.com)) ([PGVIM](https://www.pgvis.com/speakers/warit-techakanont?utm_source=chatgpt.com))
-2. Apple Music, *One Day - Single*, Nikki Yanofsky & Jacob Collier, released February 14, 2015. ([Apple Music](https://music.apple.com/us/album/one-day-single/1346193602?utm_source=chatgpt.com))
+1. Asia Pillars, “Warit Techakanont (Tonnam),” and Princess Galyani Vadhana Institute of Music, “Warit Techakanont.” ([Asia Pillars](https://asiapillars.com/pillar/warit-techakanont-tonnam/)) ([PGVIM](https://www.pgvis.com/speakers/warit-techakanont))
+2. Apple Music, *One Day - Single*, Nikki Yanofsky & Jacob Collier, released February 14, 2015. ([Apple Music](https://music.apple.com/us/album/one-day-single/1346193602))

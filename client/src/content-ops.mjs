@@ -8,7 +8,7 @@
 import yaml from 'js-yaml';
 import { AUTHORABLE_TYPES, SYSTEM_MANAGED, schemaFor, shareSchema, commentSchema } from './schemas.mjs';
 import { encAssetFor } from './member-content.mjs';
-import { stripTrackingParams } from './url-normalize.mjs';
+import { stripTrackingParams, stripTrackingParamsInText } from './url-normalize.mjs';
 
 const SUBDIR = Object.freeze({ post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' });
 const MAX_BODY_BYTES = 1_000_000; // 1MB cap on a content body (well under GitHub's per-file limit + the 2MB HTTP cap)
@@ -264,15 +264,19 @@ export function buildShareFile({ username, input, body = '' }) {
   // every host (extension, website, MCP) stores a clean url and every downstream reader (feed, share page,
   // syndication) inherits it. Denylist-only: functional params (a video id, timestamp, playlist) survive.
   if (typeof cleaned.url === 'string') cleaned.url = stripTrackingParams(cleaned.url);
+  // sow-364: and the same denylist over the NOTE. A note written with an assistant carries that assistant's tag
+  // on every citation it hands back, and the link the member pasted was already cleaned here while the ones
+  // inside their note were not.
+  const note = stripTrackingParamsInText(body);
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError('share', result.error.issues);
   const id = cleaned.id;
-  const bodyStr = String(body ?? '').trim();
+  const bodyStr = String(note ?? '').trim();
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError('share', [{ path: ['body'], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
   const path = `members/${username}/shares/${id}.md`;
-  const markdown = serializeContentFile(cleaned, body);
+  const markdown = serializeContentFile(cleaned, note);
   // slug = id so planMemberFiles (which keys encryption on built.slug + built.type) treats the Share like a
   // body-bearing item; encAssetFor('share', username, id) puts the .enc under members/<u>/_enc/ (SOW-016).
   return { path, frontmatter: cleaned, markdown, type: 'share', username, slug: id, id };
@@ -386,12 +390,15 @@ export function buildCommentFile({ username, input, body = '', scope = 'member' 
   const result = commentSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError('comment', result.error.issues);
   const id = cleaned.id;
-  const bodyStr = String(body ?? '').trim();
+  // sow-364: an author note is a comment, and a note written with an assistant arrives carrying its tag on
+  // every link. Same denylist, same single call, so every host inherits it from this one builder.
+  const text = stripTrackingParamsInText(body);
+  const bodyStr = String(text ?? '').trim();
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError('comment', [{ path: ['body'], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
   const path = `${target.folder}/comments/${id}.md`;
-  const markdown = serializeContentFile(cleaned, body);
+  const markdown = serializeContentFile(cleaned, text);
   // slug = id so planMemberFiles (which keys encryption on built.slug + built.type) treats a members comment
   // like a body-bearing item; encAssetFor('comment', username, id) puts the .enc under members/<u>/_enc/.
   return { path, frontmatter: cleaned, markdown, type: 'comment', username, slug: id, id, scope: target.scope };

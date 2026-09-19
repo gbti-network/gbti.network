@@ -6,6 +6,7 @@
 
 import { serializeContentFile, parseContentFile, byCommentOldest, NETWORK_CONTENT_OWNER } from '../../client/src/content-ops.mjs';
 import { splitMemberMarkdown, encAssetFor, MEMBER_MARKER } from '../../client/src/member-content.mjs';
+import { stripTrackingParamsInText } from '../../client/src/url-normalize.mjs'; // sow-364: the members path cleans its own body
 
 // SOW-027: the valid comment targets (mirrors operations.listComments' COMMENT_TARGET_TYPES).
 // sow-158 News track: 'news' enables the shared <gbti-discussion> news thread on the website (read is public;
@@ -473,6 +474,10 @@ export const MEMBER_READ_TIER = new Set(['paid', 'trialing', 'trial']);
  */
 export async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;
+  // sow-364: a members share encrypts its note HERE rather than through the builder's serializer, so the
+  // tracking strip has to run on this path too or a gated note keeps what a public one has cleaned. Shares and
+  // comments only, which is the scope the strip was given; article, project and prompt bodies are untouched.
+  if (built.type === 'share' || built.type === 'comment') body = stripTrackingParamsInText(body);
   const vis = built.frontmatter?.visibility ?? 'public';
   let publicPart = '';
   let memberPart = null;

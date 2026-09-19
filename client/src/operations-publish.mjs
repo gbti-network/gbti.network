@@ -12,6 +12,7 @@ import { buildContentFile, flipContentStatus, buildCommentFile, serializeContent
 import { SLUG_MAX, SLUG_PATTERN } from '../../membership/item-id.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
+import { stripTrackingParamsInText } from './url-normalize.mjs'; // sow-364: the members path cleans its own body
 import { workerDeleteDraft } from './drafts-client.mjs'; // sow-326: a publish clears its own staged record
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { hostedAuthor, hostedItemId, hostedPublishFiles } from './hosted-publish.mjs';
@@ -392,6 +393,10 @@ export function buildIntroCommentFile({ username, built, authorNote, now } = {})
  */
 export async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null; // profiles + slugless types are never body-gated
+  // sow-364: a members share encrypts its note HERE rather than through the builder's serializer, so the
+  // tracking strip has to run on this path too or a gated note keeps what a public one has cleaned. Shares and
+  // comments only, which is the scope the strip was given; article, project and prompt bodies are untouched.
+  if (built.type === 'share' || built.type === 'comment') body = stripTrackingParamsInText(body);
   const vis = built.frontmatter?.visibility ?? 'public';
   let publicPart = '';
   let memberPart = null;

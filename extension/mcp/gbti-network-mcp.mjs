@@ -17344,6 +17344,45 @@ function stripTrackingParams(input) {
   u.search = qs ? `?${qs}` : "";
   return u.toString();
 }
+var TEXT_URL_RE = /https?:\/\/[^\s<>"'`)\]]+/gi;
+var TRAILING_PUNCT_RE = /[.,;:!?*_~]+$/;
+var CODE_SPAN_RE = /(`+)(?:[^`]|(?!\1)`)*\1/g;
+function cleanUrlsInProse(text) {
+  return text.replace(TEXT_URL_RE, (run) => {
+    const punct = (TRAILING_PUNCT_RE.exec(run) || [""])[0];
+    const url2 = punct ? run.slice(0, run.length - punct.length) : run;
+    const cleaned = stripTrackingParams(url2);
+    return cleaned === url2 ? run : cleaned + punct;
+  });
+}
+function stripTrackingParamsInText(input) {
+  const src = String(input ?? "");
+  if (!src || !/https?:\/\//i.test(src)) return src;
+  const lines = src.split("\n");
+  let fence = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const f = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+    if (f) {
+      if (!fence) fence = f[1].length;
+      else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+      continue;
+    }
+    if (fence) continue;
+    const line = lines[i];
+    if (!/https?:\/\//i.test(line)) continue;
+    let out = "";
+    let last = 0;
+    CODE_SPAN_RE.lastIndex = 0;
+    let m;
+    while (m = CODE_SPAN_RE.exec(line)) {
+      out += cleanUrlsInProse(line.slice(last, m.index)) + m[0];
+      last = m.index + m[0].length;
+    }
+    out += cleanUrlsInProse(line.slice(last));
+    lines[i] = out;
+  }
+  return lines.join("\n");
+}
 
 // client/src/content-ops.mjs
 var SUBDIR = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
@@ -17430,15 +17469,16 @@ function buildShareFile({ username, input, body = "" }) {
   if (!username) throw new Error("buildShareFile: username is required");
   const cleaned = stripUndefined({ status: "published", ...input ?? {}, type: "share", author: username });
   if (typeof cleaned.url === "string") cleaned.url = stripTrackingParams(cleaned.url);
+  const note = stripTrackingParamsInText(body);
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("share", result.error.issues);
   const id = cleaned.id;
-  const bodyStr = String(body ?? "").trim();
+  const bodyStr = String(note ?? "").trim();
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError("share", [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
   const path4 = `members/${username}/shares/${id}.md`;
-  const markdown = serializeContentFile(cleaned, body);
+  const markdown = serializeContentFile(cleaned, note);
   return { path: path4, frontmatter: cleaned, markdown, type: "share", username, slug: id, id };
 }
 function shareSummary(relPath, frontmatter = {}, body = "") {
@@ -17524,12 +17564,13 @@ function buildCommentFile({ username, input, body = "", scope = "member" } = {})
   const result = commentSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("comment", result.error.issues);
   const id = cleaned.id;
-  const bodyStr = String(body ?? "").trim();
+  const text = stripTrackingParamsInText(body);
+  const bodyStr = String(text ?? "").trim();
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError("comment", [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
   const path4 = `${target.folder}/comments/${id}.md`;
-  const markdown = serializeContentFile(cleaned, body);
+  const markdown = serializeContentFile(cleaned, text);
   return { path: path4, frontmatter: cleaned, markdown, type: "comment", username, slug: id, id, scope: target.scope };
 }
 function serializeContentFile(frontmatter, body) {
@@ -18896,6 +18937,7 @@ function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
 }
 async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;
+  if (built.type === "share" || built.type === "comment") body = stripTrackingParamsInText(body);
   const vis = built.frontmatter?.visibility ?? "public";
   let publicPart = "";
   let memberPart = null;

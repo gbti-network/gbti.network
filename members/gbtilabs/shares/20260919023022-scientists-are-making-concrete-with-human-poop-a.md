@@ -28,4 +28,4 @@ The biochar appears to improve concrete by storing and slowly releasing water du
 
 The idea could eventually reduce cement consumption while putting sewage waste to productive use, but it remains experimental. Researchers still need to study real-world durability, heavy-metal leaching, performance under extreme conditions, and whether the process actually produces a meaningful reduction in carbon emissions. 
 
-[1]: https://www.sciencealert.com/michelle-starr/page/0?utm_source=chatgpt.com "Michelle Starr, Senior Journalist at ScienceAlert"
+[1]: https://www.sciencealert.com/michelle-starr/page/0 "Michelle Starr, Senior Journalist at ScienceAlert"
