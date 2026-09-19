@@ -21,6 +21,7 @@ import { CATEGORY_NAMES } from '../workers/signup/news/config/categories.mjs'; /
 import { validateCtas } from '../membership/cta-edits.mjs'; // sow-281: the CTA registry rules
 import { assignmentsOf } from '../src/lib/ctas.mjs'; // sow-281
 import { ctaItemExists, ctaImageInfo } from './lib/ctas-store.mjs'; // sow-281; sow-337 the card image check
+import { ctaWarnings, buildDigestConfigMirror } from '../membership/digest-config.mjs'; // sow-266: the digest pitch + sponsor slot
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
@@ -575,6 +576,51 @@ function validateNewsChannelsConfig() {
   for (const err of validateNewsChannels(parsed)) errors.push(err);
 }
 validateNewsChannelsConfig();
+
+// sow-266: house/digest-config.yml. SHAPE is an error, COPY is a warning.
+//
+// The split is the owner's ruling of 2026-09-19: the three pitch rules warn and do not block, so they must
+// not red a build either. A structural problem is different: a `cta:` that parses to a list, or a sponsor
+// switch that is the string "false" rather than the boolean, would be read as absent and silently revert to
+// the compiled default, which is exactly the failure a validator is for.
+function validateDigestConfig() {
+  const rel = 'house/digest-config.yml';
+  if (!has(path.join(ROOT, rel))) return; // optional: absent means every field falls back to the shipped copy
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { errors.push(`${rel}: must be a mapping with cta and sponsor blocks`); return; }
+
+  for (const block of ['cta', 'sponsor']) {
+    const v = parsed[block];
+    if (v === undefined) continue;
+    if (!v || typeof v !== 'object' || Array.isArray(v)) errors.push(`${rel}: ${block}: must be a mapping, not ${Array.isArray(v) ? 'a list' : typeof v}`);
+  }
+  const cta = parsed.cta && typeof parsed.cta === 'object' && !Array.isArray(parsed.cta) ? parsed.cta : {};
+  const sponsor = parsed.sponsor && typeof parsed.sponsor === 'object' && !Array.isArray(parsed.sponsor) ? parsed.sponsor : {};
+  for (const [block, obj] of [['cta', cta], ['sponsor', sponsor]]) {
+    if ('enabled' in obj && typeof obj.enabled !== 'boolean') {
+      errors.push(`${rel}: ${block}.enabled must be true or false, not ${JSON.stringify(obj.enabled)}. A quoted "false" reads as absent and the setting silently reverts.`);
+    }
+  }
+  for (const [block, obj, fields] of [['cta', cta, ['body', 'link_label', 'link_url']], ['sponsor', sponsor, ['html']]]) {
+    for (const f of fields) {
+      if (f in obj && obj[f] !== null && typeof obj[f] !== 'string') errors.push(`${rel}: ${block}.${f} must be text`);
+    }
+  }
+  // The mirror must build, because an exception here would surface at the next sync with no build to blame.
+  try { buildDigestConfigMirror(parsed, new Date()); } catch (e) { errors.push(`${rel}: cannot be mirrored: ${e?.message || 'unknown'}`); }
+
+  // The pitch rules, as WARNINGS on stderr, not errors. The owner ruled on 2026-09-19 that these warn and do
+  // not block, so they must not red a build either. Printed here so the warning reaches whoever merges the
+  // edit as well as whoever typed it, using the same `!` convention as the taxonomy gap notice below.
+  const copyWarnings = ctaWarnings({ body: cta.body, linkLabel: cta.link_label, linkUrl: cta.link_url });
+  if (copyWarnings.length) {
+    console.warn(`! ${rel}: the digest pitch breaks ${copyWarnings.length} of its own rules. Saved anyway, by design:`);
+    for (const w of copyWarnings) console.warn(`  - ${w}`);
+  }
+}
+validateDigestConfig();
 
 // SOW-119: the coupon registry (house/coupons.yml). A malformed coupon fails CI rather than silently
 // granting nothing at signup (the runtime core also fails closed, but the author should know).

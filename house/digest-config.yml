@@ -1,0 +1,48 @@
+# What the weekly digest says about membership, and who sponsors it. Owner-editable: change a line here,
+# push, and the next sync applies it to the live mail with NO REDEPLOY. To apply it immediately rather than
+# waiting for the scheduled run, use the "Run reconcile" trigger, or save from the digest manager in the admin
+# area, which calls the sync itself.
+#
+# SUPERADMIN-owned, pinned in CODEOWNERS and in membership/path-rank.mjs. Two tests fail if those two and the
+# Worker's action table ever disagree about who may write this file.
+#
+# AN EMPTY OR UNREADABLE VALUE FALLS BACK TO THE COPY COMPILED INTO THE RENDERER, one field at a time, not all
+# at once. An issue that goes out with last month's wording is a smaller failure than one that goes out with
+# no pitch at all. The sponsor is the opposite direction and for the same reason: absent means OFF, because
+# rendering an advertisement by accident is not recoverable.
+
+cta:
+  # The one membership note in the mail. It sits after all the articles, before the footer, and it renders only
+  # for an issue that actually has articles in it.
+  enabled: true
+
+  # THREE RULES, AND THEY WARN RATHER THAN REFUSE (owner, 2026-09-19). The manager tells you which one your
+  # copy breaks and saves it anyway:
+  #   1. at most 220 visible characters, body and link label together
+  #   2. one link, which is the link below, so no second link in the body
+  #   3. do not name something a free account already has. Collections and favourites are free, and the design
+  #      mockup claims them as membership benefits in two places, so it is an easy mistake to re-inherit.
+  #
+  # {plan} IS A BINDING, NOT A WORD. It becomes the current plan name when the mail renders, so renaming the
+  # plan never leaves a stale name in somebody's inbox. Delete the token and you are spelling it by hand.
+  body: >-
+    A {plan} membership adds comments on any item, the members Discord, and publishing your own articles,
+    projects and prompts: members first, public after editorial review.
+  link_label: What membership includes
+  link_url: /membership/
+
+sponsor:
+  # OFF, and off is the default in code as well, so a missing or broken file can never turn this on.
+  #
+  # Turning it on renders one sponsor block in every issue until you change it, under a "Sponsored" label the
+  # manager cannot edit away. One standing sponsor, not one per issue (owner, 2026-09-19).
+  enabled: false
+
+  # The sponsor's own markup. It is passed through an allowlist before it renders: links, images, basic text
+  # tags and a short list of attributes. Anything else is dropped, including scripts, frames and event
+  # handlers. Mail clients strip scripts anyway, which is exactly why this is easy to under-build: the same
+  # markup feeds the preview, and a preview is a browser.
+  #
+  # Leave it empty and the block does not render even when enabled is true, because a "Sponsored" label over
+  # nothing is worse than no block.
+  html: ''

@@ -30,6 +30,9 @@
 # sending happens at all (daily_cap: 0 is the pause), so the tier should not depend on /house/ staying
 # superadmin-owned if it is ever delegated.
 /house/mail-settings.yml     @atwellpub @gbtilabs
+# sow-266: what the digest says about membership, and who sponsors it. Superadmin for the same reason the
+# send caps are: it decides what goes into other people's inboxes, and the sponsor block is a paid placement.
+/house/digest-config.yml  @atwellpub @gbtilabs
 
 # sow-298: the syndication templates are superadmin-tier. Their write ops went in superadmin at the op level
 # (editHouseYaml -> requireRole superadmin) but this pin was never added, so for this one file the endpoint

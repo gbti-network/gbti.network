@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { loadOverridesRaw } from '../membership/overrides.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, mirrorDigestConfigToKv } from './lib/kv-mirror.mjs';
 import { toSyndicationMirror } from '../membership/syndication-config.mjs';
 import { toCouponsMirror } from '../membership/coupons.mjs';
 
@@ -57,6 +57,22 @@ export async function syncSyndicationConfigMirror({ root, env = process.env, fet
     return { dryRun: true, enabled: m.enabled, require_approval: m.require_approval, channels: m.channels };
   }
   return mirrorSyndicationConfigToKv({ raw, env, ...(fetchImpl ? { fetchImpl } : {}) });
+}
+
+/**
+ * sow-266: mirror house/digest-config.yml -> KV digest:config, so the mail compile reads the owner's pitch
+ * copy and sponsor slot live. Rides this job as well as the daily reconcile, because the digest manager calls
+ * this sync straight after a save: waiting six hours to see your own wording is not an edit surface.
+ *
+ * An unreadable file returns WITHOUT writing, rather than mirroring an empty blob. Empty would revert the
+ * owner's copy to the compiled default, silently, on a green run.
+ */
+export async function syncDigestConfigMirror({ root, env = process.env, fetchImpl, dryRun = false } = {}) {
+  let raw = null;
+  try { raw = yaml.load(fs.readFileSync(path.join(root, 'house', 'digest-config.yml'), 'utf8')); } catch { raw = null; }
+  if (!raw || typeof raw !== 'object') return { written: false, key: 'digest:config', bytes: 0, reason: 'house/digest-config.yml missing or unreadable' };
+  if (dryRun) return { dryRun: true, cta: !!raw.cta, sponsorEnabled: raw?.sponsor?.enabled === true };
+  return mirrorDigestConfigToKv({ raw, env, ...(fetchImpl ? { fetchImpl } : {}) });
 }
 
 // CLI
@@ -100,5 +116,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         else { console.error(`sync-mirror: coupons:config NOT written (${c.reason}).`); process.exitCode = 1; }
       }
     } catch (e) { console.error('sync-mirror: coupons:config FAILED:', e?.message ?? e); process.exitCode = 1; }
+
+    // 4) digest:config - sow-266: the digest's pitch copy and sponsor slot, so an edit from the manager is
+    // live within minutes rather than at the next daily reconcile.
+    try {
+      const d = await syncDigestConfigMirror({ root: ROOT, dryRun });
+      if (d.dryRun) console.log(`sync-mirror: DRY RUN would write digest:config (cta=${d.cta}, sponsor enabled=${d.sponsorEnabled}).`);
+      else if (d.written) console.log(`sync-mirror: wrote digest:config (${d.bytes} bytes).`);
+      else { console.error(`sync-mirror: digest:config NOT written (${d.reason}).`); process.exitCode = 1; }
+    } catch (e) { console.error('sync-mirror: digest:config FAILED:', e?.message ?? e); process.exitCode = 1; }
   })();
 }

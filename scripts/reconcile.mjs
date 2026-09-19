@@ -35,7 +35,7 @@ import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorMailSettingsToKv, mirrorDigestEntitlementToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorMailSettingsToKv, mirrorDigestEntitlementToKv, mirrorCouponsToKv, mirrorDigestConfigToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
 import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-source.mjs'; // sow-213 R4: KV overrides overlay for the plan + the git-present reality check behind reconcile's fail posture
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncOutboundClicks, readClicksFromDisk } from './lib/outbound-clicks.mjs'; // sow-289: the daily outbound click rollup
@@ -870,6 +870,38 @@ async function main() {
         console.log(r.written ? `reconcile: mirrored house/mail-settings.yml to KV (${r.bytes} bytes).` : `reconcile: mail-settings KV mirror SKIPPED (${r.reason}).`);
       } catch (e) {
         console.error('reconcile: mail-settings KV mirror FAILED:', e?.message ?? e);
+        process.exitCode = 1;
+      }
+    }
+  }
+
+  // sow-266: house/digest-config.yml -> KV digest:config, the digest's membership pitch and its sponsor slot,
+  // read live by the mail compile. This is what lets the owner reword the pitch or swap a sponsor by editing
+  // one file, with no Worker redeploy.
+  //
+  // ITS OWN BLOCK, for the reason mail-settings has one: a loop that treats an unreadable file as an empty one
+  // would mirror an empty blob over the live settings. Here that means reverting the owner's copy to the
+  // compiled default AND, worse in the other direction, it would be the only way a sponsor could silently
+  // vanish mid-campaign. On a read failure, leave whatever is in KV: it is the last thing a person chose.
+  {
+    let rawDigest = null;
+    let digestReadError = null;
+    try { rawDigest = yaml.load(fs.readFileSync(path.join(ROOT, 'house', 'digest-config.yml'), 'utf8')); }
+    catch (e) { digestReadError = e; }
+    if (digestReadError) {
+      console.error('reconcile: house/digest-config.yml UNREADABLE, leaving the live digest settings as they are:', digestReadError?.message ?? digestReadError);
+      process.exitCode = 1;
+    } else if (!rawDigest || typeof rawDigest !== 'object') {
+      console.error('reconcile: house/digest-config.yml parsed to nothing, leaving the live digest settings as they are.');
+      process.exitCode = 1;
+    } else if (dryRun) {
+      console.log('reconcile: DRY RUN would mirror house/digest-config.yml to KV (key digest:config).');
+    } else {
+      try {
+        const r = await mirrorDigestConfigToKv({ raw: rawDigest, env });
+        console.log(r.written ? `reconcile: mirrored house/digest-config.yml to KV (${r.bytes} bytes).` : `reconcile: digest-config KV mirror SKIPPED (${r.reason}).`);
+      } catch (e) {
+        console.error('reconcile: digest-config KV mirror FAILED:', e?.message ?? e);
         process.exitCode = 1;
       }
     }

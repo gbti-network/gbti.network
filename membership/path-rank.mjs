@@ -41,6 +41,9 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   // remove) and superadmins own the weighting, which is why this is a separate file rather than a field inside
   // house/news-sources.yml: one file cannot be owned at two ranks.
   'house/news-source-weights.yml',
+  // sow-266: the digest's membership pitch and its sponsor slot. Same tier as mail-settings.yml beside it: it
+  // decides what reaches other people's inboxes, and the sponsor block is a paid third-party placement.
+  'house/digest-config.yml',
 ]);
 // sow-337: directories pinned the same way. A call-to-action card image renders on every page the card is
 // assigned to, so writing one is the same decision as writing house/ctas.yml. Kept in lockstep with CODEOWNERS by

@@ -17,6 +17,7 @@ import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mj
 import { applyKvOverride, KV_SOURCE } from '../../membership/overrides-kv-core.mjs';
 import { buildMailSettingsMirror, MAIL_SETTINGS_KV_KEY } from '../../membership/mail-settings.mjs'; // sow-312: the send-rate caps
 import { buildDigestEntitlement, DIGEST_ENTITLED_KV_KEY } from '../../membership/digest-entitlement.mjs'; // sow-312: who gets the members edition
+import { buildDigestConfigMirror, DIGEST_CONFIG_KV_KEY } from '../../membership/digest-config.mjs'; // sow-266: the digest pitch + sponsor slot
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
@@ -25,6 +26,7 @@ export const TOPICS_KV_KEY = TOPICS_MIRROR_KEY; // SOW-087: house/topics.yml (th
 export const COUPONS_KV_KEY = COUPONS_MIRROR_KEY; // SOW-119: house/coupons.yml (signup coupon validation)
 export const MAIL_SETTINGS_KEY = MAIL_SETTINGS_KV_KEY; // sow-312: house/mail-settings.yml (the send rate caps)
 export const DIGEST_ENTITLED_KEY = DIGEST_ENTITLED_KV_KEY; // sow-312: who receives the members edition
+export const DIGEST_CONFIG_KEY = DIGEST_CONFIG_KV_KEY; // sow-266: house/digest-config.yml (the pitch copy + sponsor slot)
 
 /**
  * sow-213 Phase 2: KV-NATIVE ENTRIES SURVIVE THE SYNC.
@@ -347,6 +349,18 @@ export async function mirrorMailSettingsToKv({ raw, env = process.env, now = new
  */
 export async function mirrorDigestEntitlementToKv({ members, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = DIGEST_ENTITLED_KV_KEY } = {}) {
   return putKvJson({ label: 'digest entitlement', body: JSON.stringify(buildDigestEntitlement(members, now)), env, fetchImpl, key });
+}
+
+/**
+ * sow-266: PUT house/digest-config.yml -> KV digest:config, so the weekly mail compile reads the owner's
+ * pitch copy and sponsor slot live, with no Worker redeploy.
+ *
+ * A PLAIN WRITE, unlike the coupons mirror beside it, because nothing writes this key from the KV side: git
+ * is the only author, so there is no KV-native entry to preserve and no read-before-write to do. If a
+ * superadmin surface ever writes it directly, this must gain the coupons treatment first.
+ */
+export async function mirrorDigestConfigToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = DIGEST_CONFIG_KV_KEY } = {}) {
+  return putKvJson({ label: 'digest config', body: JSON.stringify(buildDigestConfigMirror(raw, now)), env, fetchImpl, key });
 }
 
 /** SOW-087: PUT house/topics.yml -> KV topics:vocab, so the Worker's share category suggester sees the live vocabulary. */
