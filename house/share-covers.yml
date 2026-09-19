@@ -8,11 +8,6 @@
 #   failed    why the last attempt failed; triedAt is when. Only timeouts, unreachable hosts and 5xx are retried,
 #             after 7 days. A changed image or link is a new source and is always tried.
 covers:
-  adbox85/20260918165402-estrada-same-thing-visualizer:
-    source: https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg
-    file: 20260918165402-estrada-same-thing-visualizer-0c76c677.webp
-    sha256: 0c76c677fbe0865c27ea18a622c6e63b3ce27d2593af1de0ba6639ad2d27f28e
-    copiedAt: '2026-09-18'
   atwellpub/20260610-astro-content-layer:
     lookup: https://docs.astro.build/en/guides/content-collections/
     source: https://docs.astro.build/open-graph/en/guides/content-collections.webp
