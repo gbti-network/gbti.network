@@ -9,7 +9,7 @@
 import { DEFAULT_CATEGORY } from '../config/categories.mjs';
 import { parseFeed, contentRichness } from './feeds.mjs';
 import { classifyItem, analyzeItem, keywordCategory } from './classify.mjs';
-import { loadIndex, loadGuids, loadDay, dayOf, commitIngest } from './store.mjs';
+import { loadIndex, loadGuids, loadDay, loadRemoved, dayOf, commitIngest } from './store.mjs';
 import { loadSourceList, nextChunk } from './sources.mjs'; // SOW-056: git-native pool + sequential KV cursor
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -60,6 +60,19 @@ async function mapWithConcurrency(items, limit, fn) {
 }
 
 /**
+ * Is this story new to us? Three reasons it is not, and the third is sow-338's:
+ *   - the guid map already holds it (it is stored, somewhere in the window),
+ *   - this same batch already carried it (two feeds, one story),
+ *   - a superadmin removed it, and a tombstone says so. That check cannot be folded into the guid map, because
+ *     a guid leaves with its day after thirty days while a feed may list the item for longer, which is exactly
+ *     how a removed story would come back.
+ * Pure, so each reason is assertable without running a cycle (ingest has no other test).
+ */
+export function isNewItem(guid, { guids = {}, localSeen = new Set(), removed = {} } = {}) {
+  return !(guid in guids) && !localSeen.has(guid) && !removed[guid];
+}
+
+/**
  * Run one ingest cycle. `now` is epoch seconds (inject in tests; defaults to wall clock).
  * Returns a summary object (also logged) describing what happened.
  */
@@ -71,6 +84,9 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
   // Load index + guid map once; pass both to commitIngest so it doesn't re-read them (subrequest budget).
   const index = await loadIndex(env);
   const guids = await loadGuids(env); // { guid: dayString } across the whole retention window
+  // sow-338: stories a superadmin pulled. Skipped here as well as filtered on read, because the guid map alone
+  // cannot hold a removal: a guid leaves with its day after 30 days, and feeds list some items for longer.
+  const removed = await loadRemoved(env);
 
   // 1. Resolve the live pool (git-native artifact -> KV cache -> bundled seed) and pick the next sequential chunk
   //    via the persisted cursor, then fetch + parse in parallel (allSettled => one failure can't abort).
@@ -83,7 +99,7 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
   const localSeen = new Set();
   const fresh = [];
   for (const it of parsed) {
-    if (it.guid in guids || localSeen.has(it.guid)) continue;
+    if (!isNewItem(it.guid, { guids, localSeen, removed })) continue;
     localSeen.add(it.guid);
     fresh.push({ ...it, fetchedAt: now });
   }

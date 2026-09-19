@@ -65,6 +65,7 @@ import { membershipAdminMail } from './membership-admin-mail.mjs';
 import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-119
 import { membershipInviteCreate, membershipInviteList, membershipInviteUpdate } from './membership-invites-admin.mjs'; // sow-231
 import { editorialList, editorialDecide } from './membership-editorial.mjs'; // sow-323: the editorial review queue
+import { newsItemDecide, newsRemovedList } from './membership-admin-news.mjs'; // sow-338: superadmin news removal
 import { sendEditorialQueueAlert, sendEditorialApprovedEmail } from './editorial-alert.mjs'; // sow-323
 import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
@@ -1302,6 +1303,21 @@ export default {
       // sow-323: the superadmin EDITORIAL REVIEW QUEUE. Every member article, project and prompt starts
       // members-only and a superadmin decides what becomes public (owner, 2026-09-12), so listing shows work
       // waiting and deciding PUBLISHES it. Both sit at the superadmin bar. Never cached.
+      // sow-338: a superadmin removes one news story from the index, or puts it back. KV, not a pull request,
+      // so it lives in its own module beside the news store rather than with the file-editing actions.
+      if (pathname === '/membership/admin/news-item') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await newsRemovedList(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+        if (method === 'POST') {
+          const r = await newsItemDecide(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
       if (pathname === '/membership/admin/editorial') {
         const cors = corsHeaders(request, env, { credentials: true });
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });

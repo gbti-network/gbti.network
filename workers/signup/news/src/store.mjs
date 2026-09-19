@@ -6,6 +6,7 @@
 //   feed:v2:day:<YYYY-MM-DD>  -> item[] for that day (sorted newest-first)
 //   feed:v2:guids             -> { "<guid>": "<YYYY-MM-DD>" }  dedupe map across the whole window
 //   feed:v2:index             -> { days:[...], counts:{category:{},source:{}}, total, updatedAt }
+//   feed:v2:removed           -> { "<guid>": { at, by, source, day, item } }  sow-338 tombstones
 //
 // 30-day retention = keep the last 30 day-shards (prune older). /feed reads newest shards first and
 // stops once it has enough items, so the common case parses only a shard or two. All KV access is
@@ -17,6 +18,16 @@ const PREFIX = 'feed:v2';
 const K_INDEX = `${PREFIX}:index`;
 const K_GUIDS = `${PREFIX}:guids`;
 const kDay = (d) => `${PREFIX}:day:${d}`;
+const K_REMOVED = `${PREFIX}:removed`;
+
+// sow-338: a superadmin pulling a story writes a TOMBSTONE rather than deleting the record, for two reasons.
+// Removing the item and its guid would let the next fetch of that source store it again (ingest skips only what
+// the guid map already holds), and keeping the guid alone would not last either, because a guid leaves with its
+// day after 30 days while some feeds list an item for longer. The tombstone outlives both: ingest skips it, every
+// read filters it, and it carries a copy of the item so an undo restores exactly what was there.
+//
+// They are kept for 90 days, well past retention, and pruned by the same ingest pass that prunes day shards.
+export const TOMBSTONE_DAYS = 90;
 
 /** UTC day string (YYYY-MM-DD) for an epoch-seconds timestamp. */
 export const dayOf = (epochSec) => new Date(epochSec * 1000).toISOString().slice(0, 10);
@@ -34,6 +45,7 @@ async function getJSON(env, key, fallback) {
 export const emptyIndex = () => ({ days: [], counts: { category: {}, source: {} }, contentStats: {}, total: 0, updatedAt: 0 });
 
 export const loadIndex = (env) => getJSON(env, K_INDEX, emptyIndex());
+export const loadRemoved = (env) => getJSON(env, K_REMOVED, {});
 export const loadGuids = (env) => getJSON(env, K_GUIDS, {});
 export const loadDay = (env, d) => getJSON(env, kDay(d), []);
 
@@ -41,6 +53,7 @@ export const loadDay = (env, d) => getJSON(env, kDay(d), []);
 // keeping ALL KV access isolated in this module (the R2-swap-is-one-file invariant).
 export const saveIndex = (env, index) => env.NEWS_KV.put(K_INDEX, JSON.stringify(index));
 const saveGuids = (env, guids) => env.NEWS_KV.put(K_GUIDS, JSON.stringify(guids));
+const saveRemoved = (env, removed) => env.NEWS_KV.put(K_REMOVED, JSON.stringify(removed));
 export const saveDay = (env, d, items) => env.NEWS_KV.put(kDay(d), JSON.stringify(items));
 
 /** Merge incoming items into a day's array, dedupe by guid (incoming wins), sort newest-first. Pure. */
@@ -57,6 +70,18 @@ export function applyCounts(counts, item, delta) {
   counts.source[item.source] = Math.max(0, (counts.source[item.source] || 0) + delta);
 }
 
+/** Take one guid out of a day's array. Returns { shard, item }, item null when it was not there. Pure. */
+export function dropFromShard(shard, guid) {
+  const item = shard.find((it) => it.guid === guid) || null;
+  return { shard: item ? shard.filter((it) => it.guid !== guid) : shard, item };
+}
+
+/** Tombstone guids to forget, being older than the keep window. Pure. */
+export function expiredTombstones(removed, keepDays, now) {
+  const cutoff = (now - keepDays * 86400) * 1000;
+  return Object.keys(removed).filter((g) => !(Number(removed[g]?.at) >= cutoff));
+}
+
 /** Day strings strictly older than the retention window (given current index.days). Pure. */
 export function expiredDays(days, retentionDays, now) {
   const cutoff = dayOf(now - retentionDays * 86400);
@@ -69,7 +94,7 @@ export function expiredDays(days, retentionDays, now) {
  * `changedCategories` is an optional list of { guid, from, to } for items reclassified this run
  * (their counts are adjusted). Returns the updated index.
  */
-export async function commitIngest(env, { freshItems = [], updatedItems = [], changedCategories = [], contentStatsDelta = {}, retentionDays, now, index, guids }) {
+export async function commitIngest(env, { freshItems = [], updatedItems = [], changedCategories = [], contentStatsDelta = {}, retentionDays, tombstoneDays = TOMBSTONE_DAYS, now, index, guids }) {
   const today = dayOf(now);
   index = index ?? (await loadIndex(env));
   guids = guids ?? (await loadGuids(env));
@@ -103,6 +128,15 @@ export async function commitIngest(env, { freshItems = [], updatedItems = [], ch
     index.days = index.days.filter((x) => x !== d);
   }
 
+  // 3b. sow-338: forget tombstones past their keep window. They outlive retention on purpose (a feed may list an
+  //     item longer than we store it), so this is a separate, longer cutoff.
+  const removed = await loadRemoved(env);
+  const staleTombstones = expiredTombstones(removed, tombstoneDays, now);
+  if (staleTombstones.length) {
+    for (const g of staleTombstones) delete removed[g];
+    await saveRemoved(env, removed);
+  }
+
   // 4. Merge this run's content-richness tallies (SOW-046 A diagnostics) into the cumulative per-source stats.
   index.contentStats = index.contentStats || {};
   for (const [src, d] of Object.entries(contentStatsDelta)) {
@@ -117,17 +151,75 @@ export async function commitIngest(env, { freshItems = [], updatedItems = [], ch
 }
 
 /**
+ * sow-338: a superadmin pulls one story out of the index.
+ *
+ * The guid STAYS in the guid map and a tombstone is written, so the story is skipped on every later fetch and
+ * filtered out of every read. The item is copied into the tombstone, which is what makes the undo exact.
+ *
+ * Idempotent: removing an already-removed guid answers `already`. A guid the window never held answers
+ * `not_found`, and one whose day shard no longer carries the item is still tombstoned (so it cannot return),
+ * with no copy to restore from.
+ */
+export async function removeItem(env, { guid, by = null, now = Math.floor(Date.now() / 1000) }) {
+  const removed = await loadRemoved(env);
+  if (removed[guid]) return { ok: true, already: true };
+  const guids = await loadGuids(env);
+  const day = guids[guid];
+  if (!day) return { ok: false, error: 'not_found' };
+
+  const shard = await loadDay(env, day);
+  const { shard: left, item } = dropFromShard(shard, guid);
+  if (item) {
+    const index = await loadIndex(env);
+    await saveDay(env, day, left);
+    applyCounts(index.counts, item, -1);
+    index.total = Math.max(0, index.total - 1);
+    // contentStats is a CUMULATIVE diagnostic of what the feeds have been sending us (how many arrive as full
+    // text rather than a blurb). It is a record of what we received, not of what we kept, so a removal leaves it.
+    index.updatedAt = now;
+    await saveIndex(env, index);
+  }
+  removed[guid] = { at: now * 1000, by, source: item?.source ?? null, day, item: item ?? null };
+  await saveRemoved(env, removed);
+  return { ok: true, removed: true, restorable: Boolean(item) };
+}
+
+/** sow-338: put a removed story back where it was. `expired` when its day has since left the window. */
+export async function restoreItem(env, { guid, now = Math.floor(Date.now() / 1000) }) {
+  const removed = await loadRemoved(env);
+  const rec = removed[guid];
+  if (!rec) return { ok: false, error: 'not_found' };
+  const { item, day } = rec;
+  if (item && day) {
+    const index = await loadIndex(env);
+    if (!index.days.includes(day)) return { ok: false, error: 'expired' };
+    const shard = await loadDay(env, day);
+    await saveDay(env, day, mergeDayItems(shard, [item]));
+    applyCounts(index.counts, item, +1);
+    index.total += 1;
+    index.updatedAt = now;
+    await saveIndex(env, index);
+  }
+  delete removed[guid];
+  await saveRemoved(env, removed);
+  return { ok: true, restored: Boolean(item) };
+}
+
+/**
  * Read items newest-first across day shards, applying filters, stopping once `limit` are collected.
  * Common (recent) queries parse only a shard or two. Returns { items, updatedAt }.
  */
 export async function queryItems(env, filter = {}) {
   const { limit = 50 } = filter;
   const index = await loadIndex(env);
+  // sow-338: removed stories are filtered on the way out as well as skipped on the way in. The two are not the
+  // same guard: an ingest run can write the same day a removal is landing in, and this covers that window.
+  const removed = await loadRemoved(env);
   const days = [...index.days].sort().reverse(); // newest day first
   const out = [];
   for (const d of days) {
     const shard = await loadDay(env, d);
-    for (const it of shard) if (matchesFilter(it, filter)) out.push(it);
+    for (const it of shard) if (!removed[it.guid] && matchesFilter(it, filter)) out.push(it);
     if (out.length >= limit) break; // enough recent matches; deeper shards not needed
   }
   out.sort((a, b) => ts(b) - ts(a));
