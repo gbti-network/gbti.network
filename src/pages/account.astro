@@ -272,16 +272,16 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
     .acct-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 32px; }
-    .tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 12px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--fg); text-decoration: none; text-align: center; transition: border-color .12s, transform .12s; }
-    .tile:hover { border-color: var(--brand); transform: translateY(-1px); }
+    .tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 12px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--fg); text-decoration: none; text-align: center; transition: border-color .12s, transform .12s; }
+    .tile:hover { border-color: var(--green); transform: translateY(-1px); }
     .tile-ic { display: inline-flex; }
-    .tile-ic svg { width: 26px; height: 26px; color: var(--brand); }
+    .tile-ic svg { width: 26px; height: 26px; color: var(--green-700); }
     .tile-lb { font-size: 13.5px; font-weight: 600; line-height: 1.25; }
     .tile-admin .tile-ic svg { color: var(--fg-mute); }
 
     /* sow-218: ONE column. The composer stacks above Latest Activity rather than sitting beside it. */
     .hub-cols { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 40px; align-items: start; }
-    .hub-card { border: 1.5px solid var(--line); border-radius: 16px; background: var(--panel); padding: 20px; }
+    .hub-card { border: 1.5px solid var(--line); border-radius: 16px; background: var(--paper); padding: 20px; }
     .hub-card[hidden] { display: none; } /* an explicit display would otherwise beat the UA [hidden] rule */
     .hub-h { font-size: 18px; margin: 0 0 4px; }
     .hub-sub { color: var(--fg-mute); font-size: 13.5px; margin: 0 0 16px; }

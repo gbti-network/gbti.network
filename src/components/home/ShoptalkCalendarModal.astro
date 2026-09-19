@@ -69,18 +69,22 @@ const outlook = outlookCalendarUrl(event);
      (owner screenshot, 2026-09-11). inset: 0 + margin: auto is the native centring, restated. */
   .sc { border: 0; padding: 0; background: transparent; max-width: min(92vw, 26rem); position: fixed; inset: 0; margin: auto; }
   .sc::backdrop { background: rgb(0 0 0 / 0.5); }
-  .sc-card { background: var(--bg-1, #fff); color: var(--fg, #25232b); border: 1px solid var(--line, #e6e4ea); border-radius: 14px; padding: 20px; }
+  /* sow-366: --bg-1, --bg-2 and --accent were never tokens. Their light fallbacks made the card WHITE in
+     both themes while --fg, which is a real token, flipped to near-white in dark: white on white, and the
+     chooser was unreadable (owner screenshot, 2026-09-19). The real surface tokens are --paper (a card) and
+     --tint (its hover), and both flip. A fallback on a token that does not exist is what hid this in light. */
+  .sc-card { background: var(--paper); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
   .sc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .sc-eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute, #6c6976); }
+  .sc-eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute); }
   .sc-title { margin: 2px 0 0; font-size: 20px; }
-  .sc-x { background: none; border: 0; color: var(--fg-mute, #6c6976); cursor: pointer; padding: 4px; border-radius: 8px; }
-  .sc-x:hover { color: var(--fg, #25232b); }
-  .sc-when { margin: 10px 0 14px; color: var(--fg-mute, #6c6976); font-size: 14px; }
+  .sc-x { background: none; border: 0; color: var(--fg-mute); cursor: pointer; padding: 4px; border-radius: 8px; }
+  .sc-x:hover { color: var(--fg); }
+  .sc-when { margin: 10px 0 14px; color: var(--fg-mute); font-size: 14px; }
   .sc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .sc-row { display: block; padding: 12px 14px; border: 1px solid var(--line, #e6e4ea); border-radius: 10px; text-decoration: none; color: inherit; }
-  .sc-row:hover, .sc-row:focus-visible { border-color: var(--accent, #1f9e5f); background: var(--bg-2, #f7f6f9); }
+  .sc-row { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; text-decoration: none; color: inherit; }
+  .sc-row:hover, .sc-row:focus-visible { border-color: var(--green); background: var(--tint); }
   .sc-name { display: block; font-weight: 600; }
-  .sc-note { display: block; margin-top: 2px; font-size: 13px; color: var(--fg-mute, #6c6976); }
+  .sc-note { display: block; margin-top: 2px; font-size: 13px; color: var(--fg-mute); }
 </style>
 
 <script is:inline>
