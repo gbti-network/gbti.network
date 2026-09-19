@@ -14818,8 +14818,14 @@ ${listStyleProseCss(".doc-blocks")}
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
   var CSS23 = `
-  .wrap { display:inline-flex; align-items:center; gap:8px; }
-  .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
+  /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
+     is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
+     .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
+     host with justify-content:center, so the moment the control upgraded for a signed-in member the button
+     shrank and jumped to the middle of the card, while a signed-out visitor kept the full-width one. */
+  .wrap { display:inline-flex; align-items:center; gap:8px; width:100%; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; flex:1 1 auto; cursor:pointer;
+    font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
     border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
     transition:background .15s ease, color .15s ease, border-color .15s ease; }
@@ -14827,6 +14833,20 @@ ${listStyleProseCss(".doc-blocks")}
   .btn.on { background:transparent; color:var(--brand); }
   .btn.on:hover { border-color:var(--danger); color:var(--danger); }
   .btn[disabled] { opacity:.6; cursor:default; }
+  /* sow-362: the OUTLINED treatment, for a host that asked for it (data-gbti-variant="ghost"). The website's
+     author box and sidebar cards bake a ghost button; without this the upgraded control came back solid green
+     and the same card looked different to a member and to a visitor. The default is unchanged, so every
+     extension surface keeps the filled button it has today. */
+  :host([data-gbti-variant="ghost"]) .btn { background:transparent; color:var(--fg); border-color:var(--line); }
+  :host([data-gbti-variant="ghost"]) .btn:hover { background:transparent; border-color:var(--brand); color:var(--brand); }
+  :host([data-gbti-variant="ghost"]) .btn.on { color:var(--brand); border-color:var(--brand); }
+  :host([data-gbti-variant="ghost"]) .btn.on:hover { border-color:var(--danger); color:var(--danger); }
+  /* The member profile header bakes a WHITE button, because it sits on the dark hero. Same reasoning as ghost:
+     without this the header's button turned green the moment the page recognised the reader. */
+  :host([data-gbti-variant="white"]) .btn { background:#fff; color:#25232b; border-color:#fff; }
+  :host([data-gbti-variant="white"]) .btn:hover { background:#f3f2f0; border-color:#f3f2f0; }
+  :host([data-gbti-variant="white"]) .btn.on { background:transparent; color:#fff; border-color:rgba(255,255,255,.5); }
+  :host([data-gbti-variant="white"]) .btn.on:hover { border-color:var(--danger); color:var(--danger); }
   .tune { display:inline-flex; align-items:center; justify-content:center; cursor:pointer; width:38px; height:38px;
     border-radius:10px; border:1.5px solid var(--line); background:var(--panel); color:var(--muted);
     transition:color .15s ease, border-color .15s ease; }
@@ -14834,9 +14854,13 @@ ${listStyleProseCss(".doc-blocks")}
 `;
   var GbtiSubscribe = class extends GbtiElement {
     static get observedAttributes() {
-      return ["data-gbti-username"];
+      return ["data-gbti-username", "data-gbti-variant"];
     }
     attributeChangedCallback(name, oldV, newV) {
+      if (name === "data-gbti-variant" && oldV !== newV) {
+        if (this.isConnected) this.render();
+        return;
+      }
       if (name === "data-gbti-username" && oldV !== newV) {
         this._loaded = false;
         this._following = void 0;

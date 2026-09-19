@@ -4,7 +4,8 @@ import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
 import Avatar from '../../components/Avatar.astro';
 import { isPublic, byNewest } from '../../lib/content';
-import { authorDisplay, authorHref, formatDate } from '../../lib/authors';
+import { authorDisplay, formatDate } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { buildAvatarIndex, authorItem } from '../../lib/avatars';
 import { TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT } from '../../lib/membership';
 import TierTable from '../../components/TierTable.astro';
@@ -92,7 +93,7 @@ const extensionCtaShown = extensionCtaEnabled();
     <div class="hero-c-members">
       <div class="lav-row">
         {heroMembers.map((m) => (
-          <a href={authorHref(m.data.username)} data-tooltip={m.data.displayName} aria-label={m.data.displayName}>
+          <a href={profileHref(m.data.username)} data-tooltip={m.data.displayName} aria-label={m.data.displayName}>
             <Avatar item={{ name: m.data.displayName, avatar: m.data.avatar }} class="lav" size={42} />
           </a>
         ))}

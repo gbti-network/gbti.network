@@ -5,7 +5,8 @@
 // adapt it to each page's header (centered card, dark project banner, left-aligned prompt header). It renders the
 // BYLINE only, never the <h1> (the page keeps data-gbti-region="title" on its own title).
 import { getCollection } from 'astro:content';
-import { authorDisplay, authorHref, authorAvatar, formatDate } from '../lib/authors';
+import { authorDisplay, authorAvatar, formatDate } from '../lib/authors';
+import { profileHref } from '../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import type { AvatarItem } from '../lib/avatars';
 import Avatar from './Avatar.astro';
 import StackedAvatars from './StackedAvatars.astro';
@@ -24,7 +25,7 @@ const showUpdated = Boolean(updatedAt && (!publishedAt || updatedAt.toDateString
 const prof = (await getCollection('profile')).find((p) => p.data.username === author)?.data;
 const name = prof?.displayName ?? authorDisplay(author);
 const avatar = authorAvatar(author, prof?.avatar);
-const href = authorHref(author);
+const href = profileHref(author);
 ---
 <div class:list={['content-meta', center && 'cm-center', dark && 'cm-dark']}>
   {stack && stack.length

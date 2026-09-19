@@ -5,7 +5,8 @@ import PromptCard from '../../components/prompts/PromptCard.astro';
 import { isPubliclyListed, isMembersOnlyListed } from '../../lib/content';
 import MembersOnlyCards from '../../components/MembersOnlyCards.astro'; // sow-323 Phase 3
 import { topLevelCategories, categoryLabel } from '../../lib/taxonomy';
-import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
+import { authorDisplay, authorAvatar } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177: the one search field, in the hero
 import SubscribeButton from '../../components/SubscribeButton.astro';
 
@@ -26,7 +27,7 @@ const authorNames = Object.fromEntries(allPrompts.map((p) => [p.data.author, pro
 // Per-author meta for the featured header shown when ?author= is active (filled client-side from this map).
 const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.author))].map((u) => {
   const pr = profByUser.get(u);
-  return [u, { name: pr?.displayName ?? authorDisplay(u), avatar: authorAvatar(u, pr?.avatar) ?? '', headline: pr?.headline ?? '', href: authorHref(u) }];
+  return [u, { name: pr?.displayName ?? authorDisplay(u), avatar: authorAvatar(u, pr?.avatar) ?? '', headline: pr?.headline ?? '', href: profileHref(u) }];
 }));
 ---
 <BaseLayout title="Prompts & Skills" description="A directory of AI prompts shared by the GBTI Network.">

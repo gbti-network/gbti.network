@@ -60,9 +60,17 @@ export function buildAvatarIndex(profiles: ProfileLike[]): AvatarIndex {
   return { byUsername, byLogin };
 }
 
-/** An author username -> avatar item, with a sensible fallback when the member has no profile. */
+/**
+ * An author username -> avatar item, with a sensible fallback when the member has no profile.
+ *
+ * sow-362: the fallback carries NO href. It fires exactly when the username is absent from the profile index,
+ * which is the same condition as having no page at /members/<username>/, so the href it used to return was a
+ * link to a 404 (measured live 2026-09-18 on a comment author and a share author). Callers that render
+ * `item.href` (StackedAvatars, ContributionCredits) get an anchor with no href, which the one global
+ * `a:not([href])` rule in gbti-v3.css renders as plain text.
+ */
 export function authorItem(username: string, index: AvatarIndex): AvatarItem {
-  return index.byUsername.get(username) ?? { name: authorDisplay(username), href: authorHref(username), avatar: authorAvatar(username) };
+  return index.byUsername.get(username) ?? { name: authorDisplay(username), avatar: authorAvatar(username) };
 }
 
 /** Resolve the frontmatter contributors[] (github logins) to deduped avatar items. */

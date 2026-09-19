@@ -2,7 +2,8 @@
 // Compact author box shown at the foot of a post, above the contribution history. The article's author
 // (avatar + name + headline + published date) with a link to their member profile.
 import { getCollection } from 'astro:content';
-import { authorDisplay, authorHref, formatDate } from '../../lib/authors';
+import { authorDisplay, formatDate } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { buildAvatarIndex } from '../../lib/avatars';
 import Avatar from '../Avatar.astro';
 import SubscribeButton from '../SubscribeButton.astro'; // SOW-186 C1: follow-the-author control (inert; upgrades for a signed-in member)
@@ -18,7 +19,7 @@ const index = buildAvatarIndex(profiles);
 const item = index.byUsername.get(author);
 const name = prof?.displayName ?? authorDisplay(author);
 const headline = prof?.headline;
-const href = authorHref(author);
+const href = profileHref(author);
 ---
 <div class="author-box mx-auto">
   <a href={href} class="ab-av" aria-label={name}><Avatar item={{ name, avatar: item?.avatar }} size={46} class="rounded-full" /></a>

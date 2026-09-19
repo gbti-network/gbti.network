@@ -70,7 +70,11 @@ test('the view: the member stream mount is gone; the reveal script fetches /memb
   assert.doesNotMatch(view, /data-member-stream/);
   assert.match(view, /import \{ mergeSharesIntoFeed \} from '\.\.\/\.\.\/lib\/feed-share-cards\.mjs';/);
   assert.match(view, /const entitled = canReadMemberStream\(s\);/, 'the one tier predicate still decides');
-  assert.match(view, /const r = await client\.listShares\(\{ limit: 100 \}\);\s*mergeSharesIntoFeed\(list, r\?\.items \?\? \[\], \{/);
+  // The listed shares are what gets merged. sow-362 put a line between the two (the set of members who have a
+  // profile page, so a client-rendered card does not link an author into a 404), so this allows a statement or
+  // a comment in between rather than pinning the two lines flush against each other.
+  assert.match(view, /const r = await client\.listShares\(\{ limit: 100 \}\);[\s\S]{0,300}?mergeSharesIntoFeed\(list, r\?\.items \?\? \[\], \{/);
+  assert.match(view, /authorHref: \(u: string\) => \(pages\.has\(u\) \? authorHref\(u\) : undefined\)/, 'sow-362: a merged card only links an author who has a page');
   assert.match(view, /data-feedview data-narrow=\{narrow\} data-view="card"/, 'the view names its narrow');
   assert.match(view, /\[data-feedview\]\[data-narrow="shares"\]/, 'the merge runs on the shares view only');
   assert.match(view, /list\?\.addEventListener\('feed-rows-changed', \(\) => \{ rows = Array\.from\(list\.querySelectorAll<HTMLElement>\('\[data-fi\]'\)\); apply\(\); \}\);/);

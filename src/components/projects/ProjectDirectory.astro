@@ -10,7 +10,8 @@ import Avatar from '../Avatar.astro';
 import { isStub, catalogHref } from '../../lib/content';
 import { leafLabel } from '../../lib/taxonomy';
 import { PROJECT_CATEGORIES, categoryOf, categoryStyle } from '../../lib/project-categories.mjs';
-import { authorDisplay, authorHref, authorAvatar, formatDate } from '../../lib/authors';
+import { authorDisplay, authorAvatar, formatDate } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import FavoriteButton from '../FavoriteButton.astro';
 import { favoriteCount } from '../../lib/favorites';
 
@@ -106,13 +107,13 @@ const desc = (p: any) => p.data.shortDescription ?? '';
                   </div>
                 </div>
                 {profileByUser.has(p.data.author) && (
-                  <a href={authorHref(p.data.author)} class="link author-pop-link">View profile <svg class="ar" viewBox="0 0 24 24" width="14" height="14"><use href="#g-arrow"/></svg></a>
+                  <a href={profileHref(p.data.author)} class="link author-pop-link">View profile <svg class="ar" viewBox="0 0 24 24" width="14" height="14"><use href="#g-arrow"/></svg></a>
                 )}
               </div>
             </div>
             <div class="prow-author-meta">
               {profileByUser.has(p.data.author)
-                ? <a href={authorHref(p.data.author)}>{authorDisplay(p.data.author)}</a>
+                ? <a href={profileHref(p.data.author)}>{authorDisplay(p.data.author)}</a>
                 : <span class="prow-author-name">{authorDisplay(p.data.author)}</span>}
               {p.data.publishedAt && <span class="prow-sub">Submitted {formatDate(p.data.publishedAt)}</span>}
             </div>

@@ -24,7 +24,8 @@ import { contentIcon } from '../lib/content-icons';
 import { topLevelCategories } from '../lib/taxonomy';
 import { getCollection } from 'astro:content';
 import { isDiscoverable, byNewest } from '../lib/content'; // sow-189: stale items leave the homepage
-import { authorDisplay, authorHref } from '../lib/authors';
+import { authorDisplay } from '../lib/authors';
+import { profileHref } from '../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { loadFeedItems } from '../lib/feed-items';
 import { sortByNewest, rankNewAndPopular, aggregateTags, feedCounts, commitsHeatGrid } from '../lib/home-feed.mjs';
 import { commitsByDate, commitCount } from '../lib/git-history';
@@ -264,7 +265,7 @@ const SHOPTALK = {
         <div class="side-h">Members worth following</div>
         <div class="mtf">
           {follow.map((m) => (
-            <a class="mtf-row" href={authorHref(m.data.username)}>
+            <a class="mtf-row" href={profileHref(m.data.username)}>
               <Avatar item={{ name: m.data.displayName, avatar: m.data.avatar }} class="lav" size={40} />
               <div class="mtf-info"><div class="mtf-name">{m.data.displayName}</div><div class="mtf-role">{roleLine(m)}</div></div>
             </a>

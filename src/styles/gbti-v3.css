@@ -95,6 +95,12 @@ body {
 h1,h2,h3,h4,h5 { margin: 0; font-weight: 700; }
 p { margin: 0; }
 a { color: inherit; text-decoration: none; }
+/* sow-362: an anchor with NO href is not a link. A member who has commented or shared but has not written a
+   profile yet has no page at /members/<username>/, so every card that names them renders their name as an
+   anchor with the href left off (src/lib/profile-pages.ts). This takes the pointer, the link colour and the
+   hover treatment off it, so it reads as the plain text it is rather than a link into a 404. */
+a:not([href]) { color: var(--fg) !important; cursor: default; text-decoration: none; }
+a:not([href]):hover { color: var(--fg) !important; text-decoration: none; }
 img { max-width: 100%; display: block; }
 
 /* ---------- layout ---------- */

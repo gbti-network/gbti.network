@@ -2,7 +2,8 @@
 import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
-import { authorDisplay, authorHref, formatDate } from '../../lib/authors';
+import { authorDisplay, formatDate } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
 import { isStub } from '../../lib/content';
 import StackedAvatars from '../StackedAvatars.astro';
@@ -57,7 +58,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
     </h2>
     <div class="byline mt-auto pt-3">
       <StackedAvatars items={stack} size="sm" />
-      <a href={authorHref(d.author)} class="body-sm link" style="font-weight:600">{authorDisplay(d.author)}</a>
+      <a href={profileHref(d.author)} class="body-sm link" style="font-weight:600">{authorDisplay(d.author)}</a>
     </div>
   </div>
 </article>

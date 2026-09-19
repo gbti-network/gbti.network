@@ -6,7 +6,8 @@
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
 import CollectionButton from '../CollectionButton.astro';
-import { authorDisplay, authorHref } from '../../lib/authors';
+import { authorDisplay } from '../../lib/authors';
+import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { authorItem } from '../../lib/avatars';
 import type { AvatarIndex } from '../../lib/avatars';
 import type { FeedItem } from '../../lib/feed-items';
@@ -41,7 +42,7 @@ const catsOf = (x: FeedItem) => catsAttr(x.categories);
     <div class="feed-main">
       <div class="feed-meta">
         <Avatar item={authorItem(it.author, avatarIndex)} class="av" size={26} />
-        <span class="tmeta"><a class="who" href={authorHref(it.author)}>{authorDisplay(it.author)}</a><span class="dotsep"></span>{relativeTime(it.date, NOW)}</span>
+        <span class="tmeta"><a class="who" href={profileHref(it.author)}>{authorDisplay(it.author)}</a><span class="dotsep"></span>{relativeTime(it.date, NOW)}</span>
         {it.kind === 'share'
           ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
           : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}

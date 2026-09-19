@@ -12,7 +12,9 @@ interface Props {
 }
 const { name = 'this member', username, variant = 'primary' } = Astro.props;
 ---
-<gbti-subscribe class="subscribe-wrap" data-gbti-region="subscribe" data-gbti-username={username} style="display:inline-flex">
+{/* sow-362: the variant rides along so the UPGRADED control matches the button the page baked. Without it
+    a signed-in member met a solid green button where a visitor met an outlined one, on the same card. */}
+<gbti-subscribe class="subscribe-wrap" data-gbti-region="subscribe" data-gbti-username={username} data-gbti-variant={variant} style="display:inline-flex">
   <button type="button" class={`btn btn-${variant} subscribe-btn`} data-subscribe>
     <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right:6px"><use href="#ico-mega"/></svg>
     Subscribe to activity
