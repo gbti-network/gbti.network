@@ -293,6 +293,11 @@ covers:
     file: 20260917235651-running-the-claude-commerce-agent-on-woocommerce-c9f44820.webp
     sha256: c9f4482037aa9fea5a3c7497ba0e1092e96245995875f0f294f56813e6d4037a
     copiedAt: '2026-09-17'
+  gbtilabs/20260918165402-estrada-same-thing-visualizer:
+    source: https://i.ytimg.com/vi/sXvmcWWBsFM/maxresdefault.jpg
+    file: 20260918165402-estrada-same-thing-visualizer-0c76c677.webp
+    sha256: 0c76c677fbe0865c27ea18a622c6e63b3ce27d2593af1de0ba6639ad2d27f28e
+    copiedAt: '2026-09-19'
   gbtilabs/20260918174020-one-day-jacob-collier-piano-cover:
     source: https://i.ytimg.com/vi/QkgeFVQS0ww/hqdefault.jpg
     file: 20260918174020-one-day-jacob-collier-piano-cover-746d1de3.webp
