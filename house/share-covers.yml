@@ -323,6 +323,11 @@ covers:
     file: 20260920045252-making-days-longer-4dbf66b5.webp
     sha256: 4dbf66b50508cffeffb44d693626edee4fa4122c1e495d7f4e79500e07479138
     copiedAt: '2026-09-20'
+  gbtilabs/20260920233801-brood-war-bench:
+    source: https://bw.swerdlow.dev/social/report-v2.png
+    file: 20260920233801-brood-war-bench-877b683f.webp
+    sha256: 877b683fe28024bfadb373d974cc1146cbbca16970e25e352e1bef60a18bb2f1
+    copiedAt: '2026-09-20'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
