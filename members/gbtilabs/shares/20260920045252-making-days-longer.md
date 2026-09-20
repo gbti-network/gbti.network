@@ -24,6 +24,4 @@ It is worth hearing **Siffre’s original alongside RJD2’s version**. The cont
 
 [^1]: RJD2, “Making Days Longer.” [https://www.youtube.com/watch?v=ekarH5N1srU](https://www.youtube.com/watch?v=ekarH5N1srU)
 
-[^2]: Labi Siffre, “Bless the Telephone,” 1971. [https://www.youtube.com/watch?v=mW5EjjYCnP4](https://www.youtube.com/watch?v=mW5EjjYCnP4) ([youtube.com][1])
-
-[1]: https://www.youtube.com/watch?v=mW5EjjYCnP4"Labi Siffre - Bless The Telephone (Official Music Video) - YouTube"
+[^2]: Labi Siffre, “Bless the Telephone,” 1971. [https://www.youtube.com/watch?v=XMMP-T3EF8s](https://www.youtube.com/watch?v=XMMP-T3EF8s)
