@@ -84,6 +84,22 @@ test('sow-266: a disabled sponsor leaves NO trace, which the shipped guard check
   assert.doesNotMatch(render(withSponsor('<script>x()</script>')).html, /sponsor/i);
 });
 
+test('sow-266 Phase 5: THE KILL SWITCH. A configured sponsor, switched off, leaves no trace', () => {
+  // The acceptance criterion for the whole item, and the case the test above it does NOT cover: that one proves
+  // an EMPTY sponsor renders nothing, which is a different thing from a real sponsor being turned off. This is
+  // what the owner actually reaches for, and the failure it guards against is markup that survives the switch.
+  const MARKUP = '<p>Acme builds <b>things</b>. <a href="https://acme.test/">Visit</a></p>';
+  const on = render({ digestConfig: resolveDigestConfig({ mirror: { sponsor: { enabled: true, html: MARKUP } } }) });
+  assert.match(on.html, /Sponsored/, 'the control: this markup DOES render when the switch is on');
+
+  const off = render({ digestConfig: resolveDigestConfig({ mirror: { sponsor: { enabled: false, html: MARKUP } } }) });
+  assert.doesNotMatch(off.html, /sponsor/i, 'the word itself, in any case, is what the shipped compliance guard searches for');
+  assert.doesNotMatch(off.text, /sponsor/i);
+  assert.doesNotMatch(off.html, /Acme/, 'and the markup goes with it, not just the label');
+  assert.doesNotMatch(off.html, /acme\.test/);
+  assert.doesNotMatch(off.text, /Acme/);
+});
+
 test('sow-266: an enabled sponsor renders, LABELLED, after the editorial', () => {
   const r = render(withSponsor('<p>Acme builds <b>things</b>. <a href="https://acme.test/">Visit</a></p>'));
   assert.match(r.html, /Sponsored/);
