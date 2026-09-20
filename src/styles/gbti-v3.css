@@ -1295,7 +1295,11 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .feed-page[data-view="card"] .kind-tag { white-space: normal; overflow-wrap: anywhere; }
 .feed-page[data-view="card"] .feed-title { font-size: 15px; line-height: 1.28;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.feed-page[data-view="card"] .feed-ex { display: none; }
+/* sow-376: a card carries its summary under the title, clamped to two lines so every tile in the row
+   stays one height. The card view hid every excerpt until now, which read on the homepage as though a
+   share had failed to capture a description when it had one all along. */
+.feed-page[data-view="card"] .feed-ex { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 13px; line-height: 1.5; margin-top: 8px; }
 .feed-page[data-view="card"] .feed-foot { margin-top: auto; padding-top: 10px; }
 @media (max-width: 1080px) { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 900px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -1334,7 +1338,7 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 
 /* the client-rendered news list reuses the feed vocabulary; nothing extra beyond spacing */
 .feed-news { margin-top: 8px; }
-/* owner QA: news cards keep their summary under the title (other cards stay title-only) */
+/* owner QA: a news tile has no cover image to fill, so its summary runs to three lines where a card's runs to two */
 .feed-page[data-view="card"] .news-row .feed-ex { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   font-size: 13px; line-height: 1.5; margin-top: 8px; }
 
