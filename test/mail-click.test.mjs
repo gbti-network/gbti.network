@@ -338,7 +338,8 @@ test('WIRING: the Worker composition root is what routes a real digest link thro
   const kv = fakeKv({ [`mail:issue:${issue.issueId}`]: JSON.stringify(issue) });
   const env = { SIGNUP_KV: kv, SITE_URL: `${SITE}/`, PUBLIC_BASE_URL: `${BASE}/`, MAIL_FROM: 'digest@gbti.network' };
 
-  const { renderIssue: wired } = mailDrainDeps(env);
+  // sow-266: the composition root became async when it started reading the digest settings from KV once per drain.
+  const { renderIssue: wired } = await mailDrainDeps(env);
   const { html } = wired(issue, { unsubscribeUrl: `${BASE}/mail/unsubscribe?h=a&t=b` });
 
   const counted = hrefs(html).filter((h) => h.startsWith(`${BASE}/c/`));
@@ -352,8 +353,8 @@ test('WIRING: the Worker composition root is what routes a real digest link thro
   assert.equal(JSON.parse(kv.store.get(clickKey(issue.issueId))).unresolved, 0);
 });
 
-test('WIRING: a caller-supplied ctx still wins, so a future per-recipient override is not silently ignored', () => {
-  const deps = mailDrainDeps({ SITE_URL: SITE, PUBLIC_BASE_URL: BASE });
+test('WIRING: a caller-supplied ctx still wins, so a future per-recipient override is not silently ignored', async () => {
+  const deps = await mailDrainDeps({ SITE_URL: SITE, PUBLIC_BASE_URL: BASE });
   const { html } = deps.renderIssue(frozenIssue(), { clickBase: '' });
   assert.equal(hrefs(html).filter((h) => h.includes('/c/')).length, 0);
 });

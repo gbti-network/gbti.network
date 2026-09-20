@@ -129,6 +129,7 @@ import { handleSubscribe, handleConfirm } from './mail-subscribe.mjs'; // SOW-16
 import { compileWeeklyIssue, compileWelcomeIssue } from './mail-compile.mjs'; // SOW-166: weekly compile (freeze one issue + enqueue), sends nothing
 import { drainMail } from './mail-drain.mjs'; // SOW-166: smoothed send drain on the shared 5-minute tick, behind the fail-closed gate
 import { renderMailIssue } from '../../membership/mail-render-dispatch.mjs'; // SOW-166 digest + SOW-186 phase 4 follow template, routed by issue.kind (exported so this exact dispatcher is the line under test)
+import { resolveDigestConfig, DIGEST_CONFIG_KV_KEY } from '../../membership/digest-config.mjs'; // sow-266: the owner's pitch copy + sponsor slot
 import { resolveSubscriberEmail } from '../../membership/mail-address.mjs'; // SOW-166: anon decrypt / member-from-Stripe address resolution
 import { createResendClient } from '../../clients/resend.mjs'; // SOW-166: transactional send (injected into the drain)
 import { sendCouponRedemptionAlert } from './coupon-alert.mjs'; // sow-279: fail-soft owner notice on a NEW coupon redemption
@@ -912,7 +913,7 @@ async function handleResendWebhook(request, env) {
 // what decides whether a real digest link goes through the counter at all, and a test that reconstructs that ctx
 // itself passes just as happily when this line stops passing it. That was measured, not assumed: with the wiring
 // tested only by a hand-built ctx, deleting `clickBase` from this exact line left the whole suite green.
-export function mailDrainDeps(env) {
+export async function mailDrainDeps(env) {
   const fetchMemberEmail = async ({ githubId, customerId }) => {
     if (!env.STRIPE_SECRET_KEY) return null;
     const stripe = createStripeClient({ apiKey: env.STRIPE_SECRET_KEY });
@@ -941,7 +942,26 @@ export function mailDrainDeps(env) {
   // always has a working counter, and an unset one means nothing was sent rather than links quietly degrading.
   const siteUrl = resolveSiteUrl(env);
   const clickBase = resolveClickBase(env);
-  const renderIssue = (issue, ctx = {}) => renderMailIssue(issue, { siteUrl, clickBase, ...ctx });
+  // sow-266 Phase 3: the owner's pitch copy and sponsor slot, read ONCE per drain rather than per recipient,
+  // and closed over by the renderer. This is the composition root, so it is the only place that knows both the
+  // key and the template; the drain stays pure over an injected renderer and the renderer stays pure over a ctx.
+  //
+  // FAIL-SAFE, NOT FAIL-CLOSED, and deliberately: an unreadable mirror resolves to the copy compiled into the
+  // renderer, because an issue that goes out with last month's wording beats one that goes out with no pitch.
+  // The sponsor is the opposite and resolves OFF, because rendering an advertisement by accident is the one
+  // mistake here that cannot be taken back.
+  //
+  // A FROZEN ISSUE RENDERS WITH TODAY'S COPY. The settings are a standing decision, not part of the issue, so
+  // an issue compiled last week and sent now carries the wording in force now. That is the intent: it is how
+  // switching the sponsor off stops the next send rather than only the next compile.
+  let digestConfig;
+  try {
+    const raw = await env.SIGNUP_KV?.get(DIGEST_CONFIG_KV_KEY, 'json');
+    digestConfig = resolveDigestConfig({ mirror: raw ?? null });
+  } catch {
+    digestConfig = resolveDigestConfig({ mirror: null });
+  }
+  const renderIssue = (issue, ctx = {}) => renderMailIssue(issue, { siteUrl, clickBase, digestConfig, ...ctx });
   return { resolveAddress, renderIssue, sendEmail };
 }
 
@@ -966,7 +986,7 @@ async function drainFiveMinute(env) {
 
   const [syndication, mail] = await Promise.allSettled([
     drainSyndication(env),
-    drainMail(env, mailDrainDeps(env)),
+    drainMail(env, await mailDrainDeps(env)),
   ]);
   const settle = (r) => (r.status === 'fulfilled' ? r.value : { error: String(r.reason?.message ?? r.reason) });
 
@@ -1281,7 +1301,7 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'POST') {
           const r = await membershipAdminMail(request, env, {
-            drain: (e, opts) => drainMail(e, { ...mailDrainDeps(e), ...opts }),
+            drain: async (e, opts) => drainMail(e, { ...(await mailDrainDeps(e)), ...opts }),
           });
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }

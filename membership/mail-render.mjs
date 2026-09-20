@@ -46,6 +46,8 @@
 
 import { SECTION_FEED, clickSlot, clickPath, taggedTarget } from './mail-click.mjs';
 import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name, bound not spelled
+import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner's pitch copy and sponsor slot
+import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -386,17 +388,45 @@ function emptyLineHtml(empties, p, firstIssue, links) {
 // it: a member item lands members-only and a superadmin decides what becomes public, so "publishing" on its
 // own would read as a promise of a public page. This copy names no revenue share: /revenue-model/ is the page that
 // explains it, and the CAN-SPAM position allows this block exactly one link.
-function membershipCtaHtml(p, links) {
-  const href = escapeHtml(trackUrl('/membership/', links, 'membership-cta'));
+//
+// sow-266 Phase 3: the copy is now the OWNER'S, read from the digest settings, and this function no longer owns
+// a literal. With no settings mirror it resolves to exactly the string that used to be written here, so an
+// unconfigured install renders byte for byte what it rendered before.
+//
+// `{plan}` IS SUBSTITUTED HERE, and nowhere else. The stored copy carries the token so that collapsing or
+// renaming a plan cannot leave a stale plan name in somebody's inbox; the binding is resolved at render, from
+// the same tier table the rest of the mail uses. **Wiring the settings in without this step would have sent
+// the literal text "A {plan} membership adds..." to every subscriber**, because nothing else in the repository
+// substitutes it: the only other reader of the token measures its length.
+const planBind = (body) => String(body ?? '').replace(/\{plan\}/g, tierLabel(TIER.member));
+
+function membershipCtaHtml(p, links, cta) {
+  const href = escapeHtml(trackUrl(cta.linkUrl || '/membership/', links, 'membership-cta'));
   return `<!--membership-cta-->`
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:18px">`
-    + `A ${tierLabel(TIER.member)} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review. `
-    + `<a href="${href}" style="color:${p.footerLink};text-decoration:underline">What membership includes</a>`
+    + `${escapeHtml(planBind(cta.body))} `
+    + `<a href="${href}" style="color:${p.footerLink};text-decoration:underline">${escapeHtml(cta.linkLabel)}</a>`
     + `</div>`
     + `</td></tr></table>`
     + `<!--/membership-cta-->`;
+}
+
+// sow-266 Phase 3: the paid placement. It sits AFTER the membership pitch and before the footer, which keeps
+// the CAN-SPAM shape the pitch was designed around: all editorial first, solicitation last. It is LABELLED,
+// because an unlabelled advertisement inside editorial is the thing readers object to, and the label is not
+// something the owner can type over. The markup is sanitized on the way in (membership/mail-sponsor-sanitize.mjs).
+//
+// There is deliberately NO sentinel comment around this block, unlike the pitch above it. The shipped
+// compliance guard asserts that a disabled sponsor leaves no occurrence of the word anywhere in the html, and
+// a marker naming it would satisfy that search and defeat the check that the slot is really off.
+function sponsorHtml(p, safe) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
+    + `<tr><td width="536" style="width:536px;padding:26px 28px 0">`
+    + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:14px">Sponsored</div>`
+    + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:18px;padding-top:6px">${safe}</div>`
+    + `</td></tr></table>`;
 }
 
 // The masthead: the week on the right, the logo to the right of it, and nothing on the left.
@@ -541,10 +571,24 @@ export function renderIssue(issue, ctx = {}) {
   // its end placement are approved and it is on by default; a caller passes membershipCta:false to suppress a
   // given issue. An all-editorial-empty issue never carries it either (a solicitation with no editorial reads
   // as primarily promotional). See the CTA note.
-  const showCta = filled.length > 0 && ctx.membershipCta !== false;
+  // sow-266 Phase 3: the owner's settings, or the copy compiled in here when there are none. ctx.digestConfig is
+  // the already-resolved shape when the caller has one (the Worker reads KV once per compile, not per render);
+  // resolveDigestConfig with nothing is the fail-safe floor, which is today's copy and the sponsor switched off.
+  const digest = ctx.digestConfig && typeof ctx.digestConfig === 'object'
+    ? ctx.digestConfig
+    : resolveDigestConfig({ mirror: ctx.digestMirror ?? null });
+  // The pitch can now be switched OFF by the owner as well as suppressed per issue by the caller. Both are
+  // needed: one is a standing decision, the other is about one issue.
+  const showCta = filled.length > 0 && ctx.membershipCta !== false && digest.cta.enabled !== false;
+  // Sanitized ONCE, and the same string feeds the block and the emptiness check below, so the two cannot
+  // disagree about whether there is anything to show.
+  const sponsorSafe = digest.sponsor.enabled ? sanitizeSponsorHtml(digest.sponsor.html) : '';
   const body = filled.map((s) => sectionHtml(s, p, links)).join('')
     + emptyLineHtml(empties, p, firstIssue, links)
-    + (showCta ? membershipCtaHtml(p, links) : '');
+    + (showCta ? membershipCtaHtml(p, links, digest.cta) : '')
+    // A sponsor block needs editorial above it for the same CAN-SPAM reason the pitch does, and needs
+    // something left after sanitizing: markup that reduces to nothing renders no labelled empty box.
+    + (filled.length > 0 && sponsorSafe ? sponsorHtml(p, sponsorSafe) : '');
 
   // The open pixel. Same origin as the click counter (clickBase = PUBLIC_BASE_URL), issue-scoped so one issue is
   // one open row, matching the click campaign. Gated on both being present so a bare fixture (and the web archive,
@@ -587,13 +631,19 @@ export function renderIssue(issue, ctx = {}) {
   const filledText = filled.map((s) => sectionText(s, links)).join('\n\n');
   const emptyText = empties.length ? `\n\n${emptyPhrase(empties, firstIssue)}` : '';
   // The text-side CTA mirrors the html: one modest line, after all editorial, only when the html renders it.
+  // sow-266 Phase 3: the SAME resolved copy as the html half. These were two independent literals, and the
+  // compliance guard checks each against a rule rather than against the other, so replacing one and leaving
+  // the other would have passed every test while sending two different pitches in one mail.
   const ctaText = showCta
-    ? `\n\nA ${tierLabel(TIER.member)} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review. What membership includes: ${trackUrl('/membership/', links, 'membership-cta')}`
+    ? `\n\n${planBind(digest.cta.body)} ${digest.cta.linkLabel}: ${trackUrl(digest.cta.linkUrl || '/membership/', links, 'membership-cta')}`
     : '';
+  // The text part is what a text-only client shows, so a sponsor paying for a placement gets their line there
+  // too, built from the sanitized markup rather than the raw input.
+  const sponsorLine = (filled.length > 0 && sponsorSafe) ? `\n\nSponsored: ${sponsorText(digest.sponsor.html)}` : '';
 
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n`
     + `${greetingText}\n${headerLineText}\n${launchText}\n`
-    + `${filledText}${emptyText}${ctaText}\n\n`
+    + `${filledText}${emptyText}${ctaText}${sponsorLine}\n\n`
     + `----\n${trackUrl('/', links, 'footer-home')}\n${prefsText}${unsubText}${postalText}\n`;
 
   return { subject, html, text };
