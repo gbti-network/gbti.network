@@ -906,6 +906,16 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // "false" cannot switch a toggle ON (the Worker's siteToggleInput rejects a non-boolean regardless).
     siteSettings() { return workerGet('/membership/admin/site-settings'); }, // { ok, settings, toggles }
     async setSiteToggle(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'site-setting-set', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-266: the weekly digest's membership pitch + sponsor slot (superadmin). digestConfig returns what is
+    // STORED, so an empty field shows empty rather than pre-filled with the copy the renderer falls back to.
+    //
+    // NO `enabled: args?.enabled === true` HERE, deliberately, unlike the two methods above. Both writes are
+    // PATCHES: an absent key means leave it alone, and coercing an absent switch to false would turn the pitch
+    // off every time somebody saved only the wording. The Worker rejects a non-boolean switch regardless, so
+    // passing the value through unchanged is both safe and the only correct thing.
+    digestConfig() { return workerGet('/membership/admin/digest-config'); }, // { ok, cta, sponsor, defaults, limits }
+    async setDigestCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-cta-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setDigestSponsor(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-sponsor-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     // sow-281: the CTA registry (superadmin). ctaPool reads house/ctas.yml in full; the five writes land as
     // auto-merged house PRs. `enabled` is coerced to a real boolean on the wire, as setSiteToggle does.
     ctaPool() { return workerGet('/membership/admin/cta-pool'); }, // { ok, ctas, types }

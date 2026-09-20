@@ -17547,8 +17547,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean2 = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean2), (c) => c.charCodeAt(0));
+  const clean3 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean3), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -18622,8 +18622,8 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, titl
   const id_ = input.id ?? shareId(createdAt, input.title);
   let built;
   try {
-    const { encryptedBody: _stale, ...clean2 } = input;
-    built = buildShareFile({ username: id.username, input: { ...clean2, id: id_, createdAt }, body });
+    const { encryptedBody: _stale, ...clean3 } = input;
+    built = buildShareFile({ username: id.username, input: { ...clean3, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -20523,6 +20523,9 @@ var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
   "news-banword-add",
   "news-banword-remove",
   // sow-372: superadmin, forwarded unchanged
+  "digest-cta-set",
+  "digest-sponsor-set",
+  // sow-266: superadmin, forwarded unchanged (both are PATCHES, so the payload must not be defaulted on the way through)
   "site-setting-set",
   "cta-add",
   "cta-update",
@@ -20608,6 +20611,52 @@ function readAllToggles(doc) {
   return Object.fromEntries(TOGGLE_KEYS.map((k) => [k, readToggle(doc, k)]));
 }
 
+// membership/digest-config-edits.mjs
+var DIGEST_LIMITS = Object.freeze({
+  body: 1e3,
+  linkLabel: 120,
+  linkUrl: 500,
+  sponsorHtml: 4e3
+});
+var CTA_FIELDS = Object.freeze([
+  ["body", "body", DIGEST_LIMITS.body],
+  ["linkLabel", "link_label", DIGEST_LIMITS.linkLabel],
+  ["linkUrl", "link_url", DIGEST_LIMITS.linkUrl]
+]);
+var isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+function clean2(doc) {
+  const d = structuredClone(isObj(doc) ? doc : {});
+  if (!isObj(d.cta)) d.cta = {};
+  if (!isObj(d.sponsor)) d.sponsor = {};
+  return d;
+}
+function readDigestConfig(doc) {
+  const d = clean2(doc);
+  const cta = { enabled: typeof d.cta.enabled === "boolean" ? d.cta.enabled : null };
+  for (const [wire, file2] of CTA_FIELDS) cta[wire] = typeof d.cta[file2] === "string" ? d.cta[file2] : "";
+  return {
+    cta,
+    sponsor: {
+      enabled: typeof d.sponsor.enabled === "boolean" ? d.sponsor.enabled : null,
+      html: typeof d.sponsor.html === "string" ? d.sponsor.html : ""
+    }
+  };
+}
+
+// membership/digest-config.mjs
+var DEFAULT_CTA = Object.freeze({
+  enabled: true,
+  body: "A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review.",
+  linkLabel: "What membership includes",
+  linkUrl: "/membership/"
+});
+var DEFAULT_SPONSOR = Object.freeze({ enabled: false, html: "" });
+var CTA_RULES = Object.freeze({
+  maxVisibleChars: 220,
+  maxLinks: 1,
+  forbiddenClaims: Object.freeze(["collections", "favorites", "favourites"])
+});
+
 // membership/cta-icon.mjs
 var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
 var ICON_LIMITS = Object.freeze({ name: 64, set: 40, nodes: 200, depth: 4, value: 2e4, total: 6e4 });
@@ -20670,7 +20719,7 @@ function ctasOf(parsed) {
 }
 var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
 var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
-var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
+var CTA_FIELDS2 = Object.freeze([...EDITABLE, ...STRUCTURED]);
 
 // membership/news-banwords.mjs
 var BANWORD_MIN = 2;
@@ -21039,6 +21088,7 @@ var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
 var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
 var SYNDICATION_CONFIG_PATH = "house/syndication-config.yml";
 var SITE_SETTINGS_PATH = "house/site-settings.yml";
+var DIGEST_CONFIG_PATH = "house/digest-config.yml";
 var CTAS_PATH = "house/ctas.yml";
 var readYaml = async (ctx, rel) => {
   try {
@@ -21086,6 +21136,10 @@ async function getSiteSettings(ctx) {
     settings: readAllToggles(parsed),
     toggles: Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description }))
   };
+}
+async function getDigestConfig(ctx) {
+  const parsed = await readYaml(ctx, DIGEST_CONFIG_PATH);
+  return { ok: true, ...readDigestConfig(parsed), defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR } }, limits: { ...DIGEST_LIMITS } };
 }
 async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
@@ -21199,6 +21253,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === "/api/coupon-pool") return ok(await getCouponPool2(ctx));
     if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
+    if (pathname === "/api/digest-config") return ok(await getDigestConfig(ctx));
     if (pathname === "/api/cta-pool") return ok(await getCtaPool(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
     if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));

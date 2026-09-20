@@ -33,6 +33,8 @@ import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-e
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { setSourceWeight, weightInput, readWeights } from '../../membership/news-source-weight-edits.mjs'; // sow-338: how much we take from a source
 import { addBanword, removeBanword, banwordInput, readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
+import { setDigestCta, setDigestSponsor, readDigestConfig, DIGEST_LIMITS } from '../../membership/digest-config-edits.mjs'; // sow-266: the digest pitch copy + the sponsor slot
+import { DEFAULT_CTA, DEFAULT_SPONSOR } from '../../membership/digest-config.mjs'; // sow-266: what an empty field falls back to, shown beside the box rather than in it
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
@@ -187,6 +189,29 @@ function newsEngagementInput(p) {
 function syndicationSettingsInput(p) {
   return { ok: true, args: { enabled: p?.enabled, requireApproval: p?.requireApproval, holdMinutes: p?.holdMinutes, channels: p?.channels, autoMatrix: p?.autoMatrix, channelHoldMinutes: p?.channelHoldMinutes } };
 }
+
+// sow-266: the digest pitch and the sponsor slot. Both are PATCHES, so an omitted key means "leave it alone" and
+// only an explicitly sent one is written. That is why every field is passed through undefined-preserving rather
+// than defaulted: defaulting an omitted body to '' here would blank the owner's copy every time the manager saved
+// the switch on its own. The pure cores validate the types, the lengths and the empty-patch case, and they throw
+// DigestConfigEditError, which the config branch turns into a clean 400.
+//
+// The one check that belongs HERE rather than in the core is the wire-size bound: a payload far over the stored
+// limit should be refused before it is parsed and diffed, not after.
+const digestOversize = (p) => [
+  ['body', DIGEST_LIMITS.body], ['linkLabel', DIGEST_LIMITS.linkLabel],
+  ['linkUrl', DIGEST_LIMITS.linkUrl], ['html', DIGEST_LIMITS.sponsorHtml],
+].find(([k, max]) => typeof p?.[k] === 'string' && p[k].length > max * 2);
+function digestCtaInput(p) {
+  const over = digestOversize(p);
+  if (over) return { ok: false, status: 400, body: { error: 'bad_request', message: `${over[0]} is far over the ${over[1]} character limit` } };
+  return { ok: true, args: { enabled: p?.enabled, body: p?.body, linkLabel: p?.linkLabel, linkUrl: p?.linkUrl } };
+}
+function digestSponsorInput(p) {
+  const over = digestOversize(p);
+  if (over) return { ok: false, status: 400, body: { error: 'bad_request', message: `${over[0]} is far over the ${over[1]} character limit` } };
+  return { ok: true, args: { enabled: p?.enabled, html: p?.html } };
+}
 const TEMPLATE_BATCH_MAX = 200; // types x channels x {shared,stub} is well under this; the cap only bounds abuse
 function templatesBatchInput(p) {
   const edits = Array.isArray(p?.edits) ? p.edits : null;
@@ -215,6 +240,7 @@ const CONFIG_ACTIONS = new Set([
   'news-source-add', 'news-source-remove', 'news-source-toggle',
   'news-source-weight', // sow-338: superadmin, and its own file (see the row below)
   'news-banword-add', 'news-banword-remove', // sow-372: superadmin, and its own file (see the rows below)
+  'digest-cta-set', 'digest-sponsor-set', // sow-266: superadmin, house/digest-config.yml (see the rows below)
   'coupon-add', 'coupon-update',
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign', // sow-281
@@ -242,6 +268,15 @@ const CONFIG_OP = {
   // test/path-rank.test.mjs holds this hardcode and CODEOWNERS in lockstep with it.
   'news-banword-add': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: addBanword, input: banwordInput, slug: (a) => idSlug(a.word) },
   'news-banword-remove': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: removeBanword, input: banwordInput, slug: (a) => idSlug(a.word) },
+  // sow-266: what the weekly digest says about membership, and who sponsors it. SUPERADMIN, pinned in CODEOWNERS
+  // and in SUPERADMIN_HOUSE_FILES, so rankForPath agrees with these two rows. TWO rows over one file, on purpose:
+  // the pitch and the sponsor are edited at different moments by different reasoning, and one row would put a copy
+  // tweak and a paid placement on the same branch, where whichever saved second would reset the first.
+  //
+  // FIXED SLUGS, unlike every row above, which slug the thing being edited. There is exactly one pitch and one
+  // sponsor slot, so there is nothing to name; the branch is stable and a second save simply resets it.
+  'digest-cta-set': { path: 'house/digest-config.yml', rank: ROLE_RANK.superadmin, fn: setDigestCta, input: digestCtaInput, slug: () => 'membership-pitch' },
+  'digest-sponsor-set': { path: 'house/digest-config.yml', rank: ROLE_RANK.superadmin, fn: setDigestSponsor, input: digestSponsorInput, slug: () => 'sponsor-slot' },
   // Coupons (KV-native as of sow-291 Phase 2: house/coupons.yml leaves the public repository because a coupon
   // code is a bearer credential). `kvKey` diverts the WRITE to coupons:config in the dispatch below; `path` is
   // kept as the retired git location for the record, and `slug` is unused for a KV op (no branch/PR). Add creates
@@ -868,6 +903,25 @@ export async function membershipAdminNewsEngagement(request, env, deps = {}) {
   const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
   if (r.fail) return r.fail;
   return { status: 200, body: { settings: { ...newsEngagement(syndicationConfigFromParsed(r.parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] } };
+}
+
+// sow-266 Phase 2: the digest manager's pool READ. SUPERADMIN-gated like the five above, and for the SAME reason
+// they are, which is not the reason it first looks like. This does NOT keep the settings secret: they live in
+// house/digest-config.yml in a PUBLIC repository, and the pull request that changes them is public too, so a
+// sponsor arrangement is readable on GitHub the moment it is saved. The extension reads the same file tokenless
+// for exactly that reason. What the gate protects is GBTI's own installation token, which this route uses to
+// read: an ungated route here is a free authenticated proxy onto the repository, whatever the file contains.
+//
+// IT RETURNS WHAT IS STORED, NOT WHAT WOULD RENDER. resolveDigestConfig fills every empty field with the copy
+// compiled into the renderer, which is exactly right for sending a mail and exactly wrong for editing one: an
+// editor pre-filled with a fallback invites a superadmin to save it, which pins today's default into the file
+// and freezes it there the next time the default changes. `defaults` rides along separately so the manager can
+// SHOW what an empty field falls back to without putting it in the box.
+export async function membershipAdminDigestConfig(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/digest-config.yml');
+  if (r.fail) return r.fail;
+  const stored = readDigestConfig(r.parsed);
+  return { status: 200, body: { ok: true, ...stored, defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR } }, limits: { ...DIGEST_LIMITS } } };
 }
 
 export async function membershipAdminSyndicationSettings(request, env, deps = {}) {

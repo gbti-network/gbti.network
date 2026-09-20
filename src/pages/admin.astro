@@ -35,6 +35,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
           <button type="button" role="tab" data-tab="outbound-links" data-min="superadmin" aria-selected="false" hidden>Outbound links</button>{/* sow-289 */}
           <button type="button" role="tab" data-tab="ctas" data-min="superadmin" aria-selected="false" hidden>CTAs</button>{/* sow-281 */}
+          <button type="button" role="tab" data-tab="digest" data-min="superadmin" aria-selected="false" hidden>Weekly email</button>{/* sow-266 */}
         </nav>
 
         <div class="adm-card" data-panel="admin">
@@ -78,6 +79,13 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         <div class="adm-card" data-panel="site-settings" hidden>
           <h2 class="h2">Site settings</h2>
           <gbti-site-settings-manager></gbti-site-settings-manager>
+        </div>
+        {/* sow-266: SUPERADMIN. What the weekly digest says about membership, and who sponsors it. The module
+            below is imported only for superadmin, and every write is a superadmin house PR. The settings
+            themselves are not secret: they are committed to a public repository. */}
+        <div class="adm-card" data-panel="digest" hidden>
+          <h2 class="h2">Weekly email</h2>
+          <gbti-digest-manager></gbti-digest-manager>
         </div>
         {/* sow-161 B: SUPERADMIN. The shared channel-map manager (channels x auto-share matrix, syndication
             templates + settings, engagement thresholds, moderation flag lists). The tab carries
@@ -162,6 +170,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         await import('../../client-ui/src/elements/gbti-outbound-link-manager.mjs'); // sow-289: the read-only outbound link board
         await import('../../client-ui/src/elements/gbti-cta-manager.mjs'); // sow-281: the CTA registry manager
         await import('../../client-ui/src/elements/gbti-editorial-manager.mjs'); // sow-323: the editorial review queue
+        await import('../../client-ui/src/elements/gbti-digest-manager.mjs'); // sow-266: the digest pitch + sponsor slot
       }
       setupTabs(rank);
     }

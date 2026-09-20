@@ -28,6 +28,7 @@ export const WORKER_ADMIN_ACTIONS = Object.freeze(new Set([
   'news-source-add', 'news-source-remove', 'news-source-toggle',
   'news-source-weight', // sow-338/sow-374: superadmin, forwarded unchanged
   'news-banword-add', 'news-banword-remove', // sow-372: superadmin, forwarded unchanged
+  'digest-cta-set', 'digest-sponsor-set', // sow-266: superadmin, forwarded unchanged (both are PATCHES, so the payload must not be defaulted on the way through)
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign',
   'flag-term-add', 'flag-term-remove',

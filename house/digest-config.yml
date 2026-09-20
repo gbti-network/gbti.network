@@ -10,39 +10,54 @@
 # at once. An issue that goes out with last month's wording is a smaller failure than one that goes out with
 # no pitch at all. The sponsor is the opposite direction and for the same reason: absent means OFF, because
 # rendering an advertisement by accident is not recoverable.
-
+#
+# EVERY NOTE BELOW LIVES UP HERE ON PURPOSE, AND MOVING ONE BACK INTO THE DOCUMENT DELETES IT. A save from the
+# manager keeps the comment block above the first line of data and re-writes everything under it from the
+# parsed values, so a comment sitting beside a field survives until the first superadmin edit and then is gone
+# with no warning. That happened to this file once and it is why it reads like this.
+#
+#
+# cta: the one membership note in the mail. It sits after all the articles, before the footer, and it renders
+# only for an issue that actually has articles in it.
+#
+#   enabled     true to render it. Turning it off leaves the issue with no membership pitch at all.
+#
+#   body        THREE RULES, AND THEY WARN RATHER THAN REFUSE (owner, 2026-09-19). The manager tells you which
+#               one your copy breaks and saves it anyway:
+#                 1. at most 220 visible characters, body and link label together
+#                 2. one link, which is the link below, so no second link in the body
+#                 3. do not name something a free account already has. Collections and favourites are free,
+#                    and the design mockup claims them as membership benefits in two places, so it is an easy
+#                    mistake to re-inherit.
+#
+#               {plan} IS A BINDING, NOT A WORD. It becomes the current plan name when the mail renders, so
+#               renaming the plan never leaves a stale name in somebody's inbox. Delete the token and you are
+#               spelling it by hand.
+#
+#   link_label  the words on the one link.
+#   link_url    where it goes. A path is resolved against the site, a full https link is used as it is.
+#
+#
+# sponsor: one standing sponsor block, not one per issue (owner, 2026-09-19).
+#
+#   enabled     OFF, and off is the default in code as well, so a missing or broken file can never turn this
+#               on. Turning it on renders the block in every issue until you change it, under a "Sponsored"
+#               label the manager cannot edit away.
+#
+#   html        the sponsor's own markup. It is passed through an allowlist before it renders: links, images,
+#               basic text tags and a short list of attributes. Anything else is dropped, including scripts,
+#               frames and event handlers. Mail clients strip scripts anyway, which is exactly why this is
+#               easy to under-build: the same markup feeds the preview, and a preview is a browser.
+#
+#               Leave it empty and the block does not render even when enabled is true, because a "Sponsored"
+#               label over nothing is worse than no block.
 cta:
-  # The one membership note in the mail. It sits after all the articles, before the footer, and it renders only
-  # for an issue that actually has articles in it.
   enabled: true
-
-  # THREE RULES, AND THEY WARN RATHER THAN REFUSE (owner, 2026-09-19). The manager tells you which one your
-  # copy breaks and saves it anyway:
-  #   1. at most 220 visible characters, body and link label together
-  #   2. one link, which is the link below, so no second link in the body
-  #   3. do not name something a free account already has. Collections and favourites are free, and the design
-  #      mockup claims them as membership benefits in two places, so it is an easy mistake to re-inherit.
-  #
-  # {plan} IS A BINDING, NOT A WORD. It becomes the current plan name when the mail renders, so renaming the
-  # plan never leaves a stale name in somebody's inbox. Delete the token and you are spelling it by hand.
   body: >-
     A {plan} membership adds comments on any item, the members Discord, and publishing your own articles,
     projects and prompts: members first, public after editorial review.
   link_label: What membership includes
   link_url: /membership/
-
 sponsor:
-  # OFF, and off is the default in code as well, so a missing or broken file can never turn this on.
-  #
-  # Turning it on renders one sponsor block in every issue until you change it, under a "Sponsored" label the
-  # manager cannot edit away. One standing sponsor, not one per issue (owner, 2026-09-19).
   enabled: false
-
-  # The sponsor's own markup. It is passed through an allowlist before it renders: links, images, basic text
-  # tags and a short list of attributes. Anything else is dropped, including scripts, frames and event
-  # handlers. Mail clients strip scripts anyway, which is exactly why this is easy to under-build: the same
-  # markup feeds the preview, and a preview is a browser.
-  #
-  # Leave it empty and the block does not render even when enabled is true, because a "Sponsored" label over
-  # nothing is worse than no block.
   html: ''

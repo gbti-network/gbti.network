@@ -17,7 +17,7 @@ import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // S
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
 import { toWorkerRequest } from '../../client/src/admin-worker-actions.mjs'; // sow-274: the one admin action table
-import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings, getSyndicationSettings, getCouponPool, getSiteSettings, getCtaPool } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
+import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings, getSyndicationSettings, getCouponPool, getSiteSettings, getCtaPool, getDigestConfig } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
@@ -110,6 +110,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     if (pathname === '/api/syndication-template-pool') return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === '/api/coupon-pool') return ok(await getCouponPool(ctx)); // SOW-119 QA: was npm-host-only, so the extension Coupons card showed "No coupons yet"
     if (pathname === '/api/site-settings') return ok(await getSiteSettings(ctx));
+    if (pathname === '/api/digest-config') return ok(await getDigestConfig(ctx)); // sow-266: the digest pitch + sponsor slot, as stored
     if (pathname === '/api/cta-pool') return ok(await getCtaPool(ctx)); // sow-281: the CTA registry (public git data; the writes stay gated below) // sow-271: site-wide presentation toggles (public git data; the WRITE stays gated below via /api/admin)
     if (pathname === '/api/news-engagement') return ok(await getNewsEngagementSettings(ctx));
     if (pathname === '/api/syndication-settings') return ok(await getSyndicationSettings(ctx)); // SOW-088

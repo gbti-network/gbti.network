@@ -1967,8 +1967,8 @@
     function generateNextLine(state, level) {
       return "\n" + common.repeat(" ", state.indent * level);
     }
-    function testImplicitResolving(state, str4) {
-      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str4)) return true;
+    function testImplicitResolving(state, str5) {
+      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str5)) return true;
       return false;
     }
     function isWhitespace(c) {
@@ -2423,8 +2423,8 @@
   var MAX_STRING = 200;
   var MAX_DEPTH = 3;
   function clip(s) {
-    const str4 = String(s);
-    return str4.length > MAX_STRING ? `${str4.slice(0, MAX_STRING)}…(${str4.length})` : str4;
+    const str5 = String(s);
+    return str5.length > MAX_STRING ? `${str5.slice(0, MAX_STRING)}…(${str5.length})` : str5;
   }
   function redactDeep(value, depth = 0) {
     if (value == null) return value;
@@ -11248,8 +11248,8 @@ ${listStyleProseCss(".doc-blocks")}
     return s ? truncate(s, max) : empty;
   }
   function truncate(s, max = 120) {
-    const str4 = String(s ?? "");
-    return str4.length > max ? `${str4.slice(0, max - 1).trimEnd()}…` : str4;
+    const str5 = String(s ?? "");
+    return str5.length > max ? `${str5.slice(0, max - 1).trimEnd()}…` : str5;
   }
   function snippet(md, max = 120) {
     const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
@@ -18357,10 +18357,358 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-site-settings-manager", GbtiSiteSettingsManager);
 
+  // membership/digest-config.mjs
+  var DEFAULT_CTA = Object.freeze({
+    enabled: true,
+    body: "A {plan} membership adds comments on any item, the members Discord, and publishing your own articles, projects and prompts: members first, public after editorial review.",
+    linkLabel: "What membership includes",
+    linkUrl: "/membership/"
+  });
+  var DEFAULT_SPONSOR = Object.freeze({ enabled: false, html: "" });
+  var CTA_RULES = Object.freeze({
+    maxVisibleChars: 220,
+    maxLinks: 1,
+    forbiddenClaims: Object.freeze(["collections", "favorites", "favourites"])
+  });
+  var str = (v) => typeof v === "string" ? v : "";
+  function ctaVisibleLength(body, planLabel = "Network Supporter") {
+    return str(body).replace(/\{plan\}/g, planLabel).trim().length;
+  }
+  function ctaWarnings(cta = {}, { planLabel = "Network Supporter" } = {}) {
+    const out = [];
+    const body = str(cta.body);
+    const label = str(cta.linkLabel);
+    const url = str(cta.linkUrl);
+    if (!body.trim()) out.push("The pitch has no text, so nothing will render.");
+    const visible = ctaVisibleLength(body, planLabel) + label.trim().length;
+    if (visible > CTA_RULES.maxVisibleChars) {
+      out.push(`The pitch is ${visible} characters and the limit is ${CTA_RULES.maxVisibleChars}. It will render longer than intended beside the articles.`);
+    }
+    const bodyLinks = (body.match(/<a\b/gi) || []).length + (body.match(/https?:\/\//gi) || []).length;
+    if (bodyLinks > 0) out.push("The pitch body carries its own link. There is one link already, the one beside it, so this makes two.");
+    if (!label.trim()) out.push("The link has no label, so there is nothing for a reader to click.");
+    if (!url.trim()) out.push("The link has no destination.");
+    else if (!/^(\/|https:\/\/)/.test(url.trim())) out.push("The link must start with / or https://.");
+    const lower = `${body} ${label}`.toLowerCase();
+    for (const claim of CTA_RULES.forbiddenClaims) {
+      if (lower.includes(claim)) {
+        out.push(`"${claim}" is something a free account already has, so naming it as a membership benefit is not true.`);
+        break;
+      }
+    }
+    if (/[—–]/.test(`${body}${label}`)) out.push("There is a dash here that our writing conventions do not use. A comma, a colon or a full stop reads better.");
+    return out;
+  }
+
+  // membership/mail-sponsor-sanitize.mjs
+  var ALLOWED = /* @__PURE__ */ new Set(["a", "b", "strong", "i", "em", "br", "p", "span", "small", "img"]);
+  var DROP_WITH_CONTENT = ["script", "style", "iframe", "object", "embed", "form", "noscript", "svg", "template"];
+  var ATTRS = {
+    a: ["href", "title"],
+    img: ["src", "alt", "width", "height"],
+    p: [],
+    span: [],
+    small: [],
+    b: [],
+    strong: [],
+    i: [],
+    em: [],
+    br: []
+  };
+  var isHttps = (v) => /^https:\/\/[^\s"'<>]+$/i.test(v);
+  var isMailto = (v) => /^mailto:[^\s"'<>]+$/i.test(v);
+  var isDigits = (v) => /^[0-9]{1,4}$/.test(v);
+  var escapeAttr = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  function attrValue(tag, name, raw) {
+    const value = String(raw ?? "").trim();
+    if (!value) return null;
+    if (tag === "a" && name === "href") return isHttps(value) || isMailto(value) ? value : null;
+    if (tag === "img" && name === "src") return isHttps(value) ? value : null;
+    if (name === "width" || name === "height") return isDigits(value) ? value : null;
+    if (name === "alt" || name === "title") return value.slice(0, 200);
+    return null;
+  }
+  function sanitizeSponsorHtml(input) {
+    let html = typeof input === "string" ? input : "";
+    if (!html.trim()) return "";
+    for (const tag of DROP_WITH_CONTENT) {
+      const whole = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}\\s*>`, "gi");
+      const toEnd = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*$`, "i");
+      const stray = new RegExp(`<\\/${tag}\\s*>`, "gi");
+      html = html.replace(whole, "").replace(toEnd, "").replace(stray, "");
+    }
+    html = html.replace(/<!--[\s\S]*?-->/g, "");
+    const rewritten = html.replace(/<\/?([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g, (_m, rawTag, rawAttrs) => {
+      const tag = String(rawTag).toLowerCase();
+      if (!ALLOWED.has(tag)) return "";
+      if (_m.startsWith("</")) return `</${tag}>`;
+      const keep = [];
+      const allowed = ATTRS[tag] || [];
+      const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+      let m;
+      while ((m = re.exec(String(rawAttrs ?? ""))) !== null) {
+        const name = m[1].toLowerCase();
+        if (!allowed.includes(name)) continue;
+        const value = attrValue(tag, name, m[3] ?? m[4] ?? m[5]);
+        if (value !== null) keep.push(`${name}="${escapeAttr(value)}"`);
+      }
+      if (tag === "a") {
+        if (!keep.some((a) => a.startsWith("href="))) return "";
+        keep.push('target="_blank"', 'rel="noopener nofollow sponsored"');
+      }
+      if (tag === "img" && !keep.some((a) => a.startsWith("src="))) return "";
+      if (tag === "br") return "<br />";
+      return `<${tag}${keep.length ? " " + keep.join(" ") : ""}>`;
+    });
+    return rewritten.replace(/</g, (m, i, whole) => EMITTED_AT.test(whole.slice(i)) ? "<" : "&lt;");
+  }
+  var EMITTED_AT = /^<\/?(?:a|b|strong|i|em|br|p|span|small|img)\b/;
+  function sponsorText(input) {
+    const safe = sanitizeSponsorHtml(input);
+    if (!safe) return "";
+    const hrefs = [];
+    for (const m of safe.matchAll(/<a\s[^>]*href="([^"]+)"/gi)) hrefs.push(m[1].replace(/&amp;/g, "&"));
+    const words = safe.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+    const unique = [...new Set(hrefs)];
+    return [words, ...unique].filter(Boolean).join(" ");
+  }
+
+  // client-ui/src/elements/gbti-digest-manager.mjs
+  var CSS22 = `
+  :host { display:block; }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .busy { opacity:.55; pointer-events:none; }
+  .muted { color:var(--muted); }
+  .blk { border-top:1px solid var(--line); padding:18px 0 4px; }
+  .blk:first-of-type { border-top:0; padding-top:4px; }
+  .hd { display:flex; align-items:center; gap:12px; margin:0 0 4px; }
+  .hd h3 { margin:0; font-size:15px; font-weight:700; color:var(--fg); flex:1; min-width:0; }
+  .state { font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .state.on { color:var(--accent); }
+  .state.off { color:var(--muted); }
+  .lede { font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.5; }
+  .f { margin:0 0 12px; }
+  .f label { display:block; font-size:12.5px; font-weight:600; color:var(--fg); margin:0 0 5px; }
+  .f input, .f textarea { display:block; width:100%; box-sizing:border-box; font:inherit; font-size:13.5px;
+    color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .f textarea { min-height:78px; resize:vertical; line-height:1.5; }
+  .f textarea.code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; min-height:120px; }
+  .f .note { display:block; font-size:12px; color:var(--muted); margin-top:5px; line-height:1.45; }
+  .count { font-variant-numeric:tabular-nums; }
+  /* DANGER, NOT ACCENT. The accent is this design system's brand green, which reads as "good", so using it to
+     flag a broken rule tells a superadmin the opposite of what it means. These are still only warnings and they
+     still save; the colour says which rule, not whether the save will go through. */
+  .count.over { color:var(--danger); font-weight:700; }
+  .warn { list-style:none; margin:0 0 12px; padding:10px 12px; border:1px solid var(--line); border-left:3px solid var(--danger); border-radius:8px; }
+  .warn li { font-size:12.5px; color:var(--fg); line-height:1.5; }
+  .warn li + li { margin-top:6px; }
+  .prev { border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin:0 0 6px; overflow-wrap:anywhere; }
+  .prev img { max-width:100%; height:auto; }
+  .prev .lbl { display:block; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:0 0 7px; }
+  .plain { font-size:12px; color:var(--muted); line-height:1.5; overflow-wrap:anywhere; margin:0 0 14px; }
+  .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
+  button { font:inherit; font-size:13px; font-weight:600; border-radius:8px; padding:7px 14px; cursor:pointer; }
+  .save { border:1px solid var(--accent); background:var(--accent); color:var(--paper, #fff); }
+  .save:hover { background:var(--accent); filter:brightness(1.08); }
+  .save[disabled] { cursor:default; opacity:.5; filter:none; }
+  .lk { border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); }
+  .lk:hover { background:var(--paper, transparent); border-color:var(--accent); color:var(--accent); }
+  .hint { font-size:12.5px; color:var(--muted); margin:16px 0 0; line-height:1.5; }
+  [hidden] { display:none !important; } /* an explicit display beats the UA [hidden] rule inside a shadow root */
+`;
+  var SAVED = "Saved. It merges on its own and reaches the next issue once the settings sync runs.";
+  var GbtiDigestManager = class extends GbtiElement {
+    constructor() {
+      super();
+      this._status = "idle";
+      this._draft = null;
+      this._saved = null;
+    }
+    // The client-ready race (sow-334, and the note on every manager beside this one): the element sits in static
+    // admin markup and upgrades BEFORE the client is injected, so the load starts from render() when the client
+    // arrives, never from connectedCallback. A FAILED load is its own state with a Try again button and does NOT
+    // retry on its own, because a render-triggered retry storms the route.
+    connectedCallback() {
+      super.connectedCallback?.();
+    }
+    /** Typing is not saved anywhere, so a client re-render broadcast must not rebuild the boxes under a cursor. */
+    skipClientRender() {
+      return this._status === "ready" && this._dirty();
+    }
+    _dirty() {
+      return !!this._draft && !!this._saved && JSON.stringify(this._draft) !== JSON.stringify(this._saved);
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      this._status = "loading";
+      this.render();
+      try {
+        const r = await this.client.digestConfig();
+        this._defaults = r?.defaults || {};
+        this._limits = r?.limits || {};
+        const cta = r?.cta || {};
+        const sponsor = r?.sponsor || {};
+        this._saved = {
+          cta: {
+            enabled: typeof cta.enabled === "boolean" ? cta.enabled : this._defaults.cta?.enabled !== false,
+            body: String(cta.body ?? ""),
+            linkLabel: String(cta.linkLabel ?? ""),
+            linkUrl: String(cta.linkUrl ?? "")
+          },
+          sponsor: {
+            enabled: sponsor.enabled === true,
+            html: String(sponsor.html ?? "")
+          }
+        };
+        this._draft = structuredClone(this._saved);
+        this._status = "ready";
+      } catch (e) {
+        this._status = "failed";
+        this._loadError = e?.message || "The digest settings could not be read.";
+      }
+      this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
+        return;
+      }
+      if (this._status === "idle") {
+        this.load();
+        this.set(this.css(CSS22) + `<p class="muted">Loading the digest settings...</p>`);
+        return;
+      }
+      if (this._status === "loading") {
+        this.set(this.css(CSS22) + `<p class="muted">Loading the digest settings...</p>`);
+        return;
+      }
+      if (this._status === "failed") {
+        this.set(this.css(CSS22) + `<p class="msg">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.$("[data-retry]")?.addEventListener("click", () => {
+          this._status = "idle";
+          this.render();
+        });
+        return;
+      }
+      this.set(this.css(CSS22) + `<div class="${this._busy ? "busy" : ""}">
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._ctaBlock()}
+      ${this._sponsorBlock()}
+      <p class="hint">Superadmin only. Each Save opens a pull request against house/digest-config.yml that merges on its own, and the change reaches the mail on the next settings sync rather than immediately. The wording rules above warn and never block: if you mean it, save it.</p>
+    </div>`);
+      this._wire();
+    }
+    _ctaBlock() {
+      const d = this._draft.cta;
+      const fallback = this._defaults.cta || {};
+      const warnings = ctaWarnings({ body: d.body || fallback.body, linkLabel: d.linkLabel || fallback.linkLabel, linkUrl: d.linkUrl || fallback.linkUrl });
+      const visible = ctaVisibleLength(d.body || fallback.body) + (d.linkLabel || fallback.linkLabel || "").trim().length;
+      const over = visible > CTA_RULES.maxVisibleChars;
+      return `<section class="blk">
+      <div class="hd">
+        <h3>Membership pitch</h3>
+        <span class="state ${d.enabled ? "on" : "off"}">${d.enabled ? "On" : "Off"}</span>
+        <button class="lk" type="button" data-cta-toggle>Turn ${d.enabled ? "off" : "on"}</button>
+      </div>
+      <p class="lede">One note about membership, after all the articles and before the footer. It renders only in an issue that has articles in it, so a quiet week carries no pitch.</p>
+      <div class="f">
+        <label for="dm-body">What it says</label>
+        <textarea id="dm-body" data-cta="body" placeholder="${esc(fallback.body || "")}">${esc(d.body)}</textarea>
+        <span class="note"><span class="count ${over ? "over" : ""}">${visible}</span> of ${CTA_RULES.maxVisibleChars} characters, counting the link label. Write {plan} where the plan name goes and it stays right through a rename. Leave this empty to use the wording the renderer ships with.</span>
+      </div>
+      <div class="f">
+        <label for="dm-label">The link</label>
+        <input id="dm-label" type="text" data-cta="linkLabel" value="${esc(d.linkLabel)}" placeholder="${esc(fallback.linkLabel || "")}">
+      </div>
+      <div class="f">
+        <label for="dm-url">Where it goes</label>
+        <input id="dm-url" type="text" data-cta="linkUrl" value="${esc(d.linkUrl)}" placeholder="${esc(fallback.linkUrl || "")}">
+        <span class="note">A path such as /membership/, or a full https address.</span>
+      </div>
+      ${warnings.length ? `<ul class="warn">${warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+      <div class="acts"><button class="save" type="button" data-save="cta"${this._clean("cta") ? " disabled" : ""}>Save the pitch</button>${this._clean("cta") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
+    </section>`;
+    }
+    _sponsorBlock() {
+      const d = this._draft.sponsor;
+      const safe = sanitizeSponsorHtml(d.html);
+      const plain = sponsorText(d.html);
+      const stripped = d.html.trim() && !safe;
+      return `<section class="blk">
+      <div class="hd">
+        <h3>Sponsor</h3>
+        <span class="state ${d.enabled && safe ? "on" : "off"}">${d.enabled && safe ? "On" : "Off"}</span>
+        <button class="lk" type="button" data-sponsor-toggle>Turn ${d.enabled ? "off" : "on"}</button>
+      </div>
+      <p class="lede">One standing sponsor, in every issue until you change it, under a Sponsored label that cannot be edited away. Switched on with nothing to show, it renders nothing: a label over an empty box is worse than no block.</p>
+      <div class="f">
+        <label for="dm-html">The sponsor's markup</label>
+        <textarea id="dm-html" class="code" data-sponsor="html" placeholder="&lt;a href=&quot;https://example.com&quot;&gt;Their line&lt;/a&gt;">${esc(d.html)}</textarea>
+        <span class="note">Links, images and basic text tags survive. Scripts, styles, frames, forms and every event handler are removed. Paste what they sent and check the preview.</span>
+      </div>
+      ${stripped ? `<ul class="warn"><li>Nothing in this markup survives the allowlist, so no block would render. It is most likely a script or a frame, which no mail client would run anyway.</li></ul>` : ""}
+      ${safe ? `<div class="prev"><span class="lbl">Sponsored</span>${safe}</div>
+        <p class="plain">Text-only readers see: ${esc(plain)}</p>` : ""}
+      <div class="acts"><button class="save" type="button" data-save="sponsor"${this._clean("sponsor") ? " disabled" : ""}>Save the sponsor</button>${this._clean("sponsor") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
+    </section>`;
+    }
+    _clean(block) {
+      return JSON.stringify(this._draft?.[block]) === JSON.stringify(this._saved?.[block]);
+    }
+    _wire() {
+      const retype = (el, block, key) => el.addEventListener("input", () => {
+        this._draft[block][key] = el.value;
+        const id = el.id;
+        const at = el.selectionStart;
+        this.render();
+        const next = id ? this.$(`#${id}`) : null;
+        if (next) {
+          next.focus();
+          try {
+            next.setSelectionRange(at, at);
+          } catch {
+          }
+        }
+      });
+      this.$$("[data-cta]").forEach((el) => retype(el, "cta", el.dataset.cta));
+      this.$$("[data-sponsor]").forEach((el) => retype(el, "sponsor", el.dataset.sponsor));
+      this.$("[data-cta-toggle]")?.addEventListener("click", () => {
+        this._draft.cta.enabled = !this._draft.cta.enabled;
+        this.render();
+      });
+      this.$("[data-sponsor-toggle]")?.addEventListener("click", () => {
+        this._draft.sponsor.enabled = !this._draft.sponsor.enabled;
+        this.render();
+      });
+      this.$$("[data-save]").forEach((b) => b.addEventListener("click", () => this._save(b.dataset.save)));
+    }
+    async _save(block) {
+      if (this._clean(block)) return;
+      const d = this._draft[block];
+      const send = block === "cta" ? () => this.client.setDigestCta({ enabled: d.enabled === true, body: d.body, linkLabel: d.linkLabel, linkUrl: d.linkUrl }) : () => this.client.setDigestSponsor({ enabled: d.enabled === true, html: d.html });
+      this._busy = true;
+      this._msg = "";
+      this.render();
+      try {
+        const r = await send();
+        this._msg = r?.noop ? "No change (it already reads that way)." : r?.prNumber ? houseEditAck(r) : SAVED;
+        this._saved[block] = structuredClone(d);
+      } catch (e) {
+        this._msg = e?.message || "That change could not be saved.";
+      }
+      this._busy = false;
+      this.render();
+    }
+  };
+  define("gbti-digest-manager", GbtiDigestManager);
+
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
   var SITE12 = "https://gbti.network";
   var WINDOWS = Object.freeze([7, 30]);
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .hint { font-size:12.5px; color:var(--muted); }
@@ -18447,12 +18795,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (this._failed) {
-        this.set(this.css(CSS22) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS23) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._links) {
-        this.set(this.css(CSS22) + `<p class="muted">Loading the outbound links...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading the outbound links...</p>`);
         return;
       }
       const now = /* @__PURE__ */ new Date();
@@ -18474,7 +18822,7 @@ ${listStyleProseCss(".doc-blocks")}
         <details><summary>Last 30 days, by day</summary><table><thead><tr><th>Day</th><th>Clicks</th><th>Crawlers</th><th>Other</th></tr></thead><tbody>${history2}</tbody></table></details>
       </li>`;
       }).join("");
-      this.set(this.css(CSS22) + `
+      this.set(this.css(CSS23) + `
       <div class="head"><span class="hint">${this._links.length} links. Clicks are estimates from Cloudflare zone analytics: 301 answers only, rolled up daily by reconcile. ${latest ? `Measured through ${esc(latest)}.` : "Nothing measured yet: the first rollup lands with the next daily reconcile."}</span></div>
       <ul class="list">${rows || '<li class="muted">No outbound links in the store.</li>'}</ul>
     `);
@@ -18494,7 +18842,7 @@ ${listStyleProseCss(".doc-blocks")}
   var VIEWBOX = /^\s*-?[\d.]+([\s,]+-?[\d.]+){3}\s*$/;
   var NAME_RE = /^[A-Z][A-Za-z0-9]*$/;
   var SET_RE = /^[A-Za-z0-9 .\-]+$/;
-  var ATTRS = Object.freeze({
+  var ATTRS2 = Object.freeze({
     d: PATH_DATA,
     points: POINTS,
     cx: LEN,
@@ -18541,7 +18889,7 @@ ${listStyleProseCss(".doc-blocks")}
       const v = String(raw);
       budget.total += v.length;
       if (v.length > ICON_LIMITS.value) problems.push(`${at}: attribute "${k}" is too long`);
-      else if (!ATTRS[k].test(v)) problems.push(`${at}: attribute "${k}" has a value an icon may not carry`);
+      else if (!ATTRS2[k].test(v)) problems.push(`${at}: attribute "${k}" has a value an icon may not carry`);
     }
     return problems;
   }
@@ -18561,7 +18909,7 @@ ${listStyleProseCss(".doc-blocks")}
         problems.push(`${here}: element "${s.tag}" is not allowed in an icon`);
         return;
       }
-      problems.push(...attrProblems(s.attrs, Object.keys(ATTRS), here, budget));
+      problems.push(...attrProblems(s.attrs, Object.keys(ATTRS2), here, budget));
       if (s.children !== void 0) {
         if (s.tag !== "g") problems.push(`${here}: only a group (g) may have children`);
         else problems.push(...shapeProblems(s.children, `${here}.children`, depth + 1, budget));
@@ -18768,9 +19116,9 @@ ${listStyleProseCss(".doc-blocks")}
   var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
   var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
-  var str = (v) => typeof v === "string" ? v.trim() : "";
+  var str2 = (v) => typeof v === "string" ? v.trim() : "";
   function validRef(type, ref) {
-    const r = str(ref);
+    const r = str2(ref);
     if (!r || r.length > CTA_LIMITS.ref) return false;
     return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE.test(r);
   }
@@ -18812,7 +19160,7 @@ ${listStyleProseCss(".doc-blocks")}
   function validateCta(e, where = "cta") {
     const problems = [];
     if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
-    const id = str(e.id);
+    const id = str2(e.id);
     if (!id || !ID_RE.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
     if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
     const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
@@ -18822,12 +19170,12 @@ ${listStyleProseCss(".doc-blocks")}
         problems.push(`${where}: ${k} must be text`);
         continue;
       }
-      const v = str(e[k]);
+      const v = str2(e[k]);
       if (!v) {
         if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
       } else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
     }
-    const dest = str(e.destination);
+    const dest = str2(e.destination);
     let u = null;
     if (dest || uses.link) {
       try {
@@ -18848,7 +19196,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (typeof e.html !== "string") problems.push(`${where}: html must be text`);
       else if (e.html.length > CTA_LIMITS.html) problems.push(`${where}: html is too long (max ${CTA_LIMITS.html} chars)`);
     }
-    if (uses.html && !str(e.html)) problems.push(`${where}: html is required for the html layout`);
+    if (uses.html && !str2(e.html)) problems.push(`${where}: html is required for the html layout`);
     if (e.showTitle !== void 0 && typeof e.showTitle !== "boolean") problems.push(`${where}: showTitle must be true or false`);
     if (e.hosts !== void 0) {
       if (!Array.isArray(e.hosts)) problems.push(`${where}: hosts must be a list of https origins`);
@@ -18862,7 +19210,7 @@ ${listStyleProseCss(".doc-blocks")}
         });
       }
     }
-    const partner = str(e.partner);
+    const partner = str2(e.partner);
     if (!partner || !ID_RE.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
     if (partner === "amazon" && u) {
       const why = amazonDestinationProblem(dest);
@@ -18887,7 +19235,7 @@ ${listStyleProseCss(".doc-blocks")}
         problems.push(`${at}: ref must be a ${it.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it.ref ?? null)}`);
         continue;
       }
-      const key = `${it.type}:${str(it.ref)}`;
+      const key = `${it.type}:${str2(it.ref)}`;
       if (seen.has(key)) problems.push(`${at}: ${key} is assigned to this CTA twice`);
       seen.add(key);
     }
@@ -18919,24 +19267,24 @@ ${listStyleProseCss(".doc-blocks")}
   });
   var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
   var ID_RE2 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  var str2 = (v) => typeof v === "string" ? v : "";
+  var str3 = (v) => typeof v === "string" ? v : "";
   var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
   function draftFromCta(c, { imageUrl = null } = {}) {
     return {
-      id: str2(c?.id),
-      label: str2(c?.label),
-      line: str2(c?.line),
-      button: str2(c?.button),
-      destination: str2(c?.destination),
-      partner: str2(c?.partner),
-      note: str2(c?.note),
+      id: str3(c?.id),
+      label: str3(c?.label),
+      line: str3(c?.line),
+      button: str3(c?.button),
+      destination: str3(c?.destination),
+      partner: str3(c?.partner),
+      note: str3(c?.note),
       enabled: c?.enabled === true,
       layout: CTA_LAYOUTS.includes(c?.layout) ? c.layout : "text",
       icon: c?.icon && typeof c.icon === "object" ? structuredClone(c.icon) : null,
-      html: str2(c?.html),
+      html: str3(c?.html),
       showTitle: c?.showTitle !== false,
       hosts: Array.isArray(c?.hosts) ? c.hosts.filter((h) => typeof h === "string") : [],
-      items: (Array.isArray(c?.items) ? c.items : []).filter((it) => it && typeof it === "object").map((it) => ({ type: it.type, ref: str2(it.ref) })),
+      items: (Array.isArray(c?.items) ? c.items : []).filter((it) => it && typeof it === "object").map((it) => ({ type: it.type, ref: str3(it.ref) })),
       image: typeof c?.image === "string" ? { kind: "stored", file: c.image, url: imageUrl } : { kind: "none" }
     };
   }
@@ -19012,7 +19360,7 @@ ${listStyleProseCss(".doc-blocks")}
       changed.push(k);
     };
     for (const k of ["label", "line", "button", "destination", "partner", "note", "html"]) {
-      if (str2(card[k]) !== str2(o[k]).trim()) set(k, str2(card[k]));
+      if (str3(card[k]) !== str3(o[k]).trim()) set(k, str3(card[k]));
     }
     const oLayout = CTA_LAYOUTS.includes(o.layout) ? o.layout : "text";
     if (card.layout !== oLayout) set("layout", card.layout);
@@ -19020,7 +19368,7 @@ ${listStyleProseCss(".doc-blocks")}
     if (o.showTitle !== false !== (d.showTitle !== false)) set("showTitle", d.showTitle === false ? false : null);
     const oHosts = Array.isArray(o.hosts) ? o.hosts : [];
     if (!sameJson(d.hosts, oHosts)) set("hosts", d.hosts.length ? d.hosts : null);
-    const oItems = (Array.isArray(o.items) ? o.items : []).map((it) => ({ type: it.type, ref: str2(it.ref) }));
+    const oItems = (Array.isArray(o.items) ? o.items : []).map((it) => ({ type: it.type, ref: str3(it.ref) }));
     if (!sameJson(d.items, oItems)) set("items", d.items);
     if (o.enabled === true !== (d.enabled === true)) set("enabled", d.enabled === true);
     if (d.image.kind === "upload") set("imageBase64", d.image.base64);
@@ -19043,7 +19391,7 @@ ${listStyleProseCss(".doc-blocks")}
     return found;
   }
   function pagesFromBuilt(built) {
-    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str2(p.ref)).map((p) => ({ type: p.type, ref: str2(p.ref), title: str2(p.title) || str2(p.ref) }));
+    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str3(p.ref)).map((p) => ({ type: p.type, ref: str3(p.ref), title: str3(p.title) || str3(p.ref) }));
   }
   function pageCandidates(pages, query, items = [], limit = 6) {
     const q = String(query || "").trim().toLowerCase();
@@ -19056,7 +19404,7 @@ ${listStyleProseCss(".doc-blocks")}
       const hosts = Array.isArray(c.hosts) ? c.hosts : [];
       return `Partner code${hosts.length ? `, loads from ${hosts.map((h) => h.replace(/^https:\/\//, "")).join(", ")}` : ""}`;
     }
-    return str2(c?.line);
+    return str3(c?.line);
   }
   function previewNote(d) {
     if (!d.enabled) return "Disabled: this card shows on no page.";
@@ -20119,7 +20467,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS23 = `
+  var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -20225,11 +20573,11 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS23) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS24) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -20238,7 +20586,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS23) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -20248,7 +20596,7 @@ ${listStyleProseCss(".doc-blocks")}
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
@@ -20345,7 +20693,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS24 = `
+  var CSS25 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -20844,7 +21192,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -20853,7 +21201,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS24) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS25) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -20866,7 +21214,7 @@ ${listStyleProseCss(".doc-blocks")}
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS24) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS25) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -20879,7 +21227,7 @@ ${listStyleProseCss(".doc-blocks")}
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS24) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS25) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -21487,7 +21835,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS25 = `
+  var CSS26 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -21523,7 +21871,7 @@ ${listStyleProseCss(".doc-blocks")}
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS25) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS26) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -21560,7 +21908,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS26 = `
+  var CSS27 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -21600,7 +21948,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS26) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS27) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -21817,7 +22165,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS27 = `
+  var CSS28 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -21879,7 +22227,7 @@ ${listStyleProseCss(".doc-blocks")}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS27));
+      this.set(this.css(CSS28));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -21952,13 +22300,13 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS27));
+        this.set(this.css(CSS28));
         return;
       }
       const u = esc(this._username || "");
       const av = `https://github.com/${u}.png?size=80`;
       if (!this._loaded) {
-        this.set(this.css(CSS27) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS28) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -21970,7 +22318,7 @@ ${listStyleProseCss(".doc-blocks")}
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS27) + `
+      this.set(this.css(CSS28) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -22058,7 +22406,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS28 = `
+  var CSS29 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -22120,7 +22468,7 @@ ${listStyleProseCss(".doc-blocks")}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS28) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS29) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -22261,7 +22609,7 @@ ${listStyleProseCss(".doc-blocks")}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS29 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -22438,11 +22786,11 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS29) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS30) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS29) + body);
+      this.set(this.css(CSS30) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -22553,7 +22901,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS30 = `
+  var CSS31 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -22679,10 +23027,10 @@ ${listStyleProseCss(".doc-blocks")}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS31) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS31) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -22699,7 +23047,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS30) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS31) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -22725,12 +23073,12 @@ ${listStyleProseCss(".doc-blocks")}
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS30) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS31) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS30) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS31) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -22802,7 +23150,7 @@ ${listStyleProseCss(".doc-blocks")}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS30) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS31) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -22845,21 +23193,21 @@ ${listStyleProseCss(".doc-blocks")}
       }
     }
     _splash() {
-      this.set(this.css(CSS30) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS31) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS31 = `
+  var CSS32 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS31) + `<div class="stack">
+      this.set(this.css(CSS32) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -22869,7 +23217,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS32 = `
+  var CSS33 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -22887,7 +23235,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS32) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS33) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -22896,7 +23244,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS32) + `<div class="splash">
+        this.set(this.css(CSS33) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc(c.heading)}</h2>
         <p>${esc(c.body)}</p>
@@ -22904,7 +23252,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div>`);
         return;
       }
-      this.set(this.css(CSS32) + `<slot></slot>`);
+      this.set(this.css(CSS33) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -22912,7 +23260,7 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS2 = 15e3;
   var POLL_MAX = 20;
-  var CSS33 = `
+  var CSS34 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -22983,7 +23331,7 @@ ${listStyleProseCss(".doc-blocks")}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS33) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS34) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -23081,7 +23429,7 @@ ${listStyleProseCss(".doc-blocks")}
   var BTN_ICON = {
     signin: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>`
   };
-  var CSS34 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -23186,11 +23534,11 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS34) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS35) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       if (s.ready) {
-        this.set(this.css(CSS34) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS35) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
         <p class="note">Sign-in is all it takes: your drafts save privately, and the network publishes for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -23199,7 +23547,7 @@ ${listStyleProseCss(".doc-blocks")}
       const row = s.signedIn ? `<li class="row done"><span class="ic">${check2(true)}</span><span class="t">${esc(SIGNIN_META.doneLabel)}</span></li>` : `<li class="row"><span class="ic">${check2(false)}</span>${this._card()}</li>`;
       const reached = s.reachedGithub !== false;
       const nDone = s.signedIn ? 1 : 0;
-      this.set(this.css(CSS34) + `
+      this.set(this.css(CSS35) + `
       <div class="head"><h2>Sign in to publish</h2><span class="count">${nDone} of 1</span></div>
       <div class="bar"><i style="width:${nDone * 100}%"></i></div>
       <ul>${row}</ul>
@@ -23317,7 +23665,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE14 = "https://gbti.network";
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -23389,15 +23737,15 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS35) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS35) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -23413,7 +23761,7 @@ ${listStyleProseCss(".doc-blocks")}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -23471,7 +23819,7 @@ ${listStyleProseCss(".doc-blocks")}
   var SITE15 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS36 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -23554,11 +23902,11 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -23567,7 +23915,7 @@ ${listStyleProseCss(".doc-blocks")}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -23711,7 +24059,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS37 = `
+  var CSS38 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -23752,7 +24100,7 @@ ${listStyleProseCss(".doc-blocks")}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS37) + html : "");
+      this.set(html ? this.css(CSS38) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
@@ -23771,7 +24119,7 @@ ${listStyleProseCss(".doc-blocks")}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-  var CSS38 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -23909,19 +24257,19 @@ ${listStyleProseCss(".doc-blocks")}
       }
     }
     _modelFromFm(fm, body) {
-      const str4 = (v) => v == null ? "" : String(v);
+      const str5 = (v) => v == null ? "" : String(v);
       const links = {};
-      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str4(v);
+      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str5(v);
       return {
-        displayName: str4(fm.displayName),
-        headline: str4(fm.headline),
-        avatar: str4(fm.avatar),
-        location: str4(fm.location),
+        displayName: str5(fm.displayName),
+        headline: str5(fm.headline),
+        avatar: str5(fm.avatar),
+        location: str5(fm.location),
         // preserved, never surfaced (owner decision)
         forHire: fm.forHire === true,
         directory: fm.directory === true,
-        skills: Array.isArray(fm.skills) ? fm.skills.map(str4) : [],
-        roles: Array.isArray(fm.roles) ? fm.roles.map(str4) : [],
+        skills: Array.isArray(fm.skills) ? fm.skills.map(str5) : [],
+        roles: Array.isArray(fm.roles) ? fm.roles.map(str5) : [],
         links,
         visibility: fm.visibility || "public",
         body: body || ""
@@ -23955,19 +24303,19 @@ ${listStyleProseCss(".doc-blocks")}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS39) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS39) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS38) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS39) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -23977,7 +24325,7 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS38) + sections);
+      this.set(this.css(CSS39) + sections);
       this._wire();
     }
     _identity(m) {
@@ -24244,7 +24592,7 @@ ${listStyleProseCss(".doc-blocks")}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS39 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -24819,7 +25167,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS39) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS40) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -24855,7 +25203,7 @@ ${listStyleProseCss(".doc-blocks")}
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS39) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS40) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -25305,7 +25653,7 @@ ${listStyleProseCss(".doc-blocks")}
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS40 = `
+  var CSS41 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -25437,7 +25785,7 @@ ${listStyleProseCss(".doc-blocks")}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS40) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS41) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -25492,7 +25840,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS41 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -25593,11 +25941,11 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS42) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global);
@@ -25620,7 +25968,7 @@ ${listStyleProseCss(".doc-blocks")}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE18}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS41) + `
+      this.set(this.css(CSS42) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -25690,19 +26038,19 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // membership/news-source-name.mjs
-  var str3 = (v) => typeof v === "string" ? v.trim() : "";
+  var str4 = (v) => typeof v === "string" ? v.trim() : "";
   function sourceNameMap(sources) {
     const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
     const map = /* @__PURE__ */ new Map();
     for (const s of list) {
-      const id = str3(s?.id);
-      const name = str3(s?.name);
+      const id = str4(s?.id);
+      const name = str4(s?.name);
       if (id && name) map.set(id, name);
     }
     return map;
   }
   function newsSourceName(id, names) {
-    const key = str3(id);
+    const key = str4(id);
     if (!key) return "";
     const map = names instanceof Map ? names : sourceNameMap(names);
     return map.get(key) || key;
@@ -25722,7 +26070,7 @@ ${listStyleProseCss(".doc-blocks")}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS42 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -25882,12 +26230,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS42) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS42) + head + `<div data-body></div>`);
+      this.set(this.css(CSS43) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -25998,7 +26346,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS43 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -26111,12 +26459,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS43) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -26134,7 +26482,7 @@ ${listStyleProseCss(".doc-blocks")}
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -26531,7 +26879,7 @@ From the author:
     } catch {
     }
   };
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -26576,7 +26924,7 @@ From the author:
         this.set("");
         return;
       }
-      this.set(this.css(CSS44) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS45) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -27128,7 +27476,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS45 = `
+  var CSS46 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -27462,7 +27810,7 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS45));
+        this.set(this.css(CSS46));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
@@ -27502,7 +27850,7 @@ From the author:
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
       const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      this.set(this.css(CSS46) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -27626,7 +27974,7 @@ From the author:
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS46 = `
+  var CSS47 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -27752,7 +28100,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS47) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -27760,7 +28108,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS47) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -27804,7 +28152,7 @@ From the author:
     } catch {
     }
   }
-  var CSS47 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -27938,7 +28286,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS48) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -27951,7 +28299,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS48) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -28262,6 +28610,16 @@ From the author:
       // SOW-063 P3: the splash quote pool { quotes } for the manager
       siteSettings: () => request("GET", "/api/site-settings"),
       // sow-271: the site-wide presentation toggles { settings, toggles } for the manager
+      // sow-266: the weekly digest's membership pitch + sponsor slot (superadmin). digestConfig returns what is
+      // STORED, not what would render, so an empty field shows empty rather than pre-filled with the fallback.
+      // Both writes are PATCHES: a key that is not sent is left alone, which is what lets the manager save the
+      // switch without resending the copy. So nothing here defaults a missing field.
+      digestConfig: () => request("GET", "/api/digest-config"),
+      // { ok, cta, sponsor, defaults, limits }
+      setDigestCta: (p) => request("POST", "/api/admin", { action: "digest-cta-set", ...p }),
+      // sow-266
+      setDigestSponsor: (p) => request("POST", "/api/admin", { action: "digest-sponsor-set", ...p }),
+      // sow-266
       setSiteToggle: ({ key, enabled }) => request("POST", "/api/admin", { action: "site-setting-set", key, enabled: enabled === true }),
       // sow-271
       ctaPool: () => request("GET", "/api/cta-pool"),

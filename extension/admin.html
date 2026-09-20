@@ -87,6 +87,7 @@
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
         <button class="admin-tab" type="button" data-tab="outbound-links">Outbound links</button>
         <button class="admin-tab" type="button" data-tab="ctas">CTAs</button>
+        <button class="admin-tab" type="button" data-tab="digest" data-min="superadmin">Weekly email</button>
       </div>
       <div class="admin-col">
         <section class="admin-card on" data-panel="members">
@@ -154,6 +155,13 @@
                and the file is superadmin-CODEOWNED, so an admin opening this tab gets a 403 from the endpoint. -->
           <div class="admin-card-h"><h2>CTAs</h2><p>Partner calls to action, each assigned to any content item. Superadmin only. Edits open a house PR and go live on the next site deploy.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-cta-manager></gbti-cta-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="digest">
+          <!-- sow-266: what the weekly digest says about membership, and who sponsors it (house/digest-config.yml).
+               The WRITES carry ROLE_RANK.superadmin and the file is superadmin-CODEOWNED, so an admin opening this
+               tab gets a 403 from the endpoint. The settings are not secret: they sit in a public repository. -->
+          <div class="admin-card-h"><h2>Weekly email</h2><p>The membership note in the weekly digest, and the sponsor slot. Superadmin only. A save opens a house PR that merges on its own.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-digest-manager></gbti-digest-manager></div></div>
         </section>
       </div>
       </template>

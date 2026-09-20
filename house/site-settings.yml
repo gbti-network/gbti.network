@@ -7,9 +7,16 @@
 # Each entry is a plain boolean. true = the surface is shown, false = it is hidden. Keys are declared once in
 # membership/site-settings-edits.mjs (SITE_TOGGLES); an unknown key here fails the build rather than being
 # silently ignored, because a typo'd toggle that reads as "off" is indistinguishable from one that works.
+#
+# WRITE EVERY NOTE UP HERE, NAMING THE KEY, NEVER BESIDE THE KEY ITSELF. A superadmin save from the admin area
+# keeps this block and re-writes everything under it from the parsed values, so a comment sitting next to a
+# setting survives until the first edit and then disappears with no warning. The note below was beside its key
+# and was one save away from being lost.
+#
+#   extension_cta   The Chrome extension ADVERTISING surfaces only: the header nav item, the homepage
+#                   Add-to-Chrome banner, the sign-in modal footnote, and the archived v1 homepage button.
+#                   This does NOT hide the "Extension required" explainers that appear after a member clicks a
+#                   control the extension implements, and it does not take the /extension/ install page down.
+#                   Disabled 2026-08-23 at the owner's request (temporary).
 settings:
-  # The Chrome extension ADVERTISING surfaces only: the header nav item, the homepage Add-to-Chrome banner, the
-  # sign-in modal footnote, and the archived v1 homepage button. This does NOT hide the "Extension required"
-  # explainers that appear after a member clicks a control the extension implements, and it does not take the
-  # /extension/ install page down. Disabled 2026-08-23 at the owner's request (temporary).
   extension_cta: false

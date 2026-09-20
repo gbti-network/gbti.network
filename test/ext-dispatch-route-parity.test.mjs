@@ -142,6 +142,11 @@ const PRE_AUTH = new Set([
   '/api/coupon-pool', '/api/news-engagement', '/api/syndication-settings',
   '/api/site-settings', // sow-271: the site-wide presentation toggles (public git-native read)
   '/api/cta-pool', // sow-281: the CTA registry (public git-native read; the writes are superadmin)
+  // sow-266: the digest pitch + sponsor slot. PUBLIC for the same reason as the eight above, and the reason is
+  // worth stating plainly because it is tempting to reach for the other one: house/digest-config.yml is committed
+  // to a PUBLIC repository, so a read gate here would protect nothing a person could not read on GitHub. The
+  // writes are superadmin, and that is where the boundary actually is.
+  '/api/digest-config',
 ]);
 
 test('pre-auth positioning: the routes above the ext-dispatch identity gate are EXACTLY the declared pre-auth set', () => {

@@ -26,6 +26,7 @@ import './elements/gbti-quote-manager.mjs'; // SOW-063 P3: superadmin splash-quo
 import './elements/gbti-coupon-manager.mjs'; // SOW-119: superadmin coupon manager
 import './elements/gbti-editorial-manager.mjs'; // sow-323: superadmin editorial review queue
 import './elements/gbti-site-settings-manager.mjs'; // sow-271: superadmin site-wide presentation toggles
+import './elements/gbti-digest-manager.mjs'; // sow-266: superadmin digest pitch copy + sponsor slot
 import './elements/gbti-outbound-link-manager.mjs'; // sow-289: the read-only outbound partner link board
 import './elements/gbti-cta-manager.mjs'; // sow-281: the superadmin CTA registry manager
 import './elements/gbti-cta-assignment.mjs'; // sow-281: the editor's read-only CTA line

@@ -156,6 +156,13 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     inviteUpdate: ({ code, action, note }) => request('PATCH', '/api/invites', { code, action, note }),
     quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
     siteSettings: () => request('GET', '/api/site-settings'), // sow-271: the site-wide presentation toggles { settings, toggles } for the manager
+    // sow-266: the weekly digest's membership pitch + sponsor slot (superadmin). digestConfig returns what is
+    // STORED, not what would render, so an empty field shows empty rather than pre-filled with the fallback.
+    // Both writes are PATCHES: a key that is not sent is left alone, which is what lets the manager save the
+    // switch without resending the copy. So nothing here defaults a missing field.
+    digestConfig: () => request('GET', '/api/digest-config'), // { ok, cta, sponsor, defaults, limits }
+    setDigestCta: (p) => request('POST', '/api/admin', { action: 'digest-cta-set', ...p }), // sow-266
+    setDigestSponsor: (p) => request('POST', '/api/admin', { action: 'digest-sponsor-set', ...p }), // sow-266
     setSiteToggle: ({ key, enabled }) => request('POST', '/api/admin', { action: 'site-setting-set', key, enabled: enabled === true }), // sow-271
     ctaPool: () => request('GET', '/api/cta-pool'), // sow-281: the CTA registry { ctas, types } for the manager
     addCta: (fields) => request('POST', '/api/admin', { action: 'cta-add', ...fields, enabled: fields?.enabled === true }), // sow-281

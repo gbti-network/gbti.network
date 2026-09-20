@@ -26,6 +26,8 @@ import { SIGNUP_BASE } from './signup-base.mjs'; // sow-291 Phase 2: the coupon 
 import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'; // sow-291 Phase 2
 import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
 import { readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
+import { readDigestConfig, DIGEST_LIMITS } from '../../membership/digest-config-edits.mjs'; // sow-266: the digest pitch + sponsor slot, as stored
+import { DEFAULT_CTA, DEFAULT_SPONSOR } from '../../membership/digest-config.mjs'; // sow-266: what an empty field falls back to
 import { ctasOf, CTA_ITEM_TYPES } from '../../membership/cta-edits.mjs'; // sow-281
 import { readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 import { readWeights } from '../../membership/news-source-weight-edits.mjs'; // sow-338/sow-374: the per-source weights
@@ -41,6 +43,7 @@ const CONTENT_CHANNELS_PATH = 'house/content-channels.yml';
 const MODERATION_FLAGS_PATH = 'house/moderation-flags.yml';
 const SYNDICATION_CONFIG_PATH = 'house/syndication-config.yml';
 const SITE_SETTINGS_PATH = 'house/site-settings.yml';
+const DIGEST_CONFIG_PATH = 'house/digest-config.yml'; // sow-266
 const CTAS_PATH = 'house/ctas.yml';
 
 // Host-portable read: the npm host's reader.readFile is sync (returns a string); the extension's is async
@@ -119,6 +122,21 @@ export async function getSiteSettings(ctx) {
     settings: readAllToggles(parsed),
     toggles: Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description })),
   };
+}
+
+/**
+ * sow-266: read the weekly digest's membership pitch and sponsor slot for the manager UI.
+ *
+ * WHAT IS STORED, NOT WHAT WOULD RENDER. resolveDigestConfig fills every empty field with the copy compiled
+ * into the renderer, which is right for sending a mail and wrong for editing one: an editor pre-filled with a
+ * fallback invites a superadmin to save it, which pins today's default into the file and freezes it there the
+ * next time the default changes. The defaults ride alongside so the manager can show what an empty field falls
+ * back to without putting it in the box. Mirrors membershipAdminDigestConfig in the Worker exactly, so the one
+ * shared element renders the same on either host.
+ */
+export async function getDigestConfig(ctx) {
+  const parsed = await readYaml(ctx, DIGEST_CONFIG_PATH);
+  return { ok: true, ...readDigestConfig(parsed), defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR } }, limits: { ...DIGEST_LIMITS } };
 }
 
 /** Read the call-to-action registry for the manager UI. Public git data (the site publishes /ctas.json). */
