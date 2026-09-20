@@ -59,7 +59,7 @@ import { getSubscriber, putSubscriber } from './mail-store.mjs';
 import { verifyTurnstile, rateLimit } from './abuse.mjs';
 import { createResendClient } from '../../clients/resend.mjs';
 import { renderConfirmationEmail } from '../../membership/mail-transactional-render.mjs'; // sow-270: the branded confirmation body
-import { pageResponse as page, PAGE_HEADERS, escapePage as escapeHtml } from './mail-pages.mjs'; // sow-270: the one shell both mail pages render into
+import { pageResponse as page, panelResponse, PAGE_HEADERS, escapePage as escapeHtml } from './mail-pages.mjs'; // sow-270: the shared shell, and the tinted-panel page for the two endings
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -361,10 +361,35 @@ export async function handleConfirm(request, env, deps = {}) {
     // The confirm button POSTs back to THIS exact URL (path + query), so the nonce rides the POST, not a hidden
     // field, and a prefetch of the GET never mutates.
     const action = escapeHtml(url.pathname + url.search);
-    return page('Confirm your subscription',
-      '<h1>Confirm your subscription to the GBTI Network weekly digest.</h1>'
-      + '<p>Click the button below to start receiving the weekly email.</p>'
-      + `<form method="POST" action="${action}"><button type="submit">Confirm subscription</button></form>`);
+    // sow-270 Phase 7: ONE CLICK. The form submits itself on load, so following the link from the email is the
+    // whole of it, and the reader never presses a second button to agree to what they already agreed to.
+    //
+    // THE GUARD IS KEPT, and this is the part worth being precise about. The GET still mutates nothing: the
+    // activation is the POST, and it is a script in a real browser that issues it. A mail client prefetching
+    // the link runs no script, so it still cannot confirm on the reader's behalf, which is the whole point of
+    // asking. A scripted scanner could, which narrows the hole rather than closing it (owner decision,
+    // 2026-09-20).
+    //
+    // THE BUTTON IS THE FALLBACK, revealed by <noscript> when scripting is off, and by a timer if the script
+    // ran but the submit did not take. The timer is armed BEFORE the submit is attempted, deliberately: a
+    // reader who cannot confirm and cannot see a button has no way forward at all.
+    //
+    // THE COPY HAS TO BE TRUE IN BOTH STATES, which the first version was not: it read "one moment while we
+    // add this address" above a button that had to be pressed, so the no-script reader was told something was
+    // happening while nothing was. The heading works either way, and the sentence that assumes a press lives
+    // inside the block that only appears when there is a press to make.
+    const form = `<form id="cf" method="POST" action="${action}" style="display:none">`
+      + `<p>Press the button to add this address to the GBTI Network weekly digest.</p>`
+      + `<button type="submit">Confirm subscription</button></form>`
+      + `<noscript><style>#cf{display:block!important}</style></noscript>`
+      + `<script>(function(){var f=document.getElementById('cf');`
+      + `setTimeout(function(){if(f)f.style.setProperty('display','block','important');},4000);`
+      + `try{f.submit();}catch(e){f.style.setProperty('display','block','important');}})();</script>`;
+    return panelResponse('Confirm your subscription', {
+      heading: 'Confirm your subscription',
+      lines: [],
+      extra: form,
+    });
   }
 
   // POST performs the activation.
@@ -400,7 +425,14 @@ export async function handleConfirm(request, env, deps = {}) {
   } catch { /* leave email blank; the notice still sends */ }
   await sendNewSubscriberAlert(env, { email, source: 'anon', at: new Date(now()).toISOString() }, { sendEmail: sendAdminAlert });
 
-  return page('Subscribed',
-    '<h1>You are subscribed.</h1>'
-    + '<p>You will receive the GBTI Network weekly digest.</p>');
+  // sow-270 Phase 6: the full stop. The headline already says it worked, so the lines underneath do the work
+  // the reader cannot do for themselves: when it arrives, and what to do if it does not appear. Tuesday is a
+  // fact rather than a hope, being the day the compile cron runs.
+  return panelResponse('Subscribed', {
+    heading: 'Thank you, and welcome',
+    lines: [
+      'The GBTI Network digest goes out on Tuesday mornings, United States Central Time.',
+      'If you cannot find it, look in your spam folder and mark it as not spam, so the next one arrives where you expect it.',
+    ],
+  });
 }

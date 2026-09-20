@@ -62,8 +62,15 @@ test('neither consumer has grown its own copy of the shell back', () => {
 test('all fifteen call sites survived the extraction', () => {
   // Counted before the change and pinned here. A drop means a page stopped rendering, which is the one way this
   // refactor could have broken something without a test noticing.
+  //
+  // The subscribe side reads 7 rather than the original 9 because sow-270 Phases 6 and 7 moved its two ENDINGS
+  // (the confirm page and the full stop after it) onto panelResponse, which is counted separately below. The
+  // total number of pages is unchanged; two of them simply render into the tinted panel instead of the plain
+  // shell. That count is asserted too, so moving a page to the panel cannot quietly delete it.
   const counts = CONSUMERS.map((rel) => (read(rel).match(/(?<![\w.])page\(/g) || []).length);
-  assert.deepEqual(counts, [9, 6], `expected 9 and 6 page() calls, found ${counts.join(' and ')}`);
+  assert.deepEqual(counts, [7, 6], `expected 7 and 6 page() calls, found ${counts.join(' and ')}`);
+  const panels = (read(CONSUMERS[0]).match(/panelResponse\(/g) || []).length;
+  assert.equal(panels, 2, 'the confirm page and the page after it both render into the panel');
 });
 
 test('the shell stays node-free, because it runs in a Worker', () => {

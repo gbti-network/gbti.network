@@ -221,7 +221,9 @@ test('confirm GET renders a confirm page with a POST form and does NOT create a 
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /Confirm your subscription/i);
-  assert.match(html, /<form method="POST"/i);
+  // sow-270 Phase 7 added id="cf" before the method attribute, so this is matched order-independently. What it
+  // means is unchanged: the confirm page carries a form that POSTs, because the GET must never mutate.
+  assert.match(html, /<form[^>]+method="POST"/i);
   const hash = await mailHash(SUPPRESS_KEY, 'reader@example.com');
   assert.equal(kv.m.get(subscriberKey(hash)), undefined, 'GET never mutates: no subscriber created');
 });
@@ -264,7 +266,7 @@ test('SEAM end-to-end: subscribe -> confirm POST -> the drain resolver recovers 
 
   const res = await handleConfirm(new Request(url, { method: 'POST' }), { SIGNUP_KV: kv });
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /You are subscribed/i);
+  assert.match(await res.text(), /Thank you, and welcome/i); // sow-270 Phase 6 replaced "You are subscribed."
 
   const hash = await mailHash(SUPPRESS_KEY, EMAIL);
   // the active subscriber now exists, the pending opt-in is gone
@@ -359,7 +361,10 @@ test('subscribe (opt-in OFF): the no-JS neutral page says "subscribed" in words 
   assert.match(html, /Thanks for subscribing\./);
   assert.match(html, /unless it unsubscribed before/, 'a suppressed address gets this same page, so it must not claim delivery outright');
   assert.doesNotMatch(html, /check your inbox/i);
+  // The neutral page must not carry the wording of the CONFIRMED page, whatever that wording is. sow-270
+  // Phase 6 changed it from "You are subscribed." to the full stop headline, so both are named here.
   assert.doesNotMatch(html, /You are subscribed\./);
+  assert.doesNotMatch(html, /Thank you, and welcome/);
 });
 
 test('confirm POST (opt-in ON): notifies the admin once with the decrypted address', async () => {
@@ -369,7 +374,7 @@ test('confirm POST (opt-in ON): notifies the admin once with the decrypted addre
   const res = await handleConfirm(new Request(url, { method: 'POST' }),
     { ...ENV, ADMIN_ALERT_EMAIL: 'owner@example.com', SIGNUP_KV: kv }, { sendAdminAlert: sendAlert });
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /You are subscribed/i);
+  assert.match(await res.text(), /Thank you, and welcome/i); // sow-270 Phase 6 replaced "You are subscribed."
   assert.equal(alerts.length, 1, 'the admin is notified once on a confirm');
   assert.equal(alerts[0].to, 'owner@example.com');
   assert.ok(alerts[0].subject.includes('Confirmed.Reader@Example.com'), 'the notice carries the decrypted address');
