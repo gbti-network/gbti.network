@@ -980,10 +980,13 @@ a.who:hover { color: var(--fg); }
 }
 
 /* ---------- sow-131: /feeds/ views + the ladder pager ---------- */
-/* The ladder pager: interleaved between page chunks; a consumed pager becomes an empty separator box
-   with the SAME dimensions (owner directive). min-height pins the row height across the swap. */
+/* The ladder pager: interleaved between page chunks; a consumed pager becomes ONE horizontal rule
+   between the chunk just loaded and the next (owner, 2026-09-19). It was an empty box holding the
+   pager's own height, which drew a border on all four sides and read as two rules with a gap between
+   them. min-height stays on .pager so the live row does not jump as the button is swapped out; the
+   consumed one collapses to the rule itself and keeps the vertical rhythm through its margin. */
 .pager { margin: 34px 0; min-height: 34px; }
-.pager-done { border: 1.5px solid var(--line); border-radius: var(--r); background: transparent; }
+.pager-done { min-height: 0; border: 0; border-top: 1.5px solid var(--line); border-radius: 0; background: transparent; }
 /* While a tag/visibility filter is active the ladder flattens: the FeedView script lifts the chunks'
    hidden attributes (Tailwind preflight makes [hidden] display:none !important inside @layer base, so
    CSS alone cannot reveal them) and this hides the pagers + separators; clearing the filter restores

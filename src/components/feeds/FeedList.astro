@@ -1,8 +1,9 @@
 ---
 // sow-131: the shared feed list. Server-renders the items in page CHUNKS with a ladder pager row
 // after every chunk except the last (only chunk 1 + its pager start visible). Clicking Next converts
-// the clicked pager into an empty separator box of the same dimensions (owner directive, 2026-07-21),
-// reveals the next chunk below it, and reveals that chunk's own pager below the new items. Earlier
+// the clicked pager into a single horizontal rule (owner, 2026-09-19; it was an empty box of the same
+// dimensions from 2026-07-21, which read as two rules with a gap), reveals the next chunk below it,
+// and reveals that chunk's own pager below the new items. Earlier
 // pages stay on screen, so the ladder has no Prev. JS only toggles hidden + swaps classes; nothing is
 // built in the DOM. Rows carry data-visibility + data-tags so the /feeds/ chrome (FeedView) can filter
 // them client-side; when a filter is active FeedView flattens the ladder (all chunks shown, pagers +
@@ -59,7 +60,7 @@ const NOW = Date.now();
 </div>
 
 <script>
-  // The ladder: consume the clicked pager (same-dimension empty separator box), reveal the next chunk
+  // The ladder: consume the clicked pager (it becomes one horizontal rule), reveal the next chunk
   // and its pager. Delegated per list so multiple feed lists on one site share one bundled handler.
   document.querySelectorAll<HTMLElement>('[data-feedlist]').forEach((list) => {
     list.addEventListener('click', (e) => {
