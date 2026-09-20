@@ -849,6 +849,10 @@ a.who:hover { color: var(--fg); }
 .kt-prompt  { color: #6b4fb0; background: #f2eefb; }
 .kt-share   { color: var(--fg-mute); background: var(--tint); border: 1px solid var(--line); }
 .kt-members { color: var(--green-700); background: var(--green-tint); border: 1px solid var(--green-tint-2); }
+/* sow-381: the CATEGORY pill, beside the type on every card. Deliberately the QUIETEST tag on the line: the
+   type is what a reader sorts by and the category is context, so this one is an outline rather than a fill and
+   never competes with kt-article / kt-news / kt-share. It is not a link (see FeedCard.astro). */
+.kt-cat { color: var(--fg-mute); background: transparent; border: 1px solid var(--line-2); }
 [data-theme="dark"] .kt-article { color: #8fb2ec; background: rgba(63,116,201,.16); }
 [data-theme="dark"] .kt-product { color: #6fd0c5; background: rgba(19,129,120,.18); }
 [data-theme="dark"] .kt-prompt  { color: #b5a1e8; background: rgba(107,79,176,.2); }

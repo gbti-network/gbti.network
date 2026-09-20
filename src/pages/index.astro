@@ -587,10 +587,12 @@ const SHOPTALK = {
       const main2 = el('div', 'feed-main');
       const meta = el('div', 'feed-meta');
       const srcLabel = newsSourceName(it.source, srcNames); // sow-371: "The Verge", not "object-object"
-      meta.append(
-        el('span', 'kind-tag kt-news', 'news' + (srcLabel ? ' · ' + srcLabel : '')),
-        el('span', 'tmeta', typeof it.publishedAt === 'number' ? relTime(it.publishedAt) : ''),
-      );
+      meta.append(el('span', 'kind-tag kt-news', 'news' + (srcLabel ? ' · ' + srcLabel : '')));
+      // sow-381: the category pill, as on every other card. A news category is a THIRD vocabulary and already
+      // arrives as a display string ("Hardware", "Business/Funding"), so there is nothing to resolve here.
+      const newsCat = typeof it.category === 'string' ? it.category.trim() : '';
+      if (newsCat) meta.append(el('span', 'kind-tag kt-cat', newsCat));
+      meta.append(el('span', 'tmeta', typeof it.publishedAt === 'number' ? relTime(it.publishedAt) : ''));
       const detailHref = '/news/item/?g=' + encodeURIComponent(String(it.guid || '')) + (it.source ? '&s=' + encodeURIComponent(String(it.source)) : '');
       const h2 = el('h2', 'feed-title');
       const a = el('a', undefined, String(it.title || 'Untitled'));

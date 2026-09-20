@@ -46,6 +46,10 @@ const catsOf = (x: FeedItem) => catsAttr(x.categories);
         {it.kind === 'share'
           ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
           : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}
+        {/* sow-381: the category, beside the type. NOT a link: the ?cat= drilldown matches on the taxonomy
+            PATH, which a share does not carry, so half of these pills would be dead while looking identical
+            to the live ones. Display only until that is wired. */}
+        {it.category && <span class="kind-tag kt-cat">{it.category}</span>}
         {it.stub && <span class="kind-tag kt-members">members</span>}
       </div>
       <h2 class="feed-title">
