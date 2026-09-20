@@ -42,7 +42,7 @@ export const failedView = (problem) => `<div class="mgr"><p class="msg bad">Coul
 
 /** The list. rows: [{ cta, image, busy }]. */
 export function listView({ rows, msg = '', msgBad = false, dark = false }) {
-  const items = rows.map(({ cta: c, image, busy }) => {
+  const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
     const on = c.enabled === true;
     const n = Array.isArray(c.items) ? c.items.length : 0;
     return `<li class="${on ? 'c' : 'c off'}" data-cta="${esc(c.id)}">
@@ -51,6 +51,7 @@ export function listView({ rows, msg = '', msgBad = false, dark = false }) {
         <div class="top"><span class="label">${esc(c.label || c.id)}</span><span class="${on ? 'badge on' : 'badge'}">${on ? 'Enabled' : 'Disabled'}</span><span class="badge">${esc(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
         <p class="line">${esc(rowSummary(c))}</p>
         <p class="sub mono">${esc(c.partner || 'no partner')} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc(clicks)}</p>` : ''}
       </div>
       <div class="acts-r">
         <button class="lk" type="button" data-act="edit" data-id="${esc(c.id)}"${busy ? ' disabled' : ''}>Edit</button>

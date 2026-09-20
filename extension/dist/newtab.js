@@ -3603,8 +3603,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return null;
   }
   var SUFFIX_RE = /^([\s\S]*?)\s*\{([a-z-]+)\}\s*$/;
-  function splitListSuffix(text, ordered, { bare = false } = {}) {
-    const m = SUFFIX_RE.exec(String(text ?? ""));
+  function splitListSuffix(text2, ordered, { bare = false } = {}) {
+    const m = SUFFIX_RE.exec(String(text2 ?? ""));
     if (!m) return null;
     const kind2 = styleKind(m[2]);
     if (!kind2 || kind2 !== (ordered ? "number" : "bullet")) return null;
@@ -4078,7 +4078,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (isListItem(line)) {
         const run = takeListRun(lines, i);
         const ordered = !!run.items[0]?.ordered;
-        const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text, depth, ordered: o, style }) => ({ text, depth, ordered: o, ...style ? { style } : {} }));
+        const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
         blocks2.push({ type: "list", ordered, items });
         i = run.next;
         continue;
@@ -4231,7 +4231,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       keep.push(`<sup class="md-fnchip" contenteditable="false" data-fn="${id}">${id}</sup>`);
       return `\0A${keep.length - 1}\0`;
     });
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => isDangerousUrl(url) ? text : `<a href="${String(url).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}">${text}</a>`);
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text2, url) => isDangerousUrl(url) ? text2 : `<a href="${String(url).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}">${text2}</a>`);
     h = h.replace(/\*\*(?!\*)((?:[^*]|\*(?!\*))+)\*\*/g, "<strong>$1</strong>");
     h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
     h = underscoreEmphasis(h, { em: EM_US, strong: STRONG_US, keepEscapes: true });
@@ -4285,8 +4285,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
   }
-  function textBlockToHtml(text) {
-    return String(text ?? "").split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join("<br><br>");
+  function textBlockToHtml(text2) {
+    return String(text2 ?? "").split(/\n[ \t]*\n\s*/).map((p) => inlineMdToHtml(p)).join("<br><br>");
   }
   function textBlockFromHtml(html) {
     const parts = String(html ?? "").split(/(?:<br\s*\/?>\s*){2,}/i).map((p) => inlineHtmlToMd(p).replace(/\n$/, ""));
@@ -4434,9 +4434,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return defs;
   }
-  function refAnchor(text, def) {
+  function refAnchor(text2, def) {
     const title = def.title ? ` title="${escapeHtml(def.title)}"` : "";
-    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text}</a>`;
+    return `<a href="${escapeHtml(def.url)}"${title} target="_blank" rel="noopener">${text2}</a>`;
   }
   function inline(escaped, fn = null, defs = null) {
     let t = escaped;
@@ -4466,14 +4466,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const def = defs.get(defKey(label || alt));
         return def ? `<img src="${escapeHtml(def.url)}" alt="${alt}"${def.title ? ` title="${escapeHtml(def.title)}"` : ""} loading="lazy">` : m;
       });
-      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text, label) => {
-        const def = defs.get(defKey(label || text));
-        return def ? refAnchor(text, def) : m;
+      t = t.replace(/\[([^\]\n]+)\]\[([^\]\n]*)\]/g, (m, text2, label) => {
+        const def = defs.get(defKey(label || text2));
+        return def ? refAnchor(text2, def) : m;
       });
-      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text) => {
-        if (text.startsWith("^")) return m;
-        const def = defs.get(defKey(text));
-        return def ? refAnchor(text, def) : m;
+      t = t.replace(/\[([^\]\n]+)\](?!\s*[[(:])/g, (m, text2) => {
+        if (text2.startsWith("^")) return m;
+        const def = defs.get(defKey(text2));
+        return def ? refAnchor(text2, def) : m;
       });
     }
     t = emphasis(t);
@@ -4737,7 +4737,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (OG_REASON_TEXT[reason]) return { kind: "empty", message: OG_REASON_TEXT[reason], retry: reason !== "not-a-page" };
     return { kind: "empty", message: "No preview available for this link.", retry: false };
   }
-  var CSS = `
+  var CSS2 = `
   /* sow-304: edit-mode controls */
   .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
   .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
@@ -4869,9 +4869,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
         case "no-client":
-          return this.set(this.css(CSS) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+          return this.set(this.css(CSS2) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
         case "loading":
-          return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
+          return this.set(this.css(CSS2) + `<div class="card"><p class="sub">Loading…</p></div>`);
         case "locked":
           return this._renderLocked();
         case "trial":
@@ -4886,7 +4886,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS) + this._noticeHtml(
+      this.set(this.css(CSS2) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
@@ -4896,7 +4896,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // and it states the tier plainly, because "your PR was rejected" after writing a Share is the experience this
     // exists to prevent.
     _renderTrial() {
-      this.set(this.css(CSS) + this._noticeHtml(
+      this.set(this.css(CSS2) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares requires a paid membership. <a href="https://gbti.network/membership/">Upgrade to a paid membership</a> to post.',
         "👀"
@@ -4912,7 +4912,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._noteTab = "write";
       this._visibility = "members";
       const rail = STEP_LABELS.map((l, i) => `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join("");
-      this.set(this.css(CSS) + `
+      this.set(this.css(CSS2) + `
       <div class="card wizard">
         <div class="rail">${rail}</div>
 
@@ -5548,9 +5548,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       }
     }
-    _say(el, text, kind2) {
+    _say(el, text2, kind2) {
       if (!el) return;
-      el.textContent = text;
+      el.textContent = text2;
       el.className = `msg ${kind2 || ""}`;
     }
   };
@@ -5640,7 +5640,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     } catch {
     }
   }
-  var CSS2 = `
+  var CSS3 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -5869,7 +5869,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS2) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS3) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -6348,15 +6348,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const u = String(url || "").replace(/\u200B/g, "").trim();
     return /^(https?:\/\/|mailto:)/i.test(u) ? u : "";
   }
-  function maskRuns(text, store2) {
+  function maskRuns(text2, store2) {
     const push = (raw, kind2) => {
       store2.push({ raw, kind: kind2 });
       return `${MASK}${store2.length - 1}${MASK}`;
     };
-    return String(text).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
+    return String(text2).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
   }
-  function inline2(text, { bold, italic, strike, link }) {
-    return String(text).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
+  function inline2(text2, { bold, italic, strike, link }) {
+    return String(text2).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
   }
   function blocks(md) {
     const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
@@ -6436,9 +6436,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return out;
   }
   function mdToPlain(md) {
-    const render2 = (text) => {
+    const render2 = (text2) => {
       const store2 = [];
-      const masked = maskRuns(text, store2);
+      const masked = maskRuns(text2, store2);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline2(masked, {
         bold: (t) => t,
@@ -6483,9 +6483,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
   function mdToHtml(md) {
-    const render2 = (text) => {
+    const render2 = (text2) => {
       const store2 = [];
-      const masked = maskRuns(text, store2);
+      const masked = maskRuns(text2, store2);
       const safe = esc2(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline2(safe, {
@@ -6537,8 +6537,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var REDDIT_SUB = "GBTI_network";
   var composeUrl = (task) => {
     const channel = task?.channel;
-    const text = String(task?.text || "");
-    const t = encodeURIComponent(text);
+    const text2 = String(task?.text || "");
+    const t = encodeURIComponent(text2);
     if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
     if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
     if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
@@ -6560,7 +6560,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "";
     }
   };
-  var CSS3 = `
+  var CSS4 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -6678,19 +6678,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS3) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this.set(this.css(CSS4) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS3) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS4) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS3) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this.set(this.css(CSS4) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
         this._wire();
         return;
       }
@@ -6704,7 +6704,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
       const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
       const chOpts = this._channelOptions();
-      this.set(this.css(CSS3) + this._shell(`
+      this.set(this.css(CSS4) + this._shell(`
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc(hint)}</p>
@@ -6914,7 +6914,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS4 = `
+  var CSS5 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -6996,9 +6996,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
     }
     _copyAll() {
-      const text = this._filtered().map(fmtLine).join("\n");
+      const text2 = this._filtered().map(fmtLine).join("\n");
       try {
-        navigator.clipboard?.writeText?.(text);
+        navigator.clipboard?.writeText?.(text2);
         this._flash = `Copied ${this._filtered().length} lines.`;
       } catch {
         this._flash = "Copy failed (clipboard unavailable).";
@@ -7021,7 +7021,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc(e.realm || "app")}</span></td>
             <td>${esc(e.area)}</td><td class="msg">${esc(e.msg)}</td>
             <td class="data">${esc(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS4) + `
+      this.set(this.css(CSS5) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -7336,7 +7336,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE4 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
-  var CSS5 = `
+  var CSS6 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
   .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
@@ -7419,14 +7419,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS5) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS6) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS5) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS6) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS5) + `
+      this.set(this.css(CSS6) + `
       <div class="bar">
         <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
         <span class="cnt" data-cnt></span>
@@ -9407,12 +9407,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function linkRel({ nofollow = false, blank = false } = {}) {
     return [nofollow ? "nofollow" : null, blank ? "noopener" : null].filter(Boolean).join(" ");
   }
-  function planLinkEdit({ url = "", text = "", nofollow = false, blank = false, hasExisting = false, existingText = "", remove = false } = {}) {
+  function planLinkEdit({ url = "", text: text2 = "", nofollow = false, blank = false, hasExisting = false, existingText = "", remove = false } = {}) {
     const href = String(url ?? "").trim();
     if (remove || !href) return hasExisting ? { action: "remove" } : { action: "none" };
     if (isDangerousUrl(href)) return { action: "reject" };
     const rel = linkRel({ nofollow, blank });
-    const wanted = String(text ?? "").trim();
+    const wanted = String(text2 ?? "").trim();
     return {
       action: hasExisting ? "update" : "create",
       href,
@@ -9633,13 +9633,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     function apply(remove) {
       if (!lk) return;
       const el = lk.el;
-      const text = String(lp.querySelector("[data-lk-text]").value || "").trim();
+      const text2 = String(lp.querySelector("[data-lk-text]").value || "").trim();
       const url = String(lp.querySelector("[data-lk-url]").value || "").trim();
       const nofollow = lp.querySelector("[data-lk-nofollow]").checked;
       const blank = lp.querySelector("[data-lk-blank]").checked;
       const plan = planLinkEdit({
         url,
-        text,
+        text: text2,
         nofollow,
         blank,
         hasExisting: !!lk.existing,
@@ -9752,10 +9752,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       el.addEventListener("mousedown", (e) => {
         if (e.target.tagName !== "INPUT") e.preventDefault();
       });
-      const apply2 = (text) => {
+      const apply2 = (text2) => {
         const target = ibEl;
         hideCaptionPanel();
-        if (target && typeof imageTools?.onCaption === "function") imageTools.onCaption(target, String(text ?? ""));
+        if (target && typeof imageTools?.onCaption === "function") imageTools.onCaption(target, String(text2 ?? ""));
       };
       el.querySelector("[data-ic-apply]").addEventListener("click", () => apply2(el.querySelector("[data-ic-text]").value));
       el.querySelector("[data-ic-remove]").addEventListener("click", () => apply2(""));
@@ -9966,7 +9966,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const i = host.indexOf(b._id);
           if (i < 0) return;
           const texts = normalizeListItems(current, !!b.ordered).map((it) => it.text).filter((t) => t.trim() !== "");
-          const paras = (texts.length ? texts : [""]).map((text) => host.withId({ type: "paragraph", text }));
+          const paras = (texts.length ? texts : [""]).map((text2) => host.withId({ type: "paragraph", text: text2 }));
           host.blocks().splice(i, 1, ...paras);
           host.render();
           host.change();
@@ -10365,16 +10365,16 @@ ${listStyleProseCss(".doc-blocks")}
         onRetype: (ce, toType, level) => {
           const b = this._byId(ce.dataset.id);
           if (!b || b.type !== "paragraph" && b.type !== "heading") return;
-          const text = textBlockFromHtml(ce.innerHTML);
+          const text2 = textBlockFromHtml(ce.innerHTML);
           if (toType === "heading") {
-            if (text.includes("\n")) return;
+            if (text2.includes("\n")) return;
             b.type = "heading";
             b.level = Math.min(6, Math.max(1, Number(level) || 2));
-            b.text = text;
+            b.text = text2;
           } else {
             b.type = "paragraph";
             delete b.level;
-            b.text = text;
+            b.text = text2;
           }
           this._render();
           this._focusBlock(b._id);
@@ -11727,16 +11727,16 @@ ${listStyleProseCss(".doc-blocks")}
         walk(n, out);
         return;
       }
-      const text = inline3(n.innerHTML);
-      if (text.trim()) out.push(text);
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(text2);
       return;
     }
     if (t === "BLOCKQUOTE") {
       const inner = [];
       if (hasBlockChild(n)) walk(n, inner);
       else {
-        const text = inline3(n.innerHTML);
-        if (text.trim()) inner.push(text);
+        const text2 = inline3(n.innerHTML);
+        if (text2.trim()) inner.push(text2);
       }
       const paras = flat(inner);
       out.push({ quote: true, text: paras.length ? paras.join("\n\n").split("\n").map((l) => l ? `> ${l}` : ">").join("\n") : "" });
@@ -11746,13 +11746,13 @@ ${listStyleProseCss(".doc-blocks")}
       const items = [];
       for (const li of kids(n)) {
         if (li.nodeType !== ELEMENT || tagOf(li) !== "LI") continue;
-        let text;
+        let text2;
         if (hasBlockChild(li)) {
           const inner = [];
           walk(li, inner);
-          text = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
-        } else text = inline3(li.innerHTML);
-        if (text.trim()) items.push(text);
+          text2 = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
+        } else text2 = inline3(li.innerHTML);
+        if (text2.trim()) items.push(text2);
       }
       if (!items.length) return;
       out.push(items.map((it, i) => t === "OL" ? `${i + 1}. ${it}` : `- ${it}`).join("\n"));
@@ -11764,8 +11764,8 @@ ${listStyleProseCss(".doc-blocks")}
       return;
     }
     if (/^H[1-6]$/.test(t)) {
-      const text = inline3(n.innerHTML);
-      if (text.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text}`);
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text2}`);
       return;
     }
     if (t === "HR") {
@@ -11773,13 +11773,13 @@ ${listStyleProseCss(".doc-blocks")}
       return;
     }
     if (t === "LI") {
-      const text = inline3(n.innerHTML);
-      if (text.trim()) out.push(`- ${text}`);
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(`- ${text2}`);
       return;
     }
     if (t === "TABLE") {
-      const text = inline3(n.innerHTML);
-      if (text.trim()) out.push(text);
+      const text2 = inline3(n.innerHTML);
+      if (text2.trim()) out.push(text2);
       return;
     }
   }
@@ -11818,7 +11818,7 @@ ${listStyleProseCss(".doc-blocks")}
     x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
   };
   var svg2 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
-  var CSS6 = `
+  var CSS7 = `
   :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
   .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
   .box:focus-within { border-color: var(--brand); }
@@ -11877,7 +11877,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (this._rendered) return;
       this._rendered = true;
       const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc(c.label)}" aria-label="${esc(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg2(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
-      this.set(this.css(CSS6) + `<div class="box" data-box>
+      this.set(this.css(CSS7) + `<div class="box" data-box>
       <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
       <div class="vid" data-vid hidden>
         <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
@@ -12194,7 +12194,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS7 = `
+  var CSS8 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
   .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size: 13.5px; color: var(--muted); }
   .nudge a { color: var(--brand); font-weight: 600; }
@@ -12254,14 +12254,14 @@ ${listStyleProseCss(".doc-blocks")}
     _renderEditAffordance() {
       this._fullRow(false);
       if (!this._identity || this._identity.username !== this._editAuthor) {
-        this.set(this.css(CSS7) + "");
+        this.set(this.css(CSS8) + "");
         return;
       }
-      this.set(this.css(CSS7) + `<button class="edit" type="button">Edit</button>`);
+      this.set(this.css(CSS8) + `<button class="edit" type="button">Edit</button>`);
       this.on(".edit", "click", () => this._openEdit());
     }
     async _openEdit() {
-      this.set(this.css(CSS7) + `<p class="msg">Loading…</p>`);
+      this.set(this.css(CSS8) + `<p class="msg">Loading…</p>`);
       let body = "";
       let visibility = "members";
       try {
@@ -12269,7 +12269,7 @@ ${listStyleProseCss(".doc-blocks")}
         body = c?.body ?? "";
         visibility = c?.visibility ?? c?.frontmatter?.visibility ?? "members";
       } catch {
-        this.set(this.css(CSS7) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.set(this.css(CSS8) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
         this.on(".edit", "click", () => this._openEdit());
         return;
       }
@@ -12278,19 +12278,19 @@ ${listStyleProseCss(".doc-blocks")}
     // ---- COMPOSE mode ----
     _renderCompose() {
       if (LOCKED.has(this._membership)) {
-        this.set(this.css(CSS7) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        this.set(this.css(CSS8) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
         return;
       }
       if (this._membership === "trialing") {
-        this.set(this.css(CSS7) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        this.set(this.css(CSS8) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
         return;
       }
       if (!this._identity) {
-        this.set(this.css(CSS7) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS8) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
         return;
       }
       this._fullRow(false);
-      this.set(this.css(CSS7) + `<button class="open" type="button">Write a comment</button>`);
+      this.set(this.css(CSS8) + `<button class="open" type="button">Write a comment</button>`);
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit, visibility = "members" }) {
@@ -12302,7 +12302,7 @@ ${listStyleProseCss(".doc-blocks")}
         <button type="button" data-vis="members" class="${vis === "members" ? "on" : ""}" aria-pressed="${vis === "members"}">Members only</button>
         <button type="button" data-vis="public" class="${vis === "public" ? "on" : ""}" aria-pressed="${vis === "public"}">Public</button>
       </div>`;
-      this.set(this.css(CSS7) + `
+      this.set(this.css(CSS8) + `
       <div class="form">
         <gbti-prose-editor data-editor></gbti-prose-editor>
         <div class="row">
@@ -12395,17 +12395,17 @@ ${listStyleProseCss(".doc-blocks")}
         wrap?.classList.remove("busy");
       }
     }
-    _done(msg, text, event, detail) {
-      this._say(msg, text, "ok");
+    _done(msg, text2, event, detail) {
+      this._say(msg, text2, "ok");
       this.emit(event, detail);
     }
     _fail(msg, err) {
       const h = failHint(err);
       this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, "err");
     }
-    _say(el, text, kind2) {
+    _say(el, text2, kind2) {
       if (el) {
-        el.textContent = text;
+        el.textContent = text2;
         el.className = `msg ${kind2 || ""}`;
       }
     }
@@ -12455,7 +12455,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-discussion.mjs
-  var CSS8 = `
+  var CSS9 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
@@ -12548,11 +12548,11 @@ ${listStyleProseCss(".doc-blocks")}
       const targetType = this._type();
       const targetSlug = this._slug();
       if (!targetType || !targetSlug) {
-        this.set(this.css(CSS8));
+        this.set(this.css(CSS9));
         return;
       }
       if (!this.client) {
-        this.set(this.css(CSS8) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
+        this.set(this.css(CSS9) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
         return;
       }
       if (this._role == null) {
@@ -12565,7 +12565,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._me = null;
         }
       }
-      if (!this._loaded) this.set(this.css(CSS8) + `<p class="empty">Loading the discussion…</p>`);
+      if (!this._loaded) this.set(this.css(CSS9) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
       const cacheKey = `comments-${targetType}`;
       if (!this._painted) {
@@ -12587,13 +12587,13 @@ ${listStyleProseCss(".doc-blocks")}
         wbCacheSet(targetSlug, cacheKey, items).catch(() => {
         });
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS8) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS9) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
       try {
         await this._resolveAndRender(targetType, targetSlug, items);
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS8) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS9) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
       }
       this._loaded = true;
     }
@@ -12642,7 +12642,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div></div>`;
       }).join("");
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
-      this.set(this.css(CSS8) + threadHtml + this._composeHtml(targetType, targetSlug));
+      this.set(this.css(CSS9) + threadHtml + this._composeHtml(targetType, targetSlug));
       wireEmbedPosters(this.root);
       this.$$("[data-fold]").forEach((b) => b.addEventListener("click", () => this._toggleFold(b.dataset.fold)));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec, b.dataset.authornote === "1")));
@@ -12705,8 +12705,8 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         if (c.visibility === "members") {
           if (!c.encryptedBody) return "";
-          const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
-          return (await this.client.preview({ body: text, autoEmbed: true }))?.html ?? "";
+          const { text: text2 } = await this.client.decrypt({ encPath: c.encryptedBody });
+          return (await this.client.preview({ body: text2, autoEmbed: true }))?.html ?? "";
         }
         return c.body ? (await this.client.preview({ body: c.body, autoEmbed: true }))?.html ?? "" : "";
       } catch (err) {
@@ -12720,7 +12720,7 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/elements/gbti-cta-assignment.mjs
   var SITE7 = "https://gbti.network";
   var ADMIN = `${SITE7}/admin/`;
-  var CSS9 = `
+  var CSS10 = `
   :host { display:block; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); line-height:1.5; }
   b { color:var(--fg); font-weight:600; }
   a { color:var(--accent); }
@@ -12764,26 +12764,26 @@ ${listStyleProseCss(".doc-blocks")}
       const type = this.getAttribute("type") || "";
       const ref = (this.getAttribute("ref") || "").trim();
       if (!type || !ref) {
-        this.set(this.css(CSS9) + `<span>CTA: none yet. Save the item with a permalink first; a superadmin assigns a CTA in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+        this.set(this.css(CSS10) + `<span>CTA: none yet. Save the item with a permalink first; a superadmin assigns a CTA in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS9) + `<span>${esc(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS10) + `<span>${esc(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._ctas) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS9) + `<span>CTA: checking...</span>`);
+        this.set(this.css(CSS10) + `<span>CTA: checking...</span>`);
         return;
       }
       const m = this.matches;
       if (!m.length) {
-        this.set(this.css(CSS9) + `<span>CTA: <b>none</b>. A superadmin assigns one in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+        this.set(this.css(CSS10) + `<span>CTA: <b>none</b>. A superadmin assigns one in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
         return;
       }
       const parts = m.map((c) => `<b>${esc(c.label || c.id)}</b>${c.enabled ? "" : ' <span class="off">(disabled, so it does not render)</span>'}`);
-      this.set(this.css(CSS9) + `<span>CTA: ${parts.join(", ")}. Managed by a superadmin in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+      this.set(this.css(CSS10) + `<span>CTA: ${parts.join(", ")}. Managed by a superadmin in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
     }
   };
   function matchesFor(ctas, type, ref) {
@@ -15233,7 +15233,7 @@ ${listStyleProseCss(".doc-blocks")}
     banned: "Suspended",
     unknown: "Unknown"
   };
-  var CSS10 = `
+  var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -15345,7 +15345,7 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS10) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
+        this.set(this.css(CSS11) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
         return;
       }
       let appearance = "";
@@ -15354,12 +15354,12 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS10) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
+        this.set(this.css(CSS11) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
         this._wire();
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS10) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE8}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS11) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE8}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -15369,7 +15369,7 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS10) + sections);
+      this.set(this.css(CSS11) + sections);
       this._wire();
     }
     _account() {
@@ -15559,10 +15559,10 @@ ${listStyleProseCss(".doc-blocks")}
       this._say("[data-danger-msg]", "Deletion requested. Your private data on this device is cleared. Email privacy@gbti.network to complete erasure of your published content + billing (processed within 30 days). Signing you out…", "ok");
       setTimeout(() => this.emit("gbti:request-signout"), 2500);
     }
-    _say(sel, text, kind2) {
+    _say(sel, text2, kind2) {
       const el = this.$(sel);
       if (el) {
-        el.textContent = text;
+        el.textContent = text2;
         el.className = `msg ${kind2 || ""}`;
       }
     }
@@ -15582,7 +15582,7 @@ ${listStyleProseCss(".doc-blocks")}
     unindex: "Unindex this item? Its page asks search engines not to index it and it leaves the sitemap; the site still points at it (reversible).",
     reindex: "Reindex this item? Search engines are allowed to index it again."
   };
-  var CSS11 = `
+  var CSS12 = `
   :host { display:inline-flex; }
   .mod { display:inline-flex; gap:6px; align-items:center; }
   .ma { font:inherit; font-size:12px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
@@ -15616,7 +15616,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       const btns = actions.map((a) => `<button class="ma ma-${a}" type="button" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
-      this.set(this.css(CSS11) + `<span class="mod">${btns}</span>`);
+      this.set(this.css(CSS12) + `<span class="mod">${btns}</span>`);
       this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._do(b.dataset.act)));
     }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
@@ -15670,7 +15670,7 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/elements/gbti-admin.mjs
   var RANK5 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS12 = `
+  var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .rolebar { display:flex; align-items:center; gap:8px; margin:0 0 2px; }
   .rolebar .lbl { font-size:13px; color:var(--muted); }
@@ -15705,7 +15705,7 @@ ${listStyleProseCss(".doc-blocks")}
   var GbtiAdmin = class extends GbtiElement {
     async render() {
       if (!this.client) {
-        this.set(this.css(CSS12) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
+        this.set(this.css(CSS13) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
         return;
       }
       let role = "member";
@@ -15715,13 +15715,13 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const rank = RANK5[role] ?? 0;
       if (rank < RANK5.moderator) {
-        this.set(this.css(CSS12) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
+        this.set(this.css(CSS13) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
         return;
       }
       const caps = this.hasAttribute("caps") ? this.getAttribute("caps").split(",").map((s) => s.trim()).filter(Boolean) : null;
       const capOn = (g) => !caps || caps.includes(g);
       this.set(
-        this.css(CSS12) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
+        this.css(CSS13) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
 
          <div class="grp">
            <h4>Content moderation</h4>
@@ -15862,7 +15862,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE9 = "https://gbti.network";
-  var CSS13 = `
+  var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
   .chip { font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; }
@@ -16057,19 +16057,19 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS13) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
         return;
       }
       if (this._error === "forbidden") {
-        this.set(this.css(CSS13) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
         return;
       }
       if (this._error === "auth") {
-        this.set(this.css(CSS13) + `<p class="muted">Sign in to view the member roster.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Sign in to view the member roster.</p>`);
         return;
       }
       if (this._error) {
-        this.set(this.css(CSS13) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
         return;
       }
       if (!this._data) {
@@ -16077,7 +16077,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this._load();
         }
-        this.set(this.css(CSS13) + `<p class="muted">Loading the member roster...</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Loading the member roster...</p>`);
         return;
       }
       const s = this._data.summary || {};
@@ -16118,7 +16118,7 @@ ${listStyleProseCss(".doc-blocks")}
         const panel = canManage && this._managing === m.githubId ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : "";
         return main + panel;
       }).join("");
-      this.set(this.css(CSS13) + `${chips}
+      this.set(this.css(CSS14) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Tier &amp; flags</th><th>Content</th><th>github_id</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status and tier follow ban &gt; staff &gt; grandfather &gt; Stripe. The override tiers (ban / staff / grandfather) are always authoritative from the public repo; the live Stripe tier shows when the admin Stripe endpoint is reachable. A <b>pending</b> (dashed) tag is a coupon grant a member has redeemed but reconcile has not yet folded into the repo: it is an annotation, not effective access yet, and it clears once the grant is recorded. Member actions open a house PR and take effect once it merges.</p>
       ${this._pullsSection()}
@@ -16140,7 +16140,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-category-manager.mjs
   var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS14 = `
+  var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; line-height:1.5; }
   .muted { color:var(--muted); font-size:13.5px; }
@@ -16191,7 +16191,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS14) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -16199,11 +16199,11 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS14) + `<p class="muted">Loading categories...</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Loading categories...</p>`);
         return;
       }
       this._paths = this._flatten(this._tree);
-      this.set(this.css(CSS14) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add-top">
         <input class="key" data-newtop-key type="text" placeholder="new-key (kebab-case)" />
@@ -16475,7 +16475,7 @@ ${listStyleProseCss(".doc-blocks")}
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
-  var CSS15 = `
+  var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; --r7:7px; } /* default border radius is 7px (owner) */
   .muted { color:var(--muted); font-size:13.5px; }
   button { font:inherit; cursor:pointer; }
@@ -16718,7 +16718,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -16726,7 +16726,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS15) + `<p class="muted">Loading the taxonomy…</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading the taxonomy…</p>`);
         return;
       }
       const plan = batchPlan(this._pending);
@@ -16739,7 +16739,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div>`;
       const body = `${this._newOpen ? this._newCatHtml() : ""}<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
       ${this._msg ? `<p class="msg">${this._msg}</p>` : ""}`;
-      this.set(this.css(CSS15) + header + body);
+      this.set(this.css(CSS16) + header + body);
       this._wire();
     }
     // SOW-100 QA (owner): a real add-category form — key, label, and a PARENT picker over the whole tree —
@@ -17137,7 +17137,7 @@ ${listStyleProseCss(".doc-blocks")}
     archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>'
   };
   var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
-  var CSS16 = `
+  var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     --panel2:color-mix(in srgb, var(--fg) 5%, var(--panel));
     --raise:color-mix(in srgb, var(--fg) 8%, var(--panel));
@@ -17358,7 +17358,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS16) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
         return;
       }
       const list = this._filtered();
@@ -17401,7 +17401,7 @@ ${listStyleProseCss(".doc-blocks")}
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
         </a>`).join("")}</div>
       </div>` : `<div class="detail empty"><div><div class="ico">${TAG_ICO}</div><p>Select a tag to see the content carrying it.</p></div></div>`;
-      this.set(this.css(CSS16) + `
+      this.set(this.css(CSS17) + `
       <div class="top"><div><div class="eyebrow">Admin · Tags</div><div class="title">Tag manager</div></div>
         <div class="count"><b>${list.length}</b> of <b>${this._rows.length}</b> tags · <b>${uses}</b> uses</div></div>
       <div class="toolbar">
@@ -17504,7 +17504,7 @@ ${listStyleProseCss(".doc-blocks")}
       return url || "";
     }
   };
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -17596,7 +17596,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
         return;
       }
       if (!this._sources) {
@@ -17604,11 +17604,11 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS17) + `<p class="muted">Loading news sources...</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Loading news sources...</p>`);
         return;
       }
       const view = this._view;
-      this.set(this.css(CSS17) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
       <div class="subtabs" role="tablist" aria-label="News settings">
         <button class="subtab" type="button" role="tab" data-view="sources" aria-selected="${view === "sources"}">Sources <span class="count">${this._sources.length}</span></button>
         <button class="subtab" type="button" role="tab" data-view="banwords" aria-selected="${view === "banwords"}">Blocked words <span class="count">${(this._banwords || []).length}</span></button>
@@ -17732,7 +17732,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
   // client-ui/src/elements/gbti-quote-manager.mjs
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -17778,7 +17778,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
         return;
       }
       if (!this._quotes) {
@@ -17786,7 +17786,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS18) + `<p class="muted">Loading quotes...</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Loading quotes...</p>`);
         return;
       }
       const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
@@ -17794,7 +17794,7 @@ ${listStyleProseCss(".doc-blocks")}
         const on = q && q.enabled !== false;
         return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc(q.text || "")}</span><span class="by">${esc(q.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc(q.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(q.text || "")}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._quotes.length} quotes, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -17809,9 +17809,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _wire() {
       this.on("[data-add]", "click", () => {
-        const text = (this.$("[data-add-text]")?.value || "").trim();
+        const text2 = (this.$("[data-add-text]")?.value || "").trim();
         const author = (this.$("[data-add-author]")?.value || "").trim();
-        if (!text) {
+        if (!text2) {
           this._msg = "A quote text is required.";
           this.render();
           return;
@@ -17821,15 +17821,15 @@ ${listStyleProseCss(".doc-blocks")}
           this.render();
           return;
         }
-        this._run(() => this.client.addQuote({ text, author }));
+        this._run(() => this.client.addQuote({ text: text2, author }));
       });
       this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.setQuoteEnabled({ text: b.dataset.toggle, enabled: b.dataset.on !== "1" }))));
       this.$$("[data-remove]").forEach((b) => b.addEventListener("click", () => {
-        const text = b.dataset.remove;
+        const text2 = b.dataset.remove;
         if (typeof confirm === "function" && !confirm(`Remove this quote?
 
-"${text}"`)) return;
-        this._run(() => this.client.removeQuote({ text }));
+"${text2}"`)) return;
+        this._run(() => this.client.removeQuote({ text: text2 }));
       }));
     }
     async _run(fn) {
@@ -17885,7 +17885,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var CSS19 = `
+  var CSS20 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -17967,7 +17967,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
         return;
       }
       if (!this._coupons) {
@@ -17975,7 +17975,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS19) + `<p class="muted">Loading coupons...</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Loading coupons...</p>`);
         return;
       }
       const rows = this._coupons.map((c) => {
@@ -17996,7 +17996,7 @@ ${listStyleProseCss(".doc-blocks")}
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS19) + `
+      this.set(this.css(CSS20) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -18169,7 +18169,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-editorial-manager.mjs
-  var CSS20 = `
+  var CSS21 = `
   :host { display:block; }
   [hidden] { display:none !important; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -18219,21 +18219,21 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS20) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS20) + `<p class="msg">${esc(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS21) + `<p class="msg">${esc(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._items) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS20) + '<p class="muted">Loading the review queue...</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Loading the review queue...</p>');
         return;
       }
       const rows = this._items.map((i) => this._rowHtml(i)).join("");
-      this.set(this.css(CSS20) + `
+      this.set(this.css(CSS21) + `
       <div class="head">
         <h3>Editorial review</h3>
         <span class="hint">${esc(queueSummary(this._items))}</span>
@@ -18280,7 +18280,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-editorial-manager", GbtiEditorialManager);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
-  var CSS21 = `
+  var CSS22 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
@@ -18325,7 +18325,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
         return;
       }
       if (!this._toggles) {
@@ -18333,14 +18333,14 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS21) + `<p class="muted">Loading site settings...</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Loading site settings...</p>`);
         return;
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
         return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc(t.label || t.key)}</span><span class="desc">${esc(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS21) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS22) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
@@ -18483,7 +18483,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-digest-manager.mjs
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .busy { opacity:.55; pointer-events:none; }
@@ -18592,27 +18592,27 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS22) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS22) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS22) + `<p class="msg">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS23) + `<p class="msg">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
         });
         return;
       }
-      this.set(this.css(CSS22) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
@@ -18777,41 +18777,64 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-digest-manager", GbtiDigestManager);
 
-  // client-ui/src/elements/gbti-outbound-link-manager.mjs
-  var SITE12 = "https://gbti.network";
+  // membership/outbound-link-edits.mjs
+  var LINK_STATUSES = Object.freeze(["live", "placeholder", "retired"]);
+  var EDITABLE_LINK_FIELDS = Object.freeze(["destination", "partner", "note"]);
+
+  // client-ui/src/outbound-manager-core.mjs
+  var STATUS_LABELS = Object.freeze({ live: "Live", placeholder: "Placeholder", retired: "Retired" });
+  var text = (v) => typeof v === "string" ? v.trim() : "";
+  function suggestPath(partner) {
+    const slug = text(partner).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return slug ? `/outbound/${slug}` : "";
+  }
+  function draftFromLink(link) {
+    return { path: text(link?.path), destination: text(link?.destination), partner: text(link?.partner), note: text(link?.note) };
+  }
+  function addPayload(draft = {}) {
+    const path = text(draft.path);
+    const destination = text(draft.destination);
+    const partner = text(draft.partner);
+    if (!path) return { problem: "A site path is needed, for example /outbound/acme." };
+    if (!path.startsWith("/")) return { problem: "The path must start with a slash." };
+    if (!destination) return { problem: "A destination is needed: where the link sends the reader." };
+    if (!partner) return { problem: "A partner label is needed, for example acme." };
+    const note = text(draft.note);
+    return { payload: { path, destination, partner, ...note ? { note } : {} } };
+  }
+  function updatePayload(link, draft = {}) {
+    const before = draftFromLink(link);
+    const out = { path: before.path };
+    let changed = false;
+    for (const k of ["destination", "partner", "note"]) {
+      const v = text(draft[k]);
+      if (v === before[k]) continue;
+      if (k !== "note" && !v) return { problem: `${k === "destination" ? "A destination" : "A partner label"} cannot be emptied.` };
+      out[k] = v;
+      changed = true;
+    }
+    if (!changed) return { noop: true };
+    return { payload: out };
+  }
+  function statusPayload(link, status) {
+    if (!LINK_STATUSES.includes(status)) return { problem: `Unknown status ${JSON.stringify(status)}.` };
+    if (text(link?.status || "live") === status) return { noop: true };
+    return { payload: { path: text(link?.path), status } };
+  }
+  function savedMessage(what, result) {
+    const n = result && (result.prNumber ?? result.number ?? result.pr);
+    const where = n ? ` (pull request #${n})` : "";
+    return `${what}${where}. It reaches the live site at the next deploy, in about two to three minutes.`;
+  }
+  function applyLocally(links, action, payload) {
+    const list = Array.isArray(links) ? links.map((l) => ({ ...l })) : [];
+    if (action === "add") return [...list, { status: "live", note: "", ...payload }];
+    const row = list.find((l) => text(l.path) === text(payload?.path));
+    if (!row) return list;
+    for (const k of ["destination", "partner", "note", "status"]) if (payload[k] !== void 0) row[k] = payload[k];
+    return list;
+  }
   var WINDOWS = Object.freeze([7, 30]);
-  var CSS23 = `
-  :host { display:block; }
-  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
-  .hint { font-size:12.5px; color:var(--muted); }
-  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
-  .btn { border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; }
-  .btn:hover { border-color:var(--accent); color:var(--accent); }
-  .list { list-style:none; margin:0; padding:0; }
-  .lnk { border-top:1px solid var(--line); padding:12px 2px; }
-  .lnk:first-child { border-top:0; }
-  .top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
-  .path { font-family:var(--font-mono, monospace); font-size:13.5px; color:var(--fg); font-weight:700; overflow-wrap:anywhere; }
-  .partner { font-size:12.5px; color:var(--muted); }
-  .badge { font-size:11px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; border-radius:999px; padding:2px 8px; border:1px solid var(--line); color:var(--muted); }
-  .badge.placeholder { border-color:var(--warn, #c98a12); color:var(--warn, #c98a12); }
-  .badge.retired { opacity:.7; }
-  .dest { display:block; font-size:12.5px; margin-top:3px; overflow-wrap:anywhere; }
-  .dest a { color:var(--accent); }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px 14px; margin-top:8px; }
-  .stat { font-size:13px; }
-  .stat b { font-size:16px; }
-  .stat .sub { display:block; font-size:12px; color:var(--muted); }
-  .gap { color:var(--warn, #c98a12); }
-  details { margin-top:6px; }
-  summary { cursor:pointer; font-size:12.5px; color:var(--muted); }
-  .note { font-size:13px; line-height:1.5; color:var(--fg); margin:6px 0 0; white-space:pre-line; }
-  table { border-collapse:collapse; margin-top:6px; font-size:12.5px; }
-  th, td { text-align:right; padding:2px 10px 2px 0; }
-  th:first-child, td:first-child { text-align:left; font-family:var(--font-mono, monospace); }
-  td.gap { text-align:left; }
-  .muted { color:var(--muted); }
-`;
   var day = (now, n) => new Date(now.getTime() - n * 864e5).toISOString().slice(0, 10);
   function windowFor(store2, path, days, now = /* @__PURE__ */ new Date()) {
     const coverage = new Set(Array.isArray(store2?.coverage) ? store2.coverage : []);
@@ -18833,6 +18856,17 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return out;
   }
+  function cardClicksLine(cta, clicks, now = /* @__PURE__ */ new Date(), days = 30) {
+    const path = typeof cta?.trackedPath === "string" ? cta.trackedPath.trim() : "";
+    if (!path) return null;
+    const w = windowFor(clicks, path, days, now);
+    if (!w.measured) return `${path} · not measured yet`;
+    const gap = w.unmeasured ? `, ${w.unmeasured} of ${days} days not measured` : "";
+    return `${path} · ${w.clicks} click${w.clicks === 1 ? "" : "s"} in ${days} days${gap}`;
+  }
+
+  // client-ui/src/elements/gbti-outbound-link-manager.mjs
+  var SITE12 = "https://gbti.network";
   var GbtiOutboundLinkManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -18867,12 +18901,12 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (this._failed) {
-        this.set(this.css(CSS23) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._links) {
-        this.set(this.css(CSS23) + `<p class="muted">Loading the outbound links...</p>`);
+        this.set(this.css(CSS) + `<p class="muted">Loading the outbound links...</p>`);
         return;
       }
       const now = /* @__PURE__ */ new Date();
@@ -18892,12 +18926,128 @@ ${listStyleProseCss(".doc-blocks")}
         <div class="stats">${stats}</div>
         ${l.note ? `<details><summary>Where this destination came from</summary><p class="note">${esc(l.note)}</p></details>` : ""}
         <details><summary>Last 30 days, by day</summary><table><thead><tr><th>Day</th><th>Clicks</th><th>Crawlers</th><th>Other</th></tr></thead><tbody>${history2}</tbody></table></details>
+        ${this._canWrite() ? this._rowControls(l) : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS23) + `
+      this.set(this.css(CSS) + `
       <div class="head"><span class="hint">${this._links.length} links. Clicks are estimates from Cloudflare zone analytics: 301 answers only, rolled up daily by reconcile. ${latest ? `Measured through ${esc(latest)}.` : "Nothing measured yet: the first rollup lands with the next daily reconcile."}</span></div>
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._canWrite() ? this._addForm() : ""}
       <ul class="list">${rows || '<li class="muted">No outbound links in the store.</li>'}</ul>
     `);
+      this._wire();
+    }
+    /** Write controls show only with an injected client. The Worker re-checks superadmin whatever this renders. */
+    _canWrite() {
+      return !!(this.client && typeof this.client.addOutboundLink === "function");
+    }
+    _addForm() {
+      const d = this._new || {};
+      if (!this._adding) return `<div class="newlink"><button class="btn" type="button" data-new>Add a tracked link</button></div>`;
+      const f = (k, label, ph) => `<label>${label}<input data-nf="${k}" value="${esc(d[k] || "")}" placeholder="${esc(ph)}"></label>`;
+      return `<div class="newlink edit">
+      ${f("partner", "Partner (a short lowercase label)", "acme")}
+      ${f("path", "Site path", "/outbound/acme")}
+      ${f("destination", "Destination", "https://acme.example.com/?ref=YOURCODE")}
+      ${f("note", "Note (where this destination came from)", "")}
+      ${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}
+      <div class="acts"><button class="btn" type="button" data-save-new ${this._busy ? "disabled" : ""}>${this._busy ? "Saving..." : "Mint the link"}</button><button class="btn" type="button" data-cancel-new>Cancel</button></div>
+    </div>`;
+    }
+    _rowControls(l) {
+      const editing = this._editing === l.path;
+      const status = LINK_STATUSES.map((v) => `<button class="btn ${String(l.status || "live") === v ? "on" : ""}" type="button" data-status="${esc(v)}" data-path="${esc(l.path)}">${esc(STATUS_LABELS[v])}</button>`).join("");
+      if (!editing) return `<div class="acts">${status}<button class="btn" type="button" data-edit="${esc(l.path)}">Edit</button></div>`;
+      const d = this._draft || draftFromLink(l);
+      const f = (k, label) => `<label>${label}<input data-ef="${k}" value="${esc(d[k] || "")}"></label>`;
+      return `<div class="acts">${status}</div>
+      <div class="edit">
+        ${f("destination", "Destination")}
+        ${f("partner", "Partner")}
+        ${f("note", "Note")}
+        <p class="sub">The path stays ${esc(l.path)}. Repointing keeps it, so this link keeps one click history.</p>
+        ${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}
+        <div class="acts"><button class="btn" type="button" data-save-edit="${esc(l.path)}" ${this._busy ? "disabled" : ""}>${this._busy ? "Saving..." : "Save"}</button><button class="btn" type="button" data-cancel-edit>Cancel</button></div>
+      </div>`;
+    }
+    _wire() {
+      this.$("[data-new]")?.addEventListener("click", () => {
+        this._adding = true;
+        this._new = {};
+        this._err = "";
+        this.render();
+      });
+      this.$("[data-cancel-new]")?.addEventListener("click", () => {
+        this._adding = false;
+        this._err = "";
+        this.render();
+      });
+      this.$$("[data-nf]").forEach((i) => i.addEventListener("input", () => {
+        this._new = { ...this._new || {}, [i.dataset.nf]: i.value };
+        if (i.dataset.nf === "path") this._pathTouched = true;
+        if (i.dataset.nf === "partner" && !this._pathTouched) {
+          this._new.path = suggestPath(i.value);
+          const pathInput = this.$('[data-nf="path"]');
+          if (pathInput) pathInput.value = this._new.path;
+        }
+      }));
+      this.$("[data-save-new]")?.addEventListener("click", () => this._run("add", addPayload(this._new || {}), "Link minted"));
+      this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
+        const l = (this._links || []).find((x) => x.path === b.dataset.edit);
+        this._editing = b.dataset.edit;
+        this._draft = draftFromLink(l);
+        this._err = "";
+        this.render();
+      }));
+      this.$("[data-cancel-edit]")?.addEventListener("click", () => {
+        this._editing = null;
+        this._draft = null;
+        this._err = "";
+        this.render();
+      });
+      this.$$("[data-ef]").forEach((i) => i.addEventListener("input", () => {
+        this._draft = { ...this._draft || {}, [i.dataset.ef]: i.value };
+      }));
+      this.$("[data-save-edit]")?.addEventListener("click", (e) => {
+        const l = (this._links || []).find((x) => x.path === e.currentTarget.dataset.saveEdit);
+        this._run("update", updatePayload(l, this._draft || {}), "Link updated");
+      });
+      this.$$("[data-status]").forEach((b) => b.addEventListener("click", () => {
+        const l = (this._links || []).find((x) => x.path === b.dataset.path);
+        this._run("status", statusPayload(l, b.dataset.status), `Link set to ${STATUS_LABELS[b.dataset.status]}`);
+      }));
+    }
+    /** One write, one place: refuse locally, call the client, report what happens next, update the list. */
+    async _run(action, plan, what) {
+      if (plan.noop) {
+        this._err = "";
+        this._editing = null;
+        this._msg = "Nothing changed.";
+        this.render();
+        return;
+      }
+      if (plan.problem) {
+        this._err = plan.problem;
+        this.render();
+        return;
+      }
+      this._busy = true;
+      this._err = "";
+      this.render();
+      try {
+        const call = action === "add" ? this.client.addOutboundLink(plan.payload) : action === "update" ? this.client.updateOutboundLink(plan.payload) : this.client.setOutboundLinkStatus(plan.payload);
+        const res = await call;
+        this._links = applyLocally(this._links, action, plan.payload);
+        this._msg = savedMessage(what, res);
+        this._adding = false;
+        this._editing = null;
+        this._draft = null;
+        this._pathTouched = false;
+      } catch (err) {
+        this._err = err?.message ? String(err.message) : "The change could not be saved.";
+      }
+      this._busy = false;
+      this.render();
     }
   };
   define("gbti-outbound-link-manager", GbtiOutboundLinkManager);
@@ -19527,7 +19677,7 @@ ${listStyleProseCss(".doc-blocks")}
   var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc5(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
-    const items = rows.map(({ cta: c, image, busy }) => {
+    const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
       return `<li class="${on ? "c" : "c off"}" data-cta="${esc5(c.id)}">
@@ -19536,6 +19686,7 @@ ${listStyleProseCss(".doc-blocks")}
         <div class="top"><span class="label">${esc5(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc5(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
         <p class="line">${esc5(rowSummary2(c))}</p>
         <p class="sub mono">${esc5(c.partner || "no partner")} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc5(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
         <button class="lk" type="button" data-act="edit" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>Edit</button>
@@ -19690,7 +19841,7 @@ ${listStyleProseCss(".doc-blocks")}
     return cardPreview(card, { image, dark: st.pvDark, phone: st.pvPhone });
   }
   function previewAside(st) {
-    const seg = (on, act, text) => `<button class="${on ? "seg on" : "seg"}" type="button" data-act="${act}" aria-pressed="${on}">${text}</button>`;
+    const seg = (on, act, text2) => `<button class="${on ? "seg on" : "seg"}" type="button" data-act="${act}" aria-pressed="${on}">${text2}</button>`;
     return `<aside class="ed-prev">
     <div class="pv-bar"><h4>Preview</h4>
       <div class="segs">${seg(!st.pvDark, "pv-light", "Light")}${seg(st.pvDark, "pv-dark", "Dark")}</div>
@@ -20086,13 +20237,18 @@ ${listStyleProseCss(".doc-blocks")}
       this._status = "loading";
       this.render();
       try {
-        const [pool, built] = await Promise.all([
+        const [pool, built, clicks] = await Promise.all([
           this.client.ctaPool(),
           fetch(`${this.site}/ctas.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`ctas.json ${r.status}`);
             return r.json();
-          })
+          }),
+          // sow-359: a card that points at a tracked link is already counted per path by the daily rollup, so
+          // its clicks come from the same public artifact the link board reads. It must NOT fail the load: the
+          // manager's job is editing cards, and a missing click history is a missing line, not a broken page.
+          fetch(`${this.site}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).catch(() => null)
         ]);
+        this._clicks = clicks && typeof clicks === "object" ? { coverage: Array.isArray(clicks.coverage) ? clicks.coverage : [], clicks: clicks.clicks && typeof clicks.clicks === "object" ? clicks.clicks : {} } : { coverage: [], clicks: {} };
         this._ctas = Array.isArray(pool?.ctas) ? pool.ctas : [];
         this._built = new Map((Array.isArray(built?.ctas) ? built.ctas : []).map((c) => [c.id, c]));
         this._pages = pagesFromBuilt(built);
@@ -20133,7 +20289,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._afterEditorPaint();
         return;
       }
-      const rows = this._ctas.map((c) => ({ cta: c, image: typeof c.image === "string" ? { url: this._imageUrl(c.image) } : null, busy: this._busyId === c.id }));
+      const rows = this._ctas.map((c) => ({ cta: c, image: typeof c.image === "string" ? { url: this._imageUrl(c.image) } : null, busy: this._busyId === c.id, clicks: cardClicksLine(c, this._clicks) }));
       this._paint(listView({ rows, msg: this._listMsg, msgBad: this._listBad }));
     }
     _paint(markup) {
@@ -21808,9 +21964,9 @@ ${listStyleProseCss(".doc-blocks")}
       const encPath = this.dataset?.gbtiEnc || this.getAttribute?.("data-gbti-enc");
       if (!this.client || !encPath) return;
       this.set(this.css(PROSE) + `<div class="state">Unlocking member content…</div>`);
-      let text;
+      let text2;
       try {
-        ({ text } = await this.client.decrypt({ encPath }));
+        ({ text: text2 } = await this.client.decrypt({ encPath }));
       } catch (err) {
         const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
         this.set(this.css(PROSE) + `<div class="locked">${locked ? 'This content is for members. <a href="/membership/">Become a member</a> to unlock.' : "This content could not be unlocked right now."}</div>`);
@@ -21819,7 +21975,7 @@ ${listStyleProseCss(".doc-blocks")}
       let html = "";
       try {
         const autoEmbed = (this.dataset.gbtiKind || this.getAttribute("data-gbti-kind") || "") === "comment";
-        html = (await this.client.preview({ body: text, autoEmbed }))?.html ?? "";
+        html = (await this.client.preview({ body: text2, autoEmbed }))?.html ?? "";
       } catch {
         html = "";
       }
@@ -21850,9 +22006,9 @@ ${listStyleProseCss(".doc-blocks")}
         copy.className = "codeclip-toggle";
         copy.textContent = "Copy";
         copy.addEventListener("click", async () => {
-          const text = (pre.textContent || "").replace(/\n$/, "");
+          const text2 = (pre.textContent || "").replace(/\n$/, "");
           try {
-            await navigator.clipboard.writeText(text);
+            await navigator.clipboard.writeText(text2);
             copy.textContent = "Copied";
             setTimeout(() => {
               copy.textContent = "Copy";
@@ -23272,8 +23428,8 @@ ${listStyleProseCss(".doc-blocks")}
         if (it.body) return (await this.client.preview({ body: it.body }))?.html ?? "";
         if (it.visibility === "members") {
           if (!it.encryptedBody) return "";
-          const { text } = await this.client.decrypt({ encPath: it.encryptedBody });
-          return (await this.client.preview({ body: text }))?.html ?? "";
+          const { text: text2 } = await this.client.decrypt({ encPath: it.encryptedBody });
+          return (await this.client.preview({ body: text2 }))?.html ?? "";
         }
         return "";
       } catch (err) {
@@ -26042,8 +26198,8 @@ ${listStyleProseCss(".doc-blocks")}
     _openFollow(username) {
       openNotifyModal(username, () => this._reloadFollows());
     }
-    _say(kind2, text) {
-      this._msg = { kind: kind2, text };
+    _say(kind2, text2) {
+      this._msg = { kind: kind2, text: text2 };
     }
     render() {
       this._maybeLoad();
@@ -26748,11 +26904,11 @@ ${listStyleProseCss(".doc-blocks")}
 
   // membership/syndication-format.mjs
   var TYPE_LABEL6 = { post: "article", project: "project", prompt: "prompt", share: "link" };
-  function sanitizeMentions(text) {
-    return String(text || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
+  function sanitizeMentions(text2) {
+    return String(text2 || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
   }
-  function truncate2(text, limit) {
-    const s = String(text || "");
+  function truncate2(text2, limit) {
+    const s = String(text2 || "");
     if (!Number.isFinite(limit) || s.length <= limit) return s;
     return s.slice(0, Math.max(0, limit - 1)).trimEnd() + "…";
   }
@@ -26825,8 +26981,8 @@ ${listStyleProseCss(".doc-blocks")}
     if (brandTag) kept.push(brandTag);
     return kept.join(" ");
   }
-  function dropTrailingHashtagsToFit(text, limit) {
-    let s = String(text || "");
+  function dropTrailingHashtagsToFit(text2, limit) {
+    let s = String(text2 || "");
     if (!Number.isFinite(limit) || s.length <= limit) return s;
     while (s.length > limit && /\s#[^\s#]+$/.test(s)) s = s.replace(/\s#[^\s#]+$/, "");
     return s;
@@ -26916,11 +27072,11 @@ From the author:
         { max: HASHTAG_MAX, brand: item.source === "share" ? HASHTAG_BRAND : "" }
       )
     };
-    const text = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
+    const text2 = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
       const val = vars[name.toLowerCase().replace(/-/g, "")] ?? "";
       return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
     }).replace(/\\n/g, "\n").replace(/(^|\s)(""|''|“”|‘’|\(\)|\[\])(?=\s|$)/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-    return truncate2(dropTrailingHashtagsToFit(text, limit), limit);
+    return truncate2(dropTrailingHashtagsToFit(text2, limit), limit);
   }
   function renderBodyTemplate(template, item = {}, rawBody = "") {
     const body = String(rawBody ?? "");
@@ -27857,8 +28013,8 @@ From the author:
       let html = publicBody ? (await this.client.preview({ body: resolve(publicBody) }))?.html ?? "" : "";
       if (encPath) {
         try {
-          const { text } = await this.client.decrypt({ encPath });
-          html += (await this.client.preview({ body: resolve(text) }))?.html ?? "";
+          const { text: text2 } = await this.client.decrypt({ encPath });
+          html += (await this.client.preview({ body: resolve(text2) }))?.html ?? "";
         } catch (err) {
           const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
           html += locked ? lockNotice("This part") : `<p class="muted">Could not load the members-only part right now.</p>`;
@@ -28743,6 +28899,11 @@ From the author:
       // sow-281
       unassignCta: ({ id, type, ref }) => request("POST", "/api/admin", { action: "cta-unassign", id, type, ref }),
       // sow-281
+      // sow-359: the tracked partner links. Same action dispatch as every other admin op, so this adds no new
+      // transport concept and no new route: three rows in the Worker's config table serve them.
+      addOutboundLink: (fields) => request("POST", "/api/admin", { action: "outbound-add", ...fields }),
+      updateOutboundLink: (fields) => request("POST", "/api/admin", { action: "outbound-update", ...fields }),
+      setOutboundLinkStatus: ({ path, status }) => request("POST", "/api/admin", { action: "outbound-status", path, status }),
       contentChannelPool: () => request("GET", "/api/content-channel-pool"),
       // SOW-087: the category -> Discord-channel map { channels }
       setContentChannel: ({ category, channelId }) => request("POST", "/api/admin", { action: "content-channel-set", category, channelId }),
@@ -28769,11 +28930,11 @@ From the author:
       // SOW-088: { settings, channelNames }
       setSyndicationSettings: (p) => request("POST", "/api/admin", { action: "syndication-settings-set", ...p }),
       // SOW-088
-      addQuote: ({ text, author }) => request("POST", "/api/admin", { action: "quote-add", text, author }),
+      addQuote: ({ text: text2, author }) => request("POST", "/api/admin", { action: "quote-add", text: text2, author }),
       // SOW-063 P3
-      removeQuote: ({ text }) => request("POST", "/api/admin", { action: "quote-remove", text }),
+      removeQuote: ({ text: text2 }) => request("POST", "/api/admin", { action: "quote-remove", text: text2 }),
       // SOW-063 P3
-      setQuoteEnabled: ({ text, enabled }) => request("POST", "/api/admin", { action: "quote-toggle", text, enabled }),
+      setQuoteEnabled: ({ text: text2, enabled }) => request("POST", "/api/admin", { action: "quote-toggle", text: text2, enabled }),
       // SOW-063 P3
       openPulls: () => request("GET", "/api/open-pulls"),
       // SOW-038 P2: admin-gated open content-PR queue { pulls }

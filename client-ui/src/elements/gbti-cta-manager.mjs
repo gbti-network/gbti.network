@@ -18,6 +18,7 @@ import { CTA_CARD_CSS } from '../../../membership/cta-card-render.mjs';
 import { ctaImageUrl } from '../../../src/lib/ctas.mjs';
 import { draftFromCta, blankDraft, cardFromDraft, validateDraft, savePayload, normalizeHost, foundHosts, pagesFromBuilt, pageCandidates, previewNote, plural } from '../cta-manager-core.mjs';
 import { loadingView, failedView, listView, editorView, editTitle, shownError, imageBody, iconResults, foundLine, candidateList, previewCard } from '../cta-manager-view.mjs';
+import { cardClicksLine } from '../outbound-manager-core.mjs'; // sow-359: a tracked card's click history
 import { encodeCtaImage } from '../cta-image-encode.mjs';
 import { createIconLibrary } from '../cta-icon-library.mjs';
 import { CTA_MANAGER_CSS } from './cta-manager-css.mjs';
@@ -59,10 +60,17 @@ class GbtiCtaManager extends GbtiElement {
     this._status = 'loading';
     this.render();
     try {
-      const [pool, built] = await Promise.all([
+      const [pool, built, clicks] = await Promise.all([
         this.client.ctaPool(),
         fetch(`${this.site}/ctas.json`, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(`ctas.json ${r.status}`); return r.json(); }),
+        // sow-359: a card that points at a tracked link is already counted per path by the daily rollup, so
+        // its clicks come from the same public artifact the link board reads. It must NOT fail the load: the
+        // manager's job is editing cards, and a missing click history is a missing line, not a broken page.
+        fetch(`${this.site}/outbound-clicks.json`, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
+      this._clicks = clicks && typeof clicks === 'object'
+        ? { coverage: Array.isArray(clicks.coverage) ? clicks.coverage : [], clicks: clicks.clicks && typeof clicks.clicks === 'object' ? clicks.clicks : {} }
+        : { coverage: [], clicks: {} };
       this._ctas = Array.isArray(pool?.ctas) ? pool.ctas : [];
       this._built = new Map((Array.isArray(built?.ctas) ? built.ctas : []).map((c) => [c.id, c]));
       this._pages = pagesFromBuilt(built);
@@ -92,7 +100,7 @@ class GbtiCtaManager extends GbtiElement {
     if (this._status === 'failed') { this._paint(failedView(this._problem)); return; }
     if (this._status !== 'ready') { if (this._status === 'idle') this.load(); else this._paint(loadingView()); return; }
     if (this._view === 'edit' && this._st) { this._paint(editorView(this._st, foundHosts(this._st.d.html, this._st.d.hosts))); this._afterEditorPaint(); return; }
-    const rows = this._ctas.map((c) => ({ cta: c, image: typeof c.image === 'string' ? { url: this._imageUrl(c.image) } : null, busy: this._busyId === c.id }));
+    const rows = this._ctas.map((c) => ({ cta: c, image: typeof c.image === 'string' ? { url: this._imageUrl(c.image) } : null, busy: this._busyId === c.id, clicks: cardClicksLine(c, this._clicks) })); // sow-359: the tracked link's clicks, when the card has one
     this._paint(listView({ rows, msg: this._listMsg, msgBad: this._listBad }));
   }
 

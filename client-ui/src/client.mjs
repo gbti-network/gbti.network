@@ -171,6 +171,11 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setCtaEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'cta-toggle', id, enabled: enabled === true }), // sow-281
     assignCta: ({ id, type, ref }) => request('POST', '/api/admin', { action: 'cta-assign', id, type, ref }), // sow-281
     unassignCta: ({ id, type, ref }) => request('POST', '/api/admin', { action: 'cta-unassign', id, type, ref }), // sow-281
+    // sow-359: the tracked partner links. Same action dispatch as every other admin op, so this adds no new
+    // transport concept and no new route: three rows in the Worker's config table serve them.
+    addOutboundLink: (fields) => request('POST', '/api/admin', { action: 'outbound-add', ...fields }),
+    updateOutboundLink: (fields) => request('POST', '/api/admin', { action: 'outbound-update', ...fields }),
+    setOutboundLinkStatus: ({ path, status }) => request('POST', '/api/admin', { action: 'outbound-status', path, status }),
     contentChannelPool: () => request('GET', '/api/content-channel-pool'), // SOW-087: the category -> Discord-channel map { channels }
     setContentChannel: ({ category, channelId }) => request('POST', '/api/admin', { action: 'content-channel-set', category, channelId }), // SOW-087
     removeContentChannel: ({ category }) => request('POST', '/api/admin', { action: 'content-channel-remove', category }), // SOW-087
