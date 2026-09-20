@@ -11,6 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
+import { spliceOutboundRows, OUTBOUND_MARKER } from '../membership/outbound-link-edits.mjs'; // sow-359
+import { outboundRows } from './lib/outbound-links-store.mjs'; // sow-359: the tracked partner links, validated
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const SEG = { posts: 'articles', projects: 'projects', products: 'projects', prompts: 'prompts' };
@@ -94,8 +96,13 @@ export function scanContent(root = ROOT) {
  * entry. Committed sources win; duplicate frontmatter sources keep the first; a self-redirect is dropped.
  * Pure over (committedText, items) so it unit-tests without a repo.
  */
-export function composeRedirects(committedText, items) {
-  const lines = String(committedText || '').replace(/\s+$/, '').split('\n');
+export function composeRedirects(committedText, items, outbound = []) {
+  // sow-359: the tracked partner links land FIRST, at the marker's position, before anything else reads the
+  // file. Two reasons it happens here and not after: Cloudflare takes the first matching rule, so position is
+  // behaviour rather than tidiness, and `taken` below must see these paths so a frontmatter redirect can never
+  // shadow a partner link.
+  const spliced = spliceOutboundRows(committedText, outbound);
+  const lines = String(spliced || '').replace(/\s+$/, '').split('\n');
   const taken = new Set(
     lines
       .filter((l) => l.trim() && !l.trim().startsWith('#'))
@@ -126,7 +133,15 @@ export function composeRedirects(committedText, items) {
 export function main({ root = ROOT } = {}) {
   const committedFile = path.join(root, 'public/_redirects');
   const committed = fs.existsSync(committedFile) ? fs.readFileSync(committedFile, 'utf8') : '';
-  const { text, added } = composeRedirects(committed, scanContent(root));
+  const outbound = outboundRows(root);
+  const { text, added } = composeRedirects(committed, scanContent(root), outbound);
+  // The splice is silent when the marker is absent, which would drop every partner link without a word. The
+  // store is never empty in this repo, so "we had rows and emitted none" is a hard failure, not a warning.
+  if (outbound.length && !text.includes(`${outbound[0][0]} ${outbound[0][1]} 301`)) {
+    console.error(`compose-redirects: ${outbound.length} tracked partner link(s) were not emitted. Is the marker line missing from public/_redirects?\n  ${OUTBOUND_MARKER}`);
+    process.exitCode = 1;
+    return { added: 0 };
+  }
   const distDir = path.join(root, 'dist');
   if (!fs.existsSync(distDir)) {
     console.error('compose-redirects: dist/ is missing; run `astro build` first.');
@@ -134,7 +149,7 @@ export function main({ root = ROOT } = {}) {
     return { added: 0 };
   }
   fs.writeFileSync(path.join(distDir, '_redirects'), text);
-  console.log(`compose-redirects: wrote dist/_redirects (${added} frontmatter redirect(s) appended to the committed base).`);
+  console.log(`compose-redirects: wrote dist/_redirects (${outbound.length} tracked partner link(s) spliced, ${added} frontmatter redirect(s) appended to the committed base).`);
   return { added };
 }
 

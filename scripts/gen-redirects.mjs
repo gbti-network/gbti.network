@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { outboundRows } from './lib/outbound-links-store.mjs'; // sow-289: the partner links, validated, from house/outbound-links.yml
+import { OUTBOUND_MARKER } from '../membership/outbound-link-edits.mjs'; // sow-359: the rows land at build, not here
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 
@@ -111,7 +111,10 @@ const EXTRA = [
   // the rows were inline (the migration was proven by an empty diff). Only five of the ten sit under /outbound/;
   // the rest are legacy WordPress paths that still carry Codeable traffic, which is why the store, not a prefix,
   // is the source of truth. A `retired` entry is still emitted: a path an old post links must never 404.
-  ...outboundRows(ROOT),
+  // sow-359: the rows themselves now come from the store at BUILD time (compose-redirects), so this file
+  // carries only the marker that says where they land. Before this, regenerating them was a manual run of
+  // this script, which meant the store and the file that serves could disagree without anything noticing.
+  OUTBOUND_MARKER,
 
   // A Share moved between member folders, added 2026-09-12. Moving a Share (sow-183) changes its page address
   // and leaves nothing at the old one, and shares have no frontmatter redirectFrom for compose-redirects to
@@ -122,7 +125,12 @@ const EXTRA = [
   // Pages evaluates _redirects before it looks for the page.
   ['/shares/atwellpub/20260910215127-google-deepmind-releases-predictions-for-9-billi/', '/shares/gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi/'],
 ];
-for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`); n++; }
+// A string entry is a raw line (the sow-359 outbound marker); a pair is a redirect.
+for (const e of EXTRA) {
+  if (typeof e === 'string') { lines.push(e); continue; }
+  const [oldPath, newPath] = e;
+  lines.push(`${oldPath} ${newPath} 301`); n++;
+}
 
 // The blog section was renamed to /articles/ (one canonical path). Catch any remaining /blog/<slug>/ link
 // (including ones inside older post bodies) with a splat so it lands on the live /articles/ page. This MUST

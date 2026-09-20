@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
-import { validateOutboundLinks, redirectRowsOf, linkSummary, linksOf, LINK_STATUSES } from '../membership/outbound-link-edits.mjs';
+import { validateOutboundLinks, redirectRowsOf, linkSummary, linksOf, LINK_STATUSES, OUTBOUND_MARKER, spliceOutboundRows } from '../membership/outbound-link-edits.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const store = () => yaml.load(fs.readFileSync(path.join(ROOT, 'house/outbound-links.yml'), 'utf8'));
@@ -65,11 +65,18 @@ test('the store reader the generator uses refuses an invalid store, and the rows
   assert.equal(rows.length, 10);
   assert.deepEqual(rows[0], ['/outbound/codeable', 'https://codeable.io/?ref=MzT91']);
   assert.deepEqual(rows[9], ['/outbound/tailscale', 'https://tailscale.com/']);
-  // Position: the committed public/_redirects carries the store rows contiguously, right after the two utility
-  // rows and right before the moved-share row, exactly where the inline rows stood before the migration.
-  const lines = fs.readFileSync(path.join(ROOT, 'public/_redirects'), 'utf8').split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(/\s+/)[0]);
+  // Position, and sow-359 moved WHERE it is pinned. The rows used to sit in the committed public/_redirects;
+  // they are now spliced at a marker by compose-redirects at build, so the file that actually serves is the
+  // one worth asserting against. The position itself is unchanged and still behaviour rather than tidiness:
+  // Cloudflare takes the FIRST matching rule, so a partner row moved below a splat silently stops earning.
+  const committed = fs.readFileSync(path.join(ROOT, 'public/_redirects'), 'utf8');
+  assert.ok(committed.includes(OUTBOUND_MARKER), 'the committed base no longer says where the store rows land');
+  assert.equal(committed.includes(rows[0][0]), false, 'the committed base still carries a store row: that is two sources again');
+  const { composeRedirects } = await import('../scripts/compose-redirects.mjs');
+  const { text } = composeRedirects(committed, [], rows);
+  const lines = text.split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(/\s+/)[0]);
   const first = lines.indexOf(rows[0][0]);
-  assert.ok(first > 0, 'the first store row is in the committed file');
+  assert.ok(first > 0, 'the first store row is not in the composed output');
   assert.deepEqual(lines.slice(first, first + 10), rows.map((r) => r[0]), 'the ten rows are contiguous and in file order');
   assert.equal(lines[first - 1], '/products/email-signature-generator/', 'the row before is the last utility row');
   assert.ok(lines[first + 10].startsWith('/shares/atwellpub/'), 'the row after is the moved share');
@@ -80,4 +87,22 @@ test('the store reader the generator uses refuses an invalid store, and the rows
     fs.writeFileSync(path.join(tmp, 'house/outbound-links.yml'), 'links:\n  - path: /x\n    destination: https://x.com?q=1\n    partner: x\n    status: live\n');
     assert.throws(() => outboundRows(tmp), /explicit path before any query/);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('sow-359: the splice puts the rows exactly where the marker stood, and refuses to guess when it is gone', () => {
+  const rows = [['/outbound/a', 'https://a.example.com/x'], ['/outbound/b', 'https://b.example.com/y']];
+  const base = ['# head', '/keep/ /kept/ 301', OUTBOUND_MARKER, '/tail/ /tailed/ 301'].join('\n');
+  assert.equal(
+    spliceOutboundRows(base, rows),
+    ['# head', '/keep/ /kept/ 301', '/outbound/a https://a.example.com/x 301', '/outbound/b https://b.example.com/y 301', '/tail/ /tailed/ 301'].join('\n'),
+    'the rows replace the marker in place, in store order, with the neighbours untouched',
+  );
+  // No marker: the text comes back byte-identical rather than the rows being appended somewhere arbitrary.
+  // Appending them past a splat would look like it worked and quietly stop the links earning, so the silence
+  // is deliberate, and compose-redirects turns it into a hard failure rather than shipping a file without them.
+  const noMarker = '# head\n/keep/ /kept/ 301';
+  assert.equal(spliceOutboundRows(noMarker, rows), noMarker);
+  assert.equal(spliceOutboundRows('', rows), '');
+  // A retired row is emitted like any other: an old post must never start 404ing.
+  assert.match(spliceOutboundRows(OUTBOUND_MARKER, [['/gone', 'https://x.example.com/z']]), /^\/gone https:\/\/x\.example\.com\/z 301$/);
 });
