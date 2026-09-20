@@ -17050,6 +17050,10 @@ var productSchema = external_exports.object({
   // be a form field, and the editor submits only form fields, so without it a WorkBench save dropped the value.
   requires: external_exports.string().optional(),
   pricingUrl: external_exports.string().url().optional(),
+  // sow-305: kept in lockstep with src/content.config.ts. test/client-forms.test.mjs reds if the editor offers
+  // a field this mirror does not carry.
+  license: external_exports.string().optional(),
+  licenseUrl: external_exports.string().url().optional(),
   icon: external_exports.string(),
   // REQUIRED, 1:1. The SMALL icon: the directory card renders it at 64 (shown 56).
   // Optional 1:1 LARGE icon for the detail page's 96px slot, which a 128px source cannot serve crisply at
