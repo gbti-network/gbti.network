@@ -11,7 +11,8 @@ tags:
   - bjork
   - music
   - covers
-image: https://i.ytimg.com/vi/CIWvdZtRMZY/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260920034637-bj-rk-cover-one-day-ada7e957.webp
+imageSource: https://i.ytimg.com/vi/CIWvdZtRMZY/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@PeterMuskMusic
 creatorName: Peter Músk
 id: 20260920034637-bj-rk-cover-one-day
