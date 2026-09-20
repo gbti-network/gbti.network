@@ -26,6 +26,7 @@ export const WORKER_ADMIN_ACTIONS = Object.freeze(new Set([
   // house config
   'quote-add', 'quote-remove', 'quote-toggle',
   'news-source-add', 'news-source-remove', 'news-source-toggle',
+  'news-source-weight', // sow-338/sow-374: superadmin, forwarded unchanged
   'news-banword-add', 'news-banword-remove', // sow-372: superadmin, forwarded unchanged
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign',

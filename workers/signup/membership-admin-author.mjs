@@ -31,7 +31,7 @@ import { appendModerationLog, KV_SOURCE, OVERRIDES_KV_KEY } from './membership-o
 import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 Phase 2b: the post-role-change mirror refresh
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
-import { setSourceWeight, weightInput } from '../../membership/news-source-weight-edits.mjs'; // sow-338: how much we take from a source
+import { setSourceWeight, weightInput, readWeights } from '../../membership/news-source-weight-edits.mjs'; // sow-338: how much we take from a source
 import { addBanword, removeBanword, banwordInput, readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
@@ -792,7 +792,15 @@ export async function membershipAdminNewsSourcePool(request, env, deps = {}) {
     const bans = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/news-banwords.yml');
     if (bans.ok) banwords = readBanwords(bans.parsed);
   } catch { /* the pool still answers */ }
-  return { status: 200, body: { ok: true, sources, banwords } };
+  // sow-374: and the weights, for the same reason. They live in their own file because they are a superadmin's
+  // call on an admin-owned pool, but a manager showing a source without showing how hard we lean on it is asking
+  // somebody to curate blind. Neutral is absence, so an unweighted source is simply missing from the map.
+  let weights = {};
+  try {
+    const w = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/news-source-weights.yml');
+    if (w.ok) weights = readWeights(w.parsed);
+  } catch { /* the pool still answers */ }
+  return { status: 200, body: { ok: true, sources, banwords, weights } };
 }
 
 // sow-161 increment 4 + sow-291 Phase 2: the coupon-manager CONFIG pool READ (admin-gated). The FULL registry

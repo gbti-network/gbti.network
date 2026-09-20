@@ -5325,8 +5325,8 @@ ${listStyleProseCss(".doc-blocks")}
         const pendNote = c._pending ? `<div class="cpend">${esc(echoNote({ prNumber: c.prNumber }).text)}</div>` : "";
         const foldKey = String(c.id ?? c.path ?? `i${i}`);
         const collapsed = this._collapsed?.has(foldKey);
-        const clamp = collapsed ? " clamp" : "";
-        const bodyHtml = html && html.locked ? `<div class="clocked${clamp}">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody${clamp}">${html}</div>` : "";
+        const clamp2 = collapsed ? " clamp" : "";
+        const bodyHtml = html && html.locked ? `<div class="clocked${clamp2}">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody${clamp2}">${html}</div>` : "";
         const foldBtn = `<button class="cfold${collapsed ? " collapsed" : ""}" type="button" data-fold="${esc(foldKey)}" aria-label="${collapsed ? "Expand" : "Collapse"} comment" aria-expanded="${collapsed ? "false" : "true"}">${CHEV3}</button>`;
         const houseComment = c.author === "gbti" || c.author === "house";
         const modPath = !houseComment && c.author && c.id ? c.path || `members/${c.author}/comments/${c.id}.md` : "";
@@ -10187,6 +10187,21 @@ ${listStyleProseCss(".doc-blocks")}
     return WORD_RE.test(w) ? w : "";
   }
 
+  // membership/news-source-weight-edits.mjs
+  var WEIGHT_MIN = -2;
+  var WEIGHT_MAX = 2;
+  var LABELS = Object.freeze({ "-2": "Much less", "-1": "Less", 0: "Normal", 1: "More", 2: "Much more" });
+  var weightLabel = (weight) => LABELS[String(clamp(weight))];
+  function stepToward(current, direction) {
+    const d = Number(direction) > 0 ? 1 : -1;
+    return clamp(clamp(current) + d);
+  }
+  function clamp(w) {
+    const n = Math.round(Number(w));
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n));
+  }
+
   // client-ui/src/elements/gbti-news-source-manager.mjs
   var hostOf = (url) => {
     try {
@@ -10220,9 +10235,29 @@ ${listStyleProseCss(".doc-blocks")}
   .lk:hover { border-color:var(--accent); color:var(--accent); }
   .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
   .muted { color:var(--muted); }
-  /* sow-372: the blocked-word list. Its own block under the sources, with a rule above it, because it is a
-     different decision (what we refuse to republish) on the same screen as which publications we read. */
-  .bw { border-top:1px solid var(--line); margin:22px 0 0; padding:18px 0 0; }
+
+  /* sow-374: the subtab bar. Two views of one screen, so it reads as a segmented control rather than as the
+     page's own tab row above it. */
+  .subtabs { display:flex; gap:4px; margin:0 0 16px; border-bottom:1px solid var(--line); }
+  .subtab { border:0; border-bottom:2px solid transparent; background:transparent; color:var(--muted); font:inherit;
+    font-size:13.5px; font-weight:600; padding:8px 14px; margin-bottom:-1px; cursor:pointer; }
+  .subtab:hover { color:var(--fg); background:transparent; }
+  .subtab[aria-selected="true"] { color:var(--fg); border-bottom-color:var(--accent); }
+  .subtab .count { color:var(--muted); font-weight:500; }
+
+  /* sow-374: the weight stepper in a source row. 28px targets, because the first version of the sibling control
+     measured 25x19 and was under the size a thumb can hit. The label is fixed-width so 126 rows do not shuffle
+     sideways as their values differ. */
+  .wt { display:inline-flex; align-items:center; gap:2px; flex:none; }
+  .wt button { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; flex:none;
+    border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); font:inherit; font-size:15px;
+    line-height:1; padding:0; border-radius:7px; cursor:pointer; }
+  .wt button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); background:var(--paper, transparent); }
+  .wt button:disabled { opacity:.35; cursor:default; }
+  .wt .val { display:inline-block; min-width:74px; text-align:center; font-size:12px; color:var(--muted); }
+  .wt .val.set { color:var(--fg); font-weight:600; }
+
+  /* sow-372: the blocked-word list, now its own view rather than a block under the sources. */
   .bw h4 { margin:0 0 4px; font-family:var(--font-display, inherit); font-size:15px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0; }
   .chip { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:999px; padding:3px 3px 3px 12px; font-size:13px; color:var(--fg); }
@@ -10230,6 +10265,11 @@ ${listStyleProseCss(".doc-blocks")}
      24px minimum a thumb can hit. The chip's own padding shrinks on the button side to keep the pill compact. */
   .chip button { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; flex:none; border:0; background:transparent; color:var(--muted); font:inherit; font-size:15px; line-height:1; padding:0; border-radius:999px; cursor:pointer; }
   .chip button:hover { background:var(--danger, #e06c6c); color:#fff; }
+
+  @media (max-width: 640px) {
+    .row { flex-wrap:wrap; }
+    .wt .val { min-width:64px; }
+  }
 `;
   var GbtiNewsSourceManager = class extends GbtiElement {
     // SOW-070 fix: this element is in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client.
@@ -10246,13 +10286,19 @@ ${listStyleProseCss(".doc-blocks")}
         const pool = await this.client.newsSourcePool();
         this._sources = pool?.sources || [];
         this._banwords = Array.isArray(pool?.banwords) ? pool.banwords : [];
+        this._weights = pool?.weights && typeof pool.weights === "object" ? pool.weights : {};
       } catch {
         this._sources = [];
         this._banwords = [];
+        this._weights = {};
         this._msg = "Could not load the news sources.";
       }
       this._loading = false;
       this.render();
+    }
+    /** Which subtab is showing. Held on the element so a re-render after a save does not throw the reader back. */
+    get _view() {
+      return this._viewKey === "banwords" ? "banwords" : "sources";
     }
     render() {
       if (!this.client) {
@@ -10267,29 +10313,47 @@ ${listStyleProseCss(".doc-blocks")}
         this.set(this.css(CSS12) + `<p class="muted">Loading news sources...</p>`);
         return;
       }
+      const view = this._view;
+      this.set(this.css(CSS12) + `<div class="${this._busy ? "busy" : ""}">
+      <div class="subtabs" role="tablist" aria-label="News settings">
+        <button class="subtab" type="button" role="tab" data-view="sources" aria-selected="${view === "sources"}">Sources <span class="count">${this._sources.length}</span></button>
+        <button class="subtab" type="button" role="tab" data-view="banwords" aria-selected="${view === "banwords"}">Blocked words <span class="count">${(this._banwords || []).length}</span></button>
+      </div>
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${view === "banwords" ? this._banwordsView() : this._sourcesView()}
+    </div>`);
+      this._wire();
+    }
+    _sourcesView() {
       const enabled = this._sources.filter((s) => s && s.enabled !== false).length;
+      const weighted = Object.keys(this._weights || {}).length;
       const rows = this._sources.map((s) => {
         const on = s && s.enabled !== false;
-        return `<li class="src ${on ? "" : "off"}"><div class="row"><code class="id">${esc(s.id || "")}</code><span class="nm">${esc(s.name || "")}</span><a class="url" href="${esc(s.url || "")}" target="_blank" rel="noopener nofollow">${esc(hostOf(s.url))}</a><span class="sp"></span><button class="lk" type="button" data-toggle="${esc(s.id)}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(s.id)}">Remove</button></div></li>`;
+        return `<li class="src ${on ? "" : "off"}"><div class="row"><code class="id">${esc(s.id || "")}</code><span class="nm">${esc(s.name || "")}</span><a class="url" href="${esc(s.url || "")}" target="_blank" rel="noopener nofollow">${esc(hostOf(s.url))}</a><span class="sp"></span>` + this._weightControl(s) + `<button class="lk" type="button" data-toggle="${esc(s.id)}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(s.id)}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS12) + `<div class="${this._busy ? "busy" : ""}">
-      <div class="head"><span class="hint">${this._sources.length} sources, ${enabled} enabled</span></div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      return `<div class="head"><span class="hint">${this._sources.length} sources, ${enabled} enabled, ${weighted} weighted</span></div>
       <div class="add">
         <input data-add-id type="text" placeholder="source-id (optional)" />
         <input data-add-name type="text" placeholder="Name" />
         <input data-add-url type="text" placeholder="https://... RSS/Atom feed URL" />
         <button class="btn" type="button" data-add>Add source</button>
       </div>
-      <p class="hint" style="margin:-6px 0 14px">The next news ingest confirms the feed fetches; a source that never returns items can be removed here.</p>
-      <ul class="list">${rows || '<li class="muted">No sources yet.</li>'}</ul>
-      ${this._banwordsBlock()}
-    </div>`);
-      this._wire();
+      <p class="hint" style="margin:-6px 0 14px">The next news ingest confirms the feed fetches; a source that never returns items can be removed here. The arrows change how often we check a publication and how much we keep from it.</p>
+      <ul class="list">${rows || '<li class="muted">No sources yet.</li>'}</ul>`;
+    }
+    /**
+     * sow-374: the five-step weight, in the row. The label says what the step DOES ("Much less"), never the number,
+     * because -1 is only meaningful to whoever wrote the table. The arrows disable at each end rather than wrapping
+     * or silently clamping, so the scale's edges are visible instead of being discovered.
+     */
+    _weightControl(s) {
+      const id = String(s?.id || "");
+      const w = Number(this._weights?.[id]) || 0;
+      return `<span class="wt"><button type="button" data-wt="${esc(id)}" data-dir="-1" aria-label="Take less from ${esc(s?.name || id)}" title="Take less from this source"${w <= WEIGHT_MIN ? " disabled" : ""}>&minus;</button><span class="val${w === 0 ? "" : " set"}">${esc(weightLabel(w))}</span><button type="button" data-wt="${esc(id)}" data-dir="1" aria-label="Take more from ${esc(s?.name || id)}" title="Take more from this source"${w >= WEIGHT_MAX ? " disabled" : ""}>+</button></span>`;
     }
     // sow-372: the superadmin's blocked-word list. A word here keeps every story carrying it out of the stream,
     // in the hourly ingest and in what the feed serves, so the note says both and says what it does NOT touch.
-    _banwordsBlock() {
+    _banwordsView() {
       const words = this._banwords || [];
       const chips = words.map((w) => `<span class="chip">${esc(w)}<button type="button" data-unban="${esc(w)}" aria-label="Stop blocking ${esc(w)}" title="Stop blocking ${esc(w)}">&times;</button></span>`).join("");
       return `<div class="bw">
@@ -10303,6 +10367,11 @@ ${listStyleProseCss(".doc-blocks")}
     </div>`;
     }
     _wire() {
+      this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => {
+        this._viewKey = b.dataset.view;
+        this._msg = "";
+        this.render();
+      }));
       this.on("[data-bw-add]", "click", () => {
         const raw = this.$("[data-bw-word]")?.value || "";
         const word = normalizeBanword(raw);
@@ -10317,6 +10386,11 @@ ${listStyleProseCss(".doc-blocks")}
         const word = b.dataset.unban;
         if (typeof confirm === "function" && !confirm(`Stop blocking "${word}"? Stories carrying it come back on the next hourly fetch.`)) return;
         this._run(() => this.client.removeNewsBanword({ word }));
+      }));
+      this.$$("[data-wt]").forEach((b) => b.addEventListener("click", () => {
+        const id = b.dataset.wt;
+        const next = stepToward(Number(this._weights?.[id]) || 0, Number(b.dataset.dir));
+        this._run(() => this.client.setNewsSourceWeight({ id, weight: next }));
       }));
       this.on("[data-add]", "click", () => {
         const id = (this.$("[data-add-id]")?.value || "").trim();
@@ -26695,6 +26769,9 @@ From the author:
       // SOW-056 P2
       setNewsSourceEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "news-source-toggle", id, enabled }),
       // SOW-056 P2
+      // sow-374: how hard the pipeline leans on a source. Website-only until now, so the extension's manager could
+      // list a source it had no way to turn down.
+      setNewsSourceWeight: ({ id, weight }) => request("POST", "/api/admin", { action: "news-source-weight", id, weight }),
       // sow-372: the words that keep a story out of the news stream (superadmin; the same pool read carries them).
       addNewsBanword: ({ word }) => request("POST", "/api/admin", { action: "news-banword-add", word }),
       removeNewsBanword: ({ word }) => request("POST", "/api/admin", { action: "news-banword-remove", word }),

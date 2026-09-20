@@ -20514,6 +20514,8 @@ var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
   "news-source-add",
   "news-source-remove",
   "news-source-toggle",
+  "news-source-weight",
+  // sow-338/sow-374: superadmin, forwarded unchanged
   "news-banword-add",
   "news-banword-remove",
   // sow-372: superadmin, forwarded unchanged
@@ -20688,6 +20690,23 @@ function readBanwords(doc) {
   }
   return [...out].sort();
 }
+
+// membership/news-source-weight-edits.mjs
+var WEIGHT_MIN = -2;
+var WEIGHT_MAX = 2;
+var ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+function readWeights(doc) {
+  const raw = doc?.weights;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [id, v] of Object.entries(raw)) {
+    const n = Math.round(Number(v));
+    if (!ID_RE.test(String(id)) || !Number.isFinite(n) || n === 0) continue;
+    out[id] = Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n));
+  }
+  return out;
+}
+var LABELS = Object.freeze({ "-2": "Much less", "-1": "Less", 0: "Normal", 1: "More", 2: "Much more" });
 
 // membership/syndication-config-core.mjs
 var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
@@ -21010,6 +21029,7 @@ var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x
 var TAXONOMY_PATH = "house/taxonomy.yml";
 var NEWS_SOURCES_PATH = "house/news-sources.yml";
 var NEWS_BANWORDS_PATH = "house/news-banwords.yml";
+var NEWS_SOURCE_WEIGHTS_PATH = "house/news-source-weights.yml";
 var QUOTES_PATH = "house/quotes.yml";
 var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
 var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
@@ -21030,7 +21050,8 @@ async function getTaxonomy(ctx) {
 async function getNewsSourcePool(ctx) {
   const parsed = await readYaml(ctx, NEWS_SOURCES_PATH);
   const bans = await readYaml(ctx, NEWS_BANWORDS_PATH).catch(() => ({}));
-  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [], banwords: readBanwords(bans) };
+  const w = await readYaml(ctx, NEWS_SOURCE_WEIGHTS_PATH).catch(() => ({}));
+  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [], banwords: readBanwords(bans), weights: readWeights(w) };
 }
 async function getCouponPool2(ctx) {
   await requireAdmin(ctx);

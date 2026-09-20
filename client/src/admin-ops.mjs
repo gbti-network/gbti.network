@@ -28,12 +28,14 @@ import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async 
 import { readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { ctasOf, CTA_ITEM_TYPES } from '../../membership/cta-edits.mjs'; // sow-281
 import { readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
+import { readWeights } from '../../membership/news-source-weight-edits.mjs'; // sow-338/sow-374: the per-source weights
 import { SYNDICATION_CHANNEL_NAMES } from '../../membership/syndication-template-edits.mjs'; // SOW-088
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 
 const TAXONOMY_PATH = 'house/taxonomy.yml';
 const NEWS_SOURCES_PATH = 'house/news-sources.yml';
 const NEWS_BANWORDS_PATH = 'house/news-banwords.yml'; // sow-372: the words that keep a story out of the stream
+const NEWS_SOURCE_WEIGHTS_PATH = 'house/news-source-weights.yml'; // sow-338/sow-374: how hard we lean on each source
 const QUOTES_PATH = 'house/quotes.yml';
 const CONTENT_CHANNELS_PATH = 'house/content-channels.yml';
 const MODERATION_FLAGS_PATH = 'house/moderation-flags.yml';
@@ -65,7 +67,9 @@ export async function getNewsSourcePool(ctx) {
   // sow-372: the blocked words ride back with the pool so one manager screen shows both. readYaml answers {} for
   // a file that is not there, and readBanwords answers [] for that, which is the state a fork starts in.
   const bans = await readYaml(ctx, NEWS_BANWORDS_PATH).catch(() => ({}));
-  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [], banwords: readBanwords(bans) };
+  // sow-374: the weights ride along too, so the manager can show how hard we lean on each source.
+  const w = await readYaml(ctx, NEWS_SOURCE_WEIGHTS_PATH).catch(() => ({}));
+  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [], banwords: readBanwords(bans), weights: readWeights(w) };
 }
 
 // SOW-119 + sow-291 Phase 2: the coupon registry has MOVED OFF the public repository. house/coupons.yml was a

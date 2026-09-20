@@ -136,6 +136,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addNewsSource: ({ id, name, url, description }) => request('POST', '/api/admin', { action: 'news-source-add', id, name, url, description }), // SOW-056 P2
     removeNewsSource: ({ id }) => request('POST', '/api/admin', { action: 'news-source-remove', id }), // SOW-056 P2
     setNewsSourceEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'news-source-toggle', id, enabled }), // SOW-056 P2
+    // sow-374: how hard the pipeline leans on a source. Website-only until now, so the extension's manager could
+    // list a source it had no way to turn down.
+    setNewsSourceWeight: ({ id, weight }) => request('POST', '/api/admin', { action: 'news-source-weight', id, weight }),
     // sow-372: the words that keep a story out of the news stream (superadmin; the same pool read carries them).
     addNewsBanword: ({ word }) => request('POST', '/api/admin', { action: 'news-banword-add', word }),
     removeNewsBanword: ({ word }) => request('POST', '/api/admin', { action: 'news-banword-remove', word }),
