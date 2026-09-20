@@ -59,6 +59,7 @@ import { getSubscriber, putSubscriber } from './mail-store.mjs';
 import { verifyTurnstile, rateLimit } from './abuse.mjs';
 import { createResendClient } from '../../clients/resend.mjs';
 import { renderConfirmationEmail } from '../../membership/mail-transactional-render.mjs'; // sow-270: the branded confirmation body
+import { pageResponse as page, PAGE_HEADERS, escapePage as escapeHtml } from './mail-pages.mjs'; // sow-270: the one shell both mail pages render into
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -69,35 +70,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-
-const PAGE_HEADERS = {
-  'Content-Type': 'text/html; charset=utf-8',
-  'Cache-Control': 'no-store',
-  'Referrer-Policy': 'no-referrer',
-};
-
-function escapeHtml(s) {
-  return str(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function page(title, bodyHtml, status = 200) {
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">`
-    + `<meta name="viewport" content="width=device-width, initial-scale=1">`
-    + `<meta name="referrer" content="no-referrer">`
-    + `<title>${escapeHtml(title)}</title>`
-    + `<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;`
-    + `max-width:34rem;margin:4rem auto;padding:0 1.25rem;line-height:1.55;color:#25232b;background:#fff}`
-    + `h1{font-size:1.4rem;margin:0 0 .75rem}p{margin:.5rem 0}`
-    + `button{font:inherit;font-weight:600;padding:.6rem 1.1rem;border:0;border-radius:.5rem;`
-    + `background:#1f9e5f;color:#fff;cursor:pointer}button:hover{background:#188a51}`
-    + `.muted{color:#6c6976;font-size:.9rem}</style></head><body>${bodyHtml}</body></html>`;
-  return new Response(html, { status, headers: PAGE_HEADERS });
-}
 
 /** A machine-generated 64-hex mailHash. Validate before building a KV key from a URL-supplied hash. */
 function isHashShape(h) {

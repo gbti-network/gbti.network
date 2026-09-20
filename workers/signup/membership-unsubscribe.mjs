@@ -26,6 +26,7 @@
 import { verifyUnsubRequest } from '../../membership/mail-unsub-token.mjs';
 import { suppressKey, SUPPRESS_VALUE } from '../../membership/mail-suppress.mjs';
 import { eraseSubscriberMail } from './mail-store.mjs';
+import { pageResponse as page, PAGE_HEADERS, escapePage as escapeHtml } from './mail-pages.mjs'; // sow-270: the one shell both mail pages render into
 
 /** Parse a rotation-fallback key list the same prototype-safe way membership-content resolves MEMBER_CONTENT_KEYS:
  *  a comma/space/newline-separated list of RETIRED unsubscribe keys still inside their grace window. The current
@@ -37,39 +38,8 @@ export function parseRetiredKeys(raw) {
     .filter(Boolean);
 }
 
-/** Escape a string for safe interpolation into HTML. The hash and token are machine-validated (64-hex and
- *  base64url), so this is defense in depth, not the primary guard. */
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 // Every response is uncacheable and leaks no referrer (the URL carries the capability token, so no-referrer
 // keeps it out of any referer header the page might otherwise emit). text/html so a human sees a real page.
-const PAGE_HEADERS = {
-  'Content-Type': 'text/html; charset=utf-8',
-  'Cache-Control': 'no-store',
-  'Referrer-Policy': 'no-referrer',
-};
-
-function page(title, bodyHtml, status = 200) {
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">`
-    + `<meta name="viewport" content="width=device-width, initial-scale=1">`
-    + `<meta name="referrer" content="no-referrer">`
-    + `<title>${escapeHtml(title)}</title>`
-    + `<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;`
-    + `max-width:34rem;margin:4rem auto;padding:0 1.25rem;line-height:1.55;color:#25232b;background:#fff}`
-    + `h1{font-size:1.4rem;margin:0 0 .75rem}p{margin:.5rem 0}`
-    + `button{font:inherit;font-weight:600;padding:.6rem 1.1rem;border:0;border-radius:.5rem;`
-    + `background:#1f9e5f;color:#fff;cursor:pointer}button:hover{background:#188a51}`
-    + `.muted{color:#6c6976;font-size:.9rem}</style></head><body>${bodyHtml}</body></html>`;
-  return new Response(html, { status, headers: PAGE_HEADERS });
-}
-
 /**
  * Handle GET/POST /mail/unsubscribe. GET renders a confirmation page (never mutates); POST performs the
  * unsubscribe when the capability token verifies. Injectable deps default to the real store + verifier.
