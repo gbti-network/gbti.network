@@ -11296,8 +11296,13 @@ ${listStyleProseCss(".doc-blocks")}
           sponsor: {
             enabled: sponsor.enabled === true,
             html: String(sponsor.html ?? "")
-          }
+          },
+          // sow-270: null here is the third state again, and it matters more than it does above. Nobody having
+          // chosen is not the same as somebody having chosen off, even though both behave as off, so the block
+          // says which one it is rather than showing a switch that looks deliberately set.
+          optin: { double: r?.optin?.double === true }
         };
+        this._optinUnset = typeof r?.optin?.double !== "boolean";
         this._draft = structuredClone(this._saved);
         this._status = "ready";
       } catch (e) {
@@ -11332,8 +11337,9 @@ ${listStyleProseCss(".doc-blocks")}
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
+      ${this._optinBlock()}
       ${this._inquiryBlock()}
-      <p class="hint">Superadmin only. Each Save opens a pull request against house/digest-config.yml that merges on its own, and the change reaches the mail on the next settings sync rather than immediately. The wording rules above warn and never block: if you mean it, save it.</p>
+      <p class="hint">Superadmin only. Each Save opens a pull request against house/digest-config.yml that merges on its own, and the change is live about a minute later, once that pull request has merged. The wording rules above warn and never block: if you mean it, save it.</p>
     </div>`);
       this._wire();
     }
@@ -11389,6 +11395,28 @@ ${listStyleProseCss(".doc-blocks")}
       ${safe ? `<div class="prev"><span class="lbl">Sponsored</span>${safe}</div>
         <p class="plain">Text-only readers see: ${esc(plain)}</p>` : ""}
       <div class="acts"><button class="save" type="button" data-save="sponsor"${this._clean("sponsor") ? " disabled" : ""}>Save the sponsor</button>${this._clean("sponsor") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
+    </section>`;
+    }
+    /**
+     * sow-270: whether a new subscriber has to confirm by email before the digest starts arriving.
+     *
+     * It sits with the pitch and the sponsor because it is the same file and the same audience, and apart from
+     * them because it is the only setting here that decides something about a person rather than about the mail.
+     * Both modes are described in full: a switch labelled only "double opt-in" tells a reader who already knows
+     * the term nothing they did not know, and tells everyone else nothing at all.
+     */
+    _optinBlock() {
+      const on = this._draft.optin.double === true;
+      const unset = this._optinUnset && this._clean("optin");
+      return `<section class="blk">
+      <div class="hd">
+        <h3>Confirming a new subscriber</h3>
+        <span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span>
+        <button class="lk" type="button" data-optin-toggle>Turn ${on ? "off" : "on"}</button>
+      </div>
+      <p class="lede">${on ? "Someone who subscribes is sent an email with a link, and nothing arrives until they follow it. It proves the address belongs to the person who typed it, and it costs you some of them: a confirmation that lands in a spam folder is a subscriber you never hear from again." : "Someone who subscribes starts receiving the digest straight away. Nobody is lost to an unread confirmation, and a mistyped or borrowed address is enrolled until it unsubscribes."}</p>
+      ${unset ? `<p class="note">Nobody has chosen yet, so it behaves as off. Saving records the choice either way.</p>` : ""}
+      <div class="acts"><button class="save" type="button" data-save="optin"${this._clean("optin") ? " disabled" : ""}>Save the confirmation setting</button>${this._clean("optin") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
     </section>`;
     }
     /**
@@ -11470,13 +11498,22 @@ ${listStyleProseCss(".doc-blocks")}
         this._draft.sponsor.enabled = !this._draft.sponsor.enabled;
         this.render();
       });
+      this.$("[data-optin-toggle]")?.addEventListener("click", () => {
+        this._draft.optin.double = !this._draft.optin.double;
+        this.render();
+      });
       this.$$("[data-save]").forEach((b) => b.addEventListener("click", () => this._save(b.dataset.save)));
       this.$("[data-inq-load]")?.addEventListener("click", () => this._loadInquiries());
     }
     async _save(block) {
       if (this._clean(block)) return;
       const d = this._draft[block];
-      const send = block === "cta" ? () => this.client.setDigestCta({ enabled: d.enabled === true, body: d.body, linkLabel: d.linkLabel, linkUrl: d.linkUrl }) : () => this.client.setDigestSponsor({ enabled: d.enabled === true, html: d.html });
+      const send = {
+        cta: () => this.client.setDigestCta({ enabled: d.enabled === true, body: d.body, linkLabel: d.linkLabel, linkUrl: d.linkUrl }),
+        sponsor: () => this.client.setDigestSponsor({ enabled: d.enabled === true, html: d.html }),
+        optin: () => this.client.setDigestOptin({ double: d.double === true })
+      }[block];
+      if (!send) return;
       this._busy = true;
       this._msg = "";
       this.render();
@@ -11484,6 +11521,7 @@ ${listStyleProseCss(".doc-blocks")}
         const r = await send();
         this._msg = r?.noop ? "No change (it already reads that way)." : r?.prNumber ? houseEditAck(r) : SAVED;
         this._saved[block] = structuredClone(d);
+        if (block === "optin") this._optinUnset = false;
       } catch (e) {
         this._msg = e?.message || "That change could not be saved.";
       }

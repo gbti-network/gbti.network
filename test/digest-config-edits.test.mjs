@@ -312,3 +312,22 @@ test('WIRING sow-270: the switch reaches the Worker from every host, and its bra
   // The defaults ride back with the read, or the manager has nothing to show beside an unset switch.
   assert.match(worker, /defaults: \{ cta: \{ \.\.\.DEFAULT_CTA \}, sponsor: \{ \.\.\.DEFAULT_SPONSOR \}, optin: \{ \.\.\.DEFAULT_OPTIN \} \}/);
 });
+
+test('WIRING sow-270: the manager renders the block and saves it on its own', () => {
+  const el = read('../client-ui/src/elements/gbti-digest-manager.mjs');
+  assert.match(el, /\$\{this\._optinBlock\(\)\}/, 'the block must be in the render, not merely defined');
+  assert.match(el, /optin: \(\) => this\.client\.setDigestOptin\(\{ double: d\.double === true \}\)/,
+    'its own save, so flipping the switch never rides along with a copy edit');
+  assert.match(el, /data-save="optin"/);
+  // Both modes are described. A switch labelled only with the term tells a reader who knows it nothing new,
+  // and everyone else nothing at all, which is the whole reason this setting was unreachable before.
+  assert.match(el, /nothing arrives until they follow it/);
+  assert.match(el, /starts receiving the digest straight away/);
+  // The third state survives: unset is shown as unset rather than as a chosen off.
+  assert.match(el, /Nobody has chosen yet/);
+  assert.match(el, /this\._optinUnset = typeof r\?\.optin\?\.double !== 'boolean'/);
+
+  // sow-270 Phase 2 corrected the footer: it used to say a save reached the mail on the next settings sync.
+  assert.doesNotMatch(el, /on the next settings sync rather than immediately/,
+    'the six-hour lag was fixed by the push trigger; the footer must not still claim it');
+});
