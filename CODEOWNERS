@@ -46,6 +46,11 @@
 # admin cannot attach a paid link to any member's item by pull request. membership/path-rank.mjs carries the
 # matching row and test/path-rank.test.mjs holds the two in lockstep.
 /house/ctas.yml              @atwellpub @gbtilabs
+
+# sow-359: the tracked partner redirects (house/outbound-links.yml). Where a paying click lands, and on whose
+# referral code, is the same kind of decision as which card carries which partner link above. Pinned here,
+# in SUPERADMIN_HOUSE_FILES and on the three write ops, so no single layer is the only thing holding it.
+/house/outbound-links.yml    @atwellpub @gbtilabs
 # sow-338: how much the news pipeline takes from each source. Admins own the source POOL (add, disable, remove) in
 # house/news-sources.yml; the weighting is a superadmin's call, which is why it is a separate file: one file cannot
 # be owned at two ranks. Pinned here and in SUPERADMIN_HOUSE_FILES, and the Worker's action carries the same rank.

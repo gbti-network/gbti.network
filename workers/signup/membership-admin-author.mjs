@@ -40,6 +40,8 @@ import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../m
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { addCta, updateCta, setCtaEnabled, assignCta, unassignCta } from '../../membership/cta-edits.mjs'; // sow-281
 import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput, ctaImageFiles } from './membership-admin-ctas.mjs'; // sow-281: the validators (this file is at the size cap); sow-337 the card image
+import { addOutboundLink, updateOutboundLink, setOutboundLinkStatus } from '../../membership/outbound-link-edits.mjs'; // sow-359
+import { outboundAddInput, outboundUpdateInput, outboundStatusInput } from './membership-admin-outbound.mjs'; // sow-359: the validators (this file is at the size cap)
 import { contentFlagOps } from './membership-admin-flags.mjs'; // sow-274: the content-flag ops (this file is at the size cap)
 import { applyFile, decodeContent } from './membership-admin-files.mjs'; // sow-337: moved out for the size cap; writes a binary entry too
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
@@ -244,6 +246,7 @@ const CONFIG_ACTIONS = new Set([
   'coupon-add', 'coupon-update',
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign', // sow-281
+  'outbound-add', 'outbound-update', 'outbound-status', // sow-359: the tracked partner links (no remove, see below)
   // sow-161 B (channel-map manager, superadmin): moderation flag terms + the syndication config surfaces.
   'flag-term-add', 'flag-term-remove',
   'syndication-templates-set', 'news-engagement-set', 'syndication-settings-set',
@@ -296,6 +299,14 @@ const CONFIG_OP = {
   'cta-toggle': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: setCtaEnabled, input: ctaToggleInput, slug: (a) => idSlug(a.id) },
   'cta-assign': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: assignCta, input: ctaAssignInput, slug: (a) => idSlug(`${a.id}-${a.type}-${a.ref}`) },
   'cta-unassign': { path: 'house/ctas.yml', rank: ROLE_RANK.superadmin, fn: unassignCta, input: ctaAssignInput, slug: (a) => idSlug(`${a.id}-${a.type}-${a.ref}`) },
+  // sow-359: the tracked partner links. SUPERADMIN, the tier the owner named in the request, and
+  // house/outbound-links.yml is pinned in CODEOWNERS + SUPERADMIN_HOUSE_FILES to match (the drift guard in
+  // test/path-rank.test.mjs requires rankForPath to agree with the rank hardcoded here).
+  // There is NO outbound-remove: deleting a row turns a link in an old post into a 404, so a link is taken
+  // out of use with outbound-status -> retired, which keeps its redirect answering.
+  'outbound-add': { path: 'house/outbound-links.yml', rank: ROLE_RANK.superadmin, fn: addOutboundLink, input: outboundAddInput, slug: (a) => idSlug(a.path) },
+  'outbound-update': { path: 'house/outbound-links.yml', rank: ROLE_RANK.superadmin, fn: updateOutboundLink, input: outboundUpdateInput, slug: (a) => idSlug(a.path) },
+  'outbound-status': { path: 'house/outbound-links.yml', rank: ROLE_RANK.superadmin, fn: setOutboundLinkStatus, input: outboundStatusInput, slug: (a) => idSlug(a.path) },
   // sow-161 B: the channel-map manager's config writes. moderation-flags.yml + syndication-config.yml are both
   // superadmin-pinned in CODEOWNERS + SUPERADMIN_HOUSE_FILES, so rankForPath returns superadmin for each and the
   // DRIFT guard (test/path-rank.test.mjs) requires this hardcode to say superadmin too. A fixed per-surface slug

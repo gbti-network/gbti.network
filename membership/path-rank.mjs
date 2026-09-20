@@ -33,6 +33,10 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   // affiliate tag, is a superadmin decision: an admin-ranked file would let an admin attach a paid link to any
   // item by pull request. Pinned here and in CODEOWNERS; the CTA write ops carry ROLE_RANK.superadmin too.
   'house/ctas.yml',
+  // sow-359: the tracked partner redirects. Same reasoning as the CTAs above and the same tier the owner
+  // named: where a paying click lands, and on whose referral code, is a superadmin decision. An
+  // admin-ranked file would let an admin repoint a money link by pull request.
+  'house/outbound-links.yml',
   // sow-312: the newsletter send-rate caps. It decides how much mail reaches other people's inboxes, and
   // daily_cap: 0 is the switch that stops sending altogether, so it belongs at the same tier as the files
   // above rather than inheriting /house/'s admin rank.

@@ -31,6 +31,7 @@ export const WORKER_ADMIN_ACTIONS = Object.freeze(new Set([
   'digest-cta-set', 'digest-sponsor-set', // sow-266: superadmin, forwarded unchanged (both are PATCHES, so the payload must not be defaulted on the way through)
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign',
+  'outbound-add', 'outbound-update', 'outbound-status', // sow-359: the tracked partner links, forwarded unchanged
   'flag-term-add', 'flag-term-remove',
   'syndication-templates-set', 'news-engagement-set', 'syndication-settings-set',
   // content moderation, and the multi-file batches

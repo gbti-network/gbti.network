@@ -20546,6 +20546,10 @@ var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
   "cta-toggle",
   "cta-assign",
   "cta-unassign",
+  "outbound-add",
+  "outbound-update",
+  "outbound-status",
+  // sow-359: the tracked partner links, forwarded unchanged
   "flag-term-add",
   "flag-term-remove",
   "syndication-templates-set",
