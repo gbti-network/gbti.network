@@ -16,7 +16,8 @@
 // edges, and an Image only card fills the box with no padding; any other chrome gets the card's own border. The
 // classes are prefixed pcta- because the site stylesheet already has a marketing .cta-card with 56px padding.
 import { readCtas, ctaImageInfo } from '../../scripts/lib/ctas-store.mjs';
-import { ctaFor, ctaImageUrl } from '../lib/ctas.mjs';
+import { ctaFor, ctaImageUrl, trackedHrefFor } from '../lib/ctas.mjs';
+import { outboundLinkSummaries } from '../../scripts/lib/outbound-links-store.mjs'; // sow-359: the tracked links this build knows about
 import { renderCtaCard, ctaLayoutOf, layoutUses, CTA_CARD_CSS } from '../../membership/cta-card-render.mjs';
 
 interface Props { type: 'prompt' | 'post' | 'project' | 'share'; ref: string; wrap?: string; pad?: boolean }
@@ -36,7 +37,11 @@ if (cta) {
     if (!info.ok) throw new Error(`CTA "${cta.id}" image ${cta.image}: ${info.problem}`);
     image = { url: ctaImageUrl(cta.image), width: info.width, height: info.height };
   }
-  html = renderCtaCard(cta, { image });
+  // sow-359: a card may name a tracked /outbound/ path. It is honoured only when THIS build's store carries
+  // it live, so the deploy that starts using a path is the same deploy that emits its redirect, and a card
+  // can never render a masked link that does not resolve.
+  const href = trackedHrefFor(cta, outboundLinkSummaries(root));
+  html = renderCtaCard(cta, { image, href });
   const chrome = String(wrap || '').split(/\s+/).filter(Boolean);
   const boxed = chrome.includes('card');
   const sideCard = chrome.includes('side-card');

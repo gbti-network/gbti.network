@@ -20729,13 +20729,13 @@ var MAX_BASE64 = Math.ceil(CTA_IMAGE_MAX_BYTES / 3) * 4 + 4;
 
 // membership/cta-edits.mjs
 var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
-var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200 });
+var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200, trackedPath: 200 });
 var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
 function ctasOf(parsed) {
   return Array.isArray(parsed?.ctas) ? parsed.ctas : [];
 }
-var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
+var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html", "trackedPath"];
 var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
 var CTA_FIELDS2 = Object.freeze([...EDITABLE, ...STRUCTURED]);
 

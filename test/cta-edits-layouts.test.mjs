@@ -79,7 +79,9 @@ test('addCta stores the structured parts in the order the file is written in', (
   assert.equal(e.line, undefined, 'an empty optional sentence is left out, not stored empty');
   assert.notEqual(e.icon, ICON, 'the icon is copied, not shared with the caller');
   assert.throws(() => addCta({ ctas: [] }, { id: 'cover', label: 'Cover', layout: 'image', destination: AMZ, partner: 'amazon' }, ctx), (err) => err instanceof CtaEditError && /image is required for the image layout/.test(err.message));
-  assert.deepEqual(CTA_FIELDS, ['label', 'line', 'button', 'destination', 'partner', 'note', 'layout', 'html', 'image', 'icon', 'showTitle', 'hosts']);
+  // sow-359 added trackedPath. This exact-list assertion is the point: a field that is not in CTA_FIELDS is
+  // dropped silently on the next save, so growing the list has to be a deliberate edit here too.
+  assert.deepEqual(CTA_FIELDS, ['label', 'line', 'button', 'destination', 'partner', 'note', 'layout', 'html', 'trackedPath', 'image', 'icon', 'showTitle', 'hosts']);
 });
 
 test('updateCta: sets and clears the new parts, keeps the key order, and is a no-op on identical values', () => {

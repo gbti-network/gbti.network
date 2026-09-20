@@ -63,6 +63,29 @@ export function ctaFor(registry, type, ref) {
 }
 
 /**
+ * sow-359: where a card's button actually points, given the build's own copy of the tracked link store.
+ *
+ * FAIL SAFE, AND THAT IS THE WHOLE POINT. A card names a `trackedPath` as an intention; this decides whether
+ * honouring it would work. The masked path is used ONLY when the store carries that exact path and it is
+ * live. Otherwise the card falls back to its real destination, so a card can never render a link that 404s,
+ * and retiring a link automatically unmasks every card that was using it.
+ *
+ * @param cta a registry entry
+ * @param links the store's entries (linkSummary shape: { path, status, ... })
+ * @returns the path to render, or null to mean "use the card's own destination"
+ */
+export function trackedHrefFor(cta, links = []) {
+  const want = typeof cta?.trackedPath === 'string' ? cta.trackedPath.trim() : '';
+  if (!want) return null;
+  // An amazon card can never be masked (the Associates policy; the edit core refuses it at write time). This
+  // is the second place that is true, because a hand-edited registry does not pass through the edit core.
+  if (String(cta?.partner ?? '').trim() === 'amazon') return null;
+  const row = (Array.isArray(links) ? links : []).find((l) => l && String(l.path ?? '').trim() === want);
+  if (!row) return null;
+  return String(row.status ?? 'live') === 'live' ? want : null;
+}
+
+/**
  * The registry with every assignment resolved against the real item list. `items` is [{ type, ref, title, live }]
  * from the content collections (live = the item has a public page). An assignment that matches nothing is kept and
  * marked resolved: false; one that matches a draft or a members-only item is resolved but not live (no url).
@@ -78,6 +101,9 @@ export function resolveAssignments(registry, items) {
     line: str(c.line),
     button: str(c.button),
     destination: str(c.destination),
+    // sow-359: the masked path, so the manager can show and edit it. A field left out of this list is a
+    // field the admin surface cannot see, which is the same silent-drop the editable whitelist has.
+    trackedPath: str(c.trackedPath),
     partner: str(c.partner),
     // sow-337: the layout and its optional parts, as stored, plus where the site serves the image
     layout: ctaLayoutOf(c),

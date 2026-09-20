@@ -42,11 +42,15 @@ export function destinationHost(destination) {
  * @param cta the registry entry (already validated)
  * @param opts.image { url, width, height } for image layouts, or null (a placeholder is drawn in preview)
  * @param opts.preview true in the admin: links become inert spans and the HTML block shows a notice, not the code
+ * @param opts.href sow-359: where the button actually points, when the caller has resolved a tracked path for
+ *   this card. Defaults to the card's own destination, so every existing caller renders exactly as before.
+ *   The CALLER decides, not this function, because only the caller can see whether the build's copy of the
+ *   link store still carries that path: a card must never render a masked link that does not resolve.
  */
-export function renderCtaCard(cta, { image = null, preview = false } = {}) {
+export function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
   const L = ctaLayoutOf(cta);
   const uses = layoutUses(L);
-  const href = esc(cta?.destination);
+  const href = esc(hrefOverride || cta?.destination);
   const linkOpen = (cls, extra = '') => (preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`);
   const linkClose = preview ? '</span>' : '</a>';
   const dim = (k, v) => (Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : '');

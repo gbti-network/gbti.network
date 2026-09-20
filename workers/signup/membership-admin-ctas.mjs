@@ -29,7 +29,7 @@ function idOf(p) {
 }
 // The text fields, each bounded by the core's cap. `null`/'' on an update clears an optional one. On add only
 // the label and partner are required here; the core decides what else the card's layout needs.
-const TEXT_FIELDS = ['label', 'line', 'button', 'destination', 'partner', 'note', 'layout', 'html'];
+const TEXT_FIELDS = ['label', 'line', 'button', 'destination', 'partner', 'note', 'layout', 'html', 'trackedPath']; // sow-359: trackedPath must be here or the wire drops it before the core ever sees it
 const REQUIRED_ON_ADD = ['label', 'partner'];
 const LAYOUT_MAX = 16;
 function textFields(p, { required }) {

@@ -11787,10 +11787,10 @@ ${listStyleProseCss(".doc-blocks")}
       return String(destination || "");
     }
   }
-  function renderCtaCard(cta, { image = null, preview = false } = {}) {
+  function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
     const L = ctaLayoutOf(cta);
     const uses = layoutUses(L);
-    const href = esc2(cta?.destination);
+    const href = esc2(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
     const dim = (k, v) => Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : "";
@@ -11931,10 +11931,11 @@ ${listStyleProseCss(".doc-blocks")}
 
   // membership/cta-edits.mjs
   var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
-  var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200 });
+  var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200, trackedPath: 200 });
   var ID_RE = /^[a-z0-9][a-z0-9-]*$/;
   var SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
   var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
+  var TRACKED_PATH_RE = /^\/[A-Za-z0-9/_-]*$/;
   var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
   var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
@@ -11953,6 +11954,15 @@ ${listStyleProseCss(".doc-blocks")}
     }
     if (!AMAZON_HOST_RE.test(u.hostname)) return "an amazon CTA must link straight to an amazon domain (no /outbound/ path or other intermediate site: a redirected purchase earns nothing)";
     if (!u.searchParams.get("tag")) return "an amazon destination must carry the Associates tag= parameter (without it the purchase earns nothing)";
+    return null;
+  }
+  function trackedPathProblem(trackedPath) {
+    const v = str2(trackedPath);
+    if (!v) return null;
+    if (v.length > CTA_LIMITS.trackedPath) return `trackedPath is too long (max ${CTA_LIMITS.trackedPath} chars)`;
+    if (!v.startsWith("/")) return `trackedPath must be a site path beginning with / (a tracked link is served by this site), got ${JSON.stringify(trackedPath)}`;
+    if (!TRACKED_PATH_RE.test(v)) return `trackedPath must be a plain site path with no query, fragment or whitespace, got ${JSON.stringify(trackedPath)}`;
+    if (!v.startsWith("/outbound/") || v === "/outbound/") return `trackedPath must be an /outbound/ path, got ${JSON.stringify(trackedPath)}`;
     return null;
   }
   function htmlHrefs(html) {
@@ -12039,6 +12049,13 @@ ${listStyleProseCss(".doc-blocks")}
       if (why) problems.push(`${where}: ${why}`);
     }
     if (partner === "amazon" && typeof e.html === "string") for (const why of amazonHtmlProblems(e.html)) problems.push(`${where}: ${why}`);
+    if (e.trackedPath !== void 0 && e.trackedPath !== null && e.trackedPath !== "") {
+      const why = trackedPathProblem(e.trackedPath);
+      if (why) problems.push(`${where}: ${why}`);
+      else if (partner === "amazon") {
+        problems.push(`${where}: an amazon CTA cannot use a tracked link. A purchase reached through an intermediate redirect is disqualified by the Associates Program Policies, so an amazon card links straight to amazon with its tag. See the rule at the head of house/ctas.yml.`);
+      }
+    }
     if (e.enabled !== void 0 && typeof e.enabled !== "boolean") problems.push(`${where}: enabled must be true or false`);
     if (e.note !== void 0 && e.note !== null && (typeof e.note !== "string" || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
     if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
@@ -12063,7 +12080,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return problems;
   }
-  var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html"];
+  var EDITABLE = ["label", "line", "button", "destination", "partner", "note", "layout", "html", "trackedPath"];
   var STRUCTURED = ["image", "icon", "showTitle", "hosts"];
   var CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
 

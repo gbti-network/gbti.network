@@ -27,11 +27,12 @@ import { CTA_IMAGE_FILE_RE } from './cta-image.mjs';
 export class CtaEditError extends Error {}
 
 export const CTA_ITEM_TYPES = Object.freeze(['prompt', 'post', 'project', 'share']);
-export const CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1000, ref: 160, html: 20000, image: 80, hosts: 8, host: 200 });
+export const CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1000, ref: 160, html: 20000, image: 80, hosts: 8, host: 200, trackedPath: 200 });
 
 const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 const SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
+const TRACKED_PATH_RE = /^\/[A-Za-z0-9/_-]*$/; // sow-359: a plain site path, no query, fragment or whitespace
 const AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
 // A partner host, as it goes into the page policy: a bare https origin, lowercase, optionally one leading "*." label
 // and a port, nothing else. No path, no quote, no semicolon, no space: any of those could end the policy list and
@@ -85,6 +86,27 @@ export function amazonDestinationProblem(destination) {
 }
 
 /** Every href written in an HTML block: quoted or bare attribute values, in source order. */
+/**
+ * sow-359: what is wrong with a card's `trackedPath`, or null. A card keeps its REAL destination and may
+ * additionally name a tracked path; the page renders the path and the redirect sends the reader on.
+ *
+ * Why the destination is not simply overwritten with the path: `amazonDestinationProblem` below reads the
+ * destination to decide whether a card is honest, and the board and the partner check read it too. Replacing
+ * it would leave all three reading a site path from then on.
+ */
+export function trackedPathProblem(trackedPath) {
+  const v = str(trackedPath);
+  if (!v) return null;
+  if (v.length > CTA_LIMITS.trackedPath) return `trackedPath is too long (max ${CTA_LIMITS.trackedPath} chars)`;
+  if (!v.startsWith('/')) return `trackedPath must be a site path beginning with / (a tracked link is served by this site), got ${JSON.stringify(trackedPath)}`;
+  if (!TRACKED_PATH_RE.test(v)) return `trackedPath must be a plain site path with no query, fragment or whitespace, got ${JSON.stringify(trackedPath)}`;
+  // Scoped to /outbound/ on purpose. The store also carries legacy WordPress paths that still earn, but those
+  // are history rather than a shape to mint more of, and a card naming an arbitrary site path would be a way
+  // to point a partner card at any page on the site.
+  if (!v.startsWith('/outbound/') || v === '/outbound/') return `trackedPath must be an /outbound/ path, got ${JSON.stringify(trackedPath)}`;
+  return null;
+}
+
 export function htmlHrefs(html) {
   const out = [];
   const re = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
@@ -163,6 +185,16 @@ export function validateCta(e, where = 'cta') {
     if (why) problems.push(`${where}: ${why}`);
   }
   if (partner === 'amazon' && typeof e.html === 'string') for (const why of amazonHtmlProblems(e.html)) problems.push(`${where}: ${why}`);
+  // sow-359: the masked-link option. Refused outright for an amazon card, with the reason said plainly rather
+  // than as a bare rejection, because the next person to try it will be looking at the Associates policy note
+  // at the head of house/ctas.yml and deserves to be pointed at it.
+  if (e.trackedPath !== undefined && e.trackedPath !== null && e.trackedPath !== '') {
+    const why = trackedPathProblem(e.trackedPath);
+    if (why) problems.push(`${where}: ${why}`);
+    else if (partner === 'amazon') {
+      problems.push(`${where}: an amazon CTA cannot use a tracked link. A purchase reached through an intermediate redirect is disqualified by the Associates Program Policies, so an amazon card links straight to amazon with its tag. See the rule at the head of house/ctas.yml.`);
+    }
+  }
   if (e.enabled !== undefined && typeof e.enabled !== 'boolean') problems.push(`${where}: enabled must be true or false`);
   if (e.note !== undefined && e.note !== null && (typeof e.note !== 'string' || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
   if (e.items !== undefined && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
@@ -208,13 +240,13 @@ function assertValid(d, where) {
   const problems = validateCtas(d);
   if (problems.length) throw new CtaEditError(`${where}: ${problems[0]}`);
 }
-const EDITABLE = ['label', 'line', 'button', 'destination', 'partner', 'note', 'layout', 'html'];
+const EDITABLE = ['label', 'line', 'button', 'destination', 'partner', 'note', 'layout', 'html', 'trackedPath']; // sow-359: trackedPath MUST be here or a save silently drops it
 // Text a card may leave out: clearing one removes the key, and the layout decides whether it was needed.
-const CLEARABLE = ['line', 'button', 'destination', 'note', 'layout', 'html'];
+const CLEARABLE = ['line', 'button', 'destination', 'note', 'layout', 'html', 'trackedPath']; // sow-359: clearing trackedPath unmasks the card
 // The structured parts: null clears, anything else is stored as given (validated below).
 const STRUCTURED = ['image', 'icon', 'showTitle', 'hosts'];
 export const CTA_FIELDS = Object.freeze([...EDITABLE, ...STRUCTURED]);
-const KEY_ORDER = ['id', 'label', 'layout', 'line', 'button', 'destination', 'partner', 'image', 'icon', 'html', 'showTitle', 'hosts', 'enabled', 'note', 'items'];
+const KEY_ORDER = ['id', 'label', 'layout', 'line', 'button', 'destination', 'trackedPath', 'partner', 'image', 'icon', 'html', 'showTitle', 'hosts', 'enabled', 'note', 'items'];
 
 /** The entry with its keys in the order the file is written in, so an edit never reshuffles the YAML. */
 function canonical(e) {
