@@ -4,6 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 import {
   effectiveMembership,
@@ -16,6 +17,7 @@ import {
   isBlockedFromPublishing,
   isLockedMembership,
   upgradePromptKind,
+  lockedAccountCopy,
   bannedIdsFromText,
   grandfathersFromText,
   grandfatherActive,
@@ -231,6 +233,70 @@ test('upgradePromptKind: join for free, renew for lapsed, nothing for active/ban
   for (const m of ['paid', 'trialing', 'banned', 'unknown', undefined, null, '']) {
     assert.equal(upgradePromptKind(m), null, `${m} gets no upgrade prompt`);
   }
+});
+
+// sow-360: what a LOCKED account is TOLD. Three states, three messages, one source for the splash and the banner.
+test('sow-360: a free account is not told a membership it never had has lapsed', () => {
+  const c = lockedAccountCopy('none');
+  assert.equal(c.kind, 'join');
+  assert.doesNotMatch(c.heading + ' ' + c.body, /lapsed|ended|renew/i, 'nothing to renew and nothing lost');
+  assert.equal(c.cta.label, 'See what membership includes');
+});
+
+test('sow-360: a lapsed member is told their published work is still live', () => {
+  // SOW-197 stopped a lapse unpublishing anything. Saying so is what stops a renewal being confused with a rescue.
+  for (const m of ['expired', 'cancelled']) {
+    const c = lockedAccountCopy(m);
+    assert.equal(c.kind, 'renew', m);
+    assert.match(c.body, /still live/i, m);
+    assert.equal(c.cta.label, 'Renew membership', m);
+  }
+});
+
+test('sow-360: a restricted account is offered NO button, because paying would not lift the restriction', () => {
+  const c = lockedAccountCopy('banned');
+  assert.equal(c.kind, 'restricted');
+  assert.equal(c.cta, null, 'a Join or Renew here takes money and changes nothing');
+  assert.doesNotMatch(c.heading + ' ' + c.body + ' ' + c.short, /renew|join|membership includes/i);
+});
+
+test('sow-360: the copy NEVER sells a free perk as something joining unlocks', () => {
+  // The ruling this enforces: saving, collecting and following are free and stay free, and the owner declined
+  // clawing one back to justify a sales line in August 2026. The shipped new-tab banner was making the claim
+  // anyway ("Join GBTI to save, follow, unlock member-only content, and publish"), which is what this catches.
+  assert.ok(canFollow('none') && canSave('none'), 'a free account really does get these, or this guard is moot');
+  const join = lockedAccountCopy('none');
+  const sold = `${join.heading} ${join.short} ${join.cta.label}`;
+  for (const perk of ['save', 'saving', 'follow', 'following', 'collect']) {
+    assert.doesNotMatch(sold, new RegExp(perk, 'i'), `the join pitch must not offer "${perk}", which is already free`);
+  }
+  // The full body MAY name them, but only as things that STAY, never as things membership adds.
+  assert.match(join.body, /keeps everything it has/i);
+});
+
+test('sow-360: every locked state answers, and only locked states reach this copy', () => {
+  for (const m of ['none', 'expired', 'cancelled', 'banned']) {
+    const c = lockedAccountCopy(m);
+    for (const f of ['kind', 'heading', 'body', 'short']) {
+      assert.equal(typeof c[f], 'string', `${m}.${f}`);
+      assert.ok(c[f].trim().length > 0, `${m}.${f} is empty`);
+    }
+    assert.ok(c.short.length < c.body.length, `${m}: the short form must be shorter`);
+    assert.doesNotMatch(c.body, /[\u2014\u2013]/, `${m}: a dash our conventions do not use`);
+    assert.doesNotMatch(c.short, /[\u2014\u2013]/, `${m}: a dash our conventions do not use`);
+  }
+});
+
+test('sow-360: both surfaces read the shared copy, neither keeps its own', () => {
+  // The drift guard. These two are the only places the tiers are described to a person, and they had drifted
+  // into contradicting each other: the splash said every locked account had lapsed, the banner sold free perks.
+  const gate = fs.readFileSync(new URL('../client-ui/src/elements/gbti-lock-gate.mjs', import.meta.url), 'utf8');
+  const tab = fs.readFileSync(new URL('../extension/src/newtab.mjs', import.meta.url), 'utf8');
+  for (const [name, src] of [['lock gate', gate], ['new tab', tab]]) {
+    assert.match(src, /lockedAccountCopy/, `${name} should read the shared copy`);
+    assert.doesNotMatch(src, /membership has lapsed/i, `${name} still carries its own copy`);
+  }
+  assert.doesNotMatch(tab, /Join GBTI to save/i, 'the false free-perk pitch is gone');
 });
 
 // SOW-018: the extension lock-splash predicate. Lapsed accounts lock; trial reads; paid is full; unknown fails OPEN.

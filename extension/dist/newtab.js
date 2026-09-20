@@ -2388,6 +2388,35 @@
     if (membership === "expired" || membership === "cancelled") return "renew";
     return null;
   }
+  function lockedAccountCopy(membership) {
+    const kind2 = upgradePromptKind(membership);
+    if (kind2 === "join") {
+      return {
+        kind: kind2,
+        heading: "Publishing is part of membership",
+        body: "Your account keeps everything it has: the feed, the news, following and saving. Publishing your own work, and the member-only stream, come with membership.",
+        short: "Publishing your own work and the member-only stream come with membership.",
+        cta: { label: "See what membership includes", href: MEMBERSHIP_URL }
+      };
+    }
+    if (kind2 === "renew") {
+      return {
+        kind: kind2,
+        heading: "Your membership has ended",
+        body: "Your published work is still live, and your saves and follows are untouched. Renew to publish again and to read the member-only stream.",
+        short: "Your membership has ended. Renew to publish again and to read the member-only stream.",
+        cta: { label: "Renew membership", href: MEMBERSHIP_URL }
+      };
+    }
+    return {
+      kind: "restricted",
+      heading: "This account cannot publish",
+      body: "Publishing and the member stream are closed on this account. You can still read the network and the news.",
+      short: "Publishing and the member stream are closed on this account.",
+      cta: null
+    };
+  }
+  var MEMBERSHIP_URL = "https://gbti.network/membership/";
 
   // membership/devlog-core.mjs
   var SECRET_KEY = /token|secret|authorization|bearer|password|refresh|api[_-]?key|cookie|credential|client[_-]?secret/i;
@@ -22013,7 +22042,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-subscribe.mjs
-  var MEMBERSHIP_URL = "https://gbti.network/membership/";
+  var MEMBERSHIP_URL2 = "https://gbti.network/membership/";
   function goMembership() {
     try {
       if (typeof location !== "undefined" && /^https?:$/.test(location.protocol)) {
@@ -22023,7 +22052,7 @@ ${listStyleProseCss(".doc-blocks")}
     } catch {
     }
     try {
-      window.open(MEMBERSHIP_URL, "_blank", "noopener");
+      window.open(MEMBERSHIP_URL2, "_blank", "noopener");
     } catch {
     }
   }
@@ -22845,7 +22874,9 @@ ${listStyleProseCss(".doc-blocks")}
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
   .splash .lock { font-size: 34px; line-height: 1; }
-  .splash h2 { margin: 12px 0 6px; font-family: var(--font-display, var(--font-body)); }
+  /* sow-360: an explicit --fg. The heading carried no colour and inherited the muted tone the body uses, so in
+     dark mode the two read at the same weight and the heading stopped looking like one. */
+  .splash h2 { margin: 12px 0 6px; font-family: var(--font-display, var(--font-body)); color: var(--fg); }
   .splash p { color: var(--muted); margin: 0 auto; max-width: 380px; font-size: 14px; line-height: 1.5; }
   .splash a.cta { display: inline-block; margin-top: 18px; background: var(--brand); color: #fff; font-weight: 700;
     text-decoration: none; padding: 10px 20px; border-radius: 10px; }
@@ -22864,12 +22895,12 @@ ${listStyleProseCss(".doc-blocks")}
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
+        const c = lockedAccountCopy(membership);
         this.set(this.css(CSS32) + `<div class="splash">
-        <div class="lock">🔒</div>
-        <h2>Your access is locked</h2>
-        <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
-           community stream, and publish again.</p>
-        <a class="cta" href="https://gbti.network/membership/">Renew membership</a>
+        <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
+        <h2>${esc(c.heading)}</h2>
+        <p>${esc(c.body)}</p>
+        ${c.cta ? `<a class="cta" href="${esc(c.cta.href)}">${esc(c.cta.label)}</a>` : ""}
       </div>`);
         return;
       }
@@ -28945,6 +28976,7 @@ From the author:
       el.classList.remove("show");
       return;
     }
+    const copy = lockedAccountCopy(MEMBERSHIP);
     let snoozedUntil = 0;
     try {
       snoozedUntil = Number(localStorage.getItem(UPGRADE_SNOOZE_KEY)) || 0;
@@ -28953,13 +28985,8 @@ From the author:
     if (Date.now() < snoozedUntil) return;
     const txt = $("[data-upgrade-txt]");
     const cta = $("[data-upgrade-cta]");
-    if (kind2 === "renew") {
-      if (txt) txt.textContent = "Your membership has lapsed, so you are browsing in read-only mode. Renew to save, follow, unlock member-only content, and publish again.";
-      if (cta) cta.textContent = "Renew membership";
-    } else {
-      if (txt) txt.textContent = "You are browsing in read-only mode. Join GBTI to save, follow, unlock member-only content, and publish.";
-      if (cta) cta.textContent = "Join GBTI";
-    }
+    if (txt) txt.textContent = copy.short;
+    if (cta && copy.cta) cta.textContent = copy.cta.label;
     el.classList.add("show");
     el.querySelector("[data-upgrade-dismiss]")?.addEventListener("click", () => {
       el.classList.remove("show");

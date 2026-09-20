@@ -133,6 +133,63 @@ export function upgradePromptKind(membership) {
   return null;
 }
 
+/**
+ * sow-360: what a LOCKED account is told on the splash that replaces a gated surface, and in the read-only
+ * upgrade banner. ONE source for both, because they are the two places the tiers get described to a person and
+ * they had drifted into contradicting each other.
+ *
+ * THE WORDING IS THE OWNER'S, approved 2026-09-19, and the three cases are genuinely three messages:
+ *   - a FREE account has never had a membership, so it has nothing to renew and has lost nothing. It is told
+ *     what membership adds, and told that what it already has stays.
+ *   - a LAPSED member has lost something, and is told their published work is still live (SOW-197: a lapse
+ *     stopped unpublishing content) so that renewing is not confused with rescuing it.
+ *   - a RESTRICTED account gets NO button at all. Paying does not lift a restriction in this system
+ *     (ban > staff > grandfather > Stripe), so offering Join or Renew would take money and change nothing,
+ *     which is the worst of the three outcomes.
+ *
+ * WHAT IT MUST NEVER SAY, and the reason this is one function: saving, collecting and following are FREE perks
+ * (FREE_TIER above includes a free account). Listing them as things joining unlocks is a false sales line, and
+ * the owner declined pulling one of those perks back to justify exactly that claim in August 2026. The shipped
+ * upgrade banner was making the claim anyway. test/membership-client.test.mjs fails if this copy does again.
+ *
+ * Returns { kind, heading, body, short, cta } with cta null when there is nothing honest to offer. `short` is
+ * the one-line form the dismissible new-tab banner uses, where the full body reads as a wall; it is a second
+ * LENGTH of the same claim, not a second claim, and it lives here so the two can never say different things.
+ * Pure.
+ */
+export function lockedAccountCopy(membership) {
+  const kind = upgradePromptKind(membership); // 'join' | 'renew' | null
+  if (kind === 'join') {
+    return {
+      kind,
+      heading: 'Publishing is part of membership',
+      body: 'Your account keeps everything it has: the feed, the news, following and saving. Publishing your own work, and the member-only stream, come with membership.',
+      short: 'Publishing your own work and the member-only stream come with membership.',
+      cta: { label: 'See what membership includes', href: MEMBERSHIP_URL },
+    };
+  }
+  if (kind === 'renew') {
+    return {
+      kind,
+      heading: 'Your membership has ended',
+      body: 'Your published work is still live, and your saves and follows are untouched. Renew to publish again and to read the member-only stream.',
+      short: 'Your membership has ended. Renew to publish again and to read the member-only stream.',
+      cta: { label: 'Renew membership', href: MEMBERSHIP_URL },
+    };
+  }
+  // Restricted. Reached only for a locked account, since a paid or unresolved one never sees a splash at all.
+  return {
+    kind: 'restricted',
+    heading: 'This account cannot publish',
+    body: 'Publishing and the member stream are closed on this account. You can still read the network and the news.',
+    short: 'Publishing and the member stream are closed on this account.',
+    cta: null,
+  };
+}
+
+/** Where the join and renew buttons point. One constant so the two surfaces cannot drift to different pages. */
+export const MEMBERSHIP_URL = 'https://gbti.network/membership/';
+
 /** Whether a membership value is a KNOWN non-paid status (so the publish is blocked, not merely unverified). */
 export function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);

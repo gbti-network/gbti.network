@@ -19283,6 +19283,40 @@ ${listStyleProseCss(".doc-blocks")}
   function isLockedMembership(membership) {
     return LOCKED_MEMBERSHIP.has(membership);
   }
+  function upgradePromptKind(membership) {
+    if (membership === "none") return "join";
+    if (membership === "expired" || membership === "cancelled") return "renew";
+    return null;
+  }
+  function lockedAccountCopy(membership) {
+    const kind2 = upgradePromptKind(membership);
+    if (kind2 === "join") {
+      return {
+        kind: kind2,
+        heading: "Publishing is part of membership",
+        body: "Your account keeps everything it has: the feed, the news, following and saving. Publishing your own work, and the member-only stream, come with membership.",
+        short: "Publishing your own work and the member-only stream come with membership.",
+        cta: { label: "See what membership includes", href: MEMBERSHIP_URL2 }
+      };
+    }
+    if (kind2 === "renew") {
+      return {
+        kind: kind2,
+        heading: "Your membership has ended",
+        body: "Your published work is still live, and your saves and follows are untouched. Renew to publish again and to read the member-only stream.",
+        short: "Your membership has ended. Renew to publish again and to read the member-only stream.",
+        cta: { label: "Renew membership", href: MEMBERSHIP_URL2 }
+      };
+    }
+    return {
+      kind: "restricted",
+      heading: "This account cannot publish",
+      body: "Publishing and the member stream are closed on this account. You can still read the network and the news.",
+      short: "Publishing and the member stream are closed on this account.",
+      cta: null
+    };
+  }
+  var MEMBERSHIP_URL2 = "https://gbti.network/membership/";
 
   // client-ui/src/elements/gbti-lock-gate.mjs
   var CSS28 = `
@@ -19290,7 +19324,9 @@ ${listStyleProseCss(".doc-blocks")}
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
   .splash .lock { font-size: 34px; line-height: 1; }
-  .splash h2 { margin: 12px 0 6px; font-family: var(--font-display, var(--font-body)); }
+  /* sow-360: an explicit --fg. The heading carried no colour and inherited the muted tone the body uses, so in
+     dark mode the two read at the same weight and the heading stopped looking like one. */
+  .splash h2 { margin: 12px 0 6px; font-family: var(--font-display, var(--font-body)); color: var(--fg); }
   .splash p { color: var(--muted); margin: 0 auto; max-width: 380px; font-size: 14px; line-height: 1.5; }
   .splash a.cta { display: inline-block; margin-top: 18px; background: var(--brand); color: #fff; font-weight: 700;
     text-decoration: none; padding: 10px 20px; border-radius: 10px; }
@@ -19309,12 +19345,12 @@ ${listStyleProseCss(".doc-blocks")}
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
+        const c = lockedAccountCopy(membership);
         this.set(this.css(CSS28) + `<div class="splash">
-        <div class="lock">🔒</div>
-        <h2>Your access is locked</h2>
-        <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
-           community stream, and publish again.</p>
-        <a class="cta" href="https://gbti.network/membership/">Renew membership</a>
+        <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
+        <h2>${esc(c.heading)}</h2>
+        <p>${esc(c.body)}</p>
+        ${c.cta ? `<a class="cta" href="${esc(c.cta.href)}">${esc(c.cta.label)}</a>` : ""}
       </div>`);
         return;
       }

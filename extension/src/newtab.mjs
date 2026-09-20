@@ -4,7 +4,7 @@
 // banner (SOW-026/029), and the lapsed-member lock (SOW-018). Fetches the public activity index over the
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
-import { canSeeNews, canSeeShares, upgradePromptKind } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt
+import { canSeeNews, canSeeShares, upgradePromptKind, lockedAccountCopy } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt; sow-360: one source for the tier copy
 import { devlog } from './devlog.mjs'; // SOW-124: the page realm's devlog (superadmin + Debug-flag gated; inert otherwise)
 import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
@@ -684,18 +684,18 @@ function showUpgradeBanner() {
   if (!el) return;
   const kind = upgradePromptKind(MEMBERSHIP);
   if (!kind) { el.classList.remove('show'); return; }
+  // sow-360: the copy comes from the shared source the lock splash uses. It used to be written here, and it told
+  // a free account to join in order to "save, follow, unlock member-only content, and publish". Saving and
+  // following are FREE (FREE_TIER in client/src/membership.mjs includes a free account), so two of those four
+  // were untrue, and the owner had already declined pulling a free perk back to justify that kind of line.
+  const copy = lockedAccountCopy(MEMBERSHIP);
   let snoozedUntil = 0;
   try { snoozedUntil = Number(localStorage.getItem(UPGRADE_SNOOZE_KEY)) || 0; } catch (e) {}
   if (Date.now() < snoozedUntil) return;
   const txt = $('[data-upgrade-txt]');
   const cta = $('[data-upgrade-cta]');
-  if (kind === 'renew') {
-    if (txt) txt.textContent = 'Your membership has lapsed, so you are browsing in read-only mode. Renew to save, follow, unlock member-only content, and publish again.';
-    if (cta) cta.textContent = 'Renew membership';
-  } else {
-    if (txt) txt.textContent = 'You are browsing in read-only mode. Join GBTI to save, follow, unlock member-only content, and publish.';
-    if (cta) cta.textContent = 'Join GBTI';
-  }
+  if (txt) txt.textContent = copy.short;
+  if (cta && copy.cta) cta.textContent = copy.cta.label;
   el.classList.add('show');
   el.querySelector('[data-upgrade-dismiss]')?.addEventListener('click', () => {
     el.classList.remove('show');
