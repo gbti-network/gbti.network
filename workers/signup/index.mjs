@@ -126,6 +126,7 @@ import { maybeSendWeeklyReport } from './mail-stats-report.mjs'; // after-send a
 import { resolveSiteUrl, resolveClickBase } from '../../membership/mail-click.mjs';
 import { isCentralDigestHour } from '../../membership/mail-compile-core.mjs'; // sow-166: which of the two Tuesday triggers is 7 AM Central today
 import { handleSubscribe, handleConfirm } from './mail-subscribe.mjs'; // SOW-166: anonymous double-opt-in digest subscribe + confirm
+import { handleSponsorInquiry, listSponsorInquiries } from './sponsor-inquiry.mjs'; // sow-266: the digest sponsorship inquiry form + the superadmin read of what came in
 import { compileWeeklyIssue, compileWelcomeIssue } from './mail-compile.mjs'; // SOW-166: weekly compile (freeze one issue + enqueue), sends nothing
 import { drainMail } from './mail-drain.mjs'; // SOW-166: smoothed send drain on the shared 5-minute tick, behind the fail-closed gate
 import { renderMailIssue } from '../../membership/mail-render-dispatch.mjs'; // SOW-166 digest + SOW-186 phase 4 follow template, routed by issue.kind (exported so this exact dispatcher is the line under test)
@@ -1668,6 +1669,10 @@ export default {
           // sow-266: the weekly digest's membership pitch + sponsor slot. Superadmin for the same reason the rest of
           // this table is, and because the sponsor markup is a commercial arrangement before the issue goes out.
           '/membership/admin/digest-config': membershipAdminDigestConfig,
+          // sow-266 Phase 4: what came in through the sponsorship form. Superadmin, and here the reason IS
+          // confidentiality: unlike the settings beside it, these are private messages from named people and
+          // they are nowhere public.
+          '/membership/admin/sponsor-inquiries': listSponsorInquiries,
         };
         const poolFn = CHANNEL_MAP_POOLS[pathname];
         if (poolFn) {
@@ -1896,6 +1901,13 @@ export default {
       }
       if (pathname === '/mail/confirm') {
         return await handleConfirm(request, env);
+      }
+
+      // sow-266 Phase 4: the sponsorship inquiry form on /sponsorship/. Anonymous like the two above it (no
+      // cookie, no bearer), rate limited and Turnstile gated, and fail-soft on BOTH of its outputs: it answers
+      // with a failure only when neither the stored record nor the owner's email got through.
+      if (pathname === '/sponsorship/inquiry') {
+        return await handleSponsorInquiry(request, env);
       }
 
       return json({ error: 'not_found' }, 404);

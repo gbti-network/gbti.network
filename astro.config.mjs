@@ -76,7 +76,14 @@ export default defineConfig({
     // sow-189: an unindexed article (house/content-flags.yml) emits noindex, follow AND leaves the sitemap; the
     // two halves are not redundant (the meta asks a crawler, the sitemap stops advertising the URL).
     // sow-323 Phase 3: a members-only item (it also sends robots noindex from its own page).
-    sitemap({ filter: (page) => !/\/(account|welcome|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname) }),
+    // EVERY UNINDEXED ROUTE BELONGS HERE. A page carrying <meta name="robots" content="noindex"> and a sitemap
+    // entry at the same time publishes the address of a private surface in the one file crawlers read, and then
+    // tells them to go away when they arrive. Astro's filter runs before any page is written, so it cannot read
+    // the robots meta and this list cannot be derived; scripts/check-sitemap-noindex.mjs compares the two after
+    // the build and fails with the route to add. It found EIGHT already here when it was written (the admin
+    // tools, the WorkBench and its two sub-pages, sign-in, browse, embed, account notifications), which is what
+    // a hand-maintained list does when nothing checks it.
+    sitemap({ filter: (page) => !/\/(account|account\/notifications|admin|browse|embed|login|sponsorship|welcome|workbench|workbench\/mcp|workbench\/preview|codeable-invite(\/v1)?|member-invite|curator-invite|home\/v1|news\/item)\/?$/.test(page) && !UNINDEXED.has(new URL(page).pathname) && !MEMBERS_ONLY.has(new URL(page).pathname) }),
   ],
   image: {
     // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let

@@ -117,10 +117,16 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
       msg.hidden = false;
     };
 
+    // sow-266: ONE SEND PER FORM. Disabling every control after a success is not the same property: a submit
+    // can also arrive from Enter in a field or from a dispatched event, which is how a second request was
+    // measured going out through a fully disabled form on the built homepage.
+    let done = false;
+
     form.addEventListener('submit', async (ev) => {
       // Let the plain navigation happen if fetch is unavailable for any reason.
       if (typeof window.fetch !== 'function') return;
       ev.preventDefault();
+      if (done) return;
 
       const addr = String(email.value || '').trim();
       // A deliberately loose shape check. The Worker is the authority and re-validates; this only spares a
@@ -142,7 +148,6 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
       btn.disabled = true;
       const label = btn.textContent;
       btn.textContent = 'Sending...';
-
       try {
         const res = await fetch(form.action, {
           method: 'POST',
@@ -155,6 +160,7 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
         if (res.ok && body && body.ok) {
           // The Worker answers identically whether or not this address was already known (anti-enumeration),
           // so this copy must not claim a NEW subscription was created.
+          done = true;
           form.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
           say(subscribeSuccessMessage(body), 'ok');
           return;
@@ -171,8 +177,7 @@ const sub = blurb ?? 'One email a week: new member articles, projects and prompt
       } catch {
         say('We could not reach the network. Please check your connection and try again.', 'err');
       } finally {
-        btn.disabled = false;
-        btn.textContent = label;
+        if (!done) { btn.disabled = false; btn.textContent = label; }
         // Turnstile tokens are single use, so a retry needs a fresh one. Scope the reset to THIS form's own
         // widget (a page may carry two), so a failed submit on one does not reset the other's token.
         const tsEl = form.querySelector('.cf-turnstile');

@@ -1,0 +1,188 @@
+---
+// sow-266 Phase 4: the sponsorship inquiry page. NOINDEX on purpose (owner's ask): this is a page to send
+// someone, not a page to be found. Nothing links to it from the site's own navigation, so the only way here is
+// a link in a conversation that is already happening.
+//
+// IT IS A CONTACT FORM, NOT A CHECKOUT. Nothing is bought, nothing is committed, and the page says so, because
+// the failure a form like this actually has is a sponsor believing they have booked something. What it
+// promises is a reply.
+//
+// NO RATE CARD, NO PRICE. There is one standing sponsor slot and the terms are the owner's to set per
+// conversation. Inventing a number here would be a fabricated commitment, and a page that names a price it
+// cannot honour is worse than one that asks.
+//
+// The submit goes straight to the Worker (signup.gbti.network), the same way the digest subscribe form does,
+// and it works with scripting off: the plain form posts and the Worker answers. Turnstile renders implicitly
+// and injects its own token input, so nothing of ours handles the challenge.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../../lib/membership';
+---
+
+<BaseLayout
+  title="Sponsor the weekly email"
+  description="Ask about sponsoring the GBTI Network weekly email."
+  noindex={true}
+>
+  <section class="band">
+    <div class="wrap sp-wrap">
+      <h1 class="h1">Sponsor the weekly email</h1>
+      <p class="lead">
+        The GBTI Network weekly email goes out to developers who asked for it. It carries the week's articles,
+        projects and prompts from across the network, and one sponsor.
+      </p>
+      <p class="sp-note">
+        One standing sponsor at a time, in every issue, under a Sponsored label. Tell us what you have in mind
+        and we will reply with what is available and what it costs. Nothing here books anything.
+      </p>
+
+      <form class="sp-form" method="post" action={`${SIGNUP_BASE}/sponsorship/inquiry`} data-sp-form novalidate>
+        <div class="sp-f">
+          <label class="sp-lab" for="sp-name">Your name</label>
+          <input class="sp-in" id="sp-name" type="text" name="name" required autocomplete="name" maxlength="120" />
+        </div>
+        <div class="sp-f">
+          <label class="sp-lab" for="sp-email">Email address</label>
+          <input class="sp-in" id="sp-email" type="email" name="email" required autocomplete="email" spellcheck="false" maxlength="254" placeholder="you@example.com" />
+        </div>
+        <div class="sp-two">
+          <div class="sp-f">
+            <label class="sp-lab" for="sp-org">Company <span class="sp-opt">optional</span></label>
+            <input class="sp-in" id="sp-org" type="text" name="organization" autocomplete="organization" maxlength="160" />
+          </div>
+          <div class="sp-f">
+            <label class="sp-lab" for="sp-site">Website <span class="sp-opt">optional</span></label>
+            <input class="sp-in" id="sp-site" type="url" name="website" maxlength="300" placeholder="https://" />
+          </div>
+        </div>
+        <div class="sp-f">
+          <label class="sp-lab" for="sp-msg">What would you like to sponsor?</label>
+          <textarea class="sp-in sp-ta" id="sp-msg" name="message" required maxlength="2000" rows="6"></textarea>
+          <span class="sp-help">What you sell, who you want to reach, and any timing you have in mind.</span>
+        </div>
+
+        <div class="cf-turnstile sp-ts" data-sitekey={TURNSTILE_SITE_KEY} data-theme="auto" data-size="flexible"></div>
+
+        <div class="sp-acts">
+          <button class="btn btn-primary" type="submit" data-sp-go>Send inquiry</button>
+        </div>
+        <p class="sp-fine">
+          We use what you send here to reply to you, and nothing else. Read the <a href="/privacy/">privacy policy</a>.
+        </p>
+        <p class="sp-msg" data-sp-msg role="status" aria-live="polite" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <script is:inline>
+    // Load Turnstile once. Same guard the digest subscribe form uses, so the two never both append api.js.
+    if (!window.__gbtiTurnstileLoading) {
+      window.__gbtiTurnstileLoading = true;
+      var s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+      s.async = true;
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+  </script>
+
+  <script>
+    // Progressive enhancement only. With scripting off the form is a plain POST and the Worker answers.
+    const form = document.querySelector('[data-sp-form]') as HTMLFormElement | null;
+    const msg = document.querySelector('[data-sp-msg]') as HTMLElement | null;
+    const btn = document.querySelector('[data-sp-go]') as HTMLButtonElement | null;
+    if (form && msg && btn) {
+      const say = (text: string, kind: string) => { msg.textContent = text; msg.dataset.kind = kind; msg.hidden = false; };
+      // ONE SEND PER PAGE. Disabling every control after a success is not the same property: a submit can also
+      // arrive from Enter in a field, from a script, or from any control that was not in the selector. Measured
+      // with a dispatched submit event, which sent a second inquiry through a fully disabled form.
+      let done = false;
+
+      form.addEventListener('submit', async (ev) => {
+        if (typeof window.fetch !== 'function') return;
+        ev.preventDefault();
+        if (done) return;
+        const data = new FormData(form);
+        const token = String(data.get('cf-turnstile-response') || '');
+        if (!token) {
+          say('Human verification has not finished loading. Wait a moment and try again, or allow challenges.cloudflare.com if you use a content blocker.', 'err');
+          return;
+        }
+
+        btn.disabled = true;
+        const label = btn.textContent;
+        btn.textContent = 'Sending...';
+        try {
+          const res = await fetch(form.action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+              name: data.get('name'), email: data.get('email'), organization: data.get('organization'),
+              website: data.get('website'), message: data.get('message'), turnstileToken: token,
+            }),
+          });
+          let body: any = null;
+          try { body = await res.json(); } catch { /* handled as a failure below */ }
+
+          if (res.ok && body && body.ok) {
+            done = true;
+            form.querySelectorAll('input, textarea, button').forEach((el) => { (el as HTMLInputElement).disabled = true; });
+            say('Thank you. We have your inquiry and will reply to the address you gave.', 'ok');
+            return;
+          }
+
+          const code = body && body.error ? String(body.error) : '';
+          // The Worker names the field that is wrong, and this is a contact form rather than an enumerable
+          // endpoint, so repeating its words is the helpful thing rather than a leak.
+          const problems: string[] = Array.isArray(body?.problems) ? body.problems : [];
+          say(
+            problems.length ? problems.join(' ')
+              : code === 'rate_limited' ? 'Too many requests from here. Please try again in a few minutes.'
+                : code === 'challenge_failed' ? 'We could not verify that request. Please refresh the page and try again.'
+                  : code === 'unavailable' ? 'We could not take that just now. Please email opportunities@gbti.network directly.'
+                    : 'Something went wrong. Please try again in a moment.',
+            'err',
+          );
+        } catch {
+          say('We could not reach the network. Please check your connection and try again.', 'err');
+        } finally {
+          if (!done) { btn.disabled = false; btn.textContent = label; }
+          // Turnstile tokens are single use, so a retry needs a fresh one.
+          const tsEl = form.querySelector('.cf-turnstile');
+          if ((window as any).turnstile && tsEl) {
+            try { (window as any).turnstile.reset(tsEl); } catch { /* a reset failure must not break the form */ }
+          }
+        }
+      });
+    }
+  </script>
+
+  <style>
+    .sp-wrap { max-width: 660px; }
+    .sp-note { color: var(--fg-mute); font-size: 15px; line-height: 1.6; margin: 0 0 28px; }
+    .sp-form { display: grid; gap: 16px; }
+    .sp-f { display: grid; gap: 6px; }
+    .sp-two { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+    .sp-lab { font-size: 13.5px; font-weight: 600; color: var(--fg); }
+    .sp-opt { font-weight: 400; color: var(--fg-mute); }
+    .sp-in {
+      font: inherit; font-size: 15px; color: var(--fg); background: var(--paper);
+      border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; width: 100%;
+      box-sizing: border-box;
+    }
+    .sp-in:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+    .sp-ta { resize: vertical; min-height: 140px; line-height: 1.55; }
+    .sp-help { font-size: 12.5px; color: var(--fg-mute); }
+    .sp-acts { margin-top: 4px; }
+    .sp-fine { font-size: 12.5px; color: var(--fg-mute); margin: 0; }
+    .sp-msg { font-size: 14px; margin: 0; }
+    /* The SITE's tokens, which are not the client-ui component tokens. This first read the component error
+       colour with a hard-coded hex fallback; that token is defined in the shadow-DOM token set and nowhere in
+       src/, so the fallback would have frozen the colour in one theme and passed every visual check. The guard
+       in test/css-tokens.test.mjs caught it, and then caught this comment naming the token, which is why the
+       token is not spelled out here. These two are what the digest subscribe form uses for the same states. */
+    .sp-msg[data-kind='ok'] { color: var(--green-600); }
+    .sp-msg[data-kind='err'] { color: var(--clay); }
+    /* At the END of the block: a responsive rule placed before the base rule loses on source order. */
+    @media (max-width: 560px) { .sp-two { grid-template-columns: 1fr; } }
+  </style>
+</BaseLayout>

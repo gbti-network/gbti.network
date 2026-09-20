@@ -19140,6 +19140,20 @@ async function getCouponPool({ token, signupBase, fetch: fetch2 = globalThis.fet
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `coupon pool request failed (${res.status})`);
   return { coupons: Array.isArray(data?.coupons) ? data.coupons : [] };
 }
+async function getSponsorInquiries({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/sponsor-inquiries", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `sponsor inquiry request failed (${res.status})`);
+  return { ok: true, inquiries: Array.isArray(data?.inquiries) ? data.inquiries : [] };
+}
 async function inviteAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase8(signupBase) + "/membership/admin/invites", {
@@ -21141,6 +21155,16 @@ async function getDigestConfig(ctx) {
   const parsed = await readYaml(ctx, DIGEST_CONFIG_PATH);
   return { ok: true, ...readDigestConfig(parsed), defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR } }, limits: { ...DIGEST_LIMITS } };
 }
+async function getSponsorInquiries2(ctx) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  try {
+    return await getSponsorInquiries({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "could not read the sponsorship inquiries");
+  }
+}
 async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
@@ -21353,6 +21377,12 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await listDiscordChannels(ctx));
       case "/api/admin-ops":
         return ok(await triggerAdminOp2(ctx, body ?? {}));
+      // sow-266 Phase 4: the sponsorship inquiries. BELOW the identity gate, unlike the manager reads above it,
+      // because there is nothing git-native here to read: it proxies to the Worker with the caller's token and
+      // needs a signed-in identity to have one. A signed-out caller gets "sign in first" rather than a failure
+      // out of the role check.
+      case "/api/sponsor-inquiries":
+        return ok(await getSponsorInquiries2(ctx));
       case "/api/coupon-usage":
         return ok(await getCouponUsageOp(ctx));
       // sow-231 Phase 3: issued invites. The dispatch switch has no method dimension, so the verb is read

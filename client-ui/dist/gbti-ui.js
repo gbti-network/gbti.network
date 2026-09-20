@@ -11273,6 +11273,16 @@ ${listStyleProseCss(".doc-blocks")}
   .lk { border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); }
   .lk:hover { background:var(--paper, transparent); border-color:var(--accent); color:var(--accent); }
   .hint { font-size:12.5px; color:var(--muted); margin:16px 0 0; line-height:1.5; }
+  .inq { list-style:none; margin:0; padding:0; }
+  .inq li { border-top:1px solid var(--line); padding:12px 2px; }
+  .inq li:first-child { border-top:0; }
+  .inq-hd { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .inq-who { font-size:14px; font-weight:600; color:var(--fg); }
+  .inq-meta { font-size:12px; color:var(--muted); }
+  .inq-body { font-size:13px; color:var(--fg); line-height:1.55; margin:7px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .inq-mail { font-size:12.5px; margin:5px 0 0; overflow-wrap:anywhere; }
+  .inq-mail a { color:var(--accent); }
+  .inq-none { font-size:12.5px; color:var(--muted); }
   [hidden] { display:none !important; } /* an explicit display beats the UA [hidden] rule inside a shadow root */
 `;
   var SAVED = "Saved. It merges on its own and reaches the next issue once the settings sync runs.";
@@ -11356,6 +11366,7 @@ ${listStyleProseCss(".doc-blocks")}
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
+      ${this._inquiryBlock()}
       <p class="hint">Superadmin only. Each Save opens a pull request against house/digest-config.yml that merges on its own, and the change reaches the mail on the next settings sync rather than immediately. The wording rules above warn and never block: if you mean it, save it.</p>
     </div>`);
       this._wire();
@@ -11414,6 +11425,57 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="acts"><button class="save" type="button" data-save="sponsor"${this._clean("sponsor") ? " disabled" : ""}>Save the sponsor</button>${this._clean("sponsor") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
     </section>`;
     }
+    /**
+     * What came in through the sponsorship form at /sponsorship/. READ ONLY, and it is a separate request from the
+     * settings above because it is a separate thing: a failure to read the inquiries must not blank the editor,
+     * and a superadmin with no inquiries yet should not see a screen that looks broken.
+     *
+     * Loaded lazily, on first ask. Most visits here are to change a word in the pitch, and an inquiry list is a
+     * KV scan plus one decryption per record.
+     */
+    _inquiryBlock() {
+      const rows = this._inquiries;
+      let body;
+      if (this._inqError) body = `<p class="inq-none">${esc(this._inqError)}</p><div class="acts"><button class="lk" type="button" data-inq-load>Try again</button></div>`;
+      else if (rows === "loading") body = '<p class="inq-none">Loading...</p>';
+      else if (!Array.isArray(rows)) body = '<div class="acts"><button class="lk" type="button" data-inq-load>Show inquiries</button></div>';
+      else if (!rows.length) body = '<p class="inq-none">Nothing has come in yet. The form is at /sponsorship/, which is not linked from the site and is not indexed, so it only reaches people you send it to.</p>';
+      else {
+        body = `<ul class="inq">${rows.map((r) => {
+          const when = String(r.at || "").slice(0, 10);
+          const bits = [r.organization, r.website].filter(Boolean).map((b) => esc(b)).join(" &middot; ");
+          const mail = r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : r.emailStored ? "the address could not be read back" : "the address was not stored (the mail keys were unset); it is in the notification email";
+          return `<li>
+          <div class="inq-hd"><span class="inq-who">${esc(r.name || "Someone")}</span><span class="inq-meta">${esc(when)}${bits ? " &middot; " + bits : ""}</span></div>
+          <p class="inq-mail">${mail}</p>
+          <p class="inq-body">${esc(r.message || "")}</p>
+        </li>`;
+        }).join("")}</ul>`;
+      }
+      return `<section class="blk">
+      <div class="hd"><h3>Inquiries</h3></div>
+      <p class="lede">Sponsorship inquiries from the form at /sponsorship/. They are kept for ninety days and then removed on their own, so this is a working list rather than a record. Every one of them was also emailed to the owner.</p>
+      ${body}
+    </section>`;
+    }
+    async _loadInquiries() {
+      if (!this.client?.sponsorInquiries) {
+        this._inqError = "This host cannot read the inquiries.";
+        this.render();
+        return;
+      }
+      this._inquiries = "loading";
+      this._inqError = "";
+      this.render();
+      try {
+        const r = await this.client.sponsorInquiries();
+        this._inquiries = Array.isArray(r?.inquiries) ? r.inquiries : [];
+      } catch (e) {
+        this._inquiries = null;
+        this._inqError = e?.message || "The inquiries could not be read.";
+      }
+      this.render();
+    }
     _clean(block) {
       return JSON.stringify(this._draft?.[block]) === JSON.stringify(this._saved?.[block]);
     }
@@ -11443,6 +11505,7 @@ ${listStyleProseCss(".doc-blocks")}
         this.render();
       });
       this.$$("[data-save]").forEach((b) => b.addEventListener("click", () => this._save(b.dataset.save)));
+      this.$("[data-inq-load]")?.addEventListener("click", () => this._loadInquiries());
     }
     async _save(block) {
       if (this._clean(block)) return;
@@ -27194,6 +27257,8 @@ From the author:
       // sow-266
       setDigestSponsor: (p) => request("POST", "/api/admin", { action: "digest-sponsor-set", ...p }),
       // sow-266
+      sponsorInquiries: () => request("GET", "/api/sponsor-inquiries"),
+      // sow-266 Phase 4: what came in through the sponsorship form (superadmin)
       setSiteToggle: ({ key, enabled }) => request("POST", "/api/admin", { action: "site-setting-set", key, enabled: enabled === true }),
       // sow-271
       ctaPool: () => request("GET", "/api/cta-pool"),

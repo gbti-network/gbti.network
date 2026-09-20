@@ -69,7 +69,7 @@ import {
   getTaxonomy, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   getNewsEngagementSettings, getSyndicationSettings,
-  getCouponPool, getSiteSettings, getCtaPool, getDigestConfig,
+  getCouponPool, getSiteSettings, getCtaPool, getDigestConfig, getSponsorInquiries,
 } from './admin-ops.mjs';
 import { toWorkerRequest } from './admin-worker-actions.mjs'; // sow-274: the one admin action table
 
@@ -190,6 +190,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
   if (method === 'GET' && pathname === '/api/site-settings') return run(() => getSiteSettings(ctx)); // sow-271: site-wide presentation toggles
   if (method === 'GET' && pathname === '/api/digest-config') return run(() => getDigestConfig(ctx)); // sow-266: the digest pitch + sponsor slot
+  if (method === 'GET' && pathname === '/api/sponsor-inquiries') return run(() => getSponsorInquiries(ctx)); // sow-266 Phase 4: proxied to the Worker (KV-backed, nothing in git)
   if (method === 'GET' && pathname === '/api/cta-pool') return run(() => getCtaPool(ctx)); // sow-281: the CTA registry
   if (method === 'GET' && pathname === '/api/coupon-pool') return run(() => getCouponPool(ctx)); // SOW-119: the coupon registry
   if (method === 'GET' && pathname === '/api/coupon-usage') return run(() => getCouponUsageOp(ctx)); // SOW-119: KV usage (Worker-gated)

@@ -23,7 +23,7 @@ import yaml from 'js-yaml';
 
 import { OperationError } from './operations.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs'; // sow-291 Phase 2: the coupon pool read proxies the Worker (KV-native)
-import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'; // sow-291 Phase 2
+import { getCouponPool as workerGetCouponPool, getSponsorInquiries as workerGetSponsorInquiries } from './member-admin-client.mjs'; // sow-291 Phase 2; sow-266 Phase 4
 import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
 import { readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { readDigestConfig, DIGEST_LIMITS } from '../../membership/digest-config-edits.mjs'; // sow-266: the digest pitch + sponsor slot, as stored
@@ -137,6 +137,24 @@ export async function getSiteSettings(ctx) {
 export async function getDigestConfig(ctx) {
   const parsed = await readYaml(ctx, DIGEST_CONFIG_PATH);
   return { ok: true, ...readDigestConfig(parsed), defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR } }, limits: { ...DIGEST_LIMITS } };
+}
+
+/**
+ * sow-266 Phase 4: the sponsorship inquiries, read through the Worker.
+ *
+ * NOT FROM THE CHECKOUT, unlike every other read in this file: an inquiry is a private message with a TTL and
+ * it lives in KV, so there is nothing in git to read. Same shape as getCouponPool above, and the Worker's
+ * superadmin gate is the real boundary.
+ */
+export async function getSponsorInquiries(ctx) {
+  await requireAdmin(ctx); // async role resolution via the reader, as the coupon pool does
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  try {
+    return await workerGetSponsorInquiries({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'could not read the sponsorship inquiries');
+  }
 }
 
 /** Read the call-to-action registry for the manager UI. Public git data (the site publishes /ctas.json). */

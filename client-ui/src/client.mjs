@@ -163,6 +163,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     digestConfig: () => request('GET', '/api/digest-config'), // { ok, cta, sponsor, defaults, limits }
     setDigestCta: (p) => request('POST', '/api/admin', { action: 'digest-cta-set', ...p }), // sow-266
     setDigestSponsor: (p) => request('POST', '/api/admin', { action: 'digest-sponsor-set', ...p }), // sow-266
+    sponsorInquiries: () => request('GET', '/api/sponsor-inquiries'), // sow-266 Phase 4: what came in through the sponsorship form (superadmin)
     setSiteToggle: ({ key, enabled }) => request('POST', '/api/admin', { action: 'site-setting-set', key, enabled: enabled === true }), // sow-271
     ctaPool: () => request('GET', '/api/cta-pool'), // sow-281: the CTA registry { ctas, types } for the manager
     addCta: (fields) => request('POST', '/api/admin', { action: 'cta-add', ...fields, enabled: fields?.enabled === true }), // sow-281

@@ -17,7 +17,7 @@ import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // S
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
 import { toWorkerRequest } from '../../client/src/admin-worker-actions.mjs'; // sow-274: the one admin action table
-import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings, getSyndicationSettings, getCouponPool, getSiteSettings, getCtaPool, getDigestConfig } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
+import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings, getSyndicationSettings, getCouponPool, getSiteSettings, getCtaPool, getDigestConfig, getSponsorInquiries } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
@@ -206,6 +206,12 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await listDiscordChannels(ctx));
       case '/api/admin-ops': // SOW-038 P3: trigger reconcile / E2E-smoke (admin-gated; the Worker holds the dispatch token)
         return ok(await triggerAdminOp(ctx, body ?? {}));
+      // sow-266 Phase 4: the sponsorship inquiries. BELOW the identity gate, unlike the manager reads above it,
+      // because there is nothing git-native here to read: it proxies to the Worker with the caller's token and
+      // needs a signed-in identity to have one. A signed-out caller gets "sign in first" rather than a failure
+      // out of the role check.
+      case '/api/sponsor-inquiries':
+        return ok(await getSponsorInquiries(ctx));
       case '/api/coupon-usage': // SOW-119 QA: per-coupon redemption counts (admin-gated by the op + the Worker)
         return ok(await getCouponUsageOp(ctx));
       // sow-231 Phase 3: issued invites. The dispatch switch has no method dimension, so the verb is read

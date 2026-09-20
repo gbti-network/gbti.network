@@ -131,6 +131,21 @@ export async function getCouponPool({ token, signupBase, fetch = globalThis.fetc
   return { coupons: Array.isArray(data?.coupons) ? data.coupons : [] };
 }
 
+/** sow-266 Phase 4: the sponsorship inquiries. KV-backed like the coupon pool above, so the client hosts read
+ *  them through the Worker rather than from the checkout: there is nothing in git to read. Superadmin-gated at
+ *  the Worker, which is the boundary; the host's own role check is convenience. */
+export async function getSponsorInquiries({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/admin/sponsor-inquiries', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `sponsor inquiry request failed (${res.status})`);
+  return { ok: true, inquiries: Array.isArray(data?.inquiries) ? data.inquiries : [] };
+}
+
 /**
  * sow-231 Phase 3: issued invites, over the bearer token (the extension and npm hosts). The website uses
  * the cookie session against the same routes; the Worker accepts both (`allowCookie`).

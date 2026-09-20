@@ -916,6 +916,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     digestConfig() { return workerGet('/membership/admin/digest-config'); }, // { ok, cta, sponsor, defaults, limits }
     async setDigestCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-cta-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setDigestSponsor(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-sponsor-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-266 Phase 4: the sponsorship inquiries. Unlike the settings above, these ARE private: messages from
+    // named people, held nowhere public, so the route is superadmin for the reason it looks like.
+    sponsorInquiries() { return workerGet('/membership/admin/sponsor-inquiries'); }, // { ok, inquiries, limits }
     // sow-281: the CTA registry (superadmin). ctaPool reads house/ctas.yml in full; the five writes land as
     // auto-merged house PRs. `enabled` is coerced to a real boolean on the wire, as setSiteToggle does.
     ctaPool() { return workerGet('/membership/admin/cta-pool'); }, // { ok, ctas, types }
