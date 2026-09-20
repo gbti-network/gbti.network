@@ -2,7 +2,8 @@
 // unit-tested without a network. Mirrors membership/coupon-notify.mjs.
 //
 // WHY THIS EXISTS. The owner asked to be told when a new subscriber joins the weekly digest. With double opt-in
-// disabled (MAIL_DOUBLE_OPTIN = "false") a subscriber becomes active at submit; with it on, at confirm. Either
+// off (`optin.double` in house/digest-config.yml, the default since sow-270) a subscriber becomes active at
+// submit; with it on, at confirm. Either
 // way the Worker fires this notice ONCE per genuinely new active subscriber (never on an idempotent re-subscribe).
 //
 // The address goes to the OWNER'S OWN inbox (the data controller), which is why it is included in full: it lets

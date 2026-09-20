@@ -13,6 +13,7 @@ import {
 } from '../membership/mail-optin.mjs';
 import { mailHash, suppressKey, subscriberKey, SUPPRESS_VALUE } from '../membership/mail-suppress.mjs';
 import { resolveSubscriberEmail } from '../membership/mail-address.mjs';
+import { DIGEST_CONFIG_KV_KEY } from '../membership/digest-config.mjs'; // sow-270: the opt-in setting's mirror key
 
 const SUPPRESS_KEY = 'test-suppress-signing-key';
 // MAIL_EMAIL_KEY is provisioned as a STRING secret (a base64 32-byte AES-256 key), so the test uses that exact
@@ -44,6 +45,16 @@ function makeKV() {
       return { keys: [...m.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })), list_complete: true };
     },
   };
+}
+
+// sow-270 MOVED THE DEFAULT. The confirm step used to be on unless a Worker var said otherwise; it is now a
+// setting in house/digest-config.yml that defaults OFF, read here from the digest:config mirror. So a bare
+// makeKV() is now the DIRECT mode, and every test about the confirm flow turns it on deliberately. That is the
+// whole point of the change, and this keeps it visible in the test file rather than buried in a fixture.
+function confirmKV() {
+  const kv = makeKV();
+  kv.m.set(DIGEST_CONFIG_KV_KEY, { value: JSON.stringify({ optin: { double: true } }), opts: null });
+  return kv;
 }
 
 // A recording sender + a rate-limiter that always allows, so each test isolates the branch it exercises.
@@ -85,7 +96,7 @@ test('buildPendingOptIn requires every field; normalize round-trips and rejects 
 // ---------- subscribe ----------
 
 test('subscribe: a new address writes a pending opt-in under mail:optin:, sends a confirm link, enrolls nobody', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const { sent, send } = sink();
   const res = await handleSubscribe(jsonReq({ email: 'Reader@Example.com' }), { ...ENV, SIGNUP_KV: kv }, { send, rateLimitFn: allow });
   assert.equal(res.status, 200);
@@ -113,7 +124,7 @@ test('subscribe: a FAILED confirmation send stays NEUTRAL (anti-enumeration) but
   // SecurityMaster, 2026-08-22: discarding sendConfirmationEmail's return meant a mail-provisioning gap failed
   // EVERY subscriber silently. The response must stay byte-identical (neutral is the anti-enumeration answer);
   // the boolean must be captured so the failure is visible, not discovered by a subscriber who never gets a link.
-  const kv = makeKV();
+  const kv = confirmKV();
   const throwingSend = async () => { throw new Error('resend down'); };
   const warnings = [];
   const origWarn = console.warn;
@@ -142,7 +153,7 @@ test('subscribe: a malformed email is a 400 with no opt-in and no send', async (
 });
 
 test('subscribe: a SUPPRESSED address is not re-contacted (no send) and returns the SAME neutral response', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const { sent, send } = sink();
   const hash = await mailHash(SUPPRESS_KEY, 'gone@example.com');
   await kv.put(suppressKey(hash), SUPPRESS_VALUE);
@@ -183,7 +194,7 @@ test('subscribe: Turnstile is required when a secret is set; a bad token is a 40
 });
 
 test('subscribe: unprovisioned (no MAIL_SUPPRESS_KEY) is inert - neutral response, no opt-in, no send', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const { sent, send } = sink();
   const env = { ...ENV, SIGNUP_KV: kv, MAIL_SUPPRESS_KEY: '' };
   const res = await handleSubscribe(jsonReq({ email: 'a@b.co' }), env, { send, rateLimitFn: allow });
@@ -204,7 +215,7 @@ async function subscribeAndGetConfirmUrl(kv, email) {
 }
 
 test('confirm GET renders a confirm page with a POST form and does NOT create a subscriber', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const url = await subscribeAndGetConfirmUrl(kv, 'reader@example.com');
   const res = await handleConfirm(new Request(url, { method: 'GET' }), { SIGNUP_KV: kv });
   assert.equal(res.status, 200);
@@ -216,7 +227,7 @@ test('confirm GET renders a confirm page with a POST form and does NOT create a 
 });
 
 test('confirm GET/POST with a bad nonce is invalid and creates nothing', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   await subscribeAndGetConfirmUrl(kv, 'reader@example.com');
   const hash = await mailHash(SUPPRESS_KEY, 'reader@example.com');
   const bad = `https://signup.gbti.network/mail/confirm?h=${hash}&t=WRONGNONCE`;
@@ -236,7 +247,7 @@ test('confirm POST with a malformed hash is a 400 and touches nothing', async ()
 });
 
 test('confirm POST does not activate an address suppressed between subscribe and confirm', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const url = await subscribeAndGetConfirmUrl(kv, 'reader@example.com');
   const hash = await mailHash(SUPPRESS_KEY, 'reader@example.com');
   await kv.put(suppressKey(hash), SUPPRESS_VALUE); // they opted out in the window
@@ -247,7 +258,7 @@ test('confirm POST does not activate an address suppressed between subscribe and
 });
 
 test('SEAM end-to-end: subscribe -> confirm POST -> the drain resolver recovers the ORIGINAL email', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const EMAIL = 'Seam.Reader@Example.com';
   const url = await subscribeAndGetConfirmUrl(kv, EMAIL);
 
@@ -268,7 +279,7 @@ test('SEAM end-to-end: subscribe -> confirm POST -> the drain resolver recovers 
   assert.equal(recovered, EMAIL, 'the emailEnc survived subscribe->pending->confirm->subscriber and decrypts back');
 });
 
-// ---------- MAIL_DOUBLE_OPTIN off (direct enrollment) + the new-subscriber admin notice ----------
+// ---------- the confirm step OFF, which is the default (direct enrollment) + the new-subscriber admin notice ----------
 
 // A recording admin-alert sender, injected so no network is touched and the fire-once behaviour is observable.
 function alertSink() {
@@ -276,7 +287,9 @@ function alertSink() {
   return { alerts, sendAlert: async (m) => { alerts.push(m); return { id: 'a' }; } };
 }
 // Direct mode needs a recipient for the admin notice to actually send (else it is a fail-soft no-op).
-const DIRECT_ENV = { ...ENV, MAIL_DOUBLE_OPTIN: 'false', ADMIN_ALERT_EMAIL: 'owner@example.com' };
+// sow-270: nothing here turns the confirm step off any more, because OFF IS THE DEFAULT. These tests pass a
+// bare makeKV(), so they exercise exactly what an unconfigured install does.
+const DIRECT_ENV = { ...ENV, ADMIN_ALERT_EMAIL: 'owner@example.com' };
 
 test('subscribe (opt-in OFF): a new address is ACTIVE immediately, sends NO confirmation, notifies the admin once', async () => {
   const kv = makeKV();
@@ -350,7 +363,7 @@ test('subscribe (opt-in OFF): the no-JS neutral page says "subscribed" in words 
 });
 
 test('confirm POST (opt-in ON): notifies the admin once with the decrypted address', async () => {
-  const kv = makeKV();
+  const kv = confirmKV();
   const { alerts, sendAlert } = alertSink();
   const url = await subscribeAndGetConfirmUrl(kv, 'Confirmed.Reader@Example.com');
   const res = await handleConfirm(new Request(url, { method: 'POST' }),
@@ -360,4 +373,72 @@ test('confirm POST (opt-in ON): notifies the admin once with the decrypted addre
   assert.equal(alerts.length, 1, 'the admin is notified once on a confirm');
   assert.equal(alerts[0].to, 'owner@example.com');
   assert.ok(alerts[0].subject.includes('Confirmed.Reader@Example.com'), 'the notice carries the decrypted address');
+});
+
+// ---------- sow-270: the setting, its default, and every way of failing to read it ----------
+//
+// TWO GAPS IN THIS FILE BEFORE sow-270, both closed here. No test NAMED the default, so the old ON-by-default
+// behaviour was only pinned as a side effect of a fixture happening to omit a variable. And no test fed the
+// flag a mistyped value, so the fail-safe the old comment advertised was never actually exercised. That
+// fail-safe is now deliberately reversed, and these are the record of that.
+
+test('sow-270: the confirm step is OFF by default, with nothing configured at all', async () => {
+  const kv = makeKV(); // no digest:config at all, which is what a fresh install looks like
+  const { sent, send } = sink();
+  const res = await handleSubscribe(jsonReq({ email: 'new@example.com' }), { ...ENV, SIGNUP_KV: kv }, { send, rateLimitFn: allow });
+  assert.deepEqual(await res.json(), { ok: true, direct: true }, 'an unconfigured install must enroll directly');
+  const hash = await mailHash(SUPPRESS_KEY, 'new@example.com');
+  assert.ok(kv.m.get(subscriberKey(hash)), 'the subscriber is active at submit');
+  assert.equal(kv.m.get(optinKey(hash)), undefined, 'no pending opt-in is written when the step is off');
+  assert.equal(sent.length, 0, 'no confirmation email is sent when the step is off');
+});
+
+test('sow-270: EVERY way of failing to read the setting lands OFF, which is the owner ruling and the reverse of the old var', async () => {
+  const cases = [
+    ['the mirror is absent', (kv) => kv],
+    ['the mirror is empty', (kv) => { kv.m.set(DIGEST_CONFIG_KV_KEY, { value: '{}', opts: null }); return kv; }],
+    ['the mirror has no optin block', (kv) => { kv.m.set(DIGEST_CONFIG_KV_KEY, { value: JSON.stringify({ cta: { enabled: true } }), opts: null }); return kv; }],
+    ['the mirror is unparseable', (kv) => { kv.m.set(DIGEST_CONFIG_KV_KEY, { value: 'not json {{{', opts: null }); return kv; }],
+    // The old variable read `!== "false"`, so the STRING "true" enabled it. Under the new rule only a real
+    // boolean does, which is exactly the reversal worth pinning: a config carrying a quoted value is off.
+    ['the value is the string "true"', (kv) => { kv.m.set(DIGEST_CONFIG_KV_KEY, { value: JSON.stringify({ optin: { double: 'true' } }), opts: null }); return kv; }],
+    ['the value is a number', (kv) => { kv.m.set(DIGEST_CONFIG_KV_KEY, { value: JSON.stringify({ optin: { double: 1 } }), opts: null }); return kv; }],
+  ];
+  for (const [why, seed] of cases) {
+    const kv = seed(makeKV());
+    const { sent, send } = sink();
+    const res = await handleSubscribe(jsonReq({ email: `a${cases.indexOf(seed)}@example.com` }), { ...ENV, SIGNUP_KV: kv }, { send, rateLimitFn: allow });
+    assert.deepEqual(await res.json(), { ok: true, direct: true }, `${why}: must resolve OFF`);
+    assert.equal(sent.length, 0, `${why}: no confirmation email`);
+  }
+  // A KV read that THROWS is the one resolveDigestConfig cannot see, so the route has to catch it itself.
+  const throwing = { ...makeKV(), async get() { throw new Error('kv is down'); } };
+  const { sent, send } = sink();
+  const res = await handleSubscribe(jsonReq({ email: 'thrown@example.com' }), { ...ENV, SIGNUP_KV: throwing }, { send, rateLimitFn: allow });
+  assert.deepEqual(await res.json(), { ok: true, direct: true }, 'a throwing read must not 500 and must resolve OFF');
+  assert.equal(sent.length, 0);
+});
+
+test('sow-270: only an explicit boolean true turns the confirm step ON', async () => {
+  const kv = confirmKV();
+  const { sent, send } = sink();
+  const res = await handleSubscribe(jsonReq({ email: 'wants-confirm@example.com' }), { ...ENV, SIGNUP_KV: kv }, { send, rateLimitFn: allow });
+  assert.deepEqual(await res.json(), { ok: true, direct: false });
+  const hash = await mailHash(SUPPRESS_KEY, 'wants-confirm@example.com');
+  assert.ok(kv.m.get(optinKey(hash)), 'a pending opt-in is written');
+  assert.equal(kv.m.get(subscriberKey(hash)), undefined, 'nobody is enrolled until the link is clicked');
+  assert.equal(sent.length, 1, 'the confirmation email is sent');
+});
+
+test('sow-270: the retired Worker variable is not read anywhere, so it cannot become a second source', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../workers/signup/mail-subscribe.mjs', import.meta.url), 'utf8');
+  // The name survives in one historical comment on purpose, saying it was retired and why. What must never
+  // come back is a READ of it, which is what a second source of truth would look like.
+  assert.equal(/env\??\.?\s*\.?MAIL_DOUBLE_OPTIN/.test(src), false, 'mail-subscribe reads MAIL_DOUBLE_OPTIN again');
+  assert.equal(/\benv\b[^\n]*MAIL_DOUBLE_OPTIN/.test(src), false, 'mail-subscribe reads MAIL_DOUBLE_OPTIN off env again');
+  const toml = fs.readFileSync(new URL('../workers/signup/wrangler.toml', import.meta.url), 'utf8');
+  assert.equal(/^\s*MAIL_DOUBLE_OPTIN\s*=/m.test(toml), false, 'the deploy file declares MAIL_DOUBLE_OPTIN again');
+  // And the guard is pointed at something: the setting it replaced is genuinely read here.
+  assert.match(src, /DIGEST_CONFIG_KV_KEY/, 'this guard is reading the wrong file');
 });

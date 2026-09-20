@@ -11089,6 +11089,7 @@ ${listStyleProseCss(".doc-blocks")}
     linkUrl: "/membership/"
   });
   var DEFAULT_SPONSOR = Object.freeze({ enabled: false, html: "" });
+  var DEFAULT_OPTIN = Object.freeze({ double: false });
   var CTA_RULES = Object.freeze({
     maxVisibleChars: 220,
     maxLinks: 1,
@@ -27452,6 +27453,8 @@ From the author:
       // sow-266
       setDigestSponsor: (p) => request("POST", "/api/admin", { action: "digest-sponsor-set", ...p }),
       // sow-266
+      setDigestOptin: (p) => request("POST", "/api/admin", { action: "digest-optin-set", ...p }),
+      // sow-270: { double: boolean }
       sponsorInquiries: () => request("GET", "/api/sponsor-inquiries"),
       // sow-266 Phase 4: what came in through the sponsorship form (superadmin)
       setSiteToggle: ({ key, enabled }) => request("POST", "/api/admin", { action: "site-setting-set", key, enabled: enabled === true }),

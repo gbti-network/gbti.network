@@ -916,6 +916,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     digestConfig() { return workerGet('/membership/admin/digest-config'); }, // { ok, cta, sponsor, defaults, limits }
     async setDigestCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-cta-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setDigestSponsor(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-sponsor-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-270: the double opt-in switch. Forwarded as sent, like the two above: the core rejects a missing
+    // value, so coercing an absent `double` to false here would silently turn confirmation off on any other save.
+    async setDigestOptin(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-optin-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     // sow-266 Phase 4: the sponsorship inquiries. Unlike the settings above, these ARE private: messages from
     // named people, held nowhere public, so the route is superadmin for the reason it looks like.
     sponsorInquiries() { return workerGet('/membership/admin/sponsor-inquiries'); }, // { ok, inquiries, limits }

@@ -69,6 +69,7 @@ function clean(doc) {
   const d = structuredClone(isObj(doc) ? doc : {});
   if (!isObj(d.cta)) d.cta = {};
   if (!isObj(d.sponsor)) d.sponsor = {};
+  if (!isObj(d.optin)) d.optin = {}; // sow-270
   return d;
 }
 
@@ -158,6 +159,31 @@ export function setDigestSponsor(doc, args = {}, ctx = {}) {
   };
 }
 
+/**
+ * sow-270: turn the subscribe confirmation on or off.
+ *
+ * WHAT THIS SWITCH ACTUALLY DECIDES, because it is not a display preference. With it ON a new address is held
+ * unconfirmed for 48 hours and is enrolled only if somebody clicks the link in a confirmation email. With it
+ * OFF the address is enrolled the moment the form is submitted, and no confirmation is sent. It is the record
+ * of what a stranger consented to, which is why it is superadmin and why the audit carries the value.
+ *
+ * Written even when it does not change the effective behaviour, for the reason the sponsor switch is: an
+ * explicit `double: false` says somebody decided, and a missing key says nobody has looked. They resolve the
+ * same and they read differently, and the reading is the point.
+ */
+export function setDigestOptin(doc, args = {}, ctx = {}) {
+  const d = clean(doc);
+  const double = boolField(args.double, 'The confirmation switch');
+  if (double === undefined) throw new DigestConfigEditError('nothing to change: send double as true or false');
+  const changed = d.optin.double !== double;
+  if (changed) d.optin.double = double;
+  return {
+    next: d,
+    changed,
+    audit: auditEntry(ctx, 'digest-optin.set', 'optin', changed ? { double } : { noop: true }),
+  };
+}
+
 function labelFor(wire) {
   return { body: 'The pitch body', linkLabel: 'The link label', linkUrl: 'The link destination' }[wire] || wire;
 }
@@ -184,5 +210,8 @@ export function readDigestConfig(doc) {
       enabled: typeof d.sponsor.enabled === 'boolean' ? d.sponsor.enabled : null,
       html: typeof d.sponsor.html === 'string' ? d.sponsor.html : '',
     },
+    // sow-270: null means nobody has set it, which the manager shows differently from a chosen off. Both
+    // behave as off; only the label differs.
+    optin: { double: typeof d.optin.double === 'boolean' ? d.optin.double : null },
   };
 }

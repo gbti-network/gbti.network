@@ -14,9 +14,10 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import {
-  setDigestCta, setDigestSponsor, readDigestConfig, DigestConfigEditError, DIGEST_LIMITS,
+  setDigestCta, setDigestSponsor, setDigestOptin, readDigestConfig, DigestConfigEditError, DIGEST_LIMITS,
 } from '../membership/digest-config-edits.mjs';
 import { buildDigestConfigMirror, resolveDigestConfig } from '../membership/digest-config.mjs';
+import { ADMIN_ACTIONS_SERVED } from '../workers/signup/membership-admin-author.mjs';
 
 const at = (rel) => fileURLToPath(new URL(rel, import.meta.url));
 const read = (rel) => fs.readFileSync(at(rel), 'utf8');
@@ -192,12 +193,17 @@ test('WIRING: the website transport does not coerce the switch', () => {
   assert.doesNotMatch(sponsor, /enabled:\s*args\?\.enabled === true/);
 });
 
-test('WIRING: both actions are in the Worker table, the action set and the forwarding set', () => {
+test('WIRING: all three actions are in the Worker table, the action set and the forwarding set', () => {
   const worker = read('../workers/signup/membership-admin-author.mjs');
-  for (const action of ['digest-cta-set', 'digest-sponsor-set']) {
+  for (const action of ['digest-cta-set', 'digest-sponsor-set', 'digest-optin-set']) {
     assert.match(worker, new RegExp(`'${action}': \\{ path: 'house/digest-config\\.yml', rank: ROLE_RANK\\.superadmin`),
       `${action} must be a superadmin row on house/digest-config.yml`);
-    assert.ok(worker.includes(`'${action}'`), `${action} must be in CONFIG_ACTIONS or the route refuses it`);
+    // ADMIN_ACTIONS_SERVED, not a text scan of the file. sow-270 mutation-ran the old `worker.includes(...)`
+    // form and it could not fail: the CONFIG_OP row asserted on the line above contains the same quoted
+    // string, so the scan matched the row and reported the action set green while the action set was empty.
+    // An action in the table but not in the set is dead on arrival, because CONFIG_ACTIONS.has() gates both
+    // the rank lookup and the dispatch, so the check has to read the set the route actually consults.
+    assert.ok(ADMIN_ACTIONS_SERVED.includes(action), `${action} must be in CONFIG_ACTIONS or the route refuses it`);
     assert.ok(read('../client/src/admin-worker-actions.mjs').includes(`'${action}'`),
       `${action} must be forwarded to the Worker, or the client refuses it before it leaves`);
   }
@@ -245,4 +251,64 @@ test('the shipped file parses, carries both blocks, and its pitch raises no warn
   assert.equal(typeof back.cta.body, 'string');
   assert.equal(back.cta.body.includes('{plan}'), true, 'the shipped copy binds the plan name rather than spelling it');
   assert.equal(back.sponsor.enabled, false, 'the sponsor slot ships OFF');
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-270: the confirmation switch. It joins the two blocks above as a third edit on the same file, so the
+// tests that matter are the ones that would let it be saved WITHOUT being reachable, or reachable without
+// being separable from the copy. Each was proved by breaking the line it names.
+// ---------------------------------------------------------------------------------------------------------
+
+test('sow-270: the switch is set, and setting it to what it already is reports no change', () => {
+  const doc = { ...DOC(), optin: { double: false } };
+  const on = setDigestOptin(doc, { double: true });
+  assert.equal(on.changed, true);
+  assert.equal(on.next.optin.double, true);
+  assert.equal(on.audit.action, 'digest-optin.set');
+
+  const again = setDigestOptin(on.next, { double: true });
+  assert.equal(again.changed, false, 'saving the same value must not open a pull request');
+  assert.equal(again.next.optin.double, true);
+});
+
+test('sow-270: a missing or non-boolean value is refused rather than guessed', () => {
+  for (const args of [{}, { double: null }, { double: 'true' }, { double: 1 }, { double: 'yes' }]) {
+    assert.throws(() => setDigestOptin(DOC(), args), DigestConfigEditError,
+      `${JSON.stringify(args)} must be refused: guessing this one decides what a stranger consented to`);
+  }
+});
+
+test('sow-270: the switch does not disturb the copy, and the copy does not disturb the switch', () => {
+  const doc = { ...DOC(), optin: { double: true } };
+  const copy = setDigestCta(doc, { body: 'Only the wording moved.' });
+  assert.equal(copy.next.optin.double, true, 'saving the pitch must not reset the confirmation mode');
+
+  const flip = setDigestOptin(doc, { double: false });
+  assert.equal(flip.next.cta.body, 'The stored body.', 'flipping the switch must not blank the pitch');
+  assert.equal(flip.next.cta.enabled, true);
+});
+
+test('sow-270: the read shows what is STORED, so an unset switch reads as unset and not as off', () => {
+  const unset = readDigestConfig({ ...DOC() });
+  assert.equal(unset.optin.double, null,
+    'null and false must stay distinguishable, or the manager cannot show that nobody has chosen yet');
+  assert.equal(readDigestConfig({ ...DOC(), optin: { double: false } }).optin.double, false);
+  assert.equal(readDigestConfig({ ...DOC(), optin: { double: true } }).optin.double, true);
+});
+
+test('WIRING sow-270: the switch reaches the Worker from every host, and its branch is its own', () => {
+  const worker = read('../workers/signup/membership-admin-author.mjs');
+  assert.match(worker, /'digest-optin-set':.*slug: \(\) => 'confirmation-mode'/,
+    'a fixed branch of its own: sharing one with the copy lets whichever saved second reset the first');
+
+  const site = read('../src/lib/workbench-client.ts').split('\n').find((l) => l.includes("action: 'digest-optin-set'"));
+  assert.ok(site, 'setDigestOptin is missing from the website transport');
+  assert.doesNotMatch(site, /double:\s*args\?\.double === true/,
+    'coercing an absent value to false would turn confirmation off on a save that never mentioned it');
+
+  const ui = read('../client-ui/src/client.mjs').split('\n').find((l) => l.includes("action: 'digest-optin-set'"));
+  assert.ok(ui, 'setDigestOptin is missing from the shared client transport');
+
+  // The defaults ride back with the read, or the manager has nothing to show beside an unset switch.
+  assert.match(worker, /defaults: \{ cta: \{ \.\.\.DEFAULT_CTA \}, sponsor: \{ \.\.\.DEFAULT_SPONSOR \}, optin: \{ \.\.\.DEFAULT_OPTIN \} \}/);
 });

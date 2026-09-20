@@ -5,7 +5,8 @@
 //
 // THE COPY FOLLOWS THE WORKER'S MODE, NOT A FIXED PROMISE (sow-202). The route runs double opt-in by default
 // (a PENDING record and a confirmation email, nobody enrolled until the link is clicked), but production turned
-// it off on 2026-08-26 (MAIL_DOUBLE_OPTIN "false": the address is active at submit and no confirmation email is
+// it off on 2026-08-26, and sow-270 made off the shipped default (`optin.double` in house/digest-config.yml:
+// the address is active at submit and no confirmation email is
 // sent). The small print therefore promises neither, and the success message reads the JSON `direct` flag
 // through src/lib/digest-subscribe-copy.mjs. Never state one mode's outcome in static copy: the old small print
 // promised a confirmation email to every visitor for over two weeks after production stopped sending one.

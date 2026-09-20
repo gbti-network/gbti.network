@@ -38,6 +38,21 @@ export const DEFAULT_CTA = Object.freeze({
 export const DEFAULT_SPONSOR = Object.freeze({ enabled: false, html: '' });
 
 /**
+ * sow-270: whether a new subscriber must confirm by email before they are enrolled.
+ *
+ * ABSENT MEANS OFF, and so does UNREADABLE. Owner ruling 2026-09-20: an unreadable setting is treated exactly
+ * like an unset one, because that is what production has done since 2026-08-26 and it is the default asked
+ * for. The risk was put to the owner and accepted on the record: with double opt-in ON and a broken mirror
+ * sync, addresses are enrolled without confirming until the sync recovers.
+ *
+ * THIS REVERSED THE PREVIOUS FAIL DIRECTION ON PURPOSE. Until this change the flag lived in the Worker's
+ * deploy file and read `!== 'false'`, so an unset or mistyped value kept the STRICTER confirm flow. Changing
+ * a setting's fail direction is the kind of thing a later reader undoes as an obvious bug, so it is said here
+ * rather than left to be rediscovered: off is a deliberate choice, not an oversight.
+ */
+export const DEFAULT_OPTIN = Object.freeze({ double: false });
+
+/**
  * The three rules the pitch is held to. They were assertions on a literal; now that the copy is typed, they
  * are ALSO checks on what gets typed. Owner 2026-09-19: warn, do not block.
  *
@@ -109,7 +124,8 @@ export function buildDigestConfigMirror(raw, now = new Date()) {
   const src = isObj(raw) ? raw : {};
   const cta = isObj(src.cta) ? src.cta : {};
   const sponsor = isObj(src.sponsor) ? src.sponsor : {};
-  const out = { generatedAt: now.toISOString(), cta: {}, sponsor: {} };
+  const optin = isObj(src.optin) ? src.optin : {};
+  const out = { generatedAt: now.toISOString(), cta: {}, sponsor: {}, optin: {} };
 
   if (typeof cta.enabled === 'boolean') out.cta.enabled = cta.enabled;
   for (const [from, to] of [['body', 'body'], ['link_label', 'linkLabel'], ['link_url', 'linkUrl']]) {
@@ -121,6 +137,10 @@ export function buildDigestConfigMirror(raw, now = new Date()) {
   if (typeof sponsor.enabled === 'boolean') out.sponsor.enabled = sponsor.enabled;
   const html = str(sponsor.html).trim();
   if (html) out.sponsor.html = html;
+  // sow-270: carried even when false, for the same reason the sponsor switch is: false is the setting that
+  // turns it off, and an omitted one resolves to the default, which is also off. Carrying it makes the state
+  // legible in the mirror instead of ambiguous between "chosen off" and "never set".
+  if (typeof optin.double === 'boolean') out.optin.double = optin.double;
   return out;
 }
 
@@ -136,6 +156,7 @@ export function resolveDigestConfig({ mirror = null } = {}) {
   const m = isObj(mirror) ? mirror : {};
   const c = isObj(m.cta) ? m.cta : {};
   const s = isObj(m.sponsor) ? m.sponsor : {};
+  const o = isObj(m.optin) ? m.optin : {};
   const body = str(c.body).trim();
   const linkLabel = str(c.linkLabel).trim();
   const linkUrl = str(c.linkUrl).trim();
@@ -154,6 +175,14 @@ export function resolveDigestConfig({ mirror = null } = {}) {
       // something to render. `enabled: true` with empty markup renders a bare "Sponsored" label over nothing.
       enabled: bool(s.enabled, DEFAULT_SPONSOR.enabled) === true && html.length > 0,
       html,
+    },
+    optin: {
+      // sow-270: ON only when the mirror says so explicitly. Anything else (absent block, absent field, a
+      // non-boolean, an unreadable mirror) is OFF, per the owner's 2026-09-20 ruling.
+      double: bool(o.double, DEFAULT_OPTIN.double) === true,
+      // Whether the value was chosen or inherited, so a diagnostic can tell "the owner set off" apart from
+      // "we could not read anything". The two behave identically and that is the point; only the report differs.
+      source: typeof o.double === 'boolean' ? 'config' : 'default',
     },
   };
 }

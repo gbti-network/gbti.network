@@ -51,6 +51,26 @@
 #
 #               Leave it empty and the block does not render even when enabled is true, because a "Sponsored"
 #               label over nothing is worse than no block.
+#
+#
+# optin: whether a new subscriber must confirm by email before they are enrolled (sow-270).
+#
+#   double      false (the default) enrolls an address the moment the form is submitted and sends no
+#               confirmation. true holds it unconfirmed for 48 hours and enrolls nobody until somebody clicks
+#               the link in a confirmation email.
+#
+#               THIS IS THE RECORD OF WHAT A STRANGER CONSENTED TO, which is why it is superadmin and why the
+#               audit carries the value. It also decides whether the confirmation email and its landing page
+#               are ever seen at all: with this off, nothing reaches them.
+#
+#               ABSENT MEANS OFF AND SO DOES UNREADABLE. Owner ruling 2026-09-20, with the risk taken on the
+#               record: if you turn this ON and the mirror sync breaks, addresses are enrolled without
+#               confirming until it recovers. That is the opposite of the fail direction the retired Worker
+#               variable had, so it is said plainly here rather than left to be rediscovered and "fixed".
+#
+#               A CHANGE HERE IS NOT INSTANT EVERYWHERE. Saving from the manager refreshes the mirror the mail
+#               system reads, which takes about a minute; a hand edit pushed to the repository waits for the
+#               next scheduled sync.
 cta:
   enabled: true
   body: >-
@@ -61,3 +81,5 @@ cta:
 sponsor:
   enabled: false
   html: ''
+optin:
+  double: false

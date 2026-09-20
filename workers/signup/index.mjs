@@ -1892,7 +1892,8 @@ export default {
         return await handleUnsubscribe(request, env);
       }
 
-      // SOW-166: anonymous digest capture. With MAIL_DOUBLE_OPTIN on (the default), subscribe writes a pending opt-in
+      // SOW-166: anonymous digest capture. With the confirm step ON (`optin.double` in house/digest-config.yml,
+      // sow-270; OFF is the default), subscribe writes a pending opt-in
       // and sends a confirmation email, and confirm promotes it into an active subscriber. Production runs it OFF
       // (since 2026-08-26): subscribe activates the address at once and sends no confirmation email. Both routes are
       // anonymous (no cookie/bearer) and fail-closed: unprovisioned dependencies enroll nobody.

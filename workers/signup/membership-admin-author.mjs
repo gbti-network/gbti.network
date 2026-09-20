@@ -33,8 +33,8 @@ import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-e
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { setSourceWeight, weightInput, readWeights } from '../../membership/news-source-weight-edits.mjs'; // sow-338: how much we take from a source
 import { addBanword, removeBanword, banwordInput, readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
-import { setDigestCta, setDigestSponsor, readDigestConfig, DIGEST_LIMITS } from '../../membership/digest-config-edits.mjs'; // sow-266: the digest pitch copy + the sponsor slot
-import { DEFAULT_CTA, DEFAULT_SPONSOR } from '../../membership/digest-config.mjs'; // sow-266: what an empty field falls back to, shown beside the box rather than in it
+import { setDigestCta, setDigestSponsor, setDigestOptin, readDigestConfig, DIGEST_LIMITS } from '../../membership/digest-config-edits.mjs'; // sow-266: the digest pitch copy + the sponsor slot, sow-270: the confirmation switch
+import { DEFAULT_CTA, DEFAULT_SPONSOR, DEFAULT_OPTIN } from '../../membership/digest-config.mjs'; // sow-266: what an empty field falls back to, shown beside the box rather than in it
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
@@ -214,6 +214,13 @@ function digestSponsorInput(p) {
   if (over) return { ok: false, status: 400, body: { error: 'bad_request', message: `${over[0]} is far over the ${over[1]} character limit` } };
   return { ok: true, args: { enabled: p?.enabled, html: p?.html } };
 }
+// sow-270: the confirmation switch. One boolean and no copy, so there is no size to bound and nothing to
+// patch around: the core rejects a missing or non-boolean value, which is the whole of the validation. It is
+// passed through undefined-preserving like the two above so that "nothing to change" stays the core's answer
+// and not a shape this layer invents.
+function digestOptinInput(p) {
+  return { ok: true, args: { double: p?.double } };
+}
 const TEMPLATE_BATCH_MAX = 200; // types x channels x {shared,stub} is well under this; the cap only bounds abuse
 function templatesBatchInput(p) {
   const edits = Array.isArray(p?.edits) ? p.edits : null;
@@ -243,6 +250,7 @@ const CONFIG_ACTIONS = new Set([
   'news-source-weight', // sow-338: superadmin, and its own file (see the row below)
   'news-banword-add', 'news-banword-remove', // sow-372: superadmin, and its own file (see the rows below)
   'digest-cta-set', 'digest-sponsor-set', // sow-266: superadmin, house/digest-config.yml (see the rows below)
+  'digest-optin-set', // sow-270: superadmin, the same file (see the row below)
   'coupon-add', 'coupon-update',
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign', // sow-281
@@ -280,6 +288,10 @@ const CONFIG_OP = {
   // sponsor slot, so there is nothing to name; the branch is stable and a second save simply resets it.
   'digest-cta-set': { path: 'house/digest-config.yml', rank: ROLE_RANK.superadmin, fn: setDigestCta, input: digestCtaInput, slug: () => 'membership-pitch' },
   'digest-sponsor-set': { path: 'house/digest-config.yml', rank: ROLE_RANK.superadmin, fn: setDigestSponsor, input: digestSponsorInput, slug: () => 'sponsor-slot' },
+  // sow-270: whether a new subscriber has to confirm by email before the digest starts arriving. A THIRD row on
+  // the same file for the same reason the pitch and the sponsor are separate: this one decides what a stranger
+  // consented to, and it has no business sharing a branch with a copy tweak. Fixed slug, there being one switch.
+  'digest-optin-set': { path: 'house/digest-config.yml', rank: ROLE_RANK.superadmin, fn: setDigestOptin, input: digestOptinInput, slug: () => 'confirmation-mode' },
   // Coupons (KV-native as of sow-291 Phase 2: house/coupons.yml leaves the public repository because a coupon
   // code is a bearer credential). `kvKey` diverts the WRITE to coupons:config in the dispatch below; `path` is
   // kept as the retired git location for the record, and `slug` is unused for a KV op (no branch/PR). Add creates
@@ -932,7 +944,7 @@ export async function membershipAdminDigestConfig(request, env, deps = {}) {
   const r = await loadForSuperadminRead(request, env, deps, 'house/digest-config.yml');
   if (r.fail) return r.fail;
   const stored = readDigestConfig(r.parsed);
-  return { status: 200, body: { ok: true, ...stored, defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR } }, limits: { ...DIGEST_LIMITS } } };
+  return { status: 200, body: { ok: true, ...stored, defaults: { cta: { ...DEFAULT_CTA }, sponsor: { ...DEFAULT_SPONSOR }, optin: { ...DEFAULT_OPTIN } }, limits: { ...DIGEST_LIMITS } } };
 }
 
 export async function membershipAdminSyndicationSettings(request, env, deps = {}) {

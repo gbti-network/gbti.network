@@ -26,12 +26,18 @@
 // count as fresh consent and lift the suppression (via a confirm click) is the owner's decision; until it is
 // made, the strict default stands, because silently re-contacting someone who unsubscribed is the worse error.
 //
-// SETTINGS TOGGLE: MAIL_DOUBLE_OPTIN. Defaults ON (the double-opt-in flow above). Set to the exact string
-// "false" to DISABLE it: subscribe then writes the ACTIVE subscriber at submit (no pending record, no
-// confirmation email) and notifies the admin. The welcome sweep still greets the new subscriber (welcomedAt ==
-// null), so nothing downstream changes. Fail-safe: any value other than "false" keeps the confirm flow, so an
-// unset or mistyped var never silently enrolls addresses. This weakens proof-of-consent (an address typed by a
-// third party is enrolled directly), an owner-directed tradeoff; the suppression fail-close still holds.
+// SETTINGS TOGGLE: `optin.double` in house/digest-config.yml, read here from the digest:config mirror. Defaults
+// OFF: a submit writes the ACTIVE subscriber immediately (no pending record, no confirmation email) and
+// notifies the admin. The welcome sweep still greets the new subscriber (welcomedAt == null), so nothing
+// downstream changes. Turned ON, a submit holds a pending opt-in for 48 hours and enrolls nobody until the
+// confirmation link is clicked.
+//
+// sow-270 MOVED THIS SETTING AND REVERSED ITS FAIL DIRECTION, both deliberately. It used to be the Worker var
+// MAIL_DOUBLE_OPTIN, which defaulted ON and needed a commit plus a deploy to change; that var is retired, and
+// this mirror is now the only source. An unreadable mirror resolves OFF, the same as unset (owner ruling
+// 2026-09-20, risk accepted on the record: with the switch ON and a broken sync, addresses are enrolled
+// without confirming until it recovers). Off weakens proof-of-consent, which is the tradeoff the owner took;
+// the suppression fail-close still holds in both modes.
 //
 // ADMIN NOTICE: on a genuinely new subscriber (direct-mode submit, or a confirm), the Worker fires a fail-soft
 // new-subscriber notice to the owner (subscriber-alert.mjs). It never fires on an idempotent re-subscribe.
@@ -45,6 +51,7 @@ import { encryptEmail, decryptEmail } from '../../membership/mail-address.mjs';
 import { buildSubscriber } from '../../membership/mail-subscriber.mjs';
 import { sendNewSubscriberAlert } from './subscriber-alert.mjs';
 import { timingSafeEqual } from '../../membership/mail-unsub-token.mjs';
+import { resolveDigestConfig, DIGEST_CONFIG_KV_KEY } from '../../membership/digest-config.mjs'; // sow-270: the opt-in setting
 import {
   isValidEmailShape, optinKey, buildPendingOptIn, normalizePendingOptIn, OPTIN_TTL_SECONDS,
 } from '../../membership/mail-optin.mjs';
@@ -131,7 +138,7 @@ async function readSubscribeInput(request) {
 
 /** The single neutral subscribe outcome (JSON for a fetch, an HTML page for a no-JS form navigation). The copy
  *  differs by MODE (confirm vs direct), but within a mode it is byte-identical for a new, already-active, or
- *  suppressed address, so the anti-enumeration property holds. `direct` is set when MAIL_DOUBLE_OPTIN is off, in
+ *  suppressed address, so the anti-enumeration property holds. `direct` is set when the confirm step is off, in
  *  which case a submit activates immediately and there is no confirmation email to check for. */
 function neutralResult(request, { direct = false } = {}) {
   if (wantsJson(request)) {
@@ -215,6 +222,23 @@ async function sendConfirmationEmail({ env, to, confirmUrl, send }) {
  * POST /mail/subscribe. Anonymous capture with abuse gating and double opt-in. Returns a Response (JSON or an
  * HTML page by content negotiation). Injectable deps default to the real store, abuse checks, and Resend.
  */
+/**
+ * sow-270: is the confirm step on? Reads the digest:config mirror and resolves it with the same pure function
+ * the mail compile uses, so the switch cannot mean one thing here and another there.
+ *
+ * EVERY FAILURE IS OFF. resolveDigestConfig already treats an absent or non-boolean value as off; this adds
+ * the two failures it cannot see, a missing KV binding and a throwing read, and lands them the same way.
+ */
+async function readOptinMode(kv) {
+  let mirror = null;
+  try {
+    mirror = (await kv?.get(DIGEST_CONFIG_KV_KEY, 'json')) ?? null;
+  } catch {
+    mirror = null;
+  }
+  return resolveDigestConfig({ mirror }).optin.double === true;
+}
+
 export async function handleSubscribe(request, env, deps = {}) {
   const {
     kv = env?.SIGNUP_KV,
@@ -250,11 +274,11 @@ export async function handleSubscribe(request, env, deps = {}) {
     if (!ok) return errorResult(request, 'challenge_failed', 403);
   }
 
-  // MAIL_DOUBLE_OPTIN is the settings-level toggle for the confirm step. It defaults to ON (double opt-in): only
-  // the exact string "false" disables it. When OFF, a submit activates the subscriber immediately and sends no
-  // confirmation email; the welcome sweep still greets them (welcomedAt == null). Fail-safe: an unset or typo'd
-  // value keeps the stricter confirm flow rather than silently enrolling addresses.
-  const doubleOptIn = str(env?.MAIL_DOUBLE_OPTIN).trim().toLowerCase() !== 'false';
+  // sow-270: the confirm step is a superadmin setting in house/digest-config.yml, read from the mirror the
+  // digest compile already reads. Every failure lands OFF: a missing binding, a missing key, an unparseable
+  // body, a thrown read. That is the owner's ruling and it is the opposite of what the retired Worker var did,
+  // so it is stated rather than inferred.
+  const doubleOptIn = await readOptinMode(kv);
 
   // From here every path returns the SAME neutral response WITHIN A MODE (anti-enumeration). The copy differs
   // between the confirm and direct modes, which is not an enumeration signal: it depends only on configuration,
@@ -285,7 +309,7 @@ export async function handleSubscribe(request, env, deps = {}) {
   const envelope = await encryptEmail({ key: emailKey, hash, email: addr });
   if (!envelope) return neutral;
 
-  // DIRECT MODE (MAIL_DOUBLE_OPTIN off): promote to an active subscriber now, skip the confirmation email, and
+  // DIRECT MODE (the confirm step off, which is the default): promote to an active subscriber now, skip the confirmation email, and
   // notify the admin of the new subscriber. buildSubscriber + putSubscriber are the exact two calls the confirm
   // path uses, so a direct enrollment is indistinguishable downstream from a confirmed one (welcomedAt == null,
   // greeted by the welcome sweep). The existing-active short-circuit above already made this fire only for a

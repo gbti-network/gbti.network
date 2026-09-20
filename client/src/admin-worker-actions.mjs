@@ -29,6 +29,7 @@ export const WORKER_ADMIN_ACTIONS = Object.freeze(new Set([
   'news-source-weight', // sow-338/sow-374: superadmin, forwarded unchanged
   'news-banword-add', 'news-banword-remove', // sow-372: superadmin, forwarded unchanged
   'digest-cta-set', 'digest-sponsor-set', // sow-266: superadmin, forwarded unchanged (both are PATCHES, so the payload must not be defaulted on the way through)
+  'digest-optin-set', // sow-270: superadmin, the double opt-in switch, forwarded unchanged for the same reason
   'site-setting-set',
   'cta-add', 'cta-update', 'cta-toggle', 'cta-assign', 'cta-unassign',
   'outbound-add', 'outbound-update', 'outbound-status', // sow-359: the tracked partner links, forwarded unchanged

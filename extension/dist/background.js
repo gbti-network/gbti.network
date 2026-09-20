@@ -20540,6 +20540,8 @@ var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
   "digest-cta-set",
   "digest-sponsor-set",
   // sow-266: superadmin, forwarded unchanged (both are PATCHES, so the payload must not be defaulted on the way through)
+  "digest-optin-set",
+  // sow-270: superadmin, the double opt-in switch, forwarded unchanged for the same reason
   "site-setting-set",
   "cta-add",
   "cta-update",
@@ -20646,6 +20648,7 @@ function clean2(doc) {
   const d = structuredClone(isObj(doc) ? doc : {});
   if (!isObj(d.cta)) d.cta = {};
   if (!isObj(d.sponsor)) d.sponsor = {};
+  if (!isObj(d.optin)) d.optin = {};
   return d;
 }
 function readDigestConfig(doc) {
@@ -20657,7 +20660,10 @@ function readDigestConfig(doc) {
     sponsor: {
       enabled: typeof d.sponsor.enabled === "boolean" ? d.sponsor.enabled : null,
       html: typeof d.sponsor.html === "string" ? d.sponsor.html : ""
-    }
+    },
+    // sow-270: null means nobody has set it, which the manager shows differently from a chosen off. Both
+    // behave as off; only the label differs.
+    optin: { double: typeof d.optin.double === "boolean" ? d.optin.double : null }
   };
 }
 
@@ -20669,6 +20675,7 @@ var DEFAULT_CTA = Object.freeze({
   linkUrl: "/membership/"
 });
 var DEFAULT_SPONSOR = Object.freeze({ enabled: false, html: "" });
+var DEFAULT_OPTIN = Object.freeze({ double: false });
 var CTA_RULES = Object.freeze({
   maxVisibleChars: 220,
   maxLinks: 1,
