@@ -61,7 +61,7 @@ const signedOutExtra = extensionCtaShown
           <svg class="head-me-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
         <div class="head-menu" data-head-menu role="menu" hidden>
-          <a class="hm-item" role="menuitem" data-head-me-profile href="/members/">My profile</a>
+          <a class="hm-item" role="menuitem" data-head-me-profile href="/members/">View Profile</a>
           <div class="hm-sep" role="separator"></div>
           {/* SOW: shown only in the hint-only state (signed up, extension not installed yet) -> nudge the download.
               sow-271: this is a download NUDGE, so it is extension advertising and the site setting governs it. It
@@ -72,17 +72,22 @@ const signedOutExtra = extensionCtaShown
               the WorkBench honors #tab= deep-links (Phase 3a/3b). Shown in the 'member' menu mode (a resolved cookie
               OR extension signal). The extension keeps its OWN avatar menu for in-place editing; the public site no
               longer relays actions to it. Admin tools -> a /admin stub until the site admin surface lands (sow-161). */}
-          <a class="hm-item hm-member" role="menuitem" href="/workbench/" hidden>My workspace</a>
-          <a class="hm-item hm-member" role="menuitem" href="/browse/" hidden>Browse the co-op</a>
-          <a class="hm-item hm-member" role="menuitem" href="/workbench/#tab=post" hidden>My articles</a>
-          <a class="hm-item hm-member" role="menuitem" href="/workbench/#tab=prompt" hidden>My prompts</a>
-          <a class="hm-item hm-member" role="menuitem" href="/workbench/#tab=project" hidden>My projects</a>
-          <a class="hm-item hm-member" role="menuitem" href="/workbench/#tab=prs" hidden>My pull requests</a>
+          {/* sow-187: News + "Browse the network" moved to the primary signed-in nav, so they are dropped here.
+              sow-379 (owner, 2026-09-20): SIX MORE WENT, and the reason is worth keeping, because the list now
+              reads as lost functionality and is not. My articles, My prompts, My projects, My pull requests and
+              Following were five links into five TABS OF ONE PAGE, so this menu was a second copy of the
+              WorkBench's own navigation, kept in step by hand. My Workbench opens that page and the tabs are
+              still there, listed again on its overview. Notifications went because the bell sits two inches to
+              the left of this menu and its own panel already carries "See all notifications" and "Choose what
+              arrives here", both landing on the same page.
+              BROWSE THE CO-OP IS THE ONE REMOVAL THAT COSTS SOMETHING. /browse/ now has no link anywhere on
+              the site, so it is reachable only by typing the address. The owner asked for the item to go and
+              that is their call; the page itself is untouched and one link from the WorkBench would bring it
+              back. Raised with them in the same pass rather than fixed quietly. */}
+          <a class="hm-item hm-member" role="menuitem" href="/workbench/" hidden>My Workbench</a>
           <a class="hm-item hm-member" role="menuitem" href="/workbench/#tab=saved" hidden>Saved</a>
-          <a class="hm-item hm-member" role="menuitem" href="/workbench/#tab=subs" hidden>Following</a>
-          {/* sow-187: News + "Browse the network" moved to the primary signed-in nav, so they are dropped here. */}
-          <a class="hm-item hm-member" role="menuitem" href="/account/notifications/" hidden>Notifications</a>
-          <a class="hm-item hm-member" role="menuitem" href="/account/" hidden>Account</a>
+          {/* The href stays /account/: the page did not move, only what this menu calls it. */}
+          <a class="hm-item hm-member" role="menuitem" href="/account/" hidden>Settings</a>
           <a class="hm-item hm-member hm-admin" role="menuitem" href="/admin/" hidden>Admin tools</a>
           <div class="hm-sep" role="separator"></div>
           <button class="hm-item hm-signout" role="menuitem" type="button" data-head-signout>Sign out</button>
