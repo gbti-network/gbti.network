@@ -58,7 +58,7 @@ test('sow-222: a page that is not a person resolves to nothing, and the card sta
 
 test('sow-222: YouTube and Vimeo read the channel the share stored, and refuse anything else', () => {
   const yt = creatorFrom('https://www.youtube.com/watch?v=sXvmcWWBsFM', YT);
-  assert.deepEqual([yt.url, yt.name, yt.verb, yt.label], ['https://www.youtube.com/@classicaloasis', 'Classical Oasis', 'Subscribe', 'YouTube']);
+  assert.deepEqual([yt.url, yt.name, yt.verb, yt.label], ['https://www.youtube.com/@classicaloasis', 'Classical Oasis', 'View Channel', 'YouTube']);
   assert.ok(creatorFrom('https://youtu.be/sXvmcWWBsFM', YT), 'the short form reads the same stored channel');
   assert.equal(creatorFrom('https://www.youtube.com/watch?v=x'), null, 'nothing stored: the card is unchanged');
   // A stored value is member-reachable through a pull request, so it is only trusted on the platform's host.
@@ -83,7 +83,7 @@ test('sow-222: the card model replaces Visit only when a creator resolved', () =
   assert.equal(resolved.credit, 'On YouTube, shared by Hudson Atwell.');
   assert.deepEqual(resolved.action, {
     href: 'https://www.youtube.com/@classicaloasis',
-    text: 'Subscribe',
+    text: 'View Channel',
     title: 'Open Classical Oasis on YouTube',
   });
   assert.equal(/subscribes? you|one click/i.test(JSON.stringify(resolved)), false, 'no copy claims the click subscribes');

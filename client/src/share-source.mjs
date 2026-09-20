@@ -16,9 +16,10 @@
 // A derived URL is member-controlled input: it is built from parts this module validates, never concatenated
 // from raw input, and a stored creator url is refused unless it is https on the platform's own host.
 
-/** The verb a platform's own audience would use. A button cannot subscribe; it opens the creator's page. */
+/** What the action button says. It names what the click DOES, because the click opens the creator's page
+ *  and cannot subscribe or follow for anyone. sow-375: YouTube reads "View Channel" for that reason. */
 const PLATFORMS = {
-  youtube: { label: 'YouTube', verb: 'Subscribe', hosts: ['youtube.com', 'music.youtube.com'] },
+  youtube: { label: 'YouTube', verb: 'View Channel', hosts: ['youtube.com', 'music.youtube.com'] },
   vimeo: { label: 'Vimeo', verb: 'Follow', hosts: ['vimeo.com'] },
   substack: { label: 'Substack', verb: 'Subscribe' },
   x: { label: 'X', verb: 'Follow' },

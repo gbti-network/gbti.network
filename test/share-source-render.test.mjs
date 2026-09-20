@@ -34,7 +34,7 @@ test('sow-222: neither copy keeps its own credit sentence, verb or host derivati
     const block = what === 'the page'
       ? /<div class="card news-source-card">[\s\S]*?<\/div>\n\s*\)\}/.exec(src)[0]
       : /const sideLink = srcCard[\s\S]*?: '';/.exec(src)[0];
-    assert.equal(/Subscribe|Follow|Visit/.test(block), false, `${what} still writes a verb into the card itself`);
+    assert.equal(/Subscribe|Follow|Visit|View Channel/.test(block), false, `${what} still writes a verb into the card itself`);
   }
   // The reader kept its own favicon and outbound decoration, which is correct and deliberate.
   assert.match(reader, /faviconFor\(it\.url\)/);

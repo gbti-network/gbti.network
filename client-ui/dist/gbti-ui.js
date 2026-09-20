@@ -24495,7 +24495,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client/src/share-source.mjs
   var PLATFORMS = {
-    youtube: { label: "YouTube", verb: "Subscribe", hosts: ["youtube.com", "music.youtube.com"] },
+    youtube: { label: "YouTube", verb: "View Channel", hosts: ["youtube.com", "music.youtube.com"] },
     vimeo: { label: "Vimeo", verb: "Follow", hosts: ["vimeo.com"] },
     substack: { label: "Substack", verb: "Subscribe" },
     x: { label: "X", verb: "Follow" },
