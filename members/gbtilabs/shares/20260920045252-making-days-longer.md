@@ -8,7 +8,8 @@ category: music
 tags:
   - musi
   - rjd2
-image: https://i.ytimg.com/vi/ekarH5N1srU/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260920045252-making-days-longer-4dbf66b5.webp
+imageSource: https://i.ytimg.com/vi/ekarH5N1srU/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/channel/UCi4oHqkqejwf7RWmHKaKKkA
 creatorName: RJD2 - Topic
 id: 20260920045252-making-days-longer
