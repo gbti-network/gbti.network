@@ -3438,6 +3438,15 @@ ${listStyleProseCss(".doc-blocks")}
     if (right > scrollLeft + clientWidth) return Math.max(0, right - clientWidth);
     return null;
   }
+  var WORKSPACE_PAGE_SIZE = 15;
+  function pageWindow(total, page = 0, per = WORKSPACE_PAGE_SIZE) {
+    const n = Math.max(0, Math.floor(Number(total) || 0));
+    const size = Math.max(1, Math.floor(Number(per) || 0) || WORKSPACE_PAGE_SIZE);
+    const pages = Math.max(1, Math.ceil(n / size));
+    const at = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
+    const start = at * size;
+    return { page: at, pages, start, end: Math.min(n, start + size), size };
+  }
 
   // client-ui/src/publish-diff.mjs
   var IGNORED_FIELDS = Object.freeze(/* @__PURE__ */ new Set([
@@ -9184,7 +9193,7 @@ ${listStyleProseCss(".doc-blocks")}
       count: ops.length
     };
   }
-  function pageWindow(page, pages) {
+  function pageWindow2(page, pages) {
     if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
     const set = new Set([1, 2, page - 1, page, page + 1, pages - 1, pages].filter((n) => n >= 1 && n <= pages));
     const sorted = [...set].sort((a, b) => a - b);
@@ -9636,7 +9645,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div>`).join("");
       const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
         <button class="pgb" type="button" data-cbpage="${pg.page - 1}" ${pg.page === 1 ? "disabled" : ""}>‹</button>
-        ${pageWindow(pg.page, pg.pages).map((n) => n === "…" ? `<span class="dots">…</span>` : `<button class="pgb${n === pg.page ? " on" : ""}" type="button" data-cbpage="${n}">${n}</button>`).join("")}
+        ${pageWindow2(pg.page, pg.pages).map((n) => n === "…" ? `<span class="dots">…</span>` : `<button class="pgb${n === pg.page ? " on" : ""}" type="button" data-cbpage="${n}">${n}</button>`).join("")}
         <button class="pgb" type="button" data-cbpage="${pg.page + 1}" ${pg.page === pg.pages ? "disabled" : ""}>›</button>
       </div>` : "";
       return `<div class="cbtabs">${tabs}</div>${rows || `<div class="cbempty">Nothing filed here yet.</div>`}${pager}`;
@@ -21619,6 +21628,7 @@ ${listStyleProseCss(".doc-blocks")}
     connectedCallback() {
       this._items = null;
       this._error = "";
+      this._page = 0;
       super.connectedCallback?.();
       this.reload();
     }
@@ -21654,7 +21664,8 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       const items = this._items;
-      const body = items === null ? `<p class="muted">Loading your shares...</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.map((it, i) => this.rowHtml(it, i)).join("")}</ul>`;
+      const w = pageWindow(items?.length || 0, this._page, WORKSPACE_PAGE_SIZE);
+      const body = items === null ? `<p class="muted">Loading your shares...</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.slice(w.start, w.end).map((it, j) => this.rowHtml(it, w.start + j)).join("")}</ul>` + this.pagerHtml(w);
       this.set(this.css(`
       .row { align-items: flex-start; gap: 10px; }
       .sh-main { min-width: 0; flex: 1 1 auto; }
@@ -21662,6 +21673,16 @@ ${listStyleProseCss(".doc-blocks")}
       .sh-m { display: block; font-size: 12px; color: var(--fg-mute, #888); margin-top: 2px; }
       .rowacts { display: inline-flex; gap: 6px; flex: none; }
       .tag.muted { opacity: .7; }
+      .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 16px 0 2px; }
+      .pager-n { font-size: 12.5px; color: var(--muted); font-family: var(--font-mono, monospace); }
+      /* This element has its own shadow root, so the workspace's .btn rules do not reach it. BASE_CSS gives a
+         bare button a brand fill and its own :hover, and button.ghost lands AFTER that hover rule at equal
+         specificity, which leaves a ghost button with no hover feedback at all. Hence an explicit one here. */
+      .pgb { flex: none; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+        border-radius: 8px; font: inherit; font-weight: 600; font-size: 13px; padding: 6px 13px; cursor: pointer; }
+      .pgb:hover { background: var(--panel); border-color: var(--accent); color: var(--accent); }
+      .pgb[disabled] { opacity: .42; cursor: default; }
+      .pgb[disabled]:hover { background: var(--panel); border-color: var(--line); color: var(--fg); }
     `) + `<div class="panel">
            <h2>${this._network() ? "Network shares" : "My shares"}</h2>
            ${body}
@@ -21674,6 +21695,17 @@ ${listStyleProseCss(".doc-blocks")}
         const url = b.dataset.view;
         if (url) window.open(url, "_blank", "noopener");
       }));
+      this.$$("button[data-page]").forEach((b) => b.addEventListener("click", () => {
+        if (b.hasAttribute("disabled")) return;
+        this._page = Number(b.dataset.page) || 0;
+        this.render();
+        this.scrollIntoView({ block: "start", behavior: "smooth" });
+      }));
+    }
+    /** sow-377: Prev / Page N of M / Next, in the same shape the content tabs use. Nothing when there is one page. */
+    pagerHtml({ page, pages }) {
+      if (pages <= 1) return "";
+      return `<div class="pager"><button class="pgb" data-page="${page - 1}" type="button"${page === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page + 1} of ${pages}</span><button class="pgb" data-page="${page + 1}" type="button"${page >= pages - 1 ? " disabled" : ""}>Next &rarr;</button></div>`;
     }
     rowHtml(it, i) {
       const state = shareRowState(it);
@@ -23275,10 +23307,8 @@ ${listStyleProseCss(".doc-blocks")}
         const prs = this._prs === null ? null : sortPullsByEvent(this._prs);
         if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;
         if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
-        const PAGE2 = 15;
-        const pages2 = Math.max(1, Math.ceil(prs.length / PAGE2));
-        const page2 = Math.min(this._page || 0, pages2 - 1);
-        const rows2 = prs.slice(page2 * PAGE2, page2 * PAGE2 + PAGE2).map((pr) => {
+        const { page: page2, pages: pages2, start: start2, end: end2 } = pageWindow(prs.length, this._page, WORKSPACE_PAGE_SIZE);
+        const rows2 = prs.slice(start2, end2).map((pr) => {
           const ev = prEvent(pr);
           const when = ev.at ? ` <span class="when" title="${esc(absTime(ev.at))}">${esc(ev.verb)} ${esc(relTime(ev.at))}</span>` : "";
           return `<li class="row">
@@ -23303,11 +23333,8 @@ ${listStyleProseCss(".doc-blocks")}
         return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
       }
       const paid = this._overview ? this._overview.membership === "paid" : true;
-      const PAGE = 15;
-      const pages = Math.max(1, Math.ceil(view.length / PAGE));
-      const page = Math.min(this._page || 0, pages - 1);
-      const start = page * PAGE;
-      const rows = view.slice(start, start + PAGE).map((it, j) => {
+      const { page, pages, start, end } = pageWindow(view.length, this._page, WORKSPACE_PAGE_SIZE);
+      const rows = view.slice(start, end).map((it, j) => {
         const i = start + j;
         return it.isDraft ? this._draftRow(it, i, paid) : this._contentRow(it, i);
       }).join("");

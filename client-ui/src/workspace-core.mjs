@@ -617,3 +617,28 @@ export function tabScrollLeft({ scrollLeft = 0, clientWidth = 0, scrollWidth = 0
   if (right > scrollLeft + clientWidth) return Math.max(0, right - clientWidth);
   return null;
 }
+
+/** sow-377: the rows a WorkBench list shows, and how many pages it has. */
+export const WORKSPACE_PAGE_SIZE = 15;
+
+/**
+ * sow-377: the window of a client-side paged list. ONE copy of this arithmetic, because the WorkBench had
+ * three lists doing it separately and the Shares tab was the one that never got it: it rendered every share
+ * the network has in a single scroll.
+ *
+ * `page` is clamped into range rather than trusted, so a list that shrinks under a reader (an item is
+ * removed, a filter narrows) lands on the last page instead of rendering an empty one. An empty list is one
+ * page, not zero, so `page + 1 of pages` never reads "1 of 0".
+ *
+ * `start` is what a caller adds to a row's index within the slice to get its index in the FULL list. Every
+ * row action in these lists is wired by absolute index, so a pager that returns only the slice offset by
+ * nothing would wire page two's Edit buttons to page one's items.
+ */
+export function pageWindow(total, page = 0, per = WORKSPACE_PAGE_SIZE) {
+  const n = Math.max(0, Math.floor(Number(total) || 0));
+  const size = Math.max(1, Math.floor(Number(per) || 0) || WORKSPACE_PAGE_SIZE);
+  const pages = Math.max(1, Math.ceil(n / size));
+  const at = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
+  const start = at * size;
+  return { page: at, pages, start, end: Math.min(n, start + size), size };
+}

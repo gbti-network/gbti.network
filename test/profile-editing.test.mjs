@@ -245,7 +245,11 @@ test('the element wiring: the tab mounts one kept editor, the strip opens the ta
   assert.match(src, /this\._tab = 'profile'; this\._writeHash\('#tab=profile'\); this\.render\(\);/);
   assert.match(src, /if \(this\.client && !this\._ownProfileAsked\) this\._loadProfile\(\);/);
   assert.match(src, /import '\.\/gbti-profile-editor\.mjs';/);
-  assert.equal(src.split('\n').length - 1, 1117, 'the WorkBench element does not grow past its size');
+  // sow-377: this asserted EXACT equality while its message says "does not grow past", so shrinking the file
+  // red it just as surely as growing it did (sow-377 removed 3 lines by moving the page arithmetic into
+  // workspace-core). Now it means what it says: a ratchet that refuses growth and welcomes a reduction.
+  // Lower the ceiling deliberately when the file shrinks; never raise it without splitting the file.
+  assert.ok(src.split('\n').length - 1 <= 1114, `the WorkBench element grew past its size: ${src.split('\n').length - 1} lines`);
 });
 
 test('the copy follows the writing rules', () => {

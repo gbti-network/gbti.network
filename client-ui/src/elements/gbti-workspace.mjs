@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -714,10 +714,9 @@ class GbtiWorkspace extends GbtiElement {
       if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
       // SOW-085: paginate the PR list too (same 15/page pager as the content tabs); rows key on pr.number, so a
       // slice is safe. The per-PR gate status still resolves live for the visible page after the paint.
-      const PAGE = 15;
-      const pages = Math.max(1, Math.ceil(prs.length / PAGE));
-      const page = Math.min(this._page || 0, pages - 1);
-      const rows = prs.slice(page * PAGE, page * PAGE + PAGE).map((pr) => {
+      // sow-377: the window arithmetic is shared with the content list and the Shares tab.
+      const { page, pages, start, end } = pageWindow(prs.length, this._page, WORKSPACE_PAGE_SIZE);
+      const rows = prs.slice(start, end).map((pr) => {
         // The state pill on the right already says WHERE the PR stands ("Accepted"), so the meta line names the
         // event that produced the timestamp instead of repeating it: "#271 on GitHub, merged 2 hours ago".
         // A payload without timestamps (an un-deployed Worker) yields no verb and the row reads as before.
@@ -762,11 +761,9 @@ class GbtiWorkspace extends GbtiElement {
       return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
     }
     const paid = this._overview ? this._overview.membership === 'paid' : true;
-    const PAGE = 15;
-    const pages = Math.max(1, Math.ceil(view.length / PAGE));
-    const page = Math.min(this._page || 0, pages - 1);
-    const start = page * PAGE;
-    const rows = view.slice(start, start + PAGE).map((it, j) => {
+    // sow-377: one page-window helper across the three WorkBench lists, so they cannot drift apart.
+    const { page, pages, start, end } = pageWindow(view.length, this._page, WORKSPACE_PAGE_SIZE);
+    const rows = view.slice(start, end).map((it, j) => {
       const i = start + j; // absolute index into this._viewList for the action handlers
       return it.isDraft ? this._draftRow(it, i, paid) : this._contentRow(it, i);
     }).join('');

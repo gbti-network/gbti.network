@@ -4,10 +4,15 @@
 // page can open the share composer in edit mode (the composer is the editor; see share-post-core.mjs). A
 // deep link `#tab=share&edit-share=<id>` sets the `edit-id` attribute; once the list has loaded it emits the
 // edit for that row ONCE and drops the attribute. Self-loading and inert without a client, like the inbox.
+//
+// sow-377: paged at 15 a row, the same size and pager shape the content tabs use, sharing one page-window
+// helper with them. In Network scope (`scope="network"`, superadmin) this list is every share on the
+// network, and it used to render all of them in one scroll.
 
 import { GbtiElement, define, esc } from '../base.mjs';
 import { shareRowState, sharePublicUrl } from '../share-post-core.mjs';
 import { relTime, absTime } from '../time-core.mjs';
+import { pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
 
 class GbtiShareList extends GbtiElement {
   static get observedAttributes() { return ['edit-id', 'scope']; }
@@ -18,6 +23,7 @@ class GbtiShareList extends GbtiElement {
   connectedCallback() {
     this._items = null;
     this._error = '';
+    this._page = 0; // sow-377: client-side paging, like the content tabs
     super.connectedCallback?.();
     this.reload();
   }
@@ -54,11 +60,16 @@ class GbtiShareList extends GbtiElement {
 
   render() {
     const items = this._items;
+    // sow-377: page the list. In Network scope this is every share on the network, which ran to hundreds of
+    // rows in one scroll. `data-i` stays the index into the FULL list, so a row action on page two still
+    // reaches its own item.
+    const w = pageWindow(items?.length || 0, this._page, WORKSPACE_PAGE_SIZE);
     const body = items === null
       ? `<p class="muted">Loading your shares...</p>`
       : items.length === 0
         ? `<p class="muted">${this._error ? esc(this._error) : 'No shares yet. Use the share bar above to post your first one.'}</p>`
-        : `<ul class="list">${items.map((it, i) => this.rowHtml(it, i)).join('')}</ul>`;
+        : `<ul class="list">${items.slice(w.start, w.end).map((it, j) => this.rowHtml(it, w.start + j)).join('')}</ul>`
+          + this.pagerHtml(w);
     this.set(this.css(`
       .row { align-items: flex-start; gap: 10px; }
       .sh-main { min-width: 0; flex: 1 1 auto; }
@@ -66,6 +77,16 @@ class GbtiShareList extends GbtiElement {
       .sh-m { display: block; font-size: 12px; color: var(--fg-mute, #888); margin-top: 2px; }
       .rowacts { display: inline-flex; gap: 6px; flex: none; }
       .tag.muted { opacity: .7; }
+      .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 16px 0 2px; }
+      .pager-n { font-size: 12.5px; color: var(--muted); font-family: var(--font-mono, monospace); }
+      /* This element has its own shadow root, so the workspace's .btn rules do not reach it. BASE_CSS gives a
+         bare button a brand fill and its own :hover, and button.ghost lands AFTER that hover rule at equal
+         specificity, which leaves a ghost button with no hover feedback at all. Hence an explicit one here. */
+      .pgb { flex: none; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+        border-radius: 8px; font: inherit; font-weight: 600; font-size: 13px; padding: 6px 13px; cursor: pointer; }
+      .pgb:hover { background: var(--panel); border-color: var(--accent); color: var(--accent); }
+      .pgb[disabled] { opacity: .42; cursor: default; }
+      .pgb[disabled]:hover { background: var(--panel); border-color: var(--line); color: var(--fg); }
     `) + `<div class="panel">
            <h2>${this._network() ? 'Network shares' : 'My shares'}</h2>
            ${body}
@@ -78,6 +99,24 @@ class GbtiShareList extends GbtiElement {
       const url = b.dataset.view;
       if (url) window.open(url, '_blank', 'noopener');
     }));
+    this.$$('button[data-page]').forEach((b) => b.addEventListener('click', () => {
+      if (b.hasAttribute('disabled')) return;
+      this._page = Number(b.dataset.page) || 0;
+      this.render();
+      // The list can be taller than the viewport, so paging from the foot would otherwise leave the reader
+      // looking at the pager of a list whose new first row is off the top of the screen.
+      this.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }));
+  }
+
+  /** sow-377: Prev / Page N of M / Next, in the same shape the content tabs use. Nothing when there is one page. */
+  pagerHtml({ page, pages }) {
+    if (pages <= 1) return '';
+    return `<div class="pager">`
+      + `<button class="pgb" data-page="${page - 1}" type="button"${page === 0 ? ' disabled' : ''}>&larr; Prev</button>`
+      + `<span class="pager-n">Page ${page + 1} of ${pages}</span>`
+      + `<button class="pgb" data-page="${page + 1}" type="button"${page >= pages - 1 ? ' disabled' : ''}>Next &rarr;</button>`
+      + `</div>`;
   }
 
   rowHtml(it, i) {
