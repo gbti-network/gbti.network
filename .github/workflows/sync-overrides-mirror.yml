@@ -17,8 +17,29 @@ on:
   schedule:
     - cron: '23 */6 * * *'   # every 6 hours (off the hour); 4x/day keeps the blob far inside the 48h window
   workflow_dispatch: {}
+  # sow-270: the merge itself is the trigger. Every file listed here is one this job reads, so landing a change
+  # to any of them refreshes the edge copy within about a minute instead of on the next 6-hour tick.
+  #
+  # WHY THE MERGE AND NOT THE SAVE. The admin endpoint saves by opening a pull request, and the dispatch below
+  # fires the moment that pull request OPENS. A worker-opened pull request merges in about 25 seconds (measured
+  # over the last 40 merges), and a dispatched runner reaches its checkout in roughly the same time, so a
+  # save-time dispatch is a coin flip on whether it reads the new value or the old one. Worse, losing that race
+  # writes the OLD value over the mirror and the setting then stays stale until the next tick, which is the
+  # failure the immediate refresh was added to prevent. A push trigger cannot race: the commit it runs on is
+  # the merge commit, so the value is already on main before the runner starts.
+  push:
+    branches: [main]
+    paths:
+      - 'house/roles.yml'            # effective status: ban > staff > grandfather > Stripe
+      - 'house/bans.yml'
+      - 'house/grandfathered.yml'
+      - 'house/syndication-config.yml'  # synd:config, the drain's switches
+      - 'house/coupons.yml'             # coupons:config, validated at signup
+      - 'house/digest-config.yml'       # digest:config, incl. the sow-270 confirmation switch
   # The signup Worker can fire repository_dispatch type 'sync-mirror' after a role/ban/grandfather change so the
-  # mirror refreshes immediately instead of waiting for the next 6-hour tick.
+  # mirror refreshes immediately instead of waiting for the next 6-hour tick. sow-270: kept, but it is the slower
+  # and racier of the two paths (see the push trigger above), and it has not fired once in the 200 runs going back
+  # to 2026-08-03. The push trigger is what a config save should be relying on.
   repository_dispatch:
     types: [sync-mirror]
 

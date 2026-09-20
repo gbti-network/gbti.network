@@ -61,8 +61,14 @@ export async function syncSyndicationConfigMirror({ root, env = process.env, fet
 
 /**
  * sow-266: mirror house/digest-config.yml -> KV digest:config, so the mail compile reads the owner's pitch
- * copy and sponsor slot live. Rides this job as well as the daily reconcile, because the digest manager calls
- * this sync straight after a save: waiting six hours to see your own wording is not an edit surface.
+ * copy and sponsor slot live. Rides this job as well as the daily reconcile.
+ *
+ * sow-270 CORRECTION. This used to say the digest manager calls the sync straight after a save. It never did:
+ * the manager saves by opening a pull request, and the only caller of the immediate refresh is a role change.
+ * A digest save therefore waited up to six hours, which is wrong for a setting deciding what a stranger
+ * consented to. The fix is a push trigger on the workflow rather than a call from the save, because the save
+ * happens BEFORE the merge and a refresh fired then reads the pre-merge file. See the trigger's own comment in
+ * .github/workflows/sync-overrides-mirror.yml.
  *
  * An unreadable file returns WITHOUT writing, rather than mirroring an empty blob. Empty would revert the
  * owner's copy to the compiled default, silently, on a green run.
@@ -117,8 +123,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       }
     } catch (e) { console.error('sync-mirror: coupons:config FAILED:', e?.message ?? e); process.exitCode = 1; }
 
-    // 4) digest:config - sow-266: the digest's pitch copy and sponsor slot, so an edit from the manager is
-    // live within minutes rather than at the next daily reconcile.
+    // 4) digest:config - sow-266: the digest's pitch copy and sponsor slot, plus the sow-270 confirmation
+    // switch, so an edit from the manager is live within about a minute of its pull request merging rather
+    // than at the next daily reconcile.
     try {
       const d = await syncDigestConfigMirror({ root: ROOT, dryRun });
       if (d.dryRun) console.log(`sync-mirror: DRY RUN would write digest:config (cta=${d.cta}, sponsor enabled=${d.sponsorEnabled}).`);

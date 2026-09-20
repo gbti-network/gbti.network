@@ -1,7 +1,12 @@
-# What the weekly digest says about membership, and who sponsors it. Owner-editable: change a line here,
-# push, and the next sync applies it to the live mail with NO REDEPLOY. To apply it immediately rather than
-# waiting for the scheduled run, use the "Run reconcile" trigger, or save from the digest manager in the admin
-# area, which calls the sync itself.
+# What the weekly digest says about membership, and who sponsors it, and whether a new subscriber has to
+# confirm by email before it starts arriving. Owner-editable: change a line here, push, and the sync applies it
+# to the live mail with NO REDEPLOY.
+#
+# A CHANGE IS LIVE WITHIN ABOUT A MINUTE OF LANDING ON MAIN. The sync workflow runs on a push that touches this
+# file, so a save from the digest manager takes effect once its pull request merges, not on the next scheduled
+# run. sow-270 corrected this paragraph: it used to say the manager called the sync itself, and it never did,
+# so an edit here could sit unapplied for up to six hours. Nothing needed to be triggered by hand then either,
+# which is what made the claim hard to catch.
 #
 # SUPERADMIN-owned, pinned in CODEOWNERS and in membership/path-rank.mjs. Two tests fail if those two and the
 # Worker's action table ever disagree about who may write this file.
