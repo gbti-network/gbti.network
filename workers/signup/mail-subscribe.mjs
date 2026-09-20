@@ -58,6 +58,7 @@ import {
 import { getSubscriber, putSubscriber } from './mail-store.mjs';
 import { verifyTurnstile, rateLimit } from './abuse.mjs';
 import { createResendClient } from '../../clients/resend.mjs';
+import { renderConfirmationEmail } from '../../membership/mail-transactional-render.mjs'; // sow-270: the branded confirmation body
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -192,30 +193,24 @@ async function deleteOptin(kv, hash) {
 }
 
 /** Send the transactional double-opt-in confirmation email. Best-effort: returns false (never throws) when the
- *  send is unprovisioned or fails, so subscribe stays neutral and the pending record survives for a re-send. */
+ *  send is unprovisioned or fails, so subscribe stays neutral and the pending record survives for a re-send.
+ *
+ *  sow-270: the body comes from membership/mail-transactional-render.mjs rather than being assembled here. It
+ *  used to be a bare paragraph stack in a system font, which made the one message deciding whether anything is
+ *  ever sent the only one that looked nothing like the sender it claims to be. The renderer returns null on a
+ *  url it cannot vouch for, which is a second guard: a confirmation whose only purpose is a link is not worth
+ *  delivering without one. */
 async function sendConfirmationEmail({ env, to, confirmUrl, send }) {
   const from = str(env?.MAIL_FROM).trim();
   const apiKey = str(env?.RESEND_API_KEY).trim();
   if (!from || !to || !confirmUrl) return false;
-  const subject = 'Confirm your GBTI Network digest subscription';
-  const text = 'Thanks for subscribing to the GBTI Network weekly digest.\n\n'
-    + 'Please confirm your email address to start receiving it:\n'
-    + `${confirmUrl}\n\n`
-    + 'If you did not request this, you can ignore this email and you will not be subscribed.\n\n'
-    + 'GBTI Network';
-  const safeUrl = escapeHtml(confirmUrl);
-  const html = '<!doctype html><html><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#25232b;line-height:1.55">'
-    + '<p>Thanks for subscribing to the GBTI Network weekly digest.</p>'
-    + '<p>Please confirm your email address to start receiving it:</p>'
-    + `<p><a href="${safeUrl}" style="display:inline-block;background:#1f9e5f;color:#fff;text-decoration:none;font-weight:600;padding:.6rem 1.1rem;border-radius:.5rem">Confirm subscription</a></p>`
-    + `<p style="color:#6c6976;font-size:.9rem">Or paste this link into your browser:<br>${safeUrl}</p>`
-    + '<p style="color:#6c6976;font-size:.9rem">If you did not request this, you can ignore this email and you will not be subscribed.</p>'
-    + '<p>GBTI Network</p></body></html>';
+  const mail = renderConfirmationEmail({ confirmUrl, siteUrl: str(env?.SITE_BASE_URL).trim() });
+  if (!mail) return false;
   const sender = typeof send === 'function'
     ? send
     : (apiKey ? createResendClient({ apiKey }).sendEmail : null);
   if (!sender) return false;
-  try { await sender({ from, to, subject, text, html }); return true; } catch { return false; }
+  try { await sender({ from, to, subject: mail.subject, text: mail.text, html: mail.html }); return true; } catch { return false; }
 }
 
 /**
