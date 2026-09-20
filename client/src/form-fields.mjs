@@ -44,6 +44,12 @@ export const FIELDS = Object.freeze({
     f('pricing', 'Pricing', 'enum', { options: ['free', 'freemium', 'paid'] }),
     f('pricingUrl', 'Pricing/upgrade URL', 'text'),
     f('version', 'Version', 'text', { placeholder: '1.0.0' }),
+    // sow-305: an exact identifier from house/licenses.yml. A text field rather than an enum, because the list
+    // is data and an enum here would be a second copy of it that goes stale. Both fields are ALWAYS shown: a
+    // field revealed only for Custom would be skipped by gather() and its value dropped on save, which is the
+    // failure recorded against showIf below.
+    f('license', 'License', 'text', { placeholder: 'MIT, GPL-3.0, Proprietary, Custom', hint: 'Leave blank to show whatever the GitHub repository reports, and nothing when that is unknown.' }),
+    f('licenseUrl', 'License link', 'text', { placeholder: 'https://...', hint: 'Required for Custom. A standard license links to the repository file or its own page without this.' }),
     f('requires', 'Requires', 'text', { placeholder: 'WordPress 6.0+', hint: 'The minimum host or runtime it needs. Shown as Requires on the project page.' }),
     TAGS,
     f('platforms', 'Platforms', 'array'),

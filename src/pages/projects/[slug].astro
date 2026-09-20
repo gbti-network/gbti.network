@@ -52,6 +52,15 @@ import {
   iconForUrl,
   formatRelease,
 } from '../../lib/project-page.mjs';
+// sow-305: the licence vocabulary, read once at build. Node APIs are fine here: this is page frontmatter.
+import fs from 'node:fs';
+import path from 'node:path';
+import yaml from 'js-yaml';
+import { licenseRow } from '../../../membership/licenses.mjs';
+const LICENSES = (() => {
+  try { return yaml.load(fs.readFileSync(path.resolve(process.cwd(), 'house/licenses.yml'), 'utf8')); }
+  catch { return null; }
+})();
 
 export async function getStaticPaths() {
   const projects = (await getCollection('project')).filter(hasPublicPage);
@@ -92,14 +101,53 @@ const toc = buildToc(headings, { hasBody: !stub, hasGallery: shots.length > 0, h
 // at today's project count; see project-page.mjs for why). Fails closed on every edge — a private repo, no
 // releases yet, a rate limit, a network error, or a non-GitHub repository link all just omit the row rather
 // than fail the build.
+//
+// sow-332: BOTH calls below carry a time limit. They had none, and a GitHub response that stalls rather than
+// fails never rejects, so the catch never runs and the build hangs until the deploy job's 20 minute cap kills
+// it. AbortSignal.timeout covers the body read as well as the connection.
+//
+// sow-305: and both are AUTHENTICATED when a token is in the environment. Unauthenticated GitHub allows 60
+// requests an hour per address; detection doubles the per-build count, and a few deploys in an hour would have
+// started silently omitting rows. The deploy workflow passes the Actions token, which needs no provisioning and
+// raises the allowance to 1000. A local build without one still works, just unauthenticated.
+const GH_TIMEOUT_MS = 8000;
+const ghHeaders: Record<string, string> = {
+  Accept: 'application/vnd.github+json',
+  'User-Agent': 'gbti-network-site-build',
+  ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+};
+async function github(path: string): Promise<any | null> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${path}`, { headers: ghHeaders, signal: AbortSignal.timeout(GH_TIMEOUT_MS) });
+    return res.ok ? await res.json() : null;
+  } catch { return null; } // a private repo, a rate limit, a network error or a timeout: omit the row, never fail the build
+}
+
 let release: { tag: string; url: string; publishedAt: string } | null = null;
+let detectedLicense: string | null = null;
+let repoLicenseHref: string | null = null;
 const ghRepo = repoUrl ? parseGithubRepo(repoUrl) : null;
 if (ghRepo) {
-  try {
-    const res = await fetch(`https://api.github.com/repos/${ghRepo.owner}/${ghRepo.repo}/releases/latest`);
-    if (res.ok) release = formatRelease(await res.json());
-  } catch { /* no release row; not a build failure */ }
+  const slug = `${ghRepo.owner}/${ghRepo.repo}`;
+  // The /license endpoint rather than the repository one, because it answers BOTH questions in the same call:
+  // which licence, and WHERE the file is. Assembling that path by convention, from a guessed branch and a
+  // guessed filename, worked for all four of today's repositories by luck and would have failed on the first
+  // LICENSE.md or COPYING, rendering a link that looks right and 404s on click. GitHub
+  // returns the real branch and filename; a repository with no licence file 404s, which reads as no detection.
+  const [rel, lic] = await Promise.all([github(`${slug}/releases/latest`), github(`${slug}/license`)]);
+  if (rel) release = formatRelease(rel);
+  // sow-305: GitHub answers NOASSERTION for a licence file it cannot identify. licenseRow treats that as no
+  // detection, so the row stays empty until the author picks one, per the owner.
+  if (lic?.license?.spdx_id) detectedLicense = String(lic.license.spdx_id);
+  // The file is the real terms, which is what the owner asked the row to prefer linking to. Present even when
+  // the licence itself could not be identified, which is why it is read independently of the id above.
+  if (typeof lic?.html_url === 'string') repoLicenseHref = lic.html_url;
 }
+// The author's pick always beats detection; the helper owns that and where the row links.
+const licenseInfo = licenseRow(
+  { license: d.license, licenseUrl: d.licenseUrl, detected: detectedLicense, repoLicenseHref },
+  LICENSES,
+);
 const releaseAge = release
   ? new Date(release.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   : null;
@@ -313,12 +361,20 @@ const lockedHint = (l: { encrypted?: boolean }) =>
             </nav>
           )}
 
-          {(specs.length > 0 || release) && (
+          {(specs.length > 0 || release || licenseInfo) && (
             <div class="pd-block">
               <dl class="pd-specs">
                 {specs.map(([k, v]) => (
                   <div class="pd-spec"><dt>{k}</dt><dd>{v}</dd></div>
                 ))}
+                {licenseInfo && (
+                  <div class="pd-spec">
+                    <dt>License</dt>
+                    <dd>{licenseInfo.href
+                      ? <a href={licenseInfo.href} rel="noopener" class="pd-release-link">{licenseInfo.id}</a>
+                      : licenseInfo.id}</dd>
+                  </div>
+                )}
                 {release && (
                   <div class="pd-spec">
                     <dt>Latest release</dt>

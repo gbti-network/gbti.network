@@ -1,0 +1,40 @@
+# sow-305: the licences a project may declare. Admin-owned, like house/ai-tools.yml which it copies.
+#
+# The list the owner approved on 2026-09-14, plus the two that are not SPDX identifiers at all: Proprietary,
+# which is a statement rather than a licence anyone can read, and Custom, which means "the terms are ours and
+# here is where they live" and therefore REQUIRES a link. The build refuses Custom without one.
+#
+# THE KEY IS THE STORED VALUE AND THE DISPLAYED LABEL, which is simpler than the AI-tool list beside it: an
+# SPDX identifier is already the form a reader recognises ("GPL-3.0"), so there is nothing to translate. What a
+# project writes in its frontmatter is exactly a key below, checked exactly, and rendered as it is written.
+#
+# `url` is where the row links when the project's own repository has no licence file to point at. It is absent
+# for Proprietary (plain text, no link) and for Custom (the author supplies `licenseUrl`).
+#
+# DETECTION DOES NOT WRITE HERE. A licence detected from GitHub is used only when the project declares none;
+# the author's own value always wins. See src/lib/project-page.mjs for that resolution.
+#
+# TO ADD ONE: add a line with its SPDX identifier and the spdx.org page for it.
+licenses:
+  # Permissive
+  MIT: { url: https://spdx.org/licenses/MIT.html }
+  Apache-2.0: { url: https://spdx.org/licenses/Apache-2.0.html }
+  BSD-2-Clause: { url: https://spdx.org/licenses/BSD-2-Clause.html }
+  BSD-3-Clause: { url: https://spdx.org/licenses/BSD-3-Clause.html }
+  ISC: { url: https://spdx.org/licenses/ISC.html }
+
+  # Copyleft
+  GPL-2.0: { url: https://spdx.org/licenses/GPL-2.0-only.html }
+  GPL-3.0: { url: https://spdx.org/licenses/GPL-3.0-only.html }
+  LGPL-3.0: { url: https://spdx.org/licenses/LGPL-3.0-only.html }
+  AGPL-3.0: { url: https://spdx.org/licenses/AGPL-3.0-only.html }
+  MPL-2.0: { url: https://spdx.org/licenses/MPL-2.0.html }
+
+  # Public domain dedications
+  Unlicense: { url: https://spdx.org/licenses/Unlicense.html }
+  CC0-1.0: { url: https://spdx.org/licenses/CC0-1.0.html }
+
+  # Not SPDX identifiers. Proprietary renders as plain text with no link, because there is nothing public to
+  # link to; Custom renders the author's own licenseUrl, and the build refuses it without one.
+  Proprietary: {}
+  Custom: {}

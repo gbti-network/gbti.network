@@ -16,6 +16,7 @@ import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the cou
 import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the followed-topic -> news-category map
 import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
 import { targetProblems, aiToolEntries } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
+import { licenseProblems, licenseEntries } from '../membership/licenses.mjs'; // sow-305: the controlled license list
 import { normalizeBanword, BANWORD_LIMIT, BANWORD_MIN, BANWORD_MAX } from '../membership/news-banwords.mjs'; // sow-372: the blocked-word list
 import { validateTierDisplay } from '../membership/tiers-display.mjs'; // sow-185: the membership tier display data
 import { PAID_GRANT_TIERS } from '../membership/tier-gate.mjs'; // sow-185: the paid tiers a grandfather grant may name
@@ -58,6 +59,13 @@ const TOPIC_KEYS = (() => {
 // every prompt. A guard that cannot read its own vocabulary has proved nothing (sow-245).
 const AI_TOOLS_DOC = (() => {
   try { return yaml.load(fs.readFileSync(path.join(ROOT, 'house/ai-tools.yml'), 'utf8')); }
+  catch { return null; }
+})();
+
+// sow-305: the licence list. Same shape and same reasoning as the AI-tool vocabulary above: unreadable leaves
+// this null and validateLicenseVocabulary reports THAT, rather than every project silently passing.
+const LICENSES_DOC = (() => {
+  try { return yaml.load(fs.readFileSync(path.join(ROOT, 'house/licenses.yml'), 'utf8')); }
   catch { return null; }
 })();
 
@@ -273,6 +281,14 @@ function checkContent(file, owner, type) {
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
     if (type === 'project') checkNewsFeed(fm, rel); // sow-140
+    // sow-305: the licence, in the SAME branch as the news feed above, which is the branch a project frontmatter
+    // reaches. The equivalent AI-tool check was first written beside the share rules, where a prompt never
+    // arrives, and every control passed green while nothing was checked.
+    if (type === 'project' && fm && (fm.license !== undefined || fm.licenseUrl !== undefined)) {
+      for (const problem of licenseProblems({ license: fm.license, licenseUrl: fm.licenseUrl }, LICENSES_DOC)) {
+        errors.push(`${rel}: ${problem}`);
+      }
+    }
     checkMemberGating(fm, rel, bodyOf(txt)); // SOW-016
     checkBodyImages(file, rel, bodyOf(txt)); // sow-165
   } else if (type === 'comment' || type === 'share') {
@@ -659,6 +675,25 @@ function validateAiToolsVocabulary() {
   }
 }
 validateAiToolsVocabulary();
+
+// sow-305 + sow-245: the licence list has to be READABLE for the per-project check above to mean anything.
+function validateLicenseVocabulary() {
+  const rel = 'house/licenses.yml';
+  if (!has(path.join(ROOT, rel))) { errors.push(`${rel}: missing, so no project's license was checked against anything`); return; }
+  if (!LICENSES_DOC || typeof LICENSES_DOC !== 'object') { errors.push(`${rel}: not valid YAML, so no project's license was checked`); return; }
+  const entries = licenseEntries(LICENSES_DOC);
+  if (!entries.length) { errors.push(`${rel}: lists no licenses, so no project's license was checked`); return; }
+  const seen = new Map();
+  for (const { id, url } of entries) {
+    const lower = id.toLowerCase();
+    if (seen.has(lower)) errors.push(`${rel}: "${id}" and "${seen.get(lower)}" differ only by case, which is the drift this list exists to prevent`);
+    else seen.set(lower, id);
+    if (/[\u2014\u2013]/.test(id)) errors.push(`${rel}: "${id}" carries a dash our writing conventions do not use`);
+    // Proprietary and Custom have no public page by design; everything else should link somewhere.
+    if (!url && id !== 'Proprietary' && id !== 'Custom') errors.push(`${rel}: "${id}" has no https url, so its row would have nothing to link to`);
+  }
+}
+validateLicenseVocabulary();
 
 // sow-372: the blocked-word list (house/news-banwords.yml). The runtime cores DROP a malformed entry rather
 // than throwing, because they run inside the hourly ingest and the feed read where the only alternatives are

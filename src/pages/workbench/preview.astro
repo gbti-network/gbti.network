@@ -441,6 +441,10 @@ const labelOf = CATEGORY_LABELS;
       if (fm.version) specRows.push(['Version', String(fm.version)]);
       if (fm.requires) specRows.push(['Requires', String(fm.requires)]);
       if (Array.isArray(fm.platforms) && fm.platforms.length) specRows.push(['Works with', fm.platforms.join(', ')]);
+      // sow-305: the licence the author DECLARED. The published page also falls back to what GitHub reports for
+      // the repository, which a draft preview cannot do without a build-time call, so a blank here means "not
+      // declared" rather than "no licence". Plain text: the link resolution belongs to the published page.
+      if (typeof fm.license === 'string' && fm.license.trim()) specRows.push(['License', fm.license.trim()]);
       specRows.push(['Status', 'staged draft']);
       const specs = $('[data-pv-specs]');
       if (specs) specs.innerHTML = specRows.map(([k, v]) => `<div class="pd-spec"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');

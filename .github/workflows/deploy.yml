@@ -107,6 +107,12 @@ jobs:
           # creates it. It was missing entirely until 2026-08-24: the component read the value and the build was
           # never given it, so setting the variable alone would have changed nothing and looked like a broken beacon.
           GBTI_CF_ANALYTICS_TOKEN: ${{ vars.GBTI_CF_ANALYTICS_TOKEN }}
+          # sow-305/sow-332: the project pages ask GitHub for each repository's latest release and its licence.
+          # Unauthenticated that is 60 requests an hour per address, and two calls per project put a few deploys
+          # in one hour over the line, at which point rows silently stop appearing. This token is issued by
+          # Actions automatically, needs no provisioning, and raises the allowance to 1000. A local build
+          # without it still works, just unauthenticated.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # sow-295: the public record of what this deploy serves (dist/build.json), plus a noindex rule on a preview build.
       - name: Stamp the build
         run: node scripts/deploy-target.mjs stamp

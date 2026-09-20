@@ -186,6 +186,14 @@ const projectShape = ({ image }: { image: any }) => ({
   // Rendered as a spec row in the detail page's left rail and in the end-of-body install panel.
   requires: z.string().optional(),
   pricingUrl: z.string().url().optional(), // SOW-014: where to buy/upgrade, shown when pricing !== 'free'
+  // sow-305: the licence, an exact identifier from house/licenses.yml (validated by scripts/validate-content.mjs,
+  // not by an enum here, so adding one to the list does not mean editing two schemas and a mirror). Absent means
+  // the page falls back to what GitHub reports for the repository, and shows nothing when that is unknown too.
+  license: z.string().optional(),
+  // Where the licence text lives. REQUIRED when license is "Custom" and optional otherwise; the field is always
+  // present in the editor rather than revealed by the choice, because a conditionally hidden field is skipped
+  // when the form is gathered and its value is silently dropped on save.
+  licenseUrl: z.string().url().optional(),
   // sow-140: the RSS feed of the member-owned project/site. Declaring it does NOTHING by itself: the feed
   // only reaches the network's news pool once an admin approves the project slug in the admin-owned
   // house/member-news-sources.yml registry (moderation boundary; see the ops SOP).
