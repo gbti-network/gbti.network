@@ -43,4 +43,4 @@ links:
   devto: https://dev.to/atwellpub
 ---
 
-Hi everyone, my name is Hudson Atwell, and I'm a founding member of the GBTI network. With a long background in developing products for markets, developer relations, and partnership management; I'm thrilled to build a brand as well as a community with the GBTI Network. Join my personal discord (link below) to follow my work more closely (I share a lot of music there, daily, too).
+With a long background in developing products developer relations, and website development; Hudson Atwell shares his experience by writing for the GBTI Network. Join his personal discord (link below) to follow his work more closely.
