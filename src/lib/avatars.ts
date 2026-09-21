@@ -1,4 +1,6 @@
 import { authorDisplay, authorHref, authorAvatar } from './authors';
+import { isBotLogin } from './bot-login.mjs';
+export { isBotLogin };
 
 /** One avatar in a stack: a person to credit on a card or post. */
 export interface AvatarItem {
@@ -25,6 +27,10 @@ interface CommentLike {
  *  commit author or contributor who is not a network member (no profile gravatar of our own to show). */
 export function githubAvatarUrl(login?: string | null, size = 80): string | undefined {
   if (!login) return undefined;
+  // A GitHub App's bot account (`<app>[bot]`, e.g. our gbti-network-publisher[bot], which authors every commit
+  // the network publishes) has NO avatar at this address: GitHub 404s it, and a site crawl reported one broken
+  // image per article history on 2026-09-21. No URL is better than a dead one; the Avatar falls back to letters.
+  if (isBotLogin(login)) return undefined;
   return `https://github.com/${encodeURIComponent(login)}.png?size=${size}`;
 }
 

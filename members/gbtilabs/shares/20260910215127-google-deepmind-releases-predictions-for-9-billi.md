@@ -10,7 +10,7 @@ shortDescription: >-
   every possible single-nucleotide substitution in a reference human genome. The resource could help
   genom…
 category: health
-image: https://mlq.ai/static/mlq/og-default.png
+imageRemoved: true
 tags:
   - alphagenome
   - google-deepmind

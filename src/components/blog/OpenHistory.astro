@@ -7,7 +7,7 @@
 // only when the data exists — we never fabricate them. Renders nothing when there is no committed history.
 import { getCollection } from 'astro:content';
 import { fileCommits, fileHistoryHref, prUrl } from '../../lib/git-history';
-import { buildAvatarIndex, githubAvatarUrl, githubLogin } from '../../lib/avatars';
+import { buildAvatarIndex, githubAvatarUrl, githubLogin, isBotLogin } from '../../lib/avatars';
 import { GBTI_AVATAR } from '../../lib/authors';
 import Avatar from '../Avatar.astro';
 
@@ -56,6 +56,11 @@ const ROLE_LABEL: Record<string, string> = { author: 'author', contributor: 'acc
 // resolution chain the reconcile already needed for the same reason (scripts/reconcile.mjs resolveUsername,
 // where folder 'hudson' has login 'atwellpub'), and it fixes the general case rather than one account.
 function who(login: string | null, name: string) {
+  // Every change published through the network (sow-274: one publishing path) is committed by our GitHub App,
+  // so its commits name gbti-network-publisher[bot] and nobody else; which person pressed publish is not in the
+  // commit. Show the network itself, the identity the house and automation commits already use, rather than a
+  // bot handle with an avatar GitHub does not serve.
+  if (isBotLogin(login)) return index.byUsername.get('gbtilabs') ?? { name: 'GBTI Network', avatar: GBTI_AVATAR };
   const l = login ? login.toLowerCase() : null;
   const member = l ? (index.byLogin.get(l) ?? index.byUsername.get(l)) : null;
   return { name: member?.name ?? name, avatar: member?.avatar ?? githubAvatarUrl(login) };
