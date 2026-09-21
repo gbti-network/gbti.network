@@ -4,7 +4,8 @@
 // is edited in the shared <gbti-notify-modal>. Inert in public (no client -> a sign-in nudge). Follows the
 // gbti-account load-race pattern (_loaded/_loading, _maybeLoad from render) so it upgrades the moment setClient runs.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { MATRIX_ROWS, defaultMatrix, matrixToNotify, toggleCell, summarizeFollow, isCustomFollow } from '../notify-matrix-core.mjs';
+import { MATRIX_ROWS, defaultMatrix, matrixToNotify, toggleCell, summarizeFollow, isCustomFollow, channelBlocked } from '../notify-matrix-core.mjs';
+import { BLOCKED_PILL_CSS, notifyPillHtml } from './notify-pill.mjs'; // sow-385: email notifications are off for now
 import { openNotifyModal } from './gbti-notify-modal.mjs';
 
 const SITE = 'https://gbti.network';
@@ -29,7 +30,6 @@ const CSS = `
     font:inherit; font-weight:600; font-size:12.5px; cursor:pointer; min-width:70px; text-align:center; transition:background .12s ease, color .12s ease, border-color .12s ease; }
   .pill.on { background:var(--brand); border-color:var(--brand); color:#fff; }
   .pill[disabled] { opacity:.6; cursor:default; }
-  .note { padding:14px 24px 18px; color:var(--muted); font-size:12.5px; line-height:1.45; }
   .msg { font-size:13px; padding:0 24px 14px; } .msg:empty { padding:0; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:var(--danger); }
   /* the follows list */
   .frow { display:grid; grid-template-columns:auto 1fr auto auto; gap:14px; align-items:center; padding:14px 24px; width:100%; border:0; background:transparent; color:var(--fg); font:inherit; text-align:left; cursor:pointer; }
@@ -46,6 +46,7 @@ const CSS = `
   .empty a { color:var(--brand); font-weight:600; }
   .nudge { padding:18px 20px; border:1.5px dashed var(--line); border-radius:16px; background:var(--panel); font-size:14px; color:var(--muted); }
   .nudge a { color:var(--brand); font-weight:600; }
+${BLOCKED_PILL_CSS}
 `;
 
 const CHEV = `<svg class="chev" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -85,7 +86,7 @@ class GbtiNotificationsSettings extends GbtiElement {
   }
 
   async _toggleDefault(key, channel) {
-    if (!this._prefsOk) return;
+    if (!this._prefsOk || channelBlocked(channel)) return; // sow-385: a blocked pill never saves anything
     const prev = this._matrix;
     this._matrix = toggleCell(this._matrix, key, channel); // optimistic
     this.render();
@@ -115,7 +116,7 @@ class GbtiNotificationsSettings extends GbtiElement {
     const matrix = this._matrix || defaultMatrix(this._global);
     const matrixRows = MATRIX_ROWS.map((r) => {
       const cell = matrix[r.key] || {};
-      const pills = CHANNELS.map((c) => `<button type="button" class="pill${cell[c.key] ? ' on' : ''}" data-cell="${r.key}:${c.key}" aria-pressed="${!!cell[c.key]}" ${this._prefsOk ? '' : 'disabled'}>${esc(c.label)}</button>`).join('');
+      const pills = CHANNELS.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk })).join('');
       return `<div class="mrow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
     }).join('');
 
@@ -139,9 +140,8 @@ class GbtiNotificationsSettings extends GbtiElement {
 
     this.set(this.css(CSS) + `
       <section class="sec">
-        <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
+        <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
-        <div class="note">Email arrives as one digest each morning, never one message per item.</div>
         ${prefsNote}
         ${msg}
       </section>
@@ -153,7 +153,7 @@ class GbtiNotificationsSettings extends GbtiElement {
   }
 
   _wire() {
-    this.$$('[data-cell]').forEach((el) => el.addEventListener('click', () => { const [k, c] = el.dataset.cell.split(':'); this._toggleDefault(k, c); }));
+    this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el) => el.addEventListener('click', () => { const [k, c] = el.dataset.cell.split(':'); this._toggleDefault(k, c); }));
     this.$$('[data-follow]').forEach((el) => el.addEventListener('click', () => this._openFollow(el.dataset.follow)));
   }
 }

@@ -15280,6 +15280,7 @@ ${listStyleProseCss(".doc-blocks")}
   // membership/notify-resolve.mjs
   var NOTIFY_CHANNELS = ["api", "email"];
   var SYSTEM_NOTIFY_DEFAULT = Object.freeze({ api: true, email: false });
+  var EMAIL_NOTIFICATIONS_ENABLED = false;
   function isBool(v) {
     return v === true || v === false;
   }
@@ -15317,22 +15318,30 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/notify-matrix-core.mjs
+  var EMAIL_DISABLED_TIP = "Email Notifications Disabled at this time";
+  function channelBlocked(channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
+    return channel === "email" && !emailEnabled;
+  }
   var MATRIX_ROWS = Object.freeze([
     { key: "article", label: "Articles" },
     { key: "project", label: "Projects" },
     { key: "prompt", label: "Prompts and skills" },
     { key: "share", label: "Shares" },
-    { key: "news", label: "News they curate" }
+    { key: "news", label: "News" }
+    // sow-385: was "News they curate" (owner, 2026-09-21)
   ]);
-  function resolveMatrix(followNotify, globalNotify) {
+  function resolveMatrix(followNotify, globalNotify, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
     const f = normalizeNotify(followNotify);
     const g = normalizeNotify(globalNotify);
     const out = {};
-    for (const r of MATRIX_ROWS) out[r.key] = resolveNotify({ event: r.key, follow: f, global: g });
+    for (const r of MATRIX_ROWS) {
+      const cell = resolveNotify({ event: r.key, follow: f, global: g });
+      out[r.key] = emailEnabled ? cell : { ...cell, email: false };
+    }
     return out;
   }
-  function defaultMatrix(globalNotify) {
-    return resolveMatrix(void 0, globalNotify);
+  function defaultMatrix(globalNotify, opts) {
+    return resolveMatrix(void 0, globalNotify, opts);
   }
   function matrixToNotify(matrix) {
     const out = {};
@@ -15342,17 +15351,18 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return out;
   }
-  function toggleCell(matrix, key, channel) {
+  function toggleCell(matrix, key, channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
     const next = {};
     for (const r of MATRIX_ROWS) next[r.key] = { ...matrix && matrix[r.key] || {} };
+    if (channel === "email" && !emailEnabled) return next;
     if (next[key] && (channel === "api" || channel === "email")) next[key][channel] = !next[key][channel];
     return next;
   }
   function isCustomFollow(follow) {
     return !!normalizeNotify(follow && follow.notify);
   }
-  function summarizeFollow(follow, globalNotify) {
-    const matrix = resolveMatrix(follow && follow.notify, globalNotify);
+  function summarizeFollow(follow, globalNotify, opts) {
+    const matrix = resolveMatrix(follow && follow.notify, globalNotify, opts);
     return summarizeMatrix(matrix);
   }
   function summarizeMatrix(matrix) {
@@ -15366,6 +15376,26 @@ ${listStyleProseCss(".doc-blocks")}
   function notifyPayload(mode, matrix) {
     return mode === "custom" ? matrixToNotify(matrix) : null;
   }
+
+  // client-ui/src/elements/notify-pill.mjs
+  function notifyPillHtml({ rowKey, channel, label, on = false, disabled = false } = {}) {
+    const cell = `${esc(rowKey)}:${esc(channel)}`;
+    if (channelBlocked(channel)) {
+      return `<button type="button" class="pill blocked" data-cell="${cell}" aria-pressed="false" aria-disabled="true" data-tip="${esc(EMAIL_DISABLED_TIP)}" aria-label="${esc(label)}. ${esc(EMAIL_DISABLED_TIP)}">${esc(label)}</button>`;
+    }
+    return `<button type="button" class="pill${on ? " on" : ""}" data-cell="${cell}" aria-pressed="${!!on}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+  }
+  var BLOCKED_PILL_CSS = `
+  .pill.blocked, .pill.blocked:hover, .pill.blocked:focus-visible {
+    background:transparent; border-style:dashed; border-color:var(--line); color:var(--muted); cursor:not-allowed; }
+  .grid[data-locked] .pill.blocked { cursor:not-allowed; }
+  .pill.blocked { position:relative; }
+  .pill.blocked::after { content:attr(data-tip); position:absolute; right:calc(100% + 8px); top:50%; transform:translateY(-50%);
+    z-index:5; white-space:nowrap; padding:6px 10px; border-radius:8px; background:var(--fg); color:var(--panel);
+    font-size:12px; font-weight:600; line-height:1.3; letter-spacing:0; box-shadow:0 6px 18px rgba(0,0,0,.18);
+    opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease, visibility .12s ease; }
+  .pill.blocked:hover::after, .pill.blocked:focus-visible::after { opacity:1; visibility:visible; }
+`;
 
   // client-ui/src/elements/gbti-notify-modal.mjs
   var CHANNELS2 = [
@@ -15400,9 +15430,10 @@ ${listStyleProseCss(".doc-blocks")}
   .pill { border:1.5px solid var(--line); background:var(--hover); color:var(--muted); border-radius:999px; padding:6px 13px;
     font:inherit; font-weight:600; font-size:12.5px; cursor:pointer; min-width:64px; text-align:center; transition:background .12s ease, color .12s ease, border-color .12s ease; }
   .pill.on { background:var(--brand); border-color:var(--brand); color:#fff; }
-  .grid[data-locked] { opacity:.55; }
+  /* sow-385: dim the read-only grid's parts rather than the grid itself, so the blocked Email pill's tooltip (a
+     child of the grid) is not dimmed with it, which read at about 3.7:1. The blocked pill already looks unavailable. */
+  .grid[data-locked] .rl, .grid[data-locked] .pill:not(.blocked) { opacity:.55; }
   .grid[data-locked] .pill { cursor:default; }
-  .note { color:var(--muted); font-size:12.5px; margin:12px 2px 0; line-height:1.45; }
   .ft { display:flex; align-items:center; gap:10px; padding:14px 20px 18px; border-top:1.5px solid var(--line); }
   .ft .sp { flex:1; }
   button.act { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:10px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; }
@@ -15414,6 +15445,7 @@ ${listStyleProseCss(".doc-blocks")}
   button[disabled] { opacity:.6; cursor:default; }
   .msg { font-size:13px; padding:0 20px; color:var(--danger); } .msg:empty { padding:0; }
   .load { padding:34px 20px; text-align:center; color:var(--muted); font-size:14px; }
+${BLOCKED_PILL_CSS}
 `;
   var GbtiNotifyModal = class extends GbtiElement {
     static get observedAttributes() {
@@ -15471,7 +15503,7 @@ ${listStyleProseCss(".doc-blocks")}
       this.render();
     }
     _toggle(key, channel) {
-      if (this._mode !== "custom") return;
+      if (this._mode !== "custom" || channelBlocked(channel)) return;
       this._matrix = toggleCell(this._matrix, key, channel);
       this.render();
     }
@@ -15521,7 +15553,7 @@ ${listStyleProseCss(".doc-blocks")}
       const shown = custom ? this._matrix : defaultMatrix(this._global);
       const rowHtml = MATRIX_ROWS.map((r) => {
         const cell = shown[r.key] || {};
-        const pills = CHANNELS2.map((c) => `<button type="button" class="pill${cell[c.key] ? " on" : ""}" data-cell="${r.key}:${c.key}" aria-pressed="${!!cell[c.key]}">${esc(c.label)}</button>`).join("");
+        const pills = CHANNELS2.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key] })).join("");
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
@@ -15539,7 +15571,6 @@ ${listStyleProseCss(".doc-blocks")}
             ${modeCard("custom", "Set separately", "Choose exactly what this one member sends you.")}
           </div>
           <div class="grid"${custom ? "" : " data-locked"}>${rowHtml}</div>
-          <div class="note">Email arrives as one digest each morning, never one message per item.</div>
         </div>
         <div class="msg" aria-live="polite">${esc(this._err || "")}</div>
         <div class="ft">
@@ -15554,7 +15585,7 @@ ${listStyleProseCss(".doc-blocks")}
     _wire() {
       this.$$("[data-close]").forEach((el) => el.addEventListener("click", () => this.close()));
       this.$$("[data-mode]").forEach((el) => el.addEventListener("click", () => this._setMode(el.dataset.mode)));
-      this.$$("[data-cell]").forEach((el) => el.addEventListener("click", () => {
+      this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el) => el.addEventListener("click", () => {
         const [k, c] = el.dataset.cell.split(":");
         this._toggle(k, c);
       }));
@@ -24529,7 +24560,6 @@ ${listStyleProseCss(".doc-blocks")}
     font:inherit; font-weight:600; font-size:12.5px; cursor:pointer; min-width:70px; text-align:center; transition:background .12s ease, color .12s ease, border-color .12s ease; }
   .pill.on { background:var(--brand); border-color:var(--brand); color:#fff; }
   .pill[disabled] { opacity:.6; cursor:default; }
-  .note { padding:14px 24px 18px; color:var(--muted); font-size:12.5px; line-height:1.45; }
   .msg { font-size:13px; padding:0 24px 14px; } .msg:empty { padding:0; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:var(--danger); }
   /* the follows list */
   .frow { display:grid; grid-template-columns:auto 1fr auto auto; gap:14px; align-items:center; padding:14px 24px; width:100%; border:0; background:transparent; color:var(--fg); font:inherit; text-align:left; cursor:pointer; }
@@ -24546,6 +24576,7 @@ ${listStyleProseCss(".doc-blocks")}
   .empty a { color:var(--brand); font-weight:600; }
   .nudge { padding:18px 20px; border:1.5px dashed var(--line); border-radius:16px; background:var(--panel); font-size:14px; color:var(--muted); }
   .nudge a { color:var(--brand); font-weight:600; }
+${BLOCKED_PILL_CSS}
 `;
   var CHEV2 = `<svg class="chev" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var GbtiNotificationsSettings = class extends GbtiElement {
@@ -24587,7 +24618,7 @@ ${listStyleProseCss(".doc-blocks")}
       this.render();
     }
     async _toggleDefault(key, channel) {
-      if (!this._prefsOk) return;
+      if (!this._prefsOk || channelBlocked(channel)) return;
       const prev = this._matrix;
       this._matrix = toggleCell(this._matrix, key, channel);
       this.render();
@@ -24624,7 +24655,7 @@ ${listStyleProseCss(".doc-blocks")}
       const matrix = this._matrix || defaultMatrix(this._global);
       const matrixRows = MATRIX_ROWS.map((r) => {
         const cell = matrix[r.key] || {};
-        const pills = CHANNELS3.map((c) => `<button type="button" class="pill${cell[c.key] ? " on" : ""}" data-cell="${r.key}:${c.key}" aria-pressed="${!!cell[c.key]}" ${this._prefsOk ? "" : "disabled"}>${esc(c.label)}</button>`).join("");
+        const pills = CHANNELS3.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk })).join("");
         return `<div class="mrow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const follows = this._follows || [];
@@ -24643,9 +24674,8 @@ ${listStyleProseCss(".doc-blocks")}
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
       this.set(this.css(CSS40) + `
       <section class="sec">
-        <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives when someone you follow publishes. In app is the header bell; email is a single morning digest. These apply to every follow unless you set one separately below.</p></div>
+        <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
-        <div class="note">Email arrives as one digest each morning, never one message per item.</div>
         ${prefsNote}
         ${msg}
       </section>
@@ -24656,7 +24686,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._wire();
     }
     _wire() {
-      this.$$("[data-cell]").forEach((el) => el.addEventListener("click", () => {
+      this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el) => el.addEventListener("click", () => {
         const [k, c] = el.dataset.cell.split(":");
         this._toggleDefault(k, c);
       }));

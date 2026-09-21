@@ -33,6 +33,14 @@ export const NOTIFY_CHANNELS = ['api', 'email'];
 // therefore resolves to no email, never to email.
 export const SYSTEM_NOTIFY_DEFAULT = Object.freeze({ api: true, email: false });
 
+// sow-385, owner ruling 2026-09-21: "We are not going to support email based notifications right now." While this
+// is false the settings surfaces show Email blocked and OFF for everyone (client-ui/src/notify-matrix-core.mjs), and
+// the publish step that queues follow-alert emails queues nothing (scripts/enqueue-notifications.mjs). Stored email
+// choices are left in place, dormant. resolveNotify below is deliberately NOT gated: it states what a member ASKED
+// for, and the email path it feeds stays tested (with the switch on for those tests only), so bringing email back
+// is flipping this one value rather than rebuilding the feature.
+export const EMAIL_NOTIFICATIONS_ENABLED = false;
+
 function isBool(v) {
   return v === true || v === false;
 }

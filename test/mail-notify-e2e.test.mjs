@@ -75,7 +75,7 @@ test('E2E: fan-out enqueues only the email-opted-in mailable follower, and the d
   const res = await enqueueNotifications({
     argv: ['--apply', '--added', 'members/alice/posts/x/index.md'],
     env: { SITE_ORIGIN: 'https://gbti.network' },
-    deps: { kv, readFile: readFileFor },
+    deps: { kv, readFile: readFileFor, emailEnabled: true }, // sow-385: the email path, switched on for this test
     now: at(1_000_000),
   });
   assert.equal(res.notified, 1, 'exactly one follower has the email channel on and is mailable');
@@ -123,6 +123,7 @@ test('E2E: a members-only (Mode A) article is leak-gated out of the fan-out enti
     deps: {
       kv,
       readFile: (rel) => (rel === 'members/alice/posts/secret/index.md' ? modeA : readFileFor(rel)),
+      emailEnabled: true, // sow-385: switched on, so this still tests the leak gate and not the off switch
     },
     now: at(1_000_000),
   });
@@ -140,7 +141,7 @@ test('E2E: the send gate stays fail-closed -- an enqueued notification sends NOT
   await enqueueNotifications({
     argv: ['--apply', '--added', 'members/alice/posts/x/index.md'],
     env: { SITE_ORIGIN: 'https://gbti.network' },
-    deps: { kv, readFile: readFileFor },
+    deps: { kv, readFile: readFileFor, emailEnabled: true }, // sow-385: the email path, switched on for this test
     now: at(1_000_000),
   });
 
@@ -173,10 +174,33 @@ test('E2E READ-ERROR RESILIENCE: an unreadable subscriber record is COUNTED and 
   const res = await enqueueNotifications({
     argv: ['--apply', '--added', 'members/alice/posts/x/index.md'],
     env: { SITE_ORIGIN: 'https://gbti.network' },
-    deps: { kv: throwingKv, readFile: readFileFor },
+    deps: { kv: throwingKv, readFile: readFileFor, emailEnabled: true },
     now: at(1_000_000),
   });
   assert.equal(res.readErrors, 1, 'the unreadable subscriber record is COUNTED, not silently dropped');
   assert.equal(res.notified, 1, 'the readable, opted-in follower (11) is still notified');
   assert.deepEqual(await readPendingIndex(base, 'notify:post:alice:x'), ['hA'], 'follower 11 enqueued; 22 skipped fail-closed pending a re-run');
+});
+
+// sow-385 (owner, 2026-09-21): email notifications are switched off for now. The same setup as the first E2E test,
+// a follower who turned the article email ON and is mailable, but WITHOUT the test-only switch: nothing is queued
+// and nothing is written. Without this test the four above, which switch email on for themselves, would all stay
+// green if the off switch were deleted.
+test('sow-385: with email notifications switched off, a publish queues nothing and writes nothing', async () => {
+  const kv = makeKV();
+  await kv.put('followers:9001', JSON.stringify({ followers: [{ githubId: '11', addedAt: 1 }], updatedAt: 1 }));
+  await seedMember(kv, { hash: 'hA', githubId: '11' });
+  await kv.put('prefs:11', JSON.stringify({ notify: { article: { email: true } } }));
+  const before = [...kv.m.keys()].sort();
+  const res = await enqueueNotifications({
+    argv: ['--apply', '--added', 'members/alice/posts/x/index.md'],
+    env: { SITE_ORIGIN: 'https://gbti.network' },
+    deps: { kv, readFile: readFileFor },
+    now: at(1_000_000),
+  });
+  assert.equal(res.disabled, true);
+  assert.equal(res.enqueued, 0);
+  assert.equal(res.notified, 0);
+  assert.deepEqual([...kv.m.keys()].sort(), before, 'no key was written: no issue, no pending index, no send record');
+  assert.deepEqual(await readPendingIndex(kv, 'notify:post:alice:x'), []);
 });

@@ -46,6 +46,7 @@ import { normalizeFollows } from '../membership/member-follows.mjs';
 import { normalizePrefs } from '../membership/member-prefs.mjs';
 import { MAIL_SUBSCRIBER_PREFIX } from '../membership/mail-suppress.mjs';
 import { buildNotificationIssue, selectEmailRecipients, eventForType } from '../membership/mail-notify.mjs';
+import { EMAIL_NOTIFICATIONS_ENABLED } from '../membership/notify-resolve.mjs'; // sow-385: email notifications are off for now
 import { enqueueIssue } from '../workers/signup/mail-store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -171,6 +172,13 @@ async function resolveRecipients(kv, item, { reverse, hashById }) {
 
 export async function main({ argv = process.argv.slice(2), root = ROOT, env = process.env, fetchImpl = globalThis.fetch, deps = {}, now = Date.now } = {}) {
   const { apply, added: argvAdded, before: cliBefore, after: cliAfter } = parseArgs(argv);
+  // sow-385 (owner, 2026-09-21): "We are not going to support email based notifications right now." Nothing is
+  // queued while the switch is off, before any file or KV is touched, and the publish step still exits cleanly.
+  // `deps.emailEnabled` lets the tests keep proving the email path for the day it is switched back on.
+  if (!(deps.emailEnabled ?? EMAIL_NOTIFICATIONS_ENABLED)) {
+    console.log('enqueue-notifications: email notifications are switched off (sow-385), nothing queued.');
+    return { enqueued: 0, notified: 0, items: [], disabled: true };
+  }
   const readFile = deps.readFile ?? ((rel) => {
     try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; }
   });

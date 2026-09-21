@@ -8,7 +8,8 @@
 // saves notify:null (clears the override); "Set separately" saves the full edited matrix. An absent override
 // resolves, per channel, to the member's global default and then the system default (in-app on, email off).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { MATRIX_ROWS, defaultMatrix, resolveMatrix, toggleCell, notifyPayload } from '../notify-matrix-core.mjs';
+import { MATRIX_ROWS, defaultMatrix, resolveMatrix, toggleCell, notifyPayload, channelBlocked } from '../notify-matrix-core.mjs';
+import { BLOCKED_PILL_CSS, notifyPillHtml } from './notify-pill.mjs'; // sow-385: email notifications are off for now
 
 const CHANNELS = [
   { key: 'api', label: 'In app' },
@@ -43,9 +44,10 @@ const CSS = `
   .pill { border:1.5px solid var(--line); background:var(--hover); color:var(--muted); border-radius:999px; padding:6px 13px;
     font:inherit; font-weight:600; font-size:12.5px; cursor:pointer; min-width:64px; text-align:center; transition:background .12s ease, color .12s ease, border-color .12s ease; }
   .pill.on { background:var(--brand); border-color:var(--brand); color:#fff; }
-  .grid[data-locked] { opacity:.55; }
+  /* sow-385: dim the read-only grid's parts rather than the grid itself, so the blocked Email pill's tooltip (a
+     child of the grid) is not dimmed with it, which read at about 3.7:1. The blocked pill already looks unavailable. */
+  .grid[data-locked] .rl, .grid[data-locked] .pill:not(.blocked) { opacity:.55; }
   .grid[data-locked] .pill { cursor:default; }
-  .note { color:var(--muted); font-size:12.5px; margin:12px 2px 0; line-height:1.45; }
   .ft { display:flex; align-items:center; gap:10px; padding:14px 20px 18px; border-top:1.5px solid var(--line); }
   .ft .sp { flex:1; }
   button.act { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:10px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; }
@@ -57,6 +59,7 @@ const CSS = `
   button[disabled] { opacity:.6; cursor:default; }
   .msg { font-size:13px; padding:0 20px; color:var(--danger); } .msg:empty { padding:0; }
   .load { padding:34px 20px; text-align:center; color:var(--muted); font-size:14px; }
+${BLOCKED_PILL_CSS}
 `;
 
 class GbtiNotifyModal extends GbtiElement {
@@ -113,7 +116,7 @@ class GbtiNotifyModal extends GbtiElement {
   }
 
   _toggle(key, channel) {
-    if (this._mode !== 'custom') return;
+    if (this._mode !== 'custom' || channelBlocked(channel)) return; // sow-385: email notifications are off
     this._matrix = toggleCell(this._matrix, key, channel);
     this.render();
   }
@@ -160,7 +163,7 @@ class GbtiNotifyModal extends GbtiElement {
     const shown = custom ? this._matrix : defaultMatrix(this._global);
     const rowHtml = MATRIX_ROWS.map((r) => {
       const cell = shown[r.key] || {};
-      const pills = CHANNELS.map((c) => `<button type="button" class="pill${cell[c.key] ? ' on' : ''}" data-cell="${r.key}:${c.key}" aria-pressed="${!!cell[c.key]}">${esc(c.label)}</button>`).join('');
+      const pills = CHANNELS.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key] })).join('');
       return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
     }).join('');
     const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? ' on' : ''}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
@@ -178,7 +181,6 @@ class GbtiNotifyModal extends GbtiElement {
             ${modeCard('custom', 'Set separately', 'Choose exactly what this one member sends you.')}
           </div>
           <div class="grid"${custom ? '' : ' data-locked'}>${rowHtml}</div>
-          <div class="note">Email arrives as one digest each morning, never one message per item.</div>
         </div>
         <div class="msg" aria-live="polite">${esc(this._err || '')}</div>
         <div class="ft">
@@ -194,7 +196,7 @@ class GbtiNotifyModal extends GbtiElement {
   _wire() {
     this.$$('[data-close]').forEach((el) => el.addEventListener('click', () => this.close()));
     this.$$('[data-mode]').forEach((el) => el.addEventListener('click', () => this._setMode(el.dataset.mode)));
-    this.$$('[data-cell]').forEach((el) => el.addEventListener('click', () => { const [k, c] = el.dataset.cell.split(':'); this._toggle(k, c); }));
+    this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el) => el.addEventListener('click', () => { const [k, c] = el.dataset.cell.split(':'); this._toggle(k, c); }));
     this.on('[data-save]', 'click', () => this._save());
     this.on('[data-unfollow]', 'click', () => this._unfollow());
     if (!this._escBound) { this._escBound = (e) => { if (e.key === 'Escape' && this.hasAttribute('open')) this.close(); }; document.addEventListener('keydown', this._escBound); }

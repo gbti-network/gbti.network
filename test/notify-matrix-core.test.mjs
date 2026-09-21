@@ -11,7 +11,14 @@ import {
   summarizeFollow,
   summarizeMatrix,
   notifyPayload,
+  channelBlocked,
+  EMAIL_DISABLED_TIP,
+  EMAIL_NOTIFICATIONS_ENABLED,
 } from '../client-ui/src/notify-matrix-core.mjs';
+
+// sow-385: email notifications are switched off for now. The tests of email-ON behaviour below pass this so they keep
+// proving the model for the day email returns; the sow-385 tests at the bottom prove the off state.
+const EMAIL_ON = { emailEnabled: true };
 
 test('MATRIX_ROWS carries the five design rows in order', () => {
   assert.deepEqual(
@@ -19,7 +26,7 @@ test('MATRIX_ROWS carries the five design rows in order', () => {
     ['article', 'project', 'prompt', 'share', 'news'],
   );
   assert.equal(MATRIX_ROWS.find((r) => r.key === 'prompt').label, 'Prompts and skills');
-  assert.equal(MATRIX_ROWS.find((r) => r.key === 'news').label, 'News they curate');
+  assert.equal(MATRIX_ROWS.find((r) => r.key === 'news').label, 'News'); // sow-385: was "News they curate"
 });
 
 test('an absent global default resolves every row to the system default (api on, email off)', () => {
@@ -27,17 +34,17 @@ test('an absent global default resolves every row to the system default (api on,
   for (const r of MATRIX_ROWS) assert.deepEqual(m[r.key], { api: true, email: false }, r.key);
 });
 
-test('the global default is read per row and email stays off unless the member set it', () => {
-  const m = defaultMatrix({ share: { api: false }, article: { email: true } });
+test('the global default is read per row and email stays off unless the member set it (email switched on)', () => {
+  const m = defaultMatrix({ share: { api: false }, article: { email: true } }, EMAIL_ON);
   assert.deepEqual(m.share, { api: false, email: false }); // api overridden off, email fails closed off
   assert.deepEqual(m.article, { api: true, email: true }); // api falls through to system on, email turned on
   assert.deepEqual(m.project, { api: true, email: false }); // untouched -> system default
 });
 
-test('a per-follow override wins per channel, then the global default, then the system default', () => {
+test('a per-follow override wins per channel, then the global default, then the system default (email switched on)', () => {
   const global = { article: { api: false, email: true } };
   const follow = { article: { api: true } }; // override only api; email must fall through to the global
-  const m = resolveMatrix(follow, global);
+  const m = resolveMatrix(follow, global, EMAIL_ON);
   assert.deepEqual(m.article, { api: true, email: true });
   assert.deepEqual(m.project, { api: true, email: false }); // neither set -> system default
 });
@@ -53,13 +60,13 @@ test('matrixToNotify serializes all five rows explicitly, coercing to booleans',
   });
 });
 
-test('toggleCell flips one channel and never mutates the input', () => {
+test('toggleCell flips one channel and never mutates the input (email switched on)', () => {
   const base = matrixToNotify({}); // all off
-  const next = toggleCell(base, 'article', 'email');
+  const next = toggleCell(base, 'article', 'email', EMAIL_ON);
   assert.equal(next.article.email, true);
   assert.equal(base.article.email, false, 'input untouched');
   assert.equal(next.project.email, false, 'other rows untouched');
-  const back = toggleCell(next, 'article', 'email');
+  const back = toggleCell(next, 'article', 'email', EMAIL_ON);
   assert.equal(back.article.email, false);
 });
 
@@ -103,4 +110,43 @@ test('notifyPayload returns a full object for custom and null for default (clear
   const matrix = matrixToNotify({ article: { api: true } });
   assert.deepEqual(notifyPayload('custom', matrix).article, { api: true, email: false });
   assert.equal(notifyPayload('default', matrix), null);
+});
+
+// sow-385 (owner, 2026-09-21): "We are not going to support email based notifications right now."
+
+test('sow-385: email notifications are switched off, and the tooltip is the owner\'s wording verbatim', () => {
+  assert.equal(EMAIL_NOTIFICATIONS_ENABLED, false);
+  assert.equal(EMAIL_DISABLED_TIP, 'Email Notifications Disabled at this time');
+});
+
+test('sow-385: a member who stored email ON reads OFF, in the default grid and in a per-follow override', () => {
+  const global = { article: { api: true, email: true }, share: { email: true } };
+  const d = defaultMatrix(global);
+  for (const r of MATRIX_ROWS) assert.equal(d[r.key].email, false, `${r.key} email reads off`);
+  assert.equal(d.article.api, true, 'in app is untouched');
+  const f = resolveMatrix({ project: { email: true } }, global);
+  for (const r of MATRIX_ROWS) assert.equal(f[r.key].email, false, `override ${r.key} email reads off`);
+  // Control: the same stored values with email switched on DO read on, so the mask is what made them off.
+  assert.equal(defaultMatrix(global, EMAIL_ON).article.email, true);
+});
+
+test('sow-385: the email channel does not toggle, and in app still does', () => {
+  const base = defaultMatrix(undefined);
+  const tried = toggleCell(base, 'article', 'email');
+  assert.equal(tried.article.email, false, 'email stays off');
+  assert.notEqual(tried, base, 'still a new matrix, never the input');
+  assert.equal(toggleCell(base, 'article', 'api').article.api, false, 'in app toggles as before');
+});
+
+test('sow-385: only email is blocked, and only while it is switched off', () => {
+  assert.equal(channelBlocked('email'), true);
+  assert.equal(channelBlocked('api'), false);
+  assert.equal(channelBlocked('email', EMAIL_ON), false);
+});
+
+test('sow-385: follow summaries never mention email while it is off, whatever was stored', () => {
+  const global = { article: { email: true }, share: { email: true } };
+  assert.equal(summarizeFollow({}, global), 'Everything, in app only');
+  assert.equal(summarizeFollow({ notify: { news: { api: false, email: true } } }, global).includes('email'), false);
+  assert.equal(summarizeFollow({}, global, EMAIL_ON), 'Everything, in app and by email', 'control: with email on it would');
 });
