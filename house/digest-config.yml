@@ -77,7 +77,7 @@
 #               system reads, which takes about a minute; a hand edit pushed to the repository waits for the
 #               next scheduled sync.
 cta:
-  enabled: true
+  enabled: false
   body: >-
     A {plan} membership adds comments on any item, the members Discord, and publishing your own articles,
     projects and prompts: members first, public after editorial review.
