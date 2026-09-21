@@ -20,7 +20,7 @@
 
 import { getIssue, putIssue, enqueueIssue, getSubscriber } from './mail-store.mjs';
 import { composeIssue, shouldSend, WELCOME_NOTE } from '../../membership/mail-digest.mjs';
-import { normalizeContent, normalizeNews, weeklyIssueId, membersIssueId, memberShareEntry, welcomeIssueId, weeklyEligible, isWelcomed } from '../../membership/mail-compile-core.mjs';
+import { normalizeContent, normalizeNews, weeklyIssueId, membersIssueId, memberShareEntry, welcomeIssueId, weeklyEligible, isWelcomed, daysSinceLastIssue } from '../../membership/mail-compile-core.mjs';
 import { canReceive, wantsDigest } from '../../membership/mail-subscriber.mjs';
 import { MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress.mjs';
 import { queryItems as kvQueryItems } from './news/src/store.mjs';
@@ -503,6 +503,9 @@ export async function compileWeeklyIssue(env, {
   // sow-312: both injectable so the two-edition split is unit-tested with fakes and no network.
   readEntitlement = defaultReadEntitlement,
   readMemberShares = enumerateShares,
+  // The SCHEDULED compile passes 6 (index.mjs): an issue within that many days of the last one is held for a
+  // week, so moving the send day never mails two issues back to back. Absent (the admin's manual compile), no hold.
+  minGapDays = null,
 } = {}) {
   if (!kv) return { ok: false, reason: 'no kv' };
   const nowMs = Number(now());
@@ -513,6 +516,12 @@ export async function compileWeeklyIssue(env, {
   let composed = false;
   let regimeForFilter = null;
   if (!issue) {
+    if (Number.isFinite(minGapDays) && minGapDays > 0) {
+      const gap = daysSinceLastIssue(await listPriorIssueIds(kv, { currentIssueId: issueId }), issueId);
+      if (gap != null && gap < minGapDays) {
+        return { ok: true, issueId, composed: false, skipped: true, reason: `held: the last issue went out ${gap} day(s) ago` };
+      }
+    }
     const [contentEntries, newsEntries, regime] = await Promise.all([
       gatherContentEntries(env, { fetchImpl, siteUrl }),
       gatherNewsEntries(env, { kv, queryItems }),

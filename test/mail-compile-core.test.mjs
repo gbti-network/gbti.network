@@ -221,7 +221,7 @@ test('newsBlurb leaves a sentence that merely BEGINS "The post" alone (both halv
   assert.equal(newsBlurb(s), s, 'the anchor needs "appeared first on" too, or ordinary prose gets eaten');
 });
 
-// The owner moved the digest to 7 AM Central on 2026-08-25, every week, permanently (it runs Monday; see
+// The owner moved the digest to 7 AM Central on 2026-08-25, every week, permanently (Tuesday since 2026-09-21; see
 // test/digest-send-day.test.mjs). The HOUR is what these cases test, so the fixture dates' weekday is incidental. That hour is not
 // expressible as one UTC cron, so two are declared and this decides which is real. The dates below are the
 // two sides of a real US daylight-saving boundary, chosen so a naive fixed-offset implementation fails.

@@ -30,12 +30,12 @@ export const REPORT_HOUR = 9;
 
 /**
  * Is it time to email the performance report? Friday from 09:00 America/Chicago, then Saturday and Sunday as a
- * catch-up for a Friday the drain tick missed. Monday through Thursday is false, which is what stops a report
- * racing the Monday send: by Monday morning the newest issue is the one still going out.
+ * catch-up for a Friday the drain tick missed. Monday through Thursday is false, which keeps a report clear of
+ * the Tuesday send: by Tuesday morning the newest issue is the one still going out.
  *
  * The weekday is read on the Chicago clock here rather than in a cron expression on purpose. Cloudflare numbers
  * cron weekdays from Sunday = 1, so the standard Friday `5` would fire on Thursday; that off-by-one is exactly how
- * the digest itself came to go out on Monday while its comments said Tuesday.
+ * the digest went out on Monday for a month while its comments said Tuesday.
  *
  * Fails OPEN, like isCentralDigestHour: an unresolvable zone sends the report when the issue completes, which is
  * the behaviour this replaced. It decides only when the owner hears the numbers, never who receives anything.

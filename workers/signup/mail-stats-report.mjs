@@ -1,6 +1,6 @@
 // The weekly-digest stats report, the IO half. Snapshots a completed issue's send totals into a durable record,
 // reads the anonymous open + click aggregates, and emails the owner a 4-week performance summary on the Friday
-// after the Monday send, at 09:00 America/Chicago (owner, 2026-09-21: sent minutes after the send, the report
+// after the Tuesday send, at 09:00 America/Chicago (owner, 2026-09-21: sent minutes after the send, the report
 // showed an open rate nobody had had time to move). FAIL-SOFT throughout, like coupon-alert.mjs: it runs on the
 // drain tick and must never throw or gate the send path.
 //

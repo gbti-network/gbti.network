@@ -111,7 +111,7 @@ export function webFooterHtml(p, { track } = {}) {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:28px 28px 24px">`
     + `<div style="height:1px;background-color:${p.hairline};font-size:0;line-height:0">&nbsp;</div>`
-    + line('This is the web edition of the GBTI Network weekly digest. A new issue goes out every Monday.', 14)
+    + line('This is the web edition of the GBTI Network weekly digest. A new issue goes out every Tuesday.', 14)
     + line(`${link(t('/feeds/', 'footer-feed'), 'Open the feed')} &middot; ${link(t('/', 'footer-home'), 'gbti.network')}`, 9)
     + `</td></tr></table>`;
 }

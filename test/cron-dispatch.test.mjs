@@ -12,9 +12,9 @@ import worker, { resolveCronJob } from '../workers/signup/index.mjs';
 
 // The five strings in workers/signup/wrangler.toml under [env.production.triggers], which is now the only
 // trigger block (the bare one was emptied on 2026-08-24 after it spawned a second Worker on live data).
-// The two weekly entries (Monday: Cloudflare reads `2` as Monday) are ONE job under two UTC times, because 7 AM Central is 12:00 UTC in summer and
+// The two weekly entries (Tuesday: Cloudflare reads `3` as Tuesday) are ONE job under two UTC times, because 7 AM Central is 12:00 UTC in summer and
 // 13:00 UTC in winter; the 5-minute tick runs the syndication drain AND the mail drain, composed.
-const CONFIGURED = ['0 * * * *', '30 * * * *', '*/5 * * * *', '0 12 * * 2', '0 13 * * 2'];
+const CONFIGURED = ['0 * * * *', '30 * * * *', '*/5 * * * *', '0 12 * * 3', '0 13 * * 3'];
 
 test('cron dispatch: every configured schedule routes, and to four distinct jobs', () => {
   const labels = CONFIGURED.map((c) => resolveCronJob(c)?.label);
@@ -22,7 +22,7 @@ test('cron dispatch: every configured schedule routes, and to four distinct jobs
     'news ingest', 'news image backfill', 'syndication + mail drain',
     'weekly digest compile', 'weekly digest compile',
   ]);
-  // Five schedules, FOUR jobs. The deliberate collision is the pair of Monday triggers; every other schedule
+  // Five schedules, FOUR jobs. The deliberate collision is the pair of Tuesday triggers; every other schedule
   // still has to be its own job, which is what the removed catch-all did not guarantee.
   assert.equal(new Set(labels).size, 4, 'the only shared job is the weekly digest, under its two UTC times');
   for (const c of CONFIGURED) assert.equal(typeof resolveCronJob(c).run, 'function');
@@ -56,19 +56,20 @@ test('cron dispatch: an unrecognised schedule runs NOTHING and reports it', asyn
 test('cron dispatch: BOTH weekly-digest schedules wire to the compile, and the retired one does not', () => {
   // SOW-166 wired the weekly digest to a single 0 14 * * 2. The owner moved the send to 7 AM Central on
   // 2026-08-25, which is not expressible as one UTC cron, so it became two. Both must reach the compile.
-  for (const cron of ['0 12 * * 2', '0 13 * * 2']) {
+  // The owner then moved the day to Tuesday on 2026-09-21, which under Cloudflare's numbering is `3`.
+  for (const cron of ['0 12 * * 3', '0 13 * * 3']) {
     const job = resolveCronJob(cron);
     assert.equal(job?.label, 'weekly digest compile', `${cron} routes to the compile`);
     assert.equal(typeof job?.run, 'function');
   }
-  // And the old slot is genuinely gone rather than left wired alongside them, which would send at 9 AM Central
-  // as well as at 7 and would look exactly like the digest firing twice.
+  // And the old slots are genuinely gone rather than left wired alongside them, which would send twice a week.
   assert.equal(resolveCronJob('0 14 * * 2'), null, 'the retired 14:00 UTC slot no longer resolves');
+  for (const cron of ['0 12 * * 2', '0 13 * * 2']) assert.equal(resolveCronJob(cron), null, `the retired Monday slot ${cron} no longer resolves`);
 });
 
 test('cron dispatch: a digest-SHAPED but unconfigured cron still runs NOTHING, never a silent syndicate', async () => {
   // The protection the catch-all removal buys is unchanged: a plausible-looking weekly cron that was NOT added
-  // to CRON_JOBS (here `4`, which Cloudflare reads as Wednesday, not the configured Monday) resolves to null and schedules no work,
+  // to CRON_JOBS (here `4`, which Cloudflare reads as Wednesday, not the configured Tuesday) resolves to null and schedules no work,
   // rather than silently running the syndication drain in its place.
   assert.equal(resolveCronJob('0 14 * * 4'), null, 'an unconfigured digest-shaped cron does not resolve');
   const scheduledWork = [];

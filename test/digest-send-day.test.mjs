@@ -6,6 +6,8 @@
 // ids, which are the UTC compile date: weekly-2026-09-07, -14 and -21 are all Mondays. Copy shipped on
 // 2026-09-20 then promised subscribers "Tuesday mornings". Nothing compared the two, so nothing failed.
 //
+// The same day, the owner moved the send to TUESDAY, which under Cloudflare's numbering is `3`.
+//
 // This reads the cron from wrangler.toml (the file that is deployed), converts it with Cloudflare's numbering,
 // and requires each subscriber-facing sentence to name that day and no other. Change either side alone and it
 // goes red.
@@ -48,10 +50,10 @@ function digestSendDay() {
 
 const namedDays = (text) => WEEKDAYS.filter((d) => new RegExp(`\\b${d}s?\\b`).test(text));
 
-test('the digest cron reads as Monday under Cloudflare numbering', () => {
-  // Pinned as well as derived: the owner kept Monday on 2026-09-21. Moving the send day is a decision, and this
+test('the digest cron reads as Tuesday under Cloudflare numbering', () => {
+  // Pinned as well as derived: the owner set Tuesday on 2026-09-21. Moving the send day is a decision, and this
   // line is where it gets written down.
-  assert.equal(digestSendDay(), 'Monday');
+  assert.equal(digestSendDay(), 'Tuesday');
 });
 
 test('the confirmation email names the day the cron sends, and no other', () => {

@@ -2,7 +2,7 @@ name: KV usage report
 
 # Weekly (and on-demand) Workers KV usage digest. Pulls KV operations from Cloudflare's GraphQL analytics
 # (by namespace, by day) and emails the admin address, so we can see where KV writes are going and catch a
-# trend early. Scheduled for Wednesday, two days after the Monday digest send, which is the heaviest write
+# trend early. Scheduled for Wednesday, the day after the Tuesday digest send, which is the heaviest write
 # day. The account moved to Workers Paid on 2026-08-26 after the free 1,000-writes/day cap blocked it; this
 # report is the recurring check-in on that. See .data/ops/cloudflare-ops/kv-worker-ops.md.
 #
@@ -12,7 +12,7 @@ name: KV usage report
 
 on:
   schedule:
-    - cron: '17 13 * * 3'   # Wednesdays 13:17 UTC (off the hour), after the Monday send
+    - cron: '17 13 * * 3'   # Wednesdays 13:17 UTC (off the hour), after the Tuesday send
   workflow_dispatch:
     inputs:
       days:

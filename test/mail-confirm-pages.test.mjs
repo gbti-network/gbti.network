@@ -105,7 +105,7 @@ test('the full stop page tells the reader the two things it is for', async () =>
   const kv = kvWithPending();
   const html = await (await handleConfirm(new Request(confirmUrl, { method: 'POST' }), {}, { kv, sendAdminAlert: async () => true })).text();
   // When it comes, and what to do when it does not appear. Without these it merely confirms twice.
-  assert.match(html, /Monday mornings/);
+  assert.match(html, /Tuesday mornings/);
   assert.match(html, /spam folder/);
 });
 

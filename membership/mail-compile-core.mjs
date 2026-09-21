@@ -176,6 +176,24 @@ export function normalizeNews(entries) {
  * makes enqueueIssue idempotent (compile once, Q12). Throws on a non-finite time rather than minting a
  * `weekly-NaN` id that would silently fork the issue.
  */
+/**
+ * Whole days from the newest EARLIER issue to this one, read from the ids (each ends in its UTC compile date), or
+ * null when there is no earlier issue or an id carries no date. The scheduled compile holds a week that would land
+ * within a few days of the last issue: moving the send day from Monday to Tuesday on 2026-09-21 would otherwise
+ * have mailed two issues on consecutive mornings.
+ */
+export function daysSinceLastIssue(priorIds, issueId) {
+  const day = (id) => {
+    const m = /(\d{4})-(\d{2})-(\d{2})$/.exec(str(id));
+    return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
+  };
+  const current = day(issueId);
+  if (!Number.isFinite(current)) return null;
+  const earlier = (Array.isArray(priorIds) ? priorIds : []).map(day).filter((d) => Number.isFinite(d) && d < current);
+  if (!earlier.length) return null;
+  return Math.round((current - Math.max(...earlier)) / 86400000);
+}
+
 export function weeklyIssueId(nowMs) {
   return `weekly-${utcDateStamp(nowMs, 'weeklyIssueId')}`;
 }
@@ -186,7 +204,7 @@ export function weeklyIssueId(nowMs) {
  *
  * Cloudflare cron is UTC and has no daylight handling, so 7 AM Central is 12:00 UTC from March to November and
  * 13:00 UTC from November to March. BOTH are declared as triggers and this is what decides which of them is the
- * real run on any given Monday. One fixed UTC cron cannot do it: it is correct for half the year and an hour
+ * real run on any given Tuesday. One fixed UTC cron cannot do it: it is correct for half the year and an hour
  * out for the other half, and the hour it is wrong is the hour nobody is watching.
  *
  * IT FAILS OPEN ON PURPOSE, and an asymmetry in the caller is what makes that safe rather than sloppy.

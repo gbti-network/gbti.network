@@ -70,7 +70,7 @@ export function pageResponse(title, bodyHtml, status = 200) {
 //
 // THE COPY HAS TO DO REAL WORK RATHER THAN CONFIRM TWICE. The headline already says it worked, so the lines
 // underneath tell the reader what they could not otherwise know: when the mail arrives, and what to do if it
-// does not appear. Monday is honest, not aspirational: the compile runs on the Monday crons at 7 AM Central.
+// does not appear. Tuesday is honest, not aspirational: the compile runs on the Tuesday crons at 7 AM Central.
 //
 // NO NAVIGATION, NO FOOTER, NO LINKS OUT, by the same reference. The page is an ending, and every link on it
 // is an invitation to leave before reading the two lines that matter.

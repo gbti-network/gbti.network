@@ -426,13 +426,13 @@ export async function handleConfirm(request, env, deps = {}) {
   await sendNewSubscriberAlert(env, { email, source: 'anon', at: new Date(now()).toISOString() }, { sendEmail: sendAdminAlert });
 
   // sow-270 Phase 6: the full stop. The headline already says it worked, so the lines underneath do the work
-  // the reader cannot do for themselves: when it arrives, and what to do if it does not appear. Monday is a
-  // fact rather than a hope, being the day the compile cron runs (Cloudflare reads the cron's `2` as Monday;
+  // the reader cannot do for themselves: when it arrives, and what to do if it does not appear. Tuesday is a
+  // fact rather than a hope, being the day the compile cron runs (Cloudflare reads the cron's `3` as Tuesday;
   // test/digest-send-day.test.mjs holds this copy to the cron).
   return panelResponse('Subscribed', {
     heading: 'Thank you, and welcome',
     lines: [
-      'The GBTI Network digest goes out on Monday mornings, United States Central Time.',
+      'The GBTI Network digest goes out on Tuesday mornings, United States Central Time.',
       'If you cannot find it, look in your spam folder and mark it as not spam, so the next one arrives where you expect it.',
     ],
   });

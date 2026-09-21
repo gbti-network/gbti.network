@@ -135,7 +135,7 @@ export const SECTION_LABELS = {
 //
 // THEY SAY "SINCE THE LAST ISSUE", NOT "THIS WEEK", and that is not a style preference. The issue is
 // compiled once and frozen, then the send SMOOTHS across a rate budget, so the last recipient may open the
-// same frozen issue days after the first. "This week" is true for whoever reads it on Monday morning and
+// same frozen issue days after the first. "This week" is true for whoever reads it on Tuesday morning and
 // drifts for everyone behind them in the queue. "Since the last issue" is anchored to the cadence rather
 // than to the reading date, so it stays true across the whole spread.
 //
@@ -609,7 +609,7 @@ export function hasContent(issue) {
 /**
  * THE SEND GATE. Always true.
  *
- * Owner ruling, sow-166, 2026-08-21: literal always-send. The digest goes out on its Monday cadence
+ * Owner ruling, sow-166, 2026-08-21: literal always-send. The digest goes out on its Tuesday cadence
  * regardless of what a given week produced, and a thin week shows the sections with their notes rather than
  * being skipped. Both @SowMaster and I recommended keeping a floor that skipped a fully-empty issue, and the
  * owner overruled it on the ground that it is not a reachable state: the news worker ingests daily, so every
