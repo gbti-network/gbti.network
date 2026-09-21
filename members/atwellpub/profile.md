@@ -12,7 +12,6 @@ skills:
   - Python
   - CSS
   - HTML
-  - Claude Code
 roles:
   - systems-administration
   - process-development
