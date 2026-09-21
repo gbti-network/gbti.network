@@ -18,6 +18,13 @@ import {
   normalizeToken, collectCited, collectDocuments, checkSowNumbers,
 } from '../scripts/check-sow-numbers.mjs';
 
+// PHANTOM NUMBERS ARE ASSEMBLED AT RUNTIME, NEVER WRITTEN AS LITERALS. The guard scans every file at
+// origin/main, this one included, so a fixture written as a literal sow token IS a citation: on the day this
+// file first landed, its own fixtures made the real check report two undocumented numbers and offer a
+// four-digit number as the next free one. Build any number that must not exist with phantom(), and keep real numbers
+// (ones that have documents) as the only literals in this file. A test at the end holds that.
+const phantom = (digits) => ['sow', digits].join('-');
+
 /** A fake `git grep` returning the lines it is given, and recording how it was called. */
 function gitReturning(lines) {
   const calls = [];
@@ -57,17 +64,17 @@ test('a document is keyed by the LEADING number in its name, not by a number any
     // A name that does NOT open with a number documents nothing. Without this case the test could not fail:
     // in the name above the first match IS the leading token, so dropping the anchor changed nothing and a
     // mutation run passed. Found by mutating, not by reading.
-    'notes-about-sow-999-and-others.md',
+    `notes-about-${phantom('999')}-and-others.md`,
   ] });
   assert.deepEqual([...documents.keys()], ['sow-240']);
   assert.ok(!documents.has('sow-223'), 'sow-223 must NOT be satisfied by a mention inside another name');
-  assert.ok(!documents.has('sow-999'), 'a file that does not open with a number is not a document for one');
+  assert.ok(!documents.has(phantom('999')), 'a file that does not open with a number is not a document for one');
 });
 
 test('a binary-file line is refused rather than filtered away quietly', () => {
   // git grep without -I prints `binary file <ref>:<path> matches` into this stream, and the path can contain
   // a token. Dropping such a line silently is how a wrong count nearly reached the owner.
-  const { cited, junk } = collectCited({ run: gitReturning(['sow-270', 'binary file origin/main:x/sow-999.bin matches']) });
+  const { cited, junk } = collectCited({ run: gitReturning(['sow-270', `binary file origin/main:x/${phantom('999')}.bin matches`]) });
   assert.deepEqual([...cited], ['sow-270']);
   assert.equal(junk.length, 1, 'the odd line must be REPORTED, so the caller can refuse the whole answer');
 });
@@ -126,7 +133,8 @@ test('the next free number is above the highest in use, not the lowest gap', () 
 test('normalizeToken accepts only the real shape', () => {
   assert.equal(normalizeToken('SOW-007'), 'sow-007');
   assert.equal(normalizeToken(' sow-007 '), 'sow-007');
-  for (const bad of ['sow-7', 'sow-0007', 'sows-007', '', null, undefined, 'binary file x matches']) {
+  // Assembled at runtime for the same reason: the scan reads the first three digits of a four-digit literal.
+  for (const bad of [phantom('7'), phantom('0007'), ['sows', '007'].join('-'), '', null, undefined, 'binary file x matches']) {
     assert.equal(normalizeToken(bad), null, `${JSON.stringify(bad)} must not read as a number`);
   }
 });
@@ -164,4 +172,16 @@ test('no workflow runs it, for the same reason', () => {
     assert.ok(!/check-sow-numbers/.test(text),
       `.github/workflows/${f} runs the sow-number check, which cannot work in CI: .data/ is absent there by design`);
   }
+});
+
+test('this file cites no number of its own beyond the real ones it means to', () => {
+  // The regression that made this rule: literal fixtures here were scanned as citations. Every sow token that
+  // appears in this file's TEXT must be a number with a real document, listed here on purpose. The pattern is
+  // assembled at runtime so the test does not cite anything itself.
+  // 003, 004 and 006 are the gap-test fixtures: real documents, used on purpose because they exist.
+  const REAL = new Set(['001', '002', '003', '004', '005', '006', '007', '048', '050', '093', '133', '145', '223', '240', '270', '286']);
+  const text = fs.readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const found = [...text.matchAll(new RegExp(['s', 'o', 'w'].join('') + '-(\\d{3})', 'gi'))].map((m) => m[1]);
+  assert.ok(found.length > 0, 'the scan found no tokens at all, so it proves nothing');
+  for (const n of found) assert.ok(REAL.has(n), `this file cites ${n}, which is not a real number: build it with phantom() instead`);
 });
