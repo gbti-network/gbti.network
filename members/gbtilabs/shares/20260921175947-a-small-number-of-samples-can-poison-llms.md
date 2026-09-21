@@ -14,8 +14,8 @@ tags:
   - aeo
   - seo
   - ai-citations
-image: >-
-  https://www.anthropic.com/api/opengraph-illustration?name=Hand%20Puzzle&amp;backgroundColor=heather
+image: https://gbti.network/media/shares/gbtilabs/20260921175947-a-small-number-of-samples-can-poison-llms-9023c261.webp
+imageSource: https://www.anthropic.com/api/opengraph-illustration?name=Hand%20Puzzle&amp;backgroundColor=heather
 id: 20260921175947-a-small-number-of-samples-can-poison-llms
 createdAt: '2026-09-21T17:59:47.897Z'
 type: share
