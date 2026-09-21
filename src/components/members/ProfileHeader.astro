@@ -19,7 +19,7 @@ const roles = d.roles ?? [];
 const skills = d.skills ?? [];
 ---
 <header class="band-sm dark relative overflow-hidden">
-  <Container class="relative flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:gap-12">
+  <Container class="relative flex flex-col max-sm:items-center gap-8 sm:flex-row sm:items-start sm:gap-12">
     <div class="shrink-0">
       {d.avatar ? (
         <img src={d.avatar} alt={d.displayName} class="h-48 w-48 object-cover sm:h-[300px] sm:w-[300px]" style="border-radius:var(--r-lg);border:4px solid var(--paper);box-shadow:var(--sh-lg)" />
@@ -30,23 +30,23 @@ const skills = d.skills ?? [];
       )}
     </div>
     <div class="flex flex-col gap-3 text-center sm:pt-10 sm:text-left">
-      <div class="flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+      <div class="flex flex-wrap items-center max-sm:justify-center gap-3 sm:justify-start">
         <h1 class="h1" style="color:#fff">{d.displayName}</h1>
         <span class="chip chip-green">member</span>
       </div>
       {d.headline && <p class="lead">{d.headline}</p>}
       <slot />
       {(roles.length > 0 || skills.length > 0) && (
-        <div class="mt-2 flex flex-col items-center gap-2 sm:items-start">
+        <div class="mt-2 flex flex-col max-sm:items-center gap-2 sm:items-start">
           {roles.length > 0 && (
-            <div class="flex flex-wrap justify-center gap-2 sm:justify-start">
+            <div class="flex flex-wrap max-sm:justify-center gap-2 sm:justify-start">
               {roles.map((r) => (
                 <span style="padding:.28rem .66rem;border-radius:999px;border:1.5px solid var(--line-dark-2);color:#fff;font-size:.82rem;font-weight:600">{pretty(r)}</span>
               ))}
             </div>
           )}
           {skills.length > 0 && (
-            <div class="flex flex-wrap justify-center gap-2 sm:justify-start">
+            <div class="flex flex-wrap max-sm:justify-center gap-2 sm:justify-start">
               {skills.map((s) => (
                 <span style="padding:.24rem .6rem;border-radius:999px;border:1.5px solid var(--line-dark-2);color:var(--on-dark-soft);font-size:.8rem">{s}</span>
               ))}
@@ -55,7 +55,7 @@ const skills = d.skills ?? [];
         </div>
       )}
       {socials.length > 0 && (
-        <div class="mt-2 flex flex-wrap justify-center gap-3 sm:justify-start">
+        <div class="mt-2 flex flex-wrap max-sm:justify-center gap-3 sm:justify-start">
           {socials.map(([k, v]) => (
             <a href={v} target="_blank" rel="noopener noreferrer" data-tooltip={k} class="grid h-11 w-11 place-items-center transition hover:-translate-y-0.5" style="border-radius:var(--r);border:1.5px solid var(--line-dark-2);color:var(--on-dark-soft)">
               <svg viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor" aria-hidden="true"><path d={ICON_PATHS[k]} /></svg>

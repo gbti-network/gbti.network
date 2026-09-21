@@ -44,7 +44,7 @@ const total = posts.length + projects.length + prompts.length;
       <Content />
     </div>
     {!isOrg && (
-      <div class="mt-4 flex flex-wrap justify-center gap-3 sm:justify-start">
+      <div class="mt-4 flex flex-wrap max-sm:justify-center gap-3 sm:justify-start">
         <SubscribeButton name={d.displayName} username={d.username} variant="white" />
         {/* sow-346: shown only to this member, and it opens their profile in the WorkBench */}
         <a class="btn btn-ghost" data-profile-edit data-profile-owner={d.username} href="/workbench/#tab=profile" hidden>Edit profile</a>

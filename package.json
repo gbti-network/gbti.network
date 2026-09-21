@@ -29,6 +29,7 @@
     "check:save-controls": "node scripts/check-save-controls.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs",
     "check:sow-numbers": "node scripts/check-sow-numbers.mjs",
+    "check:shim-collisions": "node scripts/check-utility-shim-collisions.mjs",
     "deploy:worker": "cd workers/signup && npx wrangler deploy --env production && curl -s -o /dev/null -w 'signup.gbti.network -> %{http_code} (401 = healthy)\\n' https://signup.gbti.network/membership/status",
     "dev": "node scripts/dev-server.mjs dev",
     "erase-member": "node --env-file-if-exists=.env scripts/erase-member.mjs",
@@ -45,7 +46,7 @@
     "syndicate-shares": "node --env-file-if-exists=.env scripts/syndicate-shares.mjs",
     "test": "node --test 'test/**/*.test.mjs'",
     "unpeg-startup": "node client/src/autostart.mjs remove",
-    "verify:dist": "node scripts/check-build-secrets.mjs && node scripts/check-redirects.mjs && node scripts/check-extension.mjs && node scripts/check-extension-hooks.mjs && node scripts/check-headers.mjs && node scripts/check-article-closing-slot.mjs && node scripts/check-byline-equivalence.mjs && node scripts/check-lcp-priority.mjs && node scripts/check-og-image-size.mjs && node scripts/check-category-links.mjs && node scripts/check-extension-cta.mjs && node scripts/check-member-links.mjs && node scripts/check-sitemap-noindex.mjs",
+    "verify:dist": "node scripts/check-build-secrets.mjs && node scripts/check-redirects.mjs && node scripts/check-extension.mjs && node scripts/check-extension-hooks.mjs && node scripts/check-headers.mjs && node scripts/check-article-closing-slot.mjs && node scripts/check-byline-equivalence.mjs && node scripts/check-lcp-priority.mjs && node scripts/check-og-image-size.mjs && node scripts/check-category-links.mjs && node scripts/check-extension-cta.mjs && node scripts/check-member-links.mjs && node scripts/check-sitemap-noindex.mjs && node scripts/check-utility-shim-collisions.mjs",
     "check:preview-shell": "node scripts/check-preview-shell.mjs"
   },
   "dependencies": {
