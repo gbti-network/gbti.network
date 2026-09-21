@@ -16,7 +16,7 @@ import { feedTime, isPublicShare, readMinutes, decodeEntities } from './home-fee
 // two: an article/project/prompt carries `categories`, an ordered path into house/taxonomy.yml, and a share
 // carries `category`, one flat key from house/topics.yml (SOW-080 decoupled them on purpose). Both resolve to
 // a display label here so the template stays dumb and neither vocabulary leaks into the markup.
-import { leafLabel, topicLabel } from './taxonomy';
+import { leafLabel, leafKey, topicLabel } from './taxonomy';
 
 export type FeedItem = {
   kind: 'article' | 'project' | 'prompt' | 'share';
@@ -34,6 +34,11 @@ export type FeedItem = {
   tags: string[];
   categories: string[]; // sow-174: the full category PATH, so any breadcrumb depth can filter
   category?: string; // sow-381: the resolved DISPLAY label for the card pill ("Music", "Accessibility"), or absent
+  // sow-382: the KEY behind that label, which is what ?cat= matches on. A share's topic key and a content
+  // leaf key land in the same `data-cats` token list, so `wordpress` on a share and `wordpress` on an
+  // article answer the same click. The 13 share-only keys (music among them) simply match no content,
+  // which is correct rather than a gap.
+  categoryKey?: string;
   thumb: string | null; // small square (always resolvable, branded fallback)
   cover: string | null; // wide feed cover (only when the item has a real image)
   srcDomain?: string; // share: the shared link's hostname
@@ -62,6 +67,7 @@ async function contentItem(entry: any, kind: 'article' | 'project' | 'prompt', c
     categories: d.categories ?? [],
     // The LEAF, not the whole path: a card shows "Accessibility", a detail page shows the breadcrumb.
     category: leafLabel(d.categories) || undefined,
+    categoryKey: leafKey(d.categories) || undefined,
     thumb: thumbs.thumb,
     cover: hasImage ? thumbs.thumbCard : null,
     read: kind === 'article' ? readMinutes(entry.body) : undefined,
@@ -93,6 +99,10 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     // unchanged. sow-381 adds the pill from the share's own flat topic key, which is a different field.
     categories: d.categories ?? [],
     category: typeof d.category === 'string' && d.category.trim() ? topicLabel(d.category.trim()) : undefined,
+    // sow-382: the raw topic key, which joins the taxonomy tokens in `data-cats`. NOT folded into
+    // `categories` above: that is a taxonomy PATH and a share does not have one, so giving it a fake one
+    // would put a share into breadcrumbs and top-level rollups it does not belong in.
+    categoryKey: typeof d.category === 'string' && d.category.trim() ? d.category.trim() : undefined,
     // thumb keeps a branded fallback (the card grid needs every tile imaged); cover stays real-only
     // so detailed rows without an image keep their text-only layout.
     // sow-283: a share pointing at our hosted copy renders it root-relative, so no visitor's browser contacts the

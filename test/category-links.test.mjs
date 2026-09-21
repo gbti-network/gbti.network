@@ -55,9 +55,53 @@ test('a build with no category link on an article page, or none elsewhere, fails
   assert.match(checkCategoryLinks({ distDir: noCards, labels: LABELS }).errors.join('\n'), /no category link was checked outside the article pages/);
 });
 
-test('loadCategoryLabels walks nested children and falls back to the key for a node with no label', () => {
+/** A throwaway root carrying one or both vocabulary files. */
+function labelRoot({ taxonomy, topics }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-catlabels-'));
   fs.mkdirSync(path.join(root, 'house'));
-  fs.writeFileSync(path.join(root, 'house/taxonomy.yml'), 'tree:\n  devops:\n    label: DevOps\n    children:\n      frameworks:\n        label: Frameworks\n        children:\n          react:\n            label: React\n  misc: {}\n');
-  assert.deepEqual(loadCategoryLabels(root), { devops: 'DevOps', frameworks: 'Frameworks', react: 'React', misc: 'misc' });
+  if (taxonomy !== undefined) fs.writeFileSync(path.join(root, 'house/taxonomy.yml'), taxonomy);
+  if (topics !== undefined) fs.writeFileSync(path.join(root, 'house/topics.yml'), topics);
+  return root;
+}
+const TAXONOMY = 'tree:\n  devops:\n    label: DevOps\n    children:\n      frameworks:\n        label: Frameworks\n        children:\n          react:\n            label: React\n  misc: {}\n';
+
+test('loadCategoryLabels walks nested children and falls back to the key for a node with no label', () => {
+  const root = labelRoot({ taxonomy: TAXONOMY, topics: 'topics: {}\n' });
+  assert.deepEqual(loadCategoryLabels(root).labels, { devops: 'DevOps', frameworks: 'Frameworks', react: 'React', misc: 'misc' });
+});
+
+// sow-382: ?cat= answers for BOTH vocabularies, so this guard reads both or it rejects 13 links that name a
+// category which is real and simply lives in the other file.
+test('sow-382: the share topic vocabulary is merged in, so a topic-only key is a known label', () => {
+  const root = labelRoot({ taxonomy: TAXONOMY, topics: 'topics:\n  music: { label: Music }\n  bare-one: {}\n' });
+  const { labels, conflicts } = loadCategoryLabels(root);
+  assert.equal(labels.music, 'Music', 'a key only the topic list defines still has its label');
+  assert.equal(labels.react, 'React', 'and the taxonomy is untouched');
+  assert.equal(labels['bare-one'], 'bare-one', 'a topic with no label falls back to its key, as the taxonomy does');
+  assert.deepEqual(conflicts, []);
+});
+
+test('sow-382: a key the two files label DIFFERENTLY is a conflict, not a silent pick', () => {
+  // "The label for this key" stops having one answer. Picking a side would leave this guard passing while a
+  // reader is shown the other word.
+  const root = labelRoot({ taxonomy: TAXONOMY, topics: 'topics:\n  react: { label: ReactJS }\n' });
+  const { labels, conflicts } = loadCategoryLabels(root);
+  assert.equal(conflicts.length, 1);
+  assert.match(conflicts[0], /react.*React.*ReactJS/);
+  assert.equal(labels.react, 'React', 'the taxonomy value is left in place rather than overwritten');
+});
+
+test('sow-382: the SAME label in both files is not a conflict', () => {
+  // 20 keys are in both today and all 20 agree, which is what makes one merged map honest.
+  const root = labelRoot({ taxonomy: TAXONOMY, topics: 'topics:\n  react: { label: React }\n' });
+  assert.deepEqual(loadCategoryLabels(root).conflicts, []);
+});
+
+test('sow-382: a MISSING topic file is reported, not read as an empty vocabulary', () => {
+  // Empty would drop every topic-only key and make this guard reject the links that name them, which reads
+  // as the links being wrong rather than the file being gone.
+  const root = labelRoot({ taxonomy: TAXONOMY });
+  const { conflicts } = loadCategoryLabels(root);
+  assert.equal(conflicts.length, 1);
+  assert.match(conflicts[0], /house\/topics\.yml is missing/);
 });

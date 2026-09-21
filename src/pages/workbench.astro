@@ -25,6 +25,17 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
           <a class="btn btn-ghost" href="/workbench/#new=prompt">New prompt</a>
           <a class="btn btn-ghost" href="/workbench/#new=project">New project</a>
         </div>
+        {/* sow-382: Browse had NO link anywhere on the site after "Browse the co-op" left the account menu in
+            sow-379, so the page was reachable only by typing the address. It sits OUTSIDE the paid gate below
+            on purpose: renderQuick() reveals this row for any signed-in member and hides the MCP tile and the
+            share bar unless the tier is paid, and Browse is a reading surface a free member gets. This is the
+            WEBSITE page rather than the shared <gbti-workspace>, so the extension, which has its own browse
+            surface and no use for a /browse/ link, is untouched. */}
+        <a class="wb-mcp wb-browse" href="/browse/">
+          <span class="wb-mcp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-grid"/></svg></span>
+          <span class="wb-mcp-t">Browse</span>
+          <span class="wb-mcp-s">Read across the co-op in one place</span>
+        </a>
         <a class="wb-mcp" href="/workbench/mcp/" data-wb-mcp hidden>
           <span class="wb-mcp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-bot"/></svg></span>
           <span class="wb-mcp-t">MCP Server</span>

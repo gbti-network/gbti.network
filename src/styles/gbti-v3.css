@@ -1299,6 +1299,12 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .feed-page[data-view="card"] .feed-cover-fb { display: block; }
 .feed-page[data-view="card"] .feed-main { display: flex; flex-direction: column; flex: 1; min-width: 0; padding: 12px 14px 14px; }
 .feed-page[data-view="card"] .feed-meta { margin-bottom: 8px; gap: 7px; }
+/* sow-382: tighter TAGS in the card grid, so the type and the category share a line instead of stacking.
+   The column is 195px and a share's source name takes 152 of it, which put the category pill on its own
+   row on 12 of 21 cards. Padding and letter spacing only: the 10px type is left alone, because the cheap
+   win is the horizontal padding and shrinking the text is what makes a tag stop reading as a tag.
+   Card density ONLY. The detailed and compact views have the width and keep the roomier tags. */
+.feed-page[data-view="card"] .kind-tag { padding: 3px 5px; letter-spacing: .02em; }
 .feed-page[data-view="card"] .feed-meta .av { width: 20px; height: 20px; }
 .feed-page[data-view="card"] .feed-meta .tmeta { font-size: 10.5px; }
 /* In the narrow card, a nowrap kind-tag with a long source slug (e.g. a news eyebrow

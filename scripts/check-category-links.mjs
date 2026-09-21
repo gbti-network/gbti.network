@@ -7,8 +7,21 @@
 // key they display, and this guard holds every built page to that.
 //
 // THE RULE. Every `<a>` whose href carries `cat=<key>` and whose visible text is ONE label must read that key's
-// label from house/taxonomy.yml. A text containing "›" is a path (the related-article eyebrow "DevOps › React"),
-// which names more than one category, so it is not held to a single key.
+// label. A text containing "›" is a path (the related-article eyebrow "DevOps › React"), which names more than
+// one category, so it is not held to a single key.
+//
+// TWO VOCABULARIES ANSWER TO ?cat=, as of sow-382. house/taxonomy.yml is the content hierarchy an article,
+// project or prompt carries a path into. house/topics.yml is the flat follow-topic list a SHARE carries one key
+// from, kept separate on purpose by SOW-080. A share's topic key now rides in the same `data-cats` token list,
+// so `?cat=wordpress` answers for a share and an article alike, and `?cat=music` answers for shares only
+// because no content is filed under it. This guard reads BOTH files, or it would reject 13 perfectly good links
+// for naming a category that is real but lives in the other file. The rule itself has not been relaxed: a link
+// must still go to the category it names.
+//
+// AND IT FAILS IF THE TWO EVER DISAGREE about a key they share. 20 keys are in both files today and all 20
+// carry the same label, which is what makes one merged map honest. If that stops being true, "the label for
+// this key" stops having one answer, and a silent pick between them would put this guard back to passing while
+// showing a reader the wrong word.
 //
 // It reads the built HTML, not the components, because the claim is about what a reader clicks. It fails when it
 // checked no link on an article page or no link anywhere else, so a build where the rail or the cards stopped
@@ -23,7 +36,12 @@ import { decodeHtmlEntities } from '../membership/html-entities.mjs';
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const PATH_SEPARATOR = '›';
 
-/** The flat key -> label map, walked the same way src/lib/taxonomy.ts builds it. */
+/**
+ * The flat key -> label map for BOTH vocabularies, walked the same way src/lib/taxonomy.ts builds each.
+ *
+ * Returns `{ labels, conflicts }`. A conflict is a key both files define with DIFFERENT labels, which makes
+ * "the label for this key" ambiguous and is reported as a failure rather than resolved by picking a side.
+ */
 export function loadCategoryLabels(root = ROOT) {
   const tree = yaml.load(fs.readFileSync(path.join(root, 'house/taxonomy.yml'), 'utf8'))?.tree ?? {};
   const labels = {};
@@ -33,7 +51,23 @@ export function loadCategoryLabels(root = ROOT) {
       if (node?.children) walk(node.children);
     }
   })(tree);
-  return labels;
+
+  // sow-382: the share topic vocabulary, which ?cat= now answers for too. An ABSENT file is reported rather
+  // than treated as an empty vocabulary: empty would silently drop 13 real keys and make this guard reject
+  // the links that name them, which reads as the links being wrong.
+  const conflicts = [];
+  const topicsFile = path.join(root, 'house/topics.yml');
+  if (!fs.existsSync(topicsFile)) {
+    conflicts.push('house/topics.yml is missing, so the share topic vocabulary could not be read');
+    return { labels, conflicts };
+  }
+  const topics = yaml.load(fs.readFileSync(topicsFile, 'utf8'))?.topics ?? {};
+  for (const [key, node] of Object.entries(topics || {})) {
+    const label = (node && node.label) || key;
+    if (key in labels && labels[key] !== label) conflicts.push(`${key}: house/taxonomy.yml says "${labels[key]}", house/topics.yml says "${label}"`);
+    else if (!(key in labels)) labels[key] = label;
+  }
+  return { labels, conflicts };
 }
 
 /** Every category link in one page: { key, text }. */
@@ -84,7 +118,11 @@ function run() {
     console.error('check-category-links: dist/index.html is missing, build the site first');
     process.exit(1);
   }
-  const { errors, checked } = checkCategoryLinks({ distDir, labels: loadCategoryLabels() });
+  const { labels, conflicts } = loadCategoryLabels();
+  const { errors, checked } = checkCategoryLinks({ distDir, labels });
+  // A key the two files label differently is reported FIRST: every link naming it is suspect, and fixing the
+  // links would be fixing the symptom.
+  errors.unshift(...conflicts.map((c) => `the two category vocabularies disagree about a key they share, ${c}`));
   if (errors.length) {
     console.error(`check-category-links: ${errors.length} problem(s):`);
     for (const e of errors.slice(0, 40)) console.error(`  - ${e}`);

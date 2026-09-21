@@ -25,7 +25,10 @@ const { it, avatarIndex, now: NOW, eager = false } = Astro.props;
 const kindLabel: Record<string, string> = { article: 'article', project: 'project', prompt: 'prompt' };
 const tagsAttr = (x: FeedItem) => (x.tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
 // sow-174: every segment of the category path, so a breadcrumb at any depth can drill down here.
-const catsOf = (x: FeedItem) => catsAttr(x.categories);
+// sow-382: the share's TOPIC key rides in the same token list as the content taxonomy segments, which is
+// what makes one ?cat= click answer for both. catsAttr de-duplicates, so a content item whose leaf key is
+// already in its path adds nothing here.
+const catsOf = (x: FeedItem) => catsAttr([...(x.categories ?? []), ...(x.categoryKey ? [x.categoryKey] : [])]);
 ---
   <article
     class:list={['feed-item', !it.cover && 'nocover']}
@@ -46,10 +49,13 @@ const catsOf = (x: FeedItem) => catsAttr(x.categories);
         {it.kind === 'share'
           ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
           : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}
-        {/* sow-381: the category, beside the type. NOT a link: the ?cat= drilldown matches on the taxonomy
-            PATH, which a share does not carry, so half of these pills would be dead while looking identical
-            to the live ones. Display only until that is wired. */}
-        {it.category && <span class="kind-tag kt-cat">{it.category}</span>}
+        {/* sow-382: the category, beside the type, and it FILTERS. It goes to /feeds/?cat= rather than
+            filtering in place, which is where the homepage trending tags already go and the only place the
+            drilldown is implemented. sow-381 shipped this as plain text because a share carried no taxonomy
+            path; a share's topic key now rides in data-cats, so every pill here has somewhere real to go. */}
+        {it.category && (it.categoryKey
+          ? <a class="kind-tag kt-cat" href={`/feeds/?cat=${encodeURIComponent(it.categoryKey)}`}>{it.category}</a>
+          : <span class="kind-tag kt-cat">{it.category}</span>)}
         {it.stub && <span class="kind-tag kt-members">members</span>}
       </div>
       <h2 class="feed-title">

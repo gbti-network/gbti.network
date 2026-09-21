@@ -46,6 +46,12 @@ for (const it of narrowed) for (const k of it.categories ?? []) {
   const key = catKey(k);
   if (key && !catLabels[key]) catLabels[key] = categoryLabel(key);
 }
+// sow-382: and the SHARE topic keys, which are a separate vocabulary and are not in any `categories` path.
+// Without this a share-only key reaches the banner unlabelled and it reads "Filtered by music".
+for (const it of narrowed) {
+  const key = catKey(it.categoryKey ?? '');
+  if (key && !catLabels[key]) catLabels[key] = it.category || categoryLabel(key);
+}
 ---
 {/* sow-362: the members-only share stream below is merged CLIENT-side, so its author links cannot ask the
     content collection whether a member has a profile page. The built set rides along here instead. A share
