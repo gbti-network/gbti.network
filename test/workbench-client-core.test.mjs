@@ -45,7 +45,7 @@ test('planMemberFiles: a members comment encrypts to a .enc + a stub .md carryin
 // whole body to a .enc and leave the stub .md plaintext-free (the same invariant the Worker feed relies on).
 test('planMemberFiles: a members Share (composer default) encrypts to .enc + a plaintext-free stub .md', async () => {
   const id = shareId('2026-03-01T00:00:00Z', 'astro is great');
-  const built = buildShareFile({ username: 'gwen', input: { id, createdAt: '2026-03-01T00:00:00Z', title: 'Astro is great', visibility: 'members' }, body: 'my secret members-only take' });
+  const built = buildShareFile({ username: 'gwen', input: { id, createdAt: '2026-03-01T00:00:00Z', title: 'Astro is great', category: 'devops', visibility: 'members' }, body: 'my secret members-only take' });
   const plan = await planMemberFiles({ built, body: 'my secret members-only take', encrypt: fakeEncrypt });
   assert.equal(plan.files.length, 2);
   const md = plan.files.find((f) => f.path.endsWith('.md'));
@@ -58,7 +58,7 @@ test('planMemberFiles: a members Share (composer default) encrypts to .enc + a p
 
 test('planMemberFiles: a PUBLIC Share returns null -> the caller commits a single plaintext .md', async () => {
   const id = shareId('2026-03-01T00:00:00Z', 'public note');
-  const built = buildShareFile({ username: 'gwen', input: { id, createdAt: '2026-03-01T00:00:00Z', title: 'Public note', visibility: 'public' }, body: 'a public link share' });
+  const built = buildShareFile({ username: 'gwen', input: { id, createdAt: '2026-03-01T00:00:00Z', title: 'Public note', category: 'devops', visibility: 'public' }, body: 'a public link share' });
   assert.equal(await planMemberFiles({ built, body: 'a public link share', encrypt: fakeEncrypt }), null);
 });
 

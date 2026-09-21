@@ -23,7 +23,7 @@ const req = (body) => ({ headers: { get: () => 'Bearer tok' }, json: async () =>
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const INDEX_YML = 'members:\n  "2002207": atwellpub\n';
 const ID = '20260901120000-a-members-share';
-const stub = { path: `members/atwellpub/shares/${ID}.md`, content: `---\ntype: share\nid: ${ID}\nauthor: atwellpub\nstatus: published\nvisibility: members\nencryptedBody: members/atwellpub/_enc/share-${ID}-body.enc\ncreatedAt: 2026-09-01T12:00:00.000Z\n---\n` };
+const stub = { path: `members/atwellpub/shares/${ID}.md`, content: `---\ntype: share\nid: ${ID}\nauthor: atwellpub\nstatus: published\ncategory: devops\nvisibility: members\nencryptedBody: members/atwellpub/_enc/share-${ID}-body.enc\ncreatedAt: 2026-09-01T12:00:00.000Z\n---\n` };
 const enc = { path: `members/atwellpub/_enc/share-${ID}-body.enc`, content: '{"v":1,"kid":"1","iv":"AAAA","aad":"a","ct":"AAAA"}' };
 const body = { itemId: `share-${ID}`, title: 'Update Share', files: [stub, enc] };
 
@@ -53,7 +53,7 @@ function ghFetch(existing = [], { contentsThrow = false } = {}) {
 }
 
 const PUB_ID = '20260901120000-a-public-share';
-const pubStub = { path: `members/atwellpub/shares/${PUB_ID}.md`, content: `---\ntype: share\nid: ${PUB_ID}\nauthor: atwellpub\nstatus: published\nvisibility: public\n---\nA link worth reading.\n` };
+const pubStub = { path: `members/atwellpub/shares/${PUB_ID}.md`, content: `---\ntype: share\nid: ${PUB_ID}\nauthor: atwellpub\nstatus: published\ncategory: devops\nvisibility: public\n---\nA link worth reading.\n` };
 const pubBody = { itemId: `share-${PUB_ID}`, title: 'A public share', files: [pubStub] };
 const notSuper = async () => ({ ok: false, status: 403 });
 const isSuper = async () => ({ ok: true, githubId: '2002207' });

@@ -9,6 +9,7 @@ import yaml from 'js-yaml';
 import { AUTHORABLE_TYPES, SYSTEM_MANAGED, schemaFor, shareSchema, commentSchema } from './schemas.mjs';
 import { encAssetFor } from './member-content.mjs';
 import { stripTrackingParams, stripTrackingParamsInText } from './url-normalize.mjs';
+import { shareCategoryProblem } from '../../membership/share-category.mjs'; // a published share needs a category
 
 const SUBDIR = Object.freeze({ post: 'posts', project: 'projects', product: 'projects', prompt: 'prompts' });
 const MAX_BODY_BYTES = 1_000_000; // 1MB cap on a content body (well under GitHub's per-file limit + the 2MB HTTP cap)
@@ -270,6 +271,10 @@ export function buildShareFile({ username, input, body = '' }) {
   const note = stripTrackingParamsInText(body);
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError('share', result.error.issues);
+  // A published share must carry a category (owner, 2026-09-21). Checked here because every host builds its share
+  // through this one function; the Worker and validate-content hold the same rule (membership/share-category.mjs).
+  const categoryProblem = shareCategoryProblem(cleaned);
+  if (categoryProblem) throw new ContentValidationError('share', [{ path: ['category'], message: categoryProblem }]);
   const id = cleaned.id;
   const bodyStr = String(note ?? '').trim();
   if (bodyStr.length > MAX_BODY_BYTES) {

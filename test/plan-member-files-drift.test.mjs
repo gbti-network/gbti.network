@@ -91,13 +91,13 @@ const FIXTURES = [
   {
     name: 'members share',
     branch: 'gated:whole-body',
-    built: buildShareFile({ username: 'gwen', input: { id: shareId('2026-03-01T00:00:00Z', 'astro'), createdAt: '2026-03-01T00:00:00Z', title: 'Astro', visibility: 'members' }, body: 'MEMBER_TAKE' }),
+    built: buildShareFile({ username: 'gwen', input: { id: shareId('2026-03-01T00:00:00Z', 'astro'), createdAt: '2026-03-01T00:00:00Z', title: 'Astro', category: 'devops', visibility: 'members' }, body: 'MEMBER_TAKE' }),
     body: 'MEMBER_TAKE',
   },
   {
     name: 'public share',
     branch: 'null:plain-public',
-    built: buildShareFile({ username: 'gwen', input: { id: shareId('2026-03-01T00:00:00Z', 'public note'), createdAt: '2026-03-01T00:00:00Z', title: 'Public note', visibility: 'public' }, body: 'A_PUBLIC_LINK' }),
+    built: buildShareFile({ username: 'gwen', input: { id: shareId('2026-03-01T00:00:00Z', 'public note'), createdAt: '2026-03-01T00:00:00Z', title: 'Public note', category: 'devops', visibility: 'public' }, body: 'A_PUBLIC_LINK' }),
     body: 'A_PUBLIC_LINK',
   },
 ];

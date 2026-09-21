@@ -6,6 +6,7 @@ shortDescription: >-
   It’s immediately recognizable as a call for help, but the popular explanation behind SOS is just a
   myth. Here’s the true story.
 url: https://wordsmarts.com/sos-meaning/
+category: education
 tags:
   - morse-code
   - history

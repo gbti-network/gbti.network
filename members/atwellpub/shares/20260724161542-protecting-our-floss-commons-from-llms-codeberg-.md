@@ -4,6 +4,7 @@ visibility: public
 title: Protecting our FLOSS commons from LLMs — Codeberg News
 shortDescription: 'In Brief: Two motions regarding'
 url: https://blog.codeberg.org/protecting-our-floss-commons-from-llms.html
+category: open-source
 id: 20260724161542-protecting-our-floss-commons-from-llms-codeberg-
 createdAt: '2026-07-24T16:15:42.790Z'
 type: share

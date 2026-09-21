@@ -10,6 +10,7 @@
 
 import { isCleanPath } from './classify-pr.mjs';
 import { ITEM_ID_MAX, ITEM_ID_PATTERN } from './item-id.mjs';
+import { shareFilesCategoryProblem } from './share-category.mjs';
 
 export const HOSTED_MAX_FILES = 20;
 export const HOSTED_MAX_FILE_BYTES = 100_000;
@@ -194,7 +195,7 @@ const ANY_MEMBER_FOLDER_RE = /^members\/[a-z0-9][a-z0-9-]{0,63}\//;
  * request body itself, so a non-superadmin cannot self-grant it by simply asking. Every other check
  * (clean paths, size caps, file count, duplicates) is unchanged and applies identically either way.
  */
-export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = false } = {}) {
+export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = false, topicKeys = null } = {}) {
   const bad = (error, status = 400) => ({ ok: false, error, status });
   if (!FOLDER_RE.test(String(folder ?? ''))) return bad('no member folder resolved for this account', 409);
   if (!ITEM_ID_RE.test(String(itemId ?? ''))) return bad(`itemId must be lowercase letters, digits, and hyphens (max ${ITEM_ID_MAX})`);
@@ -245,6 +246,10 @@ export function validateHostedRequest({ files, itemId, folder, allowAnyFolder = 
     }
     paths.push(f.path);
   }
+  // A published share must carry a category, and a real one when the caller holds the topic list. Here so a
+  // direct call to the author route cannot skip the client's own check (membership/share-category.mjs).
+  const categoryProblem = shareFilesCategoryProblem(files, { topicKeys });
+  if (categoryProblem) return bad(categoryProblem);
   return { ok: true, paths };
 }
 

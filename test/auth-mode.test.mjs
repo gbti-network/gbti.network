@@ -165,7 +165,7 @@ test('a session still marked for fork mode publishes an article through the netw
 
 test('shares and comments from that session go through the network too', async () => {
   const share = legacyForkContext();
-  await publishShare(share.ctx, { input: { url: 'https://example.com/a', title: 'A link', visibility: 'public' }, body: '' });
+  await publishShare(share.ctx, { input: { url: 'https://example.com/a', title: 'A link', category: 'devops', visibility: 'public' }, body: '' });
   assert.deepEqual(share.forkWrites, []);
   assert.equal(share.network.filter((n) => n.path === '/membership/author').length, 1);
 

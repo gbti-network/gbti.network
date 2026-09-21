@@ -8,6 +8,7 @@ shortDescription: >-
 url: https://github.com/juliusbrussee/caveman
 image: https://gbti.network/media/shares/atwellpub/20260701192642-github-juliusbrussee-caveman-why-use-many-token--03f40dd3.webp
 imageSource: https://opengraph.githubassets.com/a295e4c19d9bc8e4101f4975102e743be795e12d1f615db4386e8c3af04d5a4e/JuliusBrussee/caveman
+category: prompting
 id: 20260701192642-github-juliusbrussee-caveman-why-use-many-token-
 createdAt: '2026-07-01T19:26:42.532Z'
 type: share

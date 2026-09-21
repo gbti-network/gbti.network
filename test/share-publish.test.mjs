@@ -15,13 +15,13 @@ test('shareId: derives a sortable, filesystem-safe timestamp-slug', () => {
 test('SOW-032: buildShareFile carries the optional title + shortDescription (and stays body-only-valid)', () => {
   const withMeta = buildShareFile({
     username: 'alice',
-    input: { id: '20260615000000-x', visibility: 'public', title: 'My title', shortDescription: 'A one-line blurb', createdAt: '2026-06-15T00:00:00Z' },
+    input: { id: '20260615000000-x', visibility: 'public', category: 'devops', title: 'My title', shortDescription: 'A one-line blurb', createdAt: '2026-06-15T00:00:00Z' },
     body: 'hello',
   });
   assert.equal(withMeta.frontmatter.title, 'My title');
   assert.equal(withMeta.frontmatter.shortDescription, 'A one-line blurb');
   // Both stay optional: a body-only Share (no title/desc) is still valid.
-  const bare = buildShareFile({ username: 'alice', input: { id: '20260615000001-y', visibility: 'public', createdAt: '2026-06-15T00:00:01Z' }, body: 'just a note' });
+  const bare = buildShareFile({ username: 'alice', input: { id: '20260615000001-y', visibility: 'public', category: 'devops', createdAt: '2026-06-15T00:00:01Z' }, body: 'just a note' });
   assert.equal(bare.frontmatter.title, undefined);
   assert.equal(bare.frontmatter.shortDescription, undefined);
 });
@@ -29,7 +29,7 @@ test('SOW-032: buildShareFile carries the optional title + shortDescription (and
 test('buildShareFile: forces author = owner and the flat shares/ path', () => {
   const built = buildShareFile({
     username: 'alice',
-    input: { id: '20260610-x', author: 'mallory', visibility: 'public', title: 'Hi', createdAt: '2026-06-10T00:00:00Z' },
+    input: { id: '20260610-x', author: 'mallory', visibility: 'public', category: 'devops', title: 'Hi', createdAt: '2026-06-10T00:00:00Z' },
     body: 'a short note',
   });
   assert.equal(built.path, 'members/alice/shares/20260610-x.md');
@@ -40,11 +40,11 @@ test('buildShareFile: forces author = owner and the flat shares/ path', () => {
 });
 
 test('buildShareFile: rejects a Share with no createdAt (schema failure)', () => {
-  assert.throws(() => buildShareFile({ username: 'alice', input: { id: 'x', visibility: 'members' }, body: 'hi' }), /invalid share/);
+  assert.throws(() => buildShareFile({ username: 'alice', input: { id: 'x', visibility: 'members', category: 'devops' }, body: 'hi' }), /invalid share/);
 });
 
 test('SOW-093: buildShareFile writes status:published so the readers surface it (they filter on status===published)', () => {
-  const built = buildShareFile({ username: 'alice', input: { id: '20260701-x', visibility: 'public', createdAt: '2026-07-01T00:00:00Z' }, body: 'a note' });
+  const built = buildShareFile({ username: 'alice', input: { id: '20260701-x', visibility: 'public', category: 'devops', createdAt: '2026-07-01T00:00:00Z' }, body: 'a note' });
   assert.equal(built.frontmatter.status, 'published', 'a published share carries status:published, not a missing field');
   assert.match(built.markdown, /status: published/);
   // an explicit input status still wins (a future draft path)
@@ -55,7 +55,7 @@ test('SOW-093: buildShareFile writes status:published so the readers surface it 
 test('planMemberFiles: a members Share encrypts its whole body to an _enc/ sibling (Mode A)', async () => {
   const built = buildShareFile({
     username: 'alice',
-    input: { id: '20260610-x', visibility: 'members', createdAt: '2026-06-10T00:00:00Z' },
+    input: { id: '20260610-x', visibility: 'members', category: 'devops', createdAt: '2026-06-10T00:00:00Z' },
     body: 'a members-only thought',
   });
   const calls = [];
@@ -75,7 +75,7 @@ test('planMemberFiles: a members Share encrypts its whole body to an _enc/ sibli
 test('planMemberFiles: a public Share is a plain single file (no encryption)', async () => {
   const built = buildShareFile({
     username: 'alice',
-    input: { id: '20260610-y', visibility: 'public', createdAt: '2026-06-10T00:00:00Z' },
+    input: { id: '20260610-y', visibility: 'public', category: 'devops', createdAt: '2026-06-10T00:00:00Z' },
     body: 'a public note',
   });
   let called = false;
@@ -84,14 +84,24 @@ test('planMemberFiles: a public Share is a plain single file (no encryption)', a
   assert.equal(called, false);
 });
 
-// SOW-087: the optional topic category flows through to the share frontmatter (and stays optional).
-test('buildShareFile carries the optional category', () => {
+// SOW-087: the topic category flows through to the share frontmatter. Required to PUBLISH since 2026-09-21 (owner:
+// "Shares should not make it into being published without a category"); a draft publishes nothing and needs none.
+test('buildShareFile carries the category, refuses a published share without one, and lets a draft go without', () => {
   const withCat = buildShareFile({
     username: 'alice',
     input: { id: '20260704000000-c', visibility: 'public', category: 'devops', createdAt: '2026-07-04T00:00:00Z' },
     body: 'a devops find',
   });
   assert.equal(withCat.frontmatter.category, 'devops');
-  const bare = buildShareFile({ username: 'alice', input: { id: '20260704000001-d', visibility: 'public', createdAt: '2026-07-04T00:00:01Z' }, body: 'note' });
-  assert.equal(bare.frontmatter.category, undefined);
+  assert.throws(
+    () => buildShareFile({ username: 'alice', input: { id: '20260704000001-d', visibility: 'public', createdAt: '2026-07-04T00:00:01Z' }, body: 'note' }),
+    (err) => err.name === 'ContentValidationError' && /published share needs a category/.test(err.message),
+  );
+  assert.throws(
+    () => buildShareFile({ username: 'alice', input: { id: '20260704000002-e', visibility: 'members', category: '  ', createdAt: '2026-07-04T00:00:02Z' }, body: 'note' }),
+    /published share needs a category/, 'a blank category is no category',
+  );
+  const draft = buildShareFile({ username: 'alice', input: { id: '20260704000003-f', visibility: 'public', status: 'draft', createdAt: '2026-07-04T00:00:03Z' }, body: 'note' });
+  assert.equal(draft.frontmatter.status, 'draft');
+  assert.equal(draft.frontmatter.category, undefined);
 });

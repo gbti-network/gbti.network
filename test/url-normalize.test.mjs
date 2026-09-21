@@ -134,7 +134,7 @@ test('sow-364: code is left exactly as written, and a clean body comes back byte
 test('sow-364: buildShareFile cleans the note as well as the shared link', () => {
   const built = buildShareFile({
     username: 'alice',
-    input: { id: '20260918000000-x', visibility: 'public', createdAt: '2026-09-18T00:00:00Z', url: 'https://youtu.be/abcdefghijk?si=TOKEN' },
+    input: { id: '20260918000000-x', visibility: 'public', category: 'devops', createdAt: '2026-09-18T00:00:00Z', url: 'https://youtu.be/abcdefghijk?si=TOKEN' },
     body: 'My take, citing ([source](https://ex.com/a?utm_source=chatgpt.com)).',
   });
   assert.equal(built.frontmatter.url, 'https://youtu.be/abcdefghijk', 'the shared link, as before');
@@ -155,7 +155,7 @@ test('sow-364: buildCommentFile cleans an author note the same way', () => {
 test('sow-364: a members share is cleaned before it is ENCRYPTED, not only in the stub', async () => {
   const built = buildShareFile({
     username: 'alice',
-    input: { id: '20260918000001-m', visibility: 'members', createdAt: '2026-09-18T00:00:01Z', url: 'https://ex.com/x' },
+    input: { id: '20260918000001-m', visibility: 'members', category: 'devops', createdAt: '2026-09-18T00:00:01Z', url: 'https://ex.com/x' },
     body: 'Members only, citing https://ex.com/a?utm_source=chatgpt.com.',
   });
   let plaintext = null;

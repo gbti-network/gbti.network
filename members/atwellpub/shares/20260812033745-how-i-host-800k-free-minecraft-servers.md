@@ -8,6 +8,7 @@ title: How I Host 800k Free Minecraft Servers!
 shortDescription: A video by Tubputers on YouTube
 image: https://gbti.network/media/shares/atwellpub/20260812033745-how-i-host-800k-free-minecraft-servers-8e56662a.webp
 imageSource: https://i.ytimg.com/vi/yc0rwKXB1fo/maxresdefault.jpg
+category: hosting
 id: 20260812033745-how-i-host-800k-free-minecraft-servers
 createdAt: '2026-08-12T03:37:45.306Z'
 type: share

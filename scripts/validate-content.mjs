@@ -15,6 +15,7 @@ import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-0
 import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the coupon registry
 import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the followed-topic -> news-category map
 import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
+import { shareCategoryProblem } from '../membership/share-category.mjs'; // a published share needs a category
 import { targetProblems, aiToolEntries } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
 import { licenseProblems, licenseEntries } from '../membership/licenses.mjs'; // sow-305: the controlled license list
 import { normalizeBanword, BANWORD_LIMIT, BANWORD_MIN, BANWORD_MAX } from '../membership/news-banwords.mjs'; // sow-372: the blocked-word list
@@ -302,6 +303,11 @@ function checkContent(file, owner, type) {
     // routes the share's category Discord post, so an unknown key would silently never route.
     if (type === 'share' && fmc.category != null && !TOPIC_KEYS.has(String(fmc.category))) {
       errors.push(`${rel}: share category "${fmc.category}" is not a topic key in house/topics.yml (SOW-087)`);
+    }
+    // A PUBLISHED share must carry one (owner, 2026-09-21). The builder and the Worker refuse it first
+    // (membership/share-category.mjs); this is the backstop for a share committed by hand.
+    if (type === 'share' && shareCategoryProblem(fmc)) {
+      errors.push(`${rel}: a published share needs a category, one topic key from house/topics.yml`);
     }
     // SOW-032: a share comment is identified by the composite "<author>/<shareId>" targetSlug (a Share id is a
     // member-scoped timestamp-slug, not globally unique), so it stays unambiguous across members. The shareId stamp

@@ -50,9 +50,9 @@ test('the share schema keeps imageSource and imageRemoved in its parsed output, 
   assert.equal(parsed.imageSource, 'https://img.test/a.png', 'a zod object drops keys it does not name from its output');
   assert.equal(parsed.imageRemoved, true);
   assert.equal(shareSchema.safeParse({ id: 'x', author: 'ann', createdAt: '2026-09-01T00:00:00Z', imageRemoved: 'yes' }).success, false, 'the flag is a boolean');
-  const built = buildShareFile({ username: 'ann', input: { id: '20260901-x', createdAt: '2026-09-01T00:00:00Z', visibility: 'public', url: 'https://a.test/p', image: OURS, imageSource: 'https://img.test/a.png' } });
+  const built = buildShareFile({ username: 'ann', input: { id: '20260901-x', createdAt: '2026-09-01T00:00:00Z', visibility: 'public', category: 'devops', url: 'https://a.test/p', image: OURS, imageSource: 'https://img.test/a.png' } });
   assert.match(built.markdown, /^imageSource: https:\/\/img\.test\/a\.png$/m);
-  const removed = buildShareFile({ username: 'ann', input: { id: '20260901-y', createdAt: '2026-09-01T00:00:00Z', visibility: 'public', url: 'https://a.test/p', imageRemoved: true } });
+  const removed = buildShareFile({ username: 'ann', input: { id: '20260901-y', createdAt: '2026-09-01T00:00:00Z', visibility: 'public', category: 'devops', url: 'https://a.test/p', imageRemoved: true } });
   assert.match(removed.markdown, /^imageRemoved: true$/m);
   const s = shareSummary('members/ann/shares/20260901-x.md', { id: '20260901-x', author: 'ann', image: OURS, imageSource: 'https://img.test/a.png', imageRemoved: true, visibility: 'public' });
   assert.equal(s.imageSource, 'https://img.test/a.png');

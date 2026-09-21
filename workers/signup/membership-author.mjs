@@ -22,6 +22,7 @@ import { audienceRefusal, approvedOnMain } from './membership-audience.mjs'; // 
 export { audienceRefusal, approvedOnMain }; // tests and callers keep importing them from here
 import { recordEditorialItems, removeEditorialItems } from './editorial-records.mjs'; // sow-323: the review queue
 import { parseMembersIndex, validateHostedRequest, hostedBranchFor, statedVisibility } from '../../membership/hosted-author.mjs';
+import { readTopicsVocab } from './topic-suggest.mjs'; // the share category must be a real topic
 import { queueableItems } from '../../membership/editorial-queue.mjs';
 import { TIER, meetsTier } from '../../membership/tiers.mjs';
 
@@ -138,7 +139,11 @@ export async function membershipAuthor(request, env, deps = {}) {
   const allowAnyFolder = superadmin.ok === true;
 
   const itemId = String(payload?.itemId ?? '');
-  const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder });
+  // The topic list is read only when a share is in the request. An unreadable mirror gives no keys, and the
+  // category is then checked for presence alone (validate-content still checks the key in CI).
+  const hasShare = Array.isArray(payload?.files) && payload.files.some((f) => /\/shares\/[^/]+\.md$/.test(String(f?.path ?? '')));
+  const topicKeys = hasShare && kv ? Object.keys(await readTopicsVocab(kv)) : null;
+  const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder, topicKeys });
   if (!check.ok) return { status: check.status ?? 400, body: { error: 'bad_request', message: check.error } };
   // sow-323: PUBLISHING is open to any paid supporter. What is gated is the AUDIENCE: every member item
   // starts members-only and a superadmin decides what becomes public (owner, 2026-09-12). Decided from the

@@ -17337,6 +17337,20 @@ function stripTrackingParamsInText(input) {
   return lines.join("\n");
 }
 
+// membership/share-category.mjs
+var SHARE_CATEGORY_REQUIRED = "A published share needs a category. Choose the topic it belongs to, then publish.";
+var hasText = (v) => typeof v === "string" && v.trim() !== "";
+function shareCategoryProblem(frontmatter, { topicKeys = null } = {}) {
+  const fm = frontmatter && typeof frontmatter === "object" ? frontmatter : {};
+  if (fm.status !== "published") return null;
+  if (!hasText(fm.category)) return SHARE_CATEGORY_REQUIRED;
+  const keys = topicKeys instanceof Set ? topicKeys : Array.isArray(topicKeys) ? new Set(topicKeys) : null;
+  if (keys && keys.size > 0 && !keys.has(fm.category.trim())) {
+    return `"${fm.category.trim()}" is not one of the network's topics. Choose a category from the list, then publish.`;
+  }
+  return null;
+}
+
 // client/src/content-ops.mjs
 var SUBDIR = Object.freeze({ post: "posts", project: "projects", product: "projects", prompt: "prompts" });
 var MAX_BODY_BYTES = 1e6;
@@ -17412,6 +17426,8 @@ function buildShareFile({ username, input, body = "" }) {
   const note = stripTrackingParamsInText(body);
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("share", result.error.issues);
+  const categoryProblem = shareCategoryProblem(cleaned);
+  if (categoryProblem) throw new ContentValidationError("share", [{ path: ["category"], message: categoryProblem }]);
   const id = cleaned.id;
   const bodyStr = String(note ?? "").trim();
   if (bodyStr.length > MAX_BODY_BYTES) {

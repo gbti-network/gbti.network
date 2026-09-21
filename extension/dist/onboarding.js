@@ -15903,7 +15903,8 @@ ${listStyleProseCss(".doc-blocks")}
   var CSS25 = `
   /* sow-304: edit-mode controls */
   .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
-  .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
+  .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden], .catnote[hidden] { display: none; }
+  .catnote button, .catnote button:hover { font: inherit; padding: 0; border: 0; background: none; color: var(--brand); text-decoration: underline; cursor: pointer; width: auto; }
   .unpub { font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: var(--fg-mute, #666); cursor: pointer; margin-right: auto; }
   input[type=url][readonly] { opacity: .75; }
 
@@ -16092,14 +16093,14 @@ ${listStyleProseCss(".doc-blocks")}
 
         <section class="step" data-step="2" hidden>
           <h3>Does this look right?</h3>
-          <p class="sub">Edit anything that reads badly. Every field is optional.</p>
+          <p class="sub">Edit anything that reads badly. Choose a category; every other field is optional.</p>
           <div class="og" data-og hidden></div>
           <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
           <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
           <div class="autoblock">
             <span class="autolabel">${IC.bolt} Categorised and tagged automatically</span>
-            <select class="cat" aria-label="Category">
-              <option value="">Category (optional)</option>
+            <select class="cat" aria-label="Category" required>
+              <option value="">Choose a category</option>
             </select>
             <input class="tags" type="text" aria-label="Tags" placeholder="Tags (optional, comma separated)" maxlength="120" />
           </div>
@@ -16136,6 +16137,7 @@ ${listStyleProseCss(".doc-blocks")}
             </button>
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
+          <p class="sub catnote" data-cat-note hidden>A share needs a category before it can be posted. <button type="button" data-goto="2">Choose one</button></p>
         </section>
 
         <div class="wizfoot">
@@ -16155,6 +16157,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._suggestedTags = [];
       this.$(".card")?.addEventListener("click", (e) => this._onCardClick(e));
       this.on(".post", "click", () => this._post());
+      this.on("select.cat", "change", () => this._syncPostReady());
       this.on("input[type=url]", "change", () => this._fetchPreview());
       this.on("input[type=url]", "paste", () => setTimeout(() => this._fetchPreview(), 0));
       this.on("input[type=url]", "input", () => {
@@ -16233,6 +16236,21 @@ ${listStyleProseCss(".doc-blocks")}
           next.innerHTML = `${esc(this._edit && step === 1 ? "Next" : NEXT_LABEL[step])} ${IC.fwd}`;
         }
       }
+      this._syncPostReady();
+    }
+    // A published share needs a category (owner, 2026-09-21). The builder and the Worker refuse one without it
+    // (membership/share-category.mjs); this stops the member first and says why. Taking a share down, or saving a
+    // draft, publishes nothing and needs none.
+    _needsCategory(status2 = null) {
+      const next = status2 || (this._edit?.status === "draft" ? "draft" : "published");
+      return next === "published" && !this.$("select.cat")?.value;
+    }
+    _syncPostReady() {
+      const missing = this._needsCategory();
+      const post = this.$(".post");
+      if (post) post.disabled = missing;
+      const note = this.$("[data-cat-note]");
+      if (note) note.hidden = !missing;
     }
     _setNoteTab(tab) {
       this._noteTab = tab === "preview" ? "preview" : "write";
@@ -16458,7 +16476,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     // SOW-087: populate the category select from the public topic vocabulary (/topics.json). The vocabulary is
     // static per session, so it is fetched once and reused across re-renders. A fetch failure leaves the select
-    // with only the empty option (category stays optional).
+    // with only the empty option, and Post then stays disabled: a share cannot publish without a category.
     async _loadTopics() {
       if (!this._topics) {
         try {
@@ -16470,7 +16488,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const sel = this.$("select.cat");
       if (!sel) return;
-      sel.innerHTML = `<option value="">Category (optional)</option>` + this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join("");
+      sel.innerHTML = `<option value="">Choose a category</option>` + this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join("");
       this._applySuggested();
     }
     /**
@@ -16544,6 +16562,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (sel && this._suggested && !sel.value && [...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
       const tin = this.$("input.tags");
       if (tin && !tin.value.trim() && this._suggestedTags?.length) tin.value = this._suggestedTags.join(", ");
+      this._syncPostReady();
     }
     // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
     // EMPTY title/desc fields (never clobbering author text), so it does not re-render the composer.
@@ -16631,6 +16650,12 @@ ${listStyleProseCss(".doc-blocks")}
         this._say(msg, "Add a title, a note, or a link first.", "err");
         return;
       }
+      if (this._needsCategory(status2)) {
+        this._go(2);
+        this.$("select.cat")?.focus();
+        this._say(msg, "Choose a category before posting.", "err");
+        return;
+      }
       const btn = this.$("button.post");
       const btnLabel = btn ? btn.textContent : "";
       if (btn) {
@@ -16709,6 +16734,7 @@ ${listStyleProseCss(".doc-blocks")}
           btn.disabled = false;
           btn.textContent = this._edit ? btnLabel : btnLabel === "Save changes" ? "Post Share" : btnLabel;
         }
+        this._syncPostReady();
       }
     }
     _say(el, text2, kind2) {

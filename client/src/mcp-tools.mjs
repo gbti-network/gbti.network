@@ -231,7 +231,7 @@ export const TOOLS = [
   // to keep in the members stream.
   {
     name: 'add_share',
-    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares go to the members-only stream (body encrypted); only a superadmin can post a public share, by passing `visibility: "public"`. Title, description and image are auto-extracted from the url unless you pass them. Optional: title, shortDescription, image, category (one flat topic key), tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
+    description: 'Post a SHARE (a link to something worth reading) to the network. REQUIRED `url`. Shares go to the members-only stream (body encrypted); only a superadmin can post a public share, by passing `visibility: "public"`. Title, description and image are auto-extracted from the url unless you pass them. A published share needs a `category`: one flat topic key from https://gbti.network/topics.json. Leave it out and the category suggested for the link is used; with neither, the share is refused. Optional: title, shortDescription, image, tags[], body (your own note about the link). author is forced to you; posting a Share is paid-only and goes through the gate. Returns the PR number + url.',
     inputSchema: obj(
       {
         url: { type: 'string', description: 'The link being shared (absolute http/https URL).' },
@@ -239,7 +239,7 @@ export const TOOLS = [
         title: { type: 'string' },
         shortDescription: { type: 'string' },
         image: { type: 'string' },
-        category: { type: 'string' },
+        category: { type: 'string', description: 'One topic key from https://gbti.network/topics.json. Defaults to the category suggested for the link.' },
         tags: { type: 'array', items: { type: 'string' } },
         body: { type: 'string', description: 'Optional note in your own words about why the link is worth reading.' },
       },
@@ -297,7 +297,9 @@ export async function addShare(ctx, args = {}) {
     // other. https only, and only when the provider named the channel as well, so no card is left unnamed.
     creatorUrl: /^https:\/\//i.test(String(og?.creatorUrl || '')) ? og.creatorUrl : undefined,
     creatorName: /^https:\/\//i.test(String(og?.creatorUrl || '')) ? og?.creatorName : undefined,
-    category: args.category,
+    // A published share needs a category (owner, 2026-09-21). The composer pre-fills the Worker's suggestion for the
+    // link; an agent that names none gets the same suggestion rather than a refusal it cannot act on.
+    category: args.category || og?.suggestedCategory || undefined,
     tags: Array.isArray(args.tags) ? args.tags : undefined,
   });
   // NB: publishShare's `title` is the PULL REQUEST title, not the share's. Leave it unset so it derives

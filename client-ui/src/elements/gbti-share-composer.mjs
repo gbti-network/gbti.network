@@ -94,7 +94,8 @@ export function ogPreviewState({ og = null, error = null } = {}) {
 const CSS = `
   /* sow-304: edit-mode controls */
   .rmlink { margin-left: 8px; flex: none; font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; cursor: pointer; }
-  .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden] { display: none; }
+  .rmlink[hidden], .unpub[hidden], .editnote[hidden], .audnote[hidden], .catnote[hidden] { display: none; }
+  .catnote button, .catnote button:hover { font: inherit; padding: 0; border: 0; background: none; color: var(--brand); text-decoration: underline; cursor: pointer; width: auto; }
   .unpub { font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #ddd); background: transparent; color: var(--fg-mute, #666); cursor: pointer; margin-right: auto; }
   input[type=url][readonly] { opacity: .75; }
 
@@ -290,14 +291,14 @@ class GbtiShareComposer extends GbtiElement {
 
         <section class="step" data-step="2" hidden>
           <h3>Does this look right?</h3>
-          <p class="sub">Edit anything that reads badly. Every field is optional.</p>
+          <p class="sub">Edit anything that reads badly. Choose a category; every other field is optional.</p>
           <div class="og" data-og hidden></div>
           <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
           <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
           <div class="autoblock">
             <span class="autolabel">${IC.bolt} Categorised and tagged automatically</span>
-            <select class="cat" aria-label="Category">
-              <option value="">Category (optional)</option>
+            <select class="cat" aria-label="Category" required>
+              <option value="">Choose a category</option>
             </select>
             <input class="tags" type="text" aria-label="Tags" placeholder="Tags (optional, comma separated)" maxlength="120" />
           </div>
@@ -334,6 +335,7 @@ class GbtiShareComposer extends GbtiElement {
             </button>
           </div>
           <p class="sub audnote" data-aud-note hidden></p>
+          <p class="sub catnote" data-cat-note hidden>A share needs a category before it can be posted. <button type="button" data-goto="2">Choose one</button></p>
         </section>
 
         <div class="wizfoot">
@@ -357,6 +359,7 @@ class GbtiShareComposer extends GbtiElement {
     // `on()` binds a single element, so a group of buttons needs delegation.
     this.$('.card')?.addEventListener('click', (e) => this._onCardClick(e));
     this.on('.post', 'click', () => this._post());
+    this.on('select.cat', 'change', () => this._syncPostReady());
     // SOW-057 + SOW-102: fetch the link preview EAGERLY — on paste and on a debounced input, not only on
     // blur/enter (change) — so a pasted URL imports without the member ever leaving the field. The same-URL
     // guard in _fetchPreview keeps the overlapping triggers from double-fetching.
@@ -419,6 +422,21 @@ class GbtiShareComposer extends GbtiElement {
       // sow-304: in edit mode the link is frozen, so step 1's "Fetch details" would promise a fetch that never runs
       if (next) { next.hidden = false; next.innerHTML = `${esc(this._edit && step === 1 ? 'Next' : NEXT_LABEL[step])} ${IC.fwd}`; }
     }
+    this._syncPostReady();
+  }
+
+  // A published share needs a category (owner, 2026-09-21). The builder and the Worker refuse one without it
+  // (membership/share-category.mjs); this stops the member first and says why. Taking a share down, or saving a
+  // draft, publishes nothing and needs none.
+  _needsCategory(status = null) {
+    const next = status || (this._edit?.status === 'draft' ? 'draft' : 'published');
+    return next === 'published' && !this.$('select.cat')?.value;
+  }
+
+  _syncPostReady() {
+    const missing = this._needsCategory();
+    const post = this.$('.post'); if (post) post.disabled = missing;
+    const note = this.$('[data-cat-note]'); if (note) note.hidden = !missing;
   }
 
   _setNoteTab(tab) {
@@ -609,7 +627,7 @@ class GbtiShareComposer extends GbtiElement {
 
   // SOW-087: populate the category select from the public topic vocabulary (/topics.json). The vocabulary is
   // static per session, so it is fetched once and reused across re-renders. A fetch failure leaves the select
-  // with only the empty option (category stays optional).
+  // with only the empty option, and Post then stays disabled: a share cannot publish without a category.
   async _loadTopics() {
     if (!this._topics) {
       try {
@@ -621,7 +639,7 @@ class GbtiShareComposer extends GbtiElement {
     }
     const sel = this.$('select.cat');
     if (!sel) return;
-    sel.innerHTML = `<option value="">Category (optional)</option>` +
+    sel.innerHTML = `<option value="">Choose a category</option>` +
       this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('');
     this._applySuggested();
   }
@@ -697,6 +715,7 @@ class GbtiShareComposer extends GbtiElement {
     // independently: a member who picked a category but left tags blank still gets tags suggested.
     const tin = this.$('input.tags');
     if (tin && !tin.value.trim() && this._suggestedTags?.length) tin.value = this._suggestedTags.join(', ');
+    this._syncPostReady();
   }
 
   // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
@@ -774,7 +793,7 @@ class GbtiShareComposer extends GbtiElement {
     const body = (this.$('textarea')?.value || '').trim();
     const url = (this.$('input[type=url]')?.value || '').trim();
     const visibility = this._visibility || 'members'; // sow-192 Phase E: the audience card selection
-    const category = this.$('select.cat')?.value || ''; // SOW-087: the optional topic category
+    const category = this.$('select.cat')?.value || ''; // SOW-087: the topic category, required to publish
     // sow-303: free-form tags, normalized HERE rather than trusted. buildShareFile parses against the share
     // schema but serializes the pre-parse object, so the schema's tag normalization is computed and thrown
     // away while its rejection still fires: a tag that is not already house-shaped does not get fixed, it
@@ -782,6 +801,7 @@ class GbtiShareComposer extends GbtiElement {
     const tags = normalizeTagInput(this.$('input.tags')?.value);
     const msg = this.$('.msg');
     if (!this._edit && !body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
+    if (this._needsCategory(status)) { this._go(2); this.$('select.cat')?.focus(); this._say(msg, 'Choose a category before posting.', 'err'); return; }
     // SOW-092: a real progressing state — disable the button and show a ring spinner for the several
     // seconds postShare spends on the fork commit + PR round-trip (the card dim alone read as stuck).
     const btn = this.$('button.post');
@@ -857,6 +877,7 @@ class GbtiShareComposer extends GbtiElement {
       // sow-304: after a successful edit the chrome is already reset to the create form, so the captured
       // "Save changes" label must not be written back over it (the drive caught exactly that).
       if (btn) { btn.disabled = false; btn.textContent = this._edit ? btnLabel : (btnLabel === 'Save changes' ? 'Post Share' : btnLabel); }
+      this._syncPostReady(); // re-enabled above; still disabled while the category is missing
     }
   }
 
