@@ -259,10 +259,6 @@ covers:
     file: 20260826131343-every-song-and-radio-station-we-ve-spotted-in-th-7126247b.webp
     sha256: 7126247b215023469d8f9b4eb7a2a5e2182fc537ed918625ba4907be511f973c
     copiedAt: '2026-09-14'
-  gbtilabs/20260910215127-google-deepmind-releases-predictions-for-9-billi:
-    source: https://mlq.ai/static/mlq/og-default.png
-    failed: http-403
-    triedAt: '2026-09-14'
   gbtilabs/20260911163712-lg-tv-flaws-could-let-attackers-listen-in-even-i:
     source: https://www.malwarebytes.com/wp-content/uploads/sites/2/2026/09/LG_logo.png
     file: 20260911163712-lg-tv-flaws-could-let-attackers-listen-in-even-i-4bcc3a7b.webp
