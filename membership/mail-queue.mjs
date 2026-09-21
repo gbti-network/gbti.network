@@ -48,7 +48,7 @@ export function sendKey(issueId, recipientHash) {
 /**
  * Build a canonical, pending send record for one recipient of one issue. PURE. Validates the identifiers and
  * stamps enqueuedAt. `availableAt` is when the record first becomes eligible to send (the issue's send-start,
- * so a Tuesday-morning compile can enqueue records that only begin draining at the send window); it defaults to
+ * so a Monday-morning compile can enqueue records that only begin draining at the send window); it defaults to
  * enqueuedAt. `order` is the recipient's position in the per-issue fairness rotation (see rotateOrder), used by
  * planDrain to release the queue in a stable, rotated order so the same subscribers are not always last.
  */

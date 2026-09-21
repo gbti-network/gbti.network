@@ -1,9 +1,9 @@
 // sow-166 follow-up: the admin-gated MANUAL mail triggers. Before this route, compileWeeklyIssue and drainMail
 // were reachable only from the cron map, so the first end-to-end proof of the mail chain could not happen
-// before the next Tuesday 14:00 UTC. Pure over injected authorize/compile/drain/kv; no network, no secrets.
+// before the next weekly cron. Pure over injected authorize/compile/drain/kv; no network, no secrets.
 //
 // The load-bearing test in this file is the rehearsal-id one. A real compile fired on an off day becomes
-// Tuesday's PRIOR issue and consumes the 90-day inaugural back catalogue, so the rehearsal would silently
+// Monday's PRIOR issue and consumes the 90-day inaugural back catalogue, so the rehearsal would silently
 // spend the send it was rehearsing for. `test-compile` mints an id listPriorIssueIds cannot count, and that
 // property is asserted here rather than trusted from a comment.
 import { test } from 'node:test';

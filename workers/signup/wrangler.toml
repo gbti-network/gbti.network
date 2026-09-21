@@ -333,9 +333,11 @@ dataset = "gbti_ext_usage"
 
 # SOW-058: the syndication drain cron for production (wrangler does not inherit the top-level [triggers]).
 [env.production.triggers]
-# The two Tuesday entries are the SAME job: 7 AM America/Chicago is 12:00 UTC under daylight time and 13:00
-# UTC under standard time, and cron here is UTC with no daylight handling. isCentralDigestHour (index.mjs)
-# runs the compile on whichever one is the 07:00 hour today and no-ops the other. Do not "tidy" one away.
+# The two weekly entries run on MONDAY (Cloudflare numbers cron weekdays from Sunday = 1, so `2` is Monday;
+# test/digest-send-day.test.mjs holds the subscriber copy to it). They are the SAME job: 7 AM America/Chicago
+# is 12:00 UTC under daylight time and 13:00 UTC under standard time, and cron here is UTC with no daylight
+# handling. isCentralDigestHour (index.mjs) runs the compile on whichever one is the 07:00 hour today and
+# no-ops the other. Do not "tidy" one away.
 crons = ["*/5 * * * *", "0 * * * *", "30 * * * *", "0 12 * * 2", "0 13 * * 2"]
 
 # SOW-124: retain production Worker logs in the dashboard (wrangler does not inherit the top-level block).

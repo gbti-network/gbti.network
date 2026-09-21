@@ -2,7 +2,7 @@
 // after-send hook). Fake KV, injected sender, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { issueDateStamp, issueRow, rollup, composeStatsReport, statsKey, reportKey } from '../membership/mail-stats.mjs';
+import { issueDateStamp, issueRow, rollup, composeStatsReport, statsKey, reportKey, reportSentKey, isReportWindow } from '../membership/mail-stats.mjs';
 import { snapshotIssueStats, collectWeeklyStats, sendStatsReport, maybeSendWeeklyReport } from '../workers/signup/mail-stats-report.mjs';
 import { openKey } from '../membership/mail-open.mjs';
 import { clickKey } from '../membership/mail-click.mjs';
@@ -28,7 +28,10 @@ function sink() {
   const sent = [];
   return { sent, send: async (msg) => { sent.push(msg); return { id: 'x' }; } };
 }
+// NOW is a Wednesday, outside the report window: the snapshot happens, the email does not. FRIDAY is 09:00
+// America/Chicago on the Friday after (14:00 UTC under daylight time), the first moment the email may go.
 const NOW = () => Date.parse('2026-08-26T12:00:00.000Z');
+const FRIDAY = () => Date.parse('2026-08-28T14:00:00.000Z');
 const RECIP = { ADMIN_ALERT_EMAIL: 'owner@example.com', MAIL_FROM: 'digest@gbti.network' };
 
 // Seed one issue: a frozen issue key, a pending index, N sent records, and open/click aggregates.
@@ -105,32 +108,102 @@ test('collectWeeklyStats reads the trailing N weekly issues through a given id',
   assert.deepEqual(two.map((r) => r.issueId), ['weekly-2026-08-18', 'weekly-2026-08-11']);
 });
 
+// ---------- the report window ----------
+
+test('isReportWindow opens at 09:00 America/Chicago on Friday and closes when Monday begins', () => {
+  const at = (iso) => isReportWindow(Date.parse(iso));
+  assert.equal(at('2026-09-24T20:00:00Z'), false, 'Thursday afternoon is too early');
+  assert.equal(at('2026-09-25T13:59:00Z'), false, 'Friday 08:59 Chicago (daylight time) is too early');
+  assert.equal(at('2026-09-25T14:00:00Z'), true, 'Friday 09:00 Chicago opens the window');
+  assert.equal(at('2026-09-26T12:00:00Z'), true, 'Saturday is the catch-up');
+  assert.equal(at('2026-09-28T04:59:00Z'), true, 'Sunday 23:59 Chicago is still the catch-up');
+  assert.equal(at('2026-09-28T05:00:00Z'), false, 'Monday 00:00 Chicago closes it, before the next issue compiles');
+  assert.equal(at('2026-01-09T14:59:00Z'), false, 'Friday 08:59 Chicago under standard time');
+  assert.equal(at('2026-01-09T15:00:00Z'), true, 'Friday 09:00 Chicago under standard time');
+});
+
+test('isReportWindow fails open on input it cannot place', () => {
+  for (const bad of [NaN, null, '', undefined, Infinity]) assert.equal(isReportWindow(bad), true);
+  assert.equal(isReportWindow(Date.parse('2026-09-24T20:00:00Z'), { timeZone: 'Mars/Olympus_Mons' }), true);
+});
+
 // ---------- the after-send hook ----------
 
-test('maybeSendWeeklyReport: a completed issue snapshots, flags, and emails once', async () => {
+test('maybeSendWeeklyReport: a completed issue snapshots at once and waits for Friday to email', async () => {
   const kv = makeKV();
   seedIssue(kv, 'weekly-2026-08-25', { sent: 10, pending: [], opens: 4, clicks: 2 });
+
+  // Wednesday: the snapshot is taken (the records it counts expire), and nothing is emailed.
+  const early = sink();
+  const res0 = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: early.send, now: NOW });
+  assert.deepEqual(res0.snapshotted, ['weekly-2026-08-25']);
+  assert.equal(res0.reported, null);
+  assert.equal(res0.waiting, 'report window');
+  assert.equal(early.sent.length, 0, 'no email before Friday 09:00 Chicago');
+  assert.ok(kv.m.get(reportKey('weekly-2026-08-25')), 'the snapshot flag is set');
+  assert.ok(kv.m.get(statsKey('weekly-2026-08-25')), 'the snapshot is written');
+  assert.equal(kv.m.get(reportSentKey('weekly-2026-08-25')), undefined, 'the email flag is not');
+
+  // Friday 09:00 Chicago: one email.
   const { sent, send } = sink();
-  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: NOW });
+  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: FRIDAY });
   assert.equal(res.reported, 'weekly-2026-08-25');
   assert.equal(sent.length, 1, 'one report email');
   assert.equal(sent[0].to, 'owner@example.com');
   assert.ok(sent[0].subject.includes('10 sent'));
-  assert.ok(kv.m.get(reportKey('weekly-2026-08-25')), 'the report flag is set');
-  assert.ok(kv.m.get(statsKey('weekly-2026-08-25')), 'the snapshot is written');
+  assert.ok(kv.m.get(reportSentKey('weekly-2026-08-25')), 'the email flag is set');
 
-  // second run is a no-op: no second email
+  // Every later tick of the window is a no-op: no second email.
   const { sent: sent2, send: send2 } = sink();
-  const res2 = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send2, now: NOW });
+  const res2 = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send2, now: () => FRIDAY() + 86400000 });
   assert.equal(res2.reported, null);
-  assert.equal(sent2.length, 0, 'never re-reports a flagged issue');
+  assert.equal(sent2.length, 0, 'never re-reports an issue already emailed');
+});
+
+test('maybeSendWeeklyReport: an issue snapshotted under the old flag alone is still emailed on Friday', async () => {
+  // The state production is in when this ships: weekly-2026-09-21 was snapshotted and emailed under the single
+  // old flag, and has no sent flag. The first Friday re-sends it, now with four days of opens behind it.
+  const kv = makeKV();
+  seedIssue(kv, 'weekly-2026-08-25', { sent: 10, pending: [], opens: 4 });
+  kv.m.set(statsKey('weekly-2026-08-25'), JSON.stringify({ issueId: 'weekly-2026-08-25', sent: 10, failed: 0, suppressed: 0 }));
+  kv.m.set(reportKey('weekly-2026-08-25'), JSON.stringify({ reportedAt: 1 }));
+  const { sent, send } = sink();
+  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: FRIDAY });
+  assert.equal(res.reported, 'weekly-2026-08-25');
+  assert.equal(sent.length, 1);
+});
+
+test('maybeSendWeeklyReport reports the NEWEST issue only, never a backlog of older ones', async () => {
+  const kv = makeKV();
+  seedIssue(kv, 'weekly-2026-08-18', { sent: 8, pending: [] });
+  seedIssue(kv, 'weekly-2026-08-25', { sent: 10, pending: [] });
+  const { sent, send } = sink();
+  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: FRIDAY });
+  assert.equal(res.reported, 'weekly-2026-08-25');
+  assert.equal(sent.length, 1, 'one email for the week');
+  // A later tick in the same window must not go back for the older, unreported issue.
+  const later = sink();
+  await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: later.send, now: () => FRIDAY() + 3600000 });
+  assert.equal(later.sent.length, 0, 'the older issue is covered by the 4-week table, not a second email');
+  assert.equal(kv.m.get(reportSentKey('weekly-2026-08-18')), undefined);
+});
+
+test('maybeSendWeeklyReport does not retry a failed send every five minutes', async () => {
+  const kv = makeKV();
+  seedIssue(kv, 'weekly-2026-08-25', { sent: 10, pending: [] });
+  let calls = 0;
+  const failing = async () => { calls += 1; throw new Error('resend 500'); };
+  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: failing, now: FRIDAY });
+  assert.equal(res.send.sent, false);
+  await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: failing, now: () => FRIDAY() + 300000 });
+  assert.equal(calls, 1, 'the sent flag is claimed before the send, so the next tick does not send again');
 });
 
 test('maybeSendWeeklyReport: a still-draining issue is not reported or flagged', async () => {
   const kv = makeKV();
   seedIssue(kv, 'weekly-2026-08-25', { sent: 3, pending: ['stillPendingHash'], opens: 1 });
   const { sent, send } = sink();
-  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: NOW });
+  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: FRIDAY });
   assert.equal(res.reported, null);
   assert.equal(sent.length, 0);
   assert.equal(kv.m.get(reportKey('weekly-2026-08-25')), undefined, 'no flag while still sending');
@@ -140,7 +213,7 @@ test('maybeSendWeeklyReport: a frozen-but-not-yet-sent issue (no send records) i
   const kv = makeKV();
   seedIssue(kv, 'weekly-2026-08-25', { pending: [] }); // pending empty AND zero send records (the race window)
   const { sent, send } = sink();
-  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: NOW });
+  const res = await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: FRIDAY });
   assert.equal(res.reported, null);
   assert.equal(sent.length, 0);
   assert.equal(kv.m.get(reportKey('weekly-2026-08-25')), undefined, 'the freeze/enqueue race does not prematurely flag');
@@ -229,7 +302,7 @@ test('maybeSendWeeklyReport emails the html body, not only the text one', async 
   const kv = makeKV();
   seedIssue(kv, 'weekly-2026-08-25', { sent: 10, pending: [], opens: 4, clicks: 2 });
   const { sent, send } = sink();
-  await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: NOW });
+  await maybeSendWeeklyReport({ ...RECIP, SIGNUP_KV: kv }, { sendEmail: send, now: FRIDAY });
   assert.equal(sent.length, 1);
   assert.ok(sent[0].html && sent[0].html.includes('<table'), 'the scheduled path carries html all the way to the send');
   assert.ok(sent[0].html.includes('>2026-08-25<'), 'and the issue row is in it');

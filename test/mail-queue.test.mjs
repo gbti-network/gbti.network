@@ -18,7 +18,7 @@ test('buildMailSend stamps a pending record and defaults availableAt to enqueued
   assert.equal(r.order, 4);
   assert.equal(r.attempts, 0);
   assert.equal(r.claimedAt, null);
-  // an explicit send window (the Tuesday-morning start) overrides the default
+  // an explicit send window (the Monday-morning start) overrides the default
   const later = buildMailSend({ issueId: 'i', recipientHash: 'h', customerId: 'c' }, { now: at(1000), availableAt: 5000 });
   assert.equal(later.availableAt, 5000);
 });

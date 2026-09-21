@@ -221,7 +221,8 @@ test('newsBlurb leaves a sentence that merely BEGINS "The post" alone (both halv
   assert.equal(newsBlurb(s), s, 'the anchor needs "appeared first on" too, or ordinary prose gets eaten');
 });
 
-// The owner moved the digest to 7 AM Central on 2026-08-25, every Tuesday, permanently. That hour is not
+// The owner moved the digest to 7 AM Central on 2026-08-25, every week, permanently (it runs Monday; see
+// test/digest-send-day.test.mjs). The HOUR is what these cases test, so the fixture dates' weekday is incidental. That hour is not
 // expressible as one UTC cron, so two are declared and this decides which is real. The dates below are the
 // two sides of a real US daylight-saving boundary, chosen so a naive fixed-offset implementation fails.
 test('7 AM Central: 12:00 UTC is the real run in summer, 13:00 UTC is the impostor', () => {
@@ -234,7 +235,7 @@ test('7 AM Central: the pair SWAPS across the daylight boundary, which a fixed o
   const winterTuesday = (utcHour) => Date.UTC(2027, 0, 5, utcHour, 0, 0); // Tue 5 Jan 2027, CST (UTC-6)
   assert.equal(isCentralDigestHour(winterTuesday(13)), true, '13:00 UTC is 07:00 Chicago in January');
   assert.equal(isCentralDigestHour(winterTuesday(12)), false, '12:00 UTC is 06:00 Chicago in January');
-  // Stated as the property rather than as two more numbers: on any given Tuesday exactly ONE of the two
+  // Stated as the property rather than as two more numbers: on any given day exactly ONE of the two
   // declared triggers is the 07:00 hour. If both were ever true the digest would compile an hour early; if
   // neither were, the week would be skipped silently.
   for (const [y, m, d] of [[2026, 7, 25], [2026, 10, 3], [2027, 0, 5], [2027, 2, 16]]) {

@@ -187,7 +187,7 @@ test('every section in the order has a label and a note defined, so none can ren
 
 test('the notes are anchored to the cadence, not to the reading date', () => {
   // The issue is frozen once and the send smooths across a rate budget, so the last recipient may open it
-  // days after the first. Copy that says "this week" is true on Tuesday and drifts for everyone behind them.
+  // days after the first. Copy that says "this week" is true on Monday and drifts for everyone behind them.
   for (const [key, note] of Object.entries(EMPTY_SECTION_NOTES)) {
     assert.ok(!/\bthis week\b/i.test(note), `${key} note is anchored to the reading date ("this week")`);
     assert.ok(!/\b(today|yesterday|tomorrow|right now)\b/i.test(note), `${key} note uses a reading-date anchor`);

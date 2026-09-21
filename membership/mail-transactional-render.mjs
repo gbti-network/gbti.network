@@ -63,7 +63,7 @@ export function renderConfirmationEmail({ confirmUrl, siteUrl } = {}) {
   const site = safeUrl(str(siteUrl).trim()) || 'https://gbti.network';
   const safe = escapeHtml(url);
 
-  const preheaderText = escapeHtml('One click and the weekly digest starts arriving on Tuesday mornings.');
+  const preheaderText = escapeHtml('One click and the weekly digest starts arriving on Monday mornings.');
   const preheader = `<span style="display:none;font-size:1px;color:${P.pageBg};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${preheaderText}</span>`;
 
   const header = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
@@ -77,7 +77,7 @@ export function renderConfirmationEmail({ confirmUrl, siteUrl } = {}) {
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="480" style="width:480px;background-color:${P.cardBg};border:1px solid ${P.cardBorder};border-radius:8px">`
     + `<tr><td style="padding:24px 22px">`
     + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:${P.ink};mso-line-height-rule:exactly;line-height:22px">One click and you are on the list</div>`
-    + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:${P.inkSoft};mso-line-height-rule:exactly;line-height:21px;padding-top:10px">Somebody asked for the GBTI Network weekly digest at this address. Confirm it and the digest starts arriving on Tuesday mornings.</div>`
+    + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:${P.inkSoft};mso-line-height-rule:exactly;line-height:21px;padding-top:10px">Somebody asked for the GBTI Network weekly digest at this address. Confirm it and the digest starts arriving on Monday mornings.</div>`
     + `<div style="padding-top:18px"><a href="${safe}" style="display:inline-block;background-color:${P.button};color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:6px">Confirm subscription</a></div>`
     + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:${P.meta};mso-line-height-rule:exactly;line-height:18px;padding-top:16px">If the button does not work, paste this address into your browser:</div>`
     + `<div style="font-family:'Courier New',monospace;font-size:11px;color:${P.inkSoft};mso-line-height-rule:exactly;line-height:17px;padding-top:6px;word-break:break-all"><a href="${safe}" style="color:${P.inkSoft};text-decoration:underline">${safe}</a></div>`
@@ -109,7 +109,7 @@ export function renderConfirmationEmail({ confirmUrl, siteUrl } = {}) {
   // on a text-only client has to be able to confirm, so the url is on its own line and unwrapped.
   const text = 'CONFIRM YOUR GBTI NETWORK DIGEST SUBSCRIPTION\n\n'
     + 'Somebody asked for the GBTI Network weekly digest at this address. Confirm it and the digest\n'
-    + 'starts arriving on Tuesday mornings.\n\n'
+    + 'starts arriving on Monday mornings.\n\n'
     + `${url}\n\n`
     + `This link works for ${CONFIRM_WINDOW_HOURS} hours. If you did not ask for the digest, ignore this email:\n`
     + 'nothing is sent to this address unless the link is followed.\n\n'

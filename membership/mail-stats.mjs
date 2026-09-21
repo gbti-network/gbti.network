@@ -18,6 +18,42 @@ export const STATS_PREFIX = 'mail:stats:';
 export const statsKey = (issueId) => `${STATS_PREFIX}${issueId}`;
 export const REPORT_PREFIX = 'mail:report:';
 export const reportKey = (issueId) => `${REPORT_PREFIX}${issueId}`;
+// Two flags per issue, because two things happen at two different times. reportKey marks the SNAPSHOT, taken the
+// moment an issue finishes sending, because the per-recipient records it counts expire. reportSentKey marks the
+// EMAIL, which waits for the report window below so the opens and clicks have had four days to arrive. One flag
+// for both is what sent the owner a 5% open rate measured twenty minutes after the send.
+export const REPORT_SENT_PREFIX = 'mail:report-sent:';
+export const reportSentKey = (issueId) => `${REPORT_SENT_PREFIX}${issueId}`;
+
+export const REPORT_TIME_ZONE = 'America/Chicago';
+export const REPORT_HOUR = 9;
+
+/**
+ * Is it time to email the performance report? Friday from 09:00 America/Chicago, then Saturday and Sunday as a
+ * catch-up for a Friday the drain tick missed. Monday through Thursday is false, which is what stops a report
+ * racing the Monday send: by Monday morning the newest issue is the one still going out.
+ *
+ * The weekday is read on the Chicago clock here rather than in a cron expression on purpose. Cloudflare numbers
+ * cron weekdays from Sunday = 1, so the standard Friday `5` would fire on Thursday; that off-by-one is exactly how
+ * the digest itself came to go out on Monday while its comments said Tuesday.
+ *
+ * Fails OPEN, like isCentralDigestHour: an unresolvable zone sends the report when the issue completes, which is
+ * the behaviour this replaced. It decides only when the owner hears the numbers, never who receives anything.
+ */
+export function isReportWindow(nowMs, { timeZone = REPORT_TIME_ZONE, hour = REPORT_HOUR } = {}) {
+  if (typeof nowMs !== 'number' || !Number.isFinite(nowMs)) return true;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: 'numeric', hour12: false })
+      .formatToParts(new Date(nowMs));
+    const weekday = parts.find((part) => part.type === 'weekday')?.value;
+    const h = Number(parts.find((part) => part.type === 'hour')?.value) % 24; // some ICU builds render midnight as 24
+    if (!weekday || !Number.isFinite(h)) return true;
+    if (weekday === 'Fri') return h >= hour;
+    return weekday === 'Sat' || weekday === 'Sun';
+  } catch {
+    return true;
+  }
+}
 
 /** 'weekly-2026-08-25' -> '2026-08-25' (the date label); '' when the id carries no trailing ISO date. */
 export function issueDateStamp(issueId) {

@@ -3,7 +3,7 @@
 // WHY THIS EXISTS. compileWeeklyIssue and drainMail were reachable ONLY from the cron map in index.mjs
 // (`0 12 * * 2` / `0 13 * * 2` and `*/5 * * * *`). A deployed Worker offers no way to fire a scheduled handler by hand, so
 // the first end-to-end proof of the mail chain (compile -> enqueue -> drain -> a real message at a real
-// address) could not happen before the next Tuesday 14:00 UTC, and every subsequent re-proof, post-rotation
+// address) could not happen before the next weekly cron, and every subsequent re-proof, post-rotation
 // check or re-send carried the same week-long turnaround. That is a long feedback loop on the ONE path that
 // touches other people's inboxes, which is the path that most deserves a short one.
 //
@@ -16,7 +16,7 @@
 // THE TRAP THIS ROUTE HAD TO DESIGN AROUND, and the reason `test-compile` exists. The issue id is the compile
 // DATE (`weekly-YYYY-MM-DD`, mail-compile-core.mjs), and the section window excludes every url carried by a
 // PRIOR issue. So a real `compile` fired on a Saturday to rehearse the send does not merely create a spare
-// issue: it becomes Tuesday's prior, consumes the 90-day inaugural back catalogue and the launch note, and
+// issue: it becomes Monday's prior, consumes the 90-day inaugural back catalogue and the launch note, and
 // leaves the genuine first issue nearly empty. The rehearsal would quietly spend the thing it was rehearsing
 // for. `test-compile` therefore mints a `test-YYYY-MM-DD` id, which listPriorIssueIds cannot count (it filters
 // to the canonical `weekly-` shape precisely so a hand-seeded issue is never mistaken for a mailed one), so a
@@ -73,7 +73,7 @@ async function discardTestIssue(kv, issueId) {
 /**
  * POST /membership/admin/mail { action, issueId? }
  *
- *   compile       run the weekly compile exactly as the Tuesday cron does (idempotent by date).
+ *   compile       run the weekly compile exactly as the Monday cron does (idempotent by date).
  *   test-compile  the same compile under a `test-YYYY-MM-DD` id that the weekly exclude window ignores.
  *   drain         run the mail drain now instead of waiting for the next 5-minute tick. `issueId` narrows it.
  *   discard       delete a rehearsal issue (test- ids only).

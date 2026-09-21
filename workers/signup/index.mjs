@@ -124,7 +124,7 @@ import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: 
 import { handleMailOpen } from './mail-open-route.mjs'; // the digest open counter (1x1 pixel)
 import { maybeSendWeeklyReport } from './mail-stats-report.mjs'; // after-send admin stats email (4-week rollup)
 import { resolveSiteUrl, resolveClickBase } from '../../membership/mail-click.mjs';
-import { isCentralDigestHour } from '../../membership/mail-compile-core.mjs'; // sow-166: which of the two Tuesday triggers is 7 AM Central today
+import { isCentralDigestHour } from '../../membership/mail-compile-core.mjs'; // sow-166: which of the two Monday triggers is 7 AM Central today
 import { handleSubscribe, handleConfirm } from './mail-subscribe.mjs'; // SOW-166: anonymous double-opt-in digest subscribe + confirm
 import { handleSponsorInquiry, listSponsorInquiries } from './sponsor-inquiry.mjs'; // sow-266: the digest sponsorship inquiry form + the superadmin read of what came in
 import { compileWeeklyIssue, compileWelcomeIssue } from './mail-compile.mjs'; // SOW-166: weekly compile (freeze one issue + enqueue), sends nothing
@@ -991,9 +991,9 @@ async function drainFiveMinute(env) {
   ]);
   const settle = (r) => (r.status === 'fulfilled' ? r.value : { error: String(r.reason?.message ?? r.reason) });
 
-  // AFTER the drain: if a weekly issue just finished sending, email the owner the 4-week performance report
-  // (once per issue). Runs after drainMail so this tick's terminal send records are counted. Fail-soft, so it
-  // never suppresses the drain result above.
+  // AFTER the drain: if a weekly issue just finished sending, snapshot its totals, and on Friday from 09:00
+  // Chicago email the owner the 4-week performance report (once per issue). Runs after drainMail so this tick's
+  // terminal send records are counted. Fail-soft, so it never suppresses the drain result above.
   let report;
   try { report = await maybeSendWeeklyReport(env); }
   catch (e) { report = { error: String(e?.message ?? e) }; }
@@ -1001,7 +1001,7 @@ async function drainFiveMinute(env) {
   return { syndication: settle(syndication), mail: settle(mail), welcome, report };
 }
 
-// Shared by both Tuesday triggers. The guard is inside `run` rather than in the map so an out-of-hour tick still
+// Shared by both Monday triggers. The guard is inside `run` rather than in the map so an out-of-hour tick still
 // RESOLVES (the dispatcher treats an unresolved cron as a configuration error and shouts), it simply does no work.
 const WEEKLY_DIGEST_JOB = {
   run: (env) => (isCentralDigestHour(Date.now())
@@ -1013,7 +1013,8 @@ const WEEKLY_DIGEST_JOB = {
 const CRON_JOBS = new Map([
   ['0 * * * *', { run: ingest, label: 'news ingest' }],                 // fetch sources, dedupe, AI-classify, prune -> NEWS_KV
   ['30 * * * *', { run: backfillImages, label: 'news image backfill' }], // scrape og:images for stored items lacking one (SOW-050)
-  // SOW-166 + owner ruling 2026-08-25: the digest lands at 7 AM Central every Tuesday, year round. Cloudflare
+  // SOW-166 + owner ruling 2026-08-25: 7 AM Central every week. MONDAY, since Cloudflare numbers weekdays from
+  // Sunday = 1 (kept by the owner 2026-09-21; test/digest-send-day.test.mjs holds the copy to it). Cloudflare
   // cron is UTC with no daylight handling, so that hour is 12:00 UTC in summer and 13:00 UTC in winter; BOTH are
   // declared and isCentralDigestHour picks the real one. They share a job, which is why the dispatch test now
   // pins five schedules onto four distinct jobs rather than a one-to-one map. Freezes one issue + enqueues it,
@@ -1293,7 +1294,7 @@ export default {
 
       // sow-166 follow-up: admin-gated MANUAL mail triggers (compile / test-compile / drain / discard). Before this
       // route, compileWeeklyIssue and drainMail were reachable only from the cron map below, so the first
-      // end-to-end proof of the mail chain could not happen before the next Tuesday 14:00 UTC. It calls the SAME
+      // end-to-end proof of the mail chain could not happen before the next weekly cron. It calls the SAME
       // production functions the cron calls and grants no new send authority: the drain refuses every recipient
       // outside MAIL_SEND_ALLOWLIST and resolveSendGate still defaults to closed. The drain's IO is composed HERE
       // (mailDrainDeps) rather than inside the route module, so there is exactly one composition root and a manual

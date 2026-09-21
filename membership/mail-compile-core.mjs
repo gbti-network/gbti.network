@@ -168,7 +168,7 @@ export function weeklyIssueId(nowMs) {
  *
  * Cloudflare cron is UTC and has no daylight handling, so 7 AM Central is 12:00 UTC from March to November and
  * 13:00 UTC from November to March. BOTH are declared as triggers and this is what decides which of them is the
- * real run on any given Tuesday. One fixed UTC cron cannot do it: it is correct for half the year and an hour
+ * real run on any given Monday. One fixed UTC cron cannot do it: it is correct for half the year and an hour
  * out for the other half, and the hour it is wrong is the hour nobody is watching.
  *
  * IT FAILS OPEN ON PURPOSE, and an asymmetry in the caller is what makes that safe rather than sloppy.
