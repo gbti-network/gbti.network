@@ -39,7 +39,7 @@ syndication:
   hold_minutes: 60
   classify: ai
   templates:
-    share: 'Shared on the GBTI Network: "{title}" {shareurl}'
+    share: 'Shared on the GBTI Network: "{title}" {url}'
   news_engagement:
     enabled: true
     open_threshold: 2
@@ -130,8 +130,8 @@ syndication:
     reddit:
       share: '{title}'
     discord:
-      share: '"{title}" {shareurl}'
+      share: '"{title}" {url}'
     discord-category:
-      share: '"{title}" {shareurl}'
+      share: '"{title}" {url}'
     dailydev:
-      share: '"{title}" {shareurl}'
+      share: '"{title}" {url}'

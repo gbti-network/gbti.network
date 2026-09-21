@@ -31,8 +31,8 @@ function allowedMentionsFor(mention) {
 
 /** Post one item to one channel id. Shared by both Discord adapters.
  *  SOW-087: a configured per-type template (house/syndication-config.yml `templates:`) replaces the built-in
- *  message; the default share template is "Shared by {memberdiscord} {shareurl}" (no-ping full name when the
- *  mention does not resolve). allowed_mentions still caps pings to the author id either way. */
+ *  message; the built-in share default is 'Shared on the GBTI Network: "{title}" {url}' (membership/
+ *  syndication-config-core.mjs). allowed_mentions still caps pings to the author id either way. */
 export async function postToChannel(channelId, item, { env, fetchImpl, client, cfg, textOverride = null, templateChannel = null }) {
   const discord = client ?? createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
   // SOW-088: the caller names which channel's template set applies ('discord' featured vs
