@@ -48,6 +48,7 @@ import { SECTION_FEED, clickSlot, clickPath, taggedTarget } from './mail-click.m
 import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name, bound not spelled
 import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner's pitch copy and sponsor slot
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
+import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -148,12 +149,12 @@ const PALETTES = {
   light: {
     pageBg: '#efece7', cardBg: '#ffffff', cardBorder: '#e0dbd3', hairline: '#eae6df',
     ink: '#232029', inkSoft: '#4a4653', meta: '#7c7784', accent: '#187a4b', rule: '#187a4b',
-    footerLink: '#4a4653', postalMeta: '#9b96a1',
+    footerLink: '#4a4653', postalMeta: '#9b96a1', pillBg: '#eef6f0', pillBorder: '#cfe3d7',
   },
   dark: {
     pageBg: '#1b1922', cardBg: '#232029', cardBorder: '#35313d', hairline: '#302c37',
     ink: '#f3f2f0', inkSoft: '#bdbac4', meta: '#847f8d', accent: '#5fd49a', rule: '#1f9e5f',
-    footerLink: '#bdbac4', postalMeta: '#847f8d',
+    footerLink: '#bdbac4', postalMeta: '#847f8d', pillBg: '#1e3329', pillBorder: '#2d5240',
   },
 };
 
@@ -277,14 +278,28 @@ function metaLineHtml(sectionKey, it, p) {
   const meta = sectionKey === 'news' ? escapeHtml(sourceLabel(it)) : escapeHtml(byline(it));
   if (!meta) return '';
   const metaText = `<span style="font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:.05em;color:${p.meta}">${meta}</span>`;
+  const pill = sectionKey === 'news' ? '' : pillHtml(it.category, p);
   const avatar = sectionKey === 'news' ? '' : avatarUrl(it.author);
-  if (!avatar) return `<div style="padding-top:7px;mso-line-height-rule:exactly;line-height:16px">${metaText}</div>`;
+  if (!avatar) return `<div style="padding-top:7px;mso-line-height-rule:exactly;line-height:16px">${metaText}${pill ? ` ${pill}` : ''}</div>`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="padding-top:7px"><tr>`
     + `<td width="16" valign="middle" style="width:16px;padding-right:7px">`
     + `<img src="${escapeHtml(avatar)}" width="16" height="16" alt="" style="display:block;width:16px;height:16px;border-radius:8px" />`
     + `</td>`
     + `<td valign="middle">${metaText}</td>`
+    + (pill ? `<td valign="middle" style="padding-left:7px">${pill}</td>` : '')
     + `</tr></table>`;
+}
+
+// sow-383: the item's category beside the byline, as the PILL the owner chose on 2026-09-21. The label is built
+// upstream (mail-compile-core digestCategory: top level and leaf for an article, project or prompt, the topic for
+// a share) and is public taxonomy, never content. No category, no pill: a share with no topic shows nothing
+// rather than a placeholder.
+function pillHtml(label, p) {
+  const text = str(label).trim();
+  if (!text) return '';
+  return `<span style="font-family:'Courier New',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:${p.accent};`
+    + `background-color:${p.pillBg};border:1px solid ${p.pillBorder};border-radius:3px;padding:1px 6px;white-space:nowrap">`
+    + `${escapeHtml(text.toUpperCase())}</span>`;
 }
 
 // A single item: a linked (or plain, fail-closed) title, an OPTIONAL blurb (public frontmatter only, bare when
@@ -452,17 +467,20 @@ function logoCellHtml(logoUrl, links) {
     + `</td>`;
 }
 
-function headerHtml(p, ctx, range, launchNote, logoUrl, links) {
+function headerHtml(p, ctx, range, launchNote, logoUrl, links, webUrl = '') {
   const greeting = escapeHtml(str(ctx.greeting).trim() || 'This week on the network');
   const headerLine = escapeHtml(str(ctx.headerLine).trim() || 'Everything new across the network since the last issue.');
   const weekCell = range
     ? `<td align="right" style="font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:.1em;color:${p.meta};mso-line-height-rule:exactly;line-height:${LOGO_PX}px">${escapeHtml(range.mono)}</td>`
     : '';
   const logoCell = logoCellHtml(logoUrl, links);
+  // sow-383: "View this issue on the web" takes the empty left of the row, in the email only.
+  const webCell = webLinkCellHtml(p, webUrl);
   // A right-aligned nested table rather than one cell with an inline image: Outlook does not honour
   // vertical-align on an inline img, and the week has to sit on the mark's centre line.
-  const mastheadRow = weekCell || logoCell
+  const mastheadRow = weekCell || logoCell || webCell
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="480" style="width:480px"><tr>`
+      + webCell
       + `<td align="right"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right"><tr>`
       + weekCell
       + logoCell
@@ -527,7 +545,8 @@ function sectionText(section, links) {
 function itemText(sectionKey, it, links) {
   const title = str(it.title).trim() || '(untitled)';
   const url = trackUrl(it.url, links, 'item');
-  const meta = sectionKey === 'news' ? sourceLabel(it) : byline(it);
+  const meta = [sectionKey === 'news' ? sourceLabel(it) : byline(it), sectionKey === 'news' ? '' : str(it.category).trim()]
+    .filter(Boolean).join(' · ');
   const suffix = meta ? ` (${meta})` : '';
   const blurb = str(it.blurb).trim();
   const blurbLine = blurb ? `\n  ${blurb}` : '';
@@ -560,10 +579,17 @@ export function renderIssue(issue, ctx = {}) {
   // sow-273 follow-up: `clickBase` is the origin of the /c/ click counter, injected by the Worker's composition
   // root. When it is absent the template renders exactly as it did before, with plain utm-tagged links, so the
   // counter is an addition to this renderer rather than a dependency of it and a bare fixture stays bare.
-  const links = { siteUrl, campaign: str(issue?.issueId).trim(), clickBase: safeUrl(ctx.clickBase) };
+  // sow-383: the WEB EDITION is this same render with ctx.edition 'web': the same items, never a second template.
+  // It never carries the click counter or the open pixel (a web visitor is not an email reader, and counting one
+  // would inflate the issue's numbers), nor an Unsubscribe (nothing was mailed); it adds a subscribe box.
+  const web = ctx.edition === 'web';
+  const links = { siteUrl, campaign: str(issue?.issueId).trim(), clickBase: web ? '' : safeUrl(ctx.clickBase) };
+  const track = (url, placement) => trackUrl(url, links, placement);
+  const webUrl = web ? '' : webEditionUrl(ctx.webBase, links.campaign);
   const subject = str(ctx.subject).trim() || computedSubject(counts, range) || 'The GBTI Network weekly digest';
 
-  const preheaderText = escapeHtml(counts ? countsSummary(counts, firstIssue) : emptySummary(firstIssue));
+  const summary = counts ? countsSummary(counts, firstIssue) : emptySummary(firstIssue);
+  const preheaderText = escapeHtml(summary);
   const preheader = `<span style="display:none;font-size:1px;color:${p.pageBg};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${preheaderText}</span>`;
 
   // The membership CTA renders BY DEFAULT and is SUPPRESSIBLE per issue: it shows when the issue has editorial
@@ -583,34 +609,39 @@ export function renderIssue(issue, ctx = {}) {
   // Sanitized ONCE, and the same string feeds the block and the emptiness check below, so the two cannot
   // disagree about whether there is anything to show.
   const sponsorSafe = digest.sponsor.enabled ? sanitizeSponsorHtml(digest.sponsor.html) : '';
-  const body = filled.map((s) => sectionHtml(s, p, links)).join('')
+  const body = (web ? subscribeBoxHtml(p, { action: ctx.subscribeAction || '/mail/subscribe' }) : '')
+    + filled.map((s) => sectionHtml(s, p, links)).join('')
     + emptyLineHtml(empties, p, firstIssue, links)
     + (showCta ? membershipCtaHtml(p, links, digest.cta) : '')
     // A sponsor block needs editorial above it for the same CAN-SPAM reason the pitch does, and needs
     // something left after sanitizing: markup that reduces to nothing renders no labelled empty box.
-    + (filled.length > 0 && sponsorSafe ? sponsorHtml(p, sponsorSafe) : '');
+    + (filled.length > 0 && sponsorSafe ? sponsorHtml(p, sponsorSafe) : '')
+    // sow-383: the social row, after every solicitation and before the footer, in both editions.
+    + socialRowHtml(p, { siteUrl, track, web, theme: ctx.theme === 'dark' ? 'dark' : 'light' });
 
   // The open pixel. Same origin as the click counter (clickBase = PUBLIC_BASE_URL), issue-scoped so one issue is
   // one open row, matching the click campaign. Gated on both being present so a bare fixture (and the web archive,
   // which has no clickBase) renders no pixel: the counter is an ADDITION to this renderer, never a dependency. It
   // is a 1x1 that loads (not display:none) because a hidden image is not fetched, and the fetch is the signal. It
   // never touches the text alternative. See workers/signup/mail-open-route.mjs.
-  const openPixel = (links.clickBase && links.campaign)
+  const openPixel = (!web && links.clickBase && links.campaign)
     ? `<img src="${escapeHtml(`${links.clickBase}/o/${encodeURIComponent(links.campaign)}`)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;overflow:hidden;line-height:1px" />`
     : '';
 
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">`
     + `<meta name="viewport" content="width=device-width,initial-scale=1">`
-    + `<title>${escapeHtml(subject)}</title></head>`
+    + `<title>${escapeHtml(subject)}</title>`
+    + (web ? webHeadHtml({ title: subject, description: summary, url: ctx.canonicalUrl, image: `${siteUrl}/og-image.png` }) : '')
+    + `</head>`
     + `<body style="margin:0;padding:0;background-color:${p.pageBg}">`
     + preheader
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" align="center" style="width:600px;background-color:${p.pageBg}">`
     + `<tr><td width="600" align="center" style="width:600px;padding:24px 0 40px">`
     + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px;background-color:${p.cardBg};border:1px solid ${p.cardBorder}">`
     + `<tr><td width="536" style="width:536px;padding:0">`
-    + headerHtml(p, ctx, range, issue?.launchNote, logoUrl, links)
+    + headerHtml(p, ctx, range, issue?.launchNote, logoUrl, links, webUrl)
     + body
-    + footerHtml(p, ctx, links)
+    + (web ? webFooterHtml(p, { track }) : footerHtml(p, ctx, links))
     + `</td></tr></table>`
     + `</td></tr></table>`
     + openPixel
@@ -641,9 +672,10 @@ export function renderIssue(issue, ctx = {}) {
   // too, built from the sanitized markup rather than the raw input.
   const sponsorLine = (filled.length > 0 && sponsorSafe) ? `\n\nSponsored: ${sponsorText(digest.sponsor.html)}` : '';
 
-  const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n`
+  const webLine = webUrl ? `View this issue on the web: ${webUrl}\n` : '';
+  const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n${webLine}`
     + `${greetingText}\n${headerLineText}\n${launchText}\n`
-    + `${filledText}${emptyText}${ctaText}${sponsorLine}\n\n`
+    + `${filledText}${emptyText}${ctaText}${sponsorLine}\n\n${socialText(track)}\n\n`
     + `----\n${trackUrl('/', links, 'footer-home')}\n${prefsText}${unsubText}${postalText}\n`;
 
   return { subject, html, text };

@@ -21,7 +21,7 @@ function shareThumb(image) {
   return shareCoverUrl(p.author, p.file);
 }
 
-export function buildSharesIndex(entries) {
+export function buildSharesIndex(entries, { topicLabel = null } = {}) {
   const list = Array.isArray(entries) ? entries : [];
   return list
     .filter((e) => isPublicShare(e?.data))
@@ -46,6 +46,9 @@ export function buildSharesIndex(entries) {
         // in an email makes the reader's mail client contact that host, so a share still pointing at one ships
         // no thumb at all (the row renders text-only, as every share row did before).
         ...(shareThumb(d.image) ? { thumb: shareThumb(d.image) } : {}),
+        // sow-383: the share's topic as a label, the same shape activity-index carries, so the digest shows it
+        // beside the byline. Resolved by the caller (src/lib/taxonomy.ts topicLabel) to keep this module node-free.
+        categoryLabels: d.category && typeof topicLabel === 'function' ? [topicLabel(d.category)].filter(Boolean) : [],
       };
     })
     .sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));

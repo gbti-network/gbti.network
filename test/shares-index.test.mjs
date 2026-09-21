@@ -17,7 +17,20 @@ test('includes ONLY published+public shares; members-only, draft, and junk are e
   assert.equal(entries.length, 1, 'only the one public share survives the guard');
   assert.deepEqual(entries[0], {
     type: 'share', slug: 'ann/a', title: 'T', author: 'ann', description: null, url: '/shares/ann/a/', publishedAt: 3000, visibility: 'public',
+    categoryLabels: [],
   });
+});
+
+test('sow-383: a share carries its topic as a label for the digest, and nothing when it has none', () => {
+  const topicLabel = (k) => ({ education: 'Education', music: 'Music' }[k] || '');
+  const [withTopic, none] = buildSharesIndex([
+    share({ author: 'ann', id: 'a', createdAt: 3000, category: 'education' }),
+    share({ author: 'ann', id: 'b', createdAt: 2000 }),
+  ], { topicLabel });
+  assert.deepEqual(withTopic.categoryLabels, ['Education']);
+  assert.deepEqual(none.categoryLabels, [], 'no category, no label');
+  assert.deepEqual(buildSharesIndex([share({ author: 'ann', id: 'a', createdAt: 1, category: 'music' })])[0].categoryLabels, [],
+    'without a resolver the index carries no label rather than a raw key');
 });
 
 test('sorted newest-first by the share timestamp', () => {

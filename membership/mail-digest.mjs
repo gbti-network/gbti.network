@@ -301,6 +301,8 @@ function publicItem(it) {
     // Applied to every content type, not only prompts. It is a no-op for posts and projects today (all 40 and
     // all 11 carry their own image), and it does the right thing the day one of them does not.
     thumb: isGenericBanner(it.thumb) ? null : trimOrNull(it.thumb),
+    // sow-383: the category LABEL (public taxonomy, the same breadcrumb the item page shows), never content.
+    category: trimOrNull(it.category),
   };
 }
 

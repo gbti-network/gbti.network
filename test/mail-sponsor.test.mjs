@@ -254,7 +254,7 @@ test('sow-266 WIRING: the composition root READS the setting, or none of this re
   // any test can see and the owner's copy would silently never ship.
   const src = fsReadRoot('workers/signup/index.mjs');
   assert.match(src, /env\.SIGNUP_KV\?\.get\(DIGEST_CONFIG_KV_KEY, 'json'\)/, 'it reads the mirror');
-  assert.match(src, /renderMailIssue\(issue, \{ siteUrl, clickBase, digestConfig, \.\.\.ctx \}\)/, 'and hands it to every render');
+  assert.match(src, /renderMailIssue\(issue, \{ siteUrl, clickBase, webBase: clickBase, digestConfig, \.\.\.ctx \}\)/, 'and hands it to every render');
 });
 
 test('sow-266 WIRING: a sponsor in KV reaches the rendered mail', async () => {

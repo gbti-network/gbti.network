@@ -16,6 +16,7 @@ import { resolveCronJob } from '../workers/signup/index.mjs';
 import { renderConfirmationEmail } from '../membership/mail-transactional-render.mjs';
 import { handleConfirm } from '../workers/signup/mail-subscribe.mjs';
 import { optinKey, buildPendingOptIn } from '../membership/mail-optin.mjs';
+import { renderIssue } from '../membership/mail-render.mjs';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 // Cloudflare cron: day-of-week is 1-7 with Sunday = 1, or SUN-SAT.
@@ -78,4 +79,13 @@ test('the page a reader lands on after confirming names the day the cron sends, 
   const html = await res.text();
   assert.match(html, /Thank you, and welcome/, 'the test must reach the full stop page, or it checks nothing');
   assert.deepEqual(namedDays(html), [day], `the full stop page must name ${day} only`);
+});
+
+test('the web edition footer names the day the cron sends, and no other', () => {
+  const day = digestSendDay();
+  const issue = { issueId: 'weekly-2026-09-21', generatedAt: Date.parse('2026-09-21T12:00:00Z'), layout: [] };
+  const { html } = renderIssue(issue, { edition: 'web', siteUrl: 'https://gbti.network' });
+  assert.ok(html.includes('This is the web edition'), 'the test must reach the web footer, or it checks nothing');
+  const footer = html.slice(html.indexOf('This is the web edition'));
+  assert.deepEqual(namedDays(footer.slice(0, 200)), [day]);
 });

@@ -11,11 +11,12 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { buildSharesIndex } from '../lib/shares-index.mjs';
+import { topicLabel } from '../lib/taxonomy';
 
 export const prerender = true;
 
 export const GET: APIRoute = async () => {
-  const entries = buildSharesIndex(await getCollection('share'));
+  const entries = buildSharesIndex(await getCollection('share'), { topicLabel });
   const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: entries.length, entries });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 };

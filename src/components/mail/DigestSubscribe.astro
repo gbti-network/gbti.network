@@ -29,6 +29,7 @@
 // and reads each form's own token, so both work. Do not go back to a bare `<script src>` tag: two of those
 // execute the implicit-render scan twice and Turnstile warns about re-rendering an existing widget.
 import { TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../../lib/membership';
+import { SUBSCRIBE_HEADING, SUBSCRIBE_BLURB } from '../../lib/digest-subscribe-copy.mjs'; // sow-383: shared with the web edition
 
 interface Props {
   /** `band` is the standalone homepage block; `inline` sits inside a content page's closing column;
@@ -44,8 +45,8 @@ const { variant = 'inline', heading, blurb, quietTurnstile = false } = Astro.pro
 // The rail is quiet by design; the flag opts inline/band into the same invisible-badge behavior.
 const quiet = quietTurnstile || variant === 'rail';
 
-const title = heading ?? 'Get the weekly digest';
-const sub = blurb ?? 'One email a week: new member articles, projects and prompts, plus the developer news worth reading. Unsubscribe in one click, any time.';
+const title = heading ?? SUBSCRIBE_HEADING;
+const sub = blurb ?? SUBSCRIBE_BLURB;
 ---
 
 <section class:list={['dsub', `dsub-${variant}`]} data-digest-subscribe data-quiet-ts={quiet ? '' : undefined} aria-labelledby={`dsub-h-${variant}`}>

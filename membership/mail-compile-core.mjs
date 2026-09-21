@@ -51,9 +51,27 @@ export function normalizeContentEntry(entry, { displayName } = {}) {
     blurb: str(entry.description).trim() || null,
     // Already public on every activity-index entry since SOW-039 (verified live: 76 of 76 populated).
     thumb: str(entry.thumb).trim() || null,
+    // sow-383: the category label beside the byline. Public taxonomy (the item page shows the same breadcrumb),
+    // built at the site's build from the canonical labels, so the Worker never needs the taxonomy itself.
+    category: digestCategory(entry.categoryLabels),
     // VERBATIM. See the header note: this is the field composeIssue's fail-closed guard reads.
     visibility: entry.visibility,
   };
+}
+
+/**
+ * sow-383: the digest's category label from an index entry's `categoryLabels` (the human breadcrumb). The top
+ * level and the leaf, as the approved design draws it ("AI › Skill"), because the leaf alone ("Skill") says too
+ * little in an email with no page around it. One label is that label (a share's topic). None is null, and the
+ * renderer then shows no pill. Each part is capped so a runaway label cannot widen the row.
+ */
+export function digestCategory(labels) {
+  const parts = (Array.isArray(labels) ? labels : [])
+    .map((l) => str(l).replace(/\s+/g, ' ').trim().slice(0, 40))
+    .filter(Boolean);
+  if (!parts.length) return null;
+  if (parts.length === 1 || parts[0] === parts[parts.length - 1]) return parts[0];
+  return `${parts[0]} › ${parts[parts.length - 1]}`;
 }
 
 /** Normalize a list of activity-index + shares-index entries; unknown types are dropped. */

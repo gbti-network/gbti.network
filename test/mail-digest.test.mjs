@@ -74,7 +74,7 @@ test('LEAK GUARD: a members item is excluded and no body/ciphertext can appear i
   assert.ok(!serialized.includes('PUBLIC BODY TEXT'), 'even a public items body is not copied (projection)');
   assert.ok(!serialized.includes('.enc'));
   // the surviving item has ONLY public-safe fields
-  assert.deepEqual(Object.keys(issue.sections.article[0]).sort(), ['author', 'authorName', 'blurb', 'date', 'kind', 'thumb', 'title', 'url']); // + blurb/thumb (sow-166, 2026-08-23). Still an EXACT list, so a third field fails right here
+  assert.deepEqual(Object.keys(issue.sections.article[0]).sort(), ['author', 'authorName', 'blurb', 'category', 'date', 'kind', 'thumb', 'title', 'url']); // + blurb/thumb (sow-166, 2026-08-23), + category (sow-383, 2026-09-21: the public taxonomy LABEL, never content). Still an EXACT list, so another field fails right here
 });
 
 test('isPublicItem fails closed on missing/other visibility', () => {
@@ -216,7 +216,7 @@ test('LEAK GUARD holds through layout: a members item reaches no section and no 
   assert.ok(!serialized.includes('secret'), 'a member item title reached the compiled issue');
   for (const section of issue.layout) {
     for (const it of section.items) {
-      assert.deepEqual(Object.keys(it).sort(), ['author', 'authorName', 'blurb', 'date', 'kind', 'thumb', 'title', 'url']);
+      assert.deepEqual(Object.keys(it).sort(), ['author', 'authorName', 'blurb', 'category', 'date', 'kind', 'thumb', 'title', 'url']);
     }
   }
 });
@@ -642,7 +642,7 @@ test('the projection carries blurb + thumb through, and still drops everything e
   const it = issue.sections.article[0];
   assert.equal(it.blurb, 'Public frontmatter blurb.');
   assert.equal(it.thumb, '/media/a.png');
-  assert.deepEqual(Object.keys(it).sort(), ['author', 'authorName', 'blurb', 'date', 'kind', 'thumb', 'title', 'url']);
+  assert.deepEqual(Object.keys(it).sort(), ['author', 'authorName', 'blurb', 'category', 'date', 'kind', 'thumb', 'title', 'url']);
   assert.ok(!JSON.stringify(issue).includes('SHOULD NOT SURVIVE'), 'the projection is still an allowlist, not a merge');
 });
 

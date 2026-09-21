@@ -123,6 +123,7 @@ import { handleUnsubscribe } from './membership-unsubscribe.mjs'; // SOW-166: on
 import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: the digest click counter
 import { handleMailOpen } from './mail-open-route.mjs'; // the digest open counter (1x1 pixel)
 import { maybeSendWeeklyReport } from './mail-stats-report.mjs'; // after-send admin stats email (4-week rollup)
+import { handleDigestWeb } from './mail-web-route.mjs'; // sow-383: GET /digest/<issueId>, the web edition
 import { resolveSiteUrl, resolveClickBase } from '../../membership/mail-click.mjs';
 import { isCentralDigestHour } from '../../membership/mail-compile-core.mjs'; // sow-166: which of the two Monday triggers is 7 AM Central today
 import { handleSubscribe, handleConfirm } from './mail-subscribe.mjs'; // SOW-166: anonymous double-opt-in digest subscribe + confirm
@@ -962,7 +963,8 @@ export async function mailDrainDeps(env) {
   } catch {
     digestConfig = resolveDigestConfig({ mirror: null });
   }
-  const renderIssue = (issue, ctx = {}) => renderMailIssue(issue, { siteUrl, clickBase, digestConfig, ...ctx });
+  // sow-383: webBase builds the "View this issue on the web" link; the web edition is served from this Worker.
+  const renderIssue = (issue, ctx = {}) => renderMailIssue(issue, { siteUrl, clickBase, webBase: clickBase, digestConfig, ...ctx });
   return { resolveAddress, renderIssue, sendEmail };
 }
 
@@ -1892,6 +1894,9 @@ export default {
       if (pathname === '/mail/unsubscribe') {
         return await handleUnsubscribe(request, env);
       }
+
+      // sow-383: the web edition of a SENT public weekly issue, which the email's masthead links to.
+      if (pathname.startsWith('/digest/')) return await handleDigestWeb(request, env);
 
       // SOW-166: anonymous digest capture. With the confirm step ON (`optin.double` in house/digest-config.yml,
       // sow-270; OFF is the default), subscribe writes a pending opt-in
