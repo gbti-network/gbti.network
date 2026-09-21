@@ -9,7 +9,8 @@ tags:
   - electronic-music
   - music
   - bonobo
-image: https://i.ytimg.com/vi/Pli6OCcNznY/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260921212901-bonobo-distance-in-static-full-album-2026-58a7b0a8.webp
+imageSource: https://i.ytimg.com/vi/Pli6OCcNznY/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@RadiorockTheOriginal
 creatorName: Radiorock TheOriginal
 id: 20260921212901-bonobo-distance-in-static-full-album-2026
