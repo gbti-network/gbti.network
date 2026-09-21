@@ -310,20 +310,61 @@ export async function gatherContentEntries(env, { fetchImpl = globalThis.fetch, 
   return [...activity, ...sharesResolved];
 }
 
+// sow-384: how far back the digest's news reaches. A WEEK, because the digest is weekly and a story opened all week
+// should be able to reach the top. Before this the gather asked for the 60 newest stories, which at roughly seven
+// stories an hour is about seven hours of news: "newest" then meant "whichever publications the collection
+// rotation reached last", and on 2026-09-21 that was four crypto outlets collected in one run.
+export const NEWS_WINDOW_DAYS = 7;
+// A runaway bound on the pool, not a selection rule. A week is about 1,200 stories; this only bites if the
+// collection rate triples.
+export const NEWS_POOL_CEILING = 2000;
+
+const NEWS_OPENS_PREFIX = NEWS_OPENS_KEY('');
+
 /**
- * Gather recent news items and attach the SOW-111 distinct-opener count to each. News items live in NEWS_KV
- * (fields guid/title/link/source/publishedAt); the open counts live in SIGNUP_KV under news-opens:<guid>. Maps
- * the news store's field names (link -> url, publishedAt -> a ms date) to the normalizer's shape here, so the
- * pure normalizer stays store-agnostic. composeIssue ranks by opens then date and caps the list, so this returns
- * the recent window (default 60), not a pre-ranked slice.
+ * sow-384: the open records that exist, from ONE paged listing, so the gather reads open counts only for stories
+ * somebody has actually opened. Returns { keys, complete }, or null when the store cannot list.
+ *
+ * WHY. The gather used to read one record per story, 60 reads per compile. A week is about 1,200 stories, and 1,200
+ * reads in one invocation is past what a Worker can spend. Most stories are never opened, so listing the records
+ * that exist (a page holds 1,000 keys) and reading only those is fewer reads than the old 60, not more.
+ *
+ * A listing that runs out of `pageBudget` returns what it found with complete: false. Stories past it count zero
+ * opens, which lowers their rank and never breaks the issue. Twenty pages is 20,000 opened stories.
+ */
+export async function listOpenedNews(kv, { pageBudget = 20 } = {}) {
+  if (!kv?.list) return null;
+  const keys = new Set();
+  let cursor;
+  for (let page = 0; page < pageBudget; page += 1) {
+    // eslint-disable-next-line no-await-in-loop -- pages are sequential by construction (each needs the cursor)
+    const res = await kv.list({ prefix: NEWS_OPENS_PREFIX, cursor });
+    for (const k of res?.keys ?? []) if (k?.name) keys.add(k.name);
+    if (res?.list_complete || !res?.cursor) return { keys, complete: true };
+    cursor = res.cursor;
+  }
+  return { keys, complete: false };
+}
+
+/**
+ * Gather the last `windowDays` of news and attach the SOW-111 distinct-opener count to each. News items live in
+ * NEWS_KV (fields guid/title/link/source/category/publishedAt, publishedAt in epoch SECONDS); the open counts live
+ * in SIGNUP_KV under news-opens:<guid>. Maps the news store's field names (link -> url, publishedAt -> date) to the
+ * normalizer's shape here, so the pure normalizer stays store-agnostic. composeIssue ranks by opens then date and
+ * picks one story per category and publication (sow-384), so this returns the whole window, not a pre-ranked slice.
+ * Removed stories and blocked words are dropped by the store query itself, exactly as on the site's news feed.
+ *
+ * `nowMs` is the COMPILE's clock, so the window is deterministic per issue and in tests.
  */
 export async function gatherNewsEntries(env, {
-  kv = env?.SIGNUP_KV, queryItems = kvQueryItems, limit = 60, sourceList = loadSourceList,
+  kv = env?.SIGNUP_KV, queryItems = kvQueryItems, sourceList = loadSourceList, listOpened = listOpenedNews,
+  nowMs = Date.now(), windowDays = NEWS_WINDOW_DAYS, limit = NEWS_POOL_CEILING,
 } = {}) {
   if (!env?.NEWS_KV) return [];
+  const since = Math.floor(Number(nowMs) / 1000) - windowDays * 86400;
   let items = [];
   try {
-    const res = await queryItems(env, { limit });
+    const res = await queryItems(env, { limit, since });
     items = Array.isArray(res?.items) ? res.items : [];
   } catch {
     return [];
@@ -341,8 +382,16 @@ export async function gatherNewsEntries(env, {
   } catch {
     names = new Map();
   }
+  // Which stories have any opens at all. A listing that cannot run (no binding, or it throws) leaves every story at
+  // zero opens: the pick then falls back to newest-first, still one per category and publication.
+  let opened = null;
+  try {
+    opened = kv ? await listOpened(kv) : null;
+  } catch {
+    opened = null;
+  }
   const opensFor = async (guid) => {
-    if (!kv || !guid) return 0;
+    if (!kv || !guid || !opened?.keys?.has(NEWS_OPENS_KEY(guid))) return 0;
     try {
       const record = normalizeNewsOpens(await kv.get(NEWS_OPENS_KEY(guid), 'json'));
       return distinctOpenerCount(record);
@@ -360,6 +409,7 @@ export async function gatherNewsEntries(env, {
     digest: it?.digest,
     summary: it?.summary,
     image: it?.image,
+    category: it?.category, // sow-384: the pick's one-per-category key
     date: it?.publishedAt ? new Date(it.publishedAt).valueOf() || 0 : 0,
     opens: await opensFor(it?.guid),
   })));
@@ -421,7 +471,7 @@ export async function listRecipientHashes(kv, { pageBudget = 200, filter = null,
  */
 async function composeMembersEdition(env, {
   kv, nowMs, now, fetchImpl, siteUrl, displayName, perSection, maxNews, historyDepth,
-  publicIssue, readEntitlement, readMemberShares,
+  publicIssue, readEntitlement, readMemberShares, queryItems = kvQueryItems,
 } = {}) {
   let entitledIds;
   try {
@@ -442,7 +492,9 @@ async function composeMembersEdition(env, {
 
   const [contentEntries, newsEntries, regime] = await Promise.all([
     gatherContentEntries(env, { fetchImpl, siteUrl, audience: 'members', readMemberShares }),
-    gatherNewsEntries(env, { kv }),
+    // sow-384: the injected store query, like the public issue and the welcome. Without it this edition always read
+    // the real store, so no test could see its news window, and a mutant dropping `nowMs` here survived.
+    gatherNewsEntries(env, { kv, queryItems, nowMs }),
     // ITS OWN FAMILY, so the public edition never counts member shares as mailed. Its week is measured from
     // what its recipients RECEIVED, which borrows the public issue for weeks without an edition. See
     // listReceivedIssueIds.
@@ -524,7 +576,7 @@ export async function compileWeeklyIssue(env, {
     }
     const [contentEntries, newsEntries, regime] = await Promise.all([
       gatherContentEntries(env, { fetchImpl, siteUrl }),
-      gatherNewsEntries(env, { kv, queryItems }),
+      gatherNewsEntries(env, { kv, queryItems, nowMs }),
       resolveWindow(kv, { nowMs, currentIssueId: issueId, historyDepth }),
     ]);
     const items = normalizeContent(contentEntries, { displayName });
@@ -573,7 +625,7 @@ export async function compileWeeklyIssue(env, {
   // recoverable and a member share in the wrong inbox is not.
   const members = await composeMembersEdition(env, {
     kv, nowMs, now, fetchImpl, siteUrl, displayName, perSection, maxNews, historyDepth,
-    publicIssue: issue, readEntitlement, readMemberShares,
+    publicIssue: issue, readEntitlement, readMemberShares, queryItems,
   });
 
   let publicHashes = hashes.map((h) => h.hash);
@@ -678,7 +730,7 @@ export async function compileWelcomeIssue(env, {
   if (!issue) {
     const [contentEntries, newsEntries] = await Promise.all([
       gatherContentEntries(env, { fetchImpl, siteUrl }),
-      gatherNewsEntries(env, { kv, queryItems }),
+      gatherNewsEntries(env, { kv, queryItems, nowMs }),
     ]);
     const items = normalizeContent(contentEntries, { displayName });
     const news = normalizeNews(newsEntries);

@@ -47,19 +47,48 @@ export function fetchCap(weight) {
 }
 
 /**
+ * sow-384: deal a list into piles like cards and lay the piles end to end, so NEIGHBOURS in the list land in
+ * different runs of `runSize`. The source list is grouped by topic, because sources were added a topic at a time:
+ * the six crypto outlets sit at positions 60 to 65. Walked in list order they fell into one hourly run, and on
+ * 2026-09-21 that run's four crypto outlets were the newest thing in the store when the digest compiled.
+ *
+ * There are floor(n / runSize) piles, so every pile holds at least `runSize` sources and a source's list neighbour
+ * sits a whole pile away. Measured over every cursor position (test/news-rotation-spread.test.mjs): with today's
+ * 126 sources and runs of 16 there are seven piles of eighteen, and no two sources FEWER THAN SEVEN places apart in
+ * the list ever share a run, where in list order neighbours always could. When the piles come out exactly `runSize`
+ * long the closest pair is one fewer than the pile count, so the spread is "about as many places as there are
+ * piles", never less than two once there are two piles. A list too short to make two piles is returned as is.
+ *
+ * Pure, and a permutation: every source keeps exactly its appearances.
+ */
+export function dealIntoRuns(list, runSize) {
+  const items = Array.isArray(list) ? list : [];
+  const size = Math.floor(Number(runSize)) || 0;
+  const piles = size >= 2 ? Math.floor(items.length / size) : 0;
+  if (piles < 2) return items.slice();
+  const out = [];
+  for (let p = 0; p < piles; p += 1) for (let i = p; i < items.length; i += piles) out.push(items[i]);
+  return out;
+}
+
+/**
  * The rotation the cursor walks: every source once, then the ones weighted up again, in passes.
  *
  * Built in PASSES rather than by repeating each source in place, so a source's repeats are spread across the
  * supercycle instead of landing in the same chunk. With 125 sources and a chunk of 16 that puts any two
  * appearances of one source at least a full pass apart.
  *
+ * sow-384: with `spread` (the ingest's chunk size), each pass is DEALT (dealIntoRuns) so sources that sit next to
+ * each other in the list, which means sources on the same topic, are collected in different hourly runs. Without
+ * it the order is exactly the list order, as before.
+ *
  * Pure. Every enabled source keeps at least one appearance, whatever its weight.
  */
-export function rotationOrder(sources) {
+export function rotationOrder(sources, { spread = 0 } = {}) {
   const list = Array.isArray(sources) ? sources : [];
   const times = (s) => APPEARANCES[String(clampWeight(s?.weight))] ?? 2;
   const out = [];
-  for (let pass = 1; pass <= 4; pass += 1) for (const s of list) if (times(s) >= pass) out.push(s);
+  for (let pass = 1; pass <= 4; pass += 1) out.push(...dealIntoRuns(list.filter((s) => times(s) >= pass), spread));
   return out;
 }
 

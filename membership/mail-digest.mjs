@@ -338,9 +338,64 @@ function newsItem(it) {
     // an unexpected field into a frozen issue either.
     blurb: trimOrNull(it.blurb),
     thumb: trimOrNull(it.thumb),
+    // sow-384: kept on the frozen issue so the pick below can be audited from the stored artifact. Not rendered.
+    category: trimOrNull(it.category),
     opens: numOr0(it.opens),
     date: numOr0(it.date),
   };
+}
+
+// sow-384: what a story with no category counts as. The classifier's own fallback label, so an unclassified story
+// and one the classifier filed under Other share the one Other slot (owner ruling 2026-09-21: Other is a category).
+const NEWS_OTHER = 'other';
+
+const newsCategoryKey = (it) => (trimOrNull(it?.category) || NEWS_OTHER).toLowerCase();
+
+/** The publication a story came from: its source id, or its web address's host when it carries no id. */
+function newsPublicationKey(it) {
+  const id = trimOrNull(it?.source);
+  if (id) return `id:${id.toLowerCase()}`;
+  try {
+    return `host:${new URL(String(it?.url)).host.toLowerCase()}`;
+  } catch {
+    return 'host:';
+  }
+}
+
+/**
+ * sow-384: pick up to `max` news stories from an already RANKED list, one per category and one per publication.
+ * PURE, and it never reorders: the picks keep their ranked order.
+ *
+ * WHY. Ranking alone let one topic take the whole section. On 2026-09-21 the six crypto outlets, which sit side by
+ * side in the collection rotation, were collected in one hourly run just before the compile, so the five newest
+ * stories in the store were five crypto stories from three publications. Ranking was working; nothing asked for
+ * variety.
+ *
+ * TWO PASSES, owner ruling 2026-09-21. The first takes a story only when its category AND its publication are both
+ * unused. If that leaves the section short, the second relaxes the CATEGORY limit and never the publication one, so
+ * a single outlet can never fill the section however thin the week. The owner expects the second pass not to fire:
+ * a week of news spans all twelve categories.
+ */
+export function pickVariedNews(ranked, max) {
+  const list = Array.isArray(ranked) ? ranked : [];
+  const cap = Math.max(0, Math.floor(Number(max)) || 0);
+  const picked = new Set();
+  const categories = new Set();
+  const publications = new Set();
+  const take = (i, it) => {
+    picked.add(i);
+    categories.add(newsCategoryKey(it));
+    publications.add(newsPublicationKey(it));
+  };
+  for (let i = 0; i < list.length && picked.size < cap; i += 1) {
+    const it = list[i];
+    if (!categories.has(newsCategoryKey(it)) && !publications.has(newsPublicationKey(it))) take(i, it);
+  }
+  for (let i = 0; i < list.length && picked.size < cap; i += 1) {
+    const it = list[i];
+    if (!picked.has(i) && !publications.has(newsPublicationKey(it))) take(i, it);
+  }
+  return list.filter((_, i) => picked.has(i));
 }
 
 const byDateDesc = (a, b) => (b.date - a.date);
@@ -391,7 +446,8 @@ function urlSet(value) {
 /**
  * Compose ONE frozen weekly issue. PURE. Enforces the public-only leak guard, groups the surviving member
  * items into the four sections (each newest-first, capped at `perSection`), and ranks the news by
- * distinct-opener count (`opens`, then newest) capped at `maxNews`.
+ * distinct-opener count (`opens`, then newest), then picks up to `maxNews` of them, one per category and one per
+ * publication (sow-384, pickVariedNews).
  *
  * Empty-week policy (owner ruling 2026-08-21): the issue ALWAYS carries every section, and an empty one
  * gets its note instead of being dropped. `layout` is the render-ready ordering, filled sections first.
@@ -527,7 +583,7 @@ export function composeIssue(
     .sort((a, b) => (b.opens - a.opens) || (b.date - a.date));
 
   const memberItemCount = SECTION_KINDS.reduce((n, k) => n + sections[k].length, 0);
-  const topNews = rankedNews.slice(0, memberItemCount === 0 ? thinCap : newsCap);
+  const topNews = pickVariedNews(rankedNews, memberItemCount === 0 ? thinCap : newsCap);
 
   const counts = {
     article: sections.article.length,
@@ -548,9 +604,10 @@ export function composeIssue(
     isEmpty,
     // The frozen issue records its OWN window, so a compile that forgot to pass one is visible in the stored
     // artifact instead of invisible. `null` here means the issue is a best-of rather than a what-is-new, and
-    // that is a bug in the caller every time. News is deliberately not windowed: it is ranked by distinct
-    // openers rather than recency, and the gather already returns a bounded recent set, so a story that
-    // ingested nine days ago and was opened all week is exactly what belongs at the top.
+    // that is a bug in the caller every time. News is not windowed HERE: the gather windows it (the last seven
+    // days since sow-384) and it is ranked by distinct openers rather than recency, so the week's most-opened
+    // story can reach the top. Before sow-384 the gather returned the 60 newest stories, about seven hours of
+    // news, and a story opened all week was never in the pool at all.
     window: {
       since: sinceMs,
       excluded: excluded === null ? null : excluded.size,

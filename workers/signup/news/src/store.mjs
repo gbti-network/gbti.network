@@ -229,8 +229,15 @@ export async function queryItems(env, filter = {}) {
   // of waiting a month for them to age out. Built once per query, not per story.
   const banned = banwordMatcher(await loadBanwords(env));
   const days = [...index.days].sort().reverse(); // newest day first
+  // sow-384: with a `since`, stop at the first day file older than it. The `limit` break below only helps a query
+  // that fills up, and a week-long digest query never does, so without this it read all thirty retained days. A
+  // day file is the day a story was COLLECTED, never before it was published, so nothing inside the window can sit
+  // in an older file; one day of slack covers a feed whose clock runs ahead of ours.
+  const sinceN = Number.parseInt(filter.since, 10);
+  const oldestDay = Number.isFinite(sinceN) ? dayOf(sinceN - 86400) : null;
   const out = [];
   for (const d of days) {
+    if (oldestDay && d < oldestDay) break;
     const shard = await loadDay(env, d);
     for (const it of shard) if (!removed[it.guid] && !blockedBy(it, banned) && matchesFilter(it, filter)) out.push(it);
     if (out.length >= limit) break; // enough recent matches; deeper shards not needed

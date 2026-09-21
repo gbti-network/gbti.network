@@ -273,3 +273,17 @@ test('a re-run reuses the frozen members edition instead of recomposing it', asy
   assert.equal(second.membersEdition.issueId, first.membersEdition.issueId);
   assert.equal(second.membersEdition.enqueued, 0, 'a re-run must not enqueue the same recipient twice');
 });
+
+// sow-384: the members edition gathers the same week of news as the public issue, from the COMPILE's clock. Before
+// sow-384 it ignored the injected store query entirely, so no test could observe its news window at all.
+test('sow-384: the members edition asks the news store for the seven days before its own compile time', async () => {
+  const kv = makeKV();
+  seed(kv, 'paidhash', { githubId: '10' });
+  await kv.put(DIGEST_ENTITLED_KV_KEY, JSON.stringify(buildDigestEntitlement([{ githubId: '10', effective: { status: 'paid' } }])));
+  const asked = [];
+  const spy = async (_env, filter) => { asked.push(filter); return { items: [] }; };
+  const r = await compileWeeklyIssue({ NEWS_KV: {} }, deps(kv, { queryItems: spy }));
+  assert.ok(r.membersEdition, `no members edition was produced: ${r.membersSkipped}`);
+  assert.equal(asked.length, 2, 'the public issue and the members edition each gathered news');
+  for (const f of asked) assert.equal(f.since, Math.floor(NOW / 1000) - 7 * 86400, 'the compile clock, not the wall clock');
+});

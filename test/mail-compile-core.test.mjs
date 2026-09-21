@@ -68,12 +68,14 @@ test('normalizeNewsEntry: opens/date default 0, blank source is null, missing ti
     normalizeNewsEntry({ title: 'N', url: 'https://n/x', source: 'Src', opens: 9, date: 7 }),
     // + sourceName/blurb/thumb (sow-166, 2026-08-23). All three default to null, so an entry carrying none of
     // them normalizes to exactly what it did before, with three absent fields rather than three fabricated ones.
-    { title: 'N', url: 'https://n/x', source: 'Src', sourceName: null, blurb: null, thumb: null, opens: 9, date: 7 },
+    // + category (sow-384), null when absent for the same reason.
+    { title: 'N', url: 'https://n/x', source: 'Src', sourceName: null, blurb: null, thumb: null, category: null, opens: 9, date: 7 },
   );
   assert.deepEqual(
     normalizeNewsEntry({ title: 'N', url: 'https://n/x' }),
-    { title: 'N', url: 'https://n/x', source: null, sourceName: null, blurb: null, thumb: null, opens: 0, date: 0 },
+    { title: 'N', url: 'https://n/x', source: null, sourceName: null, blurb: null, thumb: null, category: null, opens: 0, date: 0 },
   );
+  assert.equal(normalizeNewsEntry({ title: 'N', url: 'https://n/x', category: ' AI/ML ' }).category, 'AI/ML', 'sow-384: carried, trimmed');
   assert.equal(normalizeNewsEntry({ url: 'https://n/x' }), null, 'no title -> dropped');
   assert.equal(normalizeNewsEntry({ title: 'N' }), null, 'no url -> dropped');
   assert.equal(normalizeNews(null).length, 0);

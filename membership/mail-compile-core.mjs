@@ -158,6 +158,9 @@ export function normalizeNewsEntry(entry) {
     blurb: newsBlurb(entry.digest) || newsBlurb(entry.summary),
     // The source article's image (RSS enclosure/media, or the og:image the 30-past-the-hour backfill scrapes).
     thumb: str(entry.image).trim() || null,
+    // sow-384: the classifier's label ("AI/ML", "Blockchain", "Other"), carried so composeIssue can pick one story
+    // per category. The renderer does not show it for news (mail-render skips the pill in the news section).
+    category: str(entry.category).trim() || null,
     opens: numOrNull(entry.opens) ?? 0,
     date: numOrNull(entry.date) ?? 0,
   };

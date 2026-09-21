@@ -86,15 +86,17 @@ test('isPublicItem fails closed on missing/other visibility', () => {
 
 test('news is ranked by distinct-opener count, then newest, and capped', () => {
   const news = [
-    { title: 'low', url: 'https://n/low', opens: 2, date: 900 },
-    { title: 'high', url: 'https://n/high', opens: 50, date: 100 },
-    { title: 'mid-a', url: 'https://n/ma', opens: 10, date: 100 },
-    { title: 'mid-b', url: 'https://n/mb', opens: 10, date: 500 }, // same opens, newer -> ahead of mid-a
+    // sow-384: each story its own publication and category, so this stays a test of RANKING. Without them all four
+    // share the host `n` and the one-per-publication pick (test/news-digest-variety.test.mjs) would keep one.
+    { title: 'low', url: 'https://n/low', source: 's1', category: 'c1', opens: 2, date: 900 },
+    { title: 'high', url: 'https://n/high', source: 's2', category: 'c2', opens: 50, date: 100 },
+    { title: 'mid-a', url: 'https://n/ma', source: 's3', category: 'c3', opens: 10, date: 100 },
+    { title: 'mid-b', url: 'https://n/mb', source: 's4', category: 'c4', opens: 10, date: 500 }, // same opens, newer -> ahead of mid-a
   ];
   const issue = composeIssue({ issueId: 'i', items: [], news, now: at(1_000_000) }, { maxNews: 3 });
   assert.deepEqual(issue.topNews.map((n) => n.title), ['high', 'mid-b', 'mid-a']); // opens desc, date breaks ties
   assert.equal(issue.topNews.length, 3); // capped
-  assert.deepEqual(Object.keys(issue.topNews[0]).sort(), ['blurb', 'date', 'opens', 'source', 'sourceName', 'thumb', 'title', 'url']);
+  assert.deepEqual(Object.keys(issue.topNews[0]).sort(), ['blurb', 'category', 'date', 'opens', 'source', 'sourceName', 'thumb', 'title', 'url']);
 });
 
 test('empty-week policy: skip only when member AND news are both empty; else top-news-only still sends', () => {
@@ -222,7 +224,8 @@ test('LEAK GUARD holds through layout: a members item reaches no section and no 
 });
 
 test('a thin member week can lift the news cap, but only when asked, and never past an explicit max', () => {
-  const news = Array.from({ length: 10 }, (_, i) => ({ title: `n${i}`, url: `https://n/${i}`, opens: 10 - i, date: i }));
+  // sow-384: distinct publications and categories, so this stays a test of the CAP arithmetic, not of variety.
+  const news = Array.from({ length: 10 }, (_, i) => ({ title: `n${i}`, url: `https://n/${i}`, source: `s${i}`, category: `c${i}`, opens: 10 - i, date: i }));
 
   // unset: no lift, so maxNews stays a real ceiling (this is the trap the cap test caught)
   assert.equal(composeIssue({ issueId: 'i', items: [], news, now: at(1_000_000) }, { maxNews: 3 }).topNews.length, 3);

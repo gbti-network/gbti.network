@@ -100,10 +100,29 @@ test('gatherNewsEntries maps link->url + publishedAt->date and attaches the dist
   const out = await gatherNewsEntries({ SIGNUP_KV: kv, NEWS_KV: {} }, { kv, queryItems: async () => ({ items: NEWS_ITEMS }) });
   // + sourceName/digest/summary/image (sow-166, 2026-08-23). The fixture ids are not real sources, so
   // sourceName resolves to null and the renderer falls back to the id: unchanged behaviour, stated explicitly.
-  assert.deepEqual(out[0], { title: 'Hot news', url: 'https://n/1', source: 'Src', sourceName: null, digest: undefined, summary: undefined, image: undefined, date: 1000, opens: 5 });
-  assert.deepEqual(out[1], { title: 'Cool news', url: 'https://n/2', source: 'Src2', sourceName: null, digest: undefined, summary: undefined, image: undefined, date: 900, opens: 2 });
+  assert.deepEqual(out[0], { title: 'Hot news', url: 'https://n/1', source: 'Src', sourceName: null, digest: undefined, summary: undefined, image: undefined, category: undefined, date: 1000, opens: 5 });
+  assert.deepEqual(out[1], { title: 'Cool news', url: 'https://n/2', source: 'Src2', sourceName: null, digest: undefined, summary: undefined, image: undefined, category: undefined, date: 900, opens: 2 });
   // no NEWS_KV binding -> no news (the store is not ready), never a crash
   assert.deepEqual(await gatherNewsEntries({ SIGNUP_KV: kv }, { kv, queryItems: async () => ({ items: NEWS_ITEMS }) }), []);
+});
+
+// sow-384: the window has to be the COMPILE's own week. A gather that fell back to its default clock, or to the old
+// 60-newest query, would still compose an issue and every other test here would stay green.
+test('sow-384: the weekly and the welcome ask the news store for the seven days before their own compile time', async () => {
+  const kv = makeKV();
+  seedSubscribers(kv, ['old1']);
+  seedSubscribers(kv, ['newbie'], { welcomedAt: null });
+  const env = { SIGNUP_KV: kv, NEWS_KV: {} };
+  const asked = [];
+  const spy = { ...deps(kv), queryItems: async (_env, filter) => { asked.push(filter); return { items: NEWS_ITEMS }; } };
+  const nowSec = Math.floor(Date.UTC(2026, 7, 25, 13, 0, 0) / 1000);
+  await compileWeeklyIssue(env, spy);
+  await compileWelcomeIssue(env, spy);
+  assert.ok(asked.length >= 2, 'both compiles gathered news');
+  for (const f of asked) {
+    assert.equal(f.since, nowSec - 7 * 86400, 'a week back from the compile clock, not from the wall clock');
+    assert.equal(f.limit, 2000, 'the pool ceiling, not the old 60 newest');
+  }
 });
 
 test('listRecipientHashes returns receivable subscribers and drops an unreceivable record', async () => {

@@ -128,7 +128,8 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
   const banned = banwordMatcher(banwords);
   // sow-338: the cursor walks a WEIGHTED rotation rather than the pool itself, so a source a superadmin voted up
   // comes round more often and one voted down less. Every enabled source still appears in every cycle.
-  const sources = await nextChunk(env, rotationOrder(pool), chunkSize);
+  // sow-384: `spread` deals each pass by the chunk size, so sources on one topic are collected in different runs.
+  const sources = await nextChunk(env, rotationOrder(pool, { spread: chunkSize }), chunkSize);
   const settled = await Promise.allSettled(sources.map((s) => fetchSource(s)));
   const parsed = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
 
