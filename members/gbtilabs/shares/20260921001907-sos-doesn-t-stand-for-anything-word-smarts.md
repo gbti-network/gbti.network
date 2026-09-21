@@ -10,7 +10,8 @@ tags:
   - morse-code
   - history
   - epistemology
-image: https://inbox-media-offload.wordsmarts.com/wp-content/uploads/2026/09/WS_Article_SOS-meaning.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260921001907-sos-doesn-t-stand-for-anything-word-smarts-2d05ac10.webp
+imageSource: https://inbox-media-offload.wordsmarts.com/wp-content/uploads/2026/09/WS_Article_SOS-meaning.jpg
 id: 20260921001907-sos-doesn-t-stand-for-anything-word-smarts
 createdAt: '2026-09-21T00:19:07.859Z'
 type: share
