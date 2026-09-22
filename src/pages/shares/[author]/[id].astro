@@ -17,7 +17,7 @@ import CtaCard from '../../../components/CtaCard.astro'; // sow-281: the registe
 import { embedUrl } from '../../../../client/src/video-embed.mjs';
 import { sourceCardModel } from '../../../../client/src/share-source.mjs'; // sow-222: who the source card points at
 import { getCollection } from 'astro:content';
-import { authorDisplay, formatDate, authorAvatar } from '../../../lib/authors';
+import { authorDisplay, formatDate, authorAvatar, isNetworkAuthor } from '../../../lib/authors';
 import { profileHref } from '../../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { isPublicShare, decodeEntities, utmUrl } from '../../../lib/home-feed.mjs';
 import { favoriteCount } from '../../../lib/favorites';
@@ -106,7 +106,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
           )}
 
       {body && (
-        <article class="card share-member-note" style="padding:24px;margin-top:26px">
+        <article class:list={['card', 'share-member-note', isNetworkAuthor(d.author) && 'share-member-note--house']} style="padding:24px;margin-top:26px">
           <div class="flex items-center g12">
             <a href={profileHref(d.author)} class="shrink-0"><Avatar item={{ name: authorDisplay(d.author), avatar }} size={44} class="rounded-full" /></a>
             <div>

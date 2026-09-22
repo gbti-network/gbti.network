@@ -134,9 +134,13 @@ test('DRIFT: ContentMeta still renders the byline as class="cm-name" linking to 
 });
 
 test('DRIFT: authors.ts still maps the two network pseudo-authors to the brand name', () => {
+  // The set moved to src/lib/network-authors.mjs on 2026-09-22 so node can import it (a share's note drops its
+  // quotation marks for the house voice). authors.ts must still READ that set and still name the brand.
   const s = fs.readFileSync(new URL('../src/lib/authors.ts', import.meta.url), 'utf8');
-  assert.match(s, /NETWORK_AUTHORS = new Set\(\['gbti', 'gbtilabs'\]\)/);
+  assert.match(s, /import \{[^}]*NETWORK_AUTHORS[^}]*\} from '\.\/network-authors\.mjs'/);
   assert.match(s, /'GBTI Network'/);
+  const set = fs.readFileSync(new URL('../src/lib/network-authors.mjs', import.meta.url), 'utf8');
+  assert.match(set, /NETWORK_AUTHORS = new Set\(\['gbti', 'gbtilabs'\]\)/);
 });
 
 test('gbtilabs renders as the brand, not the username, even with no displayName on the profile', () => {

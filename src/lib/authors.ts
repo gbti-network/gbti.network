@@ -7,8 +7,13 @@
  * This is the ONE place that knows it. Callers that have a profile prefer its displayName
  * (ContentMeta, AuthorBox), and callers that do not (ArticleTeaser) fall through to here, so the two
  * cannot disagree the way they would if only the profile carried the name.
+ *
+ * A few places treat the house VOICE differently: a share's note is not wrapped in quotation marks when the
+ * network wrote it, because it is editorial rather than somebody being quoted (owner, 2026-09-22).
  */
-const NETWORK_AUTHORS = new Set(['gbti', 'gbtilabs']);
+import { NETWORK_AUTHORS, isNetworkAuthor } from './network-authors.mjs';
+
+export { isNetworkAuthor };
 
 /** Display name + profile link for a content author username. */
 export function authorDisplay(username: string): string {

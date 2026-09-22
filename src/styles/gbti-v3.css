@@ -1424,9 +1424,14 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .sss-src { display: block; width: 36px; height: 36px; border-radius: 50%; background: #fff; border: 1.5px solid var(--line); object-fit: contain; padding: 4px; box-sizing: border-box; }
 .sss-member { position: absolute; right: -7px; bottom: -5px; z-index: 1; display: inline-flex; }
 .sss-member .av { border: 2px solid var(--paper); }
-.share-member-note .cmt-rich { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 17px; }
+/* The member's note on a share. UPRIGHT, not italic (owner, 2026-09-22): a note runs to several paragraphs and
+   carries code spans and quotes of its own, and a whole italic column reads as an aside rather than as writing. */
+.share-member-note .cmt-rich { font-family: Georgia, 'Times New Roman', serif; font-size: 17px; }
 .share-member-note .cmt-rich p:first-child::before { content: '"'; }
 .share-member-note .cmt-rich p:last-child::after { content: '"'; }
+/* The NETWORK's own note is not somebody being quoted, so it carries no quotation marks (owner, 2026-09-22). */
+.share-member-note--house .cmt-rich p:first-child::before,
+.share-member-note--house .cmt-rich p:last-child::after { content: none; }
 
 /* ============================================================================
    .pd-* — PRODUCT DETAIL, the "Doc Shell" layout (sow-172, design direction 1b)
