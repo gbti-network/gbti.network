@@ -12,7 +12,8 @@ tags:
   - latin-mafia
   - mixtape
   - music
-image: https://i.ytimg.com/vi/mDtud5fLgFQ/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260922210214-fred-again-latin-mafia-full-mixtape-playback-pal-9ff9190d.webp
+imageSource: https://i.ytimg.com/vi/mDtud5fLgFQ/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@Fredagainagain
 creatorName: Fred again . .
 id: 20260922210214-fred-again-latin-mafia-full-mixtape-playback-pal
