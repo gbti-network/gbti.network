@@ -975,6 +975,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       return newsGet('/membership/news' + (qs.toString() ? `?${qs.toString()}` : ''));
     },
     getNewsSources() { return newsGet('/membership/news-sources'); },
+    getFollowedNews() { return newsGet('/membership/news-following'); }, // sow-386: members-only, { items } for the header bell
     getNewsCategories() { return newsGet('/membership/news-categories'); },
     // Best-effort engagement beacons (the reader ignores their failures); cookie POST -> CSRF via workerPost.
     newsOpened({ guid, source }: any = {}) { return workerPost('/membership/news-opened', { guid, ...(source ? { source } : {}) }); },

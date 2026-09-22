@@ -31,6 +31,18 @@ export async function workerGetNewsCategories({ token, signupBase, fetch = globa
   return { categories: Array.isArray(data?.categories) ? data.categories : [] };
 }
 
+// sow-386: the recent stories from the news sources the caller follows (the notification bells). Members only; a
+// refusal is thrown like every other news read, and the bells treat any failure as "no news rows".
+export async function workerGetFollowedNews({ token, signupBase, fetch = globalThis.fetch } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const res = await fetch(`${base(signupBase)}/membership/news-following`, { headers: { Authorization: 'Bearer ' + token } });
+  if (res.status === 401) throw new NewsClientError('news requires sign-in');
+  if (res.status === 403) throw new NewsClientError('news alerts require a paid membership');
+  if (!res.ok) throw new NewsClientError('followed news unavailable (' + res.status + ')');
+  const data = await res.json();
+  return { items: Array.isArray(data?.items) ? data.items : [] };
+}
+
 // SOW-046 E: the followable news channels (sources) + the member's prefs (categories + followed channels).
 export async function workerGetNewsSources({ token, signupBase, fetch = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');

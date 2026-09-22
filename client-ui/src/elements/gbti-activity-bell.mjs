@@ -10,6 +10,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { buildBell, markSeen } from '../activity-bell.mjs';
 import { canSeeShares, toMs } from '../all-merge.mjs';
+import { selectBellEntries } from '../notification-bell-core.mjs'; // sow-386: the In app settings, shared with the website bell
 import { buildReadHash } from '../browse-hash.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221 follow-up: the shared "time ago" + its tooltip
 import { prLifecycle } from '../workspace-core.mjs'; // SOW-072 P2: the shared PR-lifecycle model (rejection never silent)
@@ -157,22 +158,40 @@ class GbtiActivityBell extends GbtiElement {
       });
   }
 
+  // sow-386: the Following group obeys the member's In app settings (selectBellEntries, the same filter the website
+  // bell uses), and carries public shares from people you follow plus, for paying members, new stories from the
+  // news sources they follow. Every read but the follow list fails soft on its own: a failed settings read shows
+  // everything (the system default), and a refused news read (a free account) means no news rows.
+  async _siteList(path) {
+    try {
+      const res = await fetch(`${SITE}${path}`, { cache: 'no-cache' });
+      const data = res.ok ? await res.json() : {};
+      return Array.isArray(data?.entries) ? data.entries : [];
+    } catch { return []; }
+  }
+
   async _following(login) {
-    const f = (await this.client.getFollows()) || {};
-    const set = new Set((f.following || []).map((x) => String(x?.username || '').toLowerCase()).filter(Boolean));
-    if (!set.size) return [];
-    const res = await fetch(`${SITE}/activity-index.json`, { cache: 'no-cache' });
-    const data = res.ok ? await res.json() : {};
-    const entries = Array.isArray(data?.entries) ? data.entries : [];
-    return entries
-      .filter((e) => set.has(String(e.author).toLowerCase()))
-      .map((e) => ({
-        id: `f:${e.type}:${e.path || e.url || e.title}`,
-        ts: toMs(e.publishedAt),
-        title: e.title || 'New activity',
-        sub: `@${e.author}`,
-        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url || ''}`,
-      }));
+    const [f, entries, shares, prefs, news] = await Promise.all([
+      this.client.getFollows(),
+      this._siteList('/activity-index.json'),
+      this._siteList('/shares-index.json'),
+      Promise.resolve().then(() => this.client.getPrefs?.()).catch(() => null),
+      Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null),
+    ]);
+    const rows = selectBellEntries({
+      follows: Array.isArray(f?.following) ? f.following : [],
+      entries, shares,
+      news: Array.isArray(news?.items) ? news.items : [],
+      global: prefs?.notify,
+    });
+    return rows.map((r) => ({
+      id: `f:${r.id}`,
+      ts: r.ts,
+      title: r.target || 'New activity',
+      sub: r.kind === 'news' ? r.actor : `@${r.actor}`,
+      href: r.kind === 'news' ? r.url
+        : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE}${r.url || ''}`,
+    }));
   }
 
   // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies

@@ -9,7 +9,7 @@ import { getEarnings as workerGetEarnings } from './member-earnings-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
+import { workerGetNews, workerGetNewsSources, workerGetFollowedNews, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
 import { getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction } from './member-admin-client.mjs';
@@ -204,6 +204,14 @@ export function mapNewsErr(err, what) {
   if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', `Sign in to ${what}.`);
   if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', `${what} is a members-only perk. Upgrade at https://gbti.network.`);
   throw new OperationError('news-failed', err?.message || `the ${what} request failed`);
+}
+
+// sow-386: the bells' members-only news rows (stories from the sources the member follows) -> { items }.
+export async function getFollowedNews(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerGetFollowedNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
+  catch (err) { mapNewsErr(err, 'News alerts'); }
 }
 
 export async function getNewsSources(ctx) {

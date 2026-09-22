@@ -1,10 +1,11 @@
 // <gbti-notifications-settings> (SOW-186 C3): the account "Notifications" surface. Two parts, both host-agnostic
 // (they talk ONLY to the injected client): a "Default for everyone you follow" 5x2 matrix bound to the member's
 // global prefs (getPrefs/setPrefs {notify}), and a "People you follow" list (getFollows) whose per-follow override
-// is edited in the shared <gbti-notify-modal>. Inert in public (no client -> a sign-in nudge). Follows the
+// is edited in the shared <gbti-notify-modal>. sow-386: the fifth row, News, is stories from followed news SOURCES,
+// members only (locked for a free account, status() decides), and it lives in this grid alone. Inert in public (no client -> a sign-in nudge). Follows the
 // gbti-account load-race pattern (_loaded/_loading, _maybeLoad from render) so it upgrades the moment setClient runs.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { MATRIX_ROWS, defaultMatrix, matrixToNotify, toggleCell, summarizeFollow, isCustomFollow, channelBlocked } from '../notify-matrix-core.mjs';
+import { MATRIX_ROWS, defaultMatrix, matrixToNotify, toggleCell, summarizeFollow, isCustomFollow, cellBlockedTip } from '../notify-matrix-core.mjs';
 import { BLOCKED_PILL_CSS, notifyPillHtml } from './notify-pill.mjs'; // sow-385: email notifications are off for now
 import { openNotifyModal } from './gbti-notify-modal.mjs';
 
@@ -37,6 +38,9 @@ const CSS = `
   .frow:hover { background:var(--hover); }
   .frow .av { width:38px; height:38px; border-radius:50%; background:var(--hover); object-fit:cover; }
   .frow .ft { min-width:0; }
+  /* sow-386: the name and its summary are two stacked lines. As bare spans they ran together ("@nameEverything...")
+     and, on a phone, the summary slid under the Default/Custom tag, since an inline span ignores its own overflow. */
+  .frow .ft .t, .frow .ft .d { display:block; }
   .frow .ft .t { font-weight:600; font-size:15px; }
   .frow .ft .d { color:var(--muted); font-size:13px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tag { font-family:var(--font-mono, monospace); font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border-radius:999px; padding:3px 9px; background:var(--hover); color:var(--muted); }
@@ -65,9 +69,12 @@ class GbtiNotificationsSettings extends GbtiElement {
       new Promise((res) => { setTimeout(() => res(null), 8000); }),
     ]);
     try {
-      const [prefs, follows] = await Promise.all([guard(this.client.getPrefs?.()), guard(this.client.getFollows?.())]);
+      const [prefs, follows, st] = await Promise.all([guard(this.client.getPrefs?.()), guard(this.client.getFollows?.()), guard(this.client.status?.())]);
+      // sow-386: whether the News switch is live. Display only (the Worker's news read is the gate); a status that
+      // cannot be read shows it locked, and saving another row still keeps whatever News value is stored.
+      this._paid = st?.membership === 'paid';
       this._global = prefs?.notify;
-      this._matrix = defaultMatrix(this._global);
+      this._matrix = defaultMatrix(this._global, { paid: this._paid });
       const list = Array.isArray(follows) ? follows : (follows?.following ?? []);
       this._follows = list.filter((e) => e && e.username).sort((a, b) => a.username.localeCompare(b.username));
       this._prefsOk = !!prefs;
@@ -86,13 +93,14 @@ class GbtiNotificationsSettings extends GbtiElement {
   }
 
   async _toggleDefault(key, channel) {
-    if (!this._prefsOk || channelBlocked(channel)) return; // sow-385: a blocked pill never saves anything
+    // sow-385/386: a blocked pill (Email, or News for a free account) never saves anything.
+    if (!this._prefsOk || cellBlockedTip(key, channel, { paid: this._paid })) return;
     const prev = this._matrix;
-    this._matrix = toggleCell(this._matrix, key, channel); // optimistic
+    this._matrix = toggleCell(this._matrix, key, channel, { paid: this._paid }); // optimistic
     this.render();
     try {
-      const prefs = await this.client.setPrefs({ notify: matrixToNotify(this._matrix) });
-      if (prefs && prefs.notify) { this._global = prefs.notify; this._matrix = defaultMatrix(prefs.notify); }
+      const prefs = await this.client.setPrefs({ notify: matrixToNotify(this._matrix, { paid: this._paid, global: this._global }) });
+      if (prefs && prefs.notify) { this._global = prefs.notify; this._matrix = defaultMatrix(prefs.notify, { paid: this._paid }); }
       this._say('ok', 'Saved. This applies to everyone you follow unless you set them separately.');
       this.render();
     } catch {
@@ -113,10 +121,10 @@ class GbtiNotificationsSettings extends GbtiElement {
     if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE}/membership/">Become a member</a>.</div>`); return; }
     if (!this._loaded) { this.set(this.css(CSS) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`); return; }
 
-    const matrix = this._matrix || defaultMatrix(this._global);
+    const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
     const matrixRows = MATRIX_ROWS.map((r) => {
       const cell = matrix[r.key] || {};
-      const pills = CHANNELS.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk })).join('');
+      const pills = CHANNELS.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk, paid: this._paid })).join('');
       return `<div class="mrow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
     }).join('');
 

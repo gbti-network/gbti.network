@@ -110,6 +110,7 @@ function shoptalkCalendar(env) {
 import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
 import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SOW-046 D: reflect news discussion onto Discord
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
+import { membershipNewsFollowing } from './membership-news-following.mjs'; // sow-386: members-only news alerts for the bells
 import { membershipDeployStatus } from './membership-deploy-status.mjs'; // sow-185: public "still deploying" status check
 import { handleDiscordInvite } from './discord-invite.mjs';
 import { listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewFileContent, itemRevisions } from './github-app.mjs';
@@ -1484,6 +1485,18 @@ export default {
         if (method === 'GET') {
           const r = await membershipDeployStatus(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'public, max-age=15' });
+        }
+      }
+
+      // sow-386: the recent stories from the news sources the caller follows, for the notification bells. Members only
+      // (authorizePaid, fail closed). Per-member, so private; five minutes of browser cache so moving between pages
+      // does not ask again. Cookie-readable for the website header bell.
+      if (pathname === '/membership/news-following') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await membershipNewsFollowing(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': r.status === 200 ? 'private, max-age=300' : 'no-store', Vary: 'Authorization, Cookie' });
         }
       }
 

@@ -15322,6 +15322,12 @@ ${listStyleProseCss(".doc-blocks")}
   function channelBlocked(channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
     return channel === "email" && !emailEnabled;
   }
+  var NEWS_MEMBERS_TIP = "News alerts are for members";
+  function cellBlockedTip(key, channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED, paid = true } = {}) {
+    if (channelBlocked(channel, { emailEnabled })) return EMAIL_DISABLED_TIP;
+    if (key === "news" && !paid) return NEWS_MEMBERS_TIP;
+    return "";
+  }
   var MATRIX_ROWS = Object.freeze([
     { key: "article", label: "Articles" },
     { key: "project", label: "Projects" },
@@ -15330,31 +15336,38 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "news", label: "News" }
     // sow-385: was "News they curate" (owner, 2026-09-21)
   ]);
-  function resolveMatrix(followNotify, globalNotify, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
+  var PERSON_ROWS = Object.freeze(MATRIX_ROWS.filter((r) => r.key !== "news"));
+  function resolveMatrix(followNotify, globalNotify, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED, paid = true, rows = MATRIX_ROWS } = {}) {
     const f = normalizeNotify(followNotify);
     const g = normalizeNotify(globalNotify);
     const out = {};
-    for (const r of MATRIX_ROWS) {
+    for (const r of rows) {
       const cell = resolveNotify({ event: r.key, follow: f, global: g });
       out[r.key] = emailEnabled ? cell : { ...cell, email: false };
+      if (r.key === "news" && !paid) out[r.key] = { api: false, email: false };
     }
     return out;
   }
   function defaultMatrix(globalNotify, opts) {
     return resolveMatrix(void 0, globalNotify, opts);
   }
-  function matrixToNotify(matrix) {
+  function matrixToNotify(matrix, { rows = MATRIX_ROWS, paid = true, global } = {}) {
     const out = {};
-    for (const r of MATRIX_ROWS) {
+    for (const r of rows) {
+      if (r.key === "news" && !paid) {
+        const kept = normalizeNotify(global)?.news;
+        if (kept) out.news = kept;
+        continue;
+      }
       const cell = matrix && matrix[r.key] || {};
       out[r.key] = { api: !!cell.api, email: !!cell.email };
     }
     return out;
   }
-  function toggleCell(matrix, key, channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED } = {}) {
+  function toggleCell(matrix, key, channel, { emailEnabled = EMAIL_NOTIFICATIONS_ENABLED, paid = true, rows = MATRIX_ROWS } = {}) {
     const next = {};
-    for (const r of MATRIX_ROWS) next[r.key] = { ...matrix && matrix[r.key] || {} };
-    if (channel === "email" && !emailEnabled) return next;
+    for (const r of rows) next[r.key] = { ...matrix && matrix[r.key] || {} };
+    if (cellBlockedTip(key, channel, { emailEnabled, paid })) return next;
     if (next[key] && (channel === "api" || channel === "email")) next[key][channel] = !next[key][channel];
     return next;
   }
@@ -15363,25 +15376,26 @@ ${listStyleProseCss(".doc-blocks")}
   }
   function summarizeFollow(follow, globalNotify, opts) {
     const matrix = resolveMatrix(follow && follow.notify, globalNotify, opts);
-    return summarizeMatrix(matrix);
+    return summarizeMatrix(matrix, PERSON_ROWS);
   }
-  function summarizeMatrix(matrix) {
-    const on = MATRIX_ROWS.filter((r) => matrix && matrix[r.key] && (matrix[r.key].api || matrix[r.key].email));
+  function summarizeMatrix(matrix, rows = MATRIX_ROWS) {
+    const on = rows.filter((r) => matrix && matrix[r.key] && (matrix[r.key].api || matrix[r.key].email));
     if (!on.length) return "Muted, nothing arrives";
-    const anyMail = MATRIX_ROWS.some((r) => matrix && matrix[r.key] && matrix[r.key].email);
-    if (on.length === MATRIX_ROWS.length) return anyMail ? "Everything, in app and by email" : "Everything, in app only";
+    const anyMail = rows.some((r) => matrix && matrix[r.key] && matrix[r.key].email);
+    if (on.length === rows.length) return anyMail ? "Everything, in app and by email" : "Everything, in app only";
     const names = on.map((r) => r.label.toLowerCase()).join(", ");
     return names.charAt(0).toUpperCase() + names.slice(1) + (anyMail ? ", email on" : "");
   }
-  function notifyPayload(mode, matrix) {
-    return mode === "custom" ? matrixToNotify(matrix) : null;
+  function notifyPayload(mode, matrix, opts) {
+    return mode === "custom" ? matrixToNotify(matrix, opts) : null;
   }
 
   // client-ui/src/elements/notify-pill.mjs
-  function notifyPillHtml({ rowKey, channel, label, on = false, disabled = false } = {}) {
+  function notifyPillHtml({ rowKey, channel, label, on = false, disabled = false, paid = true } = {}) {
     const cell = `${esc(rowKey)}:${esc(channel)}`;
-    if (channelBlocked(channel)) {
-      return `<button type="button" class="pill blocked" data-cell="${cell}" aria-pressed="false" aria-disabled="true" data-tip="${esc(EMAIL_DISABLED_TIP)}" aria-label="${esc(label)}. ${esc(EMAIL_DISABLED_TIP)}">${esc(label)}</button>`;
+    const tip = cellBlockedTip(rowKey, channel, { paid });
+    if (tip) {
+      return `<button type="button" class="pill blocked" data-cell="${cell}" aria-pressed="false" aria-disabled="true" data-tip="${esc(tip)}" aria-label="${esc(label)}. ${esc(tip)}">${esc(label)}</button>`;
     }
     return `<button type="button" class="pill${on ? " on" : ""}" data-cell="${cell}" aria-pressed="${!!on}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
   }
@@ -15395,9 +15409,21 @@ ${listStyleProseCss(".doc-blocks")}
     font-size:12px; font-weight:600; line-height:1.3; letter-spacing:0; box-shadow:0 6px 18px rgba(0,0,0,.18);
     opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease, visibility .12s ease; }
   .pill.blocked:hover::after, .pill.blocked:focus-visible::after { opacity:1; visibility:visible; }
+  /* sow-386, measured at 320, 360 and 390px wide: on one line both tooltips ran off the left edge of the container
+     that clips them (the Email one by 38px at 390, since sow-385). On a narrow screen they change shape instead:
+     - Email wraps, capped at the room left of the Email pill in the narrower of the two surfaces (the modal's grid).
+     - The only blocked In app pill is News, the LAST row of the account grid (the modal has no News row), and at
+       320px there is no room to its left at all. It opens ABOVE the pill instead, right-aligned to it, over the row
+       above, which is inside the same card. A blocked In app pill in a TOP row would need another answer. */
+  @media (max-width: 560px) {
+    .pill.blocked::after { white-space:normal; width:max-content; text-align:right; line-height:1.2; padding:5px 9px; }
+    .pill.blocked[data-cell$=":email"]::after { max-width:calc(100vw - 166px); }
+    .pill.blocked[data-cell$=":api"]::after { right:0; top:auto; bottom:calc(100% + 8px); transform:none; max-width:calc(100vw - 160px); }
+  }
 `;
 
   // client-ui/src/elements/gbti-notify-modal.mjs
+  var ROWS = { rows: PERSON_ROWS };
   var CHANNELS2 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
@@ -15492,19 +15518,19 @@ ${BLOCKED_PILL_CSS}
       this._following = !!follow;
       this._override = follow?.notify || null;
       this._mode = this._override ? "custom" : "default";
-      this._matrix = this._override ? resolveMatrix(this._override, global) : defaultMatrix(global);
+      this._matrix = this._override ? resolveMatrix(this._override, global, ROWS) : defaultMatrix(global, ROWS);
       this._loaded = true;
       this.render();
     }
     _setMode(mode) {
       if (this._mode === mode) return;
-      if (mode === "custom" && !this._override) this._matrix = defaultMatrix(this._global);
+      if (mode === "custom" && !this._override) this._matrix = defaultMatrix(this._global, ROWS);
       this._mode = mode;
       this.render();
     }
     _toggle(key, channel) {
-      if (this._mode !== "custom" || channelBlocked(channel)) return;
-      this._matrix = toggleCell(this._matrix, key, channel);
+      if (this._mode !== "custom" || cellBlockedTip(key, channel)) return;
+      this._matrix = toggleCell(this._matrix, key, channel, ROWS);
       this.render();
     }
     async _save() {
@@ -15513,7 +15539,7 @@ ${BLOCKED_PILL_CSS}
       this._err = "";
       this.render();
       try {
-        await this.client.setFollow({ username: this._username, on: true, notify: notifyPayload(this._mode, this._matrix) });
+        await this.client.setFollow({ username: this._username, on: true, notify: notifyPayload(this._mode, this._matrix, ROWS) });
         this.emit("gbti:notify-saved", { username: this._username });
         this.close();
       } catch (err) {
@@ -15550,8 +15576,8 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const custom = this._mode === "custom";
-      const shown = custom ? this._matrix : defaultMatrix(this._global);
-      const rowHtml = MATRIX_ROWS.map((r) => {
+      const shown = custom ? this._matrix : defaultMatrix(this._global, ROWS);
+      const rowHtml = PERSON_ROWS.map((r) => {
         const cell = shown[r.key] || {};
         const pills = CHANNELS2.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key] })).join("");
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
@@ -24010,6 +24036,81 @@ ${BLOCKED_PILL_CSS}
     return { replies: now, following: now, prsSeen };
   }
 
+  // client-ui/src/notification-bell-core.mjs
+  var NOTIFY_ACTION = {
+    article: "published",
+    project: "published",
+    prompt: "published",
+    share: "shared",
+    news: "published"
+  };
+  var MAX_BELL_ROWS = 30;
+  var BELL_EVENT_FOR_TYPE = Object.freeze({
+    post: "article",
+    article: "article",
+    project: "project",
+    prompt: "prompt",
+    share: "share",
+    news: "news"
+  });
+  function bellEventFor(type) {
+    const t = String(type || "");
+    return BELL_EVENT_FOR_TYPE[t] || t;
+  }
+  function inAppOn({ event, follow, global } = {}) {
+    return resolveNotify({ event, follow: normalizeNotify(follow), global: normalizeNotify(global) }).api === true;
+  }
+  function selectBellEntries({ follows = [], entries = [], shares = [], news = [], global } = {}) {
+    const notifyBy = /* @__PURE__ */ new Map();
+    for (const f of Array.isArray(follows) ? follows : []) {
+      const u = String(f?.username || "").toLowerCase();
+      if (u) notifyBy.set(u, f?.notify);
+    }
+    const people = [...Array.isArray(entries) ? entries : [], ...Array.isArray(shares) ? shares : []].filter((e) => e && notifyBy.has(String(e.author || "").toLowerCase())).map((e) => {
+      const type = String(e.type || "");
+      return { e, type, event: bellEventFor(type) };
+    }).filter(({ e, event }) => inAppOn({ event, follow: notifyBy.get(String(e.author || "").toLowerCase()), global })).map(({ e, type, event }) => ({
+      id: `${type}:${e.path || e.url || e.title || ""}`,
+      kind: "person",
+      type,
+      event,
+      actor: String(e.author || ""),
+      action: NOTIFY_ACTION[event] || "published",
+      target: String(e.title || "new activity"),
+      url: String(e.url || ""),
+      path: e.path ? String(e.path) : "",
+      ts: toMs(e.publishedAt)
+    }));
+    const newsOn = inAppOn({ event: "news", global });
+    const stories = (newsOn && Array.isArray(news) ? news : []).filter((n) => n && n.guid && /^https?:\/\//i.test(String(n.link || ""))).map((n) => ({
+      id: `news:${n.guid}`,
+      kind: "news",
+      type: "news",
+      event: "news",
+      actor: String(n.sourceName || n.source || "News"),
+      action: NOTIFY_ACTION.news,
+      target: String(n.title || "a new story"),
+      url: String(n.link),
+      path: "",
+      ts: toMs(n.publishedAt)
+    }));
+    return [...people, ...stories].sort((a, b) => b.ts - a.ts);
+  }
+  function buildFollowingBell({ follows = [], entries = [], shares = [], news = [], global, watermark = 0, max = MAX_BELL_ROWS } = {}) {
+    const followCount = new Set(
+      (Array.isArray(follows) ? follows : []).map((f) => String(f?.username || "").toLowerCase()).filter(Boolean)
+    ).size;
+    const mark = Number(watermark) || 0;
+    const cap = Number(max) > 0 ? Number(max) : MAX_BELL_ROWS;
+    const rows = selectBellEntries({ follows, entries, shares, news, global }).slice(0, cap).map((r) => ({ ...r, unread: r.ts > mark }));
+    const unread = rows.reduce((n, r) => n + (r.unread ? 1 : 0), 0);
+    return { rows, unread, followCount };
+  }
+  function unreadLabel(n) {
+    const c = Number(n) || 0;
+    return c > 9 ? "9+" : String(c);
+  }
+
   // client-ui/src/elements/gbti-activity-bell.mjs
   var SITE16 = "https://gbti.network";
   var POLL_MS2 = 12e4;
@@ -24168,19 +24269,40 @@ ${BLOCKED_PILL_CSS}
         };
       });
     }
+    // sow-386: the Following group obeys the member's In app settings (selectBellEntries, the same filter the website
+    // bell uses), and carries public shares from people you follow plus, for paying members, new stories from the
+    // news sources they follow. Every read but the follow list fails soft on its own: a failed settings read shows
+    // everything (the system default), and a refused news read (a free account) means no news rows.
+    async _siteList(path) {
+      try {
+        const res = await fetch(`${SITE16}${path}`, { cache: "no-cache" });
+        const data = res.ok ? await res.json() : {};
+        return Array.isArray(data?.entries) ? data.entries : [];
+      } catch {
+        return [];
+      }
+    }
     async _following(login) {
-      const f = await this.client.getFollows() || {};
-      const set = new Set((f.following || []).map((x) => String(x?.username || "").toLowerCase()).filter(Boolean));
-      if (!set.size) return [];
-      const res = await fetch(`${SITE16}/activity-index.json`, { cache: "no-cache" });
-      const data = res.ok ? await res.json() : {};
-      const entries = Array.isArray(data?.entries) ? data.entries : [];
-      return entries.filter((e) => set.has(String(e.author).toLowerCase())).map((e) => ({
-        id: `f:${e.type}:${e.path || e.url || e.title}`,
-        ts: toMs(e.publishedAt),
-        title: e.title || "New activity",
-        sub: `@${e.author}`,
-        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE16}${e.url || ""}`
+      const [f, entries, shares, prefs, news] = await Promise.all([
+        this.client.getFollows(),
+        this._siteList("/activity-index.json"),
+        this._siteList("/shares-index.json"),
+        Promise.resolve().then(() => this.client.getPrefs?.()).catch(() => null),
+        Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null)
+      ]);
+      const rows = selectBellEntries({
+        follows: Array.isArray(f?.following) ? f.following : [],
+        entries,
+        shares,
+        news: Array.isArray(news?.items) ? news.items : [],
+        global: prefs?.notify
+      });
+      return rows.map((r) => ({
+        id: `f:${r.id}`,
+        ts: r.ts,
+        title: r.target || "New activity",
+        sub: r.kind === "news" ? r.actor : `@${r.actor}`,
+        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE16}${r.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -24296,46 +24418,9 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-activity-bell", GbtiActivityBell);
 
-  // client-ui/src/notification-bell-core.mjs
-  var NOTIFY_ACTION = {
-    article: "published",
-    project: "published",
-    prompt: "published",
-    share: "shared",
-    news: "curated"
-  };
-  var MAX_BELL_ROWS = 30;
-  function buildFollowingBell({ follows = [], entries = [], watermark = 0, max = MAX_BELL_ROWS } = {}) {
-    const set = new Set(
-      (Array.isArray(follows) ? follows : []).map((f) => String(f?.username || "").toLowerCase()).filter(Boolean)
-    );
-    if (!set.size) return { rows: [], unread: 0, followCount: 0 };
-    const mark = Number(watermark) || 0;
-    const cap = Number(max) > 0 ? Number(max) : MAX_BELL_ROWS;
-    const rows = (Array.isArray(entries) ? entries : []).filter((e) => e && set.has(String(e.author || "").toLowerCase())).map((e) => {
-      const ts = toMs(e.publishedAt);
-      const type = String(e.type || "");
-      return {
-        id: `${type}:${e.path || e.url || e.title || ""}`,
-        actor: String(e.author || ""),
-        action: NOTIFY_ACTION[type] || "published",
-        target: String(e.title || "new activity"),
-        url: String(e.url || ""),
-        type,
-        ts,
-        unread: ts > mark
-      };
-    }).sort((a, b) => b.ts - a.ts).slice(0, cap);
-    const unread = rows.reduce((n, r) => n + (r.unread ? 1 : 0), 0);
-    return { rows, unread, followCount: set.size };
-  }
-  function unreadLabel(n) {
-    const c = Number(n) || 0;
-    return c > 9 ? "9+" : String(c);
-  }
-
   // client-ui/src/elements/gbti-notification-bell.mjs
   var INDEX_URL = "/activity-index.json";
+  var SHARES_URL = "/shares-index.json";
   var SEEN_KEY2 = "gbti-notif-seen";
   var SETTINGS_URL = "/account/notifications/";
   var FIND_URL = "/members/";
@@ -24356,6 +24441,7 @@ ${BLOCKED_PILL_CSS}
   var I_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.4 2.4 4.6-5"/></svg>';
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
+  var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
   var CSS39 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
@@ -24378,6 +24464,8 @@ ${BLOCKED_PILL_CSS}
   .it.unread { background:color-mix(in srgb, var(--brand) 8%, transparent); }
   .it.unread:hover { background:color-mix(in srgb, var(--brand) 13%, transparent); }
   .av { width:28px; height:28px; border-radius:50%; flex:none; background:var(--hover); object-fit:cover; margin-top:1px; }
+  .av.nav { display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .av.nav svg { width:16px; height:16px; }
   .it .body { flex:1; min-width:0; }
   .it .line { font-size:13px; line-height:1.45; color:var(--muted); }
   .it .line b { color:var(--fg); font-weight:600; }
@@ -24436,9 +24524,9 @@ ${BLOCKED_PILL_CSS}
         this._load();
       }
     }
-    async _fetchIndex() {
+    async _fetchIndex(url = INDEX_URL) {
       try {
-        const res = await fetch(INDEX_URL, { cache: "no-cache" });
+        const res = await fetch(url, { cache: "no-cache" });
         if (!res.ok) return [];
         const data = await res.json();
         return Array.isArray(data?.entries) ? data.entries : [];
@@ -24448,10 +24536,25 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       try {
-        const f = await this.client.getFollows() || {};
-        const follows = Array.isArray(f.following) ? f.following : [];
-        const entries = await this._fetchIndex();
-        this._bell = buildFollowingBell({ follows, entries, watermark: this._watermark });
+        const [f, entries, shares, prefs, news] = await Promise.all([
+          this.client.getFollows(),
+          // throws (banned / no session) -> gated
+          this._fetchIndex(INDEX_URL),
+          // fail-closed to []
+          this._fetchIndex(SHARES_URL),
+          // fail-closed to []
+          Promise.resolve().then(() => this.client.getPrefs?.()).catch(() => null),
+          Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null)
+        ]);
+        const follows = Array.isArray(f?.following) ? f.following : [];
+        this._bell = buildFollowingBell({
+          follows,
+          entries,
+          shares,
+          news: Array.isArray(news?.items) ? news.items : [],
+          global: prefs?.notify,
+          watermark: this._watermark
+        });
         this._gated = false;
       } catch {
         this._gated = true;
@@ -24517,11 +24620,11 @@ ${BLOCKED_PILL_CSS}
       const rows = this._bell.rows.slice(0, 12).map((r) => {
         const when = relTime(r.ts);
         const abs = when ? absTime(r.ts) : "";
-        const av = r.actor ? `https://github.com/${encodeURIComponent(r.actor)}.png?size=56` : "";
+        const av = r.kind === "person" && r.actor ? `https://github.com/${encodeURIComponent(r.actor)}.png?size=56` : "";
         const href = r.url || SETTINGS_URL;
         const internal = /^\//.test(href);
         const ext = internal ? "" : ' target="_blank" rel="noopener nofollow"';
-        return `<a class="it${r.unread ? " unread" : ""}" href="${esc(href)}"${ext}${abs ? ` title="${esc(abs)}"` : ""}><img class="av" src="${esc(av)}" alt="" width="28" height="28" decoding="async" loading="lazy" /><span class="body"><span class="line"><b>${esc(r.actor)}</b> ${esc(r.action)} <span class="tg">${esc(r.target)}</span></span>${when ? `<span class="when">${esc(when)}</span>` : ""}</span>${r.unread ? '<span class="dot"></span>' : ""}</a>`;
+        return `<a class="it${r.unread ? " unread" : ""}" href="${esc(href)}"${ext}${abs ? ` title="${esc(abs)}"` : ""}>` + (av ? `<img class="av" src="${esc(av)}" alt="" width="28" height="28" decoding="async" loading="lazy" />` : `<span class="av nav">${I_NEWS}</span>`) + `<span class="body"><span class="line"><b>${esc(r.actor)}</b> ${esc(r.action)} <span class="tg">${esc(r.target)}</span></span>${when ? `<span class="when">${esc(when)}</span>` : ""}</span>${r.unread ? '<span class="dot"></span>' : ""}</a>`;
       }).join("");
       return `<div class="list">${rows}</div>`;
     }
@@ -24567,6 +24670,9 @@ ${BLOCKED_PILL_CSS}
   .frow:hover { background:var(--hover); }
   .frow .av { width:38px; height:38px; border-radius:50%; background:var(--hover); object-fit:cover; }
   .frow .ft { min-width:0; }
+  /* sow-386: the name and its summary are two stacked lines. As bare spans they ran together ("@nameEverything...")
+     and, on a phone, the summary slid under the Default/Custom tag, since an inline span ignores its own overflow. */
+  .frow .ft .t, .frow .ft .d { display:block; }
   .frow .ft .t { font-weight:600; font-size:15px; }
   .frow .ft .d { color:var(--muted); font-size:13px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tag { font-family:var(--font-mono, monospace); font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border-radius:999px; padding:3px 9px; background:var(--hover); color:var(--muted); }
@@ -24596,9 +24702,10 @@ ${BLOCKED_PILL_CSS}
         })
       ]);
       try {
-        const [prefs, follows] = await Promise.all([guard(this.client.getPrefs?.()), guard(this.client.getFollows?.())]);
+        const [prefs, follows, st] = await Promise.all([guard(this.client.getPrefs?.()), guard(this.client.getFollows?.()), guard(this.client.status?.())]);
+        this._paid = st?.membership === "paid";
         this._global = prefs?.notify;
-        this._matrix = defaultMatrix(this._global);
+        this._matrix = defaultMatrix(this._global, { paid: this._paid });
         const list = Array.isArray(follows) ? follows : follows?.following ?? [];
         this._follows = list.filter((e) => e && e.username).sort((a, b) => a.username.localeCompare(b.username));
         this._prefsOk = !!prefs;
@@ -24618,15 +24725,15 @@ ${BLOCKED_PILL_CSS}
       this.render();
     }
     async _toggleDefault(key, channel) {
-      if (!this._prefsOk || channelBlocked(channel)) return;
+      if (!this._prefsOk || cellBlockedTip(key, channel, { paid: this._paid })) return;
       const prev = this._matrix;
-      this._matrix = toggleCell(this._matrix, key, channel);
+      this._matrix = toggleCell(this._matrix, key, channel, { paid: this._paid });
       this.render();
       try {
-        const prefs = await this.client.setPrefs({ notify: matrixToNotify(this._matrix) });
+        const prefs = await this.client.setPrefs({ notify: matrixToNotify(this._matrix, { paid: this._paid, global: this._global }) });
         if (prefs && prefs.notify) {
           this._global = prefs.notify;
-          this._matrix = defaultMatrix(prefs.notify);
+          this._matrix = defaultMatrix(prefs.notify, { paid: this._paid });
         }
         this._say("ok", "Saved. This applies to everyone you follow unless you set them separately.");
         this.render();
@@ -24652,10 +24759,10 @@ ${BLOCKED_PILL_CSS}
         this.set(this.css(CSS40) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
-      const matrix = this._matrix || defaultMatrix(this._global);
+      const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
       const matrixRows = MATRIX_ROWS.map((r) => {
         const cell = matrix[r.key] || {};
-        const pills = CHANNELS3.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk })).join("");
+        const pills = CHANNELS3.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk, paid: this._paid })).join("");
         return `<div class="mrow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const follows = this._follows || [];
@@ -27403,8 +27510,10 @@ From the author:
       // SOW-043: members-only news -> { items, updatedAt }
       getNewsSources: () => request("GET", "/api/news-sources"),
       // SOW-046: followable news channels -> { sources }
+      getFollowedNews: () => request("GET", "/api/news-following"),
+      // sow-386: members-only stories from followed sources -> { items }
       getPrefs: () => request("GET", "/api/prefs"),
-      // SOW-046: member prefs -> { categories, followedChannels }
+      // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
       setPrefs: (patch) => request("POST", "/api/prefs", patch),
       // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
       publishNews: (item) => request("POST", "/api/news-publish", { item }),
@@ -27462,7 +27571,7 @@ From the author:
       // returns { activity }
       // SOW-023: the follow graph (subscriptions) in the deletable edge store (paid-only).
       getFollows: () => request("GET", "/api/follows"),
-      // returns { following: [{ username, addedAt }] }
+      // returns { following: [{ username, addedAt, notify? }] } (notify = the per-follow settings, SOW-186)
       setFollow: ({ username, on = true, notify }) => request("POST", "/api/follows", { username, on, notify }),
       // SOW-186 C3: optional per-follow notify matrix; returns { following }
       // SOW-026: first-run onboarding readiness (token/fork/install) from durable GitHub state.

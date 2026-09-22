@@ -37,6 +37,7 @@ import {
   getDiscordInvite,
   getNews,
   getNewsSources,
+  getFollowedNews, // sow-386
   discordUnlink, // sow-218: disconnect Discord
   getPrefs,
   setPrefs,
@@ -141,6 +142,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/discord-invite') return run(() => getDiscordInvite(ctx)); // on-demand Discord invite
   if (method === 'GET' && pathname === '/api/news') return run(() => getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || undefined })); // SOW-043 members-only news
   if (method === 'GET' && pathname === '/api/news-sources') return run(() => getNewsSources(ctx)); // SOW-046: followable news channels
+  if (method === 'GET' && pathname === '/api/news-following') return run(() => getFollowedNews(ctx)); // sow-386: the bells' members-only news rows
   if (method === 'POST' && pathname === '/api/discord-unlink') return run(() => discordUnlink(ctx)); // sow-218: disconnect Discord
   if (method === 'GET' && pathname === '/api/prefs') return run(() => getPrefs(ctx)); // SOW-046: member prefs
   if (method === 'POST' && pathname === '/api/prefs') return run(() => setPrefs(ctx, body)); // SOW-046: set categories / follow a channel

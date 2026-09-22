@@ -1,5 +1,6 @@
 // SOW-023: the member FOLLOW endpoint (the subscription graph) over the deletable edge store (KV).
-//   GET  /membership/follows               -> { ok, following: [{ username, addedAt }] }   (the caller's own list)
+//   GET  /membership/follows               -> { ok, following: [{ username, addedAt, notify? }] }   (the caller's own list;
+//                                              notify = the per-follow notification settings, SOW-186)
 //   POST /membership/follows { username, on } -> { ok, following }   (on:true follow, on:false unfollow)
 //
 // SOW-060: following is a FREE-tier perk. Auth = SIGNED-IN, non-banned (authorizeMember: ban > staff > grandfather

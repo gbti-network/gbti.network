@@ -35,7 +35,7 @@ test('rows are newest-first', () => {
 
 test('action verb maps by content type; unknown -> published', () => {
   assert.equal(NOTIFY_ACTION.share, 'shared');
-  assert.equal(NOTIFY_ACTION.news, 'curated');
+  assert.equal(NOTIFY_ACTION.news, 'published'); // sow-386: a news row's actor is the publication (was 'curated')
   const r = buildFollowingBell({ follows: FOLLOWS, entries: ENTRIES, watermark: 0 });
   const byTitle = Object.fromEntries(r.rows.map((x) => [x.target, x.action]));
   assert.equal(byTitle['Radle 2.2'], 'published');          // product

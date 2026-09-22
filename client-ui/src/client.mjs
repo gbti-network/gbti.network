@@ -80,7 +80,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     discordUnlink: () => request('POST', '/api/discord-unlink'), // sow-218: disconnect Discord -> { ok, unlinked }
     getNews: ({ category, since, limit } = {}) => request('GET', `/api/news${qs({ category, since, limit })}`), // SOW-043: members-only news -> { items, updatedAt }
     getNewsSources: () => request('GET', '/api/news-sources'), // SOW-046: followable news channels -> { sources }
-    getPrefs: () => request('GET', '/api/prefs'), // SOW-046: member prefs -> { categories, followedChannels }
+    getFollowedNews: () => request('GET', '/api/news-following'), // sow-386: members-only stories from followed sources -> { items }
+    getPrefs: () => request('GET', '/api/prefs'), // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
     setPrefs: (patch) => request('POST', '/api/prefs', patch), // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
     publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
     newsDiscussed: (guid) => request('POST', '/api/news-discussed', { guid }), // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
@@ -119,7 +120,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     renameCollection: ({ id, name }) => request('POST', '/api/activity', { action: 'collection.rename', id, name }), // returns { activity }
     deleteCollection: ({ id }) => request('POST', '/api/activity', { action: 'collection.delete', id }), // returns { activity }
     // SOW-023: the follow graph (subscriptions) in the deletable edge store (paid-only).
-    getFollows: () => request('GET', '/api/follows'), // returns { following: [{ username, addedAt }] }
+    getFollows: () => request('GET', '/api/follows'), // returns { following: [{ username, addedAt, notify? }] } (notify = the per-follow settings, SOW-186)
     setFollow: ({ username, on = true, notify }) => request('POST', '/api/follows', { username, on, notify }), // SOW-186 C3: optional per-follow notify matrix; returns { following }
     // SOW-026: first-run onboarding readiness (token/fork/install) from durable GitHub state.
     onboardingStatus: () => request('GET', '/api/onboarding-status'), // returns { appMode, signedIn, forkReady, installReady, activeStep, ready, ... }

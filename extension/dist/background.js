@@ -18925,6 +18925,15 @@ async function workerGetNews({ token, signupBase, fetch: fetch2 = globalThis.fet
   const data = await res.json();
   return { items: Array.isArray(data?.items) ? data.items : [], updatedAt: data?.updatedAt ?? null };
 }
+async function workerGetFollowedNews({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const res = await fetch2(`${base2(signupBase)}/membership/news-following`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401) throw new NewsClientError("news requires sign-in");
+  if (res.status === 403) throw new NewsClientError("news alerts require a paid membership");
+  if (!res.ok) throw new NewsClientError("followed news unavailable (" + res.status + ")");
+  const data = await res.json();
+  return { items: Array.isArray(data?.items) ? data.items : [] };
+}
 async function workerGetNewsSources({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
   const res = await fetch2(`${base2(signupBase)}/membership/news-sources`, { headers: { Authorization: "Bearer " + token } });
@@ -19431,6 +19440,15 @@ function mapNewsErr(err, what) {
   if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", `Sign in to ${what}.`);
   if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError("membership-required", `${what} is a members-only perk. Upgrade at https://gbti.network.`);
   throw new OperationError("news-failed", err?.message || `the ${what} request failed`);
+}
+async function getFollowedNews(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerGetFollowedNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    mapNewsErr(err, "News alerts");
+  }
 }
 async function getNewsSources(ctx) {
   requireIdentity(ctx);
@@ -21371,6 +21389,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || void 0 }));
       case "/api/news-sources":
         return ok(await getNewsSources(ctx));
+      case "/api/news-following":
+        return ok(await getFollowedNews(ctx));
       case "/api/prefs":
         return ok(method === "POST" ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case "/api/news-publish":

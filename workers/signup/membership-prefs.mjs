@@ -1,6 +1,6 @@
 // SOW-046 (B/E): the member-prefs endpoint (category interests + followed news channels) over the deletable edge
 // store (KV).
-//   GET  /membership/prefs                          -> { ok, prefs: { categories, followedChannels } }
+//   GET  /membership/prefs                          -> { ok, prefs: { categories, followedChannels, followedTags, publicFavorites, notify?, onboarding? } }
 //   POST /membership/prefs { categories }           -> replace category interests
 //   POST /membership/prefs { followChannel:{id,on} } -> follow/unfollow a news source id
 //   POST /membership/prefs { followTag:{tag,on} }     -> sow-307: follow/unfollow a tag (cap 50, refused past it)

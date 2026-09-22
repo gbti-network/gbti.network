@@ -4,12 +4,15 @@
 // (getFollows()) intersected with the public activity index, so it shows "members I follow published X". The
 // dormant server store is not read here. Unread is a localStorage watermark set on "Mark all read"; a
 // banned/no-session account fails closed and the bell hides itself. Three first-class states per the design:
-// loading (skeletons), empty ("You are all caught up" + a follow nudge), and populated.
+// loading (skeletons), empty ("You are all caught up" + a follow nudge), and populated. sow-386: rows now obey the
+// member's In app settings and include public shares and (members only) news from followed sources; the filtering
+// is selectBellEntries in notification-bell-core.mjs, shared with the extension bell.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { buildFollowingBell, unreadLabel } from '../notification-bell-core.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 
 const INDEX_URL = '/activity-index.json'; // same-origin public build artifact (site root)
+const SHARES_URL = '/shares-index.json';  // sow-386: the public shares list, the same shape (same-origin build artifact)
 const SEEN_KEY = 'gbti-notif-seen';       // a single ms watermark (distinct from the extension bell's per-source object)
 const SETTINGS_URL = '/account/notifications/'; // C3 destination (the digest footer link lands here too, sow-267)
 const FIND_URL = '/members/';             // "find more members to follow"
@@ -22,6 +25,7 @@ const I_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0
 const I_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.4 2.4 4.6-5"/></svg>';
 const I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
 const I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
+const I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
 const I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
 
 const CSS = `
@@ -45,6 +49,8 @@ const CSS = `
   .it.unread { background:color-mix(in srgb, var(--brand) 8%, transparent); }
   .it.unread:hover { background:color-mix(in srgb, var(--brand) 13%, transparent); }
   .av { width:28px; height:28px; border-radius:50%; flex:none; background:var(--hover); object-fit:cover; margin-top:1px; }
+  .av.nav { display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .av.nav svg { width:16px; height:16px; }
   .it .body { flex:1; min-width:0; }
   .it .line { font-size:13px; line-height:1.45; color:var(--muted); }
   .it .line b { color:var(--fg); font-weight:600; }
@@ -106,9 +112,9 @@ class GbtiNotificationBell extends GbtiElement {
     }
   }
 
-  async _fetchIndex() {
+  async _fetchIndex(url = INDEX_URL) {
     try {
-      const res = await fetch(INDEX_URL, { cache: 'no-cache' });
+      const res = await fetch(url, { cache: 'no-cache' });
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data?.entries) ? data.entries : [];
@@ -117,10 +123,24 @@ class GbtiNotificationBell extends GbtiElement {
 
   async _load() {
     try {
-      const f = (await this.client.getFollows()) || {};       // throws (banned / no session) -> gated
-      const follows = Array.isArray(f.following) ? f.following : [];
-      const entries = await this._fetchIndex();                // fail-closed to []
-      this._bell = buildFollowingBell({ follows, entries, watermark: this._watermark });
+      // sow-386: everything else is read ALONGSIDE the follow list, and each fails soft on its own. A failed
+      // settings read leaves `global` undefined, which resolves to the system default (show everything), so a
+      // blip never empties the bell. The news read is members only; the Worker refuses a free account and that
+      // refusal simply means no news rows.
+      const [f, entries, shares, prefs, news] = await Promise.all([
+        this.client.getFollows(),                             // throws (banned / no session) -> gated
+        this._fetchIndex(INDEX_URL),                          // fail-closed to []
+        this._fetchIndex(SHARES_URL),                         // fail-closed to []
+        Promise.resolve().then(() => this.client.getPrefs?.()).catch(() => null),
+        Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null),
+      ]);
+      const follows = Array.isArray(f?.following) ? f.following : [];
+      this._bell = buildFollowingBell({
+        follows, entries, shares,
+        news: Array.isArray(news?.items) ? news.items : [],
+        global: prefs?.notify,
+        watermark: this._watermark,
+      });
       this._gated = false;
     } catch {
       this._gated = true; // a signed-in member with no web session or a banned account gets no bell
@@ -180,12 +200,12 @@ class GbtiNotificationBell extends GbtiElement {
     const rows = this._bell.rows.slice(0, 12).map((r) => {
       const when = relTime(r.ts);
       const abs = when ? absTime(r.ts) : '';
-      const av = r.actor ? `https://github.com/${encodeURIComponent(r.actor)}.png?size=56` : '';
+      const av = r.kind === 'person' && r.actor ? `https://github.com/${encodeURIComponent(r.actor)}.png?size=56` : '';
       const href = r.url || SETTINGS_URL;
       const internal = /^\//.test(href);
       const ext = internal ? '' : ' target="_blank" rel="noopener nofollow"';
       return `<a class="it${r.unread ? ' unread' : ''}" href="${esc(href)}"${ext}${abs ? ` title="${esc(abs)}"` : ''}>`
-        + `<img class="av" src="${esc(av)}" alt="" width="28" height="28" decoding="async" loading="lazy" />`
+        + (av ? `<img class="av" src="${esc(av)}" alt="" width="28" height="28" decoding="async" loading="lazy" />` : `<span class="av nav">${I_NEWS}</span>`)
         + `<span class="body"><span class="line"><b>${esc(r.actor)}</b> ${esc(r.action)} <span class="tg">${esc(r.target)}</span></span>`
         + `${when ? `<span class="when">${esc(when)}</span>` : ''}</span>`
         + `${r.unread ? '<span class="dot"></span>' : ''}</a>`;

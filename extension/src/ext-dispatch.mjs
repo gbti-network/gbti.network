@@ -8,7 +8,7 @@
 
 import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft, readDraft, publishShare, listShares, listShareComments, readContent,
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
-  ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
+  ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
   socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
@@ -173,6 +173,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || undefined }));
       case '/api/news-sources': // SOW-046: the followable news channels (sources)
         return ok(await getNewsSources(ctx));
+      case '/api/news-following': // sow-386: the bells' members-only news rows
+        return ok(await getFollowedNews(ctx));
       case '/api/prefs': // SOW-046: member prefs (categories + followed news channels)
         return ok(method === 'POST' ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case '/api/news-publish': // SOW-046 C: curator-only "Add to Discord" (the Worker holds the bot token + re-checks)

@@ -8,7 +8,11 @@
 // saves notify:null (clears the override); "Set separately" saves the full edited matrix. An absent override
 // resolves, per channel, to the member's global default and then the system default (in-app on, email off).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { MATRIX_ROWS, defaultMatrix, resolveMatrix, toggleCell, notifyPayload, channelBlocked } from '../notify-matrix-core.mjs';
+import { PERSON_ROWS, defaultMatrix, resolveMatrix, toggleCell, notifyPayload, cellBlockedTip } from '../notify-matrix-core.mjs';
+
+// sow-386: one followed member can send articles, projects, prompts and shares. News comes from news SOURCES, not
+// people, so it is set on the account page's grid and has no row here.
+const ROWS = { rows: PERSON_ROWS };
 import { BLOCKED_PILL_CSS, notifyPillHtml } from './notify-pill.mjs'; // sow-385: email notifications are off for now
 
 const CHANNELS = [
@@ -102,7 +106,7 @@ class GbtiNotifyModal extends GbtiElement {
     this._override = follow?.notify || null;
     this._mode = this._override ? 'custom' : 'default';
     // The editable matrix seeds from the override when custom, else from the resolved global default.
-    this._matrix = this._override ? resolveMatrix(this._override, global) : defaultMatrix(global);
+    this._matrix = this._override ? resolveMatrix(this._override, global, ROWS) : defaultMatrix(global, ROWS);
     this._loaded = true;
     this.render();
   }
@@ -110,14 +114,14 @@ class GbtiNotifyModal extends GbtiElement {
   _setMode(mode) {
     if (this._mode === mode) return;
     // Entering custom from default seeds the grid with the current global default as a starting point.
-    if (mode === 'custom' && !this._override) this._matrix = defaultMatrix(this._global);
+    if (mode === 'custom' && !this._override) this._matrix = defaultMatrix(this._global, ROWS);
     this._mode = mode;
     this.render();
   }
 
   _toggle(key, channel) {
-    if (this._mode !== 'custom' || channelBlocked(channel)) return; // sow-385: email notifications are off
-    this._matrix = toggleCell(this._matrix, key, channel);
+    if (this._mode !== 'custom' || cellBlockedTip(key, channel)) return; // sow-385: email notifications are off
+    this._matrix = toggleCell(this._matrix, key, channel, ROWS);
     this.render();
   }
 
@@ -125,7 +129,7 @@ class GbtiNotifyModal extends GbtiElement {
     if (this._saving) return;
     this._saving = true; this._err = ''; this.render();
     try {
-      await this.client.setFollow({ username: this._username, on: true, notify: notifyPayload(this._mode, this._matrix) });
+      await this.client.setFollow({ username: this._username, on: true, notify: notifyPayload(this._mode, this._matrix, ROWS) });
       this.emit('gbti:notify-saved', { username: this._username });
       this.close();
     } catch (err) {
@@ -160,8 +164,8 @@ class GbtiNotifyModal extends GbtiElement {
     }
     const custom = this._mode === 'custom';
     // In default mode the grid shows the resolved global default (read-only); in custom it shows the editable matrix.
-    const shown = custom ? this._matrix : defaultMatrix(this._global);
-    const rowHtml = MATRIX_ROWS.map((r) => {
+    const shown = custom ? this._matrix : defaultMatrix(this._global, ROWS);
+    const rowHtml = PERSON_ROWS.map((r) => {
       const cell = shown[r.key] || {};
       const pills = CHANNELS.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key] })).join('');
       return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;

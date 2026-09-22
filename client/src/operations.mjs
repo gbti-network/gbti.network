@@ -74,6 +74,7 @@ export {
   syndicateNow,
   getNews,
   getNewsSources,
+  getFollowedNews, // sow-386
   getPrefs,
   setPrefs,
   publishNews,
