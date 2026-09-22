@@ -1,6 +1,6 @@
-// The note a member writes under a share. Owner, 2026-09-22: it is NOT italicised (a multi-paragraph note with
-// code spans reads as an aside in italics), and when the NETWORK wrote it there are no quotation marks around it,
-// because the house voice is editorial rather than somebody being quoted.
+// The note a member writes under a share. Owner, 2026-09-22: it is set in ITALIC serif (it was turned upright
+// earlier the same day and the owner asked for the italics back), and when the NETWORK wrote it there are no
+// quotation marks around it, because the house voice is editorial rather than somebody being quoted.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,10 +15,11 @@ test('the network accounts are recognised, a member is not', () => {
   for (const a of ['atwellpub', 'gbtilab', '', null, undefined]) assert.equal(isNetworkAuthor(a), false, String(a));
 });
 
-test('a share note is upright, never italicised by the stylesheet', () => {
+test('a share note is set in italic serif', () => {
   const base = rules('.share-member-note .cmt-rich {');
   assert.equal(base.length, 1, 'the note rule must be found, or this checks nothing');
-  assert.doesNotMatch(base[0], /font-style:\s*italic/);
+  assert.match(base[0], /font-style:\s*italic/);
+  assert.match(base[0], /font-family:\s*Georgia/);
 });
 
 test('the house note carries no quotation marks, and a member note still does', () => {
