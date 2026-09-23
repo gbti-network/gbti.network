@@ -344,6 +344,11 @@ covers:
     file: 20260922210214-fred-again-latin-mafia-full-mixtape-playback-pal-9ff9190d.webp
     sha256: 9ff9190dcef9113e181fb1a2364da4901e6c00b35bb340c973b062dd880df44e
     copiedAt: '2026-09-22'
+  gbtilabs/20260923142044-blobatar:
+    source: https://blobatar.dev/og.png
+    file: 20260923142044-blobatar-2102c554.webp
+    sha256: 2102c554533ce447442b623c39939b9d270f806143d42015f710904a1ee1ad9a
+    copiedAt: '2026-09-23'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
