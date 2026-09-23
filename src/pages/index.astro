@@ -10,6 +10,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Avatar from '../components/Avatar.astro';
 import FavoriteButton from '../components/FavoriteButton.astro';
 import FeedList from '../components/feeds/FeedList.astro';
+import FeedFold from '../components/feeds/FeedFold.astro'; // sow-389: the phone fold under the header
 import ArticleTeaser from '../components/blog/ArticleTeaser.astro';
 import ProjectCard from '../components/projects/ProjectCard.astro';
 import HomePromptCard from '../components/home/HomePromptCard.astro';
@@ -177,6 +178,8 @@ const SHOPTALK = {
   <!-- ============ FEED + SIDEBAR ============ -->
   <div class="feed-layout">
     <main class="feed-page home-feed" data-view="detailed" data-hometabs aria-label="The network feed" data-signup-base={SIGNUP_BASE}>
+      {/* sow-389: on a phone these controls fold into one bar pinned under the header; unchanged above 620px. */}
+      <FeedFold label="Everything" count={counts.all}>
       <div class="feed-lab" id="feed"><span class="dot"></span><span class="t">The Feed</span><span class="rule"></span><a class="more" href="/feeds/">Everything, including member shares</a></div>
 
       <nav class="feed-tabs" aria-label="Feed views">
@@ -191,11 +194,12 @@ const SHOPTALK = {
         <button type="button" class="pz-open-btn" data-home-signedin data-personalize-open hidden><span class="pz-dot-blue"></span>Personalize</button>
         <span class="feed-tb-sp"></span>
         <div class="view-toggle" role="group" aria-label="Density">
-          <button type="button" class="vt-btn" data-feedview-density="card" aria-pressed="false" aria-label="Cards" data-tooltip="Cards" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg></button>
-          <button type="button" class="vt-btn on" data-feedview-density="detailed" aria-pressed="true" aria-label="Detailed" data-tooltip="Detailed" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg></button>
-          <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false" aria-label="Compact" data-tooltip="Compact" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+          <button type="button" class="vt-btn" data-feedview-density="card" aria-pressed="false" aria-label="Cards" data-tooltip="Cards" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg><span class="vt-lbl">Cards</span></button>
+          <button type="button" class="vt-btn on" data-feedview-density="detailed" aria-pressed="true" aria-label="Detailed" data-tooltip="Detailed" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg><span class="vt-lbl">Detailed</span></button>
+          <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false" aria-label="Compact" data-tooltip="Compact" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="vt-lbl">Compact</span></button>
         </div>
       </div>
+      </FeedFold>
 
       <FeedList items={feed} membersItems={sortByNewest(membersItems)} avatarIndex={avatarIndex} />
     </main>

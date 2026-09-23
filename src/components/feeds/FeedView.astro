@@ -13,6 +13,7 @@ import type { AvatarIndex } from '../../lib/avatars';
 import { FIRST_TOUCH_PCT, SIGNUP_BASE } from '../../lib/membership';
 import { FEED_NAV } from '../../lib/site-nav'; // sow-187: the one consolidated feed-nav source
 import FeedChrome from './FeedChrome.astro'; // sow-205: the shared lab + tab nav (was inline here)
+import FeedFold from './FeedFold.astro'; // sow-389: the phone fold under the header
 import DigestSubscribe from '../mail/DigestSubscribe.astro'; // sow-166: the weekly-digest CTA at the foot of the prompts grid
 import { categoryLabel } from '../../lib/taxonomy';
 import { catKey } from '../../lib/feed-filter.mjs';
@@ -25,8 +26,13 @@ interface Props {
   membersItems?: FeedItem[];
   avatarIndex: AvatarIndex;
   membersShareCount: number;
+  /** sow-389: false where this view is embedded in another page (the account page), since the phone bar pins under
+   *  the site header. */
+  fold?: boolean;
 }
-const { narrow, items, membersItems = [], avatarIndex, membersShareCount } = Astro.props;
+const { narrow, items, membersItems = [], avatarIndex, membersShareCount, fold = true } = Astro.props;
+// sow-389: the phone bar names the feed as its chip does.
+const foldLabel = FEED_NAV.find((t) => t.key === narrow)?.label ?? 'All';
 
 // sow-205: the lab caption + the tab nav moved into the shared <FeedChrome>; FeedView keeps only the
 // current narrow's href, for the tag-clear "Clear" link. FEED_NAV stays the one consolidated source.
@@ -60,16 +66,19 @@ for (const it of narrowed) {
   {/* sow-370 (owner, 2026-09-19): the "Member content only" toggle is GONE. It filtered the built cards down
       to the gated ones, which for a signed-out reader is a page of things they cannot open, and the count card
       below already says what is in the member stream. The members-only CTA that rode with it went with it. */}
+  {/* sow-389: on a phone the chrome and the view toolbar fold into one bar pinned under the header. */}
+  <FeedFold label={foldLabel} fold={fold}>
   <FeedChrome narrow={narrow} />
 
   <div class="feed-toolbar">
     <span class="feed-tb-sp"></span>
     <div class="view-toggle" role="group" aria-label="Density">
-      <button type="button" class="vt-btn on" data-feedview-density="card" aria-pressed="true" aria-label="Cards" data-tooltip="Cards" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg></button>
-      <button type="button" class="vt-btn" data-feedview-density="detailed" aria-pressed="false" aria-label="Detailed" data-tooltip="Detailed" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg></button>
-      <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false" aria-label="Compact" data-tooltip="Compact" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <button type="button" class="vt-btn on" data-feedview-density="card" aria-pressed="true" aria-label="Cards" data-tooltip="Cards" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg><span class="vt-lbl">Cards</span></button>
+      <button type="button" class="vt-btn" data-feedview-density="detailed" aria-pressed="false" aria-label="Detailed" data-tooltip="Detailed" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg><span class="vt-lbl">Detailed</span></button>
+      <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false" aria-label="Compact" data-tooltip="Compact" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="vt-lbl">Compact</span></button>
     </div>
   </div>
+  </FeedFold>
 
   <div class="feed-tag-banner" data-tag-banner hidden>
     <span>Filtered by <b data-tag-label></b></span>

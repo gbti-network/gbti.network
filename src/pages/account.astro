@@ -121,7 +121,7 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
           <div class="hub-card hub-card-feed">
             <h2 class="hub-h">Latest Activity</h2>
             <p class="hub-sub">Everything the network is shipping and sharing. Filter by kind, or narrow to member content.</p>
-            <FeedView narrow="all" items={[...contentItems, ...shareItems]} membersItems={membersItems} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
+            <FeedView narrow="all" items={[...contentItems, ...shareItems]} membersItems={membersItems} avatarIndex={avatarIndex} membersShareCount={membersShareCount} fold={false} />
           </div>
           {/* sow-218: the LIVE co-op stream, kept alongside Latest Activity rather than replaced by it.
               FeedView is rendered at build time from repository content, so on its own it shows public items,

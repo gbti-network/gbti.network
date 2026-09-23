@@ -1,0 +1,100 @@
+---
+// sow-389: on a phone, the feed's controls (the "The Feed" label row, the chips and the view toolbar) fold into one
+// bar pinned under the site header, and a tap drops them down. The owner chose this on the design canvas on
+// 2026-09-23 (variation C, "part of the header"). Desktop and tablet are unchanged: above 620px the bar never shows
+// and the panel is laid out exactly as the controls were before.
+//
+// The host passes its EXISTING controls as the slot, so there is one copy of the chips and the view buttons, not a
+// phone copy beside a desktop copy. The bar only names the feed that is showing.
+//
+// WITHOUT JAVASCRIPT NOTHING CHANGES. The fold's styles all hang off [data-fold], which only this script sets, so a
+// reader with scripting off keeps today's open controls rather than a bar that cannot open.
+//
+// Styles live in src/styles/feed-fold.css (gbti-v3.css is already past the 900-line rule).
+import '../../styles/feed-fold.css';
+
+interface Props {
+  /** The feed the page opens on, as its chip reads ("Everything", "All", "Articles"). */
+  label: string;
+  /** Its count, where the chips carry counts (the homepage). */
+  count?: number | null;
+  /** False where the feed is embedded in another page (the account page), since the bar pins under the site header. */
+  fold?: boolean;
+}
+const { label, count = null, fold = true } = Astro.props;
+---
+{fold ? (
+  <div class="feed-fold" data-feed-fold>
+    <button type="button" class="feed-fold-bar" data-feed-fold-toggle aria-expanded="false" aria-controls="feed-fold-panel">
+      <span class="ff-dot" aria-hidden="true"></span>
+      <span class="ff-t">The Feed</span>
+      <span class="ff-cur"><span data-feed-fold-label>{label}</span>{count !== null && <b class="ff-n" data-feed-fold-count>{count}</b>}</span>
+      <span class="ff-sp"></span>
+      <span class="ff-act">
+        <svg class="ff-ico" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.8" /><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.8" /></svg>
+        <span data-feed-fold-word>Filter</span>
+        <svg class="ff-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </span>
+    </button>
+    <div class="feed-fold-panel" id="feed-fold-panel" data-feed-fold-panel>
+      <slot />
+    </div>
+  </div>
+) : (
+  <slot />
+)}
+
+<script>
+  // One fold per page in practice; querySelectorAll keeps it correct if a page ever has two.
+  document.querySelectorAll<HTMLElement>('[data-feed-fold]').forEach((fold) => {
+    const bar = fold.querySelector<HTMLButtonElement>('[data-feed-fold-toggle]');
+    const panel = fold.querySelector<HTMLElement>('[data-feed-fold-panel]');
+    const word = fold.querySelector<HTMLElement>('[data-feed-fold-word]');
+    const labelEl = fold.querySelector<HTMLElement>('[data-feed-fold-label]');
+    const cur = labelEl?.parentElement;
+    if (!bar || !panel) return;
+    fold.setAttribute('data-fold', ''); // switches the phone styles on; see the header comment
+
+    const isOpen = () => fold.classList.contains('is-open');
+    const set = (open: boolean) => {
+      fold.classList.toggle('is-open', open);
+      bar.setAttribute('aria-expanded', String(open));
+      if (word) word.textContent = open ? 'Hide' : 'Filter';
+    };
+    bar.addEventListener('click', () => set(!isOpen()));
+
+    // A choice closes it, so the reader sees what they picked: a view, or a feed. A feed that is a link navigates
+    // anyway; the homepage's switch in place relabels the bar through gbti:tab-changed below.
+    panel.addEventListener('click', (e) => {
+      const t = (e.target as Element | null)?.closest?.('[data-feedview-density], .feed-tab');
+      if (t) set(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !isOpen()) return;
+      set(false);
+      bar.focus();
+    });
+
+    // The homepage switches feeds in place and says so. Read the bar's label and count from the chip now on.
+    document.addEventListener('gbti:tab-changed', () => {
+      const on = panel.querySelector<HTMLElement>('.feed-tab.on');
+      if (!on || !labelEl || !cur) return;
+      const copy = on.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('.tc').forEach((n) => n.remove());
+      labelEl.textContent = (copy.textContent || '').trim();
+      const n = on.querySelector('.tc')?.textContent?.trim() || '';
+      let countEl = cur.querySelector<HTMLElement>('[data-feed-fold-count]');
+      if (n) {
+        if (!countEl) {
+          countEl = document.createElement('b');
+          countEl.className = 'ff-n';
+          countEl.setAttribute('data-feed-fold-count', '');
+          cur.appendChild(countEl);
+        }
+        countEl.textContent = n;
+      } else if (countEl) {
+        countEl.remove();
+      }
+    });
+  });
+</script>
