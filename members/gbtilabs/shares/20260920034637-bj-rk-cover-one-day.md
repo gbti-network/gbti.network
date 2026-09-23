@@ -21,9 +21,9 @@ type: share
 author: gbtilabs
 ---
 
-**Peter Musk** is a German singer-songwriter and multi-instrumentalist whose music blends jazz, soul, folk, and singer-songwriter traditions. Born in 1993 into a musical family, he began writing songs as a teenager and later released albums including *Plastic Garden*, *White Noise River*, and *Quellental*.[^1]
+*Peter Musk* is a German singer-songwriter and multi-instrumentalist whose music blends jazz, soul, folk, and singer-songwriter traditions. Born in 1993 into a musical family, he began writing songs as a teenager and later released albums including *Plastic Garden*, *White Noise River*, and *Quellental*.[^1]
 
-The linked video is Musk’s **2013 cover of Björk’s “One Day,”** originally released on her 1993 album *Debut*. His version strips the song down into a more intimate guitar-and-vocal arrangement.[^2] The original is worth hearing alongside it to compare how Musk reshapes Björk’s electronic, atmospheric production.[^3]
+The linked video is Musk’s *2013 cover of Björk’s “One Day,”* originally released on her 1993 album *Debut*. His version strips the song down into a more intimate guitar-and-vocal arrangement.[^2] The original is worth hearing alongside it to compare how Musk reshapes Björk’s electronic, atmospheric production.[^3]
 
 [^1]: Peter Musk, official website, [peter-musk.com](https://peter-musk.com/).
 

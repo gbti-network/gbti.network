@@ -30,7 +30,7 @@ The livestream ran from July 28 through July 30, allowing fans to watch the arti
 
 The full concert video arrived later, on September 15, 2026, giving viewers a complete look at the arena performance that closed out the project’s unusual creation process.⁴
 
-**Footnotes**
+*Footnotes*
 
 1. YouTube, “Stream the exclusive Fred again.. and LATIN MAFIA live Mixtape on YouTube Music,” August 12, 2026. [https://blog.youtube/culture-and-trends/fred-again-latin-mafia-mexico-city-mixtape-youtube-music/](https://blog.youtube/culture-and-trends/fred-again-latin-mafia-mexico-city-mixtape-youtube-music/)
 2. Qobuz, “9 months & 50 hours: el resultado de una colaboración épica entre Fred again.. y Latin Mafia,” August 3, 2026. [https://www.qobuz.com/es-es/magazine/story/2026/08/03/9-months-50-hours-el-resultado-de-una-colaboracion-epica-entre-fred-again-y-latin-mafia/](https://www.qobuz.com/es-es/magazine/story/2026/08/03/9-months-50-hours-el-resultado-de-una-colaboracion-epica-entre-fred-again-y-latin-mafia/)

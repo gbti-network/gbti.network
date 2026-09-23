@@ -19,11 +19,11 @@ type: share
 author: gbtilabs
 ---
 
-Bonobo released a new album, ***Distance in Static***, on **September 11, 2026**, his first full studio album since *Fragments*. The 14-track record features collaborators including **Arooj Aftab, Joy Crookes, Nilüfer Yanya, Ichiko Aoba, Nicole Miglis, and Aanya Martin**, with vocals spanning English, Urdu, and Japanese.¹
+Bonobo released a new album, *Distance in Static*, on *September 11, 2026*, his first full studio album since *Fragments*. The 14-track record features collaborators including *Arooj Aftab, Joy Crookes, Nilüfer Yanya, Ichiko Aoba, Nicole Miglis, and Aanya Martin*, with vocals spanning English, Urdu, and Japanese.¹
 
-The album may also mark a turning point for Simon Green. He has suggested it could be his **last traditional Bonobo album**, as he becomes increasingly interested in film scoring, art installations, and other musical formats.²
+The album may also mark a turning point for Simon Green. He has suggested it could be his *last traditional Bonobo album*, as he becomes increasingly interested in film scoring, art installations, and other musical formats.²
 
-**Footnotes**
+*Footnotes*
 
 1. Ninja Tune, *Bonobo: Distance in Static*, official album release page. ([Ninja Tune][1])
 2. Megan Buerger, “Bonobo: Distance in Static,” *Pitchfork*, September 11, 2026. ([pitchfork.com][2])

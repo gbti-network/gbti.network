@@ -1427,6 +1427,11 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 /* The member's note on a share: italic serif. The owner had it set upright on 2026-09-22 and asked for the
    italics back the same day, so the italic is the decision, not a leftover. */
 .share-member-note .cmt-rich { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 17px; }
+/* Emphasis INSIDE the italic note is set UPRIGHT, which is the ordinary typographic inversion: a second italic
+   inside an italic block is invisible. The owner replaced the notes' bold with italics on 2026-09-22, and
+   without this the emphasis those notes carry would simply disappear. */
+.share-member-note .cmt-rich em,
+.share-member-note .cmt-rich i { font-style: normal; }
 .share-member-note .cmt-rich p:first-child::before { content: '"'; }
 .share-member-note .cmt-rich p:last-child::after { content: '"'; }
 /* The NETWORK's own note is not somebody being quoted, so it carries no quotation marks (owner, 2026-09-22). */

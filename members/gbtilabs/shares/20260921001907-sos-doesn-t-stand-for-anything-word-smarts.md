@@ -19,4 +19,4 @@ type: share
 author: gbtilabs
 ---
 
-In this article, writer **Tony Dunnell** takes apart one of the most familiar assumptions in everyday language: what “SOS” actually means. The answer is less obvious than most people think, and the history behind it runs through early radio, maritime emergencies, and the need for a signal that could be recognized instantly under bad conditions.
+In this article, writer *Tony Dunnell* takes apart one of the most familiar assumptions in everyday language: what “SOS” actually means. The answer is less obvious than most people think, and the history behind it runs through early radio, maritime emergencies, and the need for a signal that could be recognized instantly under bad conditions.

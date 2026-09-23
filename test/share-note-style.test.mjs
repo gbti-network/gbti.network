@@ -22,6 +22,13 @@ test('a share note is set in italic serif', () => {
   assert.match(base[0], /font-family:\s*Georgia/);
 });
 
+test('emphasis inside the italic note is upright, or it would be invisible', () => {
+  const em = rules('.share-member-note .cmt-rich em,');
+  assert.equal(em.length, 1, 'the emphasis rule must be found, or this checks nothing');
+  const block = CSS.slice(CSS.indexOf('.share-member-note .cmt-rich em,'));
+  assert.match(block.slice(0, 160), /font-style:\s*normal/);
+});
+
 test('the house note carries no quotation marks, and a member note still does', () => {
   const memberQuotes = rules('.share-member-note .cmt-rich p:first-child::before').concat(rules('.share-member-note .cmt-rich p:last-child::after'));
   assert.equal(memberQuotes.length, 2, 'a member note is still quoted');

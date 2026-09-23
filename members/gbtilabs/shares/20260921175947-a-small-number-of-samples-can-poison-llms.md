@@ -22,8 +22,8 @@ type: share
 author: gbtilabs
 ---
 
-Anthropic calls this **AI poisoning**: planting malicious content in training data so a model learns an unwanted behavior. In one study, just **250 poisoned documents** were enough to create a simple backdoor across models of very different sizes. 
+Anthropic calls this *AI poisoning*: planting malicious content in training data so a model learns an unwanted behavior. In one study, just *250 poisoned documents* were enough to create a simple backdoor across models of very different sizes. 
 
-The contrast with **AIO, AI Optimization**, is intent. Poisoning tries to manipulate a model secretly, while AIO tries to make legitimate content easier for AI systems to understand, trust, and surface. Both rely on the same basic fact: **what gets published online can shape AI behavior.**
+The contrast with *AIO, AI Optimization*, is intent. Poisoning tries to manipulate a model secretly, while AIO tries to make legitimate content easier for AI systems to understand, trust, and surface. Both rely on the same basic fact: *what gets published online can shape AI behavior.*
 
 What are you doing to seed your work into generative AI models?

@@ -20,9 +20,9 @@ type: share
 author: gbtilabs
 ---
 
-This is a **well-written and approachable article by Michelle “Chelle” Starr, Head Journalist at ScienceAlert**, who has spent more than 15 years covering science and technology. ([ScienceAlert][1]) Starr explains new research from India showing that concrete can be made partly with **biochar produced from treated human fecal sludge**, potentially turning a difficult waste stream into a useful building material. 
+This is a *well-written and approachable article by Michelle “Chelle” Starr, Head Journalist at ScienceAlert*, who has spent more than 15 years covering science and technology. ([ScienceAlert][1]) Starr explains new research from India showing that concrete can be made partly with *biochar produced from treated human fecal sludge*, potentially turning a difficult waste stream into a useful building material. 
 
-Researchers dried the sludge, heated it in a low-oxygen environment, ground the resulting biochar into powder, and used it to replace **5%, 10%, or 15% of the cement** in conventional concrete. The 5% mixture produced the strongest overall results, while the 10% mixture showed gains of up to **42% in flexural strength after 91 days**.  
+Researchers dried the sludge, heated it in a low-oxygen environment, ground the resulting biochar into powder, and used it to replace *5%, 10%, or 15% of the cement* in conventional concrete. The 5% mixture produced the strongest overall results, while the 10% mixture showed gains of up to *42% in flexural strength after 91 days*.  
 
 The biochar appears to improve concrete by storing and slowly releasing water during curing, contributing silica that helps form strength-giving compounds, and filling microscopic gaps in the material. Lower concentrations also reduced porosity, water absorption, and shrinkage, although the 15% mixture began to perform worse.  
 
