@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { subscribeSuccessMessage, inviteSuccessHeading } from '../src/lib/digest-subscribe-copy.mjs';
+import { subscribeSuccessMessage, inviteSuccessHeading, SUBSCRIBE_BLURB } from '../src/lib/digest-subscribe-copy.mjs';
 
 const COMPONENT = readFileSync(new URL('../src/components/mail/DigestSubscribe.astro', import.meta.url), 'utf8');
 
@@ -71,4 +71,9 @@ test('sow-388: the small print carries an optional first sentence, and the defau
   // A string expression, not a fragment: Astro strips the trailing space inside `<>{note} </>`, and the two
   // sentences ran together ("this form.Unsubscribe"), found by driving the built page.
   assert.match(COMPONENT, /\{note \? `\$\{note\} ` : ''\}Unsubscribe in one click from any issue\./);
+});
+
+test('the shared box line is the owner\'s wording (2026-09-23), within the writing rules', () => {
+  assert.equal(SUBSCRIBE_BLURB, 'Our community posts hand-curated content weekly. Never miss content by subscribing to our digest. Subscribing is completely free.');
+  assert.doesNotMatch(SUBSCRIBE_BLURB, /[\u2013\u2014]|\b\w+'(t|re|s|ll|ve|d)\b/i);
 });
