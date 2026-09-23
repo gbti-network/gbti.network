@@ -221,3 +221,12 @@ test('the copy follows the writing rules: no dashes, no contractions', () => {
   const note = /note="([^"]+)"/.exec(INVITE)[1];
   assert.doesNotMatch(note, /[–—]|\b\w+'(t|re|s|ll|ve|d)\b/i);
 });
+
+test('the pitch is the owner\'s wording, and only the invitation carries it', () => {
+  const pitch = /const PITCH = '([^']+)';/.exec(INVITE)?.[1];
+  assert.equal(pitch, 'Member articles, projects, skills & prompts, curated shares sent weekly to your inbox.');
+  assert.match(INVITE, /blurb=\{PITCH\}/);
+  assert.doesNotMatch(pitch, /[–—]|\b\w+'(t|re|s|ll|ve|d)\b/i);
+  // The shared blurb is untouched: the other boxes and the web edition still say what they said.
+  assert.doesNotMatch(src('src/lib/digest-subscribe-copy.mjs'), /curated shares sent weekly/);
+});
