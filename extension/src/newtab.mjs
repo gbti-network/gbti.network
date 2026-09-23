@@ -1,17 +1,21 @@
-// SOW-017 + SOW-039: the new-tab page logic. The shared member-hub shell (top bar + left rail + account menu) is
-// injected + wired by shell.mjs; this module owns the "Latest Activity" feed (three persisted view modes +
-// per-item content thumbnails), the search filter, the Latest/Following tabs (SOW-023), the onboarding setup
-// banner (SOW-026/029), and the lapsed-member lock (SOW-018). Fetches the public activity index over the
-// extension's gbti.network host permission. CSP-safe (no inline handlers).
+// SOW-017 + SOW-039: the new-tab page logic. The shared member-hub shell (top bar + account menu) is injected +
+// wired by shell.mjs; this module owns the feed (three persisted view modes + per-item content thumbnails), the
+// search filter, the Latest/Following scope (SOW-023), the onboarding setup banner (SOW-026/029), and the
+// read-only upgrade prompt (SOW-077). Fetches the public activity index over the extension's gbti.network host
+// permission. CSP-safe (no inline handlers).
+//
+// sow-296: the page is RAILLESS. The hero share box is the first thing on it, the feed is centred under it, and
+// the seven feed tabs are rendered here from the shared list (client-ui/src/feed-nav.mjs) instead of the left
+// rail. The SOW-063/074 landing splash, its quote pool read and its background image are gone with that change
+// (owner, 2026-09-22), so a bare new tab opens on the feed.
 
 import { canSeeNews, canSeeShares, upgradePromptKind, lockedAccountCopy } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt; sow-360: one source for the tier copy
 import { devlog } from './devlog.mjs'; // SOW-124: the page realm's devlog (superadmin + Debug-flag gated; inert otherwise)
-import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
-import { initShell, setRailActive } from './shell.mjs';
-import { TYPE_FILTERS, typeForHash, railKeyForType, feedSources } from '../../client-ui/src/feed-route.mjs';
+import { initShell } from './shell.mjs';
+import { TYPE_FILTERS, typeForHash, feedSources, feedTabs, tabKeyForType } from '../../client-ui/src/feed-route.mjs';
 import { viewKey, viewModeFor, landingType, LAST_SECTION_KEY, LEGACY_MODE_KEY } from '../../client-ui/src/newtab-prefs.mjs'; // SOW-105: last-section + per-section view-mode memory
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
@@ -19,14 +23,6 @@ const SITE = 'https://gbti.network';
 
 const $ = (sel) => document.querySelector(sel);
 const authorName = (a) => (a === 'gbti' || a === 'house' ? 'GBTI Network' : a);
-
-function greeting() {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-}
-function longDate() {
-  return new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-}
 
 // SOW-118: fill the bottom-right version indicator. The installed version comes from the manifest (always
 // available); the build number comes from the public changelog artifact (fail-soft, so an offline tab still
@@ -75,7 +71,7 @@ let MODE = 'compact';
 // SOW-042/043: the active type filter (all | post | project | prompt | share | news). 'all' blends the
 // activity-index with the member's Shares + members-only News (capped river). MEMBERSHIP gates both; SHARES + NEWS
 // are the raw lists, loaded once on demand. News is PAID-only; Shares are paid-or-trial. (TYPE_FILTERS,
-// parseTypeFromHash, typeForHash, railKeyForType live in client-ui/src/feed-route.mjs so they are node-testable.)
+// parseTypeFromHash, typeForHash and the tab mapping live in client-ui/src/feed-route.mjs, node-testable.)
 // The feed IS the unified content browser; the rail's Browse items are shortcuts that open it pre-filtered via
 // the hash (newtab.html#type=<X>). SOW-105: a genuinely BARE newtab.html (a fresh Chrome tab or the brand logo)
 // lands on the REMEMBERED last section (gbti-nt-last-section, written in selectType); the Activity rail item
@@ -224,9 +220,6 @@ let RETURN_MEMBER = null;
 function openReader(item, { returnTo = null } = {}) {
   if (!item) return;
   RETURN_MEMBER = returnTo;
-  hideSplash(); // opening a reader IN PLACE (post-share redirect, card-open, first-load deep link) dismisses the
-                // splash: those callers bypass the hashchange handler that would otherwise clear it (replaceState
-                // writes the deep-link hash without firing hashchange). Idempotent when the splash is already gone.
   writeReadHash(item); // SOW-092: the address bar carries a copyable deep link while reading
   const fv = $('[data-feedview]');
   const rv = $('[data-readerview]');
@@ -248,7 +241,6 @@ function openMember(username) {
   const u = String(username || '');
   if (!u) return;
   RETURN_MEMBER = null;
-  hideSplash();
   writeMemberHash(u);
   const fv = $('[data-feedview]');
   const rv = $('[data-readerview]');
@@ -284,8 +276,12 @@ function stripReadHash() {
   try {
     const { tab } = parseBrowseHash(location.hash);
     // SOW-143: a member hash carries no browse `tab`, so fall back to the current feed type rather than a bare
-    // fragment, keeping the rail highlight coherent after Back.
-    const frag = tab ? `#tab=${tab}` : (parseMemberHash(location.hash) ? `#type=${TYPE}` : '');
+    // fragment, keeping the highlight coherent after Back.
+    // sow-296: and fall back to it for EVERY other case too. Switching feeds is now a same-document tab click that
+    // writes `#type=<x>`, and this ran straight after it (selectType closes the reader), so the address lost the
+    // fragment the moment a member picked a feed: the tab row stayed right, but copying the URL or pressing Back
+    // did not. Only the `read=` part is stripped now, which is what the name says.
+    const frag = tab ? `#tab=${tab}` : (TYPE && TYPE !== 'all' ? `#type=${TYPE}` : '');
     history.replaceState(null, '', location.pathname + location.search + frag);
   } catch { /* fail-soft */ }
 }
@@ -312,168 +308,35 @@ function onReaderBack() {
   closeReader();
 }
 
-// SOW-063: the new-tab landing splash. A BARE tab (no hash) lands on the splash unless snoozed within the window;
-// clicking a card snoozes that destination and switches the main column IN PLACE (WorkBench navigates away). The
-// pure decision/rotation helpers live in client-ui/src/splash.mjs; this owns the DOM + the localStorage state. The
-// forced-sign-in gate (SOW-048, data-unauth) is a fixed overlay that covers this, so it is safe to show the splash
-// before that async check resolves. (SOW-077 removed the lapsed lock wall; a signed-in member browses read-only.)
-const SPLASH_DECISION_KEY = 'gbti-splash-decision';
-const SPLASH_WINDOW_KEY = 'gbti-splash-window-min'; // a client preference set in account.html; minutes, 0 = always show
-let QUOTES = null; // P2: the git-native /quotes.json once loaded; null -> the bundled set
-function readSplashDecision() { try { return JSON.parse(localStorage.getItem(SPLASH_DECISION_KEY) || 'null'); } catch { return null; } }
-function splashWindowMs() {
-  try { const m = parseInt(localStorage.getItem(SPLASH_WINDOW_KEY) ?? '30', 10); return Number.isFinite(m) && m >= 0 ? m * 60000 : 30 * 60000; }
-  catch { return 30 * 60000; }
-}
-function renderSplashQuote() {
-  const fig = $('[data-splash-quote]');
-  const q = pickQuote(QUOTES || BUNDLED_QUOTES, Date.now());
-  if (!fig || !q) return;
-  const t = fig.querySelector('[data-splash-quote-text]');
-  const a = fig.querySelector('[data-splash-quote-author]');
-  if (t) t.textContent = q.text;
-  if (a) a.textContent = q.author;
-  fig.hidden = false;
-}
-function showSplash() {
-  const sv = $('[data-splashview]');
-  if (!sv) return;
-  const fv = $('[data-feedview]'); const rv = $('[data-readerview]');
-  if (fv) fv.hidden = true;
-  if (rv) rv.hidden = true;
-  sv.hidden = false;
-  const root = document.documentElement;
-  // SOW-048 precedence: sign-in overrules the splash. The gate mounts async, so the CSS also pins the
-  // splash hidden under html[data-unauth]; this guard just avoids doing the work when the wall is already up.
-  if (root.hasAttribute('data-unauth')) { sv.hidden = true; return; }
-  root.setAttribute('data-splash', '1');
-  // SOW-074: the standalone splash-content toggles (any mode). No cards -> the splash is a click-anywhere screen.
-  root.toggleAttribute('data-splash-nocards', !splashShowsCards(lsItem('gbti-splash-show-cards')));
-  root.toggleAttribute('data-splash-noquote', !splashShowsQuote(lsItem('gbti-splash-show-quote')));
-  // SOW-074 follow-up: when the member disables "keep dark cards", light theme uses frosted LIGHT quick-launch cards.
-  root.toggleAttribute('data-splash-lightcards', !splashKeepsDarkCards(lsItem('gbti-splash-dark-cards')));
-  renderSplashQuote();
-  applySplashBg(); // SOW-074: apply the uploaded background (no-op until the image is read; off -> plain splash)
-  window.scrollTo(0, 0);
-}
-function hideSplash() {
-  const sv = $('[data-splashview]'); const fv = $('[data-feedview]');
-  if (sv) sv.hidden = true;
-  if (fv) fv.hidden = false;
-  const root = document.documentElement;
-  root.removeAttribute('data-splash');
-  root.removeAttribute('data-splash-nocards');
-  root.removeAttribute('data-splash-noquote');
-  root.removeAttribute('data-splash-lightcards');
-  clearSplashBg(); // SOW-074: drop the background so it never bleeds onto the feed
-}
-function snoozeSplash(dest) {
-  try { localStorage.setItem(SPLASH_DECISION_KEY, JSON.stringify({ dest, at: Date.now() })); } catch { /* storage unavailable */ }
-}
-
-// SOW-063 P2: the git-native quote pool (gbti.network/quotes.json, built from house/quotes.yml). Like the news
-// cache, it is the SAME curated set for everyone, so persist the last good fetch + re-hydrate it for an instant
-// quote; the live fetch then refreshes it. Fail-soft: cache -> the bundled BUNDLED_QUOTES, so the splash always has
-// a quote even offline or before the first fetch.
-const QUOTES_CACHE_KEY = 'gbti-quotes-cache';
-async function readQuotesCache() {
-  try { const r = await chrome.storage?.local?.get?.(QUOTES_CACHE_KEY); const c = r?.[QUOTES_CACHE_KEY]; return Array.isArray(c?.quotes) ? c.quotes : null; }
-  catch { return null; }
-}
-function writeQuotesCache(quotes) {
-  try { chrome.storage?.local?.set?.({ [QUOTES_CACHE_KEY]: { quotes, at: Date.now() } }); } catch { /* storage unavailable */ }
-}
-const reRenderQuoteIfVisible = () => { if (!$('[data-splashview]')?.hidden) renderSplashQuote(); };
-async function loadQuotes() {
-  const cached = await readQuotesCache();
-  if (Array.isArray(cached) && cached.length) { QUOTES = cached; reRenderQuoteIfVisible(); }
-  try {
-    const res = await fetch(`${SITE}/quotes.json`, { cache: 'no-cache' });
-    if (!res.ok) return;
-    const data = await res.json();
-    const quotes = Array.isArray(data?.quotes) ? data.quotes : null;
-    if (quotes && quotes.length) { QUOTES = quotes; writeQuotesCache(quotes); reRenderQuoteIfVisible(); }
-  } catch { /* keep the cache / the bundled fallback */ }
-}
-
-// SOW-074: the user-uploaded splash background. Mode / opacity / pattern are SYNC localStorage prefs; the (downscaled)
-// image is ASYNC in chrome.storage.local. The bg is applied to the splash element when it is shown; the image fills
-// in once read (a brief fade). Off / no image -> the plain SOW-063 splash. Content + full are the placement modes;
-// opacity + the pattern overlay (incl. the GBTI ASCII art, image bleeding through) are full-mode only.
-const SPLASH_BG_IMAGE_KEY = 'gbti:splash-bg-image';
-let SPLASH_BG_IMG = null; // the image data URL once read (null = none / not yet read)
-const lsItem = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-
-function clearSplashBg() {
-  // Only the BACKGROUND state; the content toggles (data-splash-nocards/noquote) are owned by showSplash/hideSplash.
-  const root = document.documentElement;
-  root.removeAttribute('data-splash-bg');
-  root.style.removeProperty('--splash-bg');
-  root.style.removeProperty('--splash-bg-dim');
-  root.style.removeProperty('--card-op');
-  root.style.removeProperty('--card-blur');
-  const pat = $('[data-splash-pattern]');
-  if (pat) { pat.className = 'splash-pattern'; pat.removeAttribute('style'); pat.replaceChildren(); }
-}
-
-function applySplashBg() {
-  clearSplashBg();
-  const mode = normalizeBgMode(lsItem('gbti-splash-bg-mode'));
-  if (mode === 'off') return; // off -> the plain splash
-  // content/fill PLACE an image, so with no image there is nothing to show: fall back to the plain splash.
-  // full is a LAYOUT (a fixed full-viewport curtain that covers the rail), so it applies even with NO image,
-  // so the sidebar is hidden whether or not a background image is set (owner-requested). The CSS gives the
-  // full curtain an opaque background so it covers the app even without an image.
-  if (!SPLASH_BG_IMG && mode !== 'full') return;
-  // Drive the placement off html[data-splash-bg] (+ --splash-bg on :root) so the CSS can target the splash block
-  // (content), the whole content column (fill), or a fixed full-viewport overlay (full) from one switch.
-  const root = document.documentElement;
-  root.setAttribute('data-splash-bg', mode);
-  // full-mode curtain with no image: the layout + the card/pattern appearance still apply; only the image
-  // var is skipped (leaving it unset also invalidates the dim gradient declaration, so nothing darkens the
-  // opaque curtain color). content/fill never reach here without an image (the early return above).
-  if (SPLASH_BG_IMG) {
-    root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
-    const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
-    root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
-  }
-  root.style.setProperty('--card-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-card-op'), 70) / 100).toFixed(2));
-  root.style.setProperty('--card-blur', `${normalizeCardBlur(lsItem('gbti-splash-bg-card-blur'))}px`);
-  const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
-  const pat = $('[data-splash-pattern]');
-  if (pat && pattern !== 'none') {
-    pat.classList.add(`p-${pattern}`);
-    // The pattern opacity (--pat-op, 0..1; default 3%) + the dots/scanlines spacing (--pat-gap, px) are tunable.
-    pat.style.setProperty('--pat-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-pattern-op'), 3) / 100).toFixed(2));
-    pat.style.setProperty('--pat-gap', `${normalizePatternGap(lsItem('gbti-splash-bg-pattern-gap'))}px`);
-    if (pattern === 'ascii') {
-      const pre = document.createElement('pre');
-      pre.textContent = (lsItem('gbti-splash-bg-ascii-text') || '').trim() || GBTI_ASCII; // custom text, else the GBTI logo
-      pat.appendChild(pre);
-      const anchor = asciiAnchor(lsItem('gbti-splash-bg-ascii-pos')); // cardinal position (default bottom-right)
-      pat.style.alignItems = anchor.alignItems;
-      pat.style.justifyContent = anchor.justifyContent;
-    }
-  }
-}
-
-async function loadSplashBg() {
-  try { const r = await chrome.storage?.local?.get?.(SPLASH_BG_IMAGE_KEY); SPLASH_BG_IMG = r?.[SPLASH_BG_IMAGE_KEY] || null; }
-  catch { SPLASH_BG_IMG = null; }
-  if (!$('[data-splashview]')?.hidden) applySplashBg(); // re-apply if the splash is already up (the image just landed)
-}
-
 /** Reflect the active view mode onto the switcher buttons. */
 function syncModeButtons() {
   document.querySelectorAll('.nt-mode').forEach((b) => b.classList.toggle('on', b.dataset.mode === MODE));
 }
 
-/** Reflect the active type filter onto the chip-row (SOW-042). */
-function syncTypeButtons() {
-  document.querySelectorAll('.nt-type').forEach((b) => b.classList.toggle('on', b.dataset.type === TYPE));
+/** sow-296: render the feed tab row from the SHARED list (client-ui/src/feed-nav.mjs, which the website's
+ *  FEED_NAV reads too). Real links, so a tab is middle-clickable and reads as navigation; the click handler
+ *  switches in place. */
+function renderTabs() {
+  const row = $('[data-ftabs]');
+  if (!row) return;
+  row.innerHTML = feedTabs().map((tab) => (
+    `<a class="nt-ftab" role="tab" data-ftab="${tab.type}" href="${tab.href}" aria-selected="false">${tab.label
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')}</a>`
+  )).join('');
+  syncTypeButtons();
 }
 
-/** Switch the active type filter (shared by the chip-row clicks AND the rail's #type=<X> hash shortcuts). Lazily
+/** Reflect the active type filter onto the tab row (sow-296; the SOW-042 chip row it replaced). */
+function syncTypeButtons() {
+  const active = tabKeyForType(TYPE);
+  document.querySelectorAll('[data-ftab]').forEach((b) => {
+    const on = tabKeyForType(b.dataset.ftab) === active;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+/** Switch the active type filter (shared by the tab-row clicks AND any #type=<X> deep link). Lazily
  *  loads Shares/News the first time they are needed, then re-renders. A no-op if the filter is unchanged. */
 function selectType(next) {
   if (!TYPE_FILTERS.has(next) || next === TYPE) return;
@@ -483,7 +346,6 @@ function selectType(next) {
   resolveMode();
   syncTypeButtons();
   syncModeButtons(); // each section shows its OWN remembered mode the moment you switch
-  setRailActive(railKeyForType(TYPE)); // keep the left rail in lockstep with the chips + feed
   closeReader(); // switching filter returns from the reader to the feed
   // Render IMMEDIATELY with whatever is already loaded (member activity + any cached news) — no blank "Loading...".
   renderFeed($('[data-filter]')?.value || '');
@@ -722,33 +584,24 @@ function init() {
   // Register the messaging-backed GbtiClient so the shell's "+" composer (and any client-ui element) works on the
   // new tab too; the feed itself still talks to the background worker directly.
   mountPageClient();
-  // SOW-063: resolve the landing BEFORE initShell (so the rail highlight matches). A bare tab (no hash) shows the
-  // splash unless snoozed within the window. SOW-105: the landing section obeys one precedence everywhere,
-  // explicit hash > remembered last section > snoozed splash dest > 'all', and applies even when the splash will
-  // show (the feed renders BEHIND the overlay, so lifting the splash reveals the remembered section already there).
-  const splashBare = !hashStr();
-  const splashDecision = readSplashDecision();
-  const wantSplash = splashBare && shouldShowSplash(splashDecision, Date.now(), splashWindowMs());
-  TYPE = landingType({ hash: hashStr(), remembered: storedLastSection(), splashDest: splashDecision?.dest });
+  // SOW-105 (sow-296): the landing section obeys one precedence, explicit hash > remembered last section > 'all'.
+  // A bare new tab used to land on the SOW-063 splash screen instead of the feed; the owner removed it on
+  // 2026-09-22, so a bare tab now opens straight onto the share box and the feed.
+  TYPE = landingType({ hash: hashStr(), remembered: storedLastSection() });
   try { localStorage.removeItem(LEGACY_MODE_KEY); } catch (e) { /* storage unavailable */ }
   resolveMode(); // SOW-105: per-section MODE, now that the landing TYPE is final
-  // The shared shell injects the left rail (feed variant: search + Latest/Following on top) + the control cluster
-  // (theme, apps, account, "+") into the greeting's top-right, and fills the page's [data-ico] glyphs. The rail
-  // item highlighted is derived from the active TYPE (railKeyForType); selectType keeps it in sync thereafter.
-  initShell({ active: railKeyForType(TYPE), nav: 'feed' });
+  // sow-296: the new tab is RAILLESS. The shell injects the brand mark and the control cluster (apps, the
+  // view-mode slot, bell, theme, account) into the page's top row and fills the page's [data-ico] glyphs; the
+  // feed tabs below the hero are this page's own, rendered from the shared list.
+  initShell({ nav: 'none' });
   // SOW-052: relocate the view-mode switch into the control cluster's slot (a DOM move; the .nt-mode click wiring
   // below still finds it by selector).
-  const modesEl = $('.nt-greet .nt-modes');
+  const modesEl = $('[data-topbar] .nt-modes');
   const modesSlot = $('[data-modes-slot]');
   if (modesEl && modesSlot) modesSlot.appendChild(modesEl);
 
-  const greetEl = $('[data-greeting]');
-  if (greetEl) greetEl.textContent = greeting();
-  const dateEl = $('[data-date]');
-  if (dateEl) dateEl.textContent = longDate();
-
   syncModeButtons();
-  syncTypeButtons();
+  renderTabs();
   initFooterTip();
   initVersionIndicator();
   // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
@@ -778,40 +631,22 @@ function init() {
     renderFeed($('[data-filter]')?.value || '');
   }));
 
-  // SOW-042/043: the type filter chip-row (All / Articles / Projects / Prompts / Shares / News). Persist +
-  // re-render; selecting All/Shares lazily loads Shares, All/News lazily loads News, the first time.
-  document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', () => selectType(b.dataset.type)));
-
-  // SOW-063: the landing splash cards. Activity/News switch the main column IN PLACE (snoozing that destination so
-  // the next bare tab skips straight to it); WorkBench navigates to its own page (it leaves the new tab, so it does
-  // not become a new-tab default). Setting the hash drives the existing hashchange handler (selectType + rail).
-  document.querySelectorAll('[data-splash-go]').forEach((b) => b.addEventListener('click', () => {
-    const dest = b.dataset.splashGo;
-    if (dest === 'workbench') { window.location.href = chrome.runtime.getURL('workspace.html'); return; }
-    snoozeSplash(dest);
-    hideSplash();
-    location.hash = splashDestHash(dest);
-  }));
-  // SOW-074: in the full-screen NO-CARDS curtain, a click ANYWHERE on the splash enters the app (the activity feed).
-  // When cards are shown they are display:none-free and handle their own clicks, and this guard is a no-op.
-  $('[data-splashview]')?.addEventListener('click', () => {
-    if (!document.documentElement.hasAttribute('data-splash-nocards')) return;
-    snoozeSplash('activity');
-    hideSplash();
-    location.hash = splashDestHash('activity');
+  // sow-296: the feed tab row (All / News / Network / Articles / Projects / Prompts & Skills / Shares), rendered
+  // from the shared list. Each tab is a real newtab.html#type= link, so a middle click opens it in a tab; a plain
+  // click switches in place, which also writes the hash and keeps a reload on the same feed.
+  $('[data-ftabs]')?.addEventListener('click', (e) => {
+    const a = e.target.closest?.('[data-ftab]');
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+    e.preventDefault();
+    const type = a.dataset.ftab;
+    if (type !== TYPE) location.hash = `type=${type}`; // the hashchange handler runs selectType
   });
-  loadQuotes(); // SOW-063 P2: hydrate + refresh the git-native quote pool (the splash shows a bundled quote until it lands)
-  loadSplashBg(); // SOW-074: read the uploaded splash background (applied when the splash is shown)
-  if (wantSplash) showSplash();
 
-  // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed; a
-  // bell deep-link (#tab=<type>&read=<path>) also auto-opens that item in the in-place reader. A hash that drops
-  // the type (back to a bare or typeless fragment) resets to 'all' (typeForHash), so the river is reachable
-  // without a full reload too.
+  // The feed tabs (newtab.html#type=<X>) switch the filter while already on the feed; a bell deep-link
+  // (#tab=<type>&read=<path>) also auto-opens that item in the in-place reader. A hash that drops the type (back
+  // to a bare or typeless fragment) resets to 'all' (typeForHash), so the river is reachable without a reload.
   window.addEventListener('hashchange', () => {
     const h = hashStr();
-    if (!h) { showSplash(); return; } // SOW-063: Back to the bare tab returns to the splash
-    hideSplash();
     // SOW-143: a member deep link opens the member view and RETURNS EARLY, so the feed underneath never re-narrows.
     const mem = parseMemberHash(h);
     if (mem) { openMember(mem); return; }

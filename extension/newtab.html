@@ -1,7 +1,10 @@
 <!doctype html>
-<!-- SOW-017 + SOW-036 + SOW-039: the GBTI Network new-tab page. The shared member-hub shell (top bar + left rail +
-     account menu) is injected by shell.mjs; this page owns the "Latest Activity" feed with three view modes
-     (compact / detailed / card) + per-item content thumbnails. V3 tokens, light + dark, CSP-safe. -->
+<!-- SOW-017 + SOW-036 + SOW-039: the GBTI Network new-tab page. The shared member-hub shell (top bar + account
+     menu) is injected by shell.mjs; this page owns the feed with three view modes (compact / detailed / card) +
+     per-item content thumbnails. V3 tokens, light + dark, CSP-safe.
+     sow-296: reshaped around the HERO SHARE BAR (the homepage's collapsed composer, src/pages/index.astro), with
+     the feed centred under it, the seven feed tabs in a row where the left rail used to be, and no sidebar. The
+     landing splash, the greeting and the top-bar "+" went with that change. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -13,11 +16,21 @@
   <script src="dist/theme-init.js"></script>
   <link rel="stylesheet" href="shell.css" />
   <style>
-    /* feed + main-column styles (the shell chrome lives in shell.css). The greeting is the page [data-topbar]
-       (layout from shell.css); SOW-052 shrinks the heading. */
-    .nt-greet-tx { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
-    .nt-greet h1 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 22px; letter-spacing: -.01em; line-height: 1.15; }
-    .nt-greet .date { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
+    /* feed + main-column styles (the shell chrome lives in shell.css). sow-296: the greeting is gone; the top row
+       is the brand + the control cluster, both injected by the shell. */
+
+    /* sow-296: THE HERO. The homepage's collapsed composer bar (.home-share-bar in src/styles/gbti-v3.css), ported
+       to the extension's tokens. One affordance: it opens the same share composer the top-bar "+" used to. */
+    .nt-share { display: flex; align-items: center; margin: 4px 0 18px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r); }
+    .nt-share-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 13px 16px; background: none; border: 0; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+    .nt-share-av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; background: var(--green-tint); }
+    .nt-share-prompt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 3px; font-size: 14.5px; color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nt-share-caret { width: 1.5px; height: 17px; background: var(--fg-mute); flex: none; animation: nt-caret 1.1s steps(1) infinite; }
+    @keyframes nt-caret { 50% { opacity: 0; } }
+    .nt-share-act { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--fg-mute); flex: none; white-space: nowrap; }
+    .nt-share-act svg { width: 19px; height: 19px; flex: none; color: var(--green); }
+    .nt-share-open:hover .nt-share-prompt, .nt-share-open:hover .nt-share-act { color: var(--fg); }
+    @media (prefers-reduced-motion: reduce) { .nt-share-caret { animation: none; } }
 
     /* SOW-026/029: the onboarding setup banner (shown until signed in; sign-in is the whole setup since sow-274) */
     .setup { display: none; align-items: center; gap: 16px; margin: 18px 0 10px; padding: 16px 20px; border: 1.5px solid var(--green); background: var(--green-tint); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; }
@@ -40,112 +53,40 @@
     .nt-mode.on { background: var(--paper); color: var(--green-700); box-shadow: var(--sh-sm); }
     .nt-mode svg { width: 17px; height: 17px; }
 
-    /* SOW-042: the type filter chip-row. It is the MOBILE counterpart to the left rail, so it is HIDDEN by
-       default (the rail is the filter on wider screens) and only shown under 650px, where the rail is hidden.
-       Framed + styled to match the rail: a paper panel holding nav-item-style chips (icon + label), the same
-       hover (paper-3) and active (green-tint + green-700) treatment as .nav-i. */
-    .nt-types { display: none; gap: 6px; margin-top: 14px; flex-wrap: wrap; padding: 6px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); }
-    .nt-type { display: inline-flex; align-items: center; gap: 9px; font-family: var(--f-sans); font-weight: 600; font-size: 13.5px; color: var(--fg-soft); background: none; border: 0; cursor: pointer; padding: 8px 13px; border-radius: var(--r); transition: background .13s, color .13s; }
-    .nt-type:hover { background: var(--paper-3); color: var(--fg); }
-    .nt-type.on { background: var(--green-tint); color: var(--green-700); }
-    .nt-type .ti { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
-    .nt-type .ti svg { width: 17px; height: 17px; }
-    @media (max-width: 650px) { .nt-types { display: flex; } }
+    /* sow-296: THE FEED TAB ROW, in place of the left rail. It renders the SHARED list (client-ui/src/feed-nav.mjs,
+       which the website's FEED_NAV reads too), so a label change lands on both hosts. The row carries the feed
+       search and the Latest / Following scope that used to sit at the top of the rail. Narrow widths scroll the
+       tabs horizontally rather than wrapping into a block that pushes the feed down the page. */
+    .nt-feednav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 16px; padding-bottom: 10px; border-bottom: 1.5px solid var(--line); }
+    /* The tabs never shrink (flex-shrink 0), so when the search and the scope toggle stop fitting beside them they
+       WRAP to a second line instead of pushing tabs out of sight. max-width keeps the row inside the column at
+       phone widths, where the tabs scroll horizontally within their own strip. */
+    .nt-ftabs { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .nt-ftabs::-webkit-scrollbar { display: none; }
+    .nt-ftab { font-family: var(--f-sans); font-weight: 600; font-size: 14px; color: var(--fg-soft); background: none; border: 0; border-radius: var(--r); cursor: pointer; padding: 8px 12px; white-space: nowrap; transition: background .13s, color .13s; }
+    .nt-ftab:hover { background: var(--paper-3); color: var(--fg); }
+    .nt-ftab.on { background: var(--green-tint); color: var(--green-700); }
+    .nt-feedctl { display: flex; align-items: center; gap: 10px; margin-left: auto; flex: none; }
+    .nt-feedctl .nt-rsrch { width: 190px; padding: 7px 12px; }
+    .nt-feedctl .nt-tab { padding: 6px 12px; font-size: 13px; }
+    @media (max-width: 560px) {
+      .nt-feedctl { width: 100%; margin-left: 0; }
+      /* min-width:0 on BOTH the field and its input: a search input carries a default intrinsic width, so without
+         it the control refuses to shrink and the scope toggle beside it is pushed off the edge. */
+      .nt-feedctl .nt-rsrch { flex: 1 1 120px; width: auto; min-width: 0; }
+      .nt-feedctl .nt-rsrch input { min-width: 0; }
+      .nt-feedctl .nt-tab { padding: 6px 10px; }
+    }
 
     .nt-feed { margin-top: 16px; }
     .muted { color: var(--fg-mute); font-size: 14px; }
 
     /* In-place reader: a content/Share item opens here (gbti-reader) instead of navigating away; Back restores
        the feed. The feed IS the browser now, so there is no separate Browse page to bounce through. */
-    [data-feedview][hidden], [data-readerview][hidden], [data-splashview][hidden] { display: none; }
+    [data-feedview][hidden], [data-readerview][hidden] { display: none; }
     .reader-back { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 8px 14px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); font-family: var(--f-sans); font-weight: 600; font-size: 13px; cursor: pointer; }
     .reader-back:hover { border-color: var(--green); color: var(--green-700); }
 
-    /* SOW-063: the new-tab landing splash. A calm centered landing (3 destination cards + a rotating quote) that
-       replaces the feed on a bare new tab. While it is up, hide the greeting + the view-mode switch (no feed = no
-       mode toggle); the shell control cluster (account / theme / bell / compose) stays. */
-    html[data-splash] .nt-greet-tx, html[data-splash] .nt-modes-slot { display: none; }
-    .nt-splash { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 38px; min-height: 62vh; padding: 36px 0; }
-    /* SOW-074 follow-up: keep the THREE quick-launch cards in ONE row down to handheld by COMPRESSING, never
-       stacking. repeat(3, minmax(0,1fr)) holds 3 columns at ANY width; clamp() shrinks the card chrome fluidly as
-       the viewport narrows (the rail hides at <=650px, so the splash ~= the viewport at handheld widths). The
-       subtitle hides on the very smallest screens. */
-    .splash-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(8px, 1.6vw, 18px); width: 100%; max-width: 760px; }
-    .splash-card { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(6px, 1.4vw, 12px); padding: clamp(11px, 2.2vw, 26px) clamp(8px, 1.8vw, 24px); background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; text-align: left; transition: border-color .14s, transform .14s, box-shadow .14s; }
-    .splash-card:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: var(--sh-sm); }
-    .splash-card .sc-ico { display: inline-flex; width: clamp(27px, 4.6vw, 42px); height: clamp(27px, 4.6vw, 42px); align-items: center; justify-content: center; border-radius: var(--r); background: var(--green-tint); color: var(--green-700); flex: none; }
-    .splash-card .sc-ico svg { width: clamp(15px, 2.6vw, 23px); height: clamp(15px, 2.6vw, 23px); }
-    .splash-card .sc-t { font-family: var(--f-display); font-weight: 800; font-size: clamp(12px, 1.9vw, 17px); line-height: 1.2; }
-    .splash-card .sc-s { font-size: clamp(11px, 1.4vw, 13px); color: var(--fg-mute); line-height: 1.4; }
-    @media (max-width: 400px) { .splash-card .sc-s { display: none; } }
-    .splash-quote { margin: 0; max-width: 600px; text-align: center; }
-    .splash-quote blockquote { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 20px; line-height: 1.5; color: var(--fg); }
-    .splash-quote figcaption { margin-top: 12px; font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
-    .splash-quote figcaption::before { content: "— "; }
-
-    /* SOW-074: the user-uploaded splash background. --splash-bg (+ --splash-bg-dim for full mode) are set on :root by
-       newtab.mjs; html[data-splash-bg] picks the placement (content / fill / full). Gated on [data-splash] too, so the
-       bg only shows with the splash and never bleeds onto the feed. */
-    .splash-pattern { display: none; }
-    /* contain the absolute pattern in content/fill (full overrides to position:fixed below). */
-    html[data-splash][data-splash-bg] .nt-splash { position: relative; }
-    /* content: the image fills the centered splash card BLOCK (rounded, inset within the column). */
-    html[data-splash][data-splash-bg="content"] .nt-splash {
-      background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
-      background-size: cover; background-position: center; border-radius: var(--r-lg); padding: 44px 28px;
-    }
-    /* fill: the image fills the WHOLE content area (the main column, right of the rail, behind the top controls). */
-    html[data-splash][data-splash-bg="fill"] .nt-main {
-      background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
-      background-size: cover; background-position: center; min-height: 100vh;
-    }
-    /* full: a fixed full-viewport overlay over the app, BELOW the SOW-018 lock (z-200) + SOW-048 auth (z-250) so
-       those still win; data-unauth still hides it (the .nt-main ancestor is display:none). */
-    html[data-splash][data-splash-bg="full"] .nt-splash {
-      position: fixed; inset: 0; z-index: 150; margin: 0; min-height: 100vh;
-      /* SOW-074 fix: the curtain must be OPAQUE with no image so it truly covers the rail + feed. It paints
-         the shell's own page background (--shell-bg carries the glass glow gradients; the fallback covers the
-         non-glass layouts where --paper-2 is a solid color). The earlier var(--bg) base computed to
-         transparent (that token exists only inside the component shadow DOMs), which is why full-screen mode
-         appeared to need an image. The image + dim live on ::before so they never clobber this base. */
-      background: var(--shell-bg, var(--paper-2, #17151b));
-    }
-    html[data-splash][data-splash-bg="full"] .nt-splash::before {
-      content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      /* --splash-bg unset makes this whole declaration invalid -> a transparent overlay (no dim over the
-         plain curtain). With an image: the dimmed cover image, exactly as before. */
-      background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
-      background-size: cover; background-position: center;
-    }
-    /* the cards/quote sit above the pattern; the pattern overlays the image (any enabled background). */
-    html[data-splash][data-splash-bg] .nt-splash > .splash-cards,
-    html[data-splash][data-splash-bg] .nt-splash > .splash-quote { position: relative; z-index: 1; }
-    html[data-splash][data-splash-bg] .splash-pattern { display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-    /* SOW-074 standalone content toggles (any mode): no cards -> hide them + the whole splash is a click-anywhere
-       screen (a click enters the app); no quote -> hide the quote. */
-    html[data-splash][data-splash-nocards] .splash-cards { display: none; }
-    html[data-splash][data-splash-nocards] .nt-splash { cursor: pointer; }
-    html[data-splash][data-splash-noquote] .splash-quote { display: none; }
-    /* Glassy, see-through cards (tunable --card-op, default 70%) + light quote whenever ANY background is active. */
-    html[data-splash][data-splash-bg] .splash-card { background: rgba(20,18,24, var(--card-op, .7)); border-color: rgba(255,255,255,.18); color: #fff; -webkit-backdrop-filter: blur(var(--card-blur, 10px)); backdrop-filter: blur(var(--card-blur, 10px)); }
-    html[data-splash][data-splash-bg] .splash-card .sc-ico { background: rgba(31,158,95,.30); color: #fff; }
-    html[data-splash][data-splash-bg] .splash-card .sc-s { color: rgba(255,255,255,.74); }
-    html[data-splash][data-splash-bg] .splash-card:hover { border-color: var(--green); }
-    html[data-splash][data-splash-bg] .splash-quote blockquote { color: #fff; }
-    html[data-splash][data-splash-bg] .splash-quote figcaption { color: rgba(255,255,255,.82); }
-    /* SOW-074 follow-up: when "keep dark cards" is OFF (data-splash-lightcards; the setting is default-ENABLED) AND
-       the theme is LIGHT, give the quick-launch cards a frosted LIGHT look (80% white, dark text, blur) on ANY splash
-       background placement. Otherwise the dark glassy see-through --card-op cards above stay (the default). */
-    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card { background: rgba(255,255,255, var(--card-op, .8)); border-color: var(--line); color: var(--fg); -webkit-backdrop-filter: blur(var(--card-blur, 10px)); backdrop-filter: blur(var(--card-blur, 10px)); }
-    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card .sc-ico { background: var(--green-tint); color: var(--green-700); }
-    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card .sc-s { color: var(--fg-mute); }
-    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card:hover { border-color: var(--green); }
-    /* the ascii art is anchored by inline align-items/justify-content (set by newtab.mjs from the chosen position,
-       default bottom-right); the padding keeps it off the very edge. */
-    .splash-pattern.p-ascii { display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; box-sizing: border-box; }
-    .splash-pattern.p-ascii pre { margin: 0; font-family: var(--f-mono, monospace); font-weight: 700; font-size: clamp(11px, 2.6vw, 30px); line-height: 1.04; letter-spacing: 2px; color: #fff; white-space: pre; mix-blend-mode: overlay; opacity: var(--pat-op, .9); }
-    .splash-pattern.p-dots { background-image: radial-gradient(rgba(255,255,255, var(--pat-op, .2)) 1.5px, transparent 1.7px); background-size: var(--pat-gap, 16px) var(--pat-gap, 16px); }
-    .splash-pattern.p-scanlines { background-image: repeating-linear-gradient(0deg, rgba(255,255,255, var(--pat-op, .11)) 0 1px, transparent 1px var(--pat-gap, 16px)); }
     /* The feed rows/cards render inside <gbti-card-list> (SOW-042), whose styles are shadow-encapsulated; the
        per-mode + atom CSS that used to live here moved into client-ui/src/elements/gbti-card-list.mjs. */
 
@@ -179,15 +120,10 @@
 <body>
   <div class="nt" data-shell data-active="activity">
     <main class="nt-main">
-      <!-- SOW-052: the greeting is the page top row ([data-topbar]); the shell appends the control cluster to its
-           right, and newtab.mjs moves the view-mode switch into that cluster ([data-modes-slot]). It sits OUTSIDE
-           [data-feedview] so the controls stay visible when the in-place reader replaces the feed. Latest/Following
-           + the feed search now live in the left rail (rendered by the shell). -->
+      <!-- sow-296: the page top row. The shell prepends the brand mark and appends the control cluster (apps, the
+           view-mode slot, bell, theme, account); newtab.mjs moves the view-mode switch into that cluster. It sits
+           OUTSIDE [data-feedview] so the controls stay visible when the in-place reader replaces the feed. -->
       <div class="nt-greet" data-topbar>
-        <div class="nt-greet-tx">
-          <h1><span data-greeting>Welcome back</span><span data-greet-name></span></h1>
-          <span class="date" data-date></span>
-        </div>
         <div class="nt-modes" role="group" aria-label="View mode">
           <button class="nt-mode" type="button" data-mode="compact" data-ico="mCompact" title="Compact" aria-label="Compact view"></button>
           <button class="nt-mode" type="button" data-mode="detailed" data-ico="mDetailed" title="Detailed" aria-label="Detailed view"></button>
@@ -196,6 +132,16 @@
       </div>
 
       <div data-feedview>
+      <!-- sow-296 (owner): "a share prompt in the top center of the extension that we see first thing, as the hero,
+           minimalistic, following the style of the homepage". [data-compose] is wired by the shell, so this opens
+           the same composer the retired "+" opened, with the same membership states inside it. -->
+      <div class="nt-share">
+        <button type="button" class="nt-share-open" data-compose aria-haspopup="dialog" aria-label="Post a Share">
+          <img class="nt-share-av" data-me-av alt="" width="34" height="34" />
+          <span class="nt-share-prompt"><i class="nt-share-caret" aria-hidden="true"></i>Share something with the network&hellip;</span>
+          <span class="nt-share-act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.82-4H15a3 3 0 0 0 .12.83l-6.1 3.55a3 3 0 1 0 0 4.24l6.1 3.55A3 3 0 1 0 18 16a3 3 0 0 0-1.77.58l-6.1-3.55a3 3 0 0 0 0-1.66l6.1-3.55A3 3 0 0 0 18 8Z" fill="currentColor"/></svg>Share</span>
+        </button>
+      </div>
       <!-- SOW-077: a non-blocking upgrade prompt for a free/lapsed member browsing read-only (replaces the old
            full-screen renew wall). newtab.mjs shows it only for the 'join'/'renew' tiers; banned + active never see it. -->
       <div class="nt-upgrade" data-upgrade>
@@ -209,16 +155,17 @@
         <span class="s-go" data-setup-go>Get started</span>
       </a>
 
-      <!-- SOW-042: the type filter. "All" merges every type (incl. the member's Shares); the rest narrow to one.
-           This horizontal filter is the MOBILE (<650px) counterpart to the left rail (which is hidden there), so
-           each chip carries the SAME glyph as its rail item. Hidden on wider screens (the rail is the filter). -->
-      <div class="nt-types" role="group" aria-label="Filter by type">
-        <button class="nt-type on" type="button" data-type="all"><span class="ti" data-ico="activity"></span>All</button>
-        <button class="nt-type" type="button" data-type="post"><span class="ti" data-ico="article"></span>Articles</button>
-        <button class="nt-type" type="button" data-type="project"><span class="ti" data-ico="project"></span>Products</button>
-        <button class="nt-type" type="button" data-type="prompt"><span class="ti" data-ico="prompt"></span>Prompts</button>
-        <button class="nt-type" type="button" data-type="share"><span class="ti" data-ico="coin"></span>Shares</button>
-        <button class="nt-type" type="button" data-type="news"><span class="ti" data-ico="news"></span>News</button>
+      <!-- sow-296: the tab row (rendered by newtab.mjs from the shared feed list) plus the feed search and the
+           Latest / Following scope, which moved here from the top of the old left rail. -->
+      <div class="nt-feednav">
+        <div class="nt-ftabs" data-ftabs role="tablist" aria-label="Feeds"></div>
+        <div class="nt-feedctl">
+          <label class="nt-rsrch"><span class="gl" data-ico="search"></span><input type="search" data-filter placeholder="Filter the feed" autocomplete="off" aria-label="Filter the feed" /></label>
+          <div class="nt-tabs" role="tablist" aria-label="Activity view">
+            <button class="nt-tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
+            <button class="nt-tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
+          </div>
+        </div>
       </div>
 
       <div class="nt-feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>
@@ -228,35 +175,6 @@
         <button class="ft-x" type="button" data-footertip-dismiss>Got it</button>
       </div>
       </div><!-- /[data-feedview] -->
-
-      <!-- SOW-063: the landing splash (shown on a bare new tab unless snoozed). Three destination cards over a
-           rotating quote; a sibling of the feed/reader views, toggled by the same hidden-attribute switch. The
-           [data-ico] glyphs are filled by initShell. -->
-      <div class="nt-splash" data-splashview hidden>
-        <!-- SOW-074: the full-mode pattern overlay (configured by newtab.mjs; the image bleeds through it). -->
-        <div class="splash-pattern" data-splash-pattern aria-hidden="true"></div>
-        <div class="splash-cards">
-          <button class="splash-card" type="button" data-splash-go="activity">
-            <span class="sc-ico" data-ico="activity"></span>
-            <span class="sc-t">View Network Activity</span>
-            <span class="sc-s">The latest across the co-op</span>
-          </button>
-          <button class="splash-card" type="button" data-splash-go="news">
-            <span class="sc-ico" data-ico="news"></span>
-            <span class="sc-t">View News</span>
-            <span class="sc-s">Curated headlines for builders</span>
-          </button>
-          <button class="splash-card" type="button" data-splash-go="workbench">
-            <span class="sc-ico" data-ico="grid"></span>
-            <span class="sc-t">Open WorkBench</span>
-            <span class="sc-s">Your content and tools</span>
-          </button>
-        </div>
-        <figure class="splash-quote" data-splash-quote hidden>
-          <blockquote data-splash-quote-text></blockquote>
-          <figcaption data-splash-quote-author></figcaption>
-        </figure>
-      </div>
 
       <!-- The in-place reader: a content/Share item opens here; Back restores the feed (no Browse page). -->
       <section data-readerview hidden>

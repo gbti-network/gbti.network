@@ -2,6 +2,8 @@
 // header dropdown, the FeedView tab strip, and the footer (they were, and would drift). A future label change,
 // for example the Projects -> Projects rename carried by sow-196, is then a single edit here rather than three.
 
+import { FEED_TABS } from '../../client-ui/src/feed-nav.mjs';
+
 export interface FeedNavItem {
   /** The narrow key (matches src/pages/feeds/[narrow].astro getStaticPaths + FeedView Props['narrow']). */
   key: string;
@@ -11,16 +13,19 @@ export interface FeedNavItem {
   inFooter: boolean;
 }
 
-/** The six public feed narrows (All is the /feeds/ index) in nav order. */
-export const FEED_NAV: readonly FeedNavItem[] = [
-  { key: 'all', label: 'All', href: '/feeds/', inFooter: true },
-  { key: 'news', label: 'News', href: '/feeds/news/', inFooter: true },
-  { key: 'network', label: 'Network', href: '/feeds/network/', inFooter: false },
-  { key: 'articles', label: 'Articles', href: '/feeds/articles/', inFooter: true },
-  { key: 'projects', label: 'Projects', href: '/feeds/projects/', inFooter: true },
-  { key: 'prompts', label: 'Prompts & Skills', href: '/feeds/prompts/', inFooter: true },
-  { key: 'shares', label: 'Shares', href: '/feeds/shares/', inFooter: true },
-];
+/**
+ * The six public feed narrows (All is the /feeds/ index) in nav order.
+ *
+ * sow-296: the KEYS AND LABELS now come from client-ui/src/feed-nav.mjs, which the EXTENSION new tab reads to
+ * render its own row of feed tabs. The two hosts used to keep the same seven entries by hand, and a label change
+ * on one left the other behind. Only the hrefs and the footer flag are website concerns and stay here.
+ */
+export const FEED_NAV: readonly FeedNavItem[] = FEED_TABS.map((t) => ({
+  key: t.key,
+  label: t.label,
+  href: t.key === 'all' ? '/feeds/' : `/feeds/${t.key}/`,
+  inFooter: t.key !== 'network', // the footer feed column omits Network
+}));
 
 /** The footer's feed column (omits Network), as [label, href] pairs to match the existing footer shape. */
 export const FOOTER_FEED_LINKS: readonly [string, string][] = FEED_NAV

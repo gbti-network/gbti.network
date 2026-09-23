@@ -1,6 +1,6 @@
 // SOW-105: the new-tab prefs core. Per-section view-mode resolution (per-type defaults, invalid stored
-// values fall through) and the boot landing precedence (explicit hash > remembered section > snoozed
-// splash dest > 'all'). Pure module, no DOM, no storage.
+// values fall through) and the boot landing precedence (explicit hash > remembered section > 'all').
+// Pure module, no DOM, no storage.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -46,25 +46,24 @@ test('viewModeFor: an unknown type falls to compact', () => {
   assert.equal(viewModeFor(undefined, 'nope'), 'compact');
 });
 
-test('landingType: an explicit hash always wins (rail clicks and deep links land where they point)', () => {
-  assert.equal(landingType({ hash: '#type=post', remembered: 'news', splashDest: 'news' }), 'post');
+test('landingType: an explicit hash always wins (tab clicks and deep links land where they point)', () => {
+  assert.equal(landingType({ hash: '#type=post', remembered: 'news' }), 'post');
   assert.equal(landingType({ hash: '#tab=share&read=alice%2F1', remembered: 'news' }), 'share');
   // an unknown hash type is malformed: it falls through to the remembered section
   assert.equal(landingType({ hash: '#type=bogus', remembered: 'prompt' }), 'prompt');
 });
 
-test('landingType: the remembered section wins over the splash dest; invalid remembered falls through', () => {
-  assert.equal(landingType({ hash: '', remembered: 'news', splashDest: 'activity' }), 'news');
-  assert.equal(landingType({ hash: '', remembered: 'all', splashDest: 'news' }), 'all', "'all' is itself remembered");
+test('landingType: the remembered section is the fallback, and an invalid one falls through to the river', () => {
+  assert.equal(landingType({ hash: '', remembered: 'news' }), 'news');
+  assert.equal(landingType({ hash: '', remembered: 'all' }), 'all', "'all' is itself remembered");
   for (const bad of ['bogus', '', null, undefined]) {
-    assert.equal(landingType({ hash: '', remembered: bad, splashDest: 'news' }), 'news', `remembered=${String(bad)}`);
+    assert.equal(landingType({ hash: '', remembered: bad }), 'all', `remembered=${String(bad)}`);
   }
 });
 
-test('landingType: the splash dest fallback maps through its vocabulary; the final default is all', () => {
-  assert.equal(landingType({ hash: '', remembered: null, splashDest: 'news' }), 'news');
-  assert.equal(landingType({ hash: '', remembered: null, splashDest: 'activity' }), 'all');
-  assert.equal(landingType({ hash: '', remembered: null, splashDest: 'workbench' }), 'all');
+// sow-296: the landing splash is gone, so a bare new tab resolves to the remembered section and, on a fresh
+// browser, to the river. There is no third step any more, and nothing may reintroduce a screen in front of it.
+test('landingType: a bare tab with nothing remembered is the river', () => {
   assert.equal(landingType({}), 'all');
   assert.equal(landingType(), 'all');
 });

@@ -8,6 +8,7 @@
 // aggregate: posts, projects and prompts, with no shares and no news, matching matchesNarrow('network') in
 // src/lib/home-feed.mjs. It is the one entry the extension was missing.
 import { canonicalType } from './content-types.mjs';
+import { FEED_TABS } from './feed-nav.mjs';
 
 export const TYPE_FILTERS = new Set(['all', 'post', 'project', 'prompt', 'share', 'news', 'network']);
 
@@ -64,4 +65,25 @@ export function feedSources(type) {
     // consumer can filter uniformly instead of special-casing network.
     kinds: isNetwork ? NETWORK_KINDS : (type === 'all' || type === 'news' ? null : [type]),
   };
+}
+
+// sow-296: the new tab renders the shared FEED_TABS row instead of the left rail, so it needs the tab key (the
+// WEBSITE narrow vocabulary: articles / projects / prompts / shares) mapped to its own TYPE vocabulary (post /
+// project / prompt / share) and back. Two vocabularies, one list, translated in one place.
+const TYPE_FOR_TAB = { all: 'all', news: 'news', network: 'network', articles: 'post', projects: 'project', prompts: 'prompt', shares: 'share' };
+const TAB_FOR_TYPE = { all: 'all', news: 'news', network: 'network', post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts', share: 'shares' };
+
+/** The feed TYPE a tab key selects. Unknown keys fall back to the river, so a stale tab never empties the feed. */
+export function typeForTabKey(key) {
+  return TYPE_FOR_TAB[String(key || '')] || 'all';
+}
+
+/** The tab key to light for a TYPE (the inverse of typeForTabKey; 'product' still resolves, per sow-196). */
+export function tabKeyForType(type) {
+  return TAB_FOR_TYPE[String(type || '')] || 'all';
+}
+
+/** The tabs to render: the shared list, each carrying the extension TYPE and the hash that selects it. */
+export function feedTabs() {
+  return FEED_TABS.map((t) => ({ ...t, type: typeForTabKey(t.key), href: `newtab.html#type=${typeForTabKey(t.key)}` }));
 }

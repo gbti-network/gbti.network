@@ -17025,18 +17025,35 @@ ${BLOCKED_PILL_CSS}
   .media .gl { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
   .media .gl svg { width:55%; height:55%; display:block; }
   .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:var(--feed-radius); padding:3px 8px; white-space:nowrap; flex:none; }
+  /* sow-296: the type tag carries the WEBSITE's per-type colours (.kt-* in src/styles/gbti-v3.css), so an article
+     reads blue and a prompt purple on both hosts. The values are duplicated rather than imported because a shadow
+     root cannot see the site stylesheet; test/card-list-site-parity.test.mjs pins the pairs against that file. */
+  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:4px; padding:3px 7px; white-space:nowrap; flex:none; }
+  .chip.k-post { color:#2f63c0; background:#eef3fc; }
+  .chip.k-project { color:#138178; background:#e7f5f3; }
+  .chip.k-prompt { color:#6b4fb0; background:#f2eefb; }
+  .chip.k-share { color:var(--muted); background:var(--hover); border-color:var(--line); }
+  .chip.k-news { color:#b3661e; background:#fdf1e4; }
+  :host-context([data-theme="dark"]) .chip.k-post { color:#8fb2ec; background:rgba(63,116,201,.16); }
+  :host-context([data-theme="dark"]) .chip.k-project { color:#6fd0c5; background:rgba(19,129,120,.18); }
+  :host-context([data-theme="dark"]) .chip.k-prompt { color:#b5a1e8; background:rgba(107,79,176,.2); }
+  :host-context([data-theme="dark"]) .chip.k-news { color:#e8b079; background:rgba(179,102,30,.2); }
   .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
   .lock svg { width:11px; height:11px; }
-  .meta { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .meta { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; min-width:0; }
   .meta b { color:var(--fg); font-weight:500; }
+  /* sow-296: the author (or the publication, for news) is NAMED on the row, as it is on the website card. It used
+     to be a tooltip on the avatar, which is not a label anyone reads in a list. */
+  .meta .who { color:var(--fg); font-weight:500; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
+  .meta .dot { width:3px; height:3px; border-radius:50%; background:var(--line); flex:none; }
   /* SOW-049: the meta avatar (member github avatar / news publisher favicon). The name/source is the title tooltip. */
   .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center;
     background:var(--hover); color:var(--muted); font-size:10px; font-weight:700; line-height:1; }
   .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .av .ini { user-select:none; }
   .meta .ago { color:var(--muted); }
-  .title { font-weight:600; color:var(--fg); }
+  /* sow-296: the display face and the website's title weight, so a feed row reads the same on both hosts. */
+  .title { font-family:var(--font-display, var(--font-body)); font-weight:700; color:var(--fg); letter-spacing:-.01em; overflow-wrap:anywhere; }
   .empty { color:var(--muted); padding:18px 2px; }
   a, .open { color:inherit; text-decoration:none; }
 
@@ -17052,14 +17069,17 @@ ${BLOCKED_PILL_CSS}
   .row-c:hover .title { color:var(--accent); }
   .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
 
-  .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; padding:14px 8px 14px 17px; }
-  .row-d.no-media { grid-template-columns:1fr; } /* SOW-049: news has no left media -> the title spans full width */
-  .row-d .media { width:62px; height:62px; border-radius:var(--feed-radius); }
+  /* sow-296: DETAILED now mirrors the website feed card (src/components/feeds/FeedCard.astro): the body leads and
+     the cover sits on the RIGHT, the meta row names the author, and the excerpt runs to two lines. It used to be a
+     small left thumbnail with a one-line excerpt, which is the one place the two hosts looked least alike. */
+  .row-d { display:grid; grid-template-columns:minmax(0,1fr) 168px; gap:20px; align-items:start; padding:20px 12px 20px 17px; }
+  .row-d.no-media { grid-template-columns:1fr; }
+  .row-d .media { width:168px; height:110px; border-radius:10px; order:2; }
   .row-d .body { min-width:0; }
-  .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
-  .row-d .title { font-size:15.5px; }
+  .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 9px; flex-wrap:wrap; }
+  .row-d .title { font-size:19px; line-height:1.24; }
   .row-d:hover .title { color:var(--accent); }
-  .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
+  .row-d .ex { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--muted); font-size:14px; line-height:1.5; margin:8px 0 0; white-space:normal; }
 
   /* MODE card — boxed grid, image-led (mirrors the /prompts grid card: 4:3 cover image up top, body below) */
   .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
@@ -17071,7 +17091,7 @@ ${BLOCKED_PILL_CSS}
   .card-i .cbody { display:flex; flex-direction:column; padding:14px; }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   /* SOW-067: card titles wrap FULLY (no 2-line clamp); the auto-rows grid reflows the variable-height cards. */
-  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; }
+  .card-i .title { font-size:16px; line-height:1.28; margin:10px 0 6px; }
   .card-i:hover .title { color:var(--accent); }
   .card-i .meta { margin:0; white-space:normal; }
   /* SOW-067: the category leaf label beside the type pill (card mode only), grouped left; the lock stays right. */
@@ -17109,11 +17129,16 @@ ${BLOCKED_PILL_CSS}
   /* Phones (responsive rule: shrink/drop the competing secondary metadata before the title loses its room). The
      compact + detailed rows otherwise crush the title to a few characters because the avatar + relative date hold
      fixed width. Below 560px: drop the "x days ago", tighten gaps/padding, shrink the glyph + avatar + chip. */
+  @media (max-width: 700px) {
+    /* sow-296: the same stack point the website uses: the cover goes full width under the body. */
+    .row-d { grid-template-columns:1fr; gap:12px; }
+    .row-d .media { width:100%; height:150px; }
+    .meta .who { max-width:130px; }
+  }
   @media (max-width: 560px) {
     .row-c { gap:9px; padding:11px 10px 11px 12px; }
     .row-c .media { width:34px; height:34px; }
-    .row-d { grid-template-columns:52px 1fr; gap:12px; padding:12px 10px 12px 14px; }
-    .row-d .media { width:52px; height:52px; }
+    .row-d { padding:14px 10px 14px 14px; }
     .row-c .ago, .row-d .ago { display:none; }
     .av { width:18px; height:18px; }
     .chip { font-size:10px; padding:3px 6px; }
@@ -17151,7 +17176,9 @@ ${BLOCKED_PILL_CSS}
       return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
     }
     _chip(item) {
-      return `<span class="chip">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
+      const t = lc2(item.type);
+      const k = ["post", "project", "prompt", "share", "news"].includes(t) ? ` k-${t}` : "";
+      return `<span class="chip${k}">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
     // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
     _categoryChip(item) {
@@ -17164,12 +17191,14 @@ ${BLOCKED_PILL_CSS}
     }
     // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
     // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
-    _meta(item) {
+    _meta(item, { named = true } = {}) {
       const ago = relTime(item.createdAt ?? item.publishedAt);
       const av = avatarFor(item);
       const ini = esc((av.title || "?").trim().charAt(0).toUpperCase() || "?");
       const img = av.src ? `<img class="avimg" src="${esc(av.src)}" alt="" loading="lazy">` : "";
-      return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
+      const who = named && av.title ? `<span class="who">${esc(av.title)}</span>` : "";
+      const sep = who && ago ? '<span class="dot"></span>' : "";
+      return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${who}${sep}${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
     }
     _open(item, i, cls) {
       const t = lc2(item.type);
@@ -17182,10 +17211,10 @@ ${BLOCKED_PILL_CSS}
       return item.openHref ? "</a>" : "</div>";
     }
     _compact(items) {
-      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it)}</span>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`).join("") + `</div>`;
     }
     _detailed(items) {
-      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}</div>${this._close(it)}`).join("") + `</div>`;
     }
     _card(items) {
       return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
@@ -28495,42 +28524,6 @@ From the author:
     network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
   var ico = (k) => SVG2[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>` : "";
-  var RAIL_FEED = [
-    { group: "Feeds" },
-    // SOW-063: an explicit #type=all so a rail click goes straight to the Activity feed; the BARE newtab.html (a fresh
-    // Chrome new tab + the brand logo) is what lands on the landing splash.
-    { key: "activity", href: "newtab.html#type=all", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
-    // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
-    { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, limited trial" },
-    // sow-204 item 4a: NETWORK, the member-publications river (posts, projects and prompts; no shares, no news).
-    // It is the one entry the extension was missing against the website's feed set, and it is what makes a rail
-    // item mean the same thing on both hosts. Its membership is NETWORK_KINDS in client-ui/src/feed-route.mjs,
-    // which must keep agreeing with matchesNarrow('network') in src/lib/home-feed.mjs.
-    { key: "network", href: "newtab.html#type=network", ico: "network", nm: "Network", sub: "Publications across the co-op" },
-    // sow-204 item 4a: the second "Member Activity" heading is GONE. The owner asked to combine the sidebar items
-    // under Feeds and to adopt the website's set exactly, and a rail split across two headings did neither: it
-    // presented the same seven destinations as two unrelated groups. One heading, the website's order.
-    // Activity IS the all-types river (bare newtab.html), so it stands in for the website's "All".
-    { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
-    { key: "projects", href: "newtab.html#type=project", ico: "project", nm: "Projects", sub: "Plugins and tools" },
-    { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
-    { key: "shares", href: "newtab.html#type=share", ico: "share", nm: "Shares", sub: "The co-op stream" },
-    // SOW-069: a share glyph, not a coin (Shares are not monetary)
-    { div: true },
-    // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
-    { key: "workspace", href: "workspace.html", ico: "grid", nm: "WorkBench", sub: "Your content + tools", children: [
-      // SOW-101: quick deep-links into the member's OWN content-management tabs (distinct from the Member Activity
-      // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/projects/prompts/shares
-      // feed items. Shares has no workspace tab yet (SOW-093), so it points at the co-op stream like the feed item.
-      { key: "wb-post", href: "workspace.html#tab=post", ico: "article", nm: "Articles" },
-      { key: "wb-product", href: "workspace.html#tab=project", ico: "project", nm: "Projects" },
-      { key: "wb-prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts" },
-      { key: "wb-shares", href: "newtab.html#type=share", ico: "share", nm: "Shares" },
-      { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests" },
-      { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved" },
-      { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following" }
-    ] }
-  ];
   var RAIL_WORKBENCH = [
     // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
     { key: "network", href: "newtab.html", ico: "network", nm: "Network", sub: "Exit WorkBench" },
@@ -28553,17 +28546,8 @@ From the author:
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
   ];
-  var RAILS = { feed: RAIL_FEED, workbench: RAIL_WORKBENCH };
-  function feedControlsHtml() {
-    return `<div class="nt-rail-feedctrls">
-    <label class="nt-rsrch"><span class="gl" data-ico="search"></span><input type="search" data-filter placeholder="Filter the feed" autocomplete="off" aria-label="Filter the feed" /></label>
-    <div class="nt-tabs" role="tablist" aria-label="Activity view">
-      <button class="nt-tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
-      <button class="nt-tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
-    </div>
-  </div>`;
-  }
-  function controlsHtml() {
+  var RAILS = { workbench: RAIL_WORKBENCH };
+  function controlsHtml({ compose = true } = {}) {
     return `<div class="nt-controls" data-controls>
     <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps>
@@ -28592,7 +28576,7 @@ From the author:
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>
+    ${compose ? '<button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>' : ""}
   </div>`;
   }
   function brandHtml() {
@@ -28601,8 +28585,8 @@ From the author:
     <span class="nt-brand-tx">GBTI <b>Network</b></span>
   </a>`;
   }
-  function railHtml(active, nav = "feed") {
-    const rail = RAILS[nav] || RAIL_FEED;
+  function railHtml(active, nav = "workbench") {
+    const rail = RAILS[nav] || RAIL_WORKBENCH;
     const items = rail.map((r) => {
       if (r.group) return `<div class="nt-rail-h">${esc5(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
@@ -28614,8 +28598,7 @@ From the author:
       const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc5(c.nm)}</span></span></a>`).join("");
       return self + kids2;
     }).join("");
-    const top = nav === "feed" ? feedControlsHtml() : "";
-    return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE23}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+    return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE23}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
   function applyHeadingIcon(key) {
     const h1 = document.querySelector("[data-topbar] h1");
@@ -28645,14 +28628,12 @@ From the author:
   function applyAccount(root, status) {
     const meBtn = root.querySelector("[data-me-btn]");
     const signinBtn = root.querySelector("[data-signin-btn]");
-    const greetName = document.querySelector("[data-greet-name]");
     if (status) {
       const login = status.identity.login;
-      const av = root.querySelector("[data-me-av]");
-      if (av) {
+      root.querySelectorAll("[data-me-av]").forEach((av) => {
         av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
         av.alt = `@${login}`;
-      }
+      });
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc5(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
@@ -28663,11 +28644,9 @@ From the author:
       root.querySelectorAll("[data-super-only]").forEach((el) => {
         el.hidden = !showSuper;
       });
-      if (greetName) greetName.textContent = `, @${login}`;
       if (meBtn) meBtn.hidden = false;
       if (signinBtn) signinBtn.hidden = true;
     } else {
-      if (greetName) greetName.textContent = "";
       if (meBtn) meBtn.hidden = true;
       if (signinBtn) signinBtn.hidden = false;
     }
@@ -28747,9 +28726,9 @@ From the author:
       btn?.setAttribute("aria-expanded", "true");
       m?.querySelector(".mi")?.focus();
     };
-    root.querySelector("[data-me-av]")?.addEventListener("error", (e) => {
+    root.querySelectorAll("[data-me-av]").forEach((av) => av.addEventListener("error", (e) => {
       e.target.src = "icons/icon-32.png";
-    });
+    }));
     btn?.addEventListener("click", (e) => {
       e.stopPropagation();
       menu()?.hidden ? open() : close();
@@ -28929,11 +28908,13 @@ From the author:
     });
     rail.querySelectorAll("a").forEach((a) => a.addEventListener("click", close));
   }
-  function initShell({ active = null, nav = "feed" } = {}) {
+  function initShell({ active = null, nav = "workbench" } = {}) {
     const root = document.querySelector("[data-shell]");
     if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
     const main = root.querySelector(".nt-main");
-    if (main) main.insertAdjacentHTML("beforebegin", railHtml(active, nav));
+    const railless = nav === "none";
+    if (railless) root.classList.add("nt-norail");
+    else if (main) main.insertAdjacentHTML("beforebegin", railHtml(active, nav));
     else root.insertAdjacentHTML("afterbegin", railHtml(active, nav));
     if (main) {
       let topbar = main.querySelector("[data-topbar]");
@@ -28943,7 +28924,8 @@ From the author:
         topbar.setAttribute("data-topbar", "");
         main.prepend(topbar);
       }
-      topbar.insertAdjacentHTML("beforeend", controlsHtml());
+      if (railless) topbar.insertAdjacentHTML("afterbegin", brandHtml());
+      topbar.insertAdjacentHTML("beforeend", controlsHtml({ compose: !railless }));
     }
     root.querySelectorAll("[data-ico]").forEach((el) => {
       el.innerHTML = ico(el.dataset.ico);
@@ -29022,66 +29004,6 @@ From the author:
     document.body.appendChild(overlay);
   }
 
-  // client-ui/src/splash.mjs
-  var TWELVE_HOURS_MS = 12 * 60 * 60 * 1e3;
-  var DEFAULT_WINDOW_MS = 30 * 60 * 1e3;
-  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "fill", "full"]);
-  var BG_PATTERNS = /* @__PURE__ */ new Set(["none", "ascii", "dots", "scanlines"]);
-  function normalizeBgMode(raw) {
-    const m = String(raw || "").toLowerCase();
-    return BG_MODES.has(m) ? m : "off";
-  }
-  function normalizeBgOpacity(raw, fallback = 55) {
-    if (raw === null || raw === void 0 || raw === "") return fallback;
-    const n = Math.round(Number(raw));
-    if (!Number.isFinite(n)) return fallback;
-    return Math.min(100, Math.max(0, n));
-  }
-  function normalizeBgPattern(raw) {
-    const p = String(raw || "").toLowerCase();
-    return BG_PATTERNS.has(p) ? p : "none";
-  }
-  function splashShowsCards(raw) {
-    return String(raw) !== "0";
-  }
-  function splashShowsQuote(raw) {
-    return String(raw) !== "0";
-  }
-  function splashKeepsDarkCards(raw) {
-    return String(raw) !== "0";
-  }
-  function normalizePatternGap(raw, fallback = 16) {
-    if (raw === null || raw === void 0 || raw === "") return fallback;
-    const n = Math.round(Number(raw));
-    if (!Number.isFinite(n)) return fallback;
-    return Math.min(60, Math.max(4, n));
-  }
-  function normalizeCardBlur(raw, fallback = 10) {
-    if (raw === null || raw === void 0 || raw === "") return fallback;
-    const n = Math.round(Number(raw));
-    if (!Number.isFinite(n)) return fallback;
-    return Math.min(20, Math.max(0, n));
-  }
-  function fitDimensions(w, h, max) {
-    w = Number(w);
-    h = Number(h);
-    max = Number(max);
-    if (!(w > 0) || !(h > 0) || !(max > 0)) return { w: 0, h: 0 };
-    const longest = Math.max(w, h);
-    if (longest <= max) return { w: Math.round(w), h: Math.round(h) };
-    const scale = max / longest;
-    return { w: Math.round(w * scale), h: Math.round(h * scale) };
-  }
-  var GBTI_ASCII = [
-    "  ____ ____ _____ ___ ",
-    " / ___| __ )_   _|_ _|",
-    "| |  _|  _ \\ | |  | | ",
-    "| |_| | |_) || |  | | ",
-    " \\____|____/ |_| |___|",
-    "                      ",
-    "  N  E  T  W  O  R  K  "
-  ].join("\n");
-
   // extension/src/account.mjs
   mountPageClient();
   initShell({ active: "settings", nav: "workbench" });
@@ -29092,215 +29014,9 @@ From the author:
     }
     location.reload();
   });
-  var SPLASH_WINDOW_KEY = "gbti-splash-window-min";
-  var splashSel = document.querySelector("[data-splash-window]");
-  if (splashSel) {
-    try {
-      splashSel.value = localStorage.getItem(SPLASH_WINDOW_KEY) ?? "30";
-    } catch (e) {
-    }
-    if (!splashSel.value) splashSel.value = "30";
-    splashSel.addEventListener("change", () => {
-      try {
-        localStorage.setItem(SPLASH_WINDOW_KEY, splashSel.value);
-      } catch (e) {
-      }
-    });
-  }
-  var BG_MODE_KEY = "gbti-splash-bg-mode";
-  var BG_OPACITY_KEY = "gbti-splash-bg-opacity";
-  var BG_PATTERN_KEY = "gbti-splash-bg-pattern";
-  var BG_PATTERN_OP_KEY = "gbti-splash-bg-pattern-op";
-  var BG_PATTERN_GAP_KEY = "gbti-splash-bg-pattern-gap";
-  var BG_CARD_OP_KEY = "gbti-splash-bg-card-op";
-  var BG_CARD_BLUR_KEY = "gbti-splash-bg-card-blur";
-  var BG_ASCII_POS_KEY = "gbti-splash-bg-ascii-pos";
-  var BG_ASCII_TEXT_KEY = "gbti-splash-bg-ascii-text";
-  var SHOW_CARDS_KEY = "gbti-splash-show-cards";
-  var SHOW_QUOTE_KEY = "gbti-splash-show-quote";
-  var KEEP_DARK_CARDS_KEY = "gbti-splash-dark-cards";
-  var BG_IMAGE_KEY = "gbti:splash-bg-image";
-  var BG_MAX_SIDE = 1600;
-  var lsGet = (k) => {
-    try {
-      return localStorage.getItem(k);
-    } catch {
-      return null;
-    }
-  };
-  var lsSet = (k, v) => {
-    try {
-      localStorage.setItem(k, v);
-    } catch {
-    }
-  };
-  for (const [sel, key, fn] of [["[data-show-cards]", SHOW_CARDS_KEY, splashShowsCards], ["[data-show-quote]", SHOW_QUOTE_KEY, splashShowsQuote], ["[data-dark-cards]", KEEP_DARK_CARDS_KEY, splashKeepsDarkCards]]) {
-    const el = document.querySelector(sel);
-    if (!el) continue;
-    el.checked = fn(lsGet(key));
-    el.addEventListener("change", () => lsSet(key, el.checked ? "1" : "0"));
-  }
-  function downscaleImage(file, maxSide) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error("read failed"));
-      reader.onload = () => {
-        const img = new Image();
-        img.onerror = () => reject(new Error("decode failed"));
-        img.onload = () => {
-          const { w, h } = fitDimensions(img.naturalWidth, img.naturalHeight, maxSide);
-          if (!w || !h) {
-            reject(new Error("bad image"));
-            return;
-          }
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.82));
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-  var bgMode = document.querySelector("[data-bg-mode]");
-  if (bgMode) {
-    const onCtrls = document.querySelector("[data-bg-on-ctrls]");
-    const fileInput = document.querySelector("[data-bg-file]");
-    const preview = document.querySelector("[data-bg-preview]");
-    const removeBtn = document.querySelector("[data-bg-remove]");
-    const note = document.querySelector("[data-bg-note]");
-    const cardOp = document.querySelector("[data-bg-card-op]");
-    const cardOpOut = document.querySelector("[data-bg-card-op-out]");
-    const cardBlur = document.querySelector("[data-bg-card-blur]");
-    const cardBlurOut = document.querySelector("[data-bg-card-blur-out]");
-    const opacity = document.querySelector("[data-bg-opacity]");
-    const opacityOut = document.querySelector("[data-bg-opacity-out]");
-    const pattern = document.querySelector("[data-bg-pattern]");
-    const patternCtrls = document.querySelector("[data-bg-pattern-ctrls]");
-    const gapRow = document.querySelector("[data-bg-gap-row]");
-    const patternOp = document.querySelector("[data-bg-pattern-op]");
-    const patternOpOut = document.querySelector("[data-bg-pattern-op-out]");
-    const patternGap = document.querySelector("[data-bg-pattern-gap]");
-    const patternGapOut = document.querySelector("[data-bg-pattern-gap-out]");
-    const asciiCtrls = document.querySelector("[data-bg-ascii-ctrls]");
-    const asciiPos = document.querySelector("[data-bg-ascii-pos]");
-    const asciiText = document.querySelector("[data-bg-ascii-text]");
-    const setOut = (out, val, suffix) => {
-      if (out) out.textContent = `${val}${suffix}`;
-    };
-    bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
-    if (cardOp) {
-      cardOp.value = String(normalizeBgOpacity(lsGet(BG_CARD_OP_KEY), 70));
-      setOut(cardOpOut, cardOp.value, "%");
-    }
-    if (cardBlur) {
-      cardBlur.value = String(normalizeCardBlur(lsGet(BG_CARD_BLUR_KEY)));
-      setOut(cardBlurOut, cardBlur.value, "px");
-    }
-    if (opacity) {
-      opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
-      setOut(opacityOut, opacity.value, "%");
-    }
-    if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
-    if (patternOp) {
-      patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 3));
-      setOut(patternOpOut, patternOp.value, "%");
-    }
-    if (patternGap) {
-      patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY)));
-      setOut(patternGapOut, patternGap.value, "px");
-    }
-    if (asciiPos) {
-      asciiPos.value = lsGet(BG_ASCII_POS_KEY) || "bottom-right";
-      if (!asciiPos.value) asciiPos.value = "bottom-right";
-    }
-    if (asciiText) asciiText.value = lsGet(BG_ASCII_TEXT_KEY) || "";
-    const syncBgOnCtrls = () => {
-      if (onCtrls) onCtrls.hidden = bgMode.value === "off";
-    };
-    const syncPatternCtrls = () => {
-      const p = pattern ? pattern.value : "none";
-      if (patternCtrls) patternCtrls.hidden = p === "none";
-      if (gapRow) gapRow.hidden = !(p === "dots" || p === "scanlines");
-      if (asciiCtrls) asciiCtrls.hidden = p !== "ascii";
-    };
-    syncBgOnCtrls();
-    syncPatternCtrls();
-    const showImage = (dataUrl) => {
-      if (preview) {
-        if (dataUrl) {
-          preview.src = dataUrl;
-          preview.hidden = false;
-        } else {
-          preview.removeAttribute("src");
-          preview.hidden = true;
-        }
-      }
-      if (removeBtn) removeBtn.hidden = !dataUrl;
-    };
-    try {
-      chrome.storage?.local?.get?.(BG_IMAGE_KEY, (o) => showImage(o?.[BG_IMAGE_KEY] || null));
-    } catch {
-    }
-    bgMode.addEventListener("change", () => {
-      lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value));
-      syncBgOnCtrls();
-    });
-    cardOp?.addEventListener("input", () => {
-      const v = String(normalizeBgOpacity(cardOp.value, 70));
-      setOut(cardOpOut, v, "%");
-      lsSet(BG_CARD_OP_KEY, v);
-    });
-    cardBlur?.addEventListener("input", () => {
-      const v = String(normalizeCardBlur(cardBlur.value));
-      setOut(cardBlurOut, v, "px");
-      lsSet(BG_CARD_BLUR_KEY, v);
-    });
-    opacity?.addEventListener("input", () => {
-      const v = String(normalizeBgOpacity(opacity.value));
-      setOut(opacityOut, v, "%");
-      lsSet(BG_OPACITY_KEY, v);
-    });
-    pattern?.addEventListener("change", () => {
-      lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value));
-      syncPatternCtrls();
-    });
-    patternOp?.addEventListener("input", () => {
-      const v = String(normalizeBgOpacity(patternOp.value, 3));
-      setOut(patternOpOut, v, "%");
-      lsSet(BG_PATTERN_OP_KEY, v);
-    });
-    patternGap?.addEventListener("input", () => {
-      const v = String(normalizePatternGap(patternGap.value));
-      setOut(patternGapOut, v, "px");
-      lsSet(BG_PATTERN_GAP_KEY, v);
-    });
-    asciiPos?.addEventListener("change", () => lsSet(BG_ASCII_POS_KEY, asciiPos.value));
-    asciiText?.addEventListener("input", () => lsSet(BG_ASCII_TEXT_KEY, asciiText.value));
-    removeBtn?.addEventListener("click", () => {
-      try {
-        chrome.storage?.local?.remove?.(BG_IMAGE_KEY);
-      } catch {
-      }
-      showImage(null);
-      if (note) note.textContent = "Image removed.";
-    });
-    fileInput?.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      if (note) note.textContent = "Processing the image...";
-      try {
-        const dataUrl = await downscaleImage(file, BG_MAX_SIDE);
-        chrome.storage?.local?.set?.({ [BG_IMAGE_KEY]: dataUrl }, () => {
-        });
-        showImage(dataUrl);
-        if (note) note.textContent = `Saved (${Math.round(dataUrl.length / 1024)} KB). Open a new tab to see it.`;
-      } catch (e) {
-        if (note) note.textContent = "Could not read that image. Try a JPG or PNG.";
-      }
-      fileInput.value = "";
-    });
+  var RETIRED_SPLASH_IMAGE_KEY = "gbti:splash-bg-image";
+  try {
+    chrome.storage?.local?.remove?.(RETIRED_SPLASH_IMAGE_KEY);
+  } catch (e) {
   }
 })();

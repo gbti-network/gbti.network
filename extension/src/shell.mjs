@@ -53,46 +53,10 @@ export const SVG = {
 };
 export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : '');
 
-// SOW-052: two rail variants. The FEED rail (new tab) is the content browser — its destinations open the feed
-// pre-filtered to one type (newtab.html#type=<X>); it also carries a top control block (feed search + Latest/
-// Following). The WORKBENCH rail (workspace / account / admin) is the member's management nav — what used to live
-// in the avatar dropdown. `initShell({ nav })` picks the variant.
-const RAIL_FEED = [
-  { group: 'Feeds' },
-  // SOW-063: an explicit #type=all so a rail click goes straight to the Activity feed; the BARE newtab.html (a fresh
-  // Chrome new tab + the brand logo) is what lands on the landing splash.
-  { key: 'activity', href: 'newtab.html#type=all', ico: 'activity', nm: 'Activity', sub: 'The latest across the co-op' },
-  // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
-  { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, limited trial' },
-  // sow-204 item 4a: NETWORK, the member-publications river (posts, projects and prompts; no shares, no news).
-  // It is the one entry the extension was missing against the website's feed set, and it is what makes a rail
-  // item mean the same thing on both hosts. Its membership is NETWORK_KINDS in client-ui/src/feed-route.mjs,
-  // which must keep agreeing with matchesNarrow('network') in src/lib/home-feed.mjs.
-  { key: 'network', href: 'newtab.html#type=network', ico: 'network', nm: 'Network', sub: 'Publications across the co-op' },
-  // sow-204 item 4a: the second "Member Activity" heading is GONE. The owner asked to combine the sidebar items
-  // under Feeds and to adopt the website's set exactly, and a rail split across two headings did neither: it
-  // presented the same seven destinations as two unrelated groups. One heading, the website's order.
-  // Activity IS the all-types river (bare newtab.html), so it stands in for the website's "All".
-  { key: 'articles', href: 'newtab.html#type=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
-  { key: 'projects', href: 'newtab.html#type=project', ico: 'project', nm: 'Projects', sub: 'Plugins and tools' },
-  { key: 'prompts', href: 'newtab.html#type=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },
-  { key: 'shares', href: 'newtab.html#type=share', ico: 'share', nm: 'Shares', sub: 'The co-op stream' }, // SOW-069: a share glyph, not a coin (Shares are not monetary)
-  { div: true },
-  // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
-  { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'WorkBench', sub: 'Your content + tools', children: [
-    // SOW-101: quick deep-links into the member's OWN content-management tabs (distinct from the Member Activity
-    // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/projects/prompts/shares
-    // feed items. Shares has no workspace tab yet (SOW-093), so it points at the co-op stream like the feed item.
-    { key: 'wb-post', href: 'workspace.html#tab=post', ico: 'article', nm: 'Articles' },
-    { key: 'wb-product', href: 'workspace.html#tab=project', ico: 'project', nm: 'Projects' },
-    { key: 'wb-prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts' },
-    { key: 'wb-shares', href: 'newtab.html#type=share', ico: 'share', nm: 'Shares' },
-    { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests' },
-    { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved' },
-    { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following' },
-  ] },
-];
-
+// sow-296: there is ONE rail variant now. The FEED rail is gone: the new tab renders the shared FEED_TABS row
+// under its hero instead of a left sidebar (owner, 2026-09-22, "Drop it, use a row of tabs"), so it calls
+// initShell({ nav: 'none' }) and gets the top bar with no rail at all. The WORKBENCH rail (workspace / account /
+// admin / shares) is the member's management nav and is unchanged.
 const RAIL_WORKBENCH = [
   // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
   { key: 'network', href: 'newtab.html', ico: 'network', nm: 'Network', sub: 'Exit WorkBench' },
@@ -115,25 +79,16 @@ const RAIL_WORKBENCH = [
   { key: 'admin', href: 'admin.html', ico: 'lock', nm: 'Admin tools', sub: 'Moderation', adminOnly: true },
 ];
 
-const RAILS = { feed: RAIL_FEED, workbench: RAIL_WORKBENCH };
-
-// The feed rail's top control block (SOW-052): the persistent feed search + the Latest/Following toggle, moved out
-// of the new-tab content header. newtab.mjs wires these by selector ([data-filter] / [data-tab]).
-function feedControlsHtml() {
-  return `<div class="nt-rail-feedctrls">
-    <label class="nt-rsrch"><span class="gl" data-ico="search"></span><input type="search" data-filter placeholder="Filter the feed" autocomplete="off" aria-label="Filter the feed" /></label>
-    <div class="nt-tabs" role="tablist" aria-label="Activity view">
-      <button class="nt-tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
-      <button class="nt-tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
-    </div>
-  </div>`;
-}
+const RAILS = { workbench: RAIL_WORKBENCH };
 
 // SOW-052: the relocatable control cluster (no longer a full-width bar). initShell appends it to the page's
 // top-right [data-topbar] slot. Order: apps, the view-mode slot (the new tab moves its .nt-modes here), bell,
-// theme, account, then the "+" compose to the right of the avatar. The account dropdown is collapsed to just
-// "My WorkBench" + Sign out (the old section deep-links moved to the WorkBench rail).
-function controlsHtml() {
+// theme, account. The account dropdown is collapsed to just "My WorkBench" + Sign out (the old section
+// deep-links moved to the WorkBench rail).
+// sow-296: the "+" stays for the RAILED pages (workspace, shares, account, admin), which have no other way to
+// post. The new tab passes compose:false, because its hero share bar is the compose affordance there and two
+// controls for one action beside each other is worse than one. wireCompose binds whichever of the two exists.
+function controlsHtml({ compose = true } = {}) {
   return `<div class="nt-controls" data-controls>
     <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps>
@@ -162,7 +117,7 @@ function controlsHtml() {
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>
+    ${compose ? '<button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>' : ''}
   </div>`;
 }
 
@@ -175,8 +130,8 @@ function brandHtml() {
   </a>`;
 }
 
-function railHtml(active, nav = 'feed') {
-  const rail = RAILS[nav] || RAIL_FEED;
+function railHtml(active, nav = 'workbench') {
+  const rail = RAILS[nav] || RAIL_WORKBENCH;
   const items = rail.map((r) => {
     if (r.group) return `<div class="nt-rail-h">${esc(r.group)}</div>`;
     if (r.div) return `<hr class="nt-rail-div" />`;
@@ -191,10 +146,8 @@ function railHtml(active, nav = 'feed') {
     const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? ' on' : ''}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc(c.nm)}</span></span></a>`).join('');
     return self + kids;
   }).join('');
-  // The feed rail leads with the feed search + Latest/Following; the workbench rail does not. The brand sits above
-  // either, at the very top of the rail.
-  const top = nav === 'feed' ? feedControlsHtml() : '';
-  return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+  // The brand sits at the very top of the rail.
+  return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
 }
 
 /** Re-highlight the rail to `key` (or clear when null). The rail renders its active item ONCE at initShell, but
@@ -227,15 +180,18 @@ async function api(pathname, query = {}) {
   } catch { return null; }
 }
 
-/** Reflect the signed-in status into the account control + (if present) the greeting suffix. */
+/** Reflect the signed-in status into the account control and every avatar the page carries. */
 function applyAccount(root, status) {
   const meBtn = root.querySelector('[data-me-btn]');
   const signinBtn = root.querySelector('[data-signin-btn]');
-  const greetName = document.querySelector('[data-greet-name]');
   if (status) {
     const login = status.identity.login;
-    const av = root.querySelector('[data-me-av]');
-    if (av) { av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`; av.alt = `@${login}`; }
+    // sow-296: querySelectorAll, because the new tab's hero share bar carries a SECOND [data-me-av]. With
+    // querySelector it stayed an empty disc while the top-bar avatar filled, which reads as a broken control.
+    root.querySelectorAll('[data-me-av]').forEach((av) => {
+      av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
+      av.alt = `@${login}`;
+    });
     const head = root.querySelector('[data-me-head]');
     if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
     // The Admin entry lives in BOTH the WorkBench rail and (re-added) the avatar dropdown, so role-gate EVERY
@@ -246,11 +202,10 @@ function applyAccount(root, status) {
     // SOW-121: the Social Queue is superadmin-only (the Worker read is superadmin-gated too).
     const showSuper = (RANK[status.role] ?? 0) >= RANK.superadmin;
     root.querySelectorAll('[data-super-only]').forEach((el) => { el.hidden = !showSuper; });
-    if (greetName) greetName.textContent = `, @${login}`;
     if (meBtn) meBtn.hidden = false;
     if (signinBtn) signinBtn.hidden = true;
   } else {
-    if (greetName) greetName.textContent = '';
+    // sow-296: the greeting suffix went with the greeting row, so there is nothing to clear here any more.
     if (meBtn) meBtn.hidden = true;
     if (signinBtn) signinBtn.hidden = false;
   }
@@ -358,7 +313,7 @@ function wireAccount(root) {
   const btn = root.querySelector('[data-me-btn]');
   const close = () => { const m = menu(); if (m) m.hidden = true; btn?.setAttribute('aria-expanded', 'false'); };
   const open = () => { const m = menu(); if (m) m.hidden = false; btn?.setAttribute('aria-expanded', 'true'); m?.querySelector('.mi')?.focus(); };
-  root.querySelector('[data-me-av]')?.addEventListener('error', (e) => { e.target.src = 'icons/icon-32.png'; });
+  root.querySelectorAll('[data-me-av]').forEach((av) => av.addEventListener('error', (e) => { e.target.src = 'icons/icon-32.png'; }));
   btn?.addEventListener('click', (e) => { e.stopPropagation(); menu()?.hidden ? open() : close(); });
   document.addEventListener('click', (e) => { const m = menu(); if (m && !m.hidden && !root.querySelector('[data-me-wrap]')?.contains(e.target)) close(); });
   document.addEventListener('keydown', (e) => { const m = menu(); if (e.key === 'Escape' && m && !m.hidden) { close(); btn?.focus(); } });
@@ -495,19 +450,23 @@ function wireDrawer(root) {
   rail.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
 }
 
-export function initShell({ active = null, nav = 'feed' } = {}) {
+export function initShell({ active = null, nav = 'workbench' } = {}) {
   const root = document.querySelector('[data-shell]');
   if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
   const main = root.querySelector('.nt-main');
-  // The rail is the left column (a direct child of [data-shell], before <main>).
-  if (main) main.insertAdjacentHTML('beforebegin', railHtml(active, nav));
+  // sow-296: nav 'none' is a RAILLESS page (the new tab). It gets the same top bar and the same wiring, with the
+  // brand mark moved into the top bar, because the rail used to be the only thing carrying it.
+  const railless = nav === 'none';
+  if (railless) root.classList.add('nt-norail');
+  else if (main) main.insertAdjacentHTML('beforebegin', railHtml(active, nav));
   else root.insertAdjacentHTML('afterbegin', railHtml(active, nav));
   // The controls live top-right of the content: append them to the page's [data-topbar] row (create a bare one at
   // the top of <main> when the page does not wrap its heading in one).
   if (main) {
     let topbar = main.querySelector('[data-topbar]');
     if (!topbar) { topbar = document.createElement('div'); topbar.className = 'nt-top'; topbar.setAttribute('data-topbar', ''); main.prepend(topbar); }
-    topbar.insertAdjacentHTML('beforeend', controlsHtml());
+    if (railless) topbar.insertAdjacentHTML('afterbegin', brandHtml());
+    topbar.insertAdjacentHTML('beforeend', controlsHtml({ compose: !railless }));
   }
   // Fill the inline-SVG glyphs (rail + controls + any static [data-ico] in the page main). Trusted constants.
   root.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = ico(el.dataset.ico); });

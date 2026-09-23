@@ -3,8 +3,7 @@
 // per-type defaults (so Prompts can stay compact while Articles stay cards). This module owns the key names
 // and the resolution rules ONLY; newtab.mjs owns every localStorage read/write (nothing here touches storage
 // or the DOM, so `node --test` imports it directly).
-import { TYPE_FILTERS, parseTypeFromHash, typeForHash } from './feed-route.mjs';
-import { splashDestHash } from './splash.mjs';
+import { TYPE_FILTERS, parseTypeFromHash } from './feed-route.mjs';
 
 /** The last section the member viewed (a TYPE_FILTERS value), written on every selectType switch. */
 export const LAST_SECTION_KEY = 'gbti-nt-last-section';
@@ -42,15 +41,16 @@ export function viewModeFor(type, stored) {
 }
 
 /**
- * The boot landing section for the new tab. Precedence: an explicit hash (a rail click or a deep link
- * MUST land where it points) > the remembered last section (validated against TYPE_FILTERS, so a stale
- * value from a removed type falls through) > the snoozed splash destination (its activity/news/workbench
- * vocabulary maps through splashDestHash, so anything non-news lands on 'all') > 'all'.
+ * The boot landing section for the new tab. Precedence: an explicit hash (a tab click or a deep link MUST land
+ * where it points) > the remembered last section (validated against TYPE_FILTERS, so a stale value from a
+ * removed type falls through) > 'all'.
+ *
+ * sow-296: the third step used to be the snoozed landing-splash destination. The splash is gone (owner,
+ * 2026-09-22), so a bare new tab resolves to the remembered section, and to the river on a fresh browser.
  */
-export function landingType({ hash, remembered, splashDest } = {}) {
+export function landingType({ hash, remembered } = {}) {
   const fromHash = parseTypeFromHash(hash);
   if (fromHash) return fromHash;
   if (TYPE_FILTERS.has(remembered)) return remembered;
-  if (splashDest) return typeForHash(splashDestHash(splashDest));
   return 'all';
 }

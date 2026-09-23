@@ -1,6 +1,6 @@
 // SOW-035 Phase 3: the Playwright EXTENSION-UI smoke. Loads the unpacked MV3 extension in a persistent context,
 // optionally seeds a signed-in state into the background worker's chrome.storage, and drives the real UI:
-//   - the new-tab page renders (greeting + activity feed), and shows the signed-in identity when seeded;
+//   - the new-tab page renders (the share hero, the feed tabs and the feed), and shows the signed-in identity;
 //   - the content script stamps gbti.network (data-gbti-extension), and the signed-in header chip appears.
 //
 // It mutates NOTHING on production: it only reads the live site + seeds a token into a THROWAWAY browser profile
@@ -62,26 +62,24 @@ async function main() {
     nt.on('pageerror', (e) => console.log('  [newtab pageerror]', e.message));
     nt.on('console', (m) => { if (m.type() === 'error') console.log('  [newtab console.error]', m.text().slice(0, 200)); });
     await nt.goto(`chrome-extension://${extId}/newtab.html`, { waitUntil: 'domcontentloaded' });
-    // The greeting <span data-greeting> is STATIC markup the boot rewrites to a time-of-day greeting. Wait on the
-    // TEXT the boot sets, NOT CSS visibility: the SOW-070 splash (html[data-splash] hides .nt-greet-tx) and the
-    // SOW-048 sign-in gate (data-unauth hides .nt-main) legitimately hide the greeting on a bare load, but the boot
-    // still populates it -- so a text wait confirms the newtab booted without a false "element hidden" timeout. If
-    // the boot genuinely fails, the text stays "Welcome back" and this still fails (correctly), with the gate state
-    // logged for triage.
-    const greetOk = await nt
-      .waitForFunction(() => /morning|afternoon|evening/i.test(document.querySelector('[data-greeting]')?.textContent || ''), { timeout: 12000 })
+    // sow-296: the greeting is gone. The boot signal is now the HERO SHARE BAR plus the feed tab row, both of
+    // which the page renders only after initShell and renderTabs have run. The sign-in gate (data-unauth) can
+    // legitimately cover them, so a failure logs the gate state for triage rather than guessing.
+    const bootOk = await nt
+      .waitForFunction(() => Boolean(document.querySelector('.nt-share-open')) && document.querySelectorAll('[data-ftab]').length === 7, { timeout: 12000 })
       .then(() => true)
       .catch(() => false);
-    if (!greetOk) {
+    if (!bootOk) {
       const gate = await nt.evaluate(() => ({
-        splash: document.documentElement.dataset.splash ?? null,
         unauth: document.documentElement.dataset.unauth ?? null,
-        greet: document.querySelector('[data-greeting]')?.textContent ?? null,
+        hero: Boolean(document.querySelector('.nt-share-open')),
+        tabs: document.querySelectorAll('[data-ftab]').length,
       })).catch(() => null);
       console.log('  [newtab gate state]', JSON.stringify(gate));
     }
-    const greeting = (await nt.textContent('[data-greeting]')) || '';
-    check('new tab renders (greeting)', /morning|afternoon|evening/i.test(greeting), greeting.trim());
+    check('new tab renders (the share hero + the seven feed tabs)', bootOk);
+    // sow-296: and the rail is gone from THIS page (it stays on workspace / shares / account / admin).
+    check('new tab has no left rail', await nt.evaluate(() => !document.querySelector('.nt-rail')));
     // SOW-039/052: the feed renders through the shared <gbti-card-list> web component (open shadow); every item in
     // every density mode carries [data-card] (content rows are <div role=button>, only News is an <a>). Playwright
     // pierces open shadow DOM in CSS locators, so this matches the rows regardless of mode.
@@ -89,12 +87,12 @@ async function main() {
     const rows = await nt.locator('gbti-card-list [data-card]').count();
     check('new tab activity feed loads from the live site', rows > 0, `${rows} rows`);
     if (HAVE_TOKEN) {
-      // SOW-052: the signed-in identity shows as the greeting suffix ", @login" in [data-greet-name] (the old
-      // [data-acct] control was removed in the headerless redesign). The element is always present, so textContent
-      // resolves immediately (no 30s timeout) whether or not it is populated.
-      await nt.waitForFunction(() => /@gbtilabs/i.test(document.querySelector('[data-greet-name]')?.textContent || ''), { timeout: 12000 }).catch(() => {});
-      const acct = (await nt.textContent('[data-greet-name]')) || '';
-      check('new tab shows the signed-in identity', /@gbtilabs/i.test(acct), acct.trim());
+      // sow-296: the signed-in identity used to show as the greeting suffix ", @login". With the greeting gone it
+      // is the AVATARS the shell fills: the account control and the hero share bar both carry [data-me-av], and
+      // the hero one is what a member looks at first.
+      await nt.waitForFunction(() => /gbtilabs/i.test(document.querySelector('.nt-share-av')?.getAttribute('src') || ''), { timeout: 12000 }).catch(() => {});
+      const heroAv = (await nt.getAttribute('.nt-share-av', 'src')) || '';
+      check('new tab shows the signed-in identity (the hero avatar)', /gbtilabs/i.test(heroAv), heroAv ? 'avatar filled' : 'empty');
     } else skip('new tab shows the signed-in identity', 'no real token');
 
     // --- the content-script bridge on gbti.network ---

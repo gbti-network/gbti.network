@@ -17060,18 +17060,35 @@ ${BLOCKED_PILL_CSS}
   .media .gl { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
   .media .gl svg { width:55%; height:55%; display:block; }
   .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:var(--feed-radius); padding:3px 8px; white-space:nowrap; flex:none; }
+  /* sow-296: the type tag carries the WEBSITE's per-type colours (.kt-* in src/styles/gbti-v3.css), so an article
+     reads blue and a prompt purple on both hosts. The values are duplicated rather than imported because a shadow
+     root cannot see the site stylesheet; test/card-list-site-parity.test.mjs pins the pairs against that file. */
+  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:4px; padding:3px 7px; white-space:nowrap; flex:none; }
+  .chip.k-post { color:#2f63c0; background:#eef3fc; }
+  .chip.k-project { color:#138178; background:#e7f5f3; }
+  .chip.k-prompt { color:#6b4fb0; background:#f2eefb; }
+  .chip.k-share { color:var(--muted); background:var(--hover); border-color:var(--line); }
+  .chip.k-news { color:#b3661e; background:#fdf1e4; }
+  :host-context([data-theme="dark"]) .chip.k-post { color:#8fb2ec; background:rgba(63,116,201,.16); }
+  :host-context([data-theme="dark"]) .chip.k-project { color:#6fd0c5; background:rgba(19,129,120,.18); }
+  :host-context([data-theme="dark"]) .chip.k-prompt { color:#b5a1e8; background:rgba(107,79,176,.2); }
+  :host-context([data-theme="dark"]) .chip.k-news { color:#e8b079; background:rgba(179,102,30,.2); }
   .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
   .lock svg { width:11px; height:11px; }
-  .meta { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .meta { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; min-width:0; }
   .meta b { color:var(--fg); font-weight:500; }
+  /* sow-296: the author (or the publication, for news) is NAMED on the row, as it is on the website card. It used
+     to be a tooltip on the avatar, which is not a label anyone reads in a list. */
+  .meta .who { color:var(--fg); font-weight:500; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
+  .meta .dot { width:3px; height:3px; border-radius:50%; background:var(--line); flex:none; }
   /* SOW-049: the meta avatar (member github avatar / news publisher favicon). The name/source is the title tooltip. */
   .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center;
     background:var(--hover); color:var(--muted); font-size:10px; font-weight:700; line-height:1; }
   .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .av .ini { user-select:none; }
   .meta .ago { color:var(--muted); }
-  .title { font-weight:600; color:var(--fg); }
+  /* sow-296: the display face and the website's title weight, so a feed row reads the same on both hosts. */
+  .title { font-family:var(--font-display, var(--font-body)); font-weight:700; color:var(--fg); letter-spacing:-.01em; overflow-wrap:anywhere; }
   .empty { color:var(--muted); padding:18px 2px; }
   a, .open { color:inherit; text-decoration:none; }
 
@@ -17087,14 +17104,17 @@ ${BLOCKED_PILL_CSS}
   .row-c:hover .title { color:var(--accent); }
   .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
 
-  .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; padding:14px 8px 14px 17px; }
-  .row-d.no-media { grid-template-columns:1fr; } /* SOW-049: news has no left media -> the title spans full width */
-  .row-d .media { width:62px; height:62px; border-radius:var(--feed-radius); }
+  /* sow-296: DETAILED now mirrors the website feed card (src/components/feeds/FeedCard.astro): the body leads and
+     the cover sits on the RIGHT, the meta row names the author, and the excerpt runs to two lines. It used to be a
+     small left thumbnail with a one-line excerpt, which is the one place the two hosts looked least alike. */
+  .row-d { display:grid; grid-template-columns:minmax(0,1fr) 168px; gap:20px; align-items:start; padding:20px 12px 20px 17px; }
+  .row-d.no-media { grid-template-columns:1fr; }
+  .row-d .media { width:168px; height:110px; border-radius:10px; order:2; }
   .row-d .body { min-width:0; }
-  .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
-  .row-d .title { font-size:15.5px; }
+  .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 9px; flex-wrap:wrap; }
+  .row-d .title { font-size:19px; line-height:1.24; }
   .row-d:hover .title { color:var(--accent); }
-  .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
+  .row-d .ex { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--muted); font-size:14px; line-height:1.5; margin:8px 0 0; white-space:normal; }
 
   /* MODE card — boxed grid, image-led (mirrors the /prompts grid card: 4:3 cover image up top, body below) */
   .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
@@ -17106,7 +17126,7 @@ ${BLOCKED_PILL_CSS}
   .card-i .cbody { display:flex; flex-direction:column; padding:14px; }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   /* SOW-067: card titles wrap FULLY (no 2-line clamp); the auto-rows grid reflows the variable-height cards. */
-  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; }
+  .card-i .title { font-size:16px; line-height:1.28; margin:10px 0 6px; }
   .card-i:hover .title { color:var(--accent); }
   .card-i .meta { margin:0; white-space:normal; }
   /* SOW-067: the category leaf label beside the type pill (card mode only), grouped left; the lock stays right. */
@@ -17144,11 +17164,16 @@ ${BLOCKED_PILL_CSS}
   /* Phones (responsive rule: shrink/drop the competing secondary metadata before the title loses its room). The
      compact + detailed rows otherwise crush the title to a few characters because the avatar + relative date hold
      fixed width. Below 560px: drop the "x days ago", tighten gaps/padding, shrink the glyph + avatar + chip. */
+  @media (max-width: 700px) {
+    /* sow-296: the same stack point the website uses: the cover goes full width under the body. */
+    .row-d { grid-template-columns:1fr; gap:12px; }
+    .row-d .media { width:100%; height:150px; }
+    .meta .who { max-width:130px; }
+  }
   @media (max-width: 560px) {
     .row-c { gap:9px; padding:11px 10px 11px 12px; }
     .row-c .media { width:34px; height:34px; }
-    .row-d { grid-template-columns:52px 1fr; gap:12px; padding:12px 10px 12px 14px; }
-    .row-d .media { width:52px; height:52px; }
+    .row-d { padding:14px 10px 14px 14px; }
     .row-c .ago, .row-d .ago { display:none; }
     .av { width:18px; height:18px; }
     .chip { font-size:10px; padding:3px 6px; }
@@ -17186,7 +17211,9 @@ ${BLOCKED_PILL_CSS}
       return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
     }
     _chip(item) {
-      return `<span class="chip">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
+      const t = lc2(item.type);
+      const k = ["post", "project", "prompt", "share", "news"].includes(t) ? ` k-${t}` : "";
+      return `<span class="chip${k}">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
     // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
     _categoryChip(item) {
@@ -17199,12 +17226,14 @@ ${BLOCKED_PILL_CSS}
     }
     // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
     // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
-    _meta(item) {
+    _meta(item, { named = true } = {}) {
       const ago = relTime(item.createdAt ?? item.publishedAt);
       const av = avatarFor(item);
       const ini = esc((av.title || "?").trim().charAt(0).toUpperCase() || "?");
       const img = av.src ? `<img class="avimg" src="${esc(av.src)}" alt="" loading="lazy">` : "";
-      return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
+      const who = named && av.title ? `<span class="who">${esc(av.title)}</span>` : "";
+      const sep = who && ago ? '<span class="dot"></span>' : "";
+      return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${who}${sep}${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
     }
     _open(item, i, cls) {
       const t = lc2(item.type);
@@ -17217,10 +17246,10 @@ ${BLOCKED_PILL_CSS}
       return item.openHref ? "</a>" : "</div>";
     }
     _compact(items) {
-      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it)}</span>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`).join("") + `</div>`;
     }
     _detailed(items) {
-      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}</div>${this._close(it)}`).join("") + `</div>`;
     }
     _card(items) {
       return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;

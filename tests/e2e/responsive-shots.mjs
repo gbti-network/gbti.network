@@ -36,10 +36,8 @@ async function dismissGate(page) {
   await page.evaluate(() => {
     document.documentElement.removeAttribute('data-unauth');
     document.querySelector('.gbti-authwrap')?.remove();
-    // Simulate the signed-in greeting width (the gate-dismissed run has no identity, but the REAL topbar carries
-    // "Good afternoon, @name" which is what makes the heading + controls compete for the row).
-    const n = document.querySelector('[data-greet-name]');
-    if (n && !n.textContent.trim()) n.textContent = ', @atwellpub';
+    // sow-296: there is no greeting to simulate any more. The new tab's top row is the brand plus the control
+    // cluster, and the widths that compete are the feed tabs against the search and the scope toggle.
   }).catch(() => {});
   await page.waitForTimeout(500);
 }
@@ -85,11 +83,11 @@ async function main() {
 
     const newtabUrl = `chrome-extension://${extId}/newtab.html`;
 
-    // 1) New tab (greeting + feed river)
+    // 1) New tab (the share hero, the feed tabs and the feed river)
     {
       const p = await context.newPage();
       await p.goto(newtabUrl, { waitUntil: 'domcontentloaded' });
-      await p.waitForSelector('[data-greeting]', { timeout: 12000 }).catch(() => {});
+      await p.waitForSelector('.nt-share-open', { timeout: 12000 }).catch(() => {});
       await dismissGate(p);
       await p.waitForSelector('gbti-card-list [data-card]', { timeout: 15000 }).catch(() => {});
       await shoot(p, 'newtab');

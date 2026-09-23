@@ -44,7 +44,7 @@
   background: var(--shell-bg);
   background-attachment: fixed;
 }
-/* SOW-074 full-splash fix: the shell page background as a VARIABLE, so the full-screen splash curtain can
+/* SOW-074: the shell page background as a VARIABLE, so a full-screen overlay (the sign-in wall) can
    paint the same opaque backdrop (glass --paper-2 is translucent by design, so the curtain cannot use it). */
 [data-layout="glass"] {
   --shell-bg:
@@ -81,18 +81,26 @@ a { color: inherit; text-decoration: none; }
    main scrolls internally so the rail stays put. */
 .nt { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 1fr; }
 
+/* sow-296: a RAILLESS page (the new tab). One column, and the content is centred in a reading-width column the
+   way the homepage centres its feed, instead of filling a monitor edge to edge. The brand mark sits in the top
+   bar here, because the rail used to be the only thing carrying it. */
+.nt.nt-norail { grid-template-columns: 1fr; }
+.nt-norail .nt-main { width: 100%; max-width: 1080px; margin: 0 auto; }
+.nt-norail [data-topbar] .nt-brand { padding: 0 10px 0 0; white-space: nowrap; }
+/* Narrow: the brand keeps its mark and drops its wordmark, and the app switcher steps aside, so the top row stays
+   ONE row (brand left, controls right) instead of stacking three deep on a phone-width window. */
+@media (max-width: 620px) {
+  .nt-norail [data-topbar] .nt-brand-tx { display: none; }
+  /* .nt-apps.show is what reveals the switcher, so this has to out-specify it, not just come after it. */
+  .nt-norail .nt-apps, .nt-norail .nt-apps.show { display: none; }
+}
+
 /* ===================== SOW-048: forced-sign-in auth gate ===================== */
 /* With no GitHub token the shell shows ONLY the <gbti-welcome> login splash; everything else is hidden. */
 html[data-unauth] [data-shell] > *:not(.gbti-authwrap) { display: none !important; }
 /* Defensive: hide any body-level overlay (e.g. the Share compose modal) while the gate is up — its trigger is
    already hidden, but this guarantees nothing escapes the wall. */
 html[data-unauth] .compose-modal { display: none !important; }
-/* Sign-in overrules the splash, ALWAYS: the SOW-074 full-mode splash curtain is position:fixed, so pin it
-   hidden explicitly under the gate (belt and braces beyond the shell-child rule above) and drop its
-   background attributes so no curtain paints beneath the wall. */
-html[data-unauth] .nt-splash,
-html[data-unauth] [data-splashview],
-html[data-unauth] .splash-pattern { display: none !important; }
 /* The wall itself is OPAQUE: glass-mode --paper-2 is translucent by design, which let anything that ever
    painted below the gate bleed through it. --shell-bg is the opaque page backdrop (shell.css glass blocks);
    the fallback covers the non-glass layouts where --paper-2 is a solid color. */
@@ -275,12 +283,18 @@ html[data-unauth] .splash-pattern { display: none !important; }
      menu) ON TOP of the greeting, right-aligned (owner ask). */
   [data-topbar] { flex-direction: column; align-items: stretch; gap: 10px; }
   .nt-controls { order: -1; margin-left: 0; justify-content: flex-end; }
+  /* sow-296: a railless page has no heading competing for the row, so the brand and the controls stay side by
+     side all the way down: brand left, controls right. */
+  .nt-norail [data-topbar] { flex-direction: row; align-items: center; }
+  .nt-norail .nt-controls { order: 0; margin-left: auto; }
 }
 /* SOW-062 5e: the drawer scrim + the hamburger (shown only when the rail is a drawer, i.e. under 800px). */
 .nt-scrim { position: fixed; inset: 0; z-index: 125; background: rgba(20,18,24,.42); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
 .nt-scrim.open { opacity: 1; pointer-events: auto; }
 .nt-burger { display: none; }
 @media (max-width: 800px) { .nt-burger { display: inline-flex; } }
+/* sow-296: no rail means no drawer to open, so the burger never shows on a railless page. */
+.nt-norail .nt-burger { display: none; }
 @media (max-width: 560px) {
   .nt-main { padding: 20px 18px 48px; }
   /* Scale the control buttons down a touch so the menu row stays comfortable on the smallest phones. */
