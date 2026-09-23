@@ -91,3 +91,14 @@ test('the web edition footer names the day the cron sends, and no other', () => 
   const footer = html.slice(html.indexOf('This is the web edition'));
   assert.deepEqual(namedDays(footer.slice(0, 200)), [day]);
 });
+
+test('sow-388: the invitation\'s small print and its confirmation headline name the day the cron sends, and no other', async () => {
+  const day = digestSendDay();
+  const invite = fs.readFileSync(new URL('../src/components/mail/DigestInvite.astro', import.meta.url), 'utf8');
+  const note = /note="([^"]+)"/.exec(invite)?.[1];
+  assert.ok(note, 'the invitation passes its sentence to the form as `note`, or this checks nothing');
+  assert.deepEqual(namedDays(note), [day]);
+  const { inviteSuccessHeading } = await import('../src/lib/digest-subscribe-copy.mjs');
+  assert.deepEqual(namedDays(inviteSuccessHeading({ direct: true })), [day]);
+  assert.deepEqual(namedDays(inviteSuccessHeading({ direct: false })), [], 'no promise of a day before the address is confirmed');
+});

@@ -1,0 +1,314 @@
+---
+// sow-388: the full-screen invitation to subscribe to the weekly digest, on every page of the site (BaseLayout).
+// Designed with the owner on 2026-09-23 (the canvas is linked from the SOW): a newspaper-style takeover, square
+// corners, most of the screen.
+//
+// WHEN IT OPENS is decided by src/lib/digest-invite-core.mjs, which the tests import: once per visit, a minute
+// after the visit began, never for a signed-in reader, never on the sales and account pages, not again for 24
+// hours, 90 days after a second dismissal, and never again once the reader subscribes. This file only wires that
+// decision to the page.
+//
+// THE FORM IS DigestSubscribe, NOT A COPY OF IT. Its success wording follows the Worker's opt-in mode, and a second
+// form would be a second thing to keep true. The `invite` variant styles it for this overlay, its bot check loads
+// only when the invitation opens, and its success event is how this file learns the subscribe worked.
+//
+// THE KICKER ABOVE THE HEADLINE is the pattern .data/ops/design-ops/banned-patterns.md rules out for new work. It
+// is here because the owner asked for "God bless the internet" by name, and it is recorded there as that exception.
+//
+// A native <dialog> opened with showModal(), like every other modal on the site: that brings the focus trap, the
+// inert page behind and Escape. The scroll lock and the focus restore are added here, as in Lightbox.astro.
+import '@fontsource-variable/playfair-display';
+import '@fontsource-variable/libre-franklin';
+import DigestSubscribe from './DigestSubscribe.astro';
+import { SUBSCRIBE_BLURB } from '../../lib/digest-subscribe-copy.mjs';
+---
+
+<dialog class="dinv" data-digest-invite aria-labelledby="dsub-h-invite">
+  {/* Initial focus goes to the panel (autofocus), not the first control: the browser would otherwise land on the X
+      and draw a focus ring round it before anyone has touched a key. Tab reaches the X first from here. */}
+  <div class="dinv-panel" tabindex="-1" autofocus>
+    <button type="button" class="dinv-x" data-dinv-close aria-label="Close">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false">
+        <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </svg>
+    </button>
+    <div class="dinv-scroll">
+      <div class="dinv-body" data-dinv-ask>
+        <span class="dinv-mark" aria-hidden="true"></span>
+        <p class="dinv-kicker">God bless the internet</p>
+        <DigestSubscribe
+          variant="invite"
+          heading="Subscribe to the Digest"
+          blurb={SUBSCRIBE_BLURB}
+          note="It arrives on Tuesday mornings. A quiet bot check runs on this form."
+          turnstileOnDemand
+        />
+        <div class="dinv-foot">
+          <button type="button" class="dinv-later" data-dinv-close>Not now</button>
+          <span>Already a member? The digest is in your <a href="/account/notifications/">notification settings</a>.</span>
+        </div>
+      </div>
+
+      <div class="dinv-body dinv-done" data-dinv-done hidden>
+        <span class="dinv-tick" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="34" height="34" focusable="false">
+            <path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+        <p class="dinv-kicker">God bless the internet</p>
+        <h2 class="dinv-done-h" id="dinv-done-h" tabindex="-1" data-dinv-done-h></h2>
+        <p class="dinv-done-msg" data-dinv-done-msg></p>
+        <div class="dinv-done-actions">
+          <button type="button" class="btn btn-primary dinv-back" data-dinv-close>Back to reading</button>
+          <a class="dinv-feed" href="/feeds/">Open the feed</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  import { readMemberSignal, onMemberSignal } from '../../lib/member-signal';
+  import { cookieValue } from '../../lib/save-controls-core.mjs';
+  import { inviteSuccessHeading } from '../../lib/digest-subscribe-copy.mjs';
+  import {
+    INVITE_VISIT_KEY, INVITE_STATE_KEY, readInviteState, serializeInviteState, readInviteVisit, serializeInviteVisit,
+    inviteDelayRemaining, shouldOpenInvite, afterInvite,
+  } from '../../lib/digest-invite-core.mjs';
+
+  const start = () => {
+    const dlg = document.querySelector<HTMLDialogElement>('[data-digest-invite]');
+    if (!dlg || typeof dlg.showModal !== 'function') return;
+    const ask = dlg.querySelector<HTMLElement>('[data-dinv-ask]');
+    const done = dlg.querySelector<HTMLElement>('[data-dinv-done]');
+    const doneH = dlg.querySelector<HTMLElement>('[data-dinv-done-h]');
+    const doneMsg = dlg.querySelector<HTMLElement>('[data-dinv-done-msg]');
+    if (!ask || !done || !doneH || !doneMsg) return;
+
+    // Every storage touch is guarded: a browser that blocks site data throws on the property read itself.
+    const area = (kind: 'localStorage' | 'sessionStorage'): Storage | null => {
+      try { return window[kind]; } catch { return null; }
+    };
+    const get = (kind: 'localStorage' | 'sessionStorage', key: string): string | null => {
+      try { return area(kind)?.getItem(key) ?? null; } catch { return null; }
+    };
+    const put = (kind: 'localStorage' | 'sessionStorage', key: string, value: string): void => {
+      try { area(kind)?.setItem(key, value); } catch { /* checked by the caller that needs it to stick */ }
+    };
+    const state = () => readInviteState(get('localStorage', INVITE_STATE_KEY));
+    const visit = (t: number) => readInviteVisit(get('sessionStorage', INVITE_VISIT_KEY), t);
+    const record = (outcome: 'shown' | 'dismissed' | 'subscribed') =>
+      put('localStorage', INVITE_STATE_KEY, serializeInviteState(afterInvite(state(), outcome, Date.now())));
+
+    // Signed in by any route: the member class (the website cookie session or the extension), the session's
+    // readable CSRF cookie, or the extension's signal before the class lands. Any one is enough to stay away.
+    const signedIn = () =>
+      document.documentElement.classList.contains('is-gbti-member') ||
+      !!cookieValue(document.cookie, 'gbti_csrf') ||
+      !!readMemberSignal();
+    const context = (t: number) => ({
+      state: state(), visit: visit(t), signedIn: signedIn(), path: location.pathname, search: location.search, now: t,
+    });
+
+    let subscribed = false;
+    // A subscribe from ANY box on the page ends the invitation on this browser, so listen before deciding anything.
+    document.addEventListener('gbti:digest-subscribed', (e) => {
+      subscribed = true;
+      record('subscribed');
+      if (!dlg.open) return;
+      const detail = ((e as CustomEvent).detail || {}) as { direct?: boolean; message?: string };
+      doneH.textContent = inviteSuccessHeading(detail);
+      doneMsg.textContent = typeof detail.message === 'string' ? detail.message : '';
+      ask.hidden = true;
+      done.hidden = false;
+      dlg.setAttribute('aria-labelledby', 'dinv-done-h');
+      doneH.focus();
+    });
+
+    const now = Date.now();
+    const thisVisit = visit(now);
+    put('sessionStorage', INVITE_VISIT_KEY, serializeInviteVisit(thisVisit)); // the visit's start, kept for the next page
+    if (!shouldOpenInvite(context(now))) return;
+
+    // Anything the reader is in the middle of wins: the cookie banner, another dialog, or a field with the caret in it.
+    const busy = () => {
+      const banner = document.querySelector<HTMLElement>('[data-cookie-consent]');
+      if (banner && !banner.hidden) return true;
+      if (document.querySelector('dialog[open]')) return true;
+      const el = document.activeElement as HTMLElement | null;
+      return !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+    };
+
+    let lastFocus: Element | null = null;
+    let closing: 'dismissed' | 'quiet' = 'dismissed';
+    let downOnBackdrop = false;
+
+    const open = () => {
+      const t = Date.now();
+      // Record first, and open only if the record stuck. A browser that cannot remember would otherwise meet this on
+      // every page of every visit, which is the one outcome the owner's rules exist to prevent.
+      put('sessionStorage', INVITE_VISIT_KEY, serializeInviteVisit({ ...visit(t), shown: true }));
+      record('shown');
+      if (!visit(t).shown || state().until <= t) return;
+      lastFocus = document.activeElement;
+      document.dispatchEvent(new Event('gbti:load-turnstile'));
+      document.documentElement.style.overflow = 'hidden';
+      dlg.showModal();
+    };
+
+    const fire = () => {
+      if (document.hidden) {
+        const back = () => {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', back);
+          fire();
+        };
+        document.addEventListener('visibilitychange', back);
+        return;
+      }
+      if (!shouldOpenInvite(context(Date.now()))) return;
+      if (busy()) { window.setTimeout(fire, 5000); return; }
+      open();
+    };
+
+    // Fetch the two faces a few seconds early, so the headline does not open in a fallback face and then jump.
+    const warm = () => {
+      if (!shouldOpenInvite(context(Date.now()))) return;
+      try {
+        document.fonts?.load("800 62px 'Playfair Display Variable'", 'Subscribe to the Digest').catch(() => {});
+        document.fonts?.load("700 16px 'Libre Franklin Variable'", 'GOD BLESS THE INTERNET').catch(() => {});
+      } catch { /* the fallback faces are fine */ }
+    };
+
+    const wait = inviteDelayRemaining(thisVisit, now);
+    window.setTimeout(warm, Math.max(0, wait - 4000));
+    window.setTimeout(fire, wait);
+
+    const close = (why: 'dismissed' | 'quiet') => { closing = why; dlg.close(); };
+    dlg.querySelectorAll('[data-dinv-close]').forEach((b) => b.addEventListener('click', () => close('dismissed')));
+    // The dark area is the dialog element itself. Require the press to START there too, so a text selection dragged
+    // out of the panel does not count as a dismissal.
+    dlg.addEventListener('pointerdown', (e) => { downOnBackdrop = e.target === dlg; });
+    dlg.addEventListener('click', (e) => { if (e.target === dlg && downOnBackdrop) close('dismissed'); });
+    // A reader who turns out to be signed in is not dismissing anything.
+    onMemberSignal((s) => { if (s && dlg.open) close('quiet'); });
+    // Escape closes natively and arrives here as a dismissal, like the X, "Not now" and the dark area.
+    dlg.addEventListener('close', () => {
+      document.documentElement.style.overflow = '';
+      if (closing === 'dismissed' && !subscribed) record('dismissed');
+      closing = 'dismissed';
+      if (lastFocus instanceof HTMLElement && document.contains(lastFocus)) lastFocus.focus();
+    });
+  };
+
+  // A prerendered page (the news items are prerendered on hover) runs its scripts before anyone sees it. Nothing
+  // here may start until the page is actually shown, or the minute would run, and the invitation be marked as seen,
+  // for a page nobody opened.
+  if ((document as Document & { prerendering?: boolean }).prerendering) {
+    document.addEventListener('prerenderingchange', start, { once: true });
+  } else {
+    start();
+  }
+</script>
+
+<style>
+  .dinv {
+    position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+    margin: 0; padding: 36px; border: 0; background: transparent; color: var(--fg); overflow: hidden;
+    --dinv-label: 'Libre Franklin Variable', 'Libre Franklin', 'Franklin Gothic', Helvetica, Arial, sans-serif;
+    --dinv-display: 'Playfair Display Variable', 'Playfair Display', 'Times New Roman', Georgia, serif;
+    --dinv-read: Georgia, 'Times New Roman', serif;
+    --dinv-mute: var(--fg-mute);
+    /* The vertical rhythm, shared with DigestSubscribe's invite variant so the two tighten together. */
+    --dinv-gap: 22px;
+  }
+  .dinv[open] { display: flex; }
+  .dinv::backdrop { background: rgba(32, 30, 38, .74); }
+  /* --fg-mute on the dark card is under 4.5:1 at these sizes, so the quiet text steps up a shade there. */
+  :global([data-theme="dark"]) .dinv { --dinv-mute: var(--fg-soft); }
+
+  .dinv-panel {
+    position: relative; flex: 1 1 auto; min-width: 0; display: flex;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 0;
+    box-shadow: 0 30px 80px rgba(20, 18, 26, .38);
+  }
+  .dinv-panel:focus { outline: none; }
+  /* The panel scrolls inside itself on a short screen; the X stays put because it sits outside the scroller. */
+  .dinv-scroll { flex: 1 1 auto; min-width: 0; display: flex; overflow-y: auto; overscroll-behavior: contain; padding: 72px 80px 64px; }
+  /* Auto margins centre the body and, unlike align-items, never push its top out of reach when it overflows. */
+  .dinv-body { margin: auto; width: 100%; max-width: 860px; display: flex; flex-direction: column; align-items: center; gap: var(--dinv-gap); text-align: center; }
+  .dinv-body[hidden] { display: none !important; }
+
+  .dinv-x {
+    position: absolute; top: 0; right: 0; z-index: 1; width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; border-radius: 0; color: var(--dinv-mute); cursor: pointer;
+  }
+  .dinv-x:hover { color: var(--fg); }
+  .dinv-x:focus-visible, .dinv-later:focus-visible, .dinv-feed:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+  .dinv-mark {
+    width: 56px; height: 56px; flex: none; background-color: var(--fg);
+    -webkit-mask: url("/brand/logo/mark-white.png") center / contain no-repeat;
+    mask: url("/brand/logo/mark-white.png") center / contain no-repeat;
+  }
+  .dinv-kicker {
+    margin: 0; font-family: var(--dinv-label); font-size: 14px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--green-700);
+  }
+
+  .dinv-foot {
+    width: 100%; max-width: 620px; padding-top: 20px; border-top: 1px solid var(--line);
+    display: flex; gap: 10px; align-items: center; justify-content: space-between; text-align: left;
+    font-family: var(--dinv-label); font-size: 14.5px; line-height: 1.5; color: var(--dinv-mute);
+  }
+  .dinv-foot a, .dinv-feed { color: inherit; text-decoration: underline; }
+  .dinv-foot a:hover, .dinv-feed:hover { color: var(--green-700); }
+  .dinv-later {
+    flex: none; padding: 10px 0; background: transparent; border: 0; cursor: pointer;
+    font-family: var(--dinv-label); font-size: 16px; font-weight: 700; color: var(--dinv-mute);
+  }
+  .dinv-later:hover { color: var(--fg); }
+
+  .dinv-tick { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: var(--green-tint); color: var(--green-700); }
+  .dinv-done-h {
+    margin: 0; outline: none;
+    font-family: var(--dinv-display); font-weight: 800; font-size: clamp(36px, min(4.8vw, 7.6vh), 56px); line-height: 1.05; letter-spacing: -.01em;
+    color: var(--fg);
+  }
+  .dinv-done-h { text-wrap: balance; }
+  .dinv-done-h::after { content: ''; display: block; width: 72px; height: 3px; margin: max(18px, var(--dinv-gap)) auto 0; background: var(--fg); }
+  .dinv-done-msg { margin: 0; max-width: 640px; text-wrap: pretty; font-family: var(--dinv-read); font-size: clamp(18px, 1.9vw, 22px); line-height: 1.55; color: var(--fg-soft); }
+  .dinv-done-actions { padding-top: 6px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: center; }
+  .dinv-back {
+    height: 60px; padding: 0 32px; border-radius: 0; box-shadow: none;
+    font-family: var(--dinv-label); font-size: 17px; font-weight: 700; letter-spacing: .04em;
+  }
+  .dinv-back:hover { transform: none; }
+  .dinv-feed { font-family: var(--dinv-label); font-size: 16px; font-weight: 700; color: var(--dinv-mute); }
+
+  /* A short screen: tighter spacing, so the whole invitation fits a common laptop window (1366 by about 650)
+     without scrolling. Measured by driving the built page, not estimated. */
+  @media (max-height: 820px) {
+    .dinv { --dinv-gap: 14px; }
+  }
+  @media (max-height: 820px) and (min-width: 641px) {
+    .dinv { padding: 24px; }
+    .dinv-scroll { padding: 36px 64px 32px; }
+    .dinv-mark { width: 36px; height: 36px; }
+    .dinv-foot { padding-top: 14px; }
+  }
+  /* A phone: the panel takes the whole screen and the text sets left, as designed. */
+  @media (max-width: 640px) {
+    .dinv { padding: 0; }
+    .dinv-panel { border: 0; box-shadow: none; }
+    .dinv-scroll { padding: 40px 28px 32px; }
+    .dinv-body { align-items: flex-start; text-align: left; margin: 0 auto auto; }
+    .dinv-mark { width: 44px; height: 44px; }
+    .dinv-kicker { font-size: 12px; }
+    .dinv-x { width: 48px; height: 48px; }
+    .dinv-foot { flex-direction: column; align-items: flex-start; }
+    .dinv-done-h::after { margin-left: 0; }
+    .dinv-done-actions { justify-content: flex-start; }
+  }
+</style>

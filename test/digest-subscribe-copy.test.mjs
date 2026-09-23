@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { subscribeSuccessMessage } from '../src/lib/digest-subscribe-copy.mjs';
+import { subscribeSuccessMessage, inviteSuccessHeading } from '../src/lib/digest-subscribe-copy.mjs';
 
 const COMPONENT = readFileSync(new URL('../src/components/mail/DigestSubscribe.astro', import.meta.url), 'utf8');
 
@@ -55,4 +55,20 @@ test('box: a signed-in member gets a link to the digest switch INSTEAD of the fo
   assert.doesNotMatch(COMPONENT, /dsub-mlink/, 'the old form-plus-link is gone');
   const member = COMPONENT.match(/<p class="dsub-member"[^>]*>([\s\S]*?)<\/p>/)[1];
   assert.doesNotMatch(member.replace(/<[^>]+>/g, ''), /[\u2013\u2014]|\b\w+'(t|re|s|ll|ve|d)\b/i, 'writing rules');
+});
+
+test('sow-388: the invitation\'s confirmation headline follows the same mode flag as the message', () => {
+  assert.equal(inviteSuccessHeading({ ok: true, direct: true }), 'The next issue is Tuesday.');
+  for (const body of [{ ok: true, direct: false }, { ok: true }, null, { ok: true, direct: 'true' }, { ok: true, direct: 1 }]) {
+    assert.equal(inviteSuccessHeading(body), 'One more step.', JSON.stringify(body));
+  }
+  for (const body of [{ direct: true }, { direct: false }]) {
+    assert.doesNotMatch(inviteSuccessHeading(body), /[\u2013\u2014]|\b\w+'(t|re|s|ll|ve|d)\b/i);
+  }
+});
+
+test('sow-388: the small print carries an optional first sentence, and the default boxes are unchanged', () => {
+  // A string expression, not a fragment: Astro strips the trailing space inside `<>{note} </>`, and the two
+  // sentences ran together ("this form.Unsubscribe"), found by driving the built page.
+  assert.match(COMPONENT, /\{note \? `\$\{note\} ` : ''\}Unsubscribe in one click from any issue\./);
 });

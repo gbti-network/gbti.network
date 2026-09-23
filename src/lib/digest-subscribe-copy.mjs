@@ -21,3 +21,11 @@ export function subscribeSuccessMessage(body) {
   }
   return 'Check your inbox. If this address is new to the digest, a confirmation email is on its way. You are not subscribed until you click the link in it.';
 }
+
+// sow-388: the headline the full-screen invitation (src/components/mail/DigestInvite.astro) shows above
+// subscribeSuccessMessage after a successful subscribe. It follows the same `direct` flag, for the same reason:
+// "the next issue is Tuesday" is only true once the address is enrolled, and with a confirmation step the reader
+// still has one thing to do. The day is pinned to the deployed cron by test/digest-send-day.test.mjs.
+export function inviteSuccessHeading(body) {
+  return body && body.direct === true ? 'The next issue is Tuesday.' : 'One more step.';
+}

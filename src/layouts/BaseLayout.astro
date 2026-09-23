@@ -14,6 +14,7 @@ import ReferralCapture from '../components/ReferralCapture.astro';
 import TouchTracker from '../components/TouchTracker.astro';
 import { SITE_NAME } from '../lib/brand';
 import CookieConsent from '../components/CookieConsent.astro';
+import DigestInvite from '../components/mail/DigestInvite.astro';
 import Lightbox from '../components/Lightbox.astro';
 import CloudflareAnalytics from '../components/CloudflareAnalytics.astro';
 import { knownImageSize } from '../lib/og-image-size.mjs';
@@ -142,6 +143,9 @@ const ogImageSize = measuredOgImageSize ?? knownImageSize(ogImage || DEFAULT_OG_
     <ReferralCapture />
     <TouchTracker />
     <CookieConsent />
+    {/* sow-388: the full-screen digest invitation, for a signed-out reader a minute into the visit. Not on a `bare`
+        page, which carries its own chrome (today only the archived Codeable lander, a sales page it stays off anyway). */}
+    {!bare && <DigestInvite />}
     <Lightbox />{/* SOW-175: site-wide click-to-enlarge for body images + product galleries */}
     {/* SOW-030: reflect the GBTI extension's page-safe identity signal onto <html> (is-gbti-member /
         is-gbti-paid / data-gbti-role) so components + CSS can show a signed-in / member experience. Presentation
