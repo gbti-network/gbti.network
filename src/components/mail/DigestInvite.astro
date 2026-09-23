@@ -44,7 +44,7 @@ const PITCH = 'Member articles, projects, skills & prompts, curated shares sent 
           variant="invite"
           heading="Subscribe to the Digest"
           blurb={PITCH}
-          note="It arrives on Tuesday mornings. A quiet bot check runs on this form."
+          note="It arrives on Tuesday mornings."
           turnstileOnDemand
         />
         <div class="dinv-foot">
@@ -231,8 +231,11 @@ const PITCH = 'Member articles, projects, skills & prompts, curated shares sent 
   /* --fg-mute on the dark card is under 4.5:1 at these sizes, so the quiet text steps up a shade there. */
   :global([data-theme="dark"]) .dinv { --dinv-mute: var(--fg-soft); }
 
+  /* Full height, but on a wide screen no wider than 840px, centred: a little narrower than the site's 1100px content
+     column, so the page stays visible either side (owner, 2026-09-23, from a mockup measured at about 820px). The
+     headline (about 650px at its full size) still fits on one line inside the 80px side padding. */
   .dinv-panel {
-    position: relative; flex: 1 1 auto; min-width: 0; display: flex;
+    position: relative; flex: 1 1 auto; min-width: 0; max-width: 840px; margin: 0 auto; display: flex;
     background: var(--paper); border: 1px solid var(--line); border-radius: 0;
     box-shadow: 0 30px 80px rgba(20, 18, 26, .38);
   }

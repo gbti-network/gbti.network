@@ -230,3 +230,9 @@ test('the pitch is the owner\'s wording, and only the invitation carries it', ()
   // The shared blurb is untouched: the other boxes and the web edition still say what they said.
   assert.doesNotMatch(src('src/lib/digest-subscribe-copy.mjs'), /curated shares sent weekly/);
 });
+
+test('on a wide screen the panel is capped narrower than the site column, and centred (owner, 2026-09-23)', () => {
+  const rule = /\n  \.dinv-panel \{([^}]*)\}/.exec(INVITE)?.[1] || '';
+  assert.match(rule, /max-width: 840px;/);
+  assert.match(rule, /margin: 0 auto;/);
+});
