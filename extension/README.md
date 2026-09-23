@@ -16,16 +16,18 @@ place; the network opens a pull request for the change on your behalf, through t
   host: the worker sends the files to the signup Worker, which opens the pull request with GBTI's own GitHub App.
   There is no copy of the repository to make and nothing to install (sow-274).
 - There is **no popup**. The toolbar action has no `default_popup`, so clicking the icon fires
-  `chrome.action.onClicked` in the background worker, which opens **`onboarding.html`** in a tab (focusing an
-  already-open one). A popup closes on focus loss, which discarded the device-flow code the moment the member
-  tabbed to GitHub; a tab survives the trip. The page is light, two-column, and mounts the shared
-  `<gbti-onboarding>` card (sign in with GitHub, the only step), plus the signed-in identity + a sign-out
-  control. Sign-in is identity only: it tells the network who the member is.
+  `chrome.action.onClicked` in the background worker, which opens the **new tab** (`newtab.html`). A popup
+  closes on focus loss, which discarded the device-flow code the moment the member tabbed to GitHub; a tab
+  survives the trip. Signed out, the new tab is the extension's one sign-in screen (`<gbti-signin-splash>`);
+  signed in, it is the feed. Sign-in is identity only: it tells the network who the member is.
+- **Setup lives on the website.** The extension shows no setup steps. After a member's first sign-in on a
+  browser, the background signs them in on gbti.network and opens `https://gbti.network/welcome/` in front,
+  unless every step is already done or skipped (sow-387).
 
 The SOW-005 gate remains the only authority on what merges; the extension only surfaces what a member may do.
 
 ## Build + load
-1. `node extension/build.mjs` (bundles `dist/{background,content,onboarding,newtab,shares}.js`; rerun after
+1. `node extension/build.mjs` (bundles `dist/{background,content,newtab,shares,workspace,admin,account}.js`; rerun after
    changing the core or client-ui). Also rebuild the UI bundle if it changed: `node client-ui/build.mjs`.
 2. Chrome -> Extensions -> Developer mode -> Load unpacked -> select `extension/`.
 3. Click the toolbar icon to open the onboarding tab, sign in with GitHub (device flow), then browse a

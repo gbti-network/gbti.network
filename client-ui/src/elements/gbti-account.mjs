@@ -13,8 +13,9 @@ import { currentLayout, currentTheme, applyLayout, applyTheme, currentGlass, app
 
 const SITE = 'https://gbti.network';
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
-// SOW-029: the welcome view's localStorage keys all share this prefix; "reset welcome" clears them so the
-// post-setup welcome (join Discord + follow discovery) runs fresh.
+// SOW-029: the welcome view's localStorage keys all share this prefix. The account-deletion request clears them from
+// this device. (sow-387 removed the "Welcome steps: Reset" row that also cleared them: the welcome is the website's,
+// and its side list lets a member reopen any step.)
 const WELCOME_PREFIX = 'gbti-welcome';
 
 const STATUS_LABEL = {
@@ -153,9 +154,7 @@ class GbtiAccount extends GbtiElement {
       <div class="sec-h"><h3>Account</h3><p>Signed in as <b>@${esc(this._login)}</b> on this device.</p></div>
       <div class="rows">
         <div class="row"><div class="rl"><div class="t">Sign out</div><div class="d">End this session on this device.</div></div><div class="rc"><button data-signout type="button">Sign out</button></div></div>
-        <div class="row"><div class="rl"><div class="t">Welcome steps</div><div class="d">Clear the steps you skipped and the channels you marked as followed, so the welcome steps ask again.</div></div><div class="rc"><button data-reset-welcome type="button">Reset</button></div></div>
       </div>
-      <div class="msg" data-account-msg aria-live="polite"></div>
     </section>`;
   }
 
@@ -278,7 +277,6 @@ class GbtiAccount extends GbtiElement {
     // Sign out: emit the established request event; the host (account page / content script) performs the actual
     // chrome signout + reload. Host-agnostic — this element never touches chrome.* directly.
     this.on('[data-signout]', 'click', () => this.emit('gbti:request-signout'));
-    this.on('[data-reset-welcome]', 'click', () => this._resetWelcome());
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copy)));
     // SOW-070: Appearance — apply + re-render so the active segment updates (tokens.mjs + shell.css re-skin live).
     this.$$('[data-set-layout]').forEach((b) => b.addEventListener('click', () => { applyLayout(b.dataset.setLayout); this.render(); }));
@@ -294,23 +292,6 @@ class GbtiAccount extends GbtiElement {
     const delBtn = this.$('[data-delete]');
     if (confirm && delBtn) confirm.addEventListener('input', () => { delBtn.disabled = confirm.value.trim() !== 'DELETE'; });
     this.on('[data-delete]', 'click', () => this._requestDeletion());
-  }
-
-  // sow-343: the progress also lives on the account (skips, channels marked followed, handles kept for later), so the
-  // reset clears that record too. Real state (a linked Discord, follows, topics, the profile) is not touched and
-  // still counts as done, which is why the message says what it cleared rather than "start over".
-  async _resetWelcome() {
-    try {
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(WELCOME_PREFIX)) localStorage.removeItem(k);
-      }
-    } catch { /* storage blocked */ }
-    let cleared = false;
-    try { await this.client?.setPrefs?.({ onboarding: null }); cleared = !!this.client?.setPrefs; } catch { cleared = false; }
-    this._say('[data-account-msg]', cleared
-      ? 'Welcome steps reset. Skipped steps and the channels you marked as followed are cleared. Anything you actually connected or followed still counts.'
-      : 'We could not reach your account, so only this device was reset. Please try again in a moment.', cleared ? 'ok' : 'err');
   }
 
   async _copy(id) {

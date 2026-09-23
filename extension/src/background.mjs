@@ -14,6 +14,8 @@ import { resolveMembership } from '../../client/src/membership.mjs';
 import { GITHUB_CLIENT_ID, activeClientId, activeScope } from '../../client/src/signup-base.mjs';
 import { resolveOpenPage } from './open-page.mjs';
 import { needsRefresh, refreshPatch } from './token-refresh.mjs';
+import { claimHandoff, shouldOpenWelcome, createDispatchClient, withTimeout, seedOnUpdate } from './welcome-handoff.mjs'; // sow-387
+import { loadProgress, WELCOME_SITE_URL } from '../../client-ui/src/onboarding-card-core.mjs'; // sow-387: DOM-free
 
 // GITHUB_CLIENT_ID is the PUBLIC device-flow OAuth app client id, single-sourced in signup-base.mjs (device flow
 // has no client secret, so it is safe to bundle). Baked into the extension at build time.
@@ -40,10 +42,11 @@ async function handleLogin(store) {
     clientId: activeClientId(),
     scope: activeScope(),
     onPrompt: ({ userCode, verificationUri }) => {
-      // Surface the code to the onboarding tab. Do NOT auto-open the verification tab here: the GitHub App device
-      // flow returns no verification_uri_complete, so an auto-opened page cannot pre-fill the code anyway, and
-      // grabbing focus mid-flow is hostile. The tab shows the code with a Copy button + an
-      // "Open github.com/login/device" button the member clicks themselves. The device flow keeps polling here.
+      // Surface the code to the page that started sign-in (the new-tab sign-in screen, sow-387). Do NOT auto-open the
+      // verification tab here: the GitHub App device flow returns no verification_uri_complete, so an auto-opened
+      // page cannot pre-fill the code anyway, and grabbing focus mid-flow is hostile. The page shows the code with a
+      // Copy button + an "Open github.com/login/device" button the member clicks themselves. The device flow keeps
+      // polling here.
       chrome.runtime.sendMessage({ type: 'login-prompt', userCode, verificationUri }).catch(() => {});
     },
   });
@@ -73,10 +76,9 @@ async function handleLogin(store) {
   } catch {
     // leave membership unset (treated as 'unknown')
   }
-  // sow-158: also sign the member into gbti.network (mint the cookie session from this fresh token). Fire-and-forget;
-  // reset the once-per-session stamp so maybeMintWebSession will re-mint later if this call did not land.
-  try { await chrome.storage?.session?.set?.({ webSessionMinted: true }); } catch { /* best-effort */ }
-  mintWebSession(accessToken);
+  // sow-158: the website session is minted from this fresh token too, but no longer here. sow-387 moved it into
+  // afterSignIn, which runs after the sign-in page has its answer, so a slow Worker can never hold the sign-in screen,
+  // and the welcome tab it may open waits for the cookie.
   return { ok: true, login: u.login };
 }
 
@@ -94,18 +96,22 @@ async function refreshViaWorker(refreshToken) {
 
 // sow-158 auth bridge: mint the gbti.network httpOnly cookie session from this member's verified token, so ONE
 // extension sign-in also signs them in on the website (WorkBench / News / account) with no separate web sign-in.
-// Bearer-authenticated -> their OWN session (no new capability). Best-effort + fire-and-forget: a failure is
-// non-fatal (web sign-in stays available). credentials:'include' so the browser stores the Set-Cookies in the
-// shared cookie jar the gbti.network page reads. The token is sent to the SAME Worker that already holds it.
+// Bearer-authenticated -> their OWN session (no new capability). Best-effort: a failure is non-fatal (web sign-in
+// stays available). credentials:'include' so the browser stores the Set-Cookies in the shared cookie jar the
+// gbti.network page reads. The token is sent to the SAME Worker that already holds it. sow-387: resolves true only
+// when the Worker answered 2xx, and gives up after MINT_TIMEOUT_MS, so the welcome handoff can wait on it.
+const MINT_TIMEOUT_MS = 8000;
 async function mintWebSession(token) {
-  if (!token) return;
+  if (!token) return false;
   try {
-    await fetch(`${SIGNUP_BASE}/auth/session-from-token`, {
+    const res = await fetch(`${SIGNUP_BASE}/auth/session-from-token`, {
       method: 'POST',
       credentials: 'include',
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout?.(MINT_TIMEOUT_MS),
     });
-  } catch { /* non-fatal: the web can always sign in directly */ }
+    return !!res?.ok;
+  } catch { return false; /* non-fatal: the web can always sign in directly */ }
 }
 
 // Opportunistic mint: once per browser session, so an EXISTING signed-in member (who signed in before this shipped)
@@ -159,31 +165,52 @@ async function ensureFreshToken(store) {
   return _refreshing;
 }
 
-// SOW-026: the toolbar icon has NO default_popup, so clicking it fires this handler instead of opening a popup.
-// A popup closes the instant it loses focus, which discarded the device-flow code the moment the member tabbed
-// to GitHub; the onboarding TAB persists. Best-effort focus an already-open onboarding tab (kept in
-// chrome.storage.session) so repeated clicks do not spawn duplicate tabs. No "tabs" permission is needed: we
-// only create/update/get by id (reading a tab's url/title would need it; checking existence + windowId does not).
-const ONBOARDING_PAGE = 'onboarding.html';
-async function openOnboardingTab() {
-  const url = chrome.runtime.getURL(ONBOARDING_PAGE);
-  try {
-    const { onboardingTabId } = (await chrome.storage?.session?.get?.('onboardingTabId')) ?? {};
-    if (onboardingTabId != null) {
-      try {
-        const t = await chrome.tabs.get(onboardingTabId); // rejects if the tab was closed
-        await chrome.tabs.update(onboardingTabId, { active: true });
-        if (t?.windowId != null) await chrome.windows.update(t.windowId, { focused: true });
-        return;
-      } catch { /* the remembered tab is gone; fall through and open a fresh one */ }
-    }
-    const created = await chrome.tabs.create({ url });
-    if (created?.id != null) await chrome.storage?.session?.set?.({ onboardingTabId: created.id });
-  } catch {
-    try { await chrome.tabs.create({ url }); } catch { /* give up */ }
-  }
+// SOW-026: the toolbar icon has NO default_popup, so clicking it fires this handler instead of opening a popup
+// (a popup closes the instant it loses focus, which discarded the device-flow code the moment the member tabbed to
+// GitHub). sow-387: it opens the new tab, which is the extension's one sign-in screen when signed out and the feed
+// when signed in. The separate toolbar sign-in page (onboarding.html) is retired.
+chrome.action?.onClicked?.addListener(() => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('newtab.html') }).catch(() => {});
+});
+
+// sow-387: existing members are seeded when the extension updates, so the release that adds the welcome handoff
+// never counts their next re-sign-in as a first one. It never opens a tab, and nothing happens at install.
+chrome.runtime.onInstalled?.addListener(({ reason } = {}) => {
+  getStore()
+    .then((store) => seedOnUpdate(chrome.storage.local, { reason, githubId: store.get('identity')?.githubId }))
+    .catch(() => {});
+});
+
+// sow-387: after a sign-in, sign the member in on the website and, on the first sign-in for this account on this
+// browser, open the website welcome in front of the sign-in tab. Single-flight, so two sign-ins that finish together
+// run it once. It runs AFTER the sign-in page has its answer, so nothing here can hold the sign-in screen.
+const PROGRESS_TIMEOUT_MS = 10000;
+let _afterSignIn = null;
+function afterSignIn(store, tab) {
+  if (_afterSignIn) return _afterSignIn;
+  _afterSignIn = (async () => {
+    try {
+      // The website session first: the welcome tab needs the cookie. The stamp is set before the mint so an api call
+      // racing it does not mint twice, and removed on failure so the next api call's opportunistic mint retries.
+      try { await chrome.storage?.session?.set?.({ webSessionMinted: true }); } catch { /* best-effort */ }
+      const minted = await mintWebSession(store.get('githubToken'));
+      if (!minted) { try { await chrome.storage?.session?.remove?.('webSessionMinted'); } catch { /* best-effort */ } }
+      // Claim before any read. Only the call that writes the record may open a tab.
+      const claimed = await claimHandoff(chrome.storage.local, store.get('identity')?.githubId);
+      if (!claimed) return;
+      // A read that fails or runs long leaves the progress unknown, and unknown progress still opens the welcome.
+      const client = createDispatchClient((req) => dispatch(buildExtContext(store), req));
+      const progress = await withTimeout(loadProgress(client), PROGRESS_TIMEOUT_MS, null);
+      if (!shouldOpenWelcome({ claimed, progress })) return;
+      const opts = { url: WELCOME_SITE_URL, active: true };
+      if (tab?.windowId != null) opts.windowId = tab.windowId;
+      if (tab?.id != null) opts.openerTabId = tab.id;
+      try { await chrome.tabs.create(opts); } catch { await chrome.tabs.create({ url: WELCOME_SITE_URL }).catch(() => {}); }
+    } catch { /* best-effort: the WorkBench card still links to the welcome */ }
+    finally { _afterSignIn = null; }
+  })();
+  return _afterSignIn;
 }
-chrome.action?.onClicked?.addListener(() => { openOnboardingTab(); });
 
 // SOW-030: tell gbti.network content scripts (in any tab) that auth changed, so they re-stamp the page-safe
 // identity signal. A service worker's chrome.runtime.sendMessage reaches extension pages, NOT content scripts,
@@ -216,9 +243,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg?.type === 'login') {
         const res = await handleLogin(store);
         // Device-flow sign-in ends on GitHub's "you're all set" page in a different tab. Route the member back
-        // to the tab that started sign-in (the onboarding tab, or the gbti.network page) so they see step 2.
+        // to the tab that started sign-in (the new tab, or a gbti.network page), which then reloads into the feed.
         if (res?.ok) { broadcastAuthChanged(); await focusTab(sender?.tab?.id, sender?.tab?.windowId); }
         sendResponse(res);
+        // sow-387: only now, with the sign-in page answered, the website session and (on a first sign-in) the
+        // website welcome, opened last so it lands in front.
+        if (res?.ok) afterSignIn(store, sender?.tab);
       } else if (msg?.type === 'signout') {
         // sow-158: end the bridged website cookie session too. Capture the token BEFORE nulling it, so the bearer
         // reaches the clear route; fire-and-forget so a slow/failed clear never blocks local sign-out.

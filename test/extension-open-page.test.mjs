@@ -20,10 +20,15 @@ test('an allowlisted page with a safe hash resolves to page#hash (leading # opti
 });
 
 test('every menu destination is on the allowlist', () => {
-  for (const p of ['workspace.html', 'shares.html', 'admin.html', 'account.html', 'onboarding.html']) {
+  for (const p of ['workspace.html', 'shares.html', 'admin.html', 'account.html']) {
     assert.ok(OPENABLE_PAGES.has(p), `${p} should be openable`);
     assert.equal(resolveOpenPage({ page: p }), p);
   }
+});
+
+test('sow-387: the retired toolbar sign-in page is no longer openable', () => {
+  assert.equal(OPENABLE_PAGES.has('onboarding.html'), false);
+  assert.equal(resolveOpenPage({ page: 'onboarding.html' }), null);
 });
 
 test('a page NOT on the allowlist is rejected (no arbitrary navigation)', () => {

@@ -96,7 +96,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ===================== SOW-048: forced-sign-in auth gate ===================== */
-/* With no GitHub token the shell shows ONLY the <gbti-welcome> login splash; everything else is hidden. */
+/* With no GitHub token the shell shows ONLY the sign-in screen (<gbti-signin-splash>, sow-387); everything else is hidden. */
 html[data-unauth] [data-shell] > *:not(.gbti-authwrap) { display: none !important; }
 /* Defensive: hide any body-level overlay (e.g. the Share compose modal) while the gate is up — its trigger is
    already hidden, but this guarantees nothing escapes the wall. */
@@ -131,13 +131,11 @@ html[data-unauth] .compose-modal { display: none !important; }
 
 /* account control (SOW-036): the avatar button opens the management dropdown */
 .nt-acctwrap { position: relative; }
-.nt-signin { font-family: var(--f-sans); font-weight: 700; font-size: 13px; color: #fff; background: var(--green); border: 0; border-radius: var(--r-pill); padding: 9px 17px; cursor: pointer; }
-.nt-signin:hover { background: var(--green-700); }
 .nt-acct { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--paper); cursor: pointer; transition: border-color .15s; }
 /* An explicit `display` beats the `hidden` attribute, so the account control + sign-in button must opt back into
    hiding (same reason .me-menu[hidden] is defined). Without this the empty avatar showed next to "Sign in" when
    signed out. */
-.nt-acct[hidden], .nt-signin[hidden] { display: none; }
+.nt-acct[hidden] { display: none; }
 .nt-acct:hover { border-color: var(--line-2); }
 .nt-acct .av { width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover; background: var(--line); }
 .nt-acct svg { width: 15px; height: 15px; color: var(--fg-mute); transition: transform .15s; }

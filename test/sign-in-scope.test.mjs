@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 import { activeScope, activeClientId, GITHUB_CLIENT_ID, AUTH_MODE } from '../client/src/signup-base.mjs';
 import { requestDeviceCode } from '../client/src/auth-device.mjs';
@@ -63,17 +63,20 @@ test('the command line login sends that scope to GitHub', async () => {
   assert.equal(asked, 'read:user');
 });
 
-test('every setup screen is sign-in only and promises no more than the sign-in asks for', () => {
+test('the sign-in screen is sign-in only and promises no more than the sign-in asks for', () => {
+  // sow-387 retired the toolbar setup page (onboarding.html and its card). The new-tab sign-in screen is now the only
+  // place a member signs in to the extension, and it carries the reassurance the retired card did.
   const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
-  const card = read('client-ui/src/elements/gbti-onboarding.mjs');
-  const page = read('extension/onboarding.html');
-  // The card has one step. No copy of the repository to make, no app to install, no GitHub settings page to open.
-  assert.doesNotMatch(card, /['"](fork|install)['"]/, 'the setup card lists a fork or install step again');
-  assert.doesNotMatch(card, /data-open/, 'the setup card sends the member to a GitHub page other than sign-in');
+  const splash = read('client-ui/src/elements/gbti-signin-splash.mjs');
+  // One action. No copy of the repository to make, no app to install, no GitHub settings page to open.
+  assert.doesNotMatch(splash, /['"](fork|install)['"]/, 'the sign-in screen lists a fork or install step again');
+  assert.doesNotMatch(splash, /data-open/, 'the sign-in screen sends the member to a GitHub page other than sign-in');
+  assert.doesNotMatch(splash, /Make your copy|Give access|Install the GBTI app/);
   // What it tells the member matches the scope pinned above. It must not say the network writes to their copy.
-  assert.match(card, /does not ask for access to your repositories/);
-  assert.doesNotMatch(card, /to the copy you choose/);
-  // The extension page lists exactly one step.
-  assert.equal((page.match(/<span class="n">\d<\/span>/g) || []).length, 1, 'the setup page lists more than one step');
-  assert.doesNotMatch(page, /Make your copy|Give access|Install the GBTI app/);
+  assert.match(splash, /does not ask for access to your repositories/);
+  assert.doesNotMatch(splash, /to the copy you choose/);
+  // And the retired page stays retired.
+  for (const gone of ['extension/onboarding.html', 'extension/src/onboarding.mjs', 'client-ui/src/elements/gbti-onboarding.mjs']) {
+    assert.equal(existsSync(new URL(`../${gone}`, import.meta.url)), false, `${gone} is back`);
+  }
 });

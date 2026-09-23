@@ -190,9 +190,11 @@ test('sow-357: a paying member\'s finish card is untouched', () => {
 // Copy that was false
 // ---------------------------------------------------------------------------
 
-test('sow-357: nothing in the wizard still sells the retired trial', () => {
+test('sow-357: nothing in the wizard or the sign-in screen still sells the retired trial', () => {
   // The 90-day trial was retired in August. The extension's signed-out splash went on offering it for a month.
-  const src = fs.readFileSync(new URL('../client-ui/src/elements/gbti-welcome.mjs', import.meta.url), 'utf8');
-  assert.ok(!src.includes('The trial is free'), 'the splash no longer promises a free trial');
-  assert.match(src, /Reading is free, and an account costs nothing/);
+  // sow-387 moved that splash out of the wizard into its own element, so both files are read.
+  const wizard = fs.readFileSync(new URL('../client-ui/src/elements/gbti-welcome.mjs', import.meta.url), 'utf8');
+  const splash = fs.readFileSync(new URL('../client-ui/src/elements/gbti-signin-splash.mjs', import.meta.url), 'utf8');
+  for (const src of [wizard, splash]) assert.ok(!src.includes('The trial is free'), 'no screen promises a free trial');
+  assert.match(splash, /Reading is free, and an account costs nothing/);
 });

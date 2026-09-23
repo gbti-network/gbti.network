@@ -6,8 +6,9 @@
 // matches a safe token pattern, so a hostile gbti.network page cannot relay a request to open an arbitrary URL.
 // Node-free + DOM-free so it unit-tests with no harness.
 
-// Every standalone extension page reachable from a menu. newtab/onboarding are included for completeness even
-// though they have their own entry points; an unlisted or off-origin string is rejected.
+// Every standalone extension page reachable from a menu. newtab is included for completeness even though it has
+// its own entry point; an unlisted or off-origin string is rejected. sow-387 retired the toolbar sign-in page
+// (onboarding.html), so it is no longer openable: nothing names it, and the new tab is the one sign-in screen.
 const PAGES = new Set([
   'newtab.html',
   'workspace.html',
@@ -15,7 +16,6 @@ const PAGES = new Set([
   'shares.html',
   'admin.html',
   'account.html',
-  'onboarding.html',
 ]);
 
 // A hash hint like "tab=prompt" or "tab=post&read=members%2Falice%2F...". Restricted to URL-safe tokens (no

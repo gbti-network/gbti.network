@@ -228,25 +228,8 @@ export const WELCOME_CSS = `
     .top { padding-top:18px; }
   }
 
-  /* SOW-048: the forced-sign-in (login splash) mode + the loading state (token-styled, not the modal). */
+  /* The loading state. sow-387: the SOW-048 sign-in splash styles that lived here moved to
+     client-ui/src/elements/gbti-signin-splash.mjs with the sign-in screen itself. */
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
-  .head { text-align:center; margin-bottom:22px; }
-  .head .ic { display:inline-grid; place-items:center; }
-  .head h2 { font-family:var(--font-display); font-size:24px; margin:8px 0 6px; }
-  .head p { color:var(--muted); margin:0 auto; max-width:46ch; line-height:1.5; }
-  .card { border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:0 0 14px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:9px;
-    background:var(--brand); color:#fff; text-decoration:none; font:inherit; font-weight:700; font-size:14px; padding:10px 16px; cursor:pointer; }
-  .btn:hover { background:var(--brand-dark); color:#fff; }
-  .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
-  .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
-  .btn.signin { width:100%; box-sizing:border-box; padding:13px; font-size:15px; }
-  .splashwrap .note { color:var(--muted); }
-  .splashwrap .note a { color:var(--accent); }
-  .codebox { text-align:center; }
-  .codebox .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
-  .codeval { display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0 14px; flex-wrap:wrap; }
-  .codeval code { font-family:var(--font-mono, monospace); font-size:22px; font-weight:700; letter-spacing:.14em; background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
-  .codeval .btn { padding:8px 13px; font-size:13px; }
   .loading { color:var(--muted); text-align:center; padding:30px 0; }
 `;

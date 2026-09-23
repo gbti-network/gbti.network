@@ -1,13 +1,17 @@
-// <gbti-welcome> (SOW-029): the post-setup welcome view, mounted by the extension when the onboarding wizard's
-// ready button ("Complete Integration") fires gbti:onboarding-start. Styled per the owner's Claude Design
+// <gbti-welcome> (SOW-029): the setup welcome. sow-387 (2026-09-23): it runs on the WEBSITE only now
+// (src/pages/welcome.astro). It used to be mounted by the extension too, twice over: as the new-tab overlay and as
+// the toolbar page's "Complete Integration" takeover. The owner ruled that the welcome belongs to the site, and the
+// extension opens this page after a member's first sign-in instead. Styled per the owner's Claude Design
 // handoff (2026-07-20, "Welcome Flow.dc.html"): a left rail stepper (numbered circles, clickable), a per-step
 // heading + progress bar, the step content, and a Back/Skip/Continue footer, in the handoff's dark + light
 // palettes. sow-344 (2026-09-16) took the CARD away: the two columns sit on the page itself with one hairline
 // between them, nothing scrolls inside, and both hosts get the same look. It walks the member through five to-dos:
 //   Discord (connect + role), Follow the channels (the GBTI properties grid), Your socials (staged handles),
 //   Follow members (the directory grid), Follow topics (the shared picker) -> a done state with stats.
-// Host-agnostic: it consumes only the injected client + a public fetch of /members-index.json, so it runs in
-// the extension now and the npm CMS later. Emits gbti:welcome-done when the member finishes.
+// Host-agnostic: it consumes only the injected client + a public fetch of /members-index.json. Emits
+// gbti:welcome-done when the member finishes.
+// sow-387: it is no longer the extension's sign-in screen either. That was its SOW-048 `auth-gate` mode, which
+// failed open (see client-ui/src/elements/gbti-signin-splash.mjs, where the sign-in screen lives now).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate, resumeStep, accountKey, socialPrefill, mergeChannelFollows, requestedStep } from '../welcome-core.mjs';
 import { ONBOARDING_STEPS, onboardingStepsFor, profileHasSocials } from '../../../membership/onboarding.mjs'; // sow-343/357: the one step list (the WorkBench card reads it too)
@@ -72,10 +76,7 @@ const AV_COLORS = ['#1f9e5f', '#c98a2b', '#5a8ad6', '#9b6fd0', '#d0715f', '#3fa8
 const avColor = (name) => { let h = 0; for (const c of String(name || '?')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; };
 
 const lc = (s) => String(s || '').toLowerCase();
-const check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const discordIco = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
-// SOW-048: the GitHub mark for the forced-sign-in (login splash) mode.
-const githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
 
 
 class GbtiWelcome extends GbtiElement {
@@ -159,9 +160,7 @@ class GbtiWelcome extends GbtiElement {
   }
 
   async load() {
-    // SOW-048: in auth-gate mode this element doubles as the extension's LOGIN SPLASH. Phase + own identity + the
-    // authenticated flag all come from the one status read.
-    this._authGate = this.hasAttribute('auth-gate');
+    // Phase + own identity come from the one status read.
     let s = null;
     try {
       s = await this.client?.status?.();
@@ -174,7 +173,6 @@ class GbtiWelcome extends GbtiElement {
       this._couponUntil = null;
       this._own = '';
     }
-    this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
     // sow-357: which steps this account is offered, decided as soon as the membership is known and before
     // anything walks the list (the resume position, the rail, the heading). A failed read leaves it unknown,
     // which offers the full list.
@@ -182,8 +180,6 @@ class GbtiWelcome extends GbtiElement {
     // sow-345: per-account storage keys, then purge the bare keys this browser may still hold from ANY account.
     this._keys = { discord: accountKey(DISCORD_DONE_KEY, s?.identity), chan: accountKey(CHAN_FOLLOWED_KEY, s?.identity), socials: accountKey(SOCIALS_STAGE_KEY, s?.identity) };
     for (const k of [DISCORD_DONE_KEY, CHAN_FOLLOWED_KEY, SOCIALS_STAGE_KEY]) { try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
-    // Signed-out + auth-gate: show ONLY the sign-in splash; skip every member fetch (they 403 / are pointless).
-    if (this._authGate && !this._authenticated) { this._loaded = true; this.render(); return; }
     // The randomized members list (shuffled ONCE so paging does not churn). Fail gracefully if the site is not
     // deployed yet (the JSON 404s) — show a friendly notice, never crash.
     try {
@@ -358,45 +354,6 @@ class GbtiWelcome extends GbtiElement {
   _lsSet(which, v) { const k = this._keys?.[which]; if (!k) return; try { localStorage.setItem(k, v); } catch { /* storage blocked */ } }
   _lsRemove(which) { const k = this._keys?.[which]; if (!k) return; try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
 
-  setCode(userCode, verificationUri) {
-    this._code = userCode || null;
-    if (verificationUri) this._verifyUri = verificationUri;
-    this.render();
-  }
-
-  // SOW-048: the login splash (signed-out, auth-gate mode). Sign in with GitHub via the device flow; once the host
-  // hands back a user code we show it + the github.com/login/device link. Authentication, not payment — a new
-  // visitor with a GitHub account can sign in and lands in the normal (membership-gated) app afterward.
-  _renderSignedOut() {
-    const code = this._code;
-    const verify = this._verifyUri || 'https://github.com/login/device';
-    const action = code
-      ? `<div class="codebox">
-           <p class="sub">Enter this code at GitHub to finish signing in:</p>
-           <div class="codeval"><code>${esc(code)}</code><button class="btn ghost" data-copy type="button">Copy</button></div>
-           <a class="btn" href="${esc(verify)}" target="_blank" rel="noopener">Open github.com/login/device</a>
-           <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
-         </div>`
-      : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
-    // SOW: when the host gates BECAUSE the prior session's token expired (not a fresh sign-in), say so, so the
-    // member understands why they are back at the splash instead of in their hub.
-    const expired = this.hasAttribute('expired')
-      ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>`
-      : '';
-    this.set(this.css(CSS) + `<div class="splashwrap">
-      <div class="head">
-        <span class="ic">${check}</span>
-        <h2>Sign in to GBTI Network</h2>
-        <p>The developer co-op. Sign in with your GitHub account to publish articles, projects, and prompts, follow members, read the members-only news, and join the community.</p>
-      </div>
-      <div class="card">
-        ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
-      </div></div>`);
-    this.on('[data-auth-signin]', 'click', () => this.emit('gbti:welcome-signin'));
-    this.on('[data-copy]', 'click', () => { try { navigator.clipboard?.writeText(code); } catch { /* clipboard blocked */ } });
-  }
-
   _goto(i) {
     this._stopDiscordPoll();
     this._done = false;
@@ -467,7 +424,6 @@ class GbtiWelcome extends GbtiElement {
 
   render() {
     if (!this._loaded) { this.set(this.css(CSS) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`); return; }
-    if (this._authGate && !this._authenticated) { this._renderSignedOut(); return; } // SOW-048 login splash
     const ph = phaseLabel(this._membership, { couponUntil: this._couponUntil });
     const phase = ph.phase === 'coupon' ? 'Free membership period' : ph.phase === 'paid' ? 'Paid membership' : ph.phase === 'trial' ? 'Trial phase' : '';
     this._step = Math.min(Math.max(this._step, 0), this._steps.length - 1);

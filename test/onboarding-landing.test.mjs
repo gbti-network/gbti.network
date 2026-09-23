@@ -1,4 +1,5 @@
-// sow-343 Phase 4: a new account meets the welcome steps before anything else, and the reset clears the record.
+// sow-343 Phase 4: a new account meets the welcome steps before anything else. (The account page's welcome reset was
+// pinned here too; sow-387 removed that row, so its tests went with it rather than passing on a missing method.)
 //
 // Owner decision 2026-09-16: "fix the redirect so a new signup meets the wizard before it ever meets the nag".
 // Measured before the fix: the login page always carried a return path (defaulting to /account/), so a walk-up
@@ -10,8 +11,6 @@ import { readFileSync } from 'node:fs';
 
 import worker, { packState } from '../workers/signup/index.mjs';
 import { signinLanding } from '../workers/signup/signin-landing.mjs';
-import { setClient } from '../client-ui/src/base.mjs';
-import { GbtiAccount } from '../client-ui/src/elements/gbti-account.mjs';
 
 // ---- the rule ----
 
@@ -121,38 +120,10 @@ test('the welcome page accepts only a same-site next path', () => {
   assert.match(WELCOME, /<a href="\/account\/" data-welcome-skip>/, 'without next, the skip link still goes to the account page');
 });
 
-// ---- the account page reset ----
+// ---- the account page reset is gone (sow-387) ----
 
-function account(client) {
-  setClient(client);
-  const el = new GbtiAccount();
-  const said = [];
-  el._say = (sel, text, kind) => said.push({ text, kind });
-  return { el, said };
-}
-
-test('the welcome reset clears the record on the account, and says what it cleared', async () => {
-  const sent = [];
-  const { el, said } = account({ setPrefs: async (p) => { sent.push(p); return {}; } });
-  await el._resetWelcome();
-  assert.deepEqual(sent, [{ onboarding: null }]);
-  assert.equal(said.at(-1).kind, 'ok');
-  assert.match(said.at(-1).text, /Skipped steps and the channels you marked as followed are cleared/);
-});
-
-test('a reset that cannot reach the account says so', async () => {
-  const { el, said } = account({ setPrefs: async () => { throw new Error('offline'); } });
-  await el._resetWelcome();
-  assert.equal(said.at(-1).kind, 'err');
-  assert.match(said.at(-1).text, /only this device was reset/);
-  const none = account({});
-  await none.el._resetWelcome();
-  assert.equal(none.said.at(-1).kind, 'err', 'a host with no prefs write did not clear anything');
-});
-
-test('the copy follows the writing rules', () => {
+test('the account page no longer offers a welcome reset, and still clears the welcome keys on a deletion request', () => {
   const src = readFileSync(new URL('../client-ui/src/elements/gbti-account.mjs', import.meta.url), 'utf8');
-  const block = src.slice(src.indexOf('async _resetWelcome()'), src.indexOf('async _copy('));
-  assert.doesNotMatch(block, /[–—]/);
-  assert.doesNotMatch(block, /\b(can't|don't|isn't|won't|we're|it's)\b/i);
+  assert.doesNotMatch(src, /data-reset-welcome|_resetWelcome|<div class="t">Welcome steps<\/div>/);
+  assert.match(src, /_requestDeletion\(\) \{[\s\S]*?k\.startsWith\(WELCOME_PREFIX\)/, 'the deletion sweep of local welcome keys stays');
 });

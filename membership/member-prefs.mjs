@@ -78,8 +78,9 @@ export function normalizePrefs(stored) {
 /** sow-343: apply the onboarding patches to a normalized prefs object (mutates `next`). */
 function applyOnboardingPatch(next, patch) {
   if (patch.onboarding !== undefined) {
-    // The one whole-block write is a CLEAR (the account page's "reset the welcome process"). A caller cannot
-    // hand over a block wholesale: every other change goes through a patch that validates its one field.
+    // The one whole-block write is a CLEAR. The account page's "reset the welcome process" sent it until sow-387
+    // removed that row; no screen sends it now, and it stays so the record can still be cleared by hand. A caller
+    // cannot hand over a block wholesale: every other change goes through a patch that validates its one field.
     if (patch.onboarding !== null) throw new PrefsError('onboarding can only be cleared (null)');
     delete next.onboarding;
   }
@@ -134,7 +135,7 @@ function applyOnboardingPatch(next, patch) {
  *    { onboardingFollows: string[] }          add GBTI channels the member opened (add only, capped)
  *    { onboardingSocials: object | null }     replace / clear the social handles kept for a trial member
  *    { onboardingSocialsSaved: boolean }      the handles reached the profile (true also clears them)
- *    { onboarding: null }                     clear all of it (the account page's welcome reset)
+ *    { onboarding: null }                     clear all of it (no screen sends it since sow-387 removed the reset)
  * Throws PrefsError on an invalid patch. Idempotent (re-following a channel is a no-op).
  */
 export function applyPrefs(stored, patch = {}) {

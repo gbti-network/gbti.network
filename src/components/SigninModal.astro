@@ -34,10 +34,12 @@ const benefitsUrl = '/membership/';
       {extensionCtaShown && <p class="body-sm muted mt12" style="font-size:12.5px"><a href={extensionInstallUrl} data-install-link>Get the extension</a> to edit and publish your work in place.</p>}
     </div>
 
-    {/* Extension installed. sow-158 Phase 2 residual fix: web sign-in stays the PRIMARY path even here (it sets the
-        httpOnly session the WorkBench + web member experience need; the extension's own sign-in sets only the
-        display-only identity signal, not that cookie). The extension popup cannot be opened from a page, so its
-        sign-in is offered as a secondary "edit in place" route via the toolbar icon. */}
+    {/* Extension installed. sow-158 Phase 2 residual fix: web sign-in stays the PRIMARY path even here, because it
+        sets the httpOnly session the WorkBench + web member experience need on this browser directly. (The
+        extension's own sign-in also mints that session through the Worker, sow-158 auth bridge, and sow-387 waits
+        for it before opening the website welcome; this dialog does not depend on it.) The extension cannot be
+        opened from a page, so its sign-in is offered as a secondary route via the toolbar icon. The "edit in place"
+        copy below is known to be stale and is a separate pass. */}
     <div data-state="present" hidden>
       <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-github"/></svg></span>
       <h2 class="h3 mt12">Sign in to GBTI Network</h2>

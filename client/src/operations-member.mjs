@@ -237,8 +237,8 @@ export async function setPrefs(ctx, { categories, followChannel, publicFavorites
   // the Worker's member-prefs normalizes it, and an absent field leaves the stored value untouched (same rule).
   // sow-343: the onboarding progress patches. THIS LIST IS AN ALLOWLIST, so a field missing here is silently dropped
   // on the extension and the command line while the website (which forwards the whole patch) works: add new prefs
-  // patches in both places. `onboarding: null` survives JSON.stringify, which is what makes the reset reach the
-  // Worker; an absent one is undefined and dropped.
+  // patches in both places. `onboarding: null` survives JSON.stringify, which is what makes a clear reach the
+  // Worker; an absent one is undefined and dropped. (sow-387 removed the Settings reset that sent it.)
   const patch = { categories, followChannel, publicFavorites, notify, onboarding, onboardingSkip, onboardingFollows, onboardingSocials, onboardingSocialsSaved };
   try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch }); }
   catch (err) { mapNewsErr(err, 'save your preferences'); }

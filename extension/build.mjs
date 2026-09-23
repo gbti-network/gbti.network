@@ -1,6 +1,6 @@
 // Build the MV3 extension bundles (SOW-006 v2 P4). esbuild bundles the core + @gbti/client-ui + deps into the
 // contexts: the background worker (ESM, MV3 type:module), the content script (IIFE, classic script), and the
-// extension pages (IIFE: onboarding, newtab, shares). chrome.* stay as globals (provided by the extension
+// extension pages (IIFE: newtab, shares, workspace, admin, account; the onboarding page was retired by sow-387). chrome.* stay as globals (provided by the extension
 // runtime). Build-time only; the dist/ output is what loads. Re-run after changing any src or the shared
 // core / client-ui.
 //   node extension/build.mjs
@@ -37,7 +37,6 @@ const common = { bundle: true, target: 'es2022', platform: 'browser', charset: '
 await build({ ...common, entryPoints: [src('theme-init.mjs')], format: 'iife', outfile: out('theme-init.js') });
 await build({ ...common, entryPoints: [src('background.mjs')], format: 'esm', outfile: out('background.js') });
 await build({ ...common, entryPoints: [src('content.mjs')], format: 'iife', outfile: out('content.js') });
-await build({ ...common, entryPoints: [src('onboarding.mjs')], format: 'iife', outfile: out('onboarding.js') }); // SOW-026 first-run tab (replaces the popup)
 await build({ ...common, entryPoints: [src('newtab.mjs')], format: 'iife', outfile: out('newtab.js') }); // SOW-017
 await build({ ...common, entryPoints: [src('shares.mjs')], format: 'iife', outfile: out('shares.js') }); // SOW-018 Shares page
 await build({ ...common, entryPoints: [src('workspace.mjs')], format: 'iife', outfile: out('workspace.js') }); // SOW-033 Workspace page
@@ -59,7 +58,7 @@ const clientSrc = (f) => path.join(dir, '..', 'client', 'src', f);
 const nodeBundle = { bundle: true, target: 'node18', platform: 'node', format: 'esm', charset: 'utf8', legalComments: 'none', preserveSymlinks: true }; // sow-237: see the note above `common`
 await build({ ...nodeBundle, entryPoints: [clientSrc('mcp-stdio.mjs')], outfile: mcp('gbti-network-mcp.mjs') });
 
-console.log('built extension/dist/{theme-init,background,content,onboarding,newtab,shares,workspace,admin,account}.js + extension/mcp/gbti-network-mcp.mjs');
+console.log('built extension/dist/{theme-init,background,content,newtab,shares,workspace,admin,account}.js + extension/mcp/gbti-network-mcp.mjs');
 if (mode !== 'classic') {
   console.log(`  (${mode.toUpperCase()} mode inlined: client id ${values.GBTI_GITHUB_APP_CLIENT_ID}, slug ${values.GBTI_GITHUB_APP_SLUG})`);
 }

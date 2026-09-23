@@ -1,5 +1,6 @@
-// SOW-048: the extension's forced-sign-in gate decision. The shell renders the <gbti-welcome> login splash unless
-// the caller is signed in (has a GitHub token AND a github login). This is an AUTHENTICATION gate, not a paid one
+// SOW-048: the extension's forced-sign-in gate decision. The shell renders the sign-in screen (<gbti-signin-splash>
+// since sow-387; before that, the <gbti-welcome> wizard in its auth-gate mode) unless the caller is signed in (has a
+// GitHub token AND a github login). This is an AUTHENTICATION gate, not a paid one
 // (membership gating stays inside the app). shouldGate is the pure decision; the rest of the shell is DOM-coupled.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { dispatch } from '../extension/src/ext-dispatch.mjs';
 import { buildExtContext } from '../extension/src/ext-context.mjs';
-import { esc } from '../extension/src/onboarding.mjs';
+import { esc } from '../client-ui/src/base.mjs'; // sow-387: the retired toolbar page carried its own copy; this is the one the extension pages render with
 
 const POST = '---\ntype: post\ntitle: Hello\nslug: hello\nauthor: alice\nstatus: published\n---\n\nBody\n';
 
@@ -187,7 +187,7 @@ test('SOW-079: syndication + admin writes STILL require identity (only the publi
   assert.equal(write.status, 409);
 });
 
-test('onboarding esc: escapes HTML metacharacters before innerHTML (matches gbti-auth)', () => {
+test('client-ui esc: escapes HTML metacharacters before innerHTML (matches gbti-auth)', () => {
   assert.equal(esc('alice'), 'alice');
   assert.equal(esc('"><img src=x onerror=alert(1)>'), '&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
   assert.equal(esc("a&b'c"), 'a&amp;b&#39;c');

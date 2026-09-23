@@ -84,6 +84,20 @@ const cookieSettled: Promise<MemberSignal | null> = new Promise((resolve) => { s
 /** Resolves once the website cookie session is known: the member signal, or null when signed out or unconfirmed. */
 export function whenCookieResolved(): Promise<MemberSignal | null> { return cookieSettled; }
 
+// sow-387: the same settlement, but saying HOW the read ended. whenCookieResolved collapses a definitive signed-out and
+// a transient failure into one null, which is right for a header and wrong for the welcome page: there, a failed read
+// must not tell a signed-in member to sign in. `in` carries the signal; `out` is a definitive answer (no session
+// cookie, a 401, or a cached signed-out); `error` is a transient failure the next load retries.
+export type CookieState = 'in' | 'out' | 'error';
+let settleCookieState: (r: { state: CookieState; signal: MemberSignal | null }) => void = () => {};
+const cookieStateSettled: Promise<{ state: CookieState; signal: MemberSignal | null }> = new Promise((resolve) => { settleCookieState = resolve; });
+
+/** Resolves once the website cookie session is known, with how the read ended (see CookieState). */
+export function whenCookieState(): Promise<{ state: CookieState; signal: MemberSignal | null }> { return cookieStateSettled; }
+
+/** Whether this browser holds the readable half of a website session (gbti_csrf). A hint, never an authority. */
+export function hasWebSessionCookie(): boolean { return !!readCookie('gbti_csrf'); }
+
 /** The effective identity given the resolved cookie session and an incoming extension signal (cookie wins). */
 export function currentIdentity(extSignal: MemberSignal | null): MemberSignal | null {
   return selectIdentity({ cookieResolved, cookieSignal, extSignal }) as MemberSignal | null;
@@ -161,10 +175,11 @@ export async function hydrateMemberSignal(base: string = readSignupBase()): Prom
   if (typeof document === 'undefined' || hydrateStarted) return;
   hydrateStarted = true;
   const csrf = readCookie('gbti_csrf');
-  if (!base || !csrf) { cookieResolved = true; cookieSignal = null; settleCookie(null); return; } // no web session -> no network at all
+  if (!base || !csrf) { cookieResolved = true; cookieSignal = null; settleCookie(null); settleCookieState({ state: 'out', signal: null }); return; } // no web session -> no network at all
   // sessionStorage coalesces the Stripe-backed /membership/status fetch across same-session navigations (the
   // response is no-store and hits Stripe per call). Keyed by the csrf value so a re-login misses the old cache.
   let signal: MemberSignal | null | undefined = readStatusCache(csrf);
+  let failed = false; // sow-387: a transient failure, as opposed to a definitive signed-out
   if (signal === undefined) {
     // sow-158 re-login fix: resolveMemberSession distinguishes a DEFINITIVE signed-out (401 / no login) from a
     // TRANSIENT failure (a Worker deploy window, a network blip), retrying the transient case. CRITICAL: on a
@@ -174,11 +189,12 @@ export async function hydrateMemberSignal(base: string = readSignupBase()): Prom
     const s = await resolveMemberSession({ base, fetchImpl: fetch });
     if (s.state === 'in') { signal = memberSignalFromStatus(s.payload) as MemberSignal | null; writeStatusCache(csrf, signal); }
     else if (s.state === 'out') { signal = null; writeStatusCache(csrf, signal); }
-    else { signal = null; /* transient: leave the cache UNSET so the next navigation retries */ }
+    else { signal = null; failed = true; /* transient: leave the cache UNSET so the next navigation retries */ }
   }
   cookieResolved = true;
   cookieSignal = signal;
   settleCookie(signal); // sow-330: before the listeners run, so a held click can wait on this and on the upgrade in order
+  settleCookieState({ state: signal ? 'in' : failed ? 'error' : 'out', signal });
   if (signal) {
     applyMemberSignalClasses(signal);
     // sow-271 Phase 4: STAMP THE ATTRIBUTE TOO, not only the classes.

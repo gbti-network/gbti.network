@@ -44,8 +44,10 @@ import './elements/gbti-lock-gate.mjs';
 import './elements/gbti-comment-box.mjs';
 import './elements/gbti-prose-editor.mjs'; // the comment editor: one prose surface backed by markdown
 import './elements/gbti-comment-echoes.mjs'; // the author's own pending comments on a public page (SOW-076 echoes, website since 2026-09-11)
-import './elements/gbti-onboarding.mjs';
-import './elements/gbti-welcome.mjs';
+// sow-387: <gbti-onboarding> (the extension's retired toolbar sign-in page) and <gbti-welcome> (the setup wizard)
+// are no longer part of this barrel. The wizard runs on the website only, which imports it directly
+// (src/pages/welcome.astro); leaving it here shipped the whole wizard in every extension bundle, the content
+// script included. The extension's sign-in screen is <gbti-signin-splash>, imported by extension/src/shell.mjs.
 import './elements/gbti-workspace.mjs';
 import './elements/gbti-saved.mjs';
 import './elements/gbti-subscriptions.mjs';

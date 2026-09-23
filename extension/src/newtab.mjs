@@ -1,8 +1,8 @@
 // SOW-017 + SOW-039: the new-tab page logic. The shared member-hub shell (top bar + account menu) is injected +
 // wired by shell.mjs; this module owns the feed (three persisted view modes + per-item content thumbnails), the
-// search filter, the Latest/Following scope (SOW-023), the onboarding setup banner (SOW-026/029), and the
-// read-only upgrade prompt (SOW-077). Fetches the public activity index over the extension's gbti.network host
-// permission. CSP-safe (no inline handlers).
+// search filter, the Latest/Following scope (SOW-023), and the read-only upgrade prompt (SOW-077). Fetches the
+// public activity index over the extension's gbti.network host permission. CSP-safe (no inline handlers).
+// sow-387: the SOW-026/029 setup banner and first-run welcome overlay are gone; setup lives on the website.
 //
 // sow-296: the page is RAILLESS. The hero share box is the first thing on it, the feed is centred under it, and
 // the seven feed tabs are rendered here from the shared list (client-ui/src/feed-nav.mjs) instead of the left
@@ -475,53 +475,11 @@ async function loadActivity() {
   }
 }
 
-/** GET /api/* via the background worker; null on any failure. (The setup banner needs the sign-in status.) */
-async function api(pathname) {
-  try {
-    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname, query: {} } });
-    return r?.json ?? null;
-  } catch { return null; }
-}
-
-const WELCOME_SEEN_KEY = 'gbti-welcome-seen';
-// SOW-029 fix: the post-setup welcome (join Discord + follow members) was reachable ONLY via the onboarding wizard's
-// "Complete Integration" click, so a member who reached the new tab any other way never saw it. Show it ONCE on the
-// first new-tab open for ANY signed-in member -- it is COMMUNITY onboarding (Discord + follow), and signing in is the
-// whole of the publish setup since sow-274. The flag is set on SHOW (so it never nags and survives an abandon); the
-// onboarding-wizard path checks + sets the same flag, so the two never double up.
-function maybeShowWelcome(signedIn) {
-  let seen = false;
-  try { seen = localStorage.getItem(WELCOME_SEEN_KEY) === '1'; } catch { /* no storage */ }
-  if (!signedIn || seen || document.querySelector('.nt-welcome-overlay')) return;
-  try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch { /* no storage */ }
-  const overlay = document.createElement('div');
-  overlay.className = 'nt-welcome-overlay';
-  overlay.style.cssText = 'position:fixed; inset:0; z-index:1200; overflow:auto; background:var(--bg,#0d1117); display:flex; justify-content:center; padding:48px 16px;';
-  const w = document.createElement('gbti-welcome');
-  w.style.cssText = 'width:100%; max-width:1080px; align-self:center;'; // the redesigned two-pane welcome panel
-  // Finish on the Profile page (banner + staged-socials prefill), matching the onboarding-wizard path.
-  // sow-204: hands off to the website WorkBench; the `?welcome=1` banner is dropped deliberately, since the
-  // sow-207 website welcome flow at /welcome/ already owns the post-signup greeting.
-  w.addEventListener('gbti:welcome-done', () => { window.location.href = 'https://gbti.network/workbench/'; });
-  overlay.appendChild(w);
-  document.body.appendChild(overlay);
-}
-
-// SOW-026/029: the onboarding setup banner. Shown until the member is signed in, which since sow-274 is the whole
-// of the setup: publishing goes through the network, so there is no copy of the repository to make and no app to
-// install. The shell owns the account control + identity; this only drives the banner.
-async function loadSetupBanner() {
-  const status = await api('/api/status');
-  const signedIn = Boolean(status?.authenticated && status?.identity?.login);
-  maybeShowWelcome(signedIn); // first-run welcome, independent of the setup card's button
-  const setup = $('[data-setup]');
-  if (!setup) return;
-  if (signedIn) { setup.classList.remove('show'); return; }
-  const txt = setup.querySelector('[data-setup-txt]');
-  const go = setup.querySelector('[data-setup-go]');
-  if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub once. The network publishes on your behalf.</span>`;
-  if (go) go.textContent = 'Get started';
-  setup.classList.add('show');
+// sow-387: the new tab no longer shows setup steps. The owner ruled (2026-09-22) that the welcome belongs to the
+// website, and the background opens it once, after a member's first sign-in (extension/src/welcome-handoff.mjs). The
+// first-run overlay's flag is no longer read, so it is removed once rather than left on the device.
+function forgetRetiredWelcomeFlag() {
+  try { localStorage.removeItem('gbti-welcome-seen'); } catch { /* storage blocked */ }
 }
 
 // SOW-077: resolve the member's effective tier, then drive the read-only upgrade prompt. A ban is a COMMUNITY ban,
@@ -612,15 +570,7 @@ function init() {
   // fetch runs); skip if a fresh fetch already landed. Render gating is canSeeNews (SOW-077: any signed-in member,
   // including banned), and a signed-out visitor is held by the forced-sign-in gate. The live loadNews re-sorts in place.
   readNewsCache().then((cached) => { if (cached && !NEWS_LOADED) { NEWS = cached; renderFeed($('[data-filter]')?.value || ''); } });
-  loadSetupBanner();
-
-  // The setup banner opens the onboarding tab (sign in; since sow-274 that is the only step).
-  $('[data-setup]')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    chrome.tabs?.create
-      ? chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') })
-      : window.open(chrome.runtime.getURL('onboarding.html'), '_blank');
-  });
+  forgetRetiredWelcomeFlag();
 
   // SOW-039/105: the view-mode switcher. Persists PER SECTION, so a change sticks to the section it was
   // made in (Prompts can stay compact while Articles stay cards). Re-renders in place.
@@ -723,8 +673,6 @@ function init() {
 
   if (document.documentElement.getAttribute('data-off') !== '1') loadActivity();
 
-  // Re-check the setup banner when the member returns to this tab (e.g. after signing in in another tab).
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadSetupBanner(); });
   // SOW-092: a share posted from the shell "+" modal opens IMMEDIATELY in the page reader (the composer
   // emits a reader-ready optimistic item; SOW-076 instant-feel). Claiming the event stops the shell's
   // no-reader fallback from also navigating to shares.html.

@@ -1,7 +1,7 @@
 // extension/src/shell.mjs (SOW-036/039): the SHARED member-hub shell for every extension page. initShell({active})
 // injects the top bar + the left rail into the [data-shell] container (before its <main class="nt-main">) and
-// wires the theme toggle, the daily.dev switcher, and the account dropdown (identity, sign-in -> onboarding,
-// sign-out, role-gated Admin). One implementation so the chrome stays identical across newtab / browse / workspace
+// wires the theme toggle, the daily.dev switcher, and the account dropdown (identity, sign-out, role-gated Admin).
+// A signed-out page shows the sign-in wall instead (mountAuthGate), which is the extension's only sign-in screen. One implementation so the chrome stays identical across newtab / browse / workspace
 // / shares / admin. CSP-safe: trusted constant markup, no inline handlers, inline-SVG icons. The icon set + esc are
 // exported so the new-tab feed reuses them.
 
@@ -9,7 +9,9 @@ import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: th
 import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
 import '../../client-ui/src/elements/gbti-social-queue.mjs'; // SOW-121: the avatar-menu Social Queue popup
 import '../../client-ui/src/elements/gbti-debug-panel.mjs'; // SOW-124: the superadmin Debug panel (devlog viewer)
-import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
+// sow-387: the sign-in wall's own element. It replaces <gbti-welcome auth-gate>, which could fail open into the setup
+// wizard, and the wizard itself no longer ships in the extension: setup lives on the website.
+import '../../client-ui/src/elements/gbti-signin-splash.mjs';
 import { expiryPopupDecision, expiryPopupCopy } from '../../client-ui/src/membership-expiry.mjs'; // SOW-119 QA: the coupon-expiry countdown
 import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
 
@@ -99,7 +101,6 @@ function controlsHtml({ compose = true } = {}) {
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
-      <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
       <button class="nt-acct" data-me-btn type="button" aria-haspopup="true" aria-expanded="false" aria-label="Account menu" hidden>
         <img class="av" data-me-av alt="" width="34" height="34" />
         <span data-ico="chev"></span>
@@ -183,7 +184,6 @@ async function api(pathname, query = {}) {
 /** Reflect the signed-in status into the account control and every avatar the page carries. */
 function applyAccount(root, status) {
   const meBtn = root.querySelector('[data-me-btn]');
-  const signinBtn = root.querySelector('[data-signin-btn]');
   if (status) {
     const login = status.identity.login;
     // sow-296: querySelectorAll, because the new tab's hero share bar carries a SECOND [data-me-av]. With
@@ -203,11 +203,9 @@ function applyAccount(root, status) {
     const showSuper = (RANK[status.role] ?? 0) >= RANK.superadmin;
     root.querySelectorAll('[data-super-only]').forEach((el) => { el.hidden = !showSuper; });
     if (meBtn) meBtn.hidden = false;
-    if (signinBtn) signinBtn.hidden = true;
   } else {
     // sow-296: the greeting suffix went with the greeting row, so there is nothing to clear here any more.
     if (meBtn) meBtn.hidden = true;
-    if (signinBtn) signinBtn.hidden = false;
   }
 }
 
@@ -262,7 +260,7 @@ export async function loadShellAccount(root = document.querySelector('[data-shel
   return signedIn ? status : null;
 }
 
-// SOW-048: run the GitHub App device flow via the background worker (same contract as onboarding/page-client).
+// SOW-048: run the GitHub App device flow via the background worker (the same contract as page-client).
 // `onPrompt` receives the user code to display; resolves on success, rejects on failure/cancel.
 function shellLogin(onPrompt) {
   return new Promise((resolve, reject) => {
@@ -274,21 +272,21 @@ function shellLogin(onPrompt) {
   });
 }
 
-/** SOW-048: the forced-sign-in gate. With no token, hide the app (data-unauth) and overlay ONLY the dual-purpose
- *  <gbti-welcome> login splash. Its Sign in button runs the device flow; on success we reload into the signed-in
- *  app (initShell re-runs, now signed in, no gate). Idempotent. */
+/** SOW-048: the forced-sign-in gate. With no token, hide the app (data-unauth) and overlay ONLY the sign-in screen
+ *  (<gbti-signin-splash>, sow-387). Its Sign in button runs the device flow; on success we reload into the
+ *  signed-in app (initShell re-runs, now signed in, no gate). Idempotent. The background worker opens the website
+ *  welcome after a member's FIRST sign-in (extension/src/welcome-handoff.mjs), so nothing here does. */
 function mountAuthGate(root, { expired = false } = {}) {
   if (!root || document.querySelector('.gbti-authwrap')) return;
   document.documentElement.setAttribute('data-unauth', '1');
   const wrap = document.createElement('div');
   wrap.className = 'gbti-authwrap';
-  const el = document.createElement('gbti-welcome');
-  el.setAttribute('auth-gate', '');
+  const el = document.createElement('gbti-signin-splash');
   if (expired) el.setAttribute('expired', ''); // SOW: token-expiry detected -> the splash explains the re-sign-in
   wrap.appendChild(el);
   root.appendChild(wrap);
   let signingIn = false; // guard against click-spam starting parallel device flows (+ leaking login-prompt listeners)
-  el.addEventListener('gbti:welcome-signin', () => {
+  el.addEventListener('gbti:signin-start', () => {
     if (signingIn) return;
     signingIn = true;
     shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri))
@@ -304,10 +302,6 @@ function setTheme(t) {
   if (b) b.innerHTML = ico(t === 'dark' ? 'sun' : 'moon');
 }
 
-const openOnboarding = () => (chrome.tabs?.create
-  ? chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') })
-  : window.open(chrome.runtime.getURL('onboarding.html'), '_blank'));
-
 function wireAccount(root) {
   const menu = () => root.querySelector('[data-me-menu]');
   const btn = root.querySelector('[data-me-btn]');
@@ -317,7 +311,6 @@ function wireAccount(root) {
   btn?.addEventListener('click', (e) => { e.stopPropagation(); menu()?.hidden ? open() : close(); });
   document.addEventListener('click', (e) => { const m = menu(); if (m && !m.hidden && !root.querySelector('[data-me-wrap]')?.contains(e.target)) close(); });
   document.addEventListener('keydown', (e) => { const m = menu(); if (e.key === 'Escape' && m && !m.hidden) { close(); btn?.focus(); } });
-  root.querySelector('[data-signin-btn]')?.addEventListener('click', openOnboarding);
   root.querySelector('[data-me-signout]')?.addEventListener('click', async () => {
     close();
     try { await chrome.runtime.sendMessage({ type: 'signout' }); } catch (e) { /* worker unreachable */ }
@@ -514,9 +507,6 @@ async function maybeShowExpiryPopup(status) {
   if (!until) return;
   const { show, daysLeft } = expiryPopupDecision({ until, dismissedAt, now: Date.now() });
   if (!show) return;
-  // The first-run welcome overlay (newtab, z-1200) paints opaque ABOVE this popup; mounted beneath it, an
-  // Escape meant for the welcome would burn a snooze on a popup the member never saw. Defer to the next load.
-  if (document.querySelector('.nt-welcome-overlay')) return;
   const { headline, dateLabel, count } = expiryPopupCopy(daysLeft, until, Date.now());
   const overlay = document.createElement('div');
   overlay.className = 'compose-modal expiry-modal';
@@ -538,9 +528,9 @@ async function maybeShowExpiryPopup(status) {
     overlay.remove();
     document.removeEventListener('keydown', onEsc);
   };
-  // Ignore Escape while a welcome overlay covers the popup (it can mount after us): that keypress belongs
-  // to the welcome, and honoring it would record a dismissal the member never saw.
-  const onEsc = (e) => { if (e.key === 'Escape' && !document.querySelector('.nt-welcome-overlay')) dismiss(); };
+  // sow-387: this used to ignore Escape while the new-tab welcome overlay covered the popup. The overlay is gone
+  // (setup lives on the website), so an Escape here is always meant for this popup.
+  const onEsc = (e) => { if (e.key === 'Escape') dismiss(); };
   document.addEventListener('keydown', onEsc);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); }); // nothing in-progress to lose
   overlay.querySelector('.compose-x')?.addEventListener('click', dismiss);

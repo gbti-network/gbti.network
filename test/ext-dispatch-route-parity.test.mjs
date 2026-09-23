@@ -15,7 +15,7 @@
 //                        host and forgotten in the other fails here, which is the whole point of the guard.
 //   WEBSITE_AUTHORING    sow-204: authoring is website-only. ONE reason for the whole set, declared once.
 //   WEBSITE_FILESYSTEM   the npm CMS host's filesystem features, which the extension cannot have.
-//   EXTENSION_WELCOME    the extension's own first-run flow, which the website does not run.
+//   EXTENSION_DISCORD_LINK  the extension's Discord-link reads, which the website serves another way.
 // A per-route table was considered and rejected: 68 rows with 68 reasons is a list nobody maintains, and it
 // goes stale the way every other count in this repo has. A bucket is a DECISION, and it is stated once.
 //
@@ -69,8 +69,8 @@ const WEBSITE_ONLY = {
 
 // Routes the EXTENSION serves and the website/npm host deliberately does not.
 const EXTENSION_ONLY = {
-  EXTENSION_WELCOME: {
-    reason: 'extension welcome flow only: gbti-welcome mints the one-time Discord-link URL and polls for the linked state. api.mjs does not import the ops; the only other consumer, gbti-syndicate-now, calls them optional-chained and degrades to no @mention preview.',
+  EXTENSION_DISCORD_LINK: {
+    reason: 'the extension\'s Discord-link reads. sow-387 took the welcome wizard out of the extension (it minted the link URL and polled the status); the status is still read by the background welcome handoff (loadProgress) and by gbti-syndicate-now, optional-chained, which degrades to no @mention preview. /api/discord-link has no extension caller left and is kept, with /api/onboarding-status and /api/discord-unlink, as a recorded sow-387 follow-up. api.mjs does not import the ops.',
     routes: ['/api/discord-link', '/api/discord-link/status'],
   },
 };

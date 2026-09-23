@@ -43,6 +43,24 @@ export function selectIdentity({ cookieResolved, cookieSignal, extSignal }) {
 }
 
 /**
+ * sow-387: which face the website welcome shows. The steps save to the member's account through the website cookie
+ * session, so they may mount only on a CONFIRMED cookie session: the extension's identity signal is display-only, and
+ * a wizard mounted on it looked signed in while every write went nowhere. The extension now opens this page right
+ * after its first sign-in, with a freshly minted cookie, so the read is often still in flight when the page paints.
+ *
+ * `hasSessionCookie`: the readable gbti_csrf cookie is present (a website session probably exists).
+ * `cookie`: undefined while the read is pending, else how it ended: `in`, `out`, or `error` (a transient failure).
+ * Returns 'loading' | 'wizard' | 'signin' | 'retry'. A pending read with a session cookie shows the loading state, so
+ * a signed-in member is never shown "Sign in" while their session is being confirmed.
+ */
+export function welcomeView({ hasSessionCookie = false, cookie } = {}) {
+  if (!cookie) return hasSessionCookie ? 'loading' : 'signin';
+  if (cookie.state === 'in') return 'wizard';
+  if (cookie.state === 'error') return 'retry';
+  return 'signin';
+}
+
+/**
  * ACTIVE MEMBER: paid, or on the 90-day trial. sow-191.
  *
  * Extracted so the definition exists ONCE and is node-testable. It was previously inline in

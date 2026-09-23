@@ -32,15 +32,6 @@
     .nt-share-open:hover .nt-share-prompt, .nt-share-open:hover .nt-share-act { color: var(--fg); }
     @media (prefers-reduced-motion: reduce) { .nt-share-caret { animation: none; } }
 
-    /* SOW-026/029: the onboarding setup banner (shown until signed in; sign-in is the whole setup since sow-274) */
-    .setup { display: none; align-items: center; gap: 16px; margin: 18px 0 10px; padding: 16px 20px; border: 1.5px solid var(--green); background: var(--green-tint); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; }
-    .setup.show { display: flex; }
-    .setup .s-txt { flex: 1; }
-    .setup .s-txt b { display: block; font-size: 15px; line-height: 1.35; }
-    .setup .s-txt span { font-size: 13px; color: var(--fg-mute); }
-    .setup .s-go { display: inline-flex; align-items: center; flex: none; background: var(--green); color: #fff; font-weight: 800; padding: 10px 18px; border-radius: var(--r); white-space: nowrap; }
-    .setup:hover .s-go { background: var(--green-700); }
-
     /* View-mode switch — SOW-052 relocates it into the shell control cluster ([data-modes-slot]). It is hidden
        while still a direct child of the greeting (before newtab.mjs moves it into the slot), so there is no flash;
        once nested inside the slot it shows. (Latest/Following + the feed search now live in the left rail, styled
@@ -150,10 +141,6 @@
         <a class="up-cta" data-upgrade-cta href="https://gbti.network/membership/" target="_blank" rel="noopener">Join GBTI</a>
         <button class="up-x" type="button" data-upgrade-dismiss aria-label="Dismiss">✕</button>
       </div>
-      <a class="setup" data-setup href="#">
-        <span class="s-txt" data-setup-txt></span>
-        <span class="s-go" data-setup-go>Get started</span>
-      </a>
 
       <!-- sow-296: the tab row (rendered by newtab.mjs from the shared feed list) plus the feed search and the
            Latest / Following scope, which moved here from the top of the old left rail. -->

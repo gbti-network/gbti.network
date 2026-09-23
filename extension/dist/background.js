@@ -70,9 +70,9 @@ var require_common = /* @__PURE__ */ __commonJSMin(((exports, module) => {
     }
     return target;
   }
-  function repeat(string4, count) {
+  function repeat(string4, count2) {
     let result = "";
-    for (let cycle = 0; cycle < count; cycle += 1) result += string4;
+    for (let cycle = 0; cycle < count2; cycle += 1) result += string4;
     return result;
   }
   function isNegativeZero(number4) {
@@ -1145,9 +1145,9 @@ var require_loader = /* @__PURE__ */ __commonJSMin(((exports, module) => {
     }
     return false;
   }
-  function writeFoldedLines(state, count) {
-    if (count === 1) state.result += " ";
-    else if (count > 1) state.result += common.repeat("\n", count - 1);
+  function writeFoldedLines(state, count2) {
+    if (count2 === 1) state.result += " ";
+    else if (count2 > 1) state.result += common.repeat("\n", count2 - 1);
   }
   function readPlainScalar(state, nodeIndent, withinFlowCollection) {
     let captureStart;
@@ -7024,8 +7024,8 @@ function az_default() {
 }
 
 // node_modules/zod/v4/locales/be.js
-function getBelarusianPlural(count, one, few, many) {
-  const absCount = Math.abs(count);
+function getBelarusianPlural(count2, one, few, many) {
+  const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
   const lastTwoDigits = absCount % 100;
   if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
@@ -9103,8 +9103,8 @@ function hu_default() {
 }
 
 // node_modules/zod/v4/locales/hy.js
-function getArmenianPlural(count, one, many) {
-  return Math.abs(count) === 1 ? one : many;
+function getArmenianPlural(count2, one, many) {
+  return Math.abs(count2) === 1 ? one : many;
 }
 function withDefiniteArticle(word) {
   if (!word)
@@ -11232,8 +11232,8 @@ function ro_default() {
 }
 
 // node_modules/zod/v4/locales/ru.js
-function getRussianPlural(count, one, few, many) {
-  const absCount = Math.abs(count);
+function getRussianPlural(count2, one, few, many) {
+  const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
   const lastTwoDigits = absCount % 100;
   if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
@@ -17899,6 +17899,9 @@ var canEditNews = (role, isNewsEditor) => rank(role) >= RANK.admin || isNewsEdit
 // client/src/membership.mjs
 var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
 var NON_PUBLISHABLE = /* @__PURE__ */ new Set(["trialing", "expired", "cancelled", "none", "banned"]);
+function canPublish(membership) {
+  return membership === "paid";
+}
 var STAGE_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
 function canStageDrafts(membership) {
   return STAGE_TIER.has(membership);
@@ -21551,8 +21554,7 @@ var PAGES = /* @__PURE__ */ new Set([
   // RETIRED page, aliased to newtab.html below (old locked-content CTAs still send it)
   "shares.html",
   "admin.html",
-  "account.html",
-  "onboarding.html"
+  "account.html"
 ]);
 var HASH_RE = /^[A-Za-z0-9=&_%.,-]{1,300}$/;
 var PAGE_ALIAS = { "browse.html": "newtab.html" };
@@ -21579,6 +21581,523 @@ function refreshPatch(resp, oldRefreshToken, now = Date.now()) {
     githubRefreshToken: resp.refresh_token || oldRefreshToken || null,
     githubTokenExpiresAt: now + (Number(resp.expires_in) || 0) * 1e3
   };
+}
+
+// client-ui/src/client.mjs
+var GbtiClientError = class extends Error {
+  constructor(code, message) {
+    super(message || code);
+    this.name = "GbtiClientError";
+    this.code = code;
+  }
+};
+function createHttpClient({ baseUrl = "", token, fetch: fetch2 = globalThis.fetch } = {}) {
+  async function request(method, path, body) {
+    const headers = { Authorization: `Bearer ${token}` };
+    const init = { method, headers };
+    if (body !== void 0) {
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+    const res = await fetch2(`${baseUrl}${path}`, init);
+    let json2 = null;
+    try {
+      json2 = await res.json();
+    } catch {
+      json2 = null;
+    }
+    if (!res.ok) {
+      throw new GbtiClientError(json2?.error || `http-${res.status}`, json2?.message || json2?.error || `request failed (${res.status})`);
+    }
+    return json2;
+  }
+  const qs2 = (params) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v != null && v !== "") p.set(k, String(v));
+    const s = p.toString();
+    return s ? `?${s}` : "";
+  };
+  return {
+    status: () => request("GET", "/api/status"),
+    listContent: ({ type, scope } = {}) => request("GET", `/api/content${qs2({ type, scope })}`),
+    // SOW-145: scope 'house' lists house/ (superadmin)
+    getContentItem: ({ path }) => request("GET", `/api/content/item${qs2({ path })}`),
+    readItem: ({ path }) => request("GET", `/api/read${qs2({ path })}`),
+    // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
+    validateContent: (b) => request("POST", "/api/validate", b),
+    publish: (b) => request("POST", "/api/publish", b),
+    // SOW-082: universal draft staging (save privately without a PR; review; publish). Private store since sow-274.
+    saveDraft: (b) => request("POST", "/api/draft", b),
+    // { type, input, body } -> { branch, state: 'staged' }
+    listDrafts: ({ type } = {}) => request("GET", `/api/drafts${qs2({ type })}`),
+    // -> { drafts: [{ type, slug, title, branch, pull, store }] } (sow-194: store is 'fork'|'kv'|'repo')
+    readDraft: ({ type, slug, store, path } = {}) => request("GET", `/api/draft${qs2({ type, slug, store, path })}`),
+    // -> { frontmatter, body } for the editor prefill (sow-194: store+path route a repo draft to its canonical file)
+    discardDraft: (b) => request("POST", "/api/draft/discard", b),
+    // { type, slug, store } -> { ok, branch } (sow-194: store:'repo' is refused 'unsupported')
+    publishDraft: (b) => request("POST", "/api/draft/publish", b),
+    // { type, slug, store, path } -> { prNumber, prUrl } (paid-only; sow-194: store:'repo' is the status flip)
+    postShare: (b) => request("POST", "/api/share", b),
+    // SOW-018: returns { id, path, visibility, encrypted }
+    listShares: ({ limit } = {}) => request("GET", `/api/shares${qs2({ limit })}`),
+    // SOW-018: returns { items: [share summaries] }
+    myShares: () => request("GET", "/api/my-shares"),
+    // sow-304: the member's own shares (drafts included) for the WorkBench
+    listShareComments: ({ targetSlug, limit } = {}) => request("GET", `/api/share-comments${qs2({ targetSlug, limit })}`),
+    // SOW-032: a Share's discussion -> { items: [comment summaries] }
+    listComments: ({ targetType, targetSlug, limit, aliases } = {}) => request("GET", `/api/comments${qs2({ targetType, targetSlug, limit, aliases: Array.isArray(aliases) && aliases.length ? aliases.join(",") : void 0 })}`),
+    // SOW-041 thread (+ SOW-112 rename aliases)
+    discordInvite: () => request("GET", "/api/discord-invite"),
+    // on-demand Discord invite -> { url, source }
+    discordLinkUrl: () => request("GET", "/api/discord-link"),
+    // SOW Part C: a one-time token-bound Discord-LINK URL -> { url }
+    discordLinkStatus: () => request("GET", "/api/discord-link/status"),
+    // SOW: welcome auto-detect poll -> { linked }
+    discordUnlink: () => request("POST", "/api/discord-unlink"),
+    // sow-218: disconnect Discord -> { ok, unlinked }
+    getNews: ({ category, since, limit } = {}) => request("GET", `/api/news${qs2({ category, since, limit })}`),
+    // SOW-043: members-only news -> { items, updatedAt }
+    getNewsSources: () => request("GET", "/api/news-sources"),
+    // SOW-046: followable news channels -> { sources }
+    getFollowedNews: () => request("GET", "/api/news-following"),
+    // sow-386: members-only stories from followed sources -> { items }
+    getPrefs: () => request("GET", "/api/prefs"),
+    // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
+    setPrefs: (patch) => request("POST", "/api/prefs", patch),
+    // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
+    publishNews: (item) => request("POST", "/api/news-publish", { item }),
+    // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
+    newsDiscussed: (guid3) => request("POST", "/api/news-discussed", { guid: guid3 }),
+    // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
+    newsOpened: (guid3, source) => request("POST", "/api/news-opened", { guid: guid3, ...source ? { source } : {} }),
+    // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
+    setContentStatus: ({ path, status }) => request("POST", "/api/content/status", { path, status }),
+    // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
+    renameContent: ({ path, newSlug }) => request("POST", "/api/content/rename", { path, newSlug }),
+    // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
+    deleteComment: ({ id }) => request("POST", "/api/comment/delete", { id }),
+    // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
+    discordChannels: () => request("GET", "/api/discord-channels"),
+    // SOW-100: [{id, name, type, parentId}] (admin)
+    postComment: (b) => request("POST", "/api/comment", b),
+    // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
+    editComment: (b) => request("POST", "/api/comment/edit", b),
+    // SOW-027: { id, body, authorNote? } -> { id, edited }
+    getComment: ({ id }) => request("GET", `/api/comment${qs2({ id })}`),
+    // SOW-027: edit prefill -> { path, frontmatter, body }
+    listPRs: () => request("GET", "/api/prs"),
+    prStatus: ({ number: number4 }) => request("GET", `/api/pr-status${qs2({ number: number4 })}`),
+    itemStats: ({ path }) => request("GET", `/api/item-stats${qs2({ path })}`),
+    // sow-232: the editor's Live revisions tile
+    formFields: ({ type }) => request("GET", `/api/form-fields${qs2({ type })}`),
+    preview: ({ body }) => request("POST", "/api/preview", { body }),
+    stageImage: (b) => request("POST", "/api/image", b),
+    listMembersOnly: () => request("GET", "/api/members-content"),
+    decrypt: ({ encPath }) => request("POST", "/api/member-decrypt", { encPath }),
+    // SOW-016: returns { text }
+    // SOW-024: favorites live in the deletable edge store (KV), NOT git. toggleFavorite SETS the favorite to
+    // `on` via the activity store and derives the resulting `favorited` from the returned activity (no global
+    // count: the public aggregate count comes from house/favorite-counts.yml on the next build).
+    toggleFavorite: async ({ targetType, targetSlug, on }) => {
+      const r = await request("POST", "/api/activity", { action: "favorite", targetType, targetSlug, on });
+      const favs = r && r.activity && r.activity.favorites || [];
+      return { favorited: favs.some((f) => f.type === targetType && f.slug === targetSlug) };
+    },
+    // SOW-057: a link's OpenGraph preview ({ image, title, description }), fetched server-side (SSRF-guarded).
+    ogPreview: ({ url: url2 }) => request("POST", "/api/og-preview", { url: url2 }),
+    // SOW-024: member activity (favorites + collections) in the deletable edge store.
+    getActivity: ({ types: types2 } = {}) => request("GET", `/api/activity${qs2({ types: Array.isArray(types2) && types2.length ? types2.join(",") : void 0 })}`),
+    // returns { favorites, collections }; SOW-050 P2 optional type filter
+    getEarnings: () => request("GET", "/api/earnings"),
+    // SOW-083 P2: the member's own earnings ledger { entries, totals }
+    createCollection: ({ name }) => request("POST", "/api/activity", { action: "collection.create", name }),
+    // returns { id, activity }
+    addToCollection: ({ id, targetType, targetSlug, on = true }) => request("POST", "/api/activity", { action: "collection.item", id, targetType, targetSlug, on }),
+    // SOW-037: manage collections from the member's "Saved" view (the ops already support these actions).
+    renameCollection: ({ id, name }) => request("POST", "/api/activity", { action: "collection.rename", id, name }),
+    // returns { activity }
+    deleteCollection: ({ id }) => request("POST", "/api/activity", { action: "collection.delete", id }),
+    // returns { activity }
+    // SOW-023: the follow graph (subscriptions) in the deletable edge store (paid-only).
+    getFollows: () => request("GET", "/api/follows"),
+    // returns { following: [{ username, addedAt, notify? }] } (notify = the per-follow settings, SOW-186)
+    setFollow: ({ username, on = true, notify }) => request("POST", "/api/follows", { username, on, notify }),
+    // SOW-186 C3: optional per-follow notify matrix; returns { following }
+    // SOW-026: first-run onboarding readiness (token/fork/install) from durable GitHub state.
+    onboardingStatus: () => request("GET", "/api/onboarding-status"),
+    // returns { appMode, signedIn, forkReady, installReady, activeStep, ready, ... }
+    getSettings: () => request("GET", "/api/settings"),
+    updateSettings: (patch) => request("POST", "/api/settings", patch),
+    getBilling: () => request("GET", "/api/billing"),
+    getReferral: () => request("GET", "/api/referral"),
+    admin: (action, args = {}) => request("POST", "/api/admin", { action, ...args }),
+    overrides: () => request("GET", "/api/overrides"),
+    // SOW-038 P2: admin-gated roster { roster, summary }
+    taxonomy: () => request("GET", "/api/taxonomy"),
+    // SOW-055: the canonical category tree { tree } for the manager
+    addCategory: ({ parentPath, key, label }) => request("POST", "/api/admin", { action: "category-add", parentPath, key, label }),
+    // SOW-055
+    renameCategory: ({ path, label }) => request("POST", "/api/admin", { action: "category-rename", path, label }),
+    // SOW-055
+    newsSourcePool: () => request("GET", "/api/news-source-pool"),
+    // SOW-056 P2: the news-source pool { sources } for the manager
+    addNewsSource: ({ id, name, url: url2, description }) => request("POST", "/api/admin", { action: "news-source-add", id, name, url: url2, description }),
+    // SOW-056 P2
+    removeNewsSource: ({ id }) => request("POST", "/api/admin", { action: "news-source-remove", id }),
+    // SOW-056 P2
+    setNewsSourceEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "news-source-toggle", id, enabled }),
+    // SOW-056 P2
+    // sow-374: how hard the pipeline leans on a source. Website-only until now, so the extension's manager could
+    // list a source it had no way to turn down.
+    setNewsSourceWeight: ({ id, weight }) => request("POST", "/api/admin", { action: "news-source-weight", id, weight }),
+    // sow-372: the words that keep a story out of the news stream (superadmin; the same pool read carries them).
+    addNewsBanword: ({ word }) => request("POST", "/api/admin", { action: "news-banword-add", word }),
+    removeNewsBanword: ({ word }) => request("POST", "/api/admin", { action: "news-banword-remove", word }),
+    couponPool: () => request("GET", "/api/coupon-pool"),
+    // SOW-119: the coupon registry { coupons } for the manager
+    addCoupon: ({ code, freeDays, note, maxRedemptions, expiresAt }) => request("POST", "/api/admin", { action: "coupon-add", code, freeDays, note, maxRedemptions, expiresAt }),
+    // SOW-119
+    updateCoupon: ({ code, patch }) => request("POST", "/api/admin", { action: "coupon-update", code, patch }),
+    // SOW-119
+    couponUsage: () => request("GET", "/api/coupon-usage"),
+    // SOW-119: per-coupon KV usage + invite links
+    // sow-231 Phase 3: issued invites. NOT git-native and no PR: per-person KV state with an admin note,
+    // so it takes effect at once. The host forwards these to /membership/admin/invites.
+    inviteList: () => request("GET", "/api/invites"),
+    inviteCreate: ({ campaign, note, expiresAt }) => request("POST", "/api/invites", { campaign, note, expiresAt }),
+    // sow-323: the editorial review queue (superadmin at the Worker). Approving PUBLISHES the item.
+    editorialQueue: () => request("GET", "/api/editorial"),
+    decideEditorial: ({ path, decision }) => request("POST", "/api/editorial", { path, decision }),
+    inviteUpdate: ({ code, action, note }) => request("PATCH", "/api/invites", { code, action, note }),
+    quotePool: () => request("GET", "/api/quote-pool"),
+    // SOW-063 P3: the splash quote pool { quotes } for the manager
+    siteSettings: () => request("GET", "/api/site-settings"),
+    // sow-271: the site-wide presentation toggles { settings, toggles } for the manager
+    // sow-266: the weekly digest's membership pitch + sponsor slot (superadmin). digestConfig returns what is
+    // STORED, not what would render, so an empty field shows empty rather than pre-filled with the fallback.
+    // Both writes are PATCHES: a key that is not sent is left alone, which is what lets the manager save the
+    // switch without resending the copy. So nothing here defaults a missing field.
+    digestConfig: () => request("GET", "/api/digest-config"),
+    // { ok, cta, sponsor, defaults, limits }
+    setDigestCta: (p) => request("POST", "/api/admin", { action: "digest-cta-set", ...p }),
+    // sow-266
+    setDigestSponsor: (p) => request("POST", "/api/admin", { action: "digest-sponsor-set", ...p }),
+    // sow-266
+    setDigestOptin: (p) => request("POST", "/api/admin", { action: "digest-optin-set", ...p }),
+    // sow-270: { double: boolean }
+    sponsorInquiries: () => request("GET", "/api/sponsor-inquiries"),
+    // sow-266 Phase 4: what came in through the sponsorship form (superadmin)
+    setSiteToggle: ({ key, enabled }) => request("POST", "/api/admin", { action: "site-setting-set", key, enabled: enabled === true }),
+    // sow-271
+    ctaPool: () => request("GET", "/api/cta-pool"),
+    // sow-281: the CTA registry { ctas, types } for the manager
+    addCta: (fields) => request("POST", "/api/admin", { action: "cta-add", ...fields, enabled: fields?.enabled === true }),
+    // sow-281
+    updateCta: (fields) => request("POST", "/api/admin", { action: "cta-update", ...fields }),
+    // sow-281
+    setCtaEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "cta-toggle", id, enabled: enabled === true }),
+    // sow-281
+    assignCta: ({ id, type, ref }) => request("POST", "/api/admin", { action: "cta-assign", id, type, ref }),
+    // sow-281
+    unassignCta: ({ id, type, ref }) => request("POST", "/api/admin", { action: "cta-unassign", id, type, ref }),
+    // sow-281
+    // sow-359: the tracked partner links. Same action dispatch as every other admin op, so this adds no new
+    // transport concept and no new route: three rows in the Worker's config table serve them.
+    addOutboundLink: (fields) => request("POST", "/api/admin", { action: "outbound-add", ...fields }),
+    updateOutboundLink: (fields) => request("POST", "/api/admin", { action: "outbound-update", ...fields }),
+    setOutboundLinkStatus: ({ path, status }) => request("POST", "/api/admin", { action: "outbound-status", path, status }),
+    contentChannelPool: () => request("GET", "/api/content-channel-pool"),
+    // SOW-087: the category -> Discord-channel map { channels }
+    setContentChannel: ({ category, channelId }) => request("POST", "/api/admin", { action: "content-channel-set", category, channelId }),
+    // SOW-087
+    removeContentChannel: ({ category }) => request("POST", "/api/admin", { action: "content-channel-remove", category }),
+    // SOW-087
+    moderationFlagPool: () => request("GET", "/api/moderation-flag-pool"),
+    // SOW-087: the moderation word lists { lists }
+    addModerationFlagTerm: ({ list, term }) => request("POST", "/api/admin", { action: "flag-term-add", list, term }),
+    // SOW-087
+    removeModerationFlagTerm: ({ list, term }) => request("POST", "/api/admin", { action: "flag-term-remove", list, term }),
+    // SOW-087
+    syndicationTemplatePool: () => request("GET", "/api/syndication-template-pool"),
+    // SOW-087: { templates, types }
+    setSyndicationTemplate: ({ type, template, channel, stub }) => request("POST", "/api/admin", { action: "syndication-template-set", type, template, channel, stub }),
+    // SOW-087 (+ SOW-088 per-channel + stub)
+    setSyndicationTemplates: ({ edits }) => request("POST", "/api/admin", { action: "syndication-templates-set", edits }),
+    // SOW-088: the batch save (one PR)
+    newsEngagementSettings: () => request("GET", "/api/news-engagement"),
+    // SOW-111: { settings, tiers }
+    setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),
+    // SOW-111
+    syndicationSettings: () => request("GET", "/api/syndication-settings"),
+    // SOW-088: { settings, channelNames }
+    setSyndicationSettings: (p) => request("POST", "/api/admin", { action: "syndication-settings-set", ...p }),
+    // SOW-088
+    addQuote: ({ text, author }) => request("POST", "/api/admin", { action: "quote-add", text, author }),
+    // SOW-063 P3
+    removeQuote: ({ text }) => request("POST", "/api/admin", { action: "quote-remove", text }),
+    // SOW-063 P3
+    setQuoteEnabled: ({ text, enabled }) => request("POST", "/api/admin", { action: "quote-toggle", text, enabled }),
+    // SOW-063 P3
+    openPulls: () => request("GET", "/api/open-pulls"),
+    // SOW-038 P2: admin-gated open content-PR queue { pulls }
+    syndicationQueue: () => request("GET", "/api/syndication"),
+    // SOW-058: superadmin tracker { pending, sent, cancelled, failed }
+    cancelSyndication: ({ id }) => request("POST", "/api/syndication/cancel", { id }),
+    // SOW-058: superadmin reject/cancel
+    approveSyndication: ({ id }) => request("POST", "/api/syndication/approve", { id }),
+    socialQueue: () => request("GET", "/api/social-queue"),
+    // SOW-121: superadmin manual-assist queue { pending, done }
+    socialQueueAction: ({ action, id }) => request("POST", "/api/social-queue", { action, id }),
+    // SOW-121: done/delete
+    getSyndicateNow: () => request("GET", "/api/syndicate-now"),
+    // SOW-088: destinations + templates + channel map (superadmin)
+    syndicateNow: (p) => request("POST", "/api/syndicate-now", p),
+    // SOW-088: { destination, item, template, channelId? } // SOW-058: superadmin approve -> posts next drain tick
+    adminOp: (action, params) => request("POST", "/api/admin-ops", params ? { action, params } : { action })
+    // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
+  };
+}
+
+// extension/src/welcome-handoff.mjs
+var HANDOFF_PREFIX = "gbti:welcome-handoff:";
+function handoffKey(githubId) {
+  const id = String(githubId ?? "").trim();
+  return id ? `${HANDOFF_PREFIX}${id}` : null;
+}
+async function claimHandoff(storage, githubId, now = Date.now()) {
+  const key = handoffKey(githubId);
+  if (!key || !storage) return false;
+  try {
+    const got = await storage.get(key);
+    if (got && got[key]) return false;
+    await storage.set({ [key]: { at: now } });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function shouldOpenWelcome({ claimed, progress } = {}) {
+  if (!claimed) return false;
+  if (!progress || !progress.known || !Array.isArray(progress.steps)) return true;
+  return progress.steps.some((s) => s?.state === "todo");
+}
+function createDispatchClient(dispatch2) {
+  const fetch2 = async (url2, init = {}) => {
+    const u = new URL(url2, "https://gbti.network");
+    const r = await dispatch2({
+      method: init.method || "GET",
+      pathname: u.pathname,
+      query: Object.fromEntries(u.searchParams.entries()),
+      body: init.body ? JSON.parse(init.body) : void 0
+    }) || { status: 500, json: { error: "no_response" } };
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json };
+  };
+  return createHttpClient({ baseUrl: "", token: "extension", fetch: fetch2 });
+}
+function withTimeout(promise2, ms, fallback = null) {
+  let timer;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([Promise.resolve(promise2).catch(() => fallback), late]).finally(() => clearTimeout(timer));
+}
+async function seedOnUpdate(storage, { reason, githubId } = {}, now = Date.now()) {
+  if (reason !== "update") return false;
+  return claimHandoff(storage, githubId, now);
+}
+
+// membership/onboarding.mjs
+var ONBOARDING_STEPS = Object.freeze([
+  Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
+  Object.freeze({ key: "subreddit", label: "Channels", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
+  Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
+  Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
+  Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
+]);
+var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
+function onboardingStepsFor({ discordAvailable = true, canPublish: canPublish2 = true } = {}) {
+  return Object.freeze(ONBOARDING_STEPS.filter((s) => {
+    if (s.key === "discord") return discordAvailable !== false;
+    if (s.key === "socials") return canPublish2 !== false;
+    return true;
+  }));
+}
+var KEY = /^[a-z][a-z0-9-]{0,39}$/;
+var MAX_NETWORK_FOLLOWS = 40;
+var MAX_SOCIALS = 30;
+var MAX_HANDLE = 200;
+var isOnboardingKey = (v) => typeof v === "string" && KEY.test(v);
+function cleanKeys(v, max, allow = null) {
+  const out = [];
+  for (const x of Array.isArray(v) ? v : []) {
+    if (!isOnboardingKey(x) || allow && !allow.includes(x) || out.includes(x)) continue;
+    out.push(x);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+function cleanSocials(v) {
+  const out = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  let n = 0;
+  for (const [k, raw] of Object.entries(v)) {
+    if (!isOnboardingKey(k) || typeof raw !== "string") continue;
+    const s = raw.trim();
+    if (!s || s.length > MAX_HANDLE || /[\x00-\x1f\x7f]/.test(s)) continue;
+    out[k] = s;
+    if (++n >= MAX_SOCIALS) break;
+  }
+  return out;
+}
+function normalizeOnboarding(v) {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out = {
+    skipped: cleanKeys(v.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
+    networkFollows: cleanKeys(v.networkFollows, MAX_NETWORK_FOLLOWS),
+    socials: cleanSocials(v.socials),
+    socialsSaved: v.socialsSaved === true
+  };
+  return isEmptyOnboarding(out) ? null : out;
+}
+function isEmptyOnboarding(o) {
+  return !o || !o.skipped.length && !o.networkFollows.length && !Object.keys(o.socials).length && !o.socialsSaved;
+}
+function profileHasSocials(links, allowed = null) {
+  if (!links || typeof links !== "object" || Array.isArray(links)) return false;
+  return Object.entries(links).some(([k, v]) => (!allowed || allowed.includes(k)) && typeof v === "string" && v.trim() !== "");
+}
+var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
+var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
+function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record: record2, discordAvailable = true, canPublish: canPublish2 = true } = {}) {
+  const rec = record2 === void 0 ? void 0 : normalizeOnboarding(record2) ?? emptyRecord();
+  const nFollows = count(follows);
+  const nTopics = count(topics);
+  const offered = onboardingStepsFor({ discordAvailable, canPublish: canPublish2 });
+  const offers = (k) => offered.some((s) => s.key === k);
+  const known = (!offers("discord") || typeof discordLinked === "boolean") && nFollows !== null && nTopics !== null && (!offers("socials") || typeof profileSocials === "boolean") && rec !== void 0;
+  const r = rec ?? emptyRecord();
+  const done = {
+    discord: discordLinked === true,
+    subreddit: r.networkFollows.length > 0,
+    socials: profileSocials === true || r.socialsSaved,
+    follow: (nFollows ?? 0) > 0,
+    topics: (nTopics ?? 0) > 0
+  };
+  const steps = offered.map((s) => ({
+    key: s.key,
+    label: s.label,
+    title: s.title,
+    state: done[s.key] ? "done" : r.skipped.includes(s.key) ? "skipped" : "todo"
+  }));
+  const outstanding = steps.filter((s) => s.state !== "done").length;
+  return { steps, complete: outstanding === 0, known, outstanding };
+}
+
+// membership/discord-roles.mjs
+var PUBLISHED_STATUSES = /* @__PURE__ */ new Set(["paid"]);
+var TRIAL_STATUSES = /* @__PURE__ */ new Set(["trialing"]);
+function discordJoinAllowed(effectiveStatus2) {
+  return PUBLISHED_STATUSES.has(effectiveStatus2) || TRIAL_STATUSES.has(effectiveStatus2);
+}
+
+// client-ui/src/social-icons.mjs
+var SOCIAL_KEYS = [
+  // sow-159: 'mastodon' removed from the offered-keys enumerator (retirement); its icon path + label +
+  // URL-builder below stay on disk inert so re-enabling is just re-adding the key here.
+  "github",
+  "website",
+  "x",
+  "bluesky",
+  "linkedin",
+  "youtube",
+  "discord",
+  "reddit",
+  "devto",
+  "instagram",
+  "threads",
+  "tiktok",
+  "twitch",
+  "facebook",
+  "dailydev",
+  "producthunt",
+  "rumble",
+  // SOW-131: audio, publishing, dev, and creator platforms.
+  "soundcloud",
+  "mixcloud",
+  "spotify",
+  "bandcamp",
+  "wordpress",
+  "substack",
+  "medium",
+  "hashnode",
+  "peerlist",
+  "gitlab",
+  "stackoverflow",
+  "patreon",
+  "kofi",
+  "telegram"
+];
+
+// client-ui/src/own-profile.mjs
+async function readOwnProfile(client, { identity } = {}) {
+  if (!client?.getContentItem) return { state: "failed", path: null, item: null };
+  let who = identity;
+  if (who === void 0) {
+    try {
+      who = (await client.status())?.identity ?? null;
+    } catch {
+      who = null;
+    }
+  }
+  let listed = null;
+  try {
+    listed = (await client.listContent?.({ type: "profile" }))?.items?.[0]?.path || null;
+  } catch {
+    listed = null;
+  }
+  const name = who?.username || who?.login || "";
+  const path = listed || (name ? `members/${name}/profile.md` : null);
+  if (!path) return { state: "failed", path: null, item: null };
+  try {
+    const item = await client.getContentItem({ path });
+    if (!item) return { state: "failed", path, item: null };
+    return { state: "found", path, item: { path, frontmatter: item.frontmatter || {}, body: item.body || "" } };
+  } catch (e) {
+    return { state: e?.code === "not-found" ? "absent" : "failed", path, item: null };
+  }
+}
+
+// client-ui/src/onboarding-card-core.mjs
+var WELCOME_SITE_URL = "https://gbti.network/welcome/";
+var answer = (p) => Promise.resolve().then(p).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
+async function loadOnboardingState(client) {
+  if (!client) return {};
+  const status = await answer(() => client.status());
+  const [prefs, follows, discord, profile] = await Promise.all([
+    answer(() => client.getPrefs()),
+    answer(() => client.getFollows()),
+    answer(() => client.discordLinkStatus()),
+    answer(async () => {
+      const r = await readOwnProfile(client, { identity: status.ok ? status.v?.identity ?? null : null });
+      if (r.state === "failed") throw new Error("the profile could not be read");
+      return r.item;
+    })
+  ]);
+  const followList = follows.ok ? Array.isArray(follows.v) ? follows.v : follows.v?.following : null;
+  const membership = status.ok ? status.v?.membership : null;
+  const unread = !membership || membership === "unknown";
+  return {
+    discordAvailable: unread ? true : discordJoinAllowed(membership),
+    canPublish: unread ? true : canPublish(membership),
+    discordLinked: discord.ok && typeof discord.v?.linked === "boolean" ? discord.v.linked : null,
+    follows: Array.isArray(followList) ? followList : null,
+    topics: prefs.ok && Array.isArray(prefs.v?.categories) ? prefs.v.categories : null,
+    profileSocials: profile.ok ? profileHasSocials(profile.v?.frontmatter?.links, SOCIAL_KEYS) : null,
+    record: prefs.ok ? prefs.v?.onboarding ?? null : void 0
+  };
+}
+async function loadProgress(client) {
+  return onboardingProgress(await loadOnboardingState(client));
 }
 
 // extension/src/background.mjs
@@ -21618,11 +22137,6 @@ async function handleLogin(store) {
     store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? "none" });
   } catch {
   }
-  try {
-    await chrome.storage?.session?.set?.({ webSessionMinted: true });
-  } catch {
-  }
-  mintWebSession(accessToken);
   return { ok: true, login: u.login };
 }
 async function refreshViaWorker(refreshToken) {
@@ -21634,15 +22148,19 @@ async function refreshViaWorker(refreshToken) {
   if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
   return res.json();
 }
+var MINT_TIMEOUT_MS = 8e3;
 async function mintWebSession(token) {
-  if (!token) return;
+  if (!token) return false;
   try {
-    await fetch(`${SIGNUP_BASE2}/auth/session-from-token`, {
+    const res = await fetch(`${SIGNUP_BASE2}/auth/session-from-token`, {
       method: "POST",
       credentials: "include",
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout?.(MINT_TIMEOUT_MS)
     });
+    return !!res?.ok;
   } catch {
+    return false;
   }
 }
 async function maybeMintWebSession(store) {
@@ -21685,32 +22203,52 @@ async function ensureFreshToken(store) {
   }
   return _refreshing;
 }
-var ONBOARDING_PAGE = "onboarding.html";
-async function openOnboardingTab() {
-  const url2 = chrome.runtime.getURL(ONBOARDING_PAGE);
-  try {
-    const { onboardingTabId } = await chrome.storage?.session?.get?.("onboardingTabId") ?? {};
-    if (onboardingTabId != null) {
+chrome.action?.onClicked?.addListener(() => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("newtab.html") }).catch(() => {
+  });
+});
+chrome.runtime.onInstalled?.addListener(({ reason } = {}) => {
+  getStore().then((store) => seedOnUpdate(chrome.storage.local, { reason, githubId: store.get("identity")?.githubId })).catch(() => {
+  });
+});
+var PROGRESS_TIMEOUT_MS = 1e4;
+var _afterSignIn = null;
+function afterSignIn(store, tab) {
+  if (_afterSignIn) return _afterSignIn;
+  _afterSignIn = (async () => {
+    try {
       try {
-        const t = await chrome.tabs.get(onboardingTabId);
-        await chrome.tabs.update(onboardingTabId, { active: true });
-        if (t?.windowId != null) await chrome.windows.update(t.windowId, { focused: true });
-        return;
+        await chrome.storage?.session?.set?.({ webSessionMinted: true });
       } catch {
       }
-    }
-    const created = await chrome.tabs.create({ url: url2 });
-    if (created?.id != null) await chrome.storage?.session?.set?.({ onboardingTabId: created.id });
-  } catch {
-    try {
-      await chrome.tabs.create({ url: url2 });
+      const minted = await mintWebSession(store.get("githubToken"));
+      if (!minted) {
+        try {
+          await chrome.storage?.session?.remove?.("webSessionMinted");
+        } catch {
+        }
+      }
+      const claimed = await claimHandoff(chrome.storage.local, store.get("identity")?.githubId);
+      if (!claimed) return;
+      const client = createDispatchClient((req) => dispatch(buildExtContext(store), req));
+      const progress = await withTimeout(loadProgress(client), PROGRESS_TIMEOUT_MS, null);
+      if (!shouldOpenWelcome({ claimed, progress })) return;
+      const opts = { url: WELCOME_SITE_URL, active: true };
+      if (tab?.windowId != null) opts.windowId = tab.windowId;
+      if (tab?.id != null) opts.openerTabId = tab.id;
+      try {
+        await chrome.tabs.create(opts);
+      } catch {
+        await chrome.tabs.create({ url: WELCOME_SITE_URL }).catch(() => {
+        });
+      }
     } catch {
+    } finally {
+      _afterSignIn = null;
     }
-  }
+  })();
+  return _afterSignIn;
 }
-chrome.action?.onClicked?.addListener(() => {
-  openOnboardingTab();
-});
 async function broadcastAuthChanged() {
   try {
     const tabs = await chrome.tabs.query({ url: "https://gbti.network/*" });
@@ -21742,6 +22280,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await focusTab(sender?.tab?.id, sender?.tab?.windowId);
         }
         sendResponse(res);
+        if (res?.ok) afterSignIn(store, sender?.tab);
       } else if (msg?.type === "signout") {
         clearWebSession(store.get("githubToken"));
         store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });

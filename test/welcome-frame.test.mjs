@@ -58,7 +58,8 @@ test('welcome hover (sow-349): every button class the wizard renders overrides t
   for (const m of COMPONENT.matchAll(/<button\b[^>]*?\bclass="([a-z][a-z-]*)/g)) classes.add(m[1]);
   classes.add('rstep'); // rendered through a variable: class="${cls}" with cls = `rstep...`
   assert.match(COMPONENT, /const cls = `rstep\$\{/, 'the rail row class is still built from rstep');
-  assert.ok(classes.size >= 10, `found the rendered button classes: ${[...classes].join(', ')}`);
+  // sow-387: nine since the sign-in splash (and its `btn`) moved to <gbti-signin-splash>.
+  assert.ok(classes.size >= 9, `found the rendered button classes: ${[...classes].join(', ')}`);
   const missing = [...classes].filter((c) => !new RegExp(`\\.${c}(?::not\\([^)]*\\))*:hover[^{]*\\{[^}]*background`).test(SRC));
   assert.deepEqual(missing, [], `button classes whose hover inherits the base green: ${missing.join(', ')}`);
 });

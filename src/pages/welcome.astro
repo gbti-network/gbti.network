@@ -5,13 +5,20 @@
 // component the extension uses (client-ui/src/elements/gbti-welcome.mjs), wired to the cookie-session adapter
 // (src/lib/workbench-client) so no GitHub token is in the page. Signed-out visitors get the sign-in prompt.
 // noindex: a private, per-member surface. Mount pattern mirrors src/pages/account.astro.
+//
+// sow-387: the wizard is the website's alone now (the extension shows no setup steps), and the extension opens this
+// page right after a member's first sign-in there. The page therefore waits for a CONFIRMED cookie session before it
+// mounts the steps: it opens on the loading state, shows the steps only when the session read says signed in, the
+// sign-in prompt only when it says signed out, and a reload message when the read failed. The extension's identity
+// signal is display-only and no longer mounts anything here (a wizard mounted on it saved nothing).
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 <BaseLayout title="Welcome" description="Welcome to the GBTI Network. Finish setting up your membership." noindex={true}>
   <section class="band band-app">
     <div class="wrap wel-wrap">
-      {/* Signed-OUT fallback (also the pre-hydration state; static SSG has no request-time cookie). */}
-      <div class="sec-head center" data-welcome-signedout>
+      {/* Signed-OUT prompt. Hidden until the session read says signed out (sow-387): static SSG has no request-time
+          cookie, so the page opens on the loading state below instead, and never flashes "Sign in" at a member. */}
+      <div class="sec-head center" data-welcome-signedout hidden>
         <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-id"/></svg></span>
         <h1 class="h1 mt24">Welcome to the GBTI Network</h1>
         <p class="lead">
@@ -21,10 +28,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <a href="/login/?return_to=%2Fwelcome%2F" class="btn btn-primary btn-lg mt24">Sign in <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
       </div>
 
-      {/* Signed-IN welcome wizard, hydrated client-side from the httpOnly-cookie session (member-signal.ts). */}
-      <div data-welcome-signedin hidden>
+      {/* A session read that failed (a Worker deploy window, a network blip). Not a signed-out answer. */}
+      <div class="sec-head center" data-welcome-retry hidden>
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-id"/></svg></span>
+        <h1 class="h1 mt24">Welcome to the GBTI Network</h1>
+        <p class="lead">We could not confirm your sign-in just now. Reload the page to try again.</p>
+        <button type="button" class="btn btn-primary btn-lg mt24" data-welcome-reload>Reload</button>
+      </div>
+
+      {/* Signed-IN welcome wizard, hydrated client-side from the httpOnly-cookie session (member-signal.ts). Visible
+          from the start with its loading line, which is the page's state until the session read ends. */}
+      <div data-welcome-signedin>
         <div data-welcome-mount>
           <p class="wel-load">Loading your welcome&hellip;</p>
+          <noscript><p class="wel-load">This page needs JavaScript. <a href="/login/?return_to=%2Fwelcome%2F">Sign in</a> with it turned on to finish setting up.</p></noscript>
           <gbti-welcome></gbti-welcome>
         </div>
         <p class="wel-skip"><a href="/account/" data-welcome-skip>Skip for now, go to my account</a></p>
@@ -33,10 +50,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   </section>
 
   <script>
-    import { onMemberSignal, currentIdentity, readMemberSignal } from '../lib/member-signal';
+    import { whenCookieState, hasWebSessionCookie } from '../lib/member-signal';
+    import { welcomeView } from '../lib/member-signal-core.mjs';
 
     const out = document.querySelector('[data-welcome-signedout]') as HTMLElement | null;
     const inn = document.querySelector('[data-welcome-signedin]') as HTMLElement | null;
+    const retry = document.querySelector('[data-welcome-retry]') as HTMLElement | null;
+    document.querySelector('[data-welcome-reload]')?.addEventListener('click', () => location.reload());
 
     let mounted = false; // the client-ui wizard loads once, on the first signed-in signal
 
@@ -53,11 +73,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const skip = document.querySelector('[data-welcome-skip]') as HTMLAnchorElement | null;
     if (skip && next) { skip.href = next; skip.textContent = 'Skip for now and continue'; }
 
-    function render(s: any) {
-      const signedIn = !!(s && s.login);
-      if (out) out.hidden = signedIn;
-      if (inn) inn.hidden = !signedIn;
-      if (signedIn) mountWelcome(s);
+    // sow-387: one of four faces (member-signal-core welcomeView). 'loading' and 'wizard' share the signed-in block,
+    // whose loading line stays until the wizard mounts.
+    function show(view: string, s: any) {
+      if (out) out.hidden = view !== 'signin';
+      if (retry) retry.hidden = view !== 'retry';
+      if (inn) inn.hidden = view !== 'loading' && view !== 'wizard';
+      if (view === 'wizard' && s && s.login) mountWelcome(s);
     }
 
     async function mountWelcome(s: any) {
@@ -82,8 +104,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
     }
 
-    render(currentIdentity(readMemberSignal()));
-    onMemberSignal(render); // BaseLayout invokes hydrateMemberSignal(); the cookie member arrives here
+    // First paint: with no session cookie the answer is already known (sign in); with one, stay on the loading state.
+    show(welcomeView({ hasSessionCookie: hasWebSessionCookie() }), null);
+    // BaseLayout invokes hydrateMemberSignal(); its read settles here. A read that never settles (a failed chunk
+    // load) is treated as a failed read after WAIT_MS, so the page cannot sit on "Loading" for ever.
+    const WAIT_MS = 15000;
+    let settled = false;
+    whenCookieState().then(({ state, signal }) => {
+      settled = true;
+      show(welcomeView({ hasSessionCookie: true, cookie: { state } }), signal);
+    });
+    setTimeout(() => { if (!settled) show(welcomeView({ hasSessionCookie: true, cookie: { state: 'error' } }), null); }, WAIT_MS);
   </script>
 
   <style>

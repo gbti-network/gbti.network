@@ -817,8 +817,8 @@
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc12 = c | 32;
-      if (lc12 >= 97 && lc12 <= 102) return lc12 - 97 + 10;
+      const lc11 = c | 32;
+      if (lc11 >= 97 && lc11 <= 102) return lc11 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -5820,14 +5820,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};
       return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => {
-        const lc12 = prLifecycle(p, null);
+        const lc11 = prLifecycle(p, null);
         return {
           id: p.number,
           ts: p.number,
           // no reliable timestamp in both host modes; the number is a recency proxy for display sort
           title: p.title || `PR #${p.number}`,
-          sub: lc12.needsAttention ? "Declined — open to see why" : "Accepted",
-          href: lc12.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
+          sub: lc11.needsAttention ? "Declined — open to see why" : "Accepted",
+          href: lc11.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
         };
       });
     }
@@ -5870,14 +5870,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc12 = String(login).toLowerCase();
+      const lc11 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc12).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc11).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc12).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc11).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -7131,660 +7131,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-debug-panel", GbtiDebugPanel);
 
-  // client-ui/src/welcome-core.mjs
-  function phaseLabel(membership, { couponUntil = null, now = Date.now() } = {}) {
-    if (membership === "paid" && couponUntil) {
-      const until = new Date(couponUntil);
-      if (!Number.isNaN(until.getTime()) && until.getTime() > now) {
-        const end = until.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-        return {
-          phase: "coupon",
-          title: "Your free membership period is active",
-          body: `Your coupon covers full membership through ${end}: your profile, posts, projects, and prompts publish under your name. No card is on file and nothing bills automatically.`,
-          upgrade: false,
-          until: until.toISOString()
-        };
-      }
-    }
-    switch (membership) {
-      case "paid":
-        return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, projects, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
-      case "trialing":
-        return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and save drafts privately now. Upgrade to a paid membership any time to publish under your name.", upgrade: true };
-      default:
-        return { phase: "neutral", title: "Welcome to GBTI Network", body: "You are set up to author and publish through the co-op.", upgrade: false };
-    }
-  }
-  function shuffle(list, rng = Math.random) {
-    const a = [...list];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-  function excludeSelf(members, ownUsername) {
-    const me = String(ownUsername || "").toLowerCase();
-    return me ? members.filter((m) => String(m?.username || "").toLowerCase() !== me) : [...members];
-  }
-  function resumeStep(done, count2) {
-    const flags = Array.isArray(done) ? done : [];
-    const n = Number.isInteger(count2) && count2 > 0 ? count2 : flags.length;
-    if (n <= 0) return 0;
-    for (let i = 0; i < n; i++) if (!flags[i]) return i;
-    return n - 1;
-  }
-  function accountKey(base, identity) {
-    const id = identity?.githubId ?? identity?.github_id ?? identity?.login ?? identity?.username;
-    if (!base || id == null || String(id).trim() === "") return null;
-    return `${base}:${String(id).trim().toLowerCase()}`;
-  }
-  function socialPrefill(saved, staged, allowed = null) {
-    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
-    const clean = (o) => {
-      const out = {};
-      if (!o || typeof o !== "object" || Array.isArray(o)) return out;
-      for (const [k, v] of Object.entries(o)) {
-        if (ok && !ok.has(k)) continue;
-        if (typeof v !== "string" || !v.trim()) continue;
-        out[k] = v.trim();
-      }
-      return out;
-    };
-    return { ...clean(staged), ...clean(saved) };
-  }
-  function wizardProfileLinks(saved, draft, allowed = null) {
-    const base = saved && typeof saved === "object" && !Array.isArray(saved) ? { ...saved } : {};
-    const typed = {};
-    for (const [k, v] of Object.entries(socialPrefill(null, draft, allowed))) {
-      const url = buildSocialUrl(k, v);
-      if (url) typed[k] = url;
-    }
-    return { links: { ...base, ...typed }, changed: Object.keys(typed).some((k) => base[k] !== typed[k]) };
-  }
-  function mergeChannelFollows(local, stored) {
-    const keys = (v) => Array.isArray(v) ? v.filter((k) => typeof k === "string" && k) : [];
-    const l = keys(local);
-    const s = keys(stored);
-    return { all: [.../* @__PURE__ */ new Set([...s, ...l])], missing: [...new Set(l.filter((k) => !s.includes(k)))] };
-  }
-  function requestedStep(key, steps) {
-    if (typeof key !== "string" || !key || !Array.isArray(steps)) return -1;
-    return steps.findIndex((s) => s?.key === key);
-  }
-  function paginate(list, p, size = 10) {
-    const pages = Math.max(1, Math.ceil(list.length / size));
-    const page = Math.min(Math.max(1, p | 0 || 1), pages);
-    const start = (page - 1) * size;
-    return { page, pages, items: list.slice(start, start + size) };
-  }
-
-  // membership/onboarding.mjs
-  var ONBOARDING_STEPS = Object.freeze([
-    Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
-    Object.freeze({ key: "subreddit", label: "Channels", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
-    Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
-    Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
-    Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
-  ]);
-  var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
-  function onboardingStepsFor({ discordAvailable = true, canPublish: canPublish2 = true } = {}) {
-    return Object.freeze(ONBOARDING_STEPS.filter((s) => {
-      if (s.key === "discord") return discordAvailable !== false;
-      if (s.key === "socials") return canPublish2 !== false;
-      return true;
-    }));
-  }
-  var KEY = /^[a-z][a-z0-9-]{0,39}$/;
-  var MAX_NETWORK_FOLLOWS = 40;
-  var MAX_SOCIALS = 30;
-  var MAX_HANDLE = 200;
-  var isOnboardingKey = (v) => typeof v === "string" && KEY.test(v);
-  function cleanKeys(v, max, allow = null) {
-    const out = [];
-    for (const x of Array.isArray(v) ? v : []) {
-      if (!isOnboardingKey(x) || allow && !allow.includes(x) || out.includes(x)) continue;
-      out.push(x);
-      if (out.length >= max) break;
-    }
-    return out;
-  }
-  function cleanSocials(v) {
-    const out = {};
-    if (!v || typeof v !== "object" || Array.isArray(v)) return out;
-    let n = 0;
-    for (const [k, raw] of Object.entries(v)) {
-      if (!isOnboardingKey(k) || typeof raw !== "string") continue;
-      const s = raw.trim();
-      if (!s || s.length > MAX_HANDLE || /[\x00-\x1f\x7f]/.test(s)) continue;
-      out[k] = s;
-      if (++n >= MAX_SOCIALS) break;
-    }
-    return out;
-  }
-  function normalizeOnboarding(v) {
-    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
-    const out = {
-      skipped: cleanKeys(v.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
-      networkFollows: cleanKeys(v.networkFollows, MAX_NETWORK_FOLLOWS),
-      socials: cleanSocials(v.socials),
-      socialsSaved: v.socialsSaved === true
-    };
-    return isEmptyOnboarding(out) ? null : out;
-  }
-  function isEmptyOnboarding(o) {
-    return !o || !o.skipped.length && !o.networkFollows.length && !Object.keys(o.socials).length && !o.socialsSaved;
-  }
-  function profileHasSocials(links, allowed = null) {
-    if (!links || typeof links !== "object" || Array.isArray(links)) return false;
-    return Object.entries(links).some(([k, v]) => (!allowed || allowed.includes(k)) && typeof v === "string" && v.trim() !== "");
-  }
-  var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
-  var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
-  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true, canPublish: canPublish2 = true } = {}) {
-    const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
-    const nFollows = count(follows);
-    const nTopics = count(topics);
-    const offered = onboardingStepsFor({ discordAvailable, canPublish: canPublish2 });
-    const offers = (k) => offered.some((s) => s.key === k);
-    const known = (!offers("discord") || typeof discordLinked === "boolean") && nFollows !== null && nTopics !== null && (!offers("socials") || typeof profileSocials === "boolean") && rec !== void 0;
-    const r = rec ?? emptyRecord();
-    const done = {
-      discord: discordLinked === true,
-      subreddit: r.networkFollows.length > 0,
-      socials: profileSocials === true || r.socialsSaved,
-      follow: (nFollows ?? 0) > 0,
-      topics: (nTopics ?? 0) > 0
-    };
-    const steps = offered.map((s) => ({
-      key: s.key,
-      label: s.label,
-      title: s.title,
-      state: done[s.key] ? "done" : r.skipped.includes(s.key) ? "skipped" : "todo"
-    }));
-    const outstanding = steps.filter((s) => s.state !== "done").length;
-    return { steps, complete: outstanding === 0, known, outstanding };
-  }
-
-  // client-ui/src/welcome-socials.mjs
-  async function saveWizardSocials({ client, profile = null, profileRead = false, draft = {}, membership, login = "" } = {}) {
-    const prefs = (patch) => Promise.resolve().then(() => client?.setPrefs?.(patch)).catch(() => null);
-    const { links, changed } = wizardProfileLinks(profile?.frontmatter?.links, draft, SOCIAL_KEYS);
-    if (!changed) return { outcome: "nothing" };
-    if (membership !== "paid") {
-      await prefs({ onboardingSocials: draft });
-      return { outcome: "kept" };
-    }
-    if (!profileRead) {
-      return { outcome: "unread", error: "We could not read your profile just now, so nothing was saved. Your handles are kept here. Try again in a moment, or skip for now." };
-    }
-    const frontmatter = profile ? { ...profile.frontmatter, links } : { displayName: login, links };
-    try {
-      await client.publish({ type: "profile", input: frontmatter, body: profile?.body ?? "", ...profile?.path ? { path: profile.path } : {} });
-    } catch (e) {
-      await prefs({ onboardingSocials: draft });
-      return { outcome: "failed", error: `Your handles were not saved (${e?.message || "the network did not answer"}). They are kept, so you can try again, or skip for now.` };
-    }
-    await prefs({ onboardingSocialsSaved: true });
-    return { outcome: "saved", profile: { path: profile?.path ?? null, body: profile?.body ?? "", frontmatter } };
-  }
-
-  // client-ui/src/own-profile.mjs
-  async function readOwnProfile(client, { identity } = {}) {
-    if (!client?.getContentItem) return { state: "failed", path: null, item: null };
-    let who = identity;
-    if (who === void 0) {
-      try {
-        who = (await client.status())?.identity ?? null;
-      } catch {
-        who = null;
-      }
-    }
-    let listed = null;
-    try {
-      listed = (await client.listContent?.({ type: "profile" }))?.items?.[0]?.path || null;
-    } catch {
-      listed = null;
-    }
-    const name = who?.username || who?.login || "";
-    const path = listed || (name ? `members/${name}/profile.md` : null);
-    if (!path) return { state: "failed", path: null, item: null };
-    try {
-      const item = await client.getContentItem({ path });
-      if (!item) return { state: "failed", path, item: null };
-      return { state: "found", path, item: { path, frontmatter: item.frontmatter || {}, body: item.body || "" } };
-    } catch (e) {
-      return { state: e?.code === "not-found" ? "absent" : "failed", path, item: null };
-    }
-  }
-
-  // client-ui/src/discord.mjs
-  var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
-
-  // membership/discord-roles.mjs
-  var PUBLISHED_STATUSES = /* @__PURE__ */ new Set(["paid"]);
-  var TRIAL_STATUSES = /* @__PURE__ */ new Set(["trialing"]);
-  function discordJoinAllowed(effectiveStatus) {
-    return PUBLISHED_STATUSES.has(effectiveStatus) || TRIAL_STATUSES.has(effectiveStatus);
-  }
-
-  // client-ui/src/profile-fields.mjs
-  var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
-  function isSanctionedAvatar(url) {
-    const v = String(url == null ? "" : url).trim();
-    if (!v) return true;
-    let u;
-    try {
-      u = new URL(v);
-    } catch {
-      return false;
-    }
-    return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
-  }
-  var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
-  function mergeStagedLinks(links, staged, allowed = null) {
-    const out = { ...links || {} };
-    if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
-    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
-    for (const [k, v] of Object.entries(staged)) {
-      if (ok && !ok.has(k)) continue;
-      if (typeof v !== "string" || !v.trim()) continue;
-      if (typeof out[k] === "string" && out[k].trim() !== "") continue;
-      out[k] = v.trim();
-    }
-    return out;
-  }
-  function recallProfileSocials(links, allowed = null) {
-    const out = {};
-    if (!links || typeof links !== "object" || Array.isArray(links)) return out;
-    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
-    for (const [k, v] of Object.entries(links)) {
-      if (ok && !ok.has(k)) continue;
-      if (typeof v !== "string" || !v.trim()) continue;
-      out[k] = v.trim();
-    }
-    return out;
-  }
-
-  // client-ui/src/elements/gbti-topic-picker.mjs
+  // client-ui/src/elements/gbti-signin-splash.mjs
   var SITE4 = "https://gbti.network";
-  var MAX_TOPICS = 200;
-  var SEEDED_KEY = "gbti-welcome-topics-seeded";
+  var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
+  var shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
+  var REASSURANCE = `<b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network uses your sign-in only to know who you are. It does not ask for access to your repositories, and it cannot read your private code or change your account. You can remove it at any time in your GitHub settings.`;
   var CSS6 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
-  .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
-  .srch:focus { outline:none; border-color:var(--accent); }
-  .cnt { flex:none; font-size:12px; color:var(--muted); white-space:nowrap; }
-  .mini { flex:none; font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
-    border:1px solid var(--line); border-radius:8px; padding:7px 11px; cursor:pointer; white-space:nowrap; }
-  .mini:hover { color:var(--fg); border-color:var(--accent); }
-  .grp { margin:14px 0 8px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
-  .grp:first-child { margin-top:0; }
-  .chips { display:flex; flex-wrap:wrap; gap:8px; }
-  .chip { font:inherit; font-size:13px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 14px; cursor:pointer; }
-  .chip:hover { color:var(--fg); border-color:var(--accent); }
-  .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
-  .muted { color:var(--muted); font-size:14px; }
-  .list.busy { opacity:.6; pointer-events:none; }
-`;
-  var GbtiTopicPicker = class extends GbtiElement {
-    connectedCallback() {
-      this._topics = null;
-      this._selected = [];
-      this._busy = false;
-      this._query = "";
-      super.connectedCallback?.();
-      this._load();
-    }
-    async _load() {
-      try {
-        const r = await fetch(`${SITE4}/topics.json`, { cache: "no-cache" });
-        this._topics = topicsFromJson(await r.json());
-      } catch {
-        this._topics = [];
-      }
-      if (this.client?.getPrefs) {
-        try {
-          const p = await this.client.getPrefs();
-          this._selected = selectedTopics(p?.categories);
-        } catch {
-          this._selected = [];
-        }
-        await this._seedDefaults();
-      }
-      this.render();
-    }
-    /**
-     * Give a member with NO topics the owner's default group, once, and PERSIST it.
-     *
-     * Persisting rather than merely highlighting is the whole point: the welcome step's Continue does not save
-     * anything itself, so a member who accepts the defaults by not touching them would otherwise finish
-     * onboarding with an untuned feed, which is exactly the outcome a default group exists to prevent.
-     *
-     * Silent on failure. This is a nicety layered on top of the step, so a failed write must leave the member
-     * looking at a normal, usable picker rather than an error about something they never asked for.
-     */
-    async _seedDefaults() {
-      if (!this.hasAttribute("seed-defaults") || this._selected.length) return;
-      try {
-        if (localStorage.getItem(SEEDED_KEY) === "1") return;
-      } catch {
-      }
-      const next = seedDefaultTopics(this._selected, this._topics);
-      if (!next.length) return;
-      try {
-        localStorage.setItem(SEEDED_KEY, "1");
-      } catch {
-      }
-      this._selected = next;
-      this.dispatchEvent(new CustomEvent("topics-change", { detail: { topics: [...next] }, bubbles: true, composed: true }));
-      if (this.client?.setPrefs) {
-        try {
-          const p = await this.client.setPrefs({ categories: next });
-          this._selected = selectedTopics(p?.categories);
-        } catch {
-        }
-      }
-    }
-    /** The current selection (topic keys), for a host that wants to read it on a Continue/Save action. */
-    get selected() {
-      return [...this._selected];
-    }
-    render() {
-      if (!this._topics) {
-        this.set(this.css(CSS6) + `<p class="muted">Loading topics...</p>`);
-        return;
-      }
-      if (!this._topics.length) {
-        this.set(this.css(CSS6) + `<p class="muted">No topics available right now.</p>`);
-        return;
-      }
-      this.set(this.css(CSS6) + `
-      <div class="bar">
-        <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
-        <span class="cnt" data-cnt></span>
-        <button class="mini" data-all type="button">Select all</button>
-        <button class="mini" data-clear type="button">Clear</button>
-      </div>
-      <div class="list" data-list></div>`);
-      const srch = this.$(".srch");
-      if (srch) {
-        srch.value = this._query;
-        srch.addEventListener("input", () => {
-          this._query = srch.value;
-          this._renderChips();
-        });
-      }
-      this.on("[data-all]", "click", () => this._setSelection(selectAllTopics(this._selected, filterTopics(this._topics, this._query), MAX_TOPICS)));
-      this.on("[data-clear]", "click", () => this._setSelection([]));
-      this._renderChips();
-    }
-    _renderChips() {
-      const list = this.$("[data-list]");
-      if (!list) return;
-      const sel = new Set(this._selected);
-      const groups = groupTopics(filterTopics(this._topics, this._query)).filter((g) => g.topics.length);
-      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${esc(t.label)}</button>`).join("");
-      list.className = `list ${this._busy ? "busy" : ""}`;
-      list.innerHTML = groups.length ? groups.map((g) => `${g.group ? `<h4 class="grp">${esc(g.group)}</h4>` : ""}<div class="chips">${chipsFor(g.topics)}</div>`).join("") : `<p class="muted">No topics match "${esc(this._query)}".</p>`;
-      const cnt = this.$("[data-cnt]");
-      if (cnt) {
-        const n = this._selected.length;
-        cnt.textContent = n ? `${n} selected${n >= MAX_TOPICS ? ` (max ${MAX_TOPICS})` : ""}` : "";
-      }
-      this.$$("[data-topic]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.topic)));
-    }
-    _toggle(key) {
-      return this._setSelection(toggleTopic(this._selected, key));
-    }
-    /** Apply + persist a whole selection (a single toggle, Select all, or Clear) as one setPrefs call. */
-    async _setSelection(next) {
-      this._selected = next;
-      this._renderChips();
-      this.dispatchEvent(new CustomEvent("topics-change", { detail: { topics: [...next] }, bubbles: true, composed: true }));
-      if (this.client?.setPrefs) {
-        this._busy = true;
-        this._renderChips();
-        try {
-          const p = await this.client.setPrefs({ categories: next });
-          this._selected = selectedTopics(p?.categories);
-        } catch {
-        }
-        this._busy = false;
-        this._renderChips();
-      }
-    }
-  };
-  define("gbti-topic-picker", GbtiTopicPicker);
-
-  // client-ui/src/elements/welcome-css.mjs
-  var WELCOME_CSS = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg);
-    /* The design handoff's dark palette (the extension default). */
-    --wf-surface:#232029; --wf-panel:#2a2731; --wf-panel2:#302c37; --wf-raise:#35313d;
-    --wf-line:rgba(255,255,255,.085); --wf-line2:rgba(255,255,255,.16);
-    --wf-fg:#f3f2f0; --wf-soft:#bdbac4; --wf-mute:#9d98a6; --wf-faint:#5c5865;
-    --wf-green:#1f9e5f; --wf-greenfg:#5fd49a; --wf-greendim:rgba(31,158,95,.16);
-    /* sow-349: a filled green button goes DARKER on hover, in both themes, so its white text reads 5.4:1. */
-    --wf-greenhover:#157a48;
-  }
-  :host-context([data-theme="light"]) {
-    --wf-surface:#efece6; --wf-panel:#ffffff; --wf-panel2:#f6f3ee; --wf-raise:#ece7df;
-    --wf-line:rgba(30,24,38,.10); --wf-line2:rgba(30,24,38,.18);
-    --wf-fg:#241f2c; --wf-soft:#4f4a58; --wf-mute:#65626f; --wf-faint:#a9a4b0;
-    --wf-green:#1f9e5f; --wf-greenfg:#137343; --wf-greendim:rgba(31,158,95,.12);
-  }
-  /* sow-349: --wf-mute carries readable secondary text (step subtitles, step numbers, notes), so it is held at
-     4.5:1 or better on every ground the wizard sits on: the site page, the extension takeover, and the wizard's
-     own panels and discs (test/welcome-frame.test.mjs computes it). --wf-faint is for decoration and disabled
-     controls only, which the contrast rule exempts. */
-  @keyframes wf-in { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
-  @keyframes wf-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-
-  /* THE FRAME (sow-344): there is no card. The owner's design pass (2026-09-16, "Welcome wizard", the dissolved
-     option, chosen for both hosts) keeps the two columns and removes the box around them: no fill, no border, no
-     radius, no shadow, no fixed height and nothing scrolling inside. The rail and the content sit on the page
-     itself with one hairline between them, so the page's own background shows through on the /welcome/ page and
-     in the extension takeover alike, which is why nothing here paints --wf-surface any more. */
-  .wf { display:flex; width:100%; max-width:1080px; margin:0 auto; box-sizing:border-box;
-    animation:wf-in .34s cubic-bezier(.2,.8,.2,1) both; color:var(--wf-fg); }
-  .rail { width:264px; flex:none; border-right:1px solid var(--wf-line);
-    padding:6px 28px 0 0; display:flex; flex-direction:column; box-sizing:border-box; }
-  .brand { display:inline-flex; align-items:center; gap:9px; }
-  .brand .mark { width:30px; height:30px; border-radius:7px; background:var(--wf-green); color:#fff;
-    display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; }
-  .brand b { font-family:var(--font-display); font-size:15px; font-weight:600; color:var(--wf-fg); line-height:1; }
-  .railhead { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--wf-mute); margin:22px 0 12px; }
-  /* The five steps read as ONE connected track rather than five boxed rows: a 2px line runs behind the circles
-     from the first to the last. It is drawn per row, as a segment above and one below each circle, so it can
-     stop 3px short of the active circle without knowing the page colour (the two hosts paint different
-     backgrounds, and a ring in the wrong one would show as a halo). The active step has no pill any more; the
-     ring on its circle and the weight of its label carry the state. */
-  .rsteps { display:flex; flex-direction:column; gap:0; }
-  .rstep { position:relative; display:flex; align-items:center; gap:12px; padding:10px 0; border:0; border-radius:0;
-    background:none; cursor:pointer; width:100%; font:inherit; text-align:left; transition:.12s; }
-  .rstep::before, .rstep::after { content:""; position:absolute; left:12px; width:2px; background:var(--wf-line); border-radius:2px; }
-  .rstep::before { top:0; bottom:calc(50% + 13px); }
-  .rstep::after { top:calc(50% + 13px); bottom:0; }
-  .rstep:first-child::before, .rstep:last-child::after { display:none; }
-  .rstep.active::before { bottom:calc(50% + 16px); }
-  .rstep.active::after { top:calc(50% + 16px); }
-  .rstep .circ { position:relative; z-index:1; width:26px; height:26px; flex:none; border-radius:50%; display:flex; align-items:center;
-    justify-content:center; font-family:var(--font-mono); font-weight:600; font-size:11px;
-    background:var(--wf-raise); color:var(--wf-mute); box-sizing:border-box; transition:box-shadow .12s, background-color .12s, color .12s; }
-  .rstep.done .circ { background:var(--wf-green); color:#fff; }
-  .rstep.active .circ { background:var(--wf-greendim); color:var(--wf-greenfg); border:1.5px solid var(--wf-green); }
-  .rstep .rl { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
-  .rstep .rl b { font-size:13.5px; font-weight:600; color:var(--wf-soft); }
-  .rstep.done .rl b, .rstep.active .rl b { color:var(--wf-fg); }
-  .rstep .rl span { font-size:11px; color:var(--wf-mute); }
-  .rstep.active .rl span { color:var(--wf-greenfg); }
-  /* sow-349: hover and keyboard focus on a step. BASE_CSS paints a hovered button brand green, which turned a step
-     into a solid block with dark text on it. A step now answers the pointer the way the dissolved layout reads: no
-     fill, a soft green halo around its circle (translucent, so it works on either host's ground), and its label at
-     full strength. */
-  .rstep:hover, .rstep:focus-visible { background:none; }
-  .rstep:focus-visible { outline:2px solid var(--wf-green); outline-offset:3px; border-radius:7px; }
-  .rstep:hover .circ, .rstep:focus-visible .circ { box-shadow:0 0 0 4px var(--wf-greendim); }
-  .rstep:not(.done):not(.active):hover .circ { background:var(--wf-greendim); color:var(--wf-greenfg); }
-  .rstep:hover .rl b, .rstep:focus-visible .rl b { color:var(--wf-fg); }
-  .rstep:hover .rl span, .rstep:focus-visible .rl span { color:var(--wf-soft); }
-  .rstep.active:hover .rl span, .rstep.active:focus-visible .rl span { color:var(--wf-greenfg); }
-
-  .main { flex:1; min-width:0; display:flex; flex-direction:column; padding-left:34px; }
-  .top { padding:0; }
-  .eyebrow { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.16em;
-    text-transform:uppercase; color:var(--wf-greenfg); display:flex; align-items:center; gap:10px; }
-  .couponline { margin:2px 0 10px; font-size:12.5px; line-height:1.5; color:var(--muted); }
-  .phasepill { font-family:var(--font-body); font-size:10px; font-weight:700; letter-spacing:.05em;
-    color:var(--wf-mute); background:var(--wf-panel2); border:1px solid var(--wf-line); border-radius:999px; padding:2px 9px; }
-  .heads { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:5px; }
-  .heads h2 { font-family:var(--font-display); font-size:25px; font-weight:600; letter-spacing:-.01em; margin:0; color:var(--wf-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:none; }
-  .stepmono { font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--wf-mute); white-space:nowrap; }
-  .bar { height:4px; background:var(--wf-raise); border-radius:99px; overflow:hidden; margin-top:15px; }
-  .bar i { display:block; height:100%; background:var(--wf-green); border-radius:99px; transition:width .3s; }
-  .content { flex:1; padding:22px 0 0; }
-  .stepin { animation:wf-fade .3s ease both; }
-  .foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:28px; padding:16px 0 0;
-    border-top:1px solid var(--wf-line); }
-  .footr { display:flex; align-items:center; gap:10px; }
-  .gbtn { font:inherit; font-weight:600; font-size:13px; color:var(--wf-soft); background:var(--wf-raise);
-    border:1.5px solid var(--wf-line); border-radius:7px; padding:11px 18px; cursor:pointer; }
-  .gbtn:hover { color:var(--wf-fg); border-color:var(--wf-line2); background:var(--wf-raise); }
-  .gbtn.off { color:var(--wf-faint); background:none; border-color:transparent; cursor:default; opacity:.5; }
-  .skipbtn { font:inherit; font-weight:600; font-size:13px; color:var(--wf-mute); background:none; border:none; cursor:pointer; padding:10px 8px; }
-  .skipbtn:hover { color:var(--wf-fg); background:none; }
-  .pbtn { font:inherit; font-weight:600; font-size:13.5px; color:#fff; background:var(--wf-green);
-    border:1.5px solid transparent; border-radius:7px; padding:11px 24px; cursor:pointer; }
-  /* The base hover colour is a LIGHT green in dark mode, which drops white text below 3:1; use our own darker one. */
-  /* sow-357: the finish card's primary is an ANCHOR for a free account. Scoped to a.pbtn so no existing button
-     changes, and text-decoration is named for the reason the sow-356 note gives under .dbtn: BASE_CSS styles the
-     bare anchor and the UA underline survives any rule that does not mention it. */
-  a.pbtn { text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
-  .pbtn:hover { background:var(--wf-green); }
-  .pbtn:not([disabled]):hover { background:var(--wf-greenhover); }
-  .pbtn[disabled] { opacity:.55; cursor:default; }
-
-  /* Step content shared. */
-  .intro { font-size:14px; line-height:1.6; color:var(--wf-soft); max-width:64ch; margin:0 0 16px; }
-  .ico-tile { flex:none; border-radius:7px; background:var(--wf-raise); border:1.5px solid var(--wf-line);
-    display:flex; align-items:center; justify-content:center; color:var(--wf-fg); box-sizing:border-box; }
-  .callout { display:flex; gap:9px; font-size:12.5px; line-height:1.5; color:var(--wf-mute);
-    background:var(--wf-panel2); border:1.5px solid var(--wf-line); border-radius:7px; padding:11px 13px; margin-top:16px; }
-  .callout .gl { color:var(--wf-faint); flex:none; }
-  .sbtn { font:inherit; font-weight:600; font-size:12.5px; color:#fff; background:var(--wf-green);
-    border:1.5px solid transparent; border-radius:7px; padding:7px 15px; cursor:pointer; flex:none; transition:.12s; }
-  .sbtn:not(.on):hover { background:var(--wf-greenhover); }
-  .sbtn.on { color:var(--wf-soft); background:var(--wf-raise); border-color:var(--wf-line); }
-
-  /* Discord step. */
-  .dhead { display:flex; align-items:center; gap:13px; margin-bottom:16px; }
-  .dhead .ico-tile { width:46px; height:46px; }
-  /* The card used to repeat the step heading ("Connect Discord") beside the icon, so the words appeared twice
-     on one screen. The icon stays, the duplicate heading is gone, and the line beside it now does the actual
-     work of inviting the member in. It is a <p> rather than a heading on purpose: the step already owns the
-     only heading on this panel, and a second one saying nearly the same thing is noise for a screen reader.
-     Sized between the old h3 and the old sub-line so it still carries next to a 46px tile. */
-  .dhead .dlede { font-family:var(--font-display); font-size:16.5px; font-weight:600; margin:0; line-height:1.25; color:var(--wf-fg); }
-  /* sow-356: text-decoration is here because .dbtn is now worn by an ANCHOR as well (the membership link shown
-     where a free account would see Connect Discord). BASE_CSS styles the bare anchor, and the UA underline survives any
-     rule that does not name it, so without this the link renders as underlined white text on the green pill. */
-  .dbtn { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:600; font-size:13.5px;
-    color:#fff; background:var(--wf-green); border:1.5px solid transparent; border-radius:7px; padding:11px 18px;
-    cursor:pointer; text-decoration:none; }
-  .dbtn:not(.on):not([disabled]):hover { background:var(--wf-greenhover); }
-  .dbtn.on, .dbtn[disabled] { color:var(--wf-soft); background:var(--wf-raise); border-color:var(--wf-line); cursor:default; }
-  /* sow-218: the connected row pairs the confirmation with a quiet Disconnect. Deliberately understated: it is
-     a real action but not the one this step is asking anybody to take. */
-  .drow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-  .dlink { font:inherit; font-size:13px; font-weight:600; color:var(--wf-soft); background:none; border:0;
-    padding:6px 2px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
-  .dlink:hover { background:none; }
-  .dlink:hover:not([disabled]) { color:var(--wf-fg); }
-  .dlink[disabled] { opacity:.6; cursor:default; }
-
-  /* Channels grid. */
-  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(238px, 1fr)); gap:12px; }
-  .pcard { display:flex; flex-direction:column; gap:11px; padding:14px; background:var(--wf-panel2);
-    border:1.5px solid var(--wf-line); border-radius:7px; box-sizing:border-box; }
-  .pcard .ph { display:flex; align-items:center; gap:10px; min-width:0; }
-  .pcard .ico-tile { width:34px; height:34px; }
-  .pcard .pn { min-width:0; }
-  .pcard .pn b { display:block; font-size:14px; font-weight:600; color:var(--wf-fg); line-height:1.1; }
-  .pcard .pn span { display:block; font-family:var(--font-mono); font-size:11.5px; color:var(--wf-mute);
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pcard .pd { font-size:12.5px; line-height:1.5; color:var(--wf-soft); flex:1; }
-  .pcard .sbtn { align-self:flex-start; }
-
-  /* Socials step. */
-  .srow { display:flex; align-items:center; gap:11px; margin:0 0 10px; max-width:560px; }
-  .srow .ico-tile { width:40px; height:40px; }
-  .srow input { flex:1; min-width:0; font:inherit; font-size:14px; color:var(--wf-fg); background:var(--wf-panel2);
-    border:1.5px solid var(--wf-line); border-radius:7px; padding:10px 13px; outline:none; box-sizing:border-box; }
-  .srow input:focus { border-color:var(--wf-green); }
-  .addmore { align-self:flex-start; font:inherit; font-weight:600; font-size:12.5px; color:var(--wf-greenfg);
-    background:none; border:none; cursor:pointer; padding:2px 0; }
-  .addmore:hover { background:none; text-decoration:underline; text-underline-offset:3px; }
-  .pkrow { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
-  .pk { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:600;
-    color:var(--wf-soft); background:var(--wf-panel2); border:1.5px solid var(--wf-line); border-radius:999px; padding:6px 11px; cursor:pointer; }
-  .pk:hover { color:var(--wf-fg); border-color:var(--wf-green); background:var(--wf-panel2); }
-
-  /* Members grid. */
-  .mtop { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-  .mtop .intro { margin:0; max-width:54ch; }
-  .mcount { font-family:var(--font-mono); font-size:11px; color:var(--wf-mute); white-space:nowrap; }
-  .mgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
-  .mcard { display:flex; align-items:center; gap:12px; padding:11px 13px; background:var(--wf-panel2);
-    border:1.5px solid var(--wf-line); border-radius:7px; box-sizing:border-box; }
-  .mav { width:36px; height:36px; flex:none; border-radius:50%; color:#fff; display:grid; place-items:center;
-    font-weight:700; font-size:13px; overflow:hidden; position:relative; }
-  .mav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .mi { flex:1; min-width:0; }
-  .mi b { display:block; font-size:13.5px; font-weight:600; color:var(--wf-fg); line-height:1.15; }
-  .mi span { display:block; color:var(--wf-mute); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pager { display:flex; align-items:center; justify-content:space-between; margin-top:13px; }
-  .pager button { font:inherit; font-weight:600; font-size:12.5px; color:var(--wf-soft); background:var(--wf-raise);
-    border:1.5px solid var(--wf-line); border-radius:7px; padding:7px 14px; cursor:pointer; }
-  .pager button[disabled] { opacity:.4; cursor:default; }
-  .pager .pg { font-family:var(--font-mono); font-size:11px; color:var(--wf-mute); }
-  .note { color:var(--wf-mute); font-size:12.5px; line-height:1.5; margin:0; }
-
-  /* Done state. */
-  .donewrap { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; padding:24px 12px; }
-  .donecheck { width:56px; height:56px; border-radius:50%; background:var(--wf-greendim); color:var(--wf-greenfg);
-    display:flex; align-items:center; justify-content:center; font-size:26px; }
-  .donewrap h3 { font-family:var(--font-display); font-size:22px; font-weight:600; margin:0; color:var(--wf-fg); }
-  .donewrap p { margin:0; font-size:14px; line-height:1.6; color:var(--wf-soft); max-width:44ch; }
-  .stats { display:flex; gap:22px; margin-top:4px; }
-  .stat { text-align:center; }
-  .stat b { display:block; font-family:var(--font-mono); font-weight:700; font-size:20px; color:var(--wf-greenfg); }
-  .stat span { display:block; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--wf-mute); }
-  /* sow-357: the ONE membership case a free account meets in the welcome, at the end (owner, 2026-09-17). */
-  .offer { margin-top:10px; max-width:52ch; text-align:left; border:1.5px solid var(--wf-line); border-radius:10px;
-    background:var(--wf-raise); padding:14px 16px; display:flex; flex-direction:column; gap:7px; }
-  .offer b { font-family:var(--font-display); font-size:14.5px; font-weight:600; color:var(--wf-fg); }
-  .offer p { margin:0; font-size:13px; line-height:1.55; color:var(--wf-soft); max-width:none; }
-  .offer a { align-self:flex-start; font-size:13px; font-weight:600; color:var(--wf-greenfg); text-decoration:underline;
-    text-underline-offset:3px; }
-
-  /* Small screens: the rail collapses to a horizontal step strip under a hairline. The track segments go with
-     it, since they only make sense stacked. Responsive block last on purpose: source order, not specificity. */
-  @media (max-width: 860px) {
-    .wf { flex-direction:column; }
-    .rail { width:100%; flex-direction:row; align-items:center; gap:10px; padding:0 0 12px; border-right:0; border-bottom:1px solid var(--wf-line); }
-    .brand b, .railhead { display:none; }
-    .rsteps { flex:1; min-width:0; flex-direction:row; overflow-x:auto; gap:4px; }
-    .rstep { width:auto; flex:none; padding:7px 9px; }
-    .rstep::before, .rstep::after { display:none; }
-    .rstep .rl span { display:none; }
-    .main { padding-left:0; }
-    .top { padding-top:18px; }
-  }
-
-  /* SOW-048: the forced-sign-in (login splash) mode + the loading state (token-styled, not the modal). */
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
   .head .ic { display:inline-grid; place-items:center; }
@@ -7794,366 +7148,44 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:9px;
     background:var(--brand); color:#fff; text-decoration:none; font:inherit; font-weight:700; font-size:14px; padding:10px 16px; cursor:pointer; }
   .btn:hover { background:var(--brand-dark); color:#fff; }
-  .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
-  .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
+  .btn.ghost { background:transparent; color:var(--fg); border:1.5px solid var(--line); }
+  .btn.ghost:hover { background:var(--hover); color:var(--fg); }
   .btn.signin { width:100%; box-sizing:border-box; padding:13px; font-size:15px; }
-  .splashwrap .note { color:var(--muted); }
-  .splashwrap .note a { color:var(--accent); }
+  .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
+  .note a { color:var(--accent); }
   .codebox { text-align:center; }
   .codebox .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
   .codeval { display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0 14px; flex-wrap:wrap; }
   .codeval code { font-family:var(--font-mono, monospace); font-size:22px; font-weight:700; letter-spacing:.14em; background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
   .codeval .btn { padding:8px 13px; font-size:13px; }
-  .loading { color:var(--muted); text-align:center; padding:30px 0; }
+  .reassure { display:flex; gap:8px; align-items:flex-start; margin:0 0 14px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); text-align:left; }
+  .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
+  .reassure p { margin:0; font-size:12px; line-height:1.5; color:var(--fg); }
+  .reassure b { font-weight:700; }
 `;
-
-  // client-ui/src/elements/gbti-welcome.mjs
-  var SITE5 = "https://gbti.network";
-  var MEMBER_PLAN = "Network Supporter";
-  var PAGE_SIZE2 = 12;
-  var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
-  var CHAN_FOLLOWED_KEY = "gbti-welcome-chan-followed";
-  var STEPS = ONBOARDING_STEPS;
-  var DONE_HEADING = "You are all set";
-  var GBTI_CHANNELS = [
-    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, projects, and prompts syndicate to our community subreddit. Open it and hit Join.", "r/GBTI_network"],
-    ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish.", "@gbti_network"],
-    ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky.", "@gbti.bsky.social"],
-    ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network.", "@gbti_network"],
-    ["github", "GitHub", "https://github.com/gbti-network", "The public content repo and our open source work.", "gbti-network"],
-    ["devto", "Dev.to", "https://dev.to/gbti", "Member articles crossposted to the GBTI organization on DEV.", "@gbti"],
-    // sow-217: the Hashnode follow tile is REMOVED with the footer link. Retiring the channel while still
-    // inviting new members to follow the publication would point them at something nobody maintains.
-    ["dailydev", "daily.dev", "https://daily.dev/squads/gbti_network/", "Follow the GBTI squad inside your daily.dev feed.", "GBTI squad"],
-    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn.", "GBTI Network"]
-  ];
-  var SOCIALS_STAGE_KEY = "gbti-welcome-socials";
-  var SOCIAL_STARTERS = ["x", "bluesky", "linkedin", "youtube", "website"];
-  var SOCIAL_HIDDEN = /* @__PURE__ */ new Set(["github", "discord"]);
-  var AV_COLORS = ["#1f9e5f", "#c98a2b", "#5a8ad6", "#9b6fd0", "#d0715f", "#3fa88a", "#c85b8e"];
-  var avColor = (name) => {
-    let h = 0;
-    for (const c of String(name || "?")) h = h * 31 + c.charCodeAt(0) >>> 0;
-    return AV_COLORS[h % AV_COLORS.length];
-  };
-  var lc = (s) => String(s || "").toLowerCase();
-  var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  var discordIco = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
-  var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var GbtiWelcome = class extends GbtiElement {
+  var GbtiSigninSplash = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
-      this._page = 1;
-      this._step = 0;
-      this._done = false;
-      this.load();
-    }
-    disconnectedCallback() {
-      super.disconnectedCallback?.();
-      this._stopDiscordPoll();
-    }
-    // SOW: after the member opens the Discord OAuth tab, poll /discord/link/status (always fresh, fail-closed) until
-    // it reports linked, then mark the step done and auto-advance. Bounded (~3 min) so a bailed-out link never spins
-    // forever; the step's Continue button stays available as a manual advance the whole time.
-    _startDiscordPoll() {
-      if (this._discordWaiting) return;
-      this._discordWaiting = true;
-      this._discordPollUntil = Date.now() + 18e4;
-      this.render();
-      const tick = async () => {
-        if (!this._discordWaiting) return;
-        let linked = false;
-        try {
-          linked = Boolean((await this.client?.discordLinkStatus?.())?.linked);
-        } catch {
-          linked = false;
-        }
-        if (!this._discordWaiting || !this.isConnected) return;
-        if (linked) {
-          this._onDiscordLinked();
-          return;
-        }
-        if (Date.now() > this._discordPollUntil) {
-          this._discordWaiting = false;
-          this.render();
-          return;
-        }
-        this._discordPollTimer = setTimeout(tick, 2500);
-      };
-      this._discordPollTimer = setTimeout(tick, 2500);
-    }
-    _onDiscordLinked() {
-      this._stopDiscordPoll();
-      this._discordJoined = true;
-      this._lsSet("discord", "1");
-      if (this._steps[this._step]?.key === "discord" && this._step < this._steps.length - 1) this._step++;
       this.render();
     }
-    /**
-     * sow-218: disconnect the linked Discord account.
-     *
-     * Server first, local state second. The wizard remembers "joined" in localStorage (DISCORD_DONE_KEY), and
-     * clearing that eagerly would show a member the Connect button while their account was still linked and still
-     * holding guild roles, which is a worse lie than the one this feature fixes. So the flag is cleared only on a
-     * confirmed unlink, and a failure is surfaced in the card rather than swallowed.
-     *
-     * A host with no client (the inert public-site embed) simply does nothing.
-     */
-    async _disconnectDiscord() {
-      if (this._discordUnlinking || !this.client?.discordUnlink) return;
-      this._discordUnlinking = true;
-      this._discordUnlinkError = null;
-      this.render();
-      let ok = false;
-      try {
-        const r = await this.client.discordUnlink();
-        ok = Boolean(r?.ok);
-        if (!ok) this._discordUnlinkError = "We could not disconnect Discord just now. Nothing was changed. Please try again in a moment.";
-      } catch {
-        this._discordUnlinkError = "We could not reach the network to disconnect Discord. Nothing was changed. Please try again in a moment.";
-      }
-      this._discordUnlinking = false;
-      if (ok) {
-        this._stopDiscordPoll();
-        this._discordJoined = false;
-        this._lsRemove("discord");
-      }
-      this.render();
-    }
-    _stopDiscordPoll() {
-      this._discordWaiting = false;
-      if (this._discordPollTimer) {
-        clearTimeout(this._discordPollTimer);
-        this._discordPollTimer = null;
-      }
-    }
-    async load() {
-      this._authGate = this.hasAttribute("auth-gate");
-      let s = null;
-      try {
-        s = await this.client?.status?.();
-        this._membership = s?.membership ?? "unknown";
-        this._couponUntil = s?.couponUntil ?? null;
-        this._own = lc(s?.identity?.username || s?.identity?.login);
-        this._login = s?.identity?.login || s?.identity?.username || "";
-      } catch {
-        this._membership = "unknown";
-        this._couponUntil = null;
-        this._own = "";
-      }
-      this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
-      this._deriveSteps();
-      this._keys = { discord: accountKey(DISCORD_DONE_KEY, s?.identity), chan: accountKey(CHAN_FOLLOWED_KEY, s?.identity), socials: accountKey(SOCIALS_STAGE_KEY, s?.identity) };
-      for (const k of [DISCORD_DONE_KEY, CHAN_FOLLOWED_KEY, SOCIALS_STAGE_KEY]) {
-        try {
-          localStorage.removeItem(k);
-        } catch {
-        }
-      }
-      if (this._authGate && !this._authenticated) {
-        this._loaded = true;
-        this.render();
-        return;
-      }
-      try {
-        const res = await fetch(`${SITE5}/members-index.json`, { cache: "no-cache" });
-        if (!res.ok) throw new Error(String(res.status));
-        const data = await res.json();
-        this._members = excludeSelf(shuffle(Array.isArray(data?.members) ? data.members : []), this._own);
-      } catch {
-        this._members = null;
-      }
-      try {
-        const r = await this.client?.getFollows?.();
-        const list = Array.isArray(r) ? r : r?.following ?? [];
-        this._follows = new Set(list.map((e) => lc(e?.username)).filter(Boolean));
-      } catch {
-        this._follows = null;
-      }
-      try {
-        const p = await this.client?.getPrefs?.();
-        this._topicsCount = Array.isArray(p?.categories) ? p.categories.length : 0;
-        this._record = p?.onboarding ?? null;
-      } catch {
-        this._topicsCount = 0;
-        this._record = void 0;
-      }
-      this._discordJoined = this._lsGet("discord") === "1";
-      if (!this._discordJoined && this.client?.discordLinkStatus) {
-        try {
-          if ((await this.client.discordLinkStatus())?.linked) {
-            this._discordJoined = true;
-            this._lsSet("discord", "1");
-          }
-        } catch {
-        }
-      }
-      try {
-        const raw = JSON.parse(this._lsGet("chan") || "[]");
-        this._chanFollowed = new Set(Array.isArray(raw) ? raw : []);
-      } catch {
-        this._chanFollowed = /* @__PURE__ */ new Set();
-      }
-      const chans = mergeChannelFollows([...this._chanFollowed], this._record?.networkFollows);
-      this._chanFollowed = new Set(chans.all);
-      if (chans.missing.length && this._record !== void 0) this._prefs({ onboardingFollows: chans.missing });
-      try {
-        const raw = JSON.parse(this._lsGet("socials") || "null");
-        this._socialDraft = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-      } catch {
-        this._socialDraft = {};
-      }
-      this._socialDraft = { ...this._record?.socials || {}, ...this._socialDraft };
-      try {
-        await Promise.race([
-          (async () => {
-            const r = await readOwnProfile(this.client, { identity: s?.identity ?? null });
-            if (r.state === "failed") return;
-            this._profile = r.item;
-            this._profileRead = true;
-            this._socialDraft = socialPrefill(recallProfileSocials(r.item?.frontmatter?.links, SOCIAL_KEYS), this._socialDraft, SOCIAL_KEYS);
-          })().catch(() => {
-          }),
-          new Promise((r) => setTimeout(r, 6e3))
-        ]);
-      } catch {
-      }
-      this._loaded = true;
-      if (!this._resumed) {
-        this._resumed = true;
-        const asked = requestedStep(this.getAttribute("start-step"), this._steps);
-        this._step = asked >= 0 ? asked : resumeStep(this._resumeFlags(), this._steps.length);
-      }
-      this.render();
-    }
-    /**
-     * The steps THIS account is offered (sow-357). Derived from the membership once it has been read, and the full
-     * list until then, so a failed read never hides a step a paying member has to do.
-     *
-     * `canPublish` decides the handles step because that step ends in a PUBLISHED profile: a free or trial member's
-     * handles are kept on the account and flushed by nothing (welcome-socials.mjs), so offering it was asking for
-     * work that goes nowhere they can see.
-     */
-    get _steps() {
-      return this._stepList || STEPS;
-    }
-    _deriveSteps() {
-      const m = this._membership;
-      const unread = !m || m === "unknown";
-      this._stepList = unread ? STEPS : onboardingStepsFor({ discordAvailable: this._mayJoinDiscord(), canPublish: canPublish(m) });
-    }
-    /**
-     * Per-step "already done", by step KEY. Each flag reads REAL state rather than a remembered click, so work
-     * done outside this wizard counts (see resumeStep).
-     *
-     * Every unknown resolves to NOT done. `_follows` is null when the read failed and `_topicsCount` is 0 when
-     * prefs were unreadable, and in both cases showing the step again is the harmless direction: the member
-     * sees a step they may not need, instead of being skipped past one they do.
-     *
-     * sow-357: the handles step counts done on the same rule the WorkBench card uses (a saved profile carries a
-     * handle, or the save succeeded), not on a typed value. The two surfaces disagreed, so a member could see a
-     * tick here and the step still outstanding on the card, which is the half that can never complete.
-     */
-    _stepDone() {
-      return {
-        discord: Boolean(this._discordJoined),
-        // the link landed (localStorage, set by the poll)
-        subreddit: (this._chanFollowed?.size ?? 0) > 0,
-        // at least one network channel followed
-        socials: profileHasSocials(this._profile?.frontmatter?.links, SOCIAL_KEYS) || this._record?.socialsSaved === true,
-        follow: (this._follows?.size ?? 0) > 0,
-        // following at least one member
-        topics: (this._topicsCount ?? 0) > 0
-        // at least one topic in the stored prefs
-      };
-    }
-    /**
-     * Whether this step offers Skip: never the first (the primary ask) and never the last (which already finishes
-     * with "I am all set"). sow-357 writes it against the list's LENGTH rather than the old fixed indexes 1 to 3,
-     * which were those same two exclusions only while every account met five steps.
-     */
-    _showSkip() {
-      return !this._done && this._step >= 1 && this._step < this._steps.length - 1;
-    }
-    /** `_stepDone` in the order this account meets the steps, which is what the rail ticks and resume reads. */
-    _doneFlags() {
-      const done = this._stepDone();
-      return this._steps.map((s) => Boolean(done[s.key]));
-    }
-    /**
-     * What RESUME treats as settled, which is not the same thing as what the rail ticks.
-     *
-     * sow-356: a free account cannot connect Discord, so resuming would park it on that step forever. Resume steps
-     * past it; the rail still shows it as outstanding rather than done, because the member has not done it and a
-     * tick would say they had.
-     */
-    /**
-     * The step heading. sow-356: "Connect Discord" is an instruction, and it is the wrong one for an account that
-     * may not join. Caught by driving the step, where the card explained that the server is for paying members
-     * under a heading telling the reader to connect. Kept short enough not to clip at phone width (measured).
-     */
-    _headingText() {
-      if (this._done) return DONE_HEADING;
-      const step = this._steps[this._step];
-      if (step?.key === "discord" && !this._mayJoinDiscord()) return "Discord community";
-      return step.heading;
-    }
-    /**
-     * What RESUME treats as settled. sow-356 had to force the Discord slot true for an account that may not join,
-     * or resume parked there for ever. sow-357 removes that special case at the root instead: such an account is
-     * not OFFERED the step, so there is nothing to step past. The one account that still sees it and cannot use it
-     * is one whose membership could not be read, and that account must land on it, to be told the check failed.
-     */
-    _resumeFlags() {
-      return this._doneFlags();
-    }
-    // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
-    // sow-345: account-scoped browser storage (see accountKey). No account means no key, and these are no-ops rather
-    // than guesses; a blocked storage reads as absent.
-    _lsGet(which) {
-      const k = this._keys?.[which];
-      if (!k) return null;
-      try {
-        return localStorage.getItem(k);
-      } catch {
-        return null;
-      }
-    }
-    _lsSet(which, v) {
-      const k = this._keys?.[which];
-      if (!k) return;
-      try {
-        localStorage.setItem(k, v);
-      } catch {
-      }
-    }
-    _lsRemove(which) {
-      const k = this._keys?.[which];
-      if (!k) return;
-      try {
-        localStorage.removeItem(k);
-      } catch {
-      }
-    }
+    /** The host hands back the device-flow code (or null to return to the Sign in button). */
     setCode(userCode, verificationUri) {
       this._code = userCode || null;
       if (verificationUri) this._verifyUri = verificationUri;
       this.render();
     }
-    // SOW-048: the login splash (signed-out, auth-gate mode). Sign in with GitHub via the device flow; once the host
-    // hands back a user code we show it + the github.com/login/device link. Authentication, not payment — a new
-    // visitor with a GitHub account can sign in and lands in the normal (membership-gated) app afterward.
-    _renderSignedOut() {
+    render() {
       const code = this._code;
       const verify = this._verifyUri || "https://github.com/login/device";
       const action = code ? `<div class="codebox">
            <p class="sub">Enter this code at GitHub to finish signing in:</p>
            <div class="codeval"><code>${esc(code)}</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+           <div class="reassure">${shield}<p>${REASSURANCE}</p></div>
            <a class="btn" href="${esc(verify)}" target="_blank" rel="noopener">Open github.com/login/device</a>
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(WELCOME_CSS) + `<div class="splashwrap">
+      this.set(this.css(CSS6) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -8161,9 +7193,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE4}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
-      this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
+      this.on("[data-auth-signin]", "click", () => this.emit("gbti:signin-start"));
       this.on("[data-copy]", "click", () => {
         try {
           navigator.clipboard?.writeText(code);
@@ -8171,363 +7203,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       });
     }
-    _goto(i) {
-      this._stopDiscordPoll();
-      this._done = false;
-      this._step = Math.min(Math.max(i, 0), this._steps.length - 1);
-      this.render();
-    }
-    async _next({ skip = false } = {}) {
-      this._stopDiscordPoll();
-      const key = this._steps[this._step]?.key;
-      if (this._socialSaving) return;
-      if (key === "socials" && !skip && !await this._saveSocials()) return;
-      if (key && !this._stepDone()[key]) this._prefs({ onboardingSkip: { step: key } });
-      if (this._step >= this._steps.length - 1) this._done = true;
-      else this._step++;
-      this.render();
-    }
-    /** sow-343: best-effort write to the progress record. The card treats an unreadable record as unknown. */
-    _prefs(patch) {
-      return Promise.resolve().then(() => this.client?.setPrefs?.(patch)).catch(() => null);
-    }
-    // sow-343: Continue on the socials step saves the handles (welcome-socials.mjs). False keeps the member here.
-    async _saveSocials() {
-      this._socialSaving = true;
-      this._socialError = null;
-      this.render();
-      const r = await saveWizardSocials({ client: this.client, profile: this._profile, profileRead: this._profileRead, draft: this._socialDraft, membership: this._membership, login: this._login || this._own });
-      this._socialSaving = false;
-      if (r.profile) {
-        this._profile = r.profile;
-        this._lsRemove("socials");
-      }
-      this._socialError = r.error || null;
-      this.render();
-      return !r.error;
-    }
-    _back() {
-      this._stopDiscordPoll();
-      if (this._done) this._done = false;
-      else if (this._step > 0) this._step--;
-      this.render();
-    }
-    _railHtml() {
-      const done = this._doneFlags();
-      const rows = this._steps.map((s, i) => {
-        const isDone = Boolean(done[i]);
-        const isActive = !this._done && this._step === i;
-        const cls = `rstep${isDone ? " done" : ""}${isActive ? " active" : ""}`;
-        const mark = isDone ? "&#10003;" : String(i + 1);
-        return `<button class="${cls}" data-goto="${i}" type="button">
-        <span class="circ">${mark}</span>
-        <span class="rl"><b>${esc(s.label)}</b><span>${esc(s.sub)}</span></span>
-      </button>`;
-      }).join("");
-      return `<aside class="rail">
-      <span class="brand"><span class="mark">G</span><b>GBTI Network</b></span>
-      <span class="railhead">Get set up</span>
-      <div class="rsteps">${rows}</div>
-    </aside>`;
-    }
-    render() {
-      if (!this._loaded) {
-        this.set(this.css(WELCOME_CSS) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`);
-        return;
-      }
-      if (this._authGate && !this._authenticated) {
-        this._renderSignedOut();
-        return;
-      }
-      const ph = phaseLabel(this._membership, { couponUntil: this._couponUntil });
-      const phase = ph.phase === "coupon" ? "Free membership period" : ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "";
-      this._step = Math.min(Math.max(this._step, 0), this._steps.length - 1);
-      const step = this._steps[this._step].key;
-      const heading = this._headingText();
-      const stepText = this._done ? "COMPLETE" : `STEP ${this._step + 1} OF ${this._steps.length}`;
-      const progress = this._done ? 100 : Math.round(this._step / this._steps.length * 100 + 12);
-      const card = this._done ? this._doneCard() : step === "discord" ? this._discordCard() : step === "subreddit" ? this._channelsCard() : step === "socials" ? this._socialsCard() : step === "topics" ? this._topicsCard() : this._membersCard();
-      const isLast = this._step >= this._steps.length - 1;
-      const backOff = this._step === 0 && !this._done;
-      const showSkip = this._showSkip();
-      const footR = this._done ? `<button class="gbtn" data-review type="button">Review steps</button>
-         ${canPublish(this._membership) ? `<button class="pbtn" data-done type="button">Go to your profile</button>` : ""}` : `${showSkip ? `<button class="skipbtn" data-step-skip type="button">Skip</button>` : ""}
-         <button class="pbtn" data-step-next type="button"${this._socialSaving ? " disabled" : ""}>${this._socialSaving ? "Saving&hellip;" : isLast ? "I am all set" : "Continue &rarr;"}</button>`;
-      this.set(this.css(WELCOME_CSS) + `<div class="wf">
-      ${this._railHtml()}
-      <div class="main">
-        <div class="top">
-          <div class="eyebrow">Welcome${phase ? `<span class="phasepill">${esc(phase)}</span>` : ""}</div>
-          <div class="heads"><h2>${esc(heading)}</h2><span class="stepmono">${esc(stepText)}</span></div>
-          ${ph.phase === "coupon" ? `<p class="couponline">${esc(ph.body)}</p>` : ""}
-          <div class="bar"><i style="width:${progress}%"></i></div>
-        </div>
-        <div class="content"><div class="stepin">${card}</div></div>
-        <div class="foot">
-          <button class="gbtn${backOff ? " off" : ""}" data-step-back type="button" ${backOff ? "disabled" : ""}>&larr; Back</button>
-          <div class="footr">${footR}</div>
-        </div>
-      </div>
-    </div>`);
-      this.$$("[data-goto]").forEach((b) => b.addEventListener("click", () => this._goto(Number(b.dataset.goto))));
-      this.$$("[data-step-next]").forEach((b) => b.addEventListener("click", () => this._next()));
-      this.on("[data-step-skip]", "click", () => this._next({ skip: true }));
-      this.on("[data-step-back]", "click", () => this._back());
-      this.on("[data-review]", "click", () => this._goto(0));
-      this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
-      if (this._done) return;
-      if (step === "discord") {
-        this.on("[data-discord-connect]", "click", async () => {
-          let url = DISCORD_LINK_URL;
-          try {
-            const r = await this.client?.discordLinkUrl?.();
-            if (r && r.url) url = r.url;
-          } catch {
-          }
-          window.open(url, "_blank", "noopener");
-          this._startDiscordPoll();
-        });
-        this.on("[data-discord-unlink]", "click", () => this._disconnectDiscord());
-      } else if (step === "subreddit") {
-        this.$$("[data-chan-open]").forEach((b) => b.addEventListener("click", () => {
-          const key = b.dataset.chanOpen;
-          const chan = GBTI_CHANNELS.find(([k]) => k === key);
-          if (!chan) return;
-          window.open(chan[2], "_blank", "noopener");
-          this._chanFollowed.add(key);
-          this._lsSet("chan", JSON.stringify([...this._chanFollowed]));
-          this._prefs({ onboardingFollows: [key] });
-          this.render();
-        }));
-      } else if (step === "socials") {
-        this.$$("[data-social-key]").forEach((inp) => inp.addEventListener("input", () => {
-          const k = inp.dataset.socialKey;
-          if (inp.value.trim()) this._socialDraft[k] = inp.value;
-          else delete this._socialDraft[k];
-          this._lsSet("socials", JSON.stringify(this._socialDraft));
-        }));
-        this.on("[data-social-more]", "click", () => {
-          this._socialsMore = !this._socialsMore;
-          this.render();
-        });
-        this.$$("[data-social-add]").forEach((b) => b.addEventListener("click", () => {
-          const k = b.dataset.socialAdd;
-          if (!(k in this._socialDraft)) this._socialDraft[k] = "";
-          this._socialsMore = false;
-          this.render();
-          this.$(`[data-social-key="${k}"]`)?.focus();
-        }));
-      } else if (step === "topics") {
-        this.$("gbti-topic-picker")?.addEventListener("topics-change", (e) => {
-          this._topicsCount = Array.isArray(e.detail?.topics) ? e.detail.topics.length : this._topicsCount;
-        });
-      } else {
-        this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.getAttribute("data-follow"))));
-        this.on("[data-prev]", "click", () => {
-          this._page--;
-          this.render();
-        });
-        this.on("[data-next]", "click", () => {
-          this._page++;
-          this.render();
-        });
-        this.$$(".mav img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
-      }
-    }
-    // sow-356: may this account be in the server at all? The community is a paid perk (owner, 2026-09-17), so a
-    // free or lapsed account is shown what it is rather than a button that now refuses. `unknown` (the status read
-    // failed) is neither: it says so, and offers nothing, because guessing either way is wrong.
-    _mayJoinDiscord() {
-      return discordJoinAllowed(this._membership);
-    }
-    _discordLockedCard() {
-      const unread = this._membership === "unknown";
-      const note = unread ? "We could not check your membership just now. Reload to try again." : `The Discord community is part of the ${MEMBER_PLAN} membership.`;
-      const link = unread ? "" : `<a class="dbtn" href="${SITE5}/membership/" target="_blank" rel="noopener">See what membership includes</a>`;
-      return `
-      <div class="dhead">
-        <span class="ico-tile">${discordIco}</span>
-        <p class="dlede">Our Discord community is for paying members.</p>
-      </div>
-      <p class="intro" style="max-width:58ch">Announcements and agile discussions happen in the server, and it is the best place to network in real time with network members. ${esc(note)}</p>
-      ${link}`;
-    }
-    _discordCard() {
-      if (!this._mayJoinDiscord()) return this._discordLockedCard();
-      const joined = this._discordJoined;
-      const btn = joined ? `<div class="drow">
-           <button class="dbtn on" type="button" disabled>&#10003; Discord connected</button>
-           <button class="dlink" data-discord-unlink type="button"${this._discordUnlinking ? " disabled" : ""}>${this._discordUnlinking ? "Disconnecting&hellip;" : "Disconnect"}</button>
-         </div>` : this._discordWaiting ? `<button class="dbtn" data-discord-connect type="button" disabled>Waiting for Discord&hellip;</button>` : `<button class="dbtn" data-discord-connect type="button">Connect Discord account</button>`;
-      const err = this._discordUnlinkError ? `<div class="callout"><span class="gl">&#9888;</span><span>${esc(this._discordUnlinkError)}</span></div>` : "";
-      const callout = joined ? `<div class="callout"><span class="gl">&#8250;</span><span>Your Discord account is connected. Disconnecting removes your network roles in the server and unlinks the account; it does not remove you from the server.</span></div>${err}` : `<div class="callout"><span class="gl">&#8250;</span><span>A new tab opens for Discord sign-in. When you finish, you land in the server and this step continues automatically.</span></div>${err}`;
-      return `
-      <div class="dhead">
-        <span class="ico-tile">${discordIco}</span>
-        <p class="dlede">Come participate in our Discord community.</p>
-      </div>
-      <p class="intro" style="max-width:58ch">Announcements and agile discussions frequently occur here, and it is the best place to network in real time with network members. Connect Discord to join the server and claim your member role.</p>
-      ${btn}
-      ${callout}`;
-    }
-    // The Follow GBTI channels grid (the design handoff's platform cards). Follow opens the channel in a new
-    // tab and flips the card to a followed state (local memory).
-    _channelsCard() {
-      const cards = GBTI_CHANNELS.map(([k, label, , blurb, handle]) => {
-        const on = this._chanFollowed?.has(k);
-        return `<div class="pcard">
-        <div class="ph">
-          <span class="ico-tile">${socialIcon(k, 19)}</span>
-          <div class="pn"><b>${esc(label)}</b><span>${esc(handle)}</span></div>
-        </div>
-        <div class="pd">${esc(blurb)}</div>
-        <button class="sbtn${on ? " on" : ""}" data-chan-open="${esc(k)}" type="button">${on ? "&#10003; Following" : "Follow"}</button>
-      </div>`;
-      }).join("");
-      return `
-      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and projects through these, including yours. Following these channels will help build the network's reach.</p>
-      <div class="grid">${cards}</div>`;
-    }
-    // The socials step: collect the member's handles across the platform set. Raw values stage locally
-    // (SOCIALS_STAGE_KEY) while typing; Continue saves them (_saveSocials). Fully skippable.
-    _socialsCard() {
-      const draft = this._socialDraft || {};
-      const visible = [.../* @__PURE__ */ new Set([...SOCIAL_STARTERS, ...Object.keys(draft)])].filter((k) => SOCIAL_KEYS.includes(k) && !SOCIAL_HIDDEN.has(k));
-      const rows = visible.map((k) => `<div class="srow">
-      <span class="ico-tile" aria-hidden="true">${socialIcon(k, 19)}</span>
-      <input type="text" data-social-key="${esc(k)}" value="${esc(draft[k] || "")}"
-        placeholder="${esc(SOCIAL_LABELS[k] || k)}: @handle or full URL" aria-label="${esc(SOCIAL_LABELS[k] || k)}" />
-    </div>`).join("");
-      const rest = SOCIAL_KEYS.filter((k) => !visible.includes(k) && !SOCIAL_HIDDEN.has(k));
-      const picker = this._socialsMore && rest.length ? `<div class="pkrow">${rest.map((k) => `<button type="button" class="pk" data-social-add="${esc(k)}">${socialIcon(k, 14)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
-      const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? "Close" : "+ More platforms"}</button>` : "";
-      return `
-      <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. ${this._membership === "paid" ? "Continue adds them to your public profile." : "We keep them on your account and add them to your public profile once your membership is paid."}</p>
-      ${this._socialError ? `<div class="callout" role="alert" style="margin-bottom:12px"><span class="gl">&#9888;</span><span>${esc(this._socialError)}</span></div>` : ""}
-      ${rows}
-      ${more}
-      ${picker}`;
-    }
-    // SOW-054: the Topics step. The shared <gbti-topic-picker> fetches the vocabulary + the member's current
-    // selection and self-persists each toggle via setPrefs; the step is skippable (an empty selection = the feed
-    // and news show everything, the current default).
-    _topicsCard() {
-      return `
-      <p class="intro">We have started you off with a few popular topics. Add the others you care about, or remove any you do not. Your activity feed and news default to them, and you can change this any time in Settings.</p>
-      <gbti-topic-picker seed-defaults></gbti-topic-picker>`;
-    }
-    _membersCard() {
-      const intro = `<p class="intro">Following a member alerts you when they publish new articles, prompts, and projects in your feed.</p>`;
-      if (this._follows === null) {
-        return `${intro}<p class="note">We could not load your follow list right now. This is a temporary problem on our side. Try again shortly, or follow members any time from a member profile.</p>`;
-      }
-      if (!this._members) {
-        return `${intro}<p class="note">We could not load the member directory right now. You can follow members any time from a member profile.</p>`;
-      }
-      if (this._members.length === 0) {
-        return `${intro}<p class="note">No members to show yet. Check back as the co-op grows.</p>`;
-      }
-      const { page, pages, items } = paginate(this._members, this._page, PAGE_SIZE2);
-      this._page = page;
-      const cards = items.map((m) => this._memberCard(m)).join("");
-      const pager = pages > 1 ? `<div class="pager"><button data-prev type="button" ${page <= 1 ? "disabled" : ""}>Back</button>
-         <span class="pg">Page ${page} of ${pages}</span>
-         <button data-next type="button" ${page >= pages ? "disabled" : ""}>More</button></div>` : "";
-      const count2 = this._follows?.size ?? 0;
-      return `
-      <div class="mtop">${intro}<span class="mcount">${count2} following</span></div>
-      <div class="mgrid">${cards}</div>
-      ${pager}`;
-    }
-    _memberCard(m) {
-      const u = lc(m.username);
-      const followed = this._follows.has(u);
-      const name = m.displayName || m.username || "?";
-      const initial = esc(String(name).trim().charAt(0).toUpperCase());
-      const av = `<span class="mav" style="background:${avColor(name)}">${initial}${m.avatar ? `<img src="${esc(m.avatar)}" alt="" />` : ""}</span>`;
-      const sub = m.headline ? `<span>${esc(m.headline)}</span>` : "";
-      return `<div class="mcard">
-      ${av}
-      <span class="mi"><b>${esc(name)}</b>${sub}</span>
-      <button class="sbtn${followed ? " on" : ""}" data-follow="${esc(u)}" type="button">${followed ? "&#10003; Following" : "Follow"}</button>
-    </div>`;
-    }
-    /**
-     * The finish card. sow-357 gave it a second version, because the first told a free account that its handles
-     * were saved (they were kept, and nothing flushes them), that it was time to publish (paid only), and offered
-     * a button that lands on a page reading "Your access is locked".
-     *
-     * The free version claims only what happened, sends them to the feed they just built, and makes the membership
-     * case ONCE, here, beside the finish rather than in place of it (owner, 2026-09-17).
-     */
-    _doneCard() {
-      const follows = this._follows?.size ?? 0;
-      const topics = this._topicsCount ?? 0;
-      const stats = `<div class="stats">
-        <div class="stat"><b>${follows}</b><span>Following</span></div>
-        <div class="stat"><b>${topics}</b><span>Topics</span></div>
-      </div>`;
-      if (canPublish(this._membership)) {
-        return `<div class="donewrap">
-      <span class="donecheck">&#10003;</span>
-      <h3>${esc(DONE_HEADING)}</h3>
-      <p>Welcome to the co-op. Your channels are followed, your handles are saved, and your feed is tuned. Time to publish.</p>
-      ${stats}
-    </div>`;
-      }
-      return `<div class="donewrap">
-      <span class="donecheck">&#10003;</span>
-      <h3>${esc(DONE_HEADING)}</h3>
-      <p>Your feed is yours now. It fills with what the members and topics you follow publish, and it keeps filling as they do.</p>
-      ${stats}
-      <a class="pbtn" href="${SITE5}/" target="_blank" rel="noopener">Go to my feed</a>
-      <p class="note">The GBTI new tab shows the same feed every time you open a browser tab.</p>
-      <div class="offer">
-        <b>Ready for more?</b>
-        <p>A ${esc(MEMBER_PLAN)} membership adds comments across the network, our Discord community, publishing your
-        own articles, projects and prompts, and a share of what the network earns from work that brings members in.</p>
-        <a href="${SITE5}/membership/" target="_blank" rel="noopener">See what membership includes</a>
-      </div>
-    </div>`;
-    }
-    /**
-     * Repaint ONLY what a follow toggle changes: each Follow button's state and the "N following" count.
-     *
-     * This exists because `render()` calls `this.set(...)`, which replaces the whole component's markup. Using
-     * it for a follow toggle tore down and rebuilt the entire wizard TWICE per click (once optimistically, once
-     * on the network response), which read as the panel flashing and reloading under the cursor, and threw away
-     * scroll position mid-list. <gbti-topic-picker> already learned this and re-renders its chips in place for
-     * the same reason; this is that pattern applied to the members grid.
-     *
-     * Deriving every button from `this._follows` rather than touching just the clicked one is deliberate: the
-     * response REPLACES the whole set, so a follow made in another tab shows up here too.
-     */
-    _refreshFollowUi() {
-      const count2 = this.$(".mcount");
-      if (count2) count2.textContent = `${this._follows?.size ?? 0} following`;
-      this.$$("[data-follow]").forEach((b) => {
-        const on = this._follows?.has(lc(b.getAttribute("data-follow"))) ?? false;
-        b.classList.toggle("on", on);
-        b.innerHTML = on ? "&#10003; Following" : "Follow";
-      });
-    }
-    async _toggleFollow(username) {
-      const u = lc(username);
-      if (!u || !this._follows) return;
-      const was = this._follows.has(u);
-      was ? this._follows.delete(u) : this._follows.add(u);
-      this._refreshFollowUi();
-      try {
-        const r = await this.client.setFollow({ username: u, on: !was });
-        const list = Array.isArray(r) ? r : r?.following ?? null;
-        if (list) this._follows = new Set(list.map((e) => lc(e?.username)).filter(Boolean));
-      } catch {
-        was ? this._follows.add(u) : this._follows.delete(u);
-      }
-      this._refreshFollowUi();
-    }
   };
-  define("gbti-welcome", GbtiWelcome);
+  define("gbti-signin-splash", GbtiSigninSplash);
 
   // client-ui/src/membership-expiry.mjs
   var DAY_MS = 24 * 60 * 60 * 1e3;
@@ -8566,7 +7243,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // extension/src/shell.mjs
-  var SITE6 = "https://gbti.network";
+  var SITE5 = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -8623,7 +7300,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { div: true },
     // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
     // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-    { key: "profile", href: `${SITE6}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
+    { key: "profile", href: `${SITE5}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
     // SOW-129, repointed sow-204
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
@@ -8640,7 +7317,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
-      <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
       <button class="nt-acct" data-me-btn type="button" aria-haspopup="true" aria-expanded="false" aria-label="Account menu" hidden>
         <img class="av" data-me-av alt="" width="34" height="34" />
         <span data-ico="chev"></span>
@@ -8649,7 +7325,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
-        <a class="mi" role="menuitem" href="${SITE6}/workbench/" target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE5}/workbench/" target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -8680,7 +7356,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc3(c.nm)}</span></span></a>`).join("");
       return self + kids2;
     }).join("");
-    return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE6}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+    return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE5}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
   function applyHeadingIcon(key) {
     const h1 = document.querySelector("[data-topbar] h1");
@@ -8709,7 +7385,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function applyAccount(root, status) {
     const meBtn = root.querySelector("[data-me-btn]");
-    const signinBtn = root.querySelector("[data-signin-btn]");
     if (status) {
       const login = status.identity.login;
       root.querySelectorAll("[data-me-av]").forEach((av) => {
@@ -8727,10 +7402,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         el.hidden = !showSuper;
       });
       if (meBtn) meBtn.hidden = false;
-      if (signinBtn) signinBtn.hidden = true;
     } else {
       if (meBtn) meBtn.hidden = true;
-      if (signinBtn) signinBtn.hidden = false;
     }
   }
   function shouldGate(status) {
@@ -8769,13 +7442,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.documentElement.setAttribute("data-unauth", "1");
     const wrap = document.createElement("div");
     wrap.className = "gbti-authwrap";
-    const el = document.createElement("gbti-welcome");
-    el.setAttribute("auth-gate", "");
+    const el = document.createElement("gbti-signin-splash");
     if (expired) el.setAttribute("expired", "");
     wrap.appendChild(el);
     root.appendChild(wrap);
     let signingIn = false;
-    el.addEventListener("gbti:welcome-signin", () => {
+    el.addEventListener("gbti:signin-start", () => {
       if (signingIn) return;
       signingIn = true;
       shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri)).then(() => location.reload()).catch(() => {
@@ -8793,7 +7465,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const b = document.querySelector("[data-theme-toggle]");
     if (b) b.innerHTML = ico(t === "dark" ? "sun" : "moon");
   }
-  var openOnboarding = () => chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
   function wireAccount(root) {
     const menu = () => root.querySelector("[data-me-menu]");
     const btn = root.querySelector("[data-me-btn]");
@@ -8826,7 +7497,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         btn?.focus();
       }
     });
-    root.querySelector("[data-signin-btn]")?.addEventListener("click", openOnboarding);
     root.querySelector("[data-me-signout]")?.addEventListener("click", async () => {
       close();
       try {
@@ -9048,7 +7718,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!until) return;
     const { show, daysLeft } = expiryPopupDecision({ until, dismissedAt, now: Date.now() });
     if (!show) return;
-    if (document.querySelector(".nt-welcome-overlay")) return;
     const { headline, dateLabel, count: count2 } = expiryPopupCopy(daysLeft, until, Date.now());
     const overlay = document.createElement("div");
     overlay.className = "compose-modal expiry-modal";
@@ -9074,7 +7743,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       document.removeEventListener("keydown", onEsc);
     };
     const onEsc = (e) => {
-      if (e.key === "Escape" && !document.querySelector(".nt-welcome-overlay")) dismiss();
+      if (e.key === "Escape") dismiss();
     };
     document.addEventListener("keydown", onEsc);
     overlay.addEventListener("click", (e) => {
@@ -12540,9 +11209,9 @@ ${listStyleProseCss(".doc-blocks")}
   .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 `;
-  var lc2 = (s) => String(s || "").toLowerCase();
+  var lc = (s) => String(s || "").toLowerCase();
   var authorName = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
-  var ghLogin = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "gbti-network" : a;
+  var ghLogin = (a) => lc(a) === "gbti" || lc(a) === "house" ? "gbti-network" : a;
   var ghAvatar = (a) => a ? `https://github.com/${encodeURIComponent(ghLogin(a))}.png?size=48` : "";
   function avatarHtml(author) {
     const url = ghAvatar(author);
@@ -12759,8 +11428,8 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-discussion", GbtiDiscussion);
 
   // client-ui/src/elements/gbti-cta-assignment.mjs
-  var SITE7 = "https://gbti.network";
-  var ADMIN = `${SITE7}/admin/`;
+  var SITE6 = "https://gbti.network";
+  var ADMIN = `${SITE6}/admin/`;
   var CSS10 = `
   :host { display:block; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); line-height:1.5; }
   b { color:var(--fg); font-weight:600; }
@@ -12785,7 +11454,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._loading = true;
       this._failed = false;
       try {
-        const r = await fetch(`${SITE7}/ctas.json`, { cache: "no-cache" });
+        const r = await fetch(`${SITE6}/ctas.json`, { cache: "no-cache" });
         if (!r.ok) throw new Error(`ctas.json ${r.status}`);
         const j = await r.json();
         this._ctas = Array.isArray(j?.ctas) ? j.ctas : [];
@@ -15142,6 +13811,13 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-settings", GbtiSettings);
 
+  // membership/discord-roles.mjs
+  var PUBLISHED_STATUSES = /* @__PURE__ */ new Set(["paid"]);
+  var TRIAL_STATUSES = /* @__PURE__ */ new Set(["trialing"]);
+  function discordJoinAllowed(effectiveStatus) {
+    return PUBLISHED_STATUSES.has(effectiveStatus) || TRIAL_STATUSES.has(effectiveStatus);
+  }
+
   // client-ui/src/storage.mjs
   function browserStorage() {
     try {
@@ -15262,7 +13938,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-account.mjs
-  var SITE8 = "https://gbti.network";
+  var SITE7 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
   var STATUS_LABEL = {
@@ -15400,7 +14076,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS11) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE8}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS11) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE7}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -15418,9 +14094,7 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="sec-h"><h3>Account</h3><p>Signed in as <b>@${esc(this._login)}</b> on this device.</p></div>
       <div class="rows">
         <div class="row"><div class="rl"><div class="t">Sign out</div><div class="d">End this session on this device.</div></div><div class="rc"><button data-signout type="button">Sign out</button></div></div>
-        <div class="row"><div class="rl"><div class="t">Welcome steps</div><div class="d">Clear the steps you skipped and the channels you marked as followed, so the welcome steps ask again.</div></div><div class="rc"><button data-reset-welcome type="button">Reset</button></div></div>
       </div>
-      <div class="msg" data-account-msg aria-live="polite"></div>
     </section>`;
     }
     // SOW-114: Privacy — the publicFavorites opt-in (server-side prefs, default OFF). When on, the member's name
@@ -15495,7 +14169,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE8}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE7}/join?ref=${r.code}` : null);
       const invite = discordJoinAllowed(this._membership) && this._invite?.url || null;
       const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
@@ -15518,7 +14192,6 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _wire() {
       this.on("[data-signout]", "click", () => this.emit("gbti:request-signout"));
-      this.on("[data-reset-welcome]", "click", () => this._resetWelcome());
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
       this.$$("[data-set-layout]").forEach((b) => b.addEventListener("click", () => {
         applyLayout(b.dataset.setLayout);
@@ -15545,26 +14218,6 @@ ${listStyleProseCss(".doc-blocks")}
         delBtn.disabled = confirm2.value.trim() !== "DELETE";
       });
       this.on("[data-delete]", "click", () => this._requestDeletion());
-    }
-    // sow-343: the progress also lives on the account (skips, channels marked followed, handles kept for later), so the
-    // reset clears that record too. Real state (a linked Discord, follows, topics, the profile) is not touched and
-    // still counts as done, which is why the message says what it cleared rather than "start over".
-    async _resetWelcome() {
-      try {
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith(WELCOME_PREFIX)) localStorage.removeItem(k);
-        }
-      } catch {
-      }
-      let cleared = false;
-      try {
-        await this.client?.setPrefs?.({ onboarding: null });
-        cleared = !!this.client?.setPrefs;
-      } catch {
-        cleared = false;
-      }
-      this._say("[data-account-msg]", cleared ? "Welcome steps reset. Skipped steps and the channels you marked as followed are cleared. Anything you actually connected or followed still counts." : "We could not reach your account, so only this device was reset. Please try again in a moment.", cleared ? "ok" : "err");
     }
     async _copy(id) {
       const el = this.$(`#${id}`);
@@ -15902,7 +14555,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
-  var SITE9 = "https://gbti.network";
+  var SITE8 = "https://gbti.network";
   var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
@@ -15985,7 +14638,7 @@ ${listStyleProseCss(".doc-blocks")}
       const counts = {};
       await Promise.all(SAVED_TYPES.map(async (t) => {
         try {
-          const res = await fetch(`${SITE9}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE8}/${indexFileFor(t)}`, { cache: "no-cache" });
           const items = res.ok ? (await res.json()).items || [] : [];
           for (const it of items) {
             const a = String(it?.author || "").toLowerCase();
@@ -16495,7 +15148,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     return out;
   }
-  function paginate2(items, page, per = 6) {
+  function paginate(items, page, per = 6) {
     const total = items.length;
     const pages = Math.max(1, Math.ceil(total / per));
     const p = Math.min(Math.max(1, page), pages);
@@ -16512,7 +15165,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
-  var SITE10 = "https://gbti.network";
+  var SITE9 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
@@ -16712,7 +15365,7 @@ ${listStyleProseCss(".doc-blocks")}
       const items = {};
       await Promise.all(Object.entries(INDEXES).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE10}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE9}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           items[type] = Array.isArray(data) ? data : data?.items || [];
         } catch {
@@ -16924,14 +15577,14 @@ ${listStyleProseCss(".doc-blocks")}
     _browserHtml(path) {
       const items = this._items?.[this._cbType] || [];
       const filed = items.filter((it) => Array.isArray(it.categories) && path.every((k, i) => it.categories[i] === k));
-      const pg = paginate2(filed, this._cbPage, CB_PER);
+      const pg = paginate(filed, this._cbPage, CB_PER);
       const now = Date.now();
       const tabs = Object.keys(INDEXES).map((t) => {
         const n = (this._items?.[t] || []).filter((it) => Array.isArray(it.categories) && path.every((k, i) => it.categories[i] === k)).length;
         return `<button class="cbtab${t === this._cbType ? " on" : ""}" type="button" data-cbtab="${t}">${TYPE_LABEL3[t]}<span class="n">${n}</span></button>`;
       }).join("");
       const rows = pg.items.map((it) => `<div class="cbrow">
-        <div style="min-width:0"><a href="${SITE10}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
+        <div style="min-width:0"><a href="${SITE9}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
         <div class="sub">@${esc(it.author || "")}${it.publishedAt ? ` · ${esc(relAge(Number(it.publishedAt), now))}` : ""}</div></div>
       </div>`).join("");
       const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
@@ -17166,7 +15819,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
-  var SITE11 = "https://gbti.network";
+  var SITE10 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
@@ -17344,7 +15997,7 @@ ${listStyleProseCss(".doc-blocks")}
       const byTag = /* @__PURE__ */ new Map();
       await Promise.all(Object.entries(INDEXES2).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE11}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE10}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           for (const it of Array.isArray(data) ? data : data?.items || []) {
             for (const raw of it.tags || []) {
@@ -17437,7 +16090,7 @@ ${listStyleProseCss(".doc-blocks")}
           <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
         </div>
         ${this._actionUi(sel)}
-        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE11}${esc(i.url || "")}" target="_blank" rel="noopener">
+        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE10}${esc(i.url || "")}" target="_blank" rel="noopener">
           <div class="ititle">${esc(i.title)}</div>
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
         </a>`).join("")}</div>
@@ -18946,7 +17599,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
-  var SITE12 = "https://gbti.network";
+  var SITE11 = "https://gbti.network";
   var GbtiOutboundLinkManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -18959,11 +17612,11 @@ ${listStyleProseCss(".doc-blocks")}
       this.render();
       try {
         const [links, clicks] = await Promise.all([
-          fetch(`${SITE12}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE11}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`links ${r.status}`);
             return r.json();
           }),
-          fetch(`${SITE12}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE11}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`clicks ${r.status}`);
             return r.json();
           })
@@ -20279,7 +18932,7 @@ ${listStyleProseCss(".doc-blocks")}
 `;
 
   // client-ui/src/elements/gbti-cta-manager.mjs
-  var SITE13 = "https://gbti.network";
+  var SITE12 = "https://gbti.network";
   var SUBMITTED = "Submitted. It merges automatically and appears shortly. Track it in your WorkBench.";
   var FIELD_KEYS = ["id", "label", "partner", "line", "button", "destination", "image", "html"];
   var GbtiCtaManager = class extends GbtiElement {
@@ -20299,7 +18952,7 @@ ${listStyleProseCss(".doc-blocks")}
     get site() {
       const o = this.dataset?.siteOrigin;
       if (o === "page" && typeof location !== "undefined") return location.origin;
-      return SITE13;
+      return SITE12;
     }
     get icons() {
       if (!this._icons) this._icons = createIconLibrary({ base: this.site });
@@ -22922,8 +21575,8 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-card-list.mjs
   var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
   var TYPE_LABEL5 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share", news: "News" };
-  var lc3 = (s) => String(s || "").toLowerCase();
-  var authorName2 = (a) => lc3(a) === "gbti" || lc3(a) === "house" ? "GBTI Network" : a;
+  var lc2 = (s) => String(s || "").toLowerCase();
+  var authorName2 = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "GBTI Network" : a;
   function faviconFor(urlOrHost) {
     let host = String(urlOrHost || "").trim();
     if (!host) return "";
@@ -22936,10 +21589,10 @@ ${BLOCKED_PILL_CSS}
     return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
   }
   function avatarFor(item = {}) {
-    if (lc3(item.type) === "news") {
+    if (lc2(item.type) === "news") {
       return { src: faviconFor(item.link || item.openHref), title: item.source || item.author || "News" };
     }
-    const a = lc3(item.author);
+    const a = lc2(item.author);
     const login = a === "gbti" || a === "house" ? "gbti-network" : item.author;
     return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : "", title: authorName2(item.author) };
   }
@@ -23102,7 +21755,7 @@ ${BLOCKED_PILL_CSS}
     }
     _media(item) {
       const isCard2 = this.mode === "card";
-      if (lc3(item.type) === "news" && !isCard2) return "";
+      if (lc2(item.type) === "news" && !isCard2) return "";
       const thumb = this._thumbUrl(item);
       if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
@@ -23111,7 +21764,7 @@ ${BLOCKED_PILL_CSS}
       return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
     }
     _chip(item) {
-      const t = lc3(item.type);
+      const t = lc2(item.type);
       const k = ["post", "project", "prompt", "share", "news"].includes(t) ? ` k-${t}` : "";
       return `<span class="chip${k}">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
@@ -23122,7 +21775,7 @@ ${BLOCKED_PILL_CSS}
     }
     // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
     _lock(item) {
-      return item.visibility === "members" && lc3(item.type) !== "news" ? `<span class="lock">${lockIco}Members</span>` : "";
+      return item.visibility === "members" && lc2(item.type) !== "news" ? `<span class="lock">${lockIco}Members</span>` : "";
     }
     // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
     // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
@@ -23136,7 +21789,7 @@ ${BLOCKED_PILL_CSS}
       return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${who}${sep}${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
     }
     _open(item, i, cls) {
-      const t = lc3(item.type);
+      const t = lc2(item.type);
       const accent = t && t !== "news" ? ` style="--cbar:${esc(typeAccent(t))}"` : "";
       const nomedia = t === "news" && cls !== "card-i" || cls === "row-d" && !this._thumbUrl(item) ? " no-media" : "";
       const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
@@ -23790,165 +22443,6 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-comment-echoes", GbtiCommentEchoes);
 
-  // client-ui/src/elements/gbti-onboarding.mjs
-  var SIGNIN_META = {
-    title: "Sign in with GitHub",
-    why: "Your GitHub account is your identity on the network. No repository access is requested, and the network publishes on your behalf.",
-    doneLabel: "Signed in"
-  };
-  var check2 = (filled) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="${filled ? "var(--brand)" : "none"}" stroke="${filled ? "var(--brand)" : "var(--line)"}" stroke-width="2"/>${filled ? '<path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' : ""}</svg>`;
-  var BTN_ICON = {
-    signin: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>`
-  };
-  var CSS35 = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-  .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
-  .count { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .bar { height:3px; border-radius:999px; background:var(--line); overflow:hidden; margin-bottom:14px; }
-  .bar > i { display:block; height:100%; background:var(--brand); transition:width .25s ease; }
-  ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-  .row { display:flex; gap:10px; align-items:flex-start; }
-  .row .ic { flex:none; margin-top:1px; }
-  .row.done .t { color:var(--muted); font-size:13px; padding-top:1px; }
-  .card { flex:1; min-width:0; border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-  .card .title { font-family:var(--font-display); font-size:16px; font-weight:700; margin:0 0 3px; }
-  .card .why { font-size:12.5px; color:var(--muted); margin:0 0 7px; line-height:1.45; }
-  /* Primary action. Used as BOTH a <button> (Sign in) and an <a> (Open github.com/login/device), so it must be a
-     block-level flex box (an inline <a> let its green background wrap mid-text into two ragged pieces) with WHITE
-     text to match the site's green CTA. */
-  .btn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; box-sizing:border-box;
-    border:0; border-radius:9px; background:var(--brand); color:#fff; text-decoration:none; text-align:center;
-    font:inherit; font-weight:700; font-size:14px; padding:11px 14px; cursor:pointer; }
-  .btn:hover { background:var(--brand-dark); color:#fff; }
-  .btn svg { flex:none; }
-  .again { display:block; margin-top:8px; text-align:right; font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; margin-left:auto; }
-  .again[disabled] { opacity:.6; cursor:default; }
-  .code { display:inline-flex; align-items:center; gap:8px; margin:2px 0 10px; font-family:ui-monospace,monospace; font-size:18px; font-weight:700; letter-spacing:.06em; background:var(--hover); padding:7px 11px; border-radius:8px; }
-  .copy { font-family:var(--font-body); font-size:11px; font-weight:600; letter-spacing:0; border:1px solid var(--line); background:var(--panel); color:var(--accent); border-radius:6px; padding:3px 8px; cursor:pointer; }
-  .copy:hover { border-color:var(--accent); }
-  .note { font-size:12px; color:var(--muted); margin:8px 0 0; }
-  /* Decodes GitHub's scary-sounding "Act on your behalf" wording on the authorize screen. */
-  .reassure { display:flex; gap:8px; align-items:flex-start; margin:0 0 11px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); }
-  .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
-  .reassure p { margin:0; font-size:12px; line-height:1.5; color:var(--fg); }
-  .reassure b { font-weight:700; }
-  .ready { text-align:center; padding:6px 0 2px; }
-  .ready .big { font-family:var(--font-display); font-size:17px; font-weight:700; margin:8px 0 4px; }
-  .foot { margin-top:12px; font-size:11.5px; color:var(--muted); text-align:center; }
-  .foot.err { color:var(--danger); }
-`;
-  var GbtiOnboarding = class extends GbtiElement {
-    connectedCallback() {
-      super.connectedCallback?.();
-      this._onVis = () => {
-        if (!document.hidden) this.refresh();
-      };
-      document.addEventListener("visibilitychange", this._onVis);
-      window.addEventListener("focus", this._onVis);
-      this.refresh();
-    }
-    disconnectedCallback() {
-      super.disconnectedCallback?.();
-      this._stopPolling();
-      document.removeEventListener("visibilitychange", this._onVis);
-      window.removeEventListener("focus", this._onVis);
-    }
-    _startPolling() {
-      if (!this._timer) this._timer = setInterval(() => {
-        if (!document.hidden) this.refresh();
-      }, 5e3);
-    }
-    _stopPolling() {
-      if (this._timer) {
-        clearInterval(this._timer);
-        this._timer = null;
-      }
-    }
-    /** The host (which runs the device flow) feeds the user code in so the sign-in card can show it. */
-    setCode(code, url) {
-      this._code = code ? { code, url } : null;
-      this.render();
-    }
-    /** Re-probe durable GitHub state and re-render. Never advances on an error (the probe returns reachedGithub:false).
-     *  A manual check (the Check again button) gets visible feedback: the button flips to "Checking...", and when the
-     *  probe returns unchanged we say so instead of silently re-rendering the same card (which reads as a dead click). */
-    async refresh({ manual = false } = {}) {
-      if (this._busy) return;
-      this._busy = true;
-      if (manual) {
-        this._checking = true;
-        this.render();
-      }
-      const sig = (s) => s ? [s.signedIn, s.activeStep].join("|") : "";
-      const before = sig(this._status);
-      try {
-        const s = await this.client?.onboardingStatus?.();
-        if (s) {
-          const becameReady = s.ready && !(this._status && this._status.ready);
-          this._status = s;
-          this._staleNote = manual && !s.ready && sig(s) === before;
-          if (s.signedIn) this._code = null;
-          if (s.ready) {
-            this._stopPolling();
-            if (becameReady) this.emit("gbti:onboarding-ready", { login: s.login });
-          } else this._startPolling();
-        }
-      } catch {
-        this._status = { ...this._status || {}, reachedGithub: false };
-      } finally {
-        this._busy = false;
-        this._checking = false;
-        this.render();
-      }
-    }
-    render() {
-      const s = this._status;
-      if (!s) {
-        this.set(this.css(CSS35) + `<p class="note">Checking your setup...</p>`);
-        return;
-      }
-      if (s.ready) {
-        this.set(this.css(CSS35) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
-        <p class="note">Sign-in is all it takes: your drafts save privately, and the network publishes for you.</p>
-        <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
-        this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
-        return;
-      }
-      const row = s.signedIn ? `<li class="row done"><span class="ic">${check2(true)}</span><span class="t">${esc(SIGNIN_META.doneLabel)}</span></li>` : `<li class="row"><span class="ic">${check2(false)}</span>${this._card()}</li>`;
-      const reached = s.reachedGithub !== false;
-      const nDone = s.signedIn ? 1 : 0;
-      this.set(this.css(CSS35) + `
-      <div class="head"><h2>Sign in to publish</h2><span class="count">${nDone} of 1</span></div>
-      <div class="bar"><i style="width:${nDone * 100}%"></i></div>
-      <ul>${row}</ul>
-      <p class="foot${reached ? "" : " err"}">${reached ? "Reached GitHub just now." : "We could not reach GitHub. Trying again."}</p>`);
-      this.on("[data-again]", "click", () => this.refresh({ manual: true }));
-      this.on("[data-signin]", "click", () => this.emit("gbti:onboarding-signin"));
-      const copy = this.$("[data-copy]");
-      if (copy) copy.addEventListener("click", () => {
-        try {
-          navigator.clipboard?.writeText?.(this._code?.code || "");
-          copy.textContent = "Copied";
-        } catch {
-        }
-      });
-    }
-    _card() {
-      const meta = SIGNIN_META;
-      const why = `<p class="why">${esc(meta.why)}</p>`;
-      const again = `<button class="again" data-again type="button"${this._checking ? " disabled" : ""}>${this._checking ? "Checking..." : "Check again"}</button>${this._staleNote && !this._checking ? `<p class="note">Checked just now, no change yet. GitHub can take a minute to reflect updates, and this step re-checks itself every few seconds.</p>` : ""}`;
-      const verifyUrl = this._code?.url || "https://github.com/login/device";
-      const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
-      const reassure = `<div class="reassure">${shield}<p><b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network uses your sign-in only to know who you are. It does not ask for access to your repositories, and it cannot read your private code or change your account. You can remove it at any time in your GitHub settings.</p></div>`;
-      const code = this._code ? `<div class="code"><span data-codeval>${esc(this._code.code)}</span><button class="copy" data-copy type="button" title="Copy the code">Copy</button></div>
-         <a class="btn" href="${esc(verifyUrl)}" target="_blank" rel="noopener">${BTN_ICON.signin}<span>Open github.com/login/device</span></a>
-         <p class="note">Copy the code, open the GitHub page, paste it there, and Authorize. Leave this tab open: it checks off on its own when you come back.</p>` : `<button class="btn" data-signin type="button">${BTN_ICON.signin}<span>Sign in with GitHub</span></button>`;
-      return `<div class="card"><p class="title">${esc(meta.title)}</p>${why}${reassure}${code}${again}</div>`;
-    }
-  };
-  define("gbti-onboarding", GbtiOnboarding);
-
   // client-ui/src/elements/gbti-share-list.mjs
   var GbtiShareList = class extends GbtiElement {
     static get observedAttributes() {
@@ -24058,8 +22552,8 @@ ${BLOCKED_PILL_CSS}
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE14 = "https://gbti.network";
-  var CSS36 = `
+  var SITE13 = "https://gbti.network";
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -24111,7 +22605,7 @@ ${BLOCKED_PILL_CSS}
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE14}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE13}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -24131,15 +22625,15 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -24155,7 +22649,7 @@ ${BLOCKED_PILL_CSS}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -24165,7 +22659,7 @@ ${BLOCKED_PILL_CSS}
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
-      const t = item.url ? `<a class="t" href="${SITE14}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE13}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
@@ -24210,10 +22704,10 @@ ${BLOCKED_PILL_CSS}
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE15 = "https://gbti.network";
-  var lc4 = (s) => String(s || "").toLowerCase();
+  var SITE14 = "https://gbti.network";
+  var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS37 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -24272,8 +22766,8 @@ ${BLOCKED_PILL_CSS}
         }
         const [src, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
         const sources = src?.sources || [];
-        const followed = new Set((prefs?.followedChannels || []).map(lc4));
-        this._channels = sources.filter((s) => followed.has(lc4(s.id))).map((s) => ({
+        const followed = new Set((prefs?.followedChannels || []).map(lc3));
+        this._channels = sources.filter((s) => followed.has(lc3(s.id))).map((s) => ({
           id: s.id,
           name: s.name || s.id,
           meta: s.category || s.description || ""
@@ -24296,11 +22790,11 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS37) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -24309,7 +22803,7 @@ ${BLOCKED_PILL_CSS}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -24321,20 +22815,20 @@ ${BLOCKED_PILL_CSS}
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
         const u = esc(f.username);
         return `<li class="row">
         <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
-        <a class="nm" href="${SITE15}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <a class="nm" href="${SITE14}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE15}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -24380,8 +22874,8 @@ ${BLOCKED_PILL_CSS}
       this.render();
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on: false } });
-        const followed = new Set((prefs?.followedChannels || []).map(lc4));
-        this._channels = (this._channels || []).filter((c) => followed.has(lc4(c.id)));
+        const followed = new Set((prefs?.followedChannels || []).map(lc3));
+        this._channels = (this._channels || []).filter((c) => followed.has(lc3(c.id)));
       } catch {
         await this._reloadChannels(false);
       }
@@ -24390,6 +22884,122 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-subscriptions", GbtiSubscriptions);
+
+  // membership/onboarding.mjs
+  var ONBOARDING_STEPS = Object.freeze([
+    Object.freeze({ key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord", title: "Connect Discord" }),
+    Object.freeze({ key: "subreddit", label: "Channels", sub: "Network channels", heading: "Follow the channels", title: "Follow the network channels" }),
+    Object.freeze({ key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials", title: "Add your social handles" }),
+    Object.freeze({ key: "follow", label: "Members", sub: "People to follow", heading: "Follow members", title: "Follow other members" }),
+    Object.freeze({ key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics", title: "Pick your topics" })
+  ]);
+  var ONBOARDING_STEP_KEYS = Object.freeze(ONBOARDING_STEPS.map((s) => s.key));
+  function onboardingStepsFor({ discordAvailable = true, canPublish: canPublish2 = true } = {}) {
+    return Object.freeze(ONBOARDING_STEPS.filter((s) => {
+      if (s.key === "discord") return discordAvailable !== false;
+      if (s.key === "socials") return canPublish2 !== false;
+      return true;
+    }));
+  }
+  var KEY = /^[a-z][a-z0-9-]{0,39}$/;
+  var MAX_NETWORK_FOLLOWS = 40;
+  var MAX_SOCIALS = 30;
+  var MAX_HANDLE = 200;
+  var isOnboardingKey = (v) => typeof v === "string" && KEY.test(v);
+  function cleanKeys(v, max, allow = null) {
+    const out = [];
+    for (const x of Array.isArray(v) ? v : []) {
+      if (!isOnboardingKey(x) || allow && !allow.includes(x) || out.includes(x)) continue;
+      out.push(x);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+  function cleanSocials(v) {
+    const out = {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+    let n = 0;
+    for (const [k, raw] of Object.entries(v)) {
+      if (!isOnboardingKey(k) || typeof raw !== "string") continue;
+      const s = raw.trim();
+      if (!s || s.length > MAX_HANDLE || /[\x00-\x1f\x7f]/.test(s)) continue;
+      out[k] = s;
+      if (++n >= MAX_SOCIALS) break;
+    }
+    return out;
+  }
+  function normalizeOnboarding(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    const out = {
+      skipped: cleanKeys(v.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
+      networkFollows: cleanKeys(v.networkFollows, MAX_NETWORK_FOLLOWS),
+      socials: cleanSocials(v.socials),
+      socialsSaved: v.socialsSaved === true
+    };
+    return isEmptyOnboarding(out) ? null : out;
+  }
+  function isEmptyOnboarding(o) {
+    return !o || !o.skipped.length && !o.networkFollows.length && !Object.keys(o.socials).length && !o.socialsSaved;
+  }
+  function profileHasSocials(links, allowed = null) {
+    if (!links || typeof links !== "object" || Array.isArray(links)) return false;
+    return Object.entries(links).some(([k, v]) => (!allowed || allowed.includes(k)) && typeof v === "string" && v.trim() !== "");
+  }
+  var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
+  var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
+  function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true, canPublish: canPublish2 = true } = {}) {
+    const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
+    const nFollows = count(follows);
+    const nTopics = count(topics);
+    const offered = onboardingStepsFor({ discordAvailable, canPublish: canPublish2 });
+    const offers = (k) => offered.some((s) => s.key === k);
+    const known = (!offers("discord") || typeof discordLinked === "boolean") && nFollows !== null && nTopics !== null && (!offers("socials") || typeof profileSocials === "boolean") && rec !== void 0;
+    const r = rec ?? emptyRecord();
+    const done = {
+      discord: discordLinked === true,
+      subreddit: r.networkFollows.length > 0,
+      socials: profileSocials === true || r.socialsSaved,
+      follow: (nFollows ?? 0) > 0,
+      topics: (nTopics ?? 0) > 0
+    };
+    const steps = offered.map((s) => ({
+      key: s.key,
+      label: s.label,
+      title: s.title,
+      state: done[s.key] ? "done" : r.skipped.includes(s.key) ? "skipped" : "todo"
+    }));
+    const outstanding = steps.filter((s) => s.state !== "done").length;
+    return { steps, complete: outstanding === 0, known, outstanding };
+  }
+
+  // client-ui/src/own-profile.mjs
+  async function readOwnProfile(client, { identity } = {}) {
+    if (!client?.getContentItem) return { state: "failed", path: null, item: null };
+    let who = identity;
+    if (who === void 0) {
+      try {
+        who = (await client.status())?.identity ?? null;
+      } catch {
+        who = null;
+      }
+    }
+    let listed = null;
+    try {
+      listed = (await client.listContent?.({ type: "profile" }))?.items?.[0]?.path || null;
+    } catch {
+      listed = null;
+    }
+    const name = who?.username || who?.login || "";
+    const path = listed || (name ? `members/${name}/profile.md` : null);
+    if (!path) return { state: "failed", path: null, item: null };
+    try {
+      const item = await client.getContentItem({ path });
+      if (!item) return { state: "failed", path, item: null };
+      return { state: "found", path, item: { path, frontmatter: item.frontmatter || {}, body: item.body || "" } };
+    } catch (e) {
+      return { state: e?.code === "not-found" ? "absent" : "failed", path, item: null };
+    }
+  }
 
   // client-ui/src/onboarding-card-core.mjs
   var WELCOME_SITE_URL = "https://gbti.network/welcome/";
@@ -24453,7 +23063,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS38 = `
+  var CSS37 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -24494,13 +23104,47 @@ ${BLOCKED_PILL_CSS}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS38) + html : "");
+      this.set(html ? this.css(CSS37) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
 
+  // client-ui/src/profile-fields.mjs
+  var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
+  function isSanctionedAvatar(url) {
+    const v = String(url == null ? "" : url).trim();
+    if (!v) return true;
+    let u;
+    try {
+      u = new URL(v);
+    } catch {
+      return false;
+    }
+    return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
+  }
+  var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
+  function mergeStagedLinks(links, staged, allowed = null) {
+    const out = { ...links || {} };
+    if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    for (const [k, v] of Object.entries(staged)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (typeof out[k] === "string" && out[k].trim() !== "") continue;
+      out[k] = v.trim();
+    }
+    return out;
+  }
+
+  // client-ui/src/welcome-core.mjs
+  function accountKey(base, identity) {
+    const id = identity?.githubId ?? identity?.github_id ?? identity?.login ?? identity?.username;
+    if (!base || id == null || String(id).trim() === "") return null;
+    return `${base}:${String(id).trim().toLowerCase()}`;
+  }
+
   // client-ui/src/elements/gbti-profile-editor.mjs
-  var SITE16 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var STATUS_LABEL2 = {
     paid: "Paid member",
     trialing: "Free trial",
@@ -24513,7 +23157,7 @@ ${BLOCKED_PILL_CSS}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-  var CSS39 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -24697,19 +23341,19 @@ ${BLOCKED_PILL_CSS}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS39) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS38) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS39) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS38) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE15}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS39) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS38) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -24719,7 +23363,7 @@ ${BLOCKED_PILL_CSS}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS39) + sections);
+      this.set(this.css(CSS38) + sections);
       this._wire();
     }
     _identity(m) {
@@ -24963,7 +23607,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-workspace.mjs
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
-  var SITE17 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
@@ -24986,7 +23630,7 @@ ${BLOCKED_PILL_CSS}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS40 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -25561,7 +24205,7 @@ ${BLOCKED_PILL_CSS}
       if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS40) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS39) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -25597,7 +24241,7 @@ ${BLOCKED_PILL_CSS}
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS40) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS39) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -25744,7 +24388,7 @@ ${BLOCKED_PILL_CSS}
       const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it.status === "published" ? publicPathFor({ type: it.type, path: it.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE17 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE16 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : "";
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
@@ -25980,6 +24624,158 @@ ${BLOCKED_PILL_CSS}
     }
   };
   define("gbti-workspace", GbtiWorkspace);
+
+  // client-ui/src/elements/gbti-topic-picker.mjs
+  var SITE17 = "https://gbti.network";
+  var MAX_TOPICS = 200;
+  var SEEDED_KEY = "gbti-welcome-topics-seeded";
+  var CSS40 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
+  .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  .srch:focus { outline:none; border-color:var(--accent); }
+  .cnt { flex:none; font-size:12px; color:var(--muted); white-space:nowrap; }
+  .mini { flex:none; font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:7px 11px; cursor:pointer; white-space:nowrap; }
+  .mini:hover { color:var(--fg); border-color:var(--accent); }
+  .grp { margin:14px 0 8px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .grp:first-child { margin-top:0; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { font:inherit; font-size:13px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 14px; cursor:pointer; }
+  .chip:hover { color:var(--fg); border-color:var(--accent); }
+  .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .muted { color:var(--muted); font-size:14px; }
+  .list.busy { opacity:.6; pointer-events:none; }
+`;
+  var GbtiTopicPicker = class extends GbtiElement {
+    connectedCallback() {
+      this._topics = null;
+      this._selected = [];
+      this._busy = false;
+      this._query = "";
+      super.connectedCallback?.();
+      this._load();
+    }
+    async _load() {
+      try {
+        const r = await fetch(`${SITE17}/topics.json`, { cache: "no-cache" });
+        this._topics = topicsFromJson(await r.json());
+      } catch {
+        this._topics = [];
+      }
+      if (this.client?.getPrefs) {
+        try {
+          const p = await this.client.getPrefs();
+          this._selected = selectedTopics(p?.categories);
+        } catch {
+          this._selected = [];
+        }
+        await this._seedDefaults();
+      }
+      this.render();
+    }
+    /**
+     * Give a member with NO topics the owner's default group, once, and PERSIST it.
+     *
+     * Persisting rather than merely highlighting is the whole point: the welcome step's Continue does not save
+     * anything itself, so a member who accepts the defaults by not touching them would otherwise finish
+     * onboarding with an untuned feed, which is exactly the outcome a default group exists to prevent.
+     *
+     * Silent on failure. This is a nicety layered on top of the step, so a failed write must leave the member
+     * looking at a normal, usable picker rather than an error about something they never asked for.
+     */
+    async _seedDefaults() {
+      if (!this.hasAttribute("seed-defaults") || this._selected.length) return;
+      try {
+        if (localStorage.getItem(SEEDED_KEY) === "1") return;
+      } catch {
+      }
+      const next = seedDefaultTopics(this._selected, this._topics);
+      if (!next.length) return;
+      try {
+        localStorage.setItem(SEEDED_KEY, "1");
+      } catch {
+      }
+      this._selected = next;
+      this.dispatchEvent(new CustomEvent("topics-change", { detail: { topics: [...next] }, bubbles: true, composed: true }));
+      if (this.client?.setPrefs) {
+        try {
+          const p = await this.client.setPrefs({ categories: next });
+          this._selected = selectedTopics(p?.categories);
+        } catch {
+        }
+      }
+    }
+    /** The current selection (topic keys), for a host that wants to read it on a Continue/Save action. */
+    get selected() {
+      return [...this._selected];
+    }
+    render() {
+      if (!this._topics) {
+        this.set(this.css(CSS40) + `<p class="muted">Loading topics...</p>`);
+        return;
+      }
+      if (!this._topics.length) {
+        this.set(this.css(CSS40) + `<p class="muted">No topics available right now.</p>`);
+        return;
+      }
+      this.set(this.css(CSS40) + `
+      <div class="bar">
+        <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
+        <span class="cnt" data-cnt></span>
+        <button class="mini" data-all type="button">Select all</button>
+        <button class="mini" data-clear type="button">Clear</button>
+      </div>
+      <div class="list" data-list></div>`);
+      const srch = this.$(".srch");
+      if (srch) {
+        srch.value = this._query;
+        srch.addEventListener("input", () => {
+          this._query = srch.value;
+          this._renderChips();
+        });
+      }
+      this.on("[data-all]", "click", () => this._setSelection(selectAllTopics(this._selected, filterTopics(this._topics, this._query), MAX_TOPICS)));
+      this.on("[data-clear]", "click", () => this._setSelection([]));
+      this._renderChips();
+    }
+    _renderChips() {
+      const list = this.$("[data-list]");
+      if (!list) return;
+      const sel = new Set(this._selected);
+      const groups = groupTopics(filterTopics(this._topics, this._query)).filter((g) => g.topics.length);
+      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${esc(t.label)}</button>`).join("");
+      list.className = `list ${this._busy ? "busy" : ""}`;
+      list.innerHTML = groups.length ? groups.map((g) => `${g.group ? `<h4 class="grp">${esc(g.group)}</h4>` : ""}<div class="chips">${chipsFor(g.topics)}</div>`).join("") : `<p class="muted">No topics match "${esc(this._query)}".</p>`;
+      const cnt = this.$("[data-cnt]");
+      if (cnt) {
+        const n = this._selected.length;
+        cnt.textContent = n ? `${n} selected${n >= MAX_TOPICS ? ` (max ${MAX_TOPICS})` : ""}` : "";
+      }
+      this.$$("[data-topic]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.topic)));
+    }
+    _toggle(key) {
+      return this._setSelection(toggleTopic(this._selected, key));
+    }
+    /** Apply + persist a whole selection (a single toggle, Select all, or Clear) as one setPrefs call. */
+    async _setSelection(next) {
+      this._selected = next;
+      this._renderChips();
+      this.dispatchEvent(new CustomEvent("topics-change", { detail: { topics: [...next] }, bubbles: true, composed: true }));
+      if (this.client?.setPrefs) {
+        this._busy = true;
+        this._renderChips();
+        try {
+          const p = await this.client.setPrefs({ categories: next });
+          this._selected = selectedTopics(p?.categories);
+        } catch {
+        }
+        this._busy = false;
+        this._renderChips();
+      }
+    }
+  };
+  define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-notification-bell.mjs
   var INDEX_URL = "/activity-index.json";
@@ -26432,7 +25228,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-news.mjs
   var SITE19 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE19}/membership/">Become a member</a> to unlock the news feed.</div>`;
-  var lc5 = (s) => String(s ?? "").toLowerCase();
+  var lc4 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
     if (!s) return "";
@@ -26555,7 +25351,7 @@ ${BLOCKED_PILL_CSS}
       try {
         const [{ sources }, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
         this._sources = Array.isArray(sources) ? sources : [];
-        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
         this._chanState = "ready";
       } catch (err) {
         this._chanState = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
@@ -26573,14 +25369,14 @@ ${BLOCKED_PILL_CSS}
       this.render();
     }
     async _toggleFollow(id, btn) {
-      const on = !this._followed.has(lc5(id));
+      const on = !this._followed.has(lc4(id));
       if (btn) {
         btn.disabled = true;
         btn.textContent = on ? "Following…" : "Unfollowing…";
       }
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on } });
-        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
       } catch {
       }
       this.render();
@@ -26702,12 +25498,12 @@ ${BLOCKED_PILL_CSS}
       }
       const followed = this._followed || /* @__PURE__ */ new Set();
       const rows = sources.map((s) => {
-        const on = followed.has(lc5(s.id));
+        const on = followed.has(lc4(s.id));
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count2 = s.count != null ? `${s.count} items` : "";
         const inline4 = [domain, count2].filter(Boolean).join(" · ");
-        const showDesc = s.description && lc5(s.description) !== lc5(domain);
+        const showDesc = s.description && lc4(s.description) !== lc4(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc(count2)}</span>` : "") + `</div>`;
         return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline4 ? `<span class="d">${esc(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
@@ -26718,7 +25514,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-news", GbtiNews);
 
   // client-ui/src/elements/gbti-news-reader.mjs
-  var lc6 = (s) => String(s ?? "").toLowerCase();
+  var lc5 = (s) => String(s ?? "").toLowerCase();
   var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
@@ -26791,9 +25587,9 @@ ${BLOCKED_PILL_CSS}
           this.client.getPrefs?.().catch(() => null)
         ]);
         this._canCurate = Boolean(status?.canCurate);
-        const sid = lc6(item.source);
-        this._publisher = (srcs?.sources || []).find((s) => lc6(s.id) === sid || lc6(s.name) === sid) || null;
-        this._followed = new Set((prefs?.followedChannels || []).map(lc6));
+        const sid = lc5(item.source);
+        this._publisher = (srcs?.sources || []).find((s) => lc5(s.id) === sid || lc5(s.name) === sid) || null;
+        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
       this.render();
@@ -26801,14 +25597,14 @@ ${BLOCKED_PILL_CSS}
     async _toggleFollow(btn) {
       const id = this._item?.source;
       if (!id || !this._followed) return;
-      const on = !this._followed.has(lc6(id));
+      const on = !this._followed.has(lc5(id));
       if (btn) {
         btn.disabled = true;
         btn.textContent = on ? "Following…" : "Unfollowing…";
       }
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on } });
-        this._followed = new Set((prefs?.followedChannels || []).map(lc6));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
       this.render();
@@ -26843,7 +25639,7 @@ ${BLOCKED_PILL_CSS}
       const fav = faviconFor(it.link || it.openHref);
       const pub = this._publisher;
       const followable = Boolean(this.client?.setPrefs && it.source && this._followed);
-      const followed = followable && this._followed.has(lc6(it.source));
+      const followed = followable && this._followed.has(lc5(it.source));
       const open = it.openHref || (it.link ? utmLink(it.link) : "");
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
@@ -27000,10 +25796,10 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/members-index.mjs
   var SITE20 = "https://gbti.network";
-  var lc7 = (s) => String(s || "").toLowerCase();
+  var lc6 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
-    return new Map(members.filter((m) => m && m.username).map((m) => [lc7(m.username), m]));
+    return new Map(members.filter((m) => m && m.username).map((m) => [lc6(m.username), m]));
   }
   var _directory = null;
   function loadMembersDirectory() {
@@ -27210,19 +26006,19 @@ From the author:
   }
 
   // membership/news-channels.mjs
-  var lc8 = (s) => String(s ?? "").trim().toLowerCase();
+  var lc7 = (s) => String(s ?? "").trim().toLowerCase();
   function newsChannelMap(parsed) {
     const out = /* @__PURE__ */ new Map();
     const list = Array.isArray(parsed?.channels) ? parsed.channels : [];
     for (const e of list) {
-      const cat = lc8(e?.category);
+      const cat = lc7(e?.category);
       const ch = String(e?.channelId ?? "").trim();
       if (cat && ch) out.set(cat, ch);
     }
     return out;
   }
   function channelForCategory(parsed, category) {
-    return newsChannelMap(parsed).get(lc8(category)) ?? null;
+    return newsChannelMap(parsed).get(lc7(category)) ?? null;
   }
   function channelForCategoryPath(parsed, path) {
     const arr = Array.isArray(path) ? path : path ? [path] : [];
@@ -27783,13 +26579,13 @@ From the author:
 
   // client-ui/src/elements/gbti-reader.mjs
   var SITE21 = "https://gbti.network";
-  var lc9 = (s) => String(s || "").toLowerCase();
+  var lc8 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
-    const x = lc9(a);
+    const x = lc8(a);
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
-  var githubLogin = (a) => lc9(a) === "gbti" || lc9(a) === "house" ? "gbti-network" : a;
+  var githubLogin = (a) => lc8(a) === "gbti" || lc8(a) === "house" ? "gbti-network" : a;
   var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -28097,21 +26893,21 @@ From the author:
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
     async _resolveAuthor(it) {
-      const username = lc9(it.author);
+      const username = lc8(it.author);
       if (isHouse(username)) return { house: true };
       const [dir, status] = await Promise.all([
         loadDirectory(),
         this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
       ]);
       const entry = dir.get(username) || null;
-      const me = lc9(status?.identity?.username || status?.identity?.login);
+      const me = lc8(status?.identity?.username || status?.identity?.login);
       const canFollow = !!status?.canFollow;
       let following = false;
       if (canFollow && this.client.getFollows) {
         try {
           const f = await this.client.getFollows();
           const list = Array.isArray(f) ? f : f?.following ?? [];
-          following = list.some((x) => lc9(x.username) === username);
+          following = list.some((x) => lc8(x.username) === username);
         } catch {
         }
       }
@@ -28322,16 +27118,16 @@ From the author:
   define("gbti-reader", GbtiReader);
 
   // client-ui/src/member-view-core.mjs
-  var lc10 = (s) => String(s || "").toLowerCase();
+  var lc9 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
     { type: "post", json: "blog-index.json", label: "Articles" },
     { type: "project", json: "projects-index.json", label: "Projects" },
     { type: "prompt", json: "prompts-index.json", label: "Prompts" }
   ]);
   function memberContent(items, username, cap = 24) {
-    const u = lc10(username);
+    const u = lc9(username);
     if (!u || u === "gbti" || u === "house" || !Array.isArray(items)) return [];
-    const mine = items.filter((it) => it && lc10(it.author) === u);
+    const mine = items.filter((it) => it && lc9(it.author) === u);
     mine.sort((a, b) => {
       const av = Number.isFinite(a?.publishedAt) ? a.publishedAt : -Infinity;
       const bv = Number.isFinite(b?.publishedAt) ? b.publishedAt : -Infinity;
@@ -28343,7 +27139,7 @@ From the author:
 
   // client-ui/src/elements/gbti-member-view.mjs
   var SITE22 = "https://gbti.network";
-  var lc11 = (s) => String(s || "").toLowerCase();
+  var lc10 = (s) => String(s || "").toLowerCase();
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
@@ -28401,7 +27197,7 @@ From the author:
       this.setAttribute("data-gbti-username", String(username || ""));
     }
     get _username() {
-      const u = lc11(this.getAttribute("data-gbti-username") || "").trim();
+      const u = lc10(this.getAttribute("data-gbti-username") || "").trim();
       return USERNAME_RE2.test(u) ? u : "";
     }
     async _load() {
@@ -28419,7 +27215,7 @@ From the author:
           ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE22}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
-        const me = lc11(status?.identity?.username || status?.identity?.login || "");
+        const me = lc10(status?.identity?.username || status?.identity?.login || "");
         this._isSelf = !!me && me === username;
         MEMBER_SECTIONS.forEach((s, i) => {
           this._sections[s.type] = memberContent(idx[i]?.items || [], username, 24);
@@ -29181,8 +27977,8 @@ From the author:
   var SHARES_LOADED_AT = null;
   var NEWS = null;
   var NEWS_LOADED = false;
-  var PAGE_SIZE3 = 40;
-  var VISIBLE = PAGE_SIZE3;
+  var PAGE_SIZE2 = 40;
+  var VISIBLE = PAGE_SIZE2;
   var PAGE_KEY = "";
   var MORE_IO = null;
   var toCardItem = (e) => ({
@@ -29221,7 +28017,7 @@ From the author:
     const pageKey = `${VIEW}|${TYPE}|${q}`;
     if (pageKey !== PAGE_KEY) {
       PAGE_KEY = pageKey;
-      VISIBLE = PAGE_SIZE3;
+      VISIBLE = PAGE_SIZE2;
     }
     const total = rows.length;
     rows = rows.slice(0, VISIBLE);
@@ -29249,7 +28045,7 @@ From the author:
         if (!ents.some((x) => x.isIntersecting)) return;
         MORE_IO.disconnect();
         MORE_IO = null;
-        VISIBLE += PAGE_SIZE3;
+        VISIBLE += PAGE_SIZE2;
         renderFeed($("[data-filter]")?.value || "");
       }, { rootMargin: "600px" });
       MORE_IO.observe(sentinel);
@@ -29484,52 +28280,11 @@ From the author:
       if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE24}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
     }
   }
-  async function api2(pathname) {
+  function forgetRetiredWelcomeFlag() {
     try {
-      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query: {} } });
-      return r?.json ?? null;
-    } catch {
-      return null;
-    }
-  }
-  var WELCOME_SEEN_KEY = "gbti-welcome-seen";
-  function maybeShowWelcome(signedIn) {
-    let seen = false;
-    try {
-      seen = localStorage.getItem(WELCOME_SEEN_KEY) === "1";
+      localStorage.removeItem("gbti-welcome-seen");
     } catch {
     }
-    if (!signedIn || seen || document.querySelector(".nt-welcome-overlay")) return;
-    try {
-      localStorage.setItem(WELCOME_SEEN_KEY, "1");
-    } catch {
-    }
-    const overlay = document.createElement("div");
-    overlay.className = "nt-welcome-overlay";
-    overlay.style.cssText = "position:fixed; inset:0; z-index:1200; overflow:auto; background:var(--bg,#0d1117); display:flex; justify-content:center; padding:48px 16px;";
-    const w = document.createElement("gbti-welcome");
-    w.style.cssText = "width:100%; max-width:1080px; align-self:center;";
-    w.addEventListener("gbti:welcome-done", () => {
-      window.location.href = "https://gbti.network/workbench/";
-    });
-    overlay.appendChild(w);
-    document.body.appendChild(overlay);
-  }
-  async function loadSetupBanner() {
-    const status = await api2("/api/status");
-    const signedIn = Boolean(status?.authenticated && status?.identity?.login);
-    maybeShowWelcome(signedIn);
-    const setup = $("[data-setup]");
-    if (!setup) return;
-    if (signedIn) {
-      setup.classList.remove("show");
-      return;
-    }
-    const txt = setup.querySelector("[data-setup-txt]");
-    const go = setup.querySelector("[data-setup-go]");
-    if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub once. The network publishes on your behalf.</span>`;
-    if (go) go.textContent = "Get started";
-    setup.classList.add("show");
   }
   async function applyMembershipState() {
     try {
@@ -29618,11 +28373,7 @@ From the author:
         renderFeed($("[data-filter]")?.value || "");
       }
     });
-    loadSetupBanner();
-    $("[data-setup]")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
-    });
+    forgetRetiredWelcomeFlag();
     document.querySelectorAll(".nt-mode").forEach((b) => b.addEventListener("click", () => {
       MODE = b.dataset.mode;
       try {
@@ -29707,9 +28458,6 @@ From the author:
       });
     });
     if (document.documentElement.getAttribute("data-off") !== "1") loadActivity();
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) loadSetupBanner();
-    });
     document.addEventListener("gbti-share-posted", (e) => {
       const item = e?.detail?.item;
       if (!item) return;
