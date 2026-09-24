@@ -13,7 +13,8 @@ tags:
   - smart-terminal
   - macos
   - mac
-image: https://marcelschmitz.com/posts/which-tab-was-that-claude-code-tab-groups/og.png
+image: https://gbti.network/media/shares/gbtilabs/20260924180549-which-tab-was-that-tab-groups-for-claude-code-on-4a28337f.webp
+imageSource: https://marcelschmitz.com/posts/which-tab-was-that-claude-code-tab-groups/og.png
 id: 20260924180549-which-tab-was-that-tab-groups-for-claude-code-on
 createdAt: '2026-09-24T18:05:49.000Z'
 type: share
