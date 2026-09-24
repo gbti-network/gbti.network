@@ -3,7 +3,7 @@
 // timestamped groups, a seen-SET for PRs), and markSeen advancing the watermark on panel open.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBell, unreadItems, markSeen, BELL_GROUPS } from '../client-ui/src/activity-bell.mjs';
+import { buildBell, unreadItems, markSeen, prTime, BELL_GROUPS } from '../client-ui/src/activity-bell.mjs';
 
 const T0 = Date.parse('2026-06-10T00:00:00Z');
 const T1 = Date.parse('2026-06-16T00:00:00Z');
@@ -85,4 +85,27 @@ test('buildBell counts holding approvals as unread past the watermark', () => {
   assert.equal(g.unread, 1, 'only the item past the watermark is unread');
   assert.equal(g.items[0].id, 'syn:a', 'newest-first');
   assert.equal(out.total, 1);
+});
+
+// Owner report 2026-09-24: "Mark all read" left 2 notices every time. markSeen wrote watermarks for replies and
+// following only, so the approvals group (added later) was never marked. The test above missed it because its
+// fixture had no approvals. This one puts an item in EVERY group, so a group added later is covered automatically.
+test('markSeen clears every bell group, including approvals and any group added later', () => {
+  const sources = {};
+  for (const g of BELL_GROUPS) sources[g.key] = [{ id: g.key === 'prs' ? 41 : `${g.key}:1`, ts: T0, title: 'x', sub: 'y' }];
+  assert.ok(buildBell(sources, {}).total >= BELL_GROUPS.length, 'control: every group starts unread');
+  const out = buildBell(sources, markSeen(sources, T1));
+  for (const g of out.groups) assert.equal(g.unread, 0, `${g.key} still unread after Mark all read`);
+  assert.equal(out.total, 0);
+  // A holding item enqueued AFTER the mark badges again.
+  sources.approvals.push({ id: 'syn:new', ts: T1 + 1000, title: 'New', sub: 'z' });
+  assert.equal(buildBell(sources, markSeen({ ...sources, approvals: [] }, T1)).total, 1);
+});
+
+test('prTime uses the merge, close or update time, never the PR number', () => {
+  assert.equal(prTime({ number: 312, mergedAt: '2026-09-20T10:00:00Z', closedAt: '2026-09-20T10:00:00Z' }), Date.parse('2026-09-20T10:00:00Z'));
+  assert.equal(prTime({ number: 312, mergedAt: null, closedAt: '2026-09-19T08:00:00Z' }), Date.parse('2026-09-19T08:00:00Z'));
+  assert.equal(prTime({ number: 312, updatedAt: '2026-09-18T08:00:00Z' }), Date.parse('2026-09-18T08:00:00Z'));
+  assert.equal(prTime({ number: 312 }), 0, 'no time known shows no time (a number would read as 1970)');
+  assert.equal(prTime(null), 0);
 });

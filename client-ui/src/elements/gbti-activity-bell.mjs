@@ -8,7 +8,7 @@
 // hides the bell entirely (no count). Content-item replies + a cross-device server marker defer to P4. Throttle: a
 // light poll + on-open; the replies fan-out over the caller's own Shares is hard-bounded.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildBell, markSeen } from '../activity-bell.mjs';
+import { buildBell, markSeen, prTime } from '../activity-bell.mjs';
 import { canSeeShares, toMs } from '../all-merge.mjs';
 import { selectBellEntries } from '../notification-bell-core.mjs'; // sow-386: the In app settings, shared with the website bell
 import { buildReadHash } from '../browse-hash.mjs';
@@ -47,7 +47,7 @@ const CSS = `
   .grp { padding:6px 4px 2px; }
   .grp-h { display:flex; align-items:center; gap:7px; padding:4px 8px; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
   .grp-h .n { background:var(--hover); color:var(--fg); border-radius:999px; padding:0 6px; font-size:10px; }
-  .it { display:block; padding:8px 10px; border-radius:9px; color:var(--fg); cursor:pointer; }
+  .it { display:block; padding:8px 10px; border-radius:9px; color:var(--fg); cursor:pointer; text-decoration:none; }
   .it:hover { background:var(--hover); }
   .it .t { font-size:13.5px; font-weight:600; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .it .s { font-size:12px; color:var(--muted); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -150,9 +150,11 @@ class GbtiActivityBell extends GbtiElement {
         const lc = prLifecycle(p, null);
         return {
           id: p.number,
-          ts: p.number, // no reliable timestamp in both host modes; the number is a recency proxy for display sort
+          // Both hosts read the Worker's my-pulls, which carries the merge and close times (sow-221). Unread for
+          // PRs is the seen-set of numbers, so this only orders the rows and says when.
+          ts: prTime(p),
           title: p.title || `PR #${p.number}`,
-          sub: lc.needsAttention ? 'Declined — open to see why' : 'Accepted',
+          sub: lc.needsAttention ? 'Declined: open to see why' : 'Accepted',
           href: lc.needsAttention ? 'workspace.html#tab=prs' : (p.html_url || SITE),
         };
       });

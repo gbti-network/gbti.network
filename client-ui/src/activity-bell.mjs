@@ -39,9 +39,19 @@ export function buildBell(sources = {}, seen = {}) {
   return { total: groups.reduce((s, g) => s + g.unread, 0), groups };
 }
 
-/** The watermark to persist when the panel opens: every currently-shown item becomes "seen". The timestamped
- *  sources advance to `now`; PRs record the current resolved set so only LATER resolutions re-badge. */
+/** The watermark to persist when the panel opens or "Mark all read" is clicked: every currently-shown item becomes
+ *  "seen". Every timestamped group advances to `now`; PRs record the current resolved set so only LATER resolutions
+ *  re-badge. The groups come from BELL_GROUPS rather than a list written here: the approvals group was added without
+ *  a watermark, so its held items stayed unread through every "Mark all read" (owner report, 2026-09-24). */
 export function markSeen(sources = {}, now = Date.now()) {
-  const prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
-  return { replies: now, following: now, prsSeen };
+  const seen = {};
+  for (const g of BELL_GROUPS) if (g.key !== 'prs') seen[g.key] = now;
+  seen.prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
+  return seen;
+}
+
+/** When a resolved PR's event happened, in ms: merged, else closed, else last updated; 0 when none is known, so the
+ *  row shows no time. The bell once used the PR NUMBER here, which rendered as a 1970 date ("56 years ago"). */
+export function prTime(p) {
+  return toMs(p?.mergedAt) || toMs(p?.closedAt) || toMs(p?.updatedAt) || 0;
 }

@@ -5999,8 +5999,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { total: groups.reduce((s, g) => s + g.unread, 0), groups };
   }
   function markSeen(sources = {}, now = Date.now()) {
-    const prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
-    return { replies: now, following: now, prsSeen };
+    const seen = {};
+    for (const g of BELL_GROUPS) if (g.key !== "prs") seen[g.key] = now;
+    seen.prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
+    return seen;
+  }
+  function prTime(p) {
+    return toMs(p?.mergedAt) || toMs(p?.closedAt) || toMs(p?.updatedAt) || 0;
   }
 
   // membership/notify-resolve.mjs
@@ -6192,7 +6197,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .grp { padding:6px 4px 2px; }
   .grp-h { display:flex; align-items:center; gap:7px; padding:4px 8px; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
   .grp-h .n { background:var(--hover); color:var(--fg); border-radius:999px; padding:0 6px; font-size:10px; }
-  .it { display:block; padding:8px 10px; border-radius:9px; color:var(--fg); cursor:pointer; }
+  .it { display:block; padding:8px 10px; border-radius:9px; color:var(--fg); cursor:pointer; text-decoration:none; }
   .it:hover { background:var(--hover); }
   .it .t { font-size:13.5px; font-weight:600; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .it .s { font-size:12px; color:var(--muted); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -6302,10 +6307,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const lc11 = prLifecycle(p, null);
         return {
           id: p.number,
-          ts: p.number,
-          // no reliable timestamp in both host modes; the number is a recency proxy for display sort
+          // Both hosts read the Worker's my-pulls, which carries the merge and close times (sow-221). Unread for
+          // PRs is the seen-set of numbers, so this only orders the rows and says when.
+          ts: prTime(p),
           title: p.title || `PR #${p.number}`,
-          sub: lc11.needsAttention ? "Declined — open to see why" : "Accepted",
+          sub: lc11.needsAttention ? "Declined: open to see why" : "Accepted",
           href: lc11.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
         };
       });
