@@ -5714,7 +5714,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/category-picker-core.mjs
-  var PATH_SEP = " › ";
+  var PATH_SEP = " — ";
   function treeNodesFromJson(data) {
     const tree = data && data.tree && typeof data.tree === "object" && !Array.isArray(data.tree) ? data.tree : null;
     if (!tree) return [];

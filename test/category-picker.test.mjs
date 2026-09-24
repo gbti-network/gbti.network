@@ -73,6 +73,8 @@ test('the closed picker shows a full path, and never drops a value it does not k
   assert.deepEqual(valueDisplay(null, 'ai/llms'), { state: 'loading', crumbs: [], leaf: `ai${PATH_SEP}llms` }, 'not "unknown" while loading');
   assert.equal(valueDisplay(tree, '').state, 'empty');
   assert.deepEqual(valueDisplay(TOPICS, 'docker'), { state: 'known', crumbs: [], leaf: 'Docker' });
+  // Owner ruling 2026-09-24: an em dash is allowed as a separator inside a dropdown or selector, and the path uses it.
+  assert.equal(PATH_SEP, ' — ', 'the levels of a path are separated by a spaced em dash');
   assert.equal(valueDisplay(TOPICS, 'retired-topic').state, 'unknown');
 });
 

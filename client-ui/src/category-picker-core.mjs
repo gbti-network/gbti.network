@@ -6,8 +6,9 @@ import { flattenTree } from './categories-core.mjs';
 import { filterTopics, groupTopics } from './topic-picker-core.mjs';
 import { esc } from './base.mjs';
 
-/** The separator the picker draws between the levels of a category path. */
-export const PATH_SEP = ' › ';
+/** The separator the picker draws between the levels of a category path. An em dash, by owner ruling (2026-09-24):
+ *  a separator inside a dropdown or selector is the one place the writing rules allow it. */
+export const PATH_SEP = ' — ';
 
 /**
  * The tree from /taxonomy.json as options in tree order: [{ key: 'ai/prompts', label, depth, crumbs: ['AI'] }]. The
