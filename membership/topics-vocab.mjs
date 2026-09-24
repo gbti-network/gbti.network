@@ -41,6 +41,53 @@ export function topicVocabList(parsed) {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/** sow-227: the extra headings declared in the file's own `groups:` map, as [{ key, label }] in file order. These are
+ *  for topics the category tree has no place for; every other heading comes from the tree. */
+export function topicGroupsFromParsed(parsed) {
+  const src = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.groups : null;
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return [];
+  return Object.entries(src)
+    .filter(([key]) => KEY_RE.test(key))
+    .map(([key, val]) => {
+      const label = typeof val === 'string' ? val.trim() : (val && typeof val.label === 'string' ? val.label.trim() : '');
+      return { key, label: label || titleCase(key) };
+    });
+}
+
+/** sow-227: the heading a topic lands under when its `group` names neither a tree key nor a declared extra. */
+export const MORE_TOPICS = Object.freeze({ key: 'more', label: 'More topics' });
+
+/**
+ * sow-227: the vocabulary with each topic's heading resolved, plus the headings in display order (owner, 2026-09-23:
+ * mirror the superadmin Categories screen). A topic's `group` names a TOP-LEVEL key of the category tree
+ * (house/taxonomy.yml `tree`), whose label and order the heading takes, or a key of the file's own `groups:` map.
+ * Headings follow the tree's order, then the extras in file order, and only headings in use are listed. A topic whose
+ * group resolves to neither falls under MORE_TOPICS, last, so a renamed tree key can never hide a topic.
+ *
+ * Returns { groups: [{ key, label }], topics: [{ key, label, group, groupKey }] }. `group` is the heading LABEL, the
+ * shape /topics.json has always promised (the published extension renders it as a heading). A vocabulary with no
+ * grouped topic at all returns no headings and no group fields, so a flat file still renders flat.
+ */
+export function topicVocabGrouped(parsed, taxonomyTree) {
+  const list = topicVocabList(parsed);
+  if (!list.some((t) => t.group)) return { groups: [], topics: list.map(({ key, label }) => ({ key, label })) };
+  const tree = taxonomyTree && typeof taxonomyTree === 'object' && !Array.isArray(taxonomyTree) ? taxonomyTree : {};
+  const known = new Map();
+  for (const [key, node] of Object.entries(tree)) {
+    known.set(key, { key, label: (node && typeof node.label === 'string' && node.label.trim()) || titleCase(key) });
+  }
+  for (const g of topicGroupsFromParsed(parsed)) if (!known.has(g.key)) known.set(g.key, g);
+  const used = new Set();
+  const topics = list.map((t) => {
+    const g = (t.group && known.get(t.group)) || MORE_TOPICS;
+    used.add(g.key);
+    return { key: t.key, label: t.label, group: g.label, groupKey: g.key };
+  });
+  const groups = [...known.values()].filter((g) => used.has(g.key));
+  if (used.has(MORE_TOPICS.key) && !known.has(MORE_TOPICS.key)) groups.push({ ...MORE_TOPICS });
+  return { groups, topics };
+}
+
 /** Display label for a topic key (falls back to a Title-Cased key). */
 export function topicVocabLabel(parsed, key) {
   const m = topicsVocabFromParsed(parsed);

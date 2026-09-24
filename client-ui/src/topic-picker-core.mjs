@@ -2,7 +2,8 @@
 // fetches /topics.json (the vocabulary) and the member's current prefs.categories (topic keys); these toggle the
 // selection and normalize the endpoint payload. Node-free + pure so node --test covers them.
 
-/** Parse the /topics.json payload into a clean [{ key, label, group? }] list, dropping malformed entries. */
+/** Parse the /topics.json payload into a clean [{ key, label, group?, groupKey? }] list, dropping malformed entries.
+ *  `group` is the heading's label; sow-227 added `groupKey`. */
 export function topicsFromJson(data) {
   const list = Array.isArray(data && data.topics) ? data.topics : [];
   return list
@@ -11,7 +12,15 @@ export function topicsFromJson(data) {
       key: t.key,
       label: typeof t.label === 'string' && t.label ? t.label : t.key,
       ...(typeof t.group === 'string' && t.group ? { group: t.group } : {}),
+      ...(typeof t.groupKey === 'string' && t.groupKey ? { groupKey: t.groupKey } : {}),
     }));
+}
+
+/** sow-227: the heading LABELS from /topics.json's `groups`, in display order (the Categories screen's order, then the
+ *  topic file's own headings). An older payload without `groups` yields [], and grouping falls back to first-seen. */
+export function groupOrderFromJson(data) {
+  const list = Array.isArray(data && data.groups) ? data.groups : [];
+  return list.map((g) => (g && typeof g.label === 'string' ? g.label : '')).filter(Boolean);
 }
 
 /** SOW-080: filter topics by a case-insensitive label (or key) substring. A blank query returns the list unchanged. */
@@ -24,17 +33,22 @@ export function filterTopics(list, query) {
 
 /** SOW-080: group topics by their optional `group` field into [{ group, topics }]. Groups appear in first-seen order;
  *  ungrouped topics collect under a trailing { group: '', topics } bucket (only when any exist). A fully ungrouped
- *  list returns a single { group: '', topics } so the picker renders one flat chip grid (backward-compatible). */
-export function groupTopics(list) {
+ *  list returns a single { group: '', topics } so the picker renders one flat chip grid (backward-compatible).
+ *  sow-227: `order` (heading labels, from groupOrderFromJson) puts the listed headings first, in that order; a heading
+ *  it does not name keeps its first-seen place after them. The topic list is sorted by label, so without an order the
+ *  headings would follow whichever topic sorts first. */
+export function groupTopics(list, order = []) {
   const arr = Array.isArray(list) ? list : [];
-  const order = [];
+  const seen = [];
   const byGroup = new Map();
   for (const t of arr) {
     const g = t && typeof t.group === 'string' && t.group ? t.group : '';
-    if (!byGroup.has(g)) { byGroup.set(g, []); if (g) order.push(g); }
+    if (!byGroup.has(g)) { byGroup.set(g, []); if (g) seen.push(g); }
     byGroup.get(g).push(t);
   }
-  const out = order.map((g) => ({ group: g, topics: byGroup.get(g) }));
+  const wanted = (Array.isArray(order) ? order : []).filter((g) => byGroup.has(g) && g);
+  const ordered = [...new Set([...wanted, ...seen])];
+  const out = ordered.map((g) => ({ group: g, topics: byGroup.get(g) }));
   if (byGroup.has('')) out.push({ group: '', topics: byGroup.get('') });
   return out;
 }

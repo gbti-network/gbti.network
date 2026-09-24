@@ -21,7 +21,7 @@ export const FIELDS = Object.freeze({
     STATUS, VISIBILITY,
     f('publicStub', 'Public stub (when members-only)', 'boolean'), // SOW-016: true = a public stub page; false = no public page
     f('excerpt', 'Excerpt', 'textarea'),
-    f('categories', 'Categories', 'array'),
+    f('categories', 'Category', 'array', { hint: 'one place in the category tree' }), // sow-227: chosen in the tree picker, one path
     TAGS,
     // sow-179/sow-183: which article layout renders this post. Defaults to journal (see
     // src/content.config.ts). sow-326 retired 'editorial' as an option site-wide, so it is not offered here
@@ -38,7 +38,7 @@ export const FIELDS = Object.freeze({
     f('title', 'Title', 'text', { required: true }),
     f('slug', 'Slug', 'text', { required: true, placeholder: 'kebab-case' }),
     f('shortDescription', 'Short description', 'textarea', { required: true }),
-    f('categories', 'Categories', 'array', { placeholder: 'devops, frameworks, wordpress' }),
+    f('categories', 'Category', 'array', { hint: 'one place in the category tree' }),
     STATUS, VISIBILITY,
     f('publicStub', 'Public stub (when members-only)', 'boolean'), // SOW-016
     f('pricing', 'Pricing', 'enum', { options: ['free', 'freemium', 'paid'] }),
@@ -77,7 +77,7 @@ export const FIELDS = Object.freeze({
     f('title', 'Title', 'text', { required: true }),
     f('slug', 'Slug', 'text', { required: true, placeholder: 'kebab-case' }),
     f('shortDescription', 'Short description', 'textarea', { required: true }), // SOW-025: required by the schema (one-liner on cards + the feed)
-    f('categories', 'Categories', 'array', { placeholder: 'devops, accessibility' }),
+    f('categories', 'Category', 'array', { hint: 'one place in the category tree' }),
     STATUS, VISIBILITY,
     f('publicStub', 'Public stub (when members-only)', 'boolean'), // SOW-016
     f('pricing', 'Pricing', 'enum', { options: ['free', 'freemium', 'paid'] }),

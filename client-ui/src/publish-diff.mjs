@@ -49,7 +49,7 @@ export const FIELD_ORDER = Object.freeze([
 
 export const FIELD_LABELS = Object.freeze({
   title: 'Title', slug: 'Permalink', author: 'Author', visibility: 'Visibility', layout: 'Layout',
-  excerpt: 'Excerpt', shortDescription: 'Short description', categories: 'Categories', tags: 'Tags',
+  excerpt: 'Excerpt', shortDescription: 'Short description', categories: 'Category', tags: 'Tags',
   coverImage: 'Cover image', coverAlt: 'Cover image alt text', video: 'Video', featured: 'Featured',
   publicStub: 'Public stub', pricing: 'Pricing', pricingUrl: 'Pricing link', links: 'Links',
   gallery: 'Gallery', galleryStyle: 'Gallery layout', sidebarPosition: 'Sidebar position',

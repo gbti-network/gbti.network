@@ -1,105 +1,113 @@
 # SOW-080: the flat, git-native TOPIC VOCABULARY a member can follow (stored in prefs.categories). DECOUPLED from the
 # content taxonomy (house/taxonomy.yml) so the follow-topic list grows without re-tagging any content. Read by
 # src/lib/taxonomy.ts (the site build + /topics.json), validated against house/topic-map.yml, and rendered by the
-# extension topic picker. Each entry is a kebab-case key -> { label, group? } (group is optional). Admin-owned
-# (house/** is CODEOWNED). A topic that is ALSO a content-taxonomy primary drives the browse drill-down; a topic with a
-# house/topic-map.yml entry also biases the news feed; otherwise a topic is a browse/interest follow. No em/en dashes.
+# topic pickers. Each entry is a kebab-case key -> { label, group }. Admin-owned (house/** is CODEOWNED). A topic that
+# is ALSO a content-taxonomy primary drives the browse drill-down; a topic with a house/topic-map.yml entry also biases
+# the news feed; otherwise a topic is a browse/interest follow. No em/en dashes.
+#
+# sow-227: `group` is the HEADING a topic sits under in the share composer and the follow-topic grid (owner,
+# 2026-09-23: mirror the superadmin Categories screen). It names either a TOP-LEVEL key of house/taxonomy.yml, whose
+# label and order the heading takes (rename DevOps there and the heading follows), or a key of `groups:` below, for
+# topics the category tree has no place for. Those headings follow the tree's, in the order written here. A group that
+# names neither lands under "More topics", and test/topics-vocab.test.mjs fails until it is fixed.
+groups:
+  making: { label: "Making & Science" }
+  life: { label: "Life & Interests" }
 topics:
-  # Tech & Building
-  ai: { label: AI }
-  devops: { label: DevOps }
-  design: { label: Design }
-  blockchain: { label: Blockchain }
-  imagegen: { label: ImageGen }
-  open-source: { label: Open Source }
-  hardware: { label: Hardware }
-  iot: { label: IoT }
-  home-network: { label: Home Network }
-  materials: { label: Materials }
-  mechanics: { label: Mechanics }
-  metaverse: { label: Metaverse }
-  pixel-art: { label: Pixel Art }
-  "3d-printing": { label: 3D Printing }
-  makers: { label: Makers }
-  space: { label: Space }
-  energy: { label: Energy }
-  production: { label: Production }
-  # Tech & Building: the AI Discord section subchannels (SOW-087: each maps to its same-named channel)
-  llm: { label: LLM }
-  musicgen: { label: MusicGen }
-  voice: { label: Voice }
-  video: { label: Video }
-  persona: { label: Persona }
-  mcp: { label: MCP }
-  prompting: { label: Prompting }
-  # Tech & Building: the Devops Discord section subchannels
-  accessibility: { label: Accessibility }
-  aws: { label: AWS }
-  browsers: { label: Browsers }
-  css: { label: CSS }
-  docker: { label: Docker }
-  fonts: { label: Fonts }
-  git: { label: Git }
-  go: { label: Go }
-  hosting: { label: Hosting }
-  javascript: { label: JavaScript }
-  laravel: { label: Laravel }
-  nextjs: { label: Next.js }
-  node: { label: Node }
-  p2p: { label: P2P }
-  php: { label: PHP }
-  python: { label: Python }
-  react: { label: React }
-  rust: { label: Rust }
-  saas: { label: SaaS }
-  security: { label: Security }
-  threejs: { label: Three.js }
-  wordpress: { label: WordPress }
-  # Tech & Building: the Blockchain Discord section subchannels
-  web3: { label: Web3 }
-  nfts: { label: NFTs }
-  dapps: { label: dApps }
-  btc: { label: BTC }
-  mining: { label: Mining }
-  rwa: { label: RWA }
-  blockchain-gaming: { label: Blockchain Gaming }
-  # Business & Work
-  business: { label: Business }
-  entrepreneurship: { label: Entrepreneurship }
-  startups: { label: Startups }
-  finance: { label: Finance }
-  marketing: { label: Marketing }
-  branding: { label: Branding }
-  sales: { label: Sales }
-  leadership: { label: Leadership }
-  realestate: { label: Real Estate }
-  law: { label: Law }
-  # Creative & Media
-  writing: { label: Writing }
-  photography: { label: Photography }
-  # Entertainment is a content-taxonomy PRIMARY (house/taxonomy.yml, the parent of gaming -> minecraft -> mods),
-  # so it drives a browse drill-down. It was missing from this follow vocabulary while its own CHILD, gaming,
-  # was present, which read as a hole rather than a decision: a member could follow Gaming but not the parent
-  # subject the network says it covers. Added 2026-08-11 with the welcome-step default group.
-  entertainment: { label: Entertainment }
-  music: { label: Music }
-  cinema: { label: Cinema }
-  memes: { label: Memes }
-  gaming: { label: Gaming }
-  # Life & Interests
-  cooking: { label: Cooking }
-  gardening: { label: Gardening }
-  homesteading: { label: Homesteading }
-  agriculture: { label: Agriculture }
-  bicycles: { label: Bicycles }
-  health: { label: Health }
-  medicine: { label: Medicine }
-  education: { label: Education }
-  charity: { label: Charity }
-  religion: { label: Religion }
-  esoteric: { label: Esoteric }
-  mindset: { label: Mindset }
-  nature: { label: Nature }
-  outdoors: { label: Outdoors }
-  transportation: { label: Transportation }
-  novelty: { label: Novelty }
+  # DevOps (the Categories screen heading)
+  accessibility: { label: Accessibility, group: devops }
+  aws: { label: AWS, group: devops }
+  browsers: { label: Browsers, group: devops }
+  css: { label: CSS, group: devops }
+  devops: { label: DevOps, group: devops }
+  docker: { label: Docker, group: devops }
+  fonts: { label: Fonts, group: devops }
+  git: { label: Git, group: devops }
+  go: { label: Go, group: devops }
+  hosting: { label: Hosting, group: devops }
+  javascript: { label: JavaScript, group: devops }
+  laravel: { label: Laravel, group: devops }
+  nextjs: { label: Next.js, group: devops }
+  node: { label: Node, group: devops }
+  open-source: { label: Open Source, group: devops }
+  p2p: { label: P2P, group: devops }
+  php: { label: PHP, group: devops }
+  python: { label: Python, group: devops }
+  react: { label: React, group: devops }
+  rust: { label: Rust, group: devops }
+  saas: { label: SaaS, group: devops }
+  security: { label: Security, group: devops }
+  threejs: { label: Three.js, group: devops }
+  wordpress: { label: WordPress, group: devops }
+  # AI (the Categories screen heading)
+  ai: { label: AI, group: ai }
+  imagegen: { label: ImageGen, group: ai }
+  llm: { label: LLM, group: ai }
+  mcp: { label: MCP, group: ai }
+  musicgen: { label: MusicGen, group: ai }
+  persona: { label: Persona, group: ai }
+  prompting: { label: Prompting, group: ai }
+  video: { label: Video, group: ai }
+  voice: { label: Voice, group: ai }
+  # Blockchain (the Categories screen heading)
+  blockchain: { label: Blockchain, group: blockchain }
+  blockchain-gaming: { label: Blockchain Gaming, group: blockchain }
+  btc: { label: BTC, group: blockchain }
+  dapps: { label: dApps, group: blockchain }
+  metaverse: { label: Metaverse, group: blockchain }
+  mining: { label: Mining, group: blockchain }
+  nfts: { label: NFTs, group: blockchain }
+  rwa: { label: RWA, group: blockchain }
+  web3: { label: Web3, group: blockchain }
+  # Entertainment (the Categories screen heading)
+  cinema: { label: Cinema, group: entertainment }
+  # Entertainment is also a content-taxonomy PRIMARY (house/taxonomy.yml, the parent of gaming -> minecraft -> mods),
+  # so it drives a browse drill-down. Added 2026-08-11 with the welcome-step default group.
+  entertainment: { label: Entertainment, group: entertainment }
+  gaming: { label: Gaming, group: entertainment }
+  memes: { label: Memes, group: entertainment }
+  music: { label: Music, group: entertainment }
+  writing: { label: Writing, group: entertainment }
+  # Business (the Categories screen heading)
+  branding: { label: Branding, group: business }
+  business: { label: Business, group: business }
+  entrepreneurship: { label: Entrepreneurship, group: business }
+  finance: { label: Finance, group: business }
+  law: { label: Law, group: business }
+  leadership: { label: Leadership, group: business }
+  marketing: { label: Marketing, group: business }
+  realestate: { label: Real Estate, group: business }
+  sales: { label: Sales, group: business }
+  startups: { label: Startups, group: business }
+  # Design (the Categories screen heading)
+  design: { label: Design, group: design }
+  photography: { label: Photography, group: design }
+  pixel-art: { label: Pixel Art, group: design }
+  # Making & Science (a heading of its own; the category tree has no place for these)
+  "3d-printing": { label: "3D Printing", group: making }
+  energy: { label: Energy, group: making }
+  hardware: { label: Hardware, group: making }
+  home-network: { label: Home Network, group: making }
+  iot: { label: IoT, group: making }
+  makers: { label: Makers, group: making }
+  materials: { label: Materials, group: making }
+  mechanics: { label: Mechanics, group: making }
+  production: { label: Production, group: making }
+  space: { label: Space, group: making }
+  # Life & Interests (a heading of its own; the category tree has no place for these)
+  agriculture: { label: Agriculture, group: life }
+  bicycles: { label: Bicycles, group: life }
+  charity: { label: Charity, group: life }
+  cooking: { label: Cooking, group: life }
+  education: { label: Education, group: life }
+  esoteric: { label: Esoteric, group: life }
+  gardening: { label: Gardening, group: life }
+  health: { label: Health, group: life }
+  homesteading: { label: Homesteading, group: life }
+  medicine: { label: Medicine, group: life }
+  mindset: { label: Mindset, group: life }
+  nature: { label: Nature, group: life }
+  novelty: { label: Novelty, group: life }
+  outdoors: { label: Outdoors, group: life }
+  religion: { label: Religion, group: life }
+  transportation: { label: Transportation, group: life }

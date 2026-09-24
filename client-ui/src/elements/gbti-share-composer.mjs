@@ -10,7 +10,7 @@
 // The host holds the GitHub token; this element only calls the injected client.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
-import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
+import './gbti-category-picker.mjs'; // sow-227: the searchable, grouped topic picker (it loads the vocabulary itself)
 import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote, shareAuthorTarget, authorMoveRemovals } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
@@ -20,7 +20,7 @@ import { renderMarkdown } from '../../../client/src/markdown.mjs'; // sow-350: a
 
 // sow-204: the locked-state list moved to SHARE_LOCKED_STATES in share-post-core.mjs with the branch
 // decision that read it. Two copies of a membership-state list is how the affordance and the gate drift apart.
-const SITE = 'https://gbti.network';
+// sow-227: the site address went with the topic fetch, which <gbti-category-picker> now owns.
 
 // sow-192 Phase E: inline glyphs for the wizard chrome. The shadow DOM cannot reach the site's light-DOM sprite
 // (#ico-*), so the step icons are inlined here. `fill:currentColor` lets them inherit the button/label color.
@@ -160,7 +160,7 @@ const CSS = `
   .step .sub { margin:0 0 12px; }
   .hint { margin:8px 0 0; font-size:12px; color:var(--muted); font-family:var(--font-mono, monospace); }
   .autoblock { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
-  .autolabel { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--brand); margin-bottom:8px; }
+  .autolabel { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--accent); margin-bottom:8px; } .autoblock .cat { margin-bottom:8px; }
   .autolabel svg { width:14px; height:14px; fill:currentColor; flex:none; }
   .authorrow { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
   .authorrow[hidden] { display:none; }
@@ -265,8 +265,8 @@ class GbtiShareComposer extends GbtiElement {
 
   // sow-192 Phase E: the same fields as before, redistributed into a four-step wizard (Link -> Preview ->
   // Note -> Publish). Every field stays in the DOM at all times (hidden steps keep their nodes), so the eager
-  // OG fetch + the field values persist across steps and the existing selectors in _fetchPreview / _loadTopics
-  // / _post keep working unchanged. Only the layout + step chrome are new; the data paths are identical.
+  // OG fetch + the field values persist across steps and the existing selectors in _fetchPreview / _post keep
+  // working unchanged. Only the layout + step chrome are new; the data paths are identical.
   _renderComposer() {
     this._edit = null; // sow-304: a fresh render is always the create form
     this._step = 1;
@@ -297,9 +297,7 @@ class GbtiShareComposer extends GbtiElement {
           <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
           <div class="autoblock">
             <span class="autolabel">${IC.bolt} Categorised and tagged automatically</span>
-            <select class="cat" aria-label="Category" required>
-              <option value="">Choose a category</option>
-            </select>
+            <gbti-category-picker class="cat" vocab="topics" aria-label="Category" required></gbti-category-picker>
             <input class="tags" type="text" aria-label="Tags" placeholder="Tags (optional, comma separated)" maxlength="120" />
           </div>
           <div class="authorrow" data-author-row hidden>
@@ -359,7 +357,7 @@ class GbtiShareComposer extends GbtiElement {
     // `on()` binds a single element, so a group of buttons needs delegation.
     this.$('.card')?.addEventListener('click', (e) => this._onCardClick(e));
     this.on('.post', 'click', () => this._post());
-    this.on('select.cat', 'change', () => this._syncPostReady());
+    this.on('.cat', 'change', () => this._syncPostReady());
     // SOW-057 + SOW-102: fetch the link preview EAGERLY — on paste and on a debounced input, not only on
     // blur/enter (change) — so a pasted URL imports without the member ever leaving the field. The same-URL
     // guard in _fetchPreview keeps the overlapping triggers from double-fetching.
@@ -371,7 +369,7 @@ class GbtiShareComposer extends GbtiElement {
     });
     this._applyPublicLock();
     this._go(1);
-    this._loadTopics();
+    this.$('.cat')?.ready?.then(() => this._applySuggested()); // sow-227: a suggestion waits for the topics to load
     this._loadAuthorTargets(); // sow-183 for shares: superadmin-only, renders nothing for everyone else
   }
 
@@ -430,7 +428,7 @@ class GbtiShareComposer extends GbtiElement {
   // draft, publishes nothing and needs none.
   _needsCategory(status = null) {
     const next = status || (this._edit?.status === 'draft' ? 'draft' : 'published');
-    return next === 'published' && !this.$('select.cat')?.value;
+    return next === 'published' && !this.$('.cat')?.value;
   }
 
   _syncPostReady() {
@@ -517,9 +515,9 @@ class GbtiShareComposer extends GbtiElement {
     set('input.desc', item.shortDescription || '');
     set('textarea', body);
     set('input.tags', Array.isArray(item.tags) ? item.tags.join(', ') : '');
-    // The topics list loads asynchronously, so the option may not exist yet: set it now AND leave it as the
-    // suggestion _applySuggested applies once the options arrive (it never clobbers a non-empty pick).
-    const cat = this.$('select.cat'); if (cat) cat.value = item.category || '';
+    // The picker shows a stored topic as it is written until its list loads, and flags one the list no longer has.
+    // It stays the suggestion too, which _applySuggested never lets clobber a non-empty pick.
+    const cat = this.$('.cat'); if (cat) cat.value = item.category || '';
     this._suggested = item.category || null;
     this._image = item.image || null;
     // sow-222: an edit keeps the creator it was published with (editInputFor carries it; this is the display side).
@@ -625,25 +623,6 @@ class GbtiShareComposer extends GbtiElement {
     }
   }
 
-  // SOW-087: populate the category select from the public topic vocabulary (/topics.json). The vocabulary is
-  // static per session, so it is fetched once and reused across re-renders. A fetch failure leaves the select
-  // with only the empty option, and Post then stays disabled: a share cannot publish without a category.
-  async _loadTopics() {
-    if (!this._topics) {
-      try {
-        const r = await fetch(`${SITE}/topics.json`, { cache: 'no-cache' });
-        this._topics = topicsFromJson(await r.json());
-      } catch {
-        this._topics = [];
-      }
-    }
-    const sel = this.$('select.cat');
-    if (!sel) return;
-    sel.innerHTML = `<option value="">Choose a category</option>` +
-      this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('');
-    this._applySuggested();
-  }
-
   /**
    * sow-183 for shares (owner, 2026-09-10): the Author picker. Sourced from the OPTIONAL client capability
    * client.authorTargets, which only the website adapter implements and which only ever succeeds for a superadmin,
@@ -705,11 +684,10 @@ class GbtiShareComposer extends GbtiElement {
     return (pick || current || '').toLowerCase() || undefined;
   }
 
-  // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
+  // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick, and only a topic the list has.
   _applySuggested() {
-    const sel = this.$('select.cat');
-    if (sel && this._suggested && !sel.value
-      && [...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
+    const sel = this.$('.cat');
+    if (sel && this._suggested && !sel.value && sel.has?.(this._suggested)) sel.value = this._suggested;
     // sow-303: the same latch for tags. A non-empty field means the author has typed something, so a later OG
     // refetch leaves it alone, exactly as `sel.value` does for the category above. Both are checked
     // independently: a member who picked a category but left tags blank still gets tags suggested.
@@ -793,7 +771,7 @@ class GbtiShareComposer extends GbtiElement {
     const body = (this.$('textarea')?.value || '').trim();
     const url = (this.$('input[type=url]')?.value || '').trim();
     const visibility = this._visibility || 'members'; // sow-192 Phase E: the audience card selection
-    const category = this.$('select.cat')?.value || ''; // SOW-087: the topic category, required to publish
+    const category = this.$('.cat')?.value || ''; // SOW-087: the topic category, required to publish
     // sow-303: free-form tags, normalized HERE rather than trusted. buildShareFile parses against the share
     // schema but serializes the pre-parse object, so the schema's tag normalization is computed and thrown
     // away while its rejection still fires: a tag that is not already house-shaped does not get fixed, it
@@ -801,7 +779,7 @@ class GbtiShareComposer extends GbtiElement {
     const tags = normalizeTagInput(this.$('input.tags')?.value);
     const msg = this.$('.msg');
     if (!this._edit && !body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
-    if (this._needsCategory(status)) { this._go(2); this.$('select.cat')?.focus(); this._say(msg, 'Choose a category before posting.', 'err'); return; }
+    if (this._needsCategory(status)) { this._go(2); this.$('.cat')?.focus(); this._say(msg, 'Choose a category before posting.', 'err'); return; }
     // SOW-092: a real progressing state — disable the button and show a ring spinner for the several
     // seconds postShare spends on the fork commit + PR round-trip (the card dim alone read as stuck).
     const btn = this.$('button.post');
@@ -848,7 +826,7 @@ class GbtiShareComposer extends GbtiElement {
       const res = await this.client.postShare({ input, body, ...(authorTarget ? { authorTarget } : {}) });
       this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ''}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, 'ok'); // SOW-072 P2: consistent ack
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
-      const cat = this.$('select.cat'); if (cat) cat.value = '';
+      const cat = this.$('.cat'); if (cat) cat.value = '';
       const tg = this.$('input.tags'); if (tg) tg.value = '';
       this._paintAuthorRow(); // back to "You"
       const postedImage = this._image;

@@ -16,6 +16,8 @@ import { resolveContentAsset } from '../assets.mjs'; // SOW-062 P3 + sow-165: re
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
 import './gbti-discussion.mjs'; // SOW-062 P6: the shared discussion thread, embedded in the editor for published items
 import './gbti-cta-assignment.mjs'; // sow-281: the read-only "which CTA does this item carry" line in the Links section
+import './gbti-category-picker.mjs'; // sow-227: the Category field is picked from the tree, not typed
+import { categoryFieldHtml } from '../category-picker-core.mjs'; // sow-227: that field's markup + the hidden input gather() reads
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174: the curated banner-color swatches
 import { detectLinkSource } from '../../../src/lib/project-page.mjs'; // sow-175: wordpress.org/github.com URL detection
@@ -1117,6 +1119,7 @@ class GbtiContentEditor extends GbtiElement {
     // array -> chips (value arrives comma-joined; hidden input keeps the comma string for gather())
     if (f.kind === 'array') {
       const arr = String(v).split(',').map((s) => s.trim()).filter(Boolean);
+      if (f.key === 'categories') return wrap(`${label}${categoryFieldHtml(arr)}`); // sow-227: one path, from the tree
       const accent = f.key !== 'tags';
       const chips = arr.map((c) => `<span class="chip2 ${accent ? '' : 'chip-neutral'}">${esc(c)}<span class="x" data-rm>${X}</span></span>`).join('');
       return wrap(`${label}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" placeholder="${esc(f.placeholder || 'Add…')}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc(arr.join(', '))}" />`);
@@ -1624,6 +1627,7 @@ class GbtiContentEditor extends GbtiElement {
       });
       box.addEventListener('click', (e) => { const rm = e.target.closest('.chip2 .x'); if (rm) { rm.closest('.chip2').remove(); persist(); } });
     });
+    this.$('[data-cat-picker]')?.addEventListener('change', (e) => { const h = this.$('input[data-key="categories"]'); if (h) h.value = (e.detail?.path || []).join(', '); this._markDirty(); });
     this.$$('.tgl[data-k]').forEach((tg) => tg.addEventListener('click', () => { const on = tg.classList.toggle('on'); tg.setAttribute('aria-checked', on); const cb = this.$(`input[data-key="${tg.dataset.k}"]`); if (cb) cb.checked = on; }));
     this.$$('[data-visswitch]').forEach((sw) => sw.querySelectorAll('.vs-opt').forEach((opt) => opt.addEventListener('click', () => {
       const vis = opt.dataset.vis; sw.dataset.active = vis;

@@ -16,6 +16,11 @@ export const TOKENS = `
   --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
   --text: #24222a; --fg: #24222a; --muted: #57545e;
   --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
+  /* sow-227: three website tokens (src/styles/gbti-v3.css), pinned here like the rest. Until now a shared component
+     that named them INHERITED them from whichever page hosted it (custom properties cross the shadow boundary), so
+     the extension's older values (extension/shell.css, e.g. --fg-mute #84818c, which fails AA) leaked in there while
+     the website got its own. Pinning them makes the extension follow the website. */
+  --line-2: #ddd9d4; --green-tint: #e9f6ef; --fg-mute: #6c6976;
   --radius: 12px;
   --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
   --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
@@ -28,6 +33,9 @@ export const TOKENS = `
   --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a;
   --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
   --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
+  /* sow-227: --fg-mute is the site's .50 lifted to .62, because .50 measures about 4.3:1 on the dark panel, under AA
+     for the small text it labels (owner-approved in the category picker design). */
+  --line-2: rgba(255,255,255,.20); --green-tint: rgba(31,158,95,.13); --fg-mute: rgba(243,242,240,.62);
   /* tooltip flips to a light bubble on dark surfaces, same inversion as the site's own CSS */
   --tooltip-bg: #f3f2f0; --tooltip-fg: #24222a; --tooltip-border: rgba(0,0,0,.12);
 }

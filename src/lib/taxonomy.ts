@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { topicVocabList, topicVocabLabel } from '../../membership/topics-vocab.mjs';
+import { topicVocabGrouped, topicVocabLabel } from '../../membership/topics-vocab.mjs';
 
 interface TaxNode {
   label: string;
@@ -17,7 +17,9 @@ interface TaxFile {
 const file = path.resolve(process.cwd(), 'house/taxonomy.yml');
 const TREE: Record<string, TaxNode> = (yaml.load(fs.readFileSync(file, 'utf8')) as TaxFile)?.tree ?? {};
 
-// Flat key -> label map (keys are unique across the tree).
+// Flat key -> label map. sow-227: keys are NOT unique across the tree (`entertainment` is both a top-level category and
+// ai > prompts > entertainment); both carry the same label, so this map is still right, but anything that needs to
+// tell the two apart must use the full path.
 const LABELS: Record<string, string> = {};
 (function walk(nodes: Record<string, TaxNode>) {
   for (const [key, node] of Object.entries(nodes)) {
@@ -104,10 +106,16 @@ try {
   TOPICS_PARSED = {};
 }
 
-/** SOW-054/SOW-080: the followed-topic vocabulary as {key,label,group?}, sorted by label. Drives the browse
- *  drill-down and (via house/topic-map.yml) the news default. */
-export function topicList(): { key: string; label: string; group?: string }[] {
-  return topicVocabList(TOPICS_PARSED);
+/** SOW-054/SOW-080: the followed-topic vocabulary, sorted by label. Drives the browse drill-down and (via
+ *  house/topic-map.yml) the news default. sow-227: each topic carries its heading, resolved against this tree:
+ *  `group` is the heading's label and `groupKey` its key (membership/topics-vocab.mjs topicVocabGrouped). */
+export function topicList(): { key: string; label: string; group?: string; groupKey?: string }[] {
+  return topicVocabGrouped(TOPICS_PARSED, TREE).topics;
+}
+
+/** sow-227: the topic headings in display order (the Categories screen's order, then the topic file's own). */
+export function topicGroups(): { key: string; label: string }[] {
+  return topicVocabGrouped(TOPICS_PARSED, TREE).groups;
 }
 
 /** Display label for a followed-topic key; falls back to a Title-Cased key. */

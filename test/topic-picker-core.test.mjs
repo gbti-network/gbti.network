@@ -1,7 +1,7 @@
 // SOW-054 Phase 3/5: the pure followed-topics picker helpers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { topicsFromJson, toggleTopic, selectedTopics, filterTopics, groupTopics, selectAllTopics, seedDefaultTopics, DEFAULT_TOPICS } from '../client-ui/src/topic-picker-core.mjs';
+import { topicsFromJson, groupOrderFromJson, toggleTopic, selectedTopics, filterTopics, groupTopics, selectAllTopics, seedDefaultTopics, DEFAULT_TOPICS } from '../client-ui/src/topic-picker-core.mjs';
 import fs from 'node:fs';
 import yaml from 'js-yaml';
 import { topicVocabKeys } from '../membership/topics-vocab.mjs';
@@ -107,4 +107,30 @@ test('every DEFAULT_TOPICS key really exists in house/topics.yml', () => {
   for (const k of DEFAULT_TOPICS) {
     assert.ok(keys.has(k), `DEFAULT_TOPICS key "${k}" is not in house/topics.yml`);
   }
+});
+
+// ---- sow-227: the heading order and key ----
+
+test('sow-227: topicsFromJson keeps groupKey beside the heading label', () => {
+  assert.deepEqual(topicsFromJson({ topics: [{ key: 'llm', label: 'LLM', group: 'AI', groupKey: 'ai', newsCategories: ['x'] }] }),
+    [{ key: 'llm', label: 'LLM', group: 'AI', groupKey: 'ai' }]);
+});
+
+test('sow-227: groupOrderFromJson reads the heading labels in order; an older payload yields none', () => {
+  assert.deepEqual(groupOrderFromJson({ groups: [{ key: 'devops', label: 'DevOps' }, { key: 'ai', label: 'AI' }, null, { key: 'x' }] }), ['DevOps', 'AI']);
+  assert.deepEqual(groupOrderFromJson({ topics: [] }), []);
+  assert.deepEqual(groupOrderFromJson(null), []);
+});
+
+test('sow-227: groupTopics honours an explicit order over first-seen, unlisted headings after it, ungrouped last', () => {
+  // Sorted by label, the first topic ("3D Printing") would otherwise put its heading first.
+  const list = [
+    { key: '3d-printing', label: '3D Printing', group: 'Making' },
+    { key: 'ai', label: 'AI', group: 'AI' },
+    { key: 'misc', label: 'Misc' },
+    { key: 'docker', label: 'Docker', group: 'DevOps' },
+    { key: 'zine', label: 'Zine', group: 'Unlisted' },
+  ];
+  assert.deepEqual(groupTopics(list, ['DevOps', 'AI', 'Making', 'Absent']).map((g) => g.group), ['DevOps', 'AI', 'Making', 'Unlisted', '']);
+  assert.deepEqual(groupTopics(list).map((g) => g.group), ['Making', 'AI', 'DevOps', 'Unlisted', ''], 'no order: first-seen, as before');
 });

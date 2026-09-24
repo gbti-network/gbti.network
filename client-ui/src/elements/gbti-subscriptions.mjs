@@ -7,6 +7,9 @@
 // SOW-060: follows + channel-follows are a FREE-tier perk (any signed-in non-banned member; the Worker is the
 // authority, fail-closed). A failed read is a transient error, not a paywall. Host-agnostic + inert in public.
 import { GbtiElement, define, esc } from '../base.mjs';
+// sow-227: the Topics sub-tab renders <gbti-topic-picker>, and on the website nothing else on /workbench/ defines it
+// (only the extension's barrel import did), so the sub-tab rendered blank there. The element imports it itself now.
+import './gbti-topic-picker.mjs';
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
