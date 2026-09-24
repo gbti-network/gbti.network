@@ -36,7 +36,7 @@ import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacte
 
 import { signSession, verifySession, sessionCookieHeader, readSessionCookie } from './session.mjs';
 import { signinLanding } from './signin-landing.mjs'; // sow-343: a new account meets the welcome steps first
-import { handleExtensionStart, handleExtensionCallback, handleExtensionClaim } from './extension-signin.mjs'; // sow-393: extension sign-in through the website
+import { handleExtensionStart, handleExtensionCallback, handleExtensionClaim, EXT_STATE_KIND } from './extension-signin.mjs'; // sow-393: extension sign-in through the website
 import {
   githubAuthorizeUrl,
   githubExchangeCode,
@@ -395,10 +395,13 @@ async function handleGithubCallback(request, env, ctx) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = await unpackState(url.searchParams.get('state'), env);
+  // sow-393: the extension's website sign-in uses this same registered callback. Its states carry their own kind and go
+  // to the extension handler, which never runs a signup; any OTHER kind is refused below.
+  if (state?.kind === EXT_STATE_KIND) return handleExtensionCallback(request, env, EXT_SIGNIN_HELPERS);
   // Split, because these mean opposite things. No `code` is usually the MEMBER declining GitHub's consent screen,
   // which is not an error at all; an unusable `state` is expired (past the 600s TTL), tampered with, or truncated
   // by something in the middle. One is a person changing their mind, the other is a bug or an attack.
-  // sow-393: an extension sign-in state (it carries a kind) never completes a website signup.
+  // sow-393: a state of any other kind never completes a website signup.
   if (!code || !state || state.kind) {
     funnel('callback rejected', { reason: !code ? 'no_code' : 'bad_state', hasState: Boolean(url.searchParams.get('state')) });
     return json({ error: 'bad_oauth_state' }, 400);
@@ -1155,7 +1158,6 @@ export default {
 
       // sow-393: the extension signs in through the website (extension-signin.mjs), no device code.
       if (method === 'GET' && pathname === '/auth/extension/start') return await handleExtensionStart(request, env, EXT_SIGNIN_HELPERS);
-      if (method === 'GET' && pathname === '/auth/extension/callback') return await handleExtensionCallback(request, env, EXT_SIGNIN_HELPERS);
       if (pathname === '/auth/extension/claim') return await handleExtensionClaim(request, env, EXT_SIGNIN_HELPERS);
       if (method === 'GET' && pathname === '/signup/start') return await handleStart(request, env);
       if (method === 'GET' && pathname === '/signup/github/callback') return await handleGithubCallback(request, env, ctx); // sow-279: ctx for the fire-and-forget coupon notice

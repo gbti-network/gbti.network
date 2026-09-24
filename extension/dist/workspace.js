@@ -27478,9 +27478,8 @@ From the author:
       const who = LOGIN_RE.test(known) ? known : "";
       const useCode = `<button class="alt" data-auth-code type="button">Use a code instead</button>`;
       const action = this._waiting ? `<div class="waitbox">
-           <p class="sub">Finish signing in in the GitHub window that just opened. The first time, GitHub asks you to authorize GBTI Network, and the window closes by itself.</p>
-           <div class="reassure">${shield}<p>${REASSURANCE}</p></div>
-           <p class="note">Waiting for you to authorize&hellip;</p>
+           <p class="sub">Finish signing in using the GitHub window that just opened. It closes by itself when you are done.</p>
+           <p class="note">Waiting for GitHub&hellip;</p>
            ${useCode}
          </div>` : code ? `<div class="codebox">
            <p class="sub">Enter this code at GitHub to finish signing in:</p>

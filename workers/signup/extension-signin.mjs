@@ -1,15 +1,22 @@
 // sow-393: the extension signs in THROUGH THE WEBSITE, with no device code (owner, 2026-09-24).
 //
-// The extension keeps exactly the credential it always had, a GitHub App user token with its refresh token, because
-// every Worker route verifies a bearer by asking GitHub who it belongs to and the extension also reads GitHub with it.
-// Only HOW it gets that token changes: a normal web redirect through this Worker instead of a code the member copies.
+// It is the website's own "Sign in with GitHub" (the classic OAuth App, profile read only), so GitHub's page asks
+// nothing a member has not seen on the website, and the token it yields can read the member's profile and nothing
+// else: it cannot touch a repository. (The first build used GBTI's GitHub App, as the device code does; GitHub labels
+// every such app "Act on your behalf" because its sign-ins can act on repositories where it is installed, and the
+// owner asked why a plain sign-in needed that. Owner ruling 2026-09-24: use the normal sign-in.) Every Worker route
+// verifies a bearer by asking GitHub who it belongs to, so this token works everywhere the old one did. It does not
+// expire on its own; it lasts until the member signs out or removes it in GitHub.
+//
+// GitHub returns to the website's registered callback, /signup/github/callback, which hands any state of this module's
+// kind to handleExtensionCallback, so no new callback URL had to be registered on GitHub.
 //
 //   1. GET  /auth/extension/start?challenge=C&redirect=R[&login=L]   The extension opens this in Chrome's own sign-in
 //                                               window (chrome.identity.launchWebAuthFlow). C is a PKCE S256 challenge
 //                                               whose verifier never leaves the extension; R is the extension's
 //                                               https://<id>.chromiumapp.org/signed-in address, and only allow-listed
-//                                               extension ids are accepted. Redirects to the GitHub App's authorize page.
-//   2. GET  /auth/extension/callback            GitHub returns here. The code is exchanged with the App secret, the
+//                                               extension ids are accepted. Redirects to GitHub's authorize page.
+//   2. GET  /signup/github/callback (state of kind ext-signin)   GitHub returns here. The code is exchanged, the
 //                                               token set is parked in KV under a random one-time HANDOFF code for
 //                                               120s, the website session is minted (one sign-in, both surfaces), and
 //                                               the window is sent to R#code=HANDOFF.
@@ -36,7 +43,7 @@
 import { signSession, sessionCookieHeader, timingSafeEqual } from './session.mjs';
 import { csrfCookieHeader, generateCsrfToken } from './csrf.mjs';
 import { rateLimit } from './abuse.mjs';
-import { githubAuthorizeUrl, githubExchangeAppCode, githubFetchUser } from './oauth.mjs';
+import { githubAuthorizeUrl, githubExchangeCodeTokens, githubFetchUser } from './oauth.mjs';
 import { wlog } from './wlog.mjs';
 
 export const EXT_STATE_KIND = 'ext-signin';
@@ -100,8 +107,10 @@ export function allowedRedirectId(redirect, env) {
 const toExtension = (id, fragment) => `https://${id}.chromiumapp.org/signed-in#${fragment}`;
 
 const nonceCookie = (challenge, value, maxAge) => `${nonceCookieName(challenge)}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
-const configured = (env) => Boolean(env.GITHUB_PUBLISHER_CLIENT_ID && env.GITHUB_PUBLISHER_CLIENT_SECRET && env.SESSION_SECRET && env.SIGNUP_KV);
-const callbackUrl = (env) => `${env.PUBLIC_BASE_URL}/auth/extension/callback`;
+const configured = (env) => Boolean(env.GITHUB_OAUTH_CLIENT_ID && env.GITHUB_OAUTH_CLIENT_SECRET && env.SESSION_SECRET && env.SIGNUP_KV);
+// The website sign-in's registered callback: GitHub requires the redirect to match it, and it routes our kind here.
+const callbackUrl = (env) => `${env.PUBLIC_BASE_URL}/signup/github/callback`;
+export const EXT_SCOPE = 'read:user'; // who the member is; not even their email
 
 /**
  * A failed sign-in goes back to the extension with a coarse reason its sign-in screen explains. Deliberately coarse,
@@ -134,16 +143,16 @@ export async function handleExtensionStart(request, env, h) {
   const nonce = crypto.randomUUID();
   const jti = crypto.randomUUID();
   const state = await h.packState({ kind: EXT_STATE_KIND, challenge, nonce, jti, rid }, env);
-  // scope null: a GitHub App takes its permissions from the App, and asking for none keeps the token identity-only.
+  // read:user only: the profile, which is all a sign-in needs.
   // login: when the extension already knows the member's website account ("Continue as"), GitHub suggests that account.
   // prompt=select_account: GitHub always shows its account picker, so no sign-in completes without a click (above).
-  const authorize = githubAuthorizeUrl({ clientId: env.GITHUB_PUBLISHER_CLIENT_ID, redirectUri: callbackUrl(env), state, scope: null });
+  const authorize = githubAuthorizeUrl({ clientId: env.GITHUB_OAUTH_CLIENT_ID, redirectUri: callbackUrl(env), state, scope: EXT_SCOPE });
   const location = `${authorize}&prompt=select_account${login ? `&login=${encodeURIComponent(login)}` : ''}`;
   log('start', {});
   return h.redirect(location, { 'Set-Cookie': nonceCookie(challenge, nonce, 600), 'Referrer-Policy': 'no-referrer', ...NO_STORE });
 }
 
-/** GET /auth/extension/callback */
+/** The GitHub return for an extension sign-in: /signup/github/callback with a state of kind ext-signin. */
 export async function handleExtensionCallback(request, env, h, fetchImpl = globalThis.fetch) {
   const url = new URL(request.url);
   const state = await h.unpackState(url.searchParams.get('state'), env);
@@ -168,7 +177,7 @@ export async function handleExtensionCallback(request, env, h, fetchImpl = globa
   let tokens;
   let user;
   try {
-    tokens = await githubExchangeAppCode({ clientId: env.GITHUB_PUBLISHER_CLIENT_ID, clientSecret: env.GITHUB_PUBLISHER_CLIENT_SECRET, code, redirectUri: callbackUrl(env) }, fetchImpl);
+    tokens = await githubExchangeCodeTokens({ clientId: env.GITHUB_OAUTH_CLIENT_ID, clientSecret: env.GITHUB_OAUTH_CLIENT_SECRET, code, redirectUri: callbackUrl(env) }, fetchImpl);
     user = await githubFetchUser(tokens.accessToken, fetchImpl);
   } catch (err) {
     log('callback failed', { step: tokens ? 'github_fetch_user' : 'github_exchange_code', status: err?.status ?? null });

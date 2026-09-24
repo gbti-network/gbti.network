@@ -1,5 +1,7 @@
 // sow-393: the extension signs in through the website. The three Worker routes, driven through the real router:
-// start -> GitHub -> callback -> https://<extension id>.chromiumapp.org/signed-in#code -> claim with the PKCE verifier.
+// start -> GitHub -> the website's /signup/github/callback (which hands our state to the extension handler) ->
+// https://<extension id>.chromiumapp.org/signed-in#code -> claim with the PKCE verifier. It is the website's normal
+// OAuth App sign-in (profile read only), not the GitHub App.
 // The code must only ever be sent to an allow-listed chromiumapp.org address: Chrome hands that to the extension that
 // opened its sign-in window and to nothing else. Sending it anywhere a page can read is how a token gets stolen.
 import { test } from 'node:test';
@@ -27,8 +29,8 @@ function fakeEnv(extra = {}) {
   return {
     SESSION_SECRET: 'test-session-secret-0123456789',
     SIGNUP_KV: fakeKv(),
-    GITHUB_PUBLISHER_CLIENT_ID: 'Iv-app-client',
-    GITHUB_PUBLISHER_CLIENT_SECRET: 'app-secret',
+    GITHUB_OAUTH_CLIENT_ID: 'Ov-oauth-client',
+    GITHUB_OAUTH_CLIENT_SECRET: 'oauth-secret',
     PUBLIC_BASE_URL: 'https://signup.gbti.test',
     SITE_BASE_URL: 'https://gbti.test',
     COOKIE_DOMAIN: 'gbti.test',
@@ -39,7 +41,7 @@ function fakeEnv(extra = {}) {
 const req = (method, path, { headers = {}, body } = {}) => new Request(`https://signup.gbti.test${path}`, { method, headers: { 'CF-Connecting-IP': '1.2.3.4', ...headers }, body });
 
 /** GitHub stand-in: the App code exchange and the user read. Records every call. */
-async function withGithub(fn, { exchange = { status: 200, body: { access_token: 'ghu_access', refresh_token: 'ghr_refresh', expires_in: 28800, refresh_token_expires_in: 15811200 } } } = {}) {
+async function withGithub(fn, { exchange = { status: 200, body: { access_token: 'gho_access', token_type: 'bearer', scope: 'read:user' } } } = {}) {
   const calls = [];
   const orig = globalThis.fetch;
   globalThis.fetch = async (url, opts = {}) => {
@@ -61,7 +63,7 @@ async function start(env, verifier = VERIFIER, { redirect = REDIRECT, login = ''
 
 // `cookie` is the whole Cookie header the member's browser would send; `nonce` alone is sent under the start's name.
 const callback = (env, { state, cookie, code = 'ghcode' }) => worker.fetch(
-  req('GET', `/auth/extension/callback?code=${code}&state=${encodeURIComponent(state)}`, { headers: cookie ? { Cookie: cookie } : {} }), env, {});
+  req('GET', `/signup/github/callback?code=${code}&state=${encodeURIComponent(state)}`, { headers: cookie ? { Cookie: cookie } : {} }), env, {});
 
 const claim = (env, body) => worker.fetch(req('POST', '/auth/extension/claim', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), env, {});
 
@@ -77,9 +79,9 @@ test('start: sends the member to the GitHub App authorize page, bound to this br
   assert.equal(res.status, 302);
   assert.equal(loc.searchParams.get('prompt'), 'select_account', 'GitHub always shows its account picker, so no sign-in completes without a click');
   assert.equal(loc.origin + loc.pathname, 'https://github.com/login/oauth/authorize');
-  assert.equal(loc.searchParams.get('client_id'), 'Iv-app-client', 'the GitHub App, not the website OAuth App');
-  assert.equal(loc.searchParams.get('redirect_uri'), 'https://signup.gbti.test/auth/extension/callback');
-  assert.equal(loc.searchParams.has('scope'), false, 'no scope is requested');
+  assert.equal(loc.searchParams.get('client_id'), 'Ov-oauth-client', 'the website\'s normal sign-in app, not the GitHub App ("Act on your behalf")');
+  assert.equal(loc.searchParams.get('redirect_uri'), 'https://signup.gbti.test/signup/github/callback', 'the website\'s registered callback, so GitHub needs no new setting');
+  assert.equal(loc.searchParams.get('scope'), 'read:user', 'the profile and nothing else');
   assert.ok(state && nonce, 'a signed state and a nonce cookie');
   const setCookie = res.headers.get('Set-Cookie');
   assert.ok(setCookie.startsWith(`${nonceCookieName(await s256(VERIFIER))}=`), 'named for this sign-in, __Host- so no sibling subdomain can plant it');
@@ -90,7 +92,7 @@ test('start: sends the member to the GitHub App authorize page, bound to this br
 test('start: refuses a malformed challenge, and answers 501 when the App is not configured', async () => {
   const bad = await worker.fetch(req('GET', `/auth/extension/start?challenge=short&redirect=${encodeURIComponent(REDIRECT)}`), fakeEnv(), {});
   assert.equal(bad.status, 400);
-  const unset = await start(fakeEnv({ GITHUB_PUBLISHER_CLIENT_SECRET: '' }));
+  const unset = await start(fakeEnv({ GITHUB_OAUTH_CLIENT_SECRET: '' }));
   assert.equal(unset.res.status, 501);
 });
 
@@ -134,14 +136,15 @@ test('the whole flow: callback parks the tokens and signs the website in; the ve
     const loc = res.headers.get('Location');
     assert.ok(loc.startsWith(`${REDIRECT}#code=`), loc);
     const exchange = calls.find((c) => c.url.includes('access_token'));
-    assert.match(exchange.body, /client_id=Iv-app-client/);
-    assert.match(exchange.body, /client_secret=app-secret/);
+    assert.match(exchange.body, /client_id=Ov-oauth-client/);
+    assert.match(exchange.body, /client_secret=oauth-secret/);
+    assert.match(exchange.body, /redirect_uri=https%3A%2F%2Fsignup\.gbti\.test%2Fsignup%2Fgithub%2Fcallback/);
     const cookies = res.headers.getSetCookie();
     const spent = `${nonceCookieName(await s256(VERIFIER))}=;`;
     assert.ok(cookies.some((c) => c.startsWith('gbti_session=') && /HttpOnly/.test(c)), 'the website session is minted in the same step');
     assert.ok(cookies.some((c) => c.startsWith('gbti_csrf=') && /Domain=gbti\.test/.test(c)));
     assert.ok(cookies.some((c) => c.startsWith(spent) && /Max-Age=0/.test(c)), 'the nonce is spent');
-    assert.ok(!loc.includes('ghu_access'), 'the token never rides in the URL');
+    assert.ok(!loc.includes('gho_access'), 'the token never rides in the URL');
 
     const code = handoffOf(res);
     assert.ok(env.SIGNUP_KV.store.has(`${EXT_HANDOFF_PREFIX}${code}`));
@@ -155,7 +158,7 @@ test('the whole flow: callback parks the tokens and signs the website in; the ve
     assert.equal(ok.status, 200);
     assert.equal(ok.headers.get('Access-Control-Allow-Origin'), null, 'no CORS even for an allow-listed origin: no web page can read a claim');
     const body = await ok.json();
-    assert.deepEqual(body, { access_token: 'ghu_access', refresh_token: 'ghr_refresh', expires_in: 28800, refresh_token_expires_in: 15811200, github_id: '4242', login: 'octo' });
+    assert.deepEqual(body, { access_token: 'gho_access', refresh_token: '', expires_in: 0, refresh_token_expires_in: 0, github_id: '4242', login: 'octo' }, 'an OAuth App token: no refresh, no expiry');
     assert.equal(env.SIGNUP_KV.store.has(`${EXT_HANDOFF_PREFIX}${code}`), false, 'claimed once, then gone');
 
     const again = await claim(env, { code, verifier: VERIFIER });
@@ -183,11 +186,11 @@ test('the code without the verifier, or the verifier without the code, claims no
 test('callback: declined, transplanted, replayed and website states mint nothing, and a stranger cannot cancel a sign-in', async () => {
   const env = fakeEnv();
   const { state, cookie } = await start(env);
-  const declined = await worker.fetch(req('GET', `/auth/extension/callback?error=access_denied&state=${encodeURIComponent(state)}`), env, {});
+  const declined = await worker.fetch(req('GET', `/signup/github/callback?error=access_denied&state=${encodeURIComponent(state)}`), env, {});
   assert.equal(declined.headers.get('Location'), `${REDIRECT}#error=declined`);
   assert.equal(declined.headers.get('Set-Cookie'), null, 'a failure leaves the nonce cookie, so a page that sends the browser here cannot cancel a sign-in');
 
-  const unusable = await worker.fetch(req('GET', '/auth/extension/callback?code=c&state=forged'), env, {});
+  const unusable = await worker.fetch(req('GET', '/signup/github/callback?code=c&state=forged'), env, {});
   assert.equal(unusable.status, 400, 'with no usable state there is nowhere to send a code, and none is sent');
   assert.equal(unusable.headers.get('Location'), null);
 
@@ -203,10 +206,14 @@ test('callback: declined, transplanted, replayed and website states mint nothing
     const replay = await callback(env, { state, cookie });
     assert.match(replay.headers.get('Location'), /#error=expired$/, 'a state is single-use');
 
-    const website = await packState({ ref: '', nonce: 'n1', jti: 'jti-web' }, env); // a website signup state has no kind
-    const crossed = await callback(env, { state: website, cookie: 'gbti_oauth_nonce=n1' });
-    assert.equal(crossed.status, 400, 'a website state never completes an extension sign-in');
     assert.equal(calls.filter((c) => c.url.includes('access_token')).length, 1, 'only the one good callback reached GitHub');
+    // The callback is shared, so a WEBSITE state here is simply a website sign-in (its signup needs Stripe, absent in
+    // this test, hence it fails); what matters is that it never yields an extension handoff or a chromiumapp redirect.
+    const handoffsBefore = [...env.SIGNUP_KV.store.keys()].filter((k) => k.startsWith(EXT_HANDOFF_PREFIX)).length;
+    const website = await packState({ ref: '', nonce: 'n1', jti: 'jti-web' }, env);
+    const crossed = await callback(env, { state: website, cookie: 'gbti_oauth_nonce=n1' });
+    assert.ok(!String(crossed.headers.get('Location') || '').includes('chromiumapp.org'), 'a website state never reaches the extension');
+    assert.equal([...env.SIGNUP_KV.store.keys()].filter((k) => k.startsWith(EXT_HANDOFF_PREFIX)).length, handoffsBefore, 'and parks no extension handoff');
   });
 });
 
@@ -259,12 +266,14 @@ test('callback: an id dropped from the allow-list after the sign-in started gets
   });
 });
 
-test('the website signup callback refuses an extension sign-in state', async () => {
+test('the website callback hands an extension sign-in state to the extension handler, which never runs a signup', async () => {
   const env = fakeEnv();
   const extState = await packState({ kind: EXT_STATE_KIND, challenge: await s256(VERIFIER), rid: EXT, nonce: 'n2', jti: 'jti-ext' }, env);
+  // The website's own nonce cookie does not satisfy the extension handler, which wants its per-sign-in __Host- one.
   const res = await worker.fetch(req('GET', `/signup/github/callback?code=c&state=${encodeURIComponent(extState)}`, { headers: { Cookie: 'gbti_oauth_nonce=n2' } }), env, {});
-  assert.equal(res.status, 400);
+  assert.equal(res.headers.get('Location'), `${REDIRECT}#error=expired`, 'answered by the extension handler, back to the extension');
   assert.equal(env.SIGNUP_KV.store.get('statejti:jti-ext'), undefined, 'refused before anything is consumed');
+  assert.equal(env.SIGNUP_KV.store.get('gh:4242'), undefined, 'and no signup ran');
 });
 
 test('claim: only POST, and malformed bodies are refused', async () => {

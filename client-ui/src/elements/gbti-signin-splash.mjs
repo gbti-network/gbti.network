@@ -25,6 +25,8 @@ const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="tru
 // sow-387: moved verbatim from the retired toolbar sign-in page (<gbti-onboarding>), because this screen is now the
 // only place a member signs in to the extension, and GitHub's authorize page says "Act on your behalf", which alarms
 // people out of context. test/sign-in-scope.test.mjs pins that it still says no repository access is requested.
+// sow-393: it now shows only beside the device CODE, which still signs in through GBTI's GitHub App. The website
+// sign-in uses the normal profile-only GitHub sign-in, whose page never says "Act on your behalf", so it needs none.
 export const REASSURANCE = `<b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network uses your sign-in only to know who you are. It does not ask for access to your repositories, and it cannot read your private code or change your account. You can remove it at any time in your GitHub settings.`;
 
 // Moved from welcome-css.mjs with the splash (the SOW-048 block), plus the base `.note` size and spacing it relied
@@ -103,9 +105,8 @@ class GbtiSigninSplash extends GbtiElement {
     const useCode = `<button class="alt" data-auth-code type="button">Use a code instead</button>`;
     const action = this._waiting
       ? `<div class="waitbox">
-           <p class="sub">Finish signing in in the GitHub window that just opened. The first time, GitHub asks you to authorize GBTI Network, and the window closes by itself.</p>
-           <div class="reassure">${shield}<p>${REASSURANCE}</p></div>
-           <p class="note">Waiting for you to authorize&hellip;</p>
+           <p class="sub">Finish signing in using the GitHub window that just opened. It closes by itself when you are done.</p>
+           <p class="note">Waiting for GitHub&hellip;</p>
            ${useCode}
          </div>`
       : code

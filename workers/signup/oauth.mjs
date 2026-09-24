@@ -53,21 +53,21 @@ export async function githubExchangeCode({ clientId, clientSecret, code, redirec
 }
 
 /**
- * sow-393: exchange a GitHub APP web-flow code for the whole token set. githubExchangeCode above keeps only the
- * access token, which is all the website's OAuth App sign-in needs; the extension also needs the refresh token and
- * both expiries, exactly what the device flow used to hand it. Same shape as githubRefreshToken below.
+ * sow-393: exchange a web-flow code for the whole token set, the shape the extension stores (the same shape as
+ * githubRefreshToken below). An OAuth App token, which the extension's website sign-in now gets, carries no refresh
+ * token and no expiry, so those come back empty and the extension simply never refreshes it.
  * Returns { accessToken, refreshToken, expiresIn, refreshTokenExpiresIn }.
  */
-export async function githubExchangeAppCode({ clientId, clientSecret, code, redirectUri }, fetchImpl = globalThis.fetch) {
+export async function githubExchangeCodeTokens({ clientId, clientSecret, code, redirectUri }, fetchImpl = globalThis.fetch) {
   const res = await fetchImpl(GITHUB_TOKEN, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: form({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }).toString(),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`github app code exchange failed ${res.status}`);
+  if (!res.ok) throw new Error(`github code exchange failed ${res.status}`);
   const data = JSON.parse(text);
-  if (data.error || !data.access_token) throw new Error(`github app code exchange error: ${data.error || 'no access_token'}`);
+  if (data.error || !data.access_token) throw new Error(`github code exchange error: ${data.error || 'no access_token'}`);
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token || '',

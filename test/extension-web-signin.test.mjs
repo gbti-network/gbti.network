@@ -120,3 +120,12 @@ test('the sign-in screen offers the website sign-in, "Continue as", and the code
   const setCode = splash.slice(splash.indexOf('  setCode(userCode, verificationUri) {'), splash.indexOf('  setWaiting(on) {'));
   assert.match(setCode, /if \(this\._code\) this\._waiting = false;/, 'switching to the code must not leave the waiting box up');
 });
+
+test('the website sign-in says nothing about "Act on your behalf"; only the code, which still uses the GitHub App, explains it', () => {
+  const splash = read('client-ui/src/elements/gbti-signin-splash.mjs');
+  const waiting = splash.slice(splash.indexOf('const action = this._waiting'), splash.indexOf('      : code'));
+  assert.ok(waiting.length > 0, 'found the waiting box');
+  assert.doesNotMatch(waiting, /REASSURANCE|Act on your behalf/, 'the normal GitHub sign-in never shows that wording');
+  const codeBox = splash.slice(splash.indexOf('      : code'), splash.indexOf('data-auth-signin type="button">${githubIco}'));
+  assert.match(codeBox, /\$\{REASSURANCE\}/, 'the device code still goes through the GitHub App, whose page does');
+});
