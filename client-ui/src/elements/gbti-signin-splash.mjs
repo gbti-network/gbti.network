@@ -7,9 +7,12 @@
 // extension keeps only this screen. It takes no client and reads no status: whether to show it is the shell's
 // decision alone (shouldGate in extension/src/shell.mjs), and it cannot turn into anything else.
 //
-// The host drives it: it listens for `gbti:signin-start` (the Sign in button), runs the device flow, and calls
-// setCode(userCode, verificationUri) to show the code, or setCode(null) to go back to the button. The `expired`
-// attribute explains a re-sign-in after the previous session's token lapsed.
+// The host drives it. `gbti:signin-start` carries { method }: 'web' (the Sign in button, sow-393) opens the website
+// sign-in in Chrome's sign-in window and the host calls setWaiting(true) until it ends; 'code' (the "Use a code instead" link, the old
+// device flow kept as a fallback) makes the host call setCode(userCode, verificationUri), or setCode(null) to go back.
+// setNote(text) explains a sign-in that did not finish. The `expired` attribute explains a re-sign-in after the
+// previous session's token lapsed, and `known-login` (set by the host when the member is already signed in on the
+// website) turns the button into "Continue as @login". It still reads nothing itself.
 import { GbtiElement, define, esc } from '../base.mjs';
 
 const SITE = 'https://gbti.network';
@@ -53,7 +56,14 @@ const CSS = `
   .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
   .reassure p { margin:0; font-size:12px; line-height:1.5; color:var(--fg); }
   .reassure b { font-weight:700; }
+  .alt { display:block; margin:12px auto 0; background:none; border:0; padding:4px; font:inherit; font-size:12.5px; color:var(--accent); text-decoration:underline; cursor:pointer; }
+  .alt:hover { background:none; color:var(--accent); }
+  .waitbox { text-align:center; }
+  .waitbox .sub { color:var(--fg); font-size:14px; line-height:1.5; margin:0 0 12px; }
+  .problem { color:var(--danger, #c0392b); font-size:13px; line-height:1.5; margin:0 0 12px; }
 `;
+
+const LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 
 class GbtiSigninSplash extends GbtiElement {
   connectedCallback() {
@@ -64,14 +74,41 @@ class GbtiSigninSplash extends GbtiElement {
   /** The host hands back the device-flow code (or null to return to the Sign in button). */
   setCode(userCode, verificationUri) {
     this._code = userCode || null;
+    if (this._code) this._waiting = false; // a code shown replaces the website sign-in's waiting box
     if (verificationUri) this._verifyUri = verificationUri;
     this.render();
   }
 
+  /** sow-393: a website sign-in is open in another tab (true), or it ended (false). */
+  setWaiting(on) {
+    this._waiting = Boolean(on);
+    if (this._waiting) this._code = null;
+    this.render();
+  }
+
+  /** sow-393: why the last sign-in did not finish ('' clears it). */
+  setNote(text) {
+    this._note = text ? String(text) : '';
+    this.render();
+  }
+
+  static get observedAttributes() { return ['known-login']; }
+  attributeChangedCallback() { if (this.isConnected) this.render(); }
+
   render() {
     const code = this._code;
     const verify = this._verifyUri || 'https://github.com/login/device';
-    const action = code
+    const known = this.getAttribute('known-login') || '';
+    const who = LOGIN_RE.test(known) ? known : '';
+    const useCode = `<button class="alt" data-auth-code type="button">Use a code instead</button>`;
+    const action = this._waiting
+      ? `<div class="waitbox">
+           <p class="sub">Finish signing in in the GitHub window that just opened. The first time, GitHub asks you to authorize GBTI Network, and the window closes by itself.</p>
+           <div class="reassure">${shield}<p>${REASSURANCE}</p></div>
+           <p class="note">Waiting for you to authorize&hellip;</p>
+           ${useCode}
+         </div>`
+      : code
       ? `<div class="codebox">
            <p class="sub">Enter this code at GitHub to finish signing in:</p>
            <div class="codeval"><code>${esc(code)}</code><button class="btn ghost" data-copy type="button">Copy</button></div>
@@ -79,7 +116,7 @@ class GbtiSigninSplash extends GbtiElement {
            <a class="btn" href="${esc(verify)}" target="_blank" rel="noopener">Open github.com/login/device</a>
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>`
-      : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
+      : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc(who)}` : 'Sign in with GitHub'}</button>${useCode}`;
     // When the host gates BECAUSE the prior session's token expired (not a fresh sign-in), say so, so the member
     // understands why they are back here instead of in their hub.
     const expired = this.hasAttribute('expired')
@@ -92,10 +129,11 @@ class GbtiSigninSplash extends GbtiElement {
         <p>The developer co-op. Sign in with your GitHub account to publish articles, projects, and prompts, follow members, read the members-only news, and join the community.</p>
       </div>
       <div class="card">
-        ${expired}${action}
+        ${expired}${this._note ? `<p class="problem" role="alert">${esc(this._note)}</p>` : ''}${action}
         <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
-    this.on('[data-auth-signin]', 'click', () => this.emit('gbti:signin-start'));
+    this.on('[data-auth-signin]', 'click', () => this.emit('gbti:signin-start', { method: 'web' }));
+    this.on('[data-auth-code]', 'click', () => this.emit('gbti:signin-start', { method: 'code' }));
     this.on('[data-copy]', 'click', () => { try { navigator.clipboard?.writeText(code); } catch { /* clipboard blocked */ } });
   }
 }

@@ -7632,7 +7632,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
   .reassure p { margin:0; font-size:12px; line-height:1.5; color:var(--fg); }
   .reassure b { font-weight:700; }
+  .alt { display:block; margin:12px auto 0; background:none; border:0; padding:4px; font:inherit; font-size:12.5px; color:var(--accent); text-decoration:underline; cursor:pointer; }
+  .alt:hover { background:none; color:var(--accent); }
+  .waitbox { text-align:center; }
+  .waitbox .sub { color:var(--fg); font-size:14px; line-height:1.5; margin:0 0 12px; }
+  .problem { color:var(--danger, #c0392b); font-size:13px; line-height:1.5; margin:0 0 12px; }
 `;
+  var LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
   var GbtiSigninSplash = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -7641,19 +7647,45 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     /** The host hands back the device-flow code (or null to return to the Sign in button). */
     setCode(userCode, verificationUri) {
       this._code = userCode || null;
+      if (this._code) this._waiting = false;
       if (verificationUri) this._verifyUri = verificationUri;
       this.render();
+    }
+    /** sow-393: a website sign-in is open in another tab (true), or it ended (false). */
+    setWaiting(on) {
+      this._waiting = Boolean(on);
+      if (this._waiting) this._code = null;
+      this.render();
+    }
+    /** sow-393: why the last sign-in did not finish ('' clears it). */
+    setNote(text2) {
+      this._note = text2 ? String(text2) : "";
+      this.render();
+    }
+    static get observedAttributes() {
+      return ["known-login"];
+    }
+    attributeChangedCallback() {
+      if (this.isConnected) this.render();
     }
     render() {
       const code = this._code;
       const verify = this._verifyUri || "https://github.com/login/device";
-      const action = code ? `<div class="codebox">
+      const known = this.getAttribute("known-login") || "";
+      const who = LOGIN_RE.test(known) ? known : "";
+      const useCode = `<button class="alt" data-auth-code type="button">Use a code instead</button>`;
+      const action = this._waiting ? `<div class="waitbox">
+           <p class="sub">Finish signing in in the GitHub window that just opened. The first time, GitHub asks you to authorize GBTI Network, and the window closes by itself.</p>
+           <div class="reassure">${shield}<p>${REASSURANCE}</p></div>
+           <p class="note">Waiting for you to authorize&hellip;</p>
+           ${useCode}
+         </div>` : code ? `<div class="codebox">
            <p class="sub">Enter this code at GitHub to finish signing in:</p>
            <div class="codeval"><code>${esc(code)}</code><button class="btn ghost" data-copy type="button">Copy</button></div>
            <div class="reassure">${shield}<p>${REASSURANCE}</p></div>
            <a class="btn" href="${esc(verify)}" target="_blank" rel="noopener">Open github.com/login/device</a>
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
-         </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
+         </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc(who)}` : "Sign in with GitHub"}</button>${useCode}`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
       this.set(this.css(CSS7) + `<div class="splashwrap">
       <div class="head">
@@ -7662,10 +7694,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <p>The developer co-op. Sign in with your GitHub account to publish articles, projects, and prompts, follow members, read the members-only news, and join the community.</p>
       </div>
       <div class="card">
-        ${expired}${action}
+        ${expired}${this._note ? `<p class="problem" role="alert">${esc(this._note)}</p>` : ""}${action}
         <p class="note" style="margin-top:14px">New here? <a href="${SITE4}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
-      this.on("[data-auth-signin]", "click", () => this.emit("gbti:signin-start"));
+      this.on("[data-auth-signin]", "click", () => this.emit("gbti:signin-start", { method: "web" }));
+      this.on("[data-auth-code]", "click", () => this.emit("gbti:signin-start", { method: "code" }));
       this.on("[data-copy]", "click", () => {
         try {
           navigator.clipboard?.writeText(code);
@@ -7675,6 +7708,46 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   define("gbti-signin-splash", GbtiSigninSplash);
+
+  // extension/src/web-signin.mjs
+  var SIGNUP_BASE = "https://signup.gbti.network";
+  var REDIRECT_PATH = "signed-in";
+  var CODE_RE = /^#code=([A-Za-z0-9_-]{43})$/;
+  var ERROR_RE = /^#error=([a-z]{1,20})$/;
+  var LOGIN_RE2 = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+  function b64url(bytes) {
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  async function makePkce(cryptoImpl = globalThis.crypto) {
+    const raw = new Uint8Array(32);
+    cryptoImpl.getRandomValues(raw);
+    const verifier = b64url(raw);
+    const digest = await cryptoImpl.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    return { verifier, challenge: b64url(new Uint8Array(digest)) };
+  }
+  function startUrl({ challenge, redirect, login }, base = SIGNUP_BASE) {
+    const u = new URL(`${base}/auth/extension/start`);
+    u.searchParams.set("challenge", challenge);
+    u.searchParams.set("redirect", redirect);
+    if (login && LOGIN_RE2.test(login)) u.searchParams.set("login", login);
+    return u.toString();
+  }
+  function readRedirectResult(finalUrl, redirect) {
+    let u;
+    try {
+      u = new URL(String(finalUrl));
+    } catch {
+      return null;
+    }
+    if (`${u.origin}${u.pathname}` !== String(redirect) || u.search) return null;
+    const c = CODE_RE.exec(u.hash);
+    if (c) return { code: c[1] };
+    const e = ERROR_RE.exec(u.hash);
+    if (e) return { error: e[1] };
+    return null;
+  }
 
   // client-ui/src/membership-expiry.mjs
   var DAY_MS = 24 * 60 * 60 * 1e3;
@@ -7887,6 +7960,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (root) applyAccount(root, signedIn ? status : null);
     return signedIn ? status : null;
   }
+  async function shellWebLogin(login) {
+    const { verifier, challenge } = await makePkce();
+    const redirect = chrome.identity.getRedirectURL(REDIRECT_PATH);
+    let finalUrl;
+    try {
+      finalUrl = await chrome.identity.launchWebAuthFlow({ url: startUrl({ challenge, redirect, login }), interactive: true });
+    } catch {
+      throw new Error("closed");
+    }
+    const got = readRedirectResult(finalUrl, redirect);
+    if (!got?.code) throw new Error(got?.error || "failed");
+    const r = await chrome.runtime.sendMessage({ type: "login", method: "web", code: got.code, verifier });
+    if (!r?.ok) throw new Error("failed");
+    return r;
+  }
   function shellLogin(onPrompt) {
     return new Promise((resolve, reject) => {
       const onMsg = (m) => {
@@ -7916,15 +8004,35 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (expired) el.setAttribute("expired", "");
     wrap.appendChild(el);
     root.appendChild(wrap);
-    let signingIn = false;
-    el.addEventListener("gbti:signin-start", () => {
-      if (signingIn) return;
-      signingIn = true;
-      shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri)).then(() => location.reload()).catch(() => {
+    const why = {
+      closed: "The sign-in window was closed before it finished.",
+      declined: "GitHub was not authorized, so nothing changed.",
+      expired: "That sign-in waited too long. Please try again."
+    };
+    let active = null;
+    el.addEventListener("gbti:signin-start", (e) => {
+      const method = e?.detail?.method === "code" ? "code" : "web";
+      if (active?.method === "code") return;
+      el.setNote?.("");
+      if (method === "web") el.setWaiting?.(true);
+      const run = method === "web" ? shellWebLogin(el.getAttribute("known-login") || "") : shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri));
+      const me = { method, run };
+      active = me;
+      run.then(() => location.reload()).catch((err) => {
+        if (active !== me) return;
+        active = null;
         el.setCode?.(null);
-        signingIn = false;
+        el.setWaiting?.(false);
+        el.setNote?.(Object.hasOwn(why, err?.message) && why[err.message] || "Sign-in did not finish. Try again, or use a code instead.");
       });
     });
+    try {
+      chrome.runtime.sendMessage({ type: "web-session-peek" }).then((r) => {
+        if (r?.login) el.setAttribute("known-login", r.login);
+      }).catch(() => {
+      });
+    } catch {
+    }
   }
   function setTheme(t) {
     document.documentElement.setAttribute("data-theme", t);

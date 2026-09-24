@@ -36,6 +36,7 @@ import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacte
 
 import { signSession, verifySession, sessionCookieHeader, readSessionCookie } from './session.mjs';
 import { signinLanding } from './signin-landing.mjs'; // sow-343: a new account meets the welcome steps first
+import { handleExtensionStart, handleExtensionCallback, handleExtensionClaim } from './extension-signin.mjs'; // sow-393: extension sign-in through the website
 import {
   githubAuthorizeUrl,
   githubExchangeCode,
@@ -281,6 +282,9 @@ export async function unpackState(token, env) {
 // NOT necessarily an attack: a back button, a refresh or a bfcache restore of the callback URL reaches here too,
 // and looks identical to the member. If that turns out to be common, the fix is a friendlier page, not a weaker
 // consume, and this log is how we would find out.
+// sow-393: what the extension sign-in routes borrow from here, passed in so that module never imports this one.
+const EXT_SIGNIN_HELPERS = { json, redirect, packState, unpackState, consumeStateJti }; // function declarations, hoisted
+
 export async function consumeStateJti(kv, jti) {
   if (!kv) { funnel('state consume denied', { reason: 'no_kv_binding' }); return false; }
   if (typeof jti !== 'string' || !jti) { funnel('state consume denied', { reason: 'no_jti' }); return false; } // pre-sow-236 state, or shape drift
@@ -394,7 +398,8 @@ async function handleGithubCallback(request, env, ctx) {
   // Split, because these mean opposite things. No `code` is usually the MEMBER declining GitHub's consent screen,
   // which is not an error at all; an unusable `state` is expired (past the 600s TTL), tampered with, or truncated
   // by something in the middle. One is a person changing their mind, the other is a bug or an attack.
-  if (!code || !state) {
+  // sow-393: an extension sign-in state (it carries a kind) never completes a website signup.
+  if (!code || !state || state.kind) {
     funnel('callback rejected', { reason: !code ? 'no_code' : 'bad_state', hasState: Boolean(url.searchParams.get('state')) });
     return json({ error: 'bad_oauth_state' }, 400);
   }
@@ -1148,6 +1153,10 @@ export default {
         }
       }
 
+      // sow-393: the extension signs in through the website (extension-signin.mjs), no device code.
+      if (method === 'GET' && pathname === '/auth/extension/start') return await handleExtensionStart(request, env, EXT_SIGNIN_HELPERS);
+      if (method === 'GET' && pathname === '/auth/extension/callback') return await handleExtensionCallback(request, env, EXT_SIGNIN_HELPERS);
+      if (pathname === '/auth/extension/claim') return await handleExtensionClaim(request, env, EXT_SIGNIN_HELPERS);
       if (method === 'GET' && pathname === '/signup/start') return await handleStart(request, env);
       if (method === 'GET' && pathname === '/signup/github/callback') return await handleGithubCallback(request, env, ctx); // sow-279: ctx for the fire-and-forget coupon notice
       if (method === 'GET' && pathname === '/signup/discord/callback') return await handleDiscordCallback(request, env);

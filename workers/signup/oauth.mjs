@@ -53,6 +53,30 @@ export async function githubExchangeCode({ clientId, clientSecret, code, redirec
 }
 
 /**
+ * sow-393: exchange a GitHub APP web-flow code for the whole token set. githubExchangeCode above keeps only the
+ * access token, which is all the website's OAuth App sign-in needs; the extension also needs the refresh token and
+ * both expiries, exactly what the device flow used to hand it. Same shape as githubRefreshToken below.
+ * Returns { accessToken, refreshToken, expiresIn, refreshTokenExpiresIn }.
+ */
+export async function githubExchangeAppCode({ clientId, clientSecret, code, redirectUri }, fetchImpl = globalThis.fetch) {
+  const res = await fetchImpl(GITHUB_TOKEN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: form({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }).toString(),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`github app code exchange failed ${res.status}`);
+  const data = JSON.parse(text);
+  if (data.error || !data.access_token) throw new Error(`github app code exchange error: ${data.error || 'no access_token'}`);
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || '',
+    expiresIn: Number(data.expires_in) || 0,
+    refreshTokenExpiresIn: Number(data.refresh_token_expires_in) || 0,
+  };
+}
+
+/**
  * SOW: refresh a GitHub App user-to-server access token using its refresh token. GitHub App user tokens expire
  * (~8h) and the device flow hands back a `refresh_token` (valid ~6 months) we use to mint a fresh access token
  * WITHOUT another sign-in. Refreshing requires the App's client_id + client_secret, so it runs here on the Worker

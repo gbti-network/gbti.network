@@ -16,6 +16,7 @@ import { resolveOpenPage } from './open-page.mjs';
 import { needsRefresh, refreshPatch } from './token-refresh.mjs';
 import { claimHandoff, shouldOpenWelcome, createDispatchClient, withTimeout, seedOnUpdate } from './welcome-handoff.mjs'; // sow-387
 import { loadProgress, WELCOME_SITE_URL } from '../../client-ui/src/onboarding-card-core.mjs'; // sow-387: DOM-free
+import { claimTokens, knownLoginFrom, fromExtensionPage } from './web-signin.mjs'; // sow-393
 
 // GITHUB_CLIENT_ID is the PUBLIC device-flow OAuth app client id, single-sourced in signup-base.mjs (device flow
 // has no client secret, so it is safe to bundle). Baked into the extension at build time.
@@ -34,6 +35,7 @@ function getStore() {
   return storePromise;
 }
 
+// The device-code sign-in, kept as the "Use a code instead" fallback (sow-393). The website sign-in is the default.
 async function handleLogin(store) {
   const { accessToken, refreshToken, expiresIn } = await deviceFlowLogin({
     // The extension bakes the GitHub App client (hosted mode) at build time and sends no scope: with no install
@@ -50,6 +52,20 @@ async function handleLogin(store) {
       chrome.runtime.sendMessage({ type: 'login-prompt', userCode, verificationUri }).catch(() => {});
     },
   });
+  return completeLogin(store, { accessToken, refreshToken, expiresIn });
+}
+
+// sow-393: the website sign-in. The sign-in page ran it in Chrome's own sign-in window (chrome.identity), which
+// handed back a one-time code that only this extension can see; the page's PKCE verifier proves it started the
+// flow. The Worker returns the same GitHub App token set the device flow produces.
+async function handleWebLogin(store, { code, verifier } = {}) {
+  const t = await claimTokens({ code, verifier });
+  return completeLogin(store, { accessToken: t.access_token, refreshToken: t.refresh_token, expiresIn: t.expires_in });
+}
+
+// What every sign-in does once it holds a token, whichever way it got it: read who it belongs to, store it, and
+// resolve the membership. sow-393 split it out of handleLogin so both sign-ins store exactly the same record.
+async function completeLogin(store, { accessToken, refreshToken, expiresIn }) {
   const repo = createRepoClient({ token: accessToken, upstream: UPSTREAM });
   const u = await repo.getAuthUser();
   // SOW: persist the refresh token + access-token expiry so the background can refresh silently (GitHub App user
@@ -240,8 +256,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await ensureFreshToken(store); // SOW: refresh an about-to-expire token before the request reads GitHub
         maybeMintWebSession(store); // sow-158: opportunistic once-per-session website sign-in (fire-and-forget)
         sendResponse(await dispatch(buildExtContext(store), msg.req || {}));
+      } else if ((msg?.type === 'web-session-peek' || (msg?.type === 'login' && msg.method === 'web')) && !fromExtensionPage(sender, chrome.runtime.getURL(''))) {
+        // sow-393: the website sign-in and the "Continue as" read belong to the extension's own sign-in page. A content
+        // script on a web page has no business sending either, so a compromised page cannot plant tokens this way.
+        sendResponse({ ok: false, error: 'forbidden' });
+      } else if (msg?.type === 'web-session-peek') {
+        // sow-393: is the member already signed in on the website? Only the login comes back, for the sign-in
+        // screen's "Continue as" button; the browser sends the cookie and nothing here reads it.
+        let login = null;
+        try {
+          const r = await fetch(`${SIGNUP_BASE}/membership/status`, { credentials: 'include', signal: AbortSignal.timeout?.(5000) });
+          if (r.ok) login = knownLoginFrom(await r.json());
+        } catch { login = null; }
+        sendResponse({ ok: true, login });
       } else if (msg?.type === 'login') {
-        const res = await handleLogin(store);
+        // sow-393: 'web' (the default sign-in) arrives with the code and verifier; anything else is the device code.
+        const res = msg.method === 'web' ? await handleWebLogin(store, msg) : await handleLogin(store);
         // Device-flow sign-in ends on GitHub's "you're all set" page in a different tab. Route the member back
         // to the tab that started sign-in (the new tab, or a gbti.network page), which then reloads into the feed.
         if (res?.ok) { broadcastAuthChanged(); await focusTab(sender?.tab?.id, sender?.tab?.windowId); }

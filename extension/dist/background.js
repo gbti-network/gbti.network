@@ -22100,8 +22100,31 @@ async function loadProgress(client) {
   return onboardingProgress(await loadOnboardingState(client));
 }
 
-// extension/src/background.mjs
+// extension/src/web-signin.mjs
 var SIGNUP_BASE2 = "https://signup.gbti.network";
+var LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+async function claimTokens({ code, verifier }, fetchImpl = globalThis.fetch, base3 = SIGNUP_BASE2) {
+  const res = await fetchImpl(`${base3}/auth/extension/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, verifier })
+  });
+  if (!res.ok) throw new Error(`claim failed: ${res.status}`);
+  const body = await res.json();
+  if (!body || typeof body.access_token !== "string" || !body.access_token) throw new Error("claim returned no token");
+  return body;
+}
+function fromExtensionPage(sender, extensionOrigin) {
+  const url2 = String(sender?.url ?? "");
+  return Boolean(extensionOrigin) && url2.startsWith(extensionOrigin);
+}
+function knownLoginFrom(statusBody) {
+  const login = statusBody && typeof statusBody.login === "string" ? statusBody.login : "";
+  return LOGIN_RE.test(login) ? login : null;
+}
+
+// extension/src/background.mjs
+var SIGNUP_BASE3 = "https://signup.gbti.network";
 var storePromise = null;
 function getStore() {
   if (!storePromise) {
@@ -22123,6 +22146,13 @@ async function handleLogin(store) {
       });
     }
   });
+  return completeLogin(store, { accessToken, refreshToken, expiresIn });
+}
+async function handleWebLogin(store, { code, verifier } = {}) {
+  const t = await claimTokens({ code, verifier });
+  return completeLogin(store, { accessToken: t.access_token, refreshToken: t.refresh_token, expiresIn: t.expires_in });
+}
+async function completeLogin(store, { accessToken, refreshToken, expiresIn }) {
   const repo = createRepoClient({ token: accessToken, upstream: UPSTREAM });
   const u = await repo.getAuthUser();
   store.set({
@@ -22133,14 +22163,14 @@ async function handleLogin(store) {
   });
   try {
     const reader = createGithubReader({ upstream: UPSTREAM, token: accessToken });
-    const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE2, readFile: (p) => reader.readFile(p) });
+    const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE3, readFile: (p) => reader.readFile(p) });
     store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? "none" });
   } catch {
   }
   return { ok: true, login: u.login };
 }
 async function refreshViaWorker(refreshToken) {
-  const res = await fetch(`${SIGNUP_BASE2}/auth/refresh`, {
+  const res = await fetch(`${SIGNUP_BASE3}/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refreshToken })
@@ -22152,7 +22182,7 @@ var MINT_TIMEOUT_MS = 8e3;
 async function mintWebSession(token) {
   if (!token) return false;
   try {
-    const res = await fetch(`${SIGNUP_BASE2}/auth/session-from-token`, {
+    const res = await fetch(`${SIGNUP_BASE3}/auth/session-from-token`, {
       method: "POST",
       credentials: "include",
       headers: { Authorization: `Bearer ${token}` },
@@ -22177,7 +22207,7 @@ async function maybeMintWebSession(store) {
 async function clearWebSession(token) {
   if (!token) return;
   try {
-    await fetch(`${SIGNUP_BASE2}/auth/session-clear`, {
+    await fetch(`${SIGNUP_BASE3}/auth/session-clear`, {
       method: "POST",
       credentials: "include",
       headers: { Authorization: `Bearer ${token}` }
@@ -22273,8 +22303,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await ensureFreshToken(store);
         maybeMintWebSession(store);
         sendResponse(await dispatch(buildExtContext(store), msg.req || {}));
+      } else if ((msg?.type === "web-session-peek" || msg?.type === "login" && msg.method === "web") && !fromExtensionPage(sender, chrome.runtime.getURL(""))) {
+        sendResponse({ ok: false, error: "forbidden" });
+      } else if (msg?.type === "web-session-peek") {
+        let login = null;
+        try {
+          const r = await fetch(`${SIGNUP_BASE3}/membership/status`, { credentials: "include", signal: AbortSignal.timeout?.(5e3) });
+          if (r.ok) login = knownLoginFrom(await r.json());
+        } catch {
+          login = null;
+        }
+        sendResponse({ ok: true, login });
       } else if (msg?.type === "login") {
-        const res = await handleLogin(store);
+        const res = msg.method === "web" ? await handleWebLogin(store, msg) : await handleLogin(store);
         if (res?.ok) {
           broadcastAuthChanged();
           await focusTab(sender?.tab?.id, sender?.tab?.windowId);

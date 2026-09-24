@@ -10,13 +10,13 @@ import { EXTENSION } from '../../lib/extension';
 // walkthrough and its FAQ answers are gone. scripts/check-extension.mjs fails the build if they come back. The
 // package zip is still built and served for the MCP guide, which is the only page that links it.
 const feats = [
-  { icon: 'i-gh', title: 'Sign in with GitHub', body: 'Click the GBTI icon in your toolbar and sign in. Your GitHub credentials stay on your own machine, not on our servers.' },
+  { icon: 'i-gh', title: 'Sign in with GitHub', body: 'Click the GBTI icon in your toolbar and sign in with GitHub. There is no code to copy, and it signs you in on the website too.' },
   { icon: 'i-pencil', title: 'Edit in place', body: 'Open any page you can edit and change it where it lives. No separate dashboard, no copy-paste between tabs.' },
   { icon: 'i-publish', title: 'Publish through the network', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
 ];
 const faqs = [
   { q: 'How do I update it?', a: 'You do not have to. The Chrome Web Store updates the extension on its own.' },
-  { q: 'Is my GitHub sign-in safe?', a: 'Yes. Sign-in happens between your browser and GitHub. Your token is stored locally by the extension and never sent to GBTI servers.' },
+  { q: 'Is my GitHub sign-in safe?', a: 'Yes. You authorize GBTI Network on GitHub\'s own page, and your GitHub password never reaches us. The sign-in only tells us who you are: it cannot read your private code or change your GitHub account, and you can remove it at any time in your GitHub settings.' },
   { q: 'Do I need to be a member?', a: 'The extension is free to install, and anyone can browse. But active GBTI membership is required to participate: publishing articles, projects, and prompts, sharing URLs that earn referral revenue, commenting, joining the member directory, reading member-only content, and the other network benefits all require it. Without the right privileges, the gate blocks those actions. A free account lets you read the community; a paid membership unlocks publishing and the rest.' },
   { q: 'Can my AI agent publish for me?', a: 'Yes. Paid members can run the GBTI MCP server, so an agent like Claude Code can draft, publish, and maintain your content through the same gated flow. The MCP guide in the WorkBench has the download and the setup steps.' },
 ];
