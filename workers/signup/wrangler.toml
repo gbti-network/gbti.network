@@ -88,6 +88,12 @@ DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
 # SECRET set via `wrangler secret put`. Override the sandbox value in [env.production.vars] if the App differs.
 GITHUB_PUBLISHER_CLIENT_ID = "Iv23lis8jbx62zI7cwE8"
 
+# sow-393: the extension ids allowed to receive a website sign-in (extension-signin.mjs sends the one-time code ONLY
+# to https://<id>.chromiumapp.org/). The store id, plus the owner's unpacked build loaded from the repo's extension
+# folder, whose id Chrome derives from that folder's path (X:\home\atwellpub\repos\gbti.network\extension). A
+# different unpacked path has a different id and needs adding here. Unset, only the store id is accepted.
+EXTENSION_IDS = "iffjdmifgnjgkdjoodapjciddibmifka,pfpaefimiahamogelkicgmcipjlkgcih"
+
 # Public content repo ("owner/name") for the re-gate / disable dispatch (SOW-005 signal).
 GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
 
@@ -272,6 +278,7 @@ NEWS_CHANNELS = "{\"channels\":[{\"category\":\"ai/ml\",\"channelId\":\"15234199
 STRIPE_PRICE_ID = "price_1Tg5NHBFxyhSkuibXFrQyqaN"            # the live $150/yr recurring price (prod_UfQDvczTRPCOOq)
 GITHUB_OAUTH_CLIENT_ID = "Ov23li18yffp7NHSM6l6"
 GITHUB_PUBLISHER_CLIENT_ID = "Iv23lis8jbx62zI7cwE8"           # SOW: the gbti-network-publisher App (same App in sandbox + prod) for /auth/refresh
+EXTENSION_IDS = "iffjdmifgnjgkdjoodapjciddibmifka,pfpaefimiahamogelkicgmcipjlkgcih" # sow-393: store id + the owner's unpacked build from the repo folder (see the top-level note)
 DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
 DISCORD_GUILD_ID = "1073029070411006053"
 DISCORD_TRIAL_ROLE_ID = "1511800465107583198"
