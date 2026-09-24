@@ -200,6 +200,17 @@ html[data-unauth] .compose-modal { display: none !important; }
 .compose-x { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--fg-mute); cursor: pointer; }
 .compose-x:hover { background: var(--paper-3); color: var(--fg); }
 .compose-x svg { width: 18px; height: 18px; }
+/* sow-395 (owner, 2026-09-24): the Post a Share dialog matches the website's (.share-modal in gbti-v3.css): no
+   panel of its own, the composer's card is the dialog (square, 2px, set inside the composer), and a round close
+   button floats on its top-right corner. margin:auto centres it and stays safe when a step is taller than the
+   window (the overlay scrolls). */
+.share-dialog { position: relative; width: 100%; max-width: 620px; margin: auto; }
+.share-dialog gbti-share-composer { display: block; }
+.share-x { position: absolute; top: -14px; right: -14px; z-index: 2; width: 30px; height: 30px; display: inline-flex;
+  align-items: center; justify-content: center; border-radius: 50%; background: var(--paper); border: 1.5px solid var(--line);
+  color: var(--fg-mute); cursor: pointer; box-shadow: var(--sh-md); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.share-x:hover { color: var(--fg); }
+.share-x svg { width: 16px; height: 16px; }
 /* SOW-070: GLASS — the compose modal is a frosted panel over a softer brand-tinted scrim, with an inner-light top
    border (the recipe). The panel reads var(--paper) (translucent under the glass token layer) + the backdrop blur. */
 [data-layout="glass"] .compose-modal { background: rgba(20,35,26,.2); }

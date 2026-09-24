@@ -419,13 +419,16 @@ function openSocialQueueModal() {
 function openComposeModal() {
   if (document.querySelector('.compose-modal')) return; // already open
   const overlay = document.createElement('div');
-  overlay.className = 'compose-modal';
-  overlay.innerHTML = `<div class="compose-panel"><div class="compose-head"><b>Post a Share</b><button class="compose-x" type="button" aria-label="Close">${ico('x')}</button></div><gbti-share-composer></gbti-share-composer></div>`;
+  overlay.className = 'compose-modal share-overlay';
+  // sow-395 (owner, 2026-09-24): the same dialog as the website's (src/components/home/HomeShareModal.astro): the
+  // composer's own card IS the dialog, with a round close button floating on its corner. It used to sit inside a
+  // "Post a Share" panel of its own, which read as a section within a section. The title moves to the label.
+  overlay.innerHTML = `<div class="share-dialog" role="dialog" aria-modal="true" aria-label="Post a Share"><button class="share-x" type="button" aria-label="Close">${ico('x')}</button><gbti-share-composer></gbti-share-composer></div>`;
   const onEsc = (e) => { if (e.key === 'Escape') close(); };
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
   // SOW-041 follow-up: deliberately NO backdrop-click-to-close on the Share composer — an accidental click on the
   // overlay must never discard an in-progress draft. The member closes intentionally (the X, Esc, or a successful post).
-  overlay.querySelector('.compose-x')?.addEventListener('click', close);
+  overlay.querySelector('.share-x')?.addEventListener('click', close);
   // SOW-092: posted -> close, then redirect the member to their new share. A page with a share reader
   // (the new-tab feed, the shares feed) claims the event during dispatch (detail.handled) and opens it in
   // place; on a page with no reader (workspace/admin/account) we stash the optimistic item and land on
