@@ -1,4 +1,5 @@
-// sow-394: signed-out readers can find "Submit content" (owner's design, 2026-09-24). A browser drive covers what a
+// sow-394: signed-out readers can find "Submit content" (owner's design, 2026-09-24). The three new links go to the
+// plans on /membership/ (owner, 2026-09-24); the explainer page /submit-content/ stays, linked from the footer. A browser drive covers what a
 // reader sees; these pin the wiring a drive cannot see break later: where each link sits, what it says and points
 // at, and the gate that takes it away once someone signs in.
 import { test } from 'node:test';
@@ -20,10 +21,10 @@ function inOrder(text, needles, what) {
   }
 }
 
-test('the header button sits between the theme toggle and Sign in, and goes to the explainer', () => {
+test('the header button sits between the theme toggle and Sign in, and goes to the plans', () => {
   inOrder(HEADER, [
     'data-theme-toggle',
-    '<a href="/submit-content/" class="head-submit" data-submit-cta>',
+    '<a href="/membership/" class="head-submit" data-submit-cta>',
     '<use href="#ico-pencil" /></svg> Submit content</a>',
     '<a href="/login/" class="btn-gh" data-signin>',
   ], 'header');
@@ -43,7 +44,7 @@ test('the header button shows only from 920px up, where the centred nav keeps ro
 test('the phone menu carries it inside the signed-out set, before Sign in / Join', () => {
   const out = HEADER.slice(HEADER.indexOf('<div data-mnav-set="out">'), HEADER.indexOf('<div data-mnav-set="in"'));
   assert.ok(out.length > 0, 'the signed-out phone set was found');
-  inOrder(out, ['<a href="/submit-content/" class="m-submit">', ' Submit content</a>', 'class="m-join">Sign in / Join</a>'], 'phone menu');
+  inOrder(out, ['<a href="/membership/" class="m-submit">', ' Submit content</a>', 'class="m-join">Sign in / Join</a>'], 'phone menu');
 });
 
 test('the end of every article has its own Submit content line, hidden for any signed-in account', () => {
@@ -51,7 +52,7 @@ test('the end of every article has its own Submit content line, hidden for any s
     'Become a member',
     '<p class="ci-submit">',
     '<span class="ci-submit-t">Publish your work on the network.</span>',
-    '<a href="/submit-content/" class="ci-submit-a">Submit content ',
+    '<a href="/membership/" class="ci-submit-a">Submit content ',
     '</section>',
   ], 'article invite');
   assert.match(INVITE, /html\.is-gbti-member \.community-invite \.ci-submit \{ display: none; \}/);
@@ -74,12 +75,12 @@ test('the explainer shows the plans first to anyone who cannot publish, and the 
   assert.match(PAGE, /:global\(html\.is-gbti-member-active\) \.sc-cta-paid \{ display: flex; \}/);
 });
 
-test('every Submit content link points at the one explainer page', () => {
+test('every new Submit content link goes to the membership page', () => {
   for (const [name, text] of [['header', HEADER], ['article invite', INVITE]]) {
     // One icon at most between the tag and the words: the icon pattern may not cross its own </svg>, or a match
     // could run from one link's icon to a later link's words and report the wrong href.
     const hrefs = [...text.matchAll(/<a href="([^"]+)"[^>]*>(?:<svg(?:(?!<\/svg>)[^])*<\/svg>)?\s*Submit content/g)].map((m) => m[1]);
     assert.ok(hrefs.length >= 1, `${name}: found its link`);
-    for (const h of hrefs) assert.equal(h, '/submit-content/', name);
+    for (const h of hrefs) assert.equal(h, '/membership/', name);
   }
 });

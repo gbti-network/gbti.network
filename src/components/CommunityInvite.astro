@@ -81,11 +81,12 @@ const isMemberAuthored = author !== 'gbti';
     )}
   </div>
   {/* sow-394 (owner's design, 2026-09-24, version B): the way in to publishing, on its own line so "Become a
-      member" stays the one button. Signed-out readers only: the rule below hides it for any signed-in account. */}
+      member" stays the one button. It goes to the plans, like the header's Submit content button (owner,
+      2026-09-24). Signed-out readers only: the rule below hides it for any signed-in account. */}
   <p class="ci-submit">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-pencil"/></svg>
     <span class="ci-submit-t">Publish your work on the network.</span>
-    <a href="/submit-content/" class="ci-submit-a">Submit content <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
+    <a href="/membership/" class="ci-submit-a">Submit content <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
   </p>
 </section>
 <style is:global>
