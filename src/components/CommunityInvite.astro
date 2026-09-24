@@ -80,6 +80,13 @@ const isMemberAuthored = author !== 'gbti';
       <span class="body-sm" style="color:var(--on-dark-mute)">You are reading {display}'s work. Joining from this page credits {display}.</span>
     )}
   </div>
+  {/* sow-394 (owner's design, 2026-09-24, version B): the way in to publishing, on its own line so "Become a
+      member" stays the one button. Signed-out readers only: the rule below hides it for any signed-in account. */}
+  <p class="ci-submit">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-pencil"/></svg>
+    <span class="ci-submit-t">Publish your work on the network.</span>
+    <a href="/submit-content/" class="ci-submit-a">Submit content <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
+  </p>
 </section>
 <style is:global>
   /* SOW-050: the Join CTA is irrelevant to an ACTIVE member (paid or trial). member-signal.ts toggles
@@ -87,6 +94,19 @@ const isMemberAuthored = author !== 'gbti';
      Presentation-only (the signal is untrusted by design; the CTA is cosmetic). Visitors + lapsed accounts,
      for whom joining/renewing matters, still see it. */
   html.is-gbti-member-active .community-invite { display: none; }
+  /* sow-394: the Submit content line. html.is-gbti-member is set for ANY signed-in account (src/lib/member-signal.ts),
+     so a free account, which still sees the join pitch above, does not see this line. */
+  .community-invite .ci-submit { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin: 28px 0 0;
+    padding-top: 20px; border-top: 1px solid rgba(255,255,255,.12); }
+  .community-invite .ci-submit > svg { color: var(--green-mint); flex: none; }
+  /* A 14em basis keeps the sentence beside the icon on a phone (it wraps there, the icon does not strand) and
+     sends only the link to the next line; on a wide block all three share one line. */
+  .community-invite .ci-submit-t { flex: 1 1 14em; min-width: 0; color: #fff; font-weight: 600; }
+  .community-invite .ci-submit-a { display: inline-flex; align-items: center; gap: 7px; color: var(--green-mint); font-weight: 600;
+    text-decoration: underline; text-underline-offset: 4px; white-space: nowrap; }
+  .community-invite .ci-submit-a:hover { color: #fff; }
+  .community-invite .ci-submit-a svg { flex: none; }
+  html.is-gbti-member .community-invite .ci-submit { display: none; }
 </style>
 {refCode && (
   <script

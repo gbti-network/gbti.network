@@ -69,7 +69,16 @@ const steps = [
         the network immediately, and a superadmin reviews it before it appears on the public site. Reading is
         free for everyone. Publishing is part of {PLAN} membership, at {PRICE}.
       </p>
-      <div class="sc-cta">
+      {/* sow-394 (owner, 2026-09-24): the buttons follow who is reading. "Open the WorkBench" sent a signed-out
+          reader to a sign-in wall, and a free account still cannot publish once there, so both see the plans
+          first. The signed-out set is the default, which is also what a reader without JavaScript gets; the
+          member-signal classes on <html> (src/lib/member-signal.ts) switch it. is-gbti-member = any signed-in
+          account (the Sign in button goes); is-gbti-member-active = an effective paid member (today's buttons). */}
+      <div class="sc-cta sc-cta-out">
+        <a class="btn btn-primary" href="/membership/">See membership <svg class="ar" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-arrow"/></svg></a>
+        <a class="btn btn-ghost sc-signin" href="/login/?return_to=%2Fsubmit-content%2F"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-github"/></svg> Sign in</a>
+      </div>
+      <div class="sc-cta sc-cta-paid">
         <a class="btn btn-primary" href="/workbench/">Open the WorkBench</a>
         <a class="btn btn-ghost" href="/membership/">See membership</a>
       </div>
@@ -176,6 +185,11 @@ const steps = [
   .sc-eyebrow { font-family: var(--font-mono, monospace); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-700); margin: 0 0 10px; }
   .sc-head .lead { margin: 14px 0 0; }
   .sc-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 0; }
+  /* sow-394: which button set shows (see the markup). */
+  .sc-cta-paid { display: none; }
+  :global(html.is-gbti-member) .sc-signin { display: none; }
+  :global(html.is-gbti-member-active) .sc-cta-out { display: none; }
+  :global(html.is-gbti-member-active) .sc-cta-paid { display: flex; }
   .sc-sec { margin: 0 0 40px; }
   .sc-sec .h2 { margin: 0 0 14px; }
   .sc-sec .body { margin: 0 0 14px; line-height: 1.7; }

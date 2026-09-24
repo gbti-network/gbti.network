@@ -47,6 +47,12 @@ const signedOutExtra = extensionCtaShown
         <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-moon" /></svg>
         <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-sun" /></svg>
       </button>
+      {/* sow-394 (owner's design, 2026-09-24): the way in to publishing for a signed-out reader. Hidden with Sign in
+          once identity resolves (applyHeaderIdentity below), and shown only from 920px up: the nav is centred with
+          equal gaps, and this button costs about 150px of them, so below 920px they drop under 35px and collide
+          by 821px (measured on the live header). Between 651px and 920px it is simply absent; the end of every
+          article and the footer still carry the link. At 650px and below it is an item in the phone menu. */}
+      <a href="/submit-content/" class="head-submit" data-submit-cta><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-pencil" /></svg> Submit content</a>
       <a href="/login/" class="btn-gh" data-signin><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-github" /></svg> Sign in</a>
       {/* SOW-186 C2: the site notification bell. Ships inert + hidden; upgrades (setClient + the element module)
           only for a signed-in WEBSITE member with a cookie session, then reveals itself. A visitor never sees it. */}
@@ -106,6 +112,9 @@ const signedOutExtra = extensionCtaShown
       <div data-mnav-set="out">
         {SIGNED_OUT_NAV.map((i) => <a href={i.href}>{i.label}</a>)}
         {signedOutExtra.map((i) => <a href={i.href}>{i.label}</a>)}
+        {/* sow-394: the phone home of the header's Submit content button. Inside the signed-out set, so the
+            identity swap above removes it for a signed-in reader. */}
+        <a href="/submit-content/" class="m-submit"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-pencil" /></svg> Submit content</a>
         <a href="/login/" class="m-join">Sign in / Join</a>
       </div>
       <div data-mnav-set="in" hidden>
@@ -126,6 +135,18 @@ const signedOutExtra = extensionCtaShown
   .head-mobile a { padding: 11px 0; font-weight: 500; color: var(--fg-soft); border-bottom: 1px solid var(--line); }
   .head-mobile a:last-child { border-bottom: 0; }
   .head-mobile .m-join { color: var(--green-700); font-weight: 600; }
+  .head-mobile .m-submit { display: flex; align-items: center; gap: 9px; color: var(--fg); font-weight: 600; }
+  .head-mobile .m-submit svg { flex: none; }
+  /* sow-394: the outlined Submit content button. The same shape as Sign in (square, 1.5px border, the same size
+     steps) with the softer line colour, so Sign in stays the stronger of the two. Transparent, so it takes the
+     header's own background in either theme. Hidden by default and shown from 920px up (see the markup). */
+  .head-submit { display: none; align-items: center; gap: 8px; padding: 10px 16px; border: 1.5px solid var(--line-2);
+    border-radius: 0; background: transparent; color: var(--fg); font-family: var(--f-sans); font-weight: 600;
+    font-size: 15px; white-space: nowrap; text-decoration: none; transition: border-color .15s ease; }
+  .head-submit svg { width: 17px; height: 17px; flex: none; }
+  .head-submit:hover, .head-submit:focus-visible { border-color: var(--fg); color: var(--fg); }
+  @media (min-width: 920px) { .head-submit { display: inline-flex; } }
+  @media (max-width: 1080px) { .head-submit { padding: 9px 13px; font-size: 13.5px; } }
   .head-mobile .m-group { display: block; padding: 11px 0 4px; font-family: var(--f-mono); font-size: 11px;
     letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); }
   .head-mobile .m-sub { padding-left: 14px; }
@@ -190,6 +211,7 @@ import { isGithubLogin } from '../lib/github-login.mjs'; // sow-369: the hint is
   // chrome-extension:// directly. Avatars come from GitHub by login, with a brand fallback on error.
   const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   const signin = document.querySelector('[data-signin]');
+  const submitCta = document.querySelector<HTMLElement>('[data-submit-cta]'); // sow-394: leaves with Sign in
   const wrap = document.querySelector('[data-head-me-wrap]');
   const me = document.querySelector('[data-head-me]');
   const meAv = document.querySelector('[data-head-me-av]');
@@ -270,10 +292,12 @@ import { isGithubLogin } from '../lib/github-login.mjs'; // sow-369: the hint is
       if (adminItem) adminItem.hidden = (RANK[eff.role] ?? 0) < RANK.moderator; // ...then the role gate hides Admin for non-staff (must run AFTER setMenuMode)
       wrap.hidden = false;
       signin.style.display = 'none';
+      if (submitCta) submitCta.style.display = 'none';
     } else {
       closeMenu();
       wrap.hidden = true;
       signin.style.display = '';
+      if (submitCta) submitCta.style.display = ''; // back to the stylesheet, which shows it from 920px up
     }
   }
   meAv?.addEventListener('error', () => { if (meAv) meAv.src = '/favicon-32x32.png'; });
