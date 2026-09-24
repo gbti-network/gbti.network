@@ -26,6 +26,15 @@ export function toMs(v) {
   return Number.isNaN(t) ? 0 : t;
 }
 
+/**
+ * The feed's one ordering: newest first by createdAt, whatever the item is (member content, a Share or news). Nothing
+ * is pinned or boosted (owner, 2026-09-24: the extension does not favour member content the way the homepage does),
+ * and an undated item sinks to the end. Sorts a copy; the input is untouched.
+ */
+export function newestFirst(rows) {
+  return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => toMs(b?.createdAt) - toMs(a?.createdAt));
+}
+
 export function hostOf(u) {
   try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'link'; }
 }

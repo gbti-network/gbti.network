@@ -11,7 +11,7 @@
 
 import { canSeeNews, canSeeShares, upgradePromptKind, lockedAccountCopy } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt; sow-360: one source for the tier copy
 import { devlog } from './devlog.mjs'; // SOW-124: the page realm's devlog (superadmin + Debug-flag gated; inert otherwise)
-import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
+import { mergeAll, newestFirst } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>); SOW-143 the member deep-link (tab=member&member=<u>)
 import { initShell } from './shell.mjs';
@@ -147,8 +147,8 @@ function renderFeed(filter = '') {
   // SOW-042/043: the "All" filter blends content + the member's Shares (the ONE shared mergeAll, Shares omitted for
   // a non-member) with members-only News (supplementary, paid-only). A specific type filter narrows to that type.
   // Content + Shares are projected by toCardItem; News (a different source) by newsToItem; both are card items.
-  // The per-view source matrix (pure, node-tested): Activity ('all') = member content + Shares, NO news; News
-  // ('news') = news BLENDED with member content + Shares; the single-type directories narrow to their type.
+  // The per-view source matrix (pure, node-tested): All = member content + Shares + news, newest-first with no
+  // source favoured; News = news only; the single-type directories narrow to their type.
   const { wantNews, wantShares, narrow, kinds } = feedSources(TYPE);
   // A single content-type view renders from its full directory once loaded (the capped river is the fallback
   // until the fetch lands, so the switch is instant and then fills in).
@@ -159,8 +159,8 @@ function renderFeed(filter = '') {
   if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
   // sow-204 item 4a: filter by `kinds` rather than by TYPE, because NETWORK admits THREE item types
   // (posts, projects, prompts) and the old single-type equality could not express it. A single-type view
-  // reports kinds:[itsOwnType], so this is the same behaviour for every pre-existing view; `all` and `news`
-  // report kinds:null and are not filtered at all.
+  // reports kinds:[itsOwnType], so this is the same behaviour for every pre-existing view; `all` reports
+  // kinds:null and is not filtered at all, and `news` reports ['news'].
   if (kinds) rows = rows.filter((e) => kinds.includes(e.type));
   // SOW-046 E: the Following view drills into followed MEMBERS' content/shares AND followed NEWS CHANNELS' news
   // (a news item is kept when its source is in the member's followedChannels).
@@ -169,7 +169,7 @@ function renderFeed(filter = '') {
       ? (FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()))
       : (FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()))));
   }
-  rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt)); // newest-first across all three sources
+  rows = newestFirst(rows); // newest-first across all three sources, none favoured
   if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
   // Pagination window: reset on a view/type/search change, widen via the Show more button below the list.
   const pageKey = `${VIEW}|${TYPE}|${q}`;
@@ -659,8 +659,7 @@ function init() {
         b.setAttribute('aria-selected', on ? 'true' : 'false');
       });
       const q = $('[data-filter]')?.value || '';
-      // News only appears in the News view now, so Following loads news ONLY when the current view wants it
-      // (TYPE==='news'); on Activity it loads just the followed members + channels for the member-content filter.
+      // Following loads news whenever the current view carries it (All and News), so followed channels show up.
       const wantN = feedSources(TYPE).wantNews;
       if (VIEW === 'following' && (!FOLLOWS_LOADED || !PREFS_LOADED || (wantN && !NEWS_LOADED))) {
         const feed = $('[data-feed]');

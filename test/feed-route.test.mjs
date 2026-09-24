@@ -63,12 +63,12 @@ test('TYPE_FILTERS is the canonical set the feed + chips share', () => {
   assert.deepEqual([...TYPE_FILTERS].sort(), ['all', 'network', 'news', 'post', 'project', 'prompt', 'share']);
 });
 
-test('feedSources: Activity (all) blends member content + Shares but NO news', () => {
-  assert.deepEqual(feedSources('all'), { wantNews: false, wantShares: true, narrow: false, kinds: null });
+test('feedSources: All blends member content + Shares + news, filtering nothing (owner, 2026-09-24)', () => {
+  assert.deepEqual(feedSources('all'), { wantNews: true, wantShares: true, narrow: false, kinds: null });
 });
 
-test('feedSources: News blends news + member content + Shares (member activity injected, not narrowed)', () => {
-  assert.deepEqual(feedSources('news'), { wantNews: true, wantShares: true, narrow: false, kinds: null });
+test('feedSources: News is news only, so it is not a copy of All', () => {
+  assert.deepEqual(feedSources('news'), { wantNews: true, wantShares: false, narrow: false, kinds: ['news'] });
 });
 
 test('feedSources: Shares loads Shares then narrows to that type', () => {
@@ -81,7 +81,7 @@ test('feedSources: a single content type narrows, no Shares, no news', () => {
   }
 });
 
-test('feedSources: only the News view wants news; the three blended views are all/news/network', () => {
+test('feedSources: All and News want news; the three blended views are all/news/network', () => {
   // sow-204 item 4a CHANGED this invariant, so it is RESTATED rather than relaxed. It used to read
   // "narrow is true for everything except all/news". NETWORK is a third blended view: it spans three item
   // types, so it has no single per-type DIRECTORY index to render from and must come off the merged river and
@@ -89,7 +89,7 @@ test('feedSources: only the News view wants news; the three blended views are al
   // the view load an index that does not exist.
   const BLENDED = new Set(['all', 'news', 'network']);
   for (const t of [...TYPE_FILTERS]) {
-    assert.equal(feedSources(t).wantNews, t === 'news', `wantNews for ${t}`);
+    assert.equal(feedSources(t).wantNews, t === 'all' || t === 'news', `wantNews for ${t}`);
     assert.equal(feedSources(t).narrow, !BLENDED.has(t), `narrow for ${t}`);
   }
   // Falsifiability: the loop passes vacuously on an empty TYPE_FILTERS, and would still pass if EVERY type

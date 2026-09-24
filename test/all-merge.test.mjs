@@ -113,3 +113,18 @@ test('toMs normalizes numbers, ISO strings, and absent/garbage to 0', () => {
   assert.equal(toMs('not-a-date'), 0);
   assert.equal(toMs(undefined), 0);
 });
+
+// Owner, 2026-09-24: the extension's All tab does not favour member content. A news item newer than a member's
+// article sits above it, and a Share sorts by its own date too. This is the ordering renderFeed uses.
+test('newestFirst orders every kind of item by date alone, none favoured', async () => {
+  const { newestFirst } = await import('../client-ui/src/all-merge.mjs');
+  const rows = [
+    { id: 'article', type: 'post', createdAt: Date.parse('2026-09-24T10:00:00Z') },
+    { id: 'news-newer', type: 'news', createdAt: Date.parse('2026-09-24T12:00:00Z') },
+    { id: 'share', type: 'share', createdAt: '2026-09-24T11:00:00Z' },
+    { id: 'news-older', type: 'news', createdAt: Date.parse('2026-09-23T09:00:00Z') },
+    { id: 'undated', type: 'post', createdAt: null },
+  ];
+  assert.deepEqual(newestFirst(rows).map((r) => r.id), ['news-newer', 'share', 'article', 'news-older', 'undated']);
+  assert.equal(rows[0].id, 'article', 'sorts a copy');
+});

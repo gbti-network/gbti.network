@@ -44,8 +44,10 @@ export function railKeyForType(type) {
 /**
  * Which sources a given TYPE view composes, and whether it narrows to a single type. Pure + node-testable; the
  * new-tab feed (renderFeed + the lazy-load gates) is driven entirely by this so the two stay in lockstep.
- *   - `all`  (Activity): member content + Shares, NO news. The quick river (capped).
- *   - `news` (News): news BLENDED with member content + Shares, newest-first (member activity is injected).
+ *   - `all`: EVERYTHING, member content + Shares + news, in one newest-first river (capped). No source is favoured:
+ *     a news item newer than a member's article sits above it (owner, 2026-09-24: the extension does not favour
+ *     member content the way the homepage does).
+ *   - `news`: news only (owner, 2026-09-24), now that All carries the blend; otherwise the two tabs were identical.
  *   - `share`: Shares only (loads Shares, then narrows).
  *   - `post|project|prompt`: that one content type only (no Shares, no news).
  * `narrow` is false for the two BLENDED views (`all`, `news`) and true for the single-type directories.
@@ -58,12 +60,12 @@ export function feedSources(type) {
   // conflating them would make the view either load the wrong index or show everything.
   const isNetwork = type === 'network';
   return {
-    wantNews: type === 'news',
-    wantShares: type === 'all' || type === 'news' || type === 'share',
+    wantNews: type === 'all' || type === 'news',
+    wantShares: type === 'all' || type === 'share',
     narrow: !(type === 'all' || type === 'news' || isNetwork),
     // The item types to keep, or null for "keep everything". A single-type view reports its own type so a
     // consumer can filter uniformly instead of special-casing network.
-    kinds: isNetwork ? NETWORK_KINDS : (type === 'all' || type === 'news' ? null : [type]),
+    kinds: isNetwork ? NETWORK_KINDS : (type === 'all' ? null : [type]),
   };
 }
 

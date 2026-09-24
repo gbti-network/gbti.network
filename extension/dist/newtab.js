@@ -2518,6 +2518,9 @@
     const t = Date.parse(v);
     return Number.isNaN(t) ? 0 : t;
   }
+  function newestFirst(rows) {
+    return [...Array.isArray(rows) ? rows : []].sort((a, b) => toMs(b?.createdAt) - toMs(a?.createdAt));
+  }
   function hostOf(u) {
     try {
       return new URL(u).hostname.replace(/^www\./, "");
@@ -8364,12 +8367,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function feedSources(type) {
     const isNetwork = type === "network";
     return {
-      wantNews: type === "news",
-      wantShares: type === "all" || type === "news" || type === "share",
+      wantNews: type === "all" || type === "news",
+      wantShares: type === "all" || type === "share",
       narrow: !(type === "all" || type === "news" || isNetwork),
       // The item types to keep, or null for "keep everything". A single-type view reports its own type so a
       // consumer can filter uniformly instead of special-casing network.
-      kinds: isNetwork ? NETWORK_KINDS : type === "all" || type === "news" ? null : [type]
+      kinds: isNetwork ? NETWORK_KINDS : type === "all" ? null : [type]
     };
   }
   var TYPE_FOR_TAB = { all: "all", news: "news", network: "network", articles: "post", projects: "project", prompts: "prompt", shares: "share" };
@@ -28474,7 +28477,7 @@ From the author:
     if (VIEW === "following") {
       rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
     }
-    rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+    rows = newestFirst(rows);
     if (q) rows = rows.filter((e) => `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
     const pageKey = `${VIEW}|${TYPE}|${q}`;
     if (pageKey !== PAGE_KEY) {
