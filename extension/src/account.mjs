@@ -6,7 +6,9 @@ import { mountPageClient } from './page-client.mjs'; // sets the client + define
 import { initShell } from './shell.mjs';
 
 mountPageClient();
-initShell({ active: 'settings', nav: 'workbench' }); // SOW-052: Account = the WorkBench "Settings" section
+// Owner, 2026-09-24: Settings has no left sidebar. It takes the new tab's railless layout (sow-296): the brand and
+// the controls share the top row, and the avatar menu is the way to WorkBench and back.
+initShell({ active: 'settings', nav: 'none' });
 
 // <gbti-account>'s "Sign out" + the file-and-sign-out step of "Request deletion" emit this event.
 document.addEventListener('gbti:request-signout', async () => {

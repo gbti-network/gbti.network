@@ -28264,7 +28264,7 @@ From the author:
 
   // extension/src/account.mjs
   mountPageClient();
-  initShell({ active: "settings", nav: "workbench" });
+  initShell({ active: "settings", nav: "none" });
   document.addEventListener("gbti:request-signout", async () => {
     try {
       await chrome.runtime.sendMessage({ type: "signout" });

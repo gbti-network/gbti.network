@@ -1,6 +1,6 @@
 <!doctype html>
-<!-- SOW-040: the GBTI extension's Account / Settings page, inside the shared member-hub shell (top bar + left rail
-     injected by shell.mjs). Mounts <gbti-account> (membership, billing, referrals, danger zone). NOT behind the
+<!-- SOW-040: the GBTI extension's Account / Settings page, inside the shared member-hub shell (the top row is
+     injected by shell.mjs; no left rail since 2026-09-24, owner). Mounts <gbti-account> (membership, billing, referrals, danger zone). NOT behind the
      membership lock gate: a lapsed member must reach this page to renew, cancel, or delete. The token stays in the
      background worker; the element talks only to the injected client. -->
 <html lang="en">
@@ -15,14 +15,16 @@
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
     gbti-account { display: block; max-width: 720px; margin: 0 auto; }
+    /* The heading sits under the top row, in the same column as the settings, because a railless top row holds only
+       the brand and the controls (sow-296) and keeps them on one line at every width. */
+    .hub-head { max-width: 720px; margin: 6px auto 20px; }
   </style>
 </head>
 <body>
   <div class="nt" data-shell data-active="settings">
     <main class="nt-main">
-      <div class="nt-top" data-topbar>
-        <div><h1 class="hub-h">Settings</h1><p class="hub-sub">Membership, billing, referrals, and account controls.</p></div>
-      </div>
+      <div class="nt-top" data-topbar></div>
+      <div class="hub-head"><h1 class="hub-h"><span class="head-ico" data-ico="gear" aria-hidden="true"></span>Settings</h1><p class="hub-sub">Membership, billing, referrals, and account controls.</p></div>
       <gbti-account>
       <!-- SOW-080: followed-topic management moved to WorkBench -> Following -> Topics (gbti-subscriptions). -->
       <!-- sow-296: the two new-tab splash cards (the recurrence window and the background image) were removed
