@@ -25,7 +25,7 @@ test('the header button sits between the theme toggle and Sign in, and goes to t
   inOrder(HEADER, [
     'data-theme-toggle',
     '<a href="/membership/" class="head-submit" data-submit-cta>',
-    '<use href="#ico-pencil" /></svg> Submit content</a>',
+    '<span class="head-submit-dot" aria-hidden="true"></span>Submit content</a>',
     '<a href="/login/" class="btn-gh" data-signin>',
   ], 'header');
 });
@@ -36,9 +36,11 @@ test('the header button leaves with Sign in once identity resolves, and comes ba
   assert.match(HEADER, /signin\.style\.display = '';\n\s*if \(submitCta\) submitCta\.style\.display = '';/, 'restored when signed out');
 });
 
-test('the header button shows only from 920px up, where the centred nav keeps room on both sides', () => {
+test('the header button shows only from 940px up, where the centred nav keeps room on both sides', () => {
   assert.match(HEADER, /\.head-submit \{ display: none;/, 'hidden by default');
-  assert.match(HEADER, /@media \(min-width: 920px\) \{ \.head-submit \{ display: inline-flex; \} \}/, 'shown from 920px');
+  assert.match(HEADER, /@media \(min-width: 940px\) \{ \.head-submit \{ display: inline-flex; \} \}/, 'shown from 940px');
+  // the owner's pick on the canvas: the mono uppercase label with a green dot
+  assert.match(HEADER, /\.head-submit \{[^}]*font-family: var\(--f-mono\);[^}]*text-transform: uppercase;/);
 });
 
 test('the phone menu carries it inside the signed-out set, before Sign in / Join', () => {
@@ -77,9 +79,9 @@ test('the explainer shows the plans first to anyone who cannot publish, and the 
 
 test('every new Submit content link goes to the membership page', () => {
   for (const [name, text] of [['header', HEADER], ['article invite', INVITE]]) {
-    // One icon at most between the tag and the words: the icon pattern may not cross its own </svg>, or a match
-    // could run from one link's icon to a later link's words and report the wrong href.
-    const hrefs = [...text.matchAll(/<a href="([^"]+)"[^>]*>(?:<svg(?:(?!<\/svg>)[^])*<\/svg>)?\s*Submit content/g)].map((m) => m[1]);
+    // One icon or dot at most between the tag and the words: the icon pattern may not cross its own </svg>, or a
+    // match could run from one link's icon to a later link's words and report the wrong href.
+    const hrefs = [...text.matchAll(/<a href="([^"]+)"[^>]*>(?:<svg(?:(?!<\/svg>)[^])*<\/svg>|<span[^>]*><\/span>)?\s*Submit content/g)].map((m) => m[1]);
     assert.ok(hrefs.length >= 1, `${name}: found its link`);
     for (const h of hrefs) assert.equal(h, '/membership/', name);
   }

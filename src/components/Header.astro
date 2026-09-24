@@ -49,12 +49,14 @@ const signedOutExtra = extensionCtaShown
       </button>
       {/* sow-394 (owner's design, 2026-09-24): the way in to publishing for a signed-out reader. It goes straight to
           the plans on /membership/ (owner, 2026-09-24: publishing is part of the paid plan, so the plans are the
-          next step); the explainer at /submit-content/ stays, linked from the footer. Hidden with Sign in
-          once identity resolves (applyHeaderIdentity below), and shown only from 920px up: the nav is centred with
-          equal gaps, and this button costs about 150px of them, so below 920px they drop under 35px and collide
-          by 821px (measured on the live header). Between 651px and 920px it is simply absent; the end of every
-          article and the footer still carry the link. At 650px and below it is an item in the phone menu. */}
-      <a href="/membership/" class="head-submit" data-submit-cta><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><use href="#ico-pencil" /></svg> Submit content</a>
+          next step); the explainer at /submit-content/ stays, linked from the footer. The mono label with a
+          green dot is the owner's pick from ten versions on the design canvas (2026-09-24, "7. Mono label").
+          Hidden with Sign in once identity resolves (applyHeaderIdentity below), and shown only from 940px up:
+          the nav is centred with equal gaps and this button is 159px wide below 1080px, so the gaps are 39px at
+          940px, 29px at 920px and 19px at 900px (measured on the live header). Between 651px and 940px it is
+          simply absent; the end of every article and the footer still carry the link. At 650px and below it is
+          an item in the phone menu. */}
+      <a href="/membership/" class="head-submit" data-submit-cta><span class="head-submit-dot" aria-hidden="true"></span>Submit content</a>
       <a href="/login/" class="btn-gh" data-signin><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-github" /></svg> Sign in</a>
       {/* SOW-186 C2: the site notification bell. Ships inert + hidden; upgrades (setClient + the element module)
           only for a signed-in WEBSITE member with a cookie session, then reveals itself. A visitor never sees it. */}
@@ -139,16 +141,18 @@ const signedOutExtra = extensionCtaShown
   .head-mobile .m-join { color: var(--green-700); font-weight: 600; }
   .head-mobile .m-submit { display: flex; align-items: center; gap: 9px; color: var(--fg); font-weight: 600; }
   .head-mobile .m-submit svg { flex: none; }
-  /* sow-394: the outlined Submit content button. The same shape as Sign in (square, 1.5px border, the same size
-     steps) with the softer line colour, so Sign in stays the stronger of the two. Transparent, so it takes the
-     header's own background in either theme. Hidden by default and shown from 920px up (see the markup). */
-  .head-submit { display: none; align-items: center; gap: 8px; padding: 10px 16px; border: 1.5px solid var(--line-2);
-    border-radius: 0; background: transparent; color: var(--fg); font-family: var(--f-sans); font-weight: 600;
-    font-size: 15px; white-space: nowrap; text-decoration: none; transition: border-color .15s ease; }
-  .head-submit svg { width: 17px; height: 17px; flex: none; }
+  /* sow-394: the Submit content button, the owner's "mono label": square and outlined like Sign in, with the
+     softer line colour, set in the mono uppercase the site uses for its section labels ("THE FEED") and led by
+     the same green dot. The same height as Sign in at each size step. Transparent, so it takes the header's own
+     background in either theme. Hidden by default and shown from 940px up (see the markup). */
+  .head-submit { display: none; align-items: center; gap: 9px; padding: 12px 16px; border: 1.5px solid var(--line-2);
+    border-radius: 0; background: transparent; color: var(--fg); font-family: var(--f-mono); font-weight: 700;
+    font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; text-decoration: none;
+    transition: border-color .15s ease; }
+  .head-submit-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
   .head-submit:hover, .head-submit:focus-visible { border-color: var(--fg); color: var(--fg); }
-  @media (min-width: 920px) { .head-submit { display: inline-flex; } }
-  @media (max-width: 1080px) { .head-submit { padding: 9px 13px; font-size: 13.5px; } }
+  @media (min-width: 940px) { .head-submit { display: inline-flex; } }
+  @media (max-width: 1080px) { .head-submit { padding: 10.5px 13px; font-size: 12px; letter-spacing: .1em; } }
   .head-mobile .m-group { display: block; padding: 11px 0 4px; font-family: var(--f-mono); font-size: 11px;
     letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); }
   .head-mobile .m-sub { padding-left: 14px; }
