@@ -14,7 +14,6 @@ import FeedFold from '../components/feeds/FeedFold.astro'; // sow-389: the phone
 import ArticleTeaser from '../components/blog/ArticleTeaser.astro';
 import ProjectCard from '../components/projects/ProjectCard.astro';
 import HomePromptCard from '../components/home/HomePromptCard.astro';
-import PricingAccordion from '../components/home/PricingAccordion.astro';
 import ExtensionBanner from '../components/home/ExtensionBanner.astro';
 import DigestSubscribe from '../components/mail/DigestSubscribe.astro';
 import PersonalizeModal from '../components/home/PersonalizeModal.astro';
@@ -140,13 +139,11 @@ const SHOPTALK = {
 
 <div class="wrap feedwrap">
 
-  <!-- sow-192 Phase F: the pricing accordion (signed-out). Bound to src/lib/tiers.ts (TIER_DISPLAY); hidden
-       for a signed-in member via the shared [data-home-joincard] hook. -->
-  <PricingAccordion />
+  <!-- sow-392 (owner, 2026-09-24): the signed-out pricing accordion that sat here is removed. The plans live on
+       /membership/ only, and the feed now starts at the top of the page. -->
 
-  <!-- "GBTI Homepage" design (owner-elected 2026-08-10): the logged-out Chrome-extension promo banner, between
-       the pricing accordion and the feed. Carries [data-home-joincard], so the mount script hides it for a
-       signed-in member. -->
+  <!-- "GBTI Homepage" design (owner-elected 2026-08-10): the logged-out Chrome-extension promo banner, above
+       the feed. Carries [data-home-joincard], so the mount script hides it for a signed-in member. -->
   <ExtensionBanner />
 
   <!-- sow-192 Phase D: the Personalize modal + its build-time candidate lists (members/categories/tags). The

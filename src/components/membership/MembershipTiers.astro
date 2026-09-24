@@ -64,7 +64,9 @@ const isFree = (t: { priceMonthly: number; priceAnnual: number }) => t.priceMont
     </p>
   </div>
 
-  <div class="mt-grid">
+  {/* sow-392: the grid has one column per offered plan, so two plans sit centred instead of filling two of three
+      columns and leaving the right third empty (owner report, 2026-09-24). */}
+  <div class="mt-grid" style={`--mt-cols: ${CARDS.length}`}>
     {CARDS.map((t, i) => (
       <article class:list={['mt-card', t.key === 'member' && 'mt-card-hl']} data-tier={t.key}>
         <header class="mt-card-head">
@@ -133,8 +135,15 @@ const isFree = (t: { priceMonthly: number; priceAnnual: number }) => t.priceMont
   .mtiers-sub strong { color: var(--fg); }
 
   /* Grid */
-  .mt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: start; }
-  @media (max-width: 860px) { .mt-grid { grid-template-columns: 1fr; max-width: 460px; margin-left: auto; margin-right: auto; } }
+  /* sow-392: one column per plan (--mt-cols, set on the element from the offered list), each column capped at a
+     card width close to the three-column layout's, and the whole grid centred. Two plans read as a centred pair
+     rather than two thirds of a row. */
+  .mt-grid {
+    --mt-card-max: 370px;
+    display: grid; grid-template-columns: repeat(var(--mt-cols, 3), minmax(0, 1fr)); gap: 22px; align-items: start;
+    max-width: calc(var(--mt-cols, 3) * var(--mt-card-max) + (var(--mt-cols, 3) - 1) * 22px); margin-left: auto; margin-right: auto;
+  }
+  @media (max-width: 860px) { .mt-grid { grid-template-columns: 1fr; max-width: 460px; } }
 
   .mt-card { display: flex; flex-direction: column; background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px; padding: 30px 26px; height: 100%; }
   .mt-card-hl { border-color: var(--green-600); box-shadow: 0 0 0 1.5px var(--green-600); }

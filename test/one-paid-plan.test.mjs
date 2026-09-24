@@ -67,10 +67,10 @@ test('at least one paid tier must be offered, or the pricing section would rende
   assert.throws(() => offeredTiers(parseTierDisplay({ tiers: noneOffered })), /no paid tier is offered/);
 });
 
-test('a revenue line renders as a real link, on BOTH card surfaces, through one function', () => {
+test('a revenue line renders as a real link on the plan cards, through the one shared function', () => {
   // The homepage accordion rendered the registry string as plain text while the membership page had its own
   // splitter, so the live homepage showed `[revenue program](/revenue-model/)` to every visitor, brackets and
-  // URL. One function now, imported by both.
+  // URL. One function now. sow-392 removed the accordion, so the membership cards are the one card surface.
   assert.deepEqual(revenueFragments('Supporters share in the [revenue program](/revenue-model/).'), [
     { text: 'Supporters share in the ' },
     { text: 'revenue program', href: '/revenue-model/' },
@@ -78,23 +78,27 @@ test('a revenue line renders as a real link, on BOTH card surfaces, through one 
   ]);
   assert.deepEqual(revenueFragments('No link at all.'), [{ text: 'No link at all.' }]);
   assert.deepEqual(revenueFragments(''), []);
-  const accordion = read('src/components/home/PricingAccordion.astro');
   const card = read('src/components/membership/MembershipTiers.astro');
-  for (const [name, src] of [['the homepage accordion', accordion], ['the membership card', card]]) {
+  for (const [name, src] of [['the membership card', card]]) {
     assert.match(src, /revenueFragments\(/, `${name} must render the revenue line through revenueFragments`);
     assert.match(src, /offeredTiers\(\)/, `${name} must render the OFFERED tiers only`);
     assert.doesNotMatch(src, /function revenueFragments/, `${name} must not keep a local copy to drift from`);
   }
 });
 
-test('no call to action offers the retired plan, and the labels come from the registry', () => {
-  const raw = read('src/components/home/PricingAccordion.astro');
-  const accordion = stripComments(raw, 'PricingAccordion.astro');
-  assert.doesNotMatch(accordion, /Become a creator/, 'the retired plan must not be offered');
-  assert.doesNotMatch(accordion, /Become a member['"`]/, 'the plan name must come from the registry, not a literal');
-  assert.match(accordion, /Become a \$\{t\.label\}/, 'bound to the registry label');
-  // and the stripper is not vacuous: it must still be reading the file
-  assert.ok(accordion.includes('offeredTiers()'), 'the stripper must not have blanked the code it scans');
+test('the homepage carries no pricing block, and the membership plans sit one column per plan', () => {
+  // sow-392 (owner, 2026-09-24): the signed-out pricing accordion above the homepage feed was removed, and its
+  // styles with it. This also stops a rebuild from a stale clone quietly bringing it back.
+  assert.ok(!fs.existsSync(path.join(ROOT, 'src/components/home/PricingAccordion.astro')), 'the accordion component is gone');
+  assert.doesNotMatch(read('src/pages/index.astro'), /PricingAccordion/, 'the homepage does not mount it');
+  assert.doesNotMatch(read('src/styles/gbti-v3.css'), /\.price-(acc|grid|card|sum)\b/, 'its styles are gone');
+  // The membership grid was three fixed columns, so two plans filled two thirds of the row and left the right
+  // third empty. The column count now comes from the offered list the cards are drawn from.
+  const card = read('src/components/membership/MembershipTiers.astro');
+  assert.match(card, /<div class="mt-grid" style=\{`--mt-cols: \$\{CARDS\.length\}`\}>/, 'the grid is told how many plans it holds');
+  assert.match(card, /grid-template-columns: repeat\(var\(--mt-cols, 3\), minmax\(0, 1fr\)\)/, 'one column per plan');
+  assert.match(card, /max-width: calc\(var\(--mt-cols, 3\) \* var\(--mt-card-max\)/, 'and the pair is capped and centred, not stretched');
+  assert.doesNotMatch(card, /\.mt-grid \{[^}]*repeat\(3, 1fr\)/, 'no fixed three-column grid is left');
 });
 
 test('tierCta has no apply-only branch left, and still answers for every offered card', () => {

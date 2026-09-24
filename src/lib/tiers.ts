@@ -1,8 +1,9 @@
 // sow-185: tier access for the site, in ONE import. Mirrors src/lib/taxonomy.ts: reads house/membership-tiers.yml
 // once at build via js-yaml, through the shared pure parser membership/tiers-display.mjs, AND re-exports the tier
 // AXIS (identity + ranking + membership test) from membership/tiers.mjs so a component gets both "what tiers
-// exist / how they rank" and "how to display them" from a single module. The sow-192 homepage pricing accordion
-// and the Your-membership / Upgrade rail cards bind to TIER_DISPLAY; the gating side (sow-185) consumes the same
+// exist / how they rank" and "how to display them" from a single module. The membership page cards and the
+// Your-membership / Upgrade rail cards bind to TIER_DISPLAY (the sow-192 homepage pricing accordion did too, until
+// sow-392 removed it); the gating side (sow-185) consumes the same
 // yml + axis, so the site and the server can never disagree on the tier model.
 import fs from 'node:fs';
 import path from 'node:path';
