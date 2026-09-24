@@ -13,8 +13,9 @@
 // sow-383: the box's heading and blurb, shared by the site component and the digest's web edition (which the
 // Worker renders and so cannot use the component itself). One definition, so the two boxes cannot drift apart.
 export const SUBSCRIBE_HEADING = 'Get the weekly digest';
-// Owner's wording, 2026-09-23 (was "One email a week: new member articles, ... Unsubscribe in one click, any time.").
-export const SUBSCRIBE_BLURB = 'Our community posts hand-curated content weekly. Never miss content by subscribing to our digest. Subscribing is completely free.';
+// Owner's wording, 2026-09-23, trimmed the same day (was "One email a week: new member articles, ... Unsubscribe in
+// one click, any time.", then "Our community posts hand-curated content weekly. Never miss content ...").
+export const SUBSCRIBE_BLURB = 'Never miss content by subscribing to our digest. Subscribing is completely free.';
 
 export function subscribeSuccessMessage(body) {
   if (body && body.direct === true) {

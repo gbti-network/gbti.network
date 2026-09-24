@@ -74,6 +74,6 @@ test('sow-388: the small print carries an optional first sentence, and the defau
 });
 
 test('the shared box line is the owner\'s wording (2026-09-23), within the writing rules', () => {
-  assert.equal(SUBSCRIBE_BLURB, 'Our community posts hand-curated content weekly. Never miss content by subscribing to our digest. Subscribing is completely free.');
+  assert.equal(SUBSCRIBE_BLURB, 'Never miss content by subscribing to our digest. Subscribing is completely free.');
   assert.doesNotMatch(SUBSCRIBE_BLURB, /[\u2013\u2014]|\b\w+'(t|re|s|ll|ve|d)\b/i);
 });
