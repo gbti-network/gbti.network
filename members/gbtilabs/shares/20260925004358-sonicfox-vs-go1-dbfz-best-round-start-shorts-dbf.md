@@ -1,25 +1,25 @@
 ---
 status: published
-visibility: public
-title: 'SonicFox vs Go1 DBFZ (BEST ROUND START) #shorts #dbfz'
-shortDescription: A video by Isaiah the luigi on YouTube
+id: 20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf
+createdAt: '2026-09-25T00:43:58.791Z'
+updatedAt: '2026-09-25T01:01:59.198Z'
 url: https://www.youtube.com/shorts/uK5G_Z0gvqg
+title: SonicFox vs Go1 DBFZ in the Best Fight Opener Ever
+shortDescription: >-
+  Two longtime DBFZ rivals briefly turned their 2026 match into a coordinated performance before
+  returning to competition.
 category: gaming
-tags:
-  - sonicfox
-  - go1
-  - dragon-ball-fighterz
-  - dbfz
-  - fighting-games
-  - esports
-  - dragon-ball-games-battle-hour
-  - masters-showdown
-image: https://gbti.network/media/shares/gbtilabs/20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf-a45dce08.webp
+image: >-
+  https://gbti.network/media/shares/gbtilabs/20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf-a45dce08.webp
 imageSource: https://i.ytimg.com/vi/uK5G_Z0gvqg/hq2.jpg
 creatorUrl: https://www.youtube.com/@isaiahtheluigiYT
 creatorName: Isaiah the luigi
-id: 20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf
-createdAt: '2026-09-25T00:43:58.791Z'
+tags:
+  - sonicfox
+  - go1
+  - dbfz
+  - esports
+visibility: public
 type: share
 author: gbtilabs
 ---
