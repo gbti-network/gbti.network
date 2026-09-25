@@ -9,6 +9,7 @@
 // pure JS, runs in Workers, and is the only runtime dependency.
 
 import { XMLParser } from 'fast-xml-parser';
+import { cutAtWord } from './text-fit.mjs'; // sow-402: shared word-boundary cut
 
 // Shared parser. attributeNamePrefix '@_' so we can read Atom <link href="...">; textNodeName
 // '#text' so element text living alongside attributes is reachable. CDATA is unwrapped to text by default.
@@ -38,6 +39,30 @@ const ENTITIES = {
   '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"',
   '&#39;': "'", '&apos;': "'", '&nbsp;': ' ',
 };
+
+// sow-402: the sign-offs blog platforms append to a feed excerpt. Anchored to the END of the text and bounded, so the
+// same words inside a real sentence ("continue reading the spec before...") are left alone.
+const SIGN_OFFS = [
+  /\s*The post\b.{1,300}?\bappeared first on\b[^.!?]{0,160}[.!?]?\s*$/i, // WordPress
+  /\s*(?:Continue reading|Read more|Read the full (?:story|article|post)|Keep reading)\b[^.!?]{0,80}$/i,
+];
+
+/**
+ * sow-402 (owner, 2026-09-24): the DISPLAY excerpt of an item with no AI summary. "If the imported summary is clean
+ * enough to be good, leave it": clean text comes out unchanged. Otherwise the feed's sign-offs are removed, a
+ * trailing "[…]" or "..." becomes one "…" (it marks a truncation, so it stays), and text over `max` ends at a whole
+ * word with "…" instead of mid-word. No length limit beyond the existing 500 and no AI call. Pure.
+ */
+export function tidyExcerpt(raw, max = 500) {
+  let s = String(raw ?? '').trim();
+  for (let prev = null; prev !== s;) {
+    prev = s;
+    for (const re of SIGN_OFFS) s = s.replace(re, '').trim();
+  }
+  s = s.replace(/\s*(?:\[(?:…|\.\.\.)\]|\.\.\.|…)$/, '…');
+  if (s === '…') return '';
+  return s.length > max ? cutAtWord(s, max) : s;
+}
 
 /** Strip HTML tags, decode common entities, collapse whitespace, and cap length for AI input. */
 export function cleanText(raw, max = 500) {
@@ -194,7 +219,8 @@ function normalize({ rawGuid, title, link, summary, content, date, image }, sour
     title: cleanTitle,
     link: cleanLink,
     image: (typeof image === 'string' && image) ? image : null, // source article image (RSS media), or null
-    summary: cleanText(summary ?? content, 500),
+    // sow-402: tidied (sign-offs out, ends on a whole word). Cleaned wider first so the 500 cut lands on a word.
+    summary: tidyExcerpt(cleanText(summary ?? content, 2000), 500),
     // TRANSIENT (stripped before persisting in ingest): the fuller article text for AI summarization at ingest.
     // Prefers the feed's full content over the short excerpt, so many feeds get a real summary with NO extra fetch.
     contentText: cleanText(content ?? summary, MAX_CONTENT_CHARS),

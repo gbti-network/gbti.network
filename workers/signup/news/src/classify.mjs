@@ -6,6 +6,7 @@
 // and finally to the DEFAULT_CATEGORY. Ingestion must never block on classification.
 
 import { CATEGORIES, CATEGORY_NAMES, DEFAULT_CATEGORY } from '../config/categories.mjs';
+import { cutAtWord } from './text-fit.mjs'; // sow-402: shared word-boundary cut
 
 // Lightweight keyword fallback. First matching pattern wins; order matters (most specific first).
 // Used only when the AI call fails — keeps quota exhaustion graceful instead of dumping to "Other".
@@ -83,12 +84,36 @@ export async function classifyItem(env, item) {
   return { category: keywordCategory(item) || DEFAULT_CATEGORY, classified: false };
 }
 
-// SOW-046 A: the combined classify + SUMMARIZE call. One Workers AI call returns BOTH the category and a 1-2
-// sentence summary, so we never exceed the free 50-subrequest/run budget (a separate summarize call would). The
+// SOW-046 A: the combined classify + SUMMARIZE call. One Workers AI call returns BOTH the category and a one-sentence
+// summary (sow-402: under 150 characters), so we never exceed the free 50-subrequest/run budget (a separate summarize call would). The
 // summary is generated from the feed's full article text when it inlines one (item.contentText from
 // <content:encoded>/<content>), else from the short excerpt. Same model + fail-closed posture as classifyItem.
 
-const MAX_SUMMARY_CHARS = 400;
+// sow-402 (owner, 2026-09-24): "all future news summaries that are AI generated are under 150 chars". Was 400, cut
+// mid-word. The prompt asks for one sentence under 150; fitSummary enforces it on whatever the model returns.
+export const MAX_SUMMARY_CHARS = 149;
+
+/**
+ * sow-402: fit an AI summary under the limit at a clean point, never mid-word (owner ruling: "trim at a clean
+ * point"). Text that fits is returned unchanged. Otherwise the longest run of WHOLE sentences that fits; otherwise
+ * the text cut at the last whole word with "…" (cutAtWord), the ellipsis counting toward the limit. A sentence ends
+ * at . ! or ? (with any closing quote or bracket) followed by a space and a capital, a digit or an opening quote,
+ * so "v2.0" and "e.g. this" do not end one. Empty input gives null. Pure.
+ */
+export function fitSummary(text, max = MAX_SUMMARY_CHARS) {
+  const s = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  if (s.length <= max) return s;
+  const re = /[.!?]["'’”)\]]*(?=\s+[A-Z0-9"'“‘(\[])/g;
+  let best = 0;
+  for (let m = re.exec(s); m; m = re.exec(s)) {
+    const end = m.index + m[0].length;
+    if (end > max) break;
+    best = end;
+  }
+  if (best > 0) return s.slice(0, best).trim();
+  return cutAtWord(s, max) || null;
+}
 
 /** System + user messages for the combined classify+summarize call. Pure. */
 export function buildAnalysisMessages(item) {
@@ -96,7 +121,7 @@ export function buildAnalysisMessages(item) {
   const system =
     'You analyze a developer/tech news item. Reply in EXACTLY this format and NOTHING else:\n' +
     'CATEGORY: <one category name, copied exactly from the list below>\n' +
-    'SUMMARY: <one or two plain sentences, no preamble, no markdown, no line breaks>\n\n' +
+    'SUMMARY: <one plain sentence under 150 characters, no preamble, no markdown, no line breaks>\n\n' +
     'Categories:\n' + list;
   const body = item?.contentText || item?.summary || '';
   const user = `Title: ${item?.title ?? ''}\n\nContent:\n${body || '(none)'}`;
@@ -121,8 +146,7 @@ export function parseAnalysis(raw) {
     // collapse whitespace + trim FIRST, then strip wrapping quotes (so leading/trailing spaces can't hide them)
     digest = digest.replace(/\s+/g, ' ').trim();
     digest = digest.replace(/^["'“”']+/, '').replace(/["'“”']+$/, '').trim();
-    if (digest.length > MAX_SUMMARY_CHARS) digest = digest.slice(0, MAX_SUMMARY_CHARS).trim();
-    if (!digest) digest = null;
+    digest = fitSummary(digest); // sow-402: under 150 characters, ended at a sentence or a whole word (null if empty)
   }
   return { category, digest };
 }

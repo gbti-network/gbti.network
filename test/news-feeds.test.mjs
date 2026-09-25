@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFeed, cleanText, toEpochSeconds, contentRichness, RICH_CONTENT_MIN } from '../workers/signup/news/src/feeds.mjs';
+import { parseFeed, cleanText, toEpochSeconds, contentRichness, RICH_CONTENT_MIN, tidyExcerpt } from '../workers/signup/news/src/feeds.mjs';
 
 const RSS = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
@@ -208,4 +208,39 @@ test('parseFeed falls back to the first inline body <img> (SOW-050 Tier 0)', () 
   assert.equal(by['Description image'], 'https://cdn.ex.com/desc.png'); // single-quoted src too
   assert.equal(by['Tracking beacon is skipped'], null); // feedburner .gif beacon -> not picked
   assert.equal(by['Media wins over inline'], 'https://cdn.ex.com/win.png'); // enclosure/media still takes priority
+});
+
+// sow-402 (owner, 2026-09-24): an imported excerpt that is clean is left exactly as it is; one that is not has its
+// platform sign-offs removed and ends on a whole word. Its length is kept (the existing 500) and no AI is involved.
+test('sow-402: a clean excerpt comes out unchanged', () => {
+  const clean = 'Astro 5.2 ships a faster content layer and a smaller client runtime. Upgrading is a one-line change.';
+  assert.equal(tidyExcerpt(clean), clean);
+});
+
+test('sow-402: platform sign-offs are removed from the end of an excerpt', () => {
+  assert.equal(tidyExcerpt('A new release is out. The post Release notes for June appeared first on Example Blog.'), 'A new release is out.');
+  assert.equal(tidyExcerpt('The team rewrote the scheduler in Rust. Continue reading →'), 'The team rewrote the scheduler in Rust.');
+  assert.equal(tidyExcerpt('Benchmarks improved across the board. Read more'), 'Benchmarks improved across the board.');
+  assert.equal(tidyExcerpt('Benchmarks improved across the board. Read the full article on Medium »'), 'Benchmarks improved across the board.');
+});
+
+test('sow-402: the same words inside a real sentence are left alone', () => {
+  const s = 'Continue reading the spec before you upgrade, because the defaults changed in three places this release.';
+  assert.equal(tidyExcerpt(s), s);
+});
+
+test('sow-402: a truncation marker becomes one ellipsis, and a long excerpt ends on a whole word', () => {
+  assert.equal(tidyExcerpt('The migration guide covers every breaking change [&hellip;]'.replace('&hellip;', '…')), 'The migration guide covers every breaking change…');
+  assert.equal(tidyExcerpt('The migration guide covers every breaking change [...]'), 'The migration guide covers every breaking change…');
+  const long = ('alpha beta gamma delta ').repeat(40).trim();
+  const out = tidyExcerpt(long);
+  assert.ok(out.length <= 500 && out.endsWith('…'));
+  assert.equal(long[out.length - 1], ' ', 'the cut landed inside a word');
+});
+
+test('sow-402: parseFeed stores the tidied excerpt, and the AI input keeps the full text', () => {
+  const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>X</title><item><title>T</title><link>https://example.com/a</link><description>A short blurb. The post T appeared first on Example.</description><content:encoded xmlns:content="http://purl.org/rss/1.0/modules/content/">&lt;p&gt;The whole article body.&lt;/p&gt;</content:encoded></item></channel></rss>`;
+  const [it] = parseFeed(xml, 'src');
+  assert.equal(it.summary, 'A short blurb.');
+  assert.equal(it.contentText, 'The whole article body.');
 });
