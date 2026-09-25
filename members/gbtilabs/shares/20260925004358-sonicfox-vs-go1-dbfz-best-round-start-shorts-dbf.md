@@ -2,7 +2,7 @@
 status: published
 id: 20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf
 createdAt: '2026-09-25T00:43:58.791Z'
-updatedAt: '2026-09-25T01:26:55.569Z'
+updatedAt: '2026-09-25T02:50:39.749Z'
 url: https://www.youtube.com/shorts/uK5G_Z0gvqg
 title: GO1 v SonicFox in Iconic 2026 Dragon Ball FighterZ Competition
 shortDescription: >-
@@ -32,8 +32,6 @@ The moment works as both a technical performance and a reference to one of *Drag
 
 *Full match:*
 [https://www.youtube.com/watch?v=4U9ruT53nkE](https://www.youtube.com/watch?v=4U9ruT53nkE)
-
-*One-sentence summary:* GO1 and SonicFox opened their 2026 DBFZ match with a rehearsed synchronized sequence before moving into the competitive set, which GO1 won 2-0.
 
 1. Dragon Ball Games Battle Hour 2026, *Dragon Ball FighterZ Masters Showdown*. [https://dbgbh.bn-ent.net/title/dbfz/stage.html](https://dbgbh.bn-ent.net/title/dbfz/stage.html)
 2. Esports.net, coverage of SonicFox and GO1’s DBFZ rivalry and 2026 reunion. [https://www.esports.net/news/sonicfox-go1-rivalry-dragon-ball-fighterz-evo-japan/](https://www.esports.net/news/sonicfox-go1-rivalry-dragon-ball-fighterz-evo-japan/)
