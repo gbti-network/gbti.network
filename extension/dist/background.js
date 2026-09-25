@@ -19212,99 +19212,6 @@ async function editorialAdminRequest({ token, signupBase, method = "GET", body =
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `editorial review request failed (${res.status})`);
   return data;
 }
-async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndication queue request failed (${res.status})`);
-  return data;
-}
-async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndicate-now", { method: "GET", headers: { Authorization: "Bearer " + token } });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
-  return data;
-}
-async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndicate-now", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft })
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now failed (${res.status})`);
-  return data;
-}
-async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication/cancel", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ id })
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `cancel request failed (${res.status})`);
-  return data;
-}
-async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication/approve", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ id })
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `approve request failed (${res.status})`);
-  return data;
-}
-async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue request failed (${res.status})`);
-  return data;
-}
-async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
-  if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/social-queue", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ action, id })
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue action failed (${res.status})`);
-  return data;
-}
 
 // client/src/operations-member.mjs
 function mapActivityError(err) {
@@ -19392,41 +19299,6 @@ async function ogPreview2(ctx, { url: url2 } = {}) {
     if (err instanceof OgClientError) throw new OperationError("og-preview-failed", err.message);
     throw err;
   }
-}
-async function getSyndicationQueue2(ctx) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return getSyndicationQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-}
-async function cancelSyndication2(ctx, { id } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return cancelSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-}
-async function approveSyndication2(ctx, { id } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return approveSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-}
-async function getSocialQueue2(ctx) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return getSocialQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-}
-async function socialQueueAction2(ctx, { action, id } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return socialQueueAction({ action, id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-}
-async function getSyndicateNowInfo(ctx) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-}
-async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft } = {}) {
-  requireIdentity(ctx);
-  const token = ctx.store?.get?.("githubToken");
-  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -20825,7 +20697,6 @@ var LABELS = Object.freeze({ "-2": "Much less", "-1": "Less", 0: "Normal", 1: "M
 
 // membership/syndication-config-core.mjs
 var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
-var TEMPLATE_CHANNELS = CHANNELS;
 var CHANNEL_CAPABILITY = Object.freeze({
   discord: "auto",
   "discord-category": "auto",
@@ -20996,146 +20867,6 @@ function buildDefaultAutoMatrix() {
   }
   return Object.freeze(m);
 }
-function asBool(v, fallback) {
-  if (v === true || v === false) return v;
-  if (v === 1 || v === 0) return v === 1;
-  if (typeof v === "string") {
-    const s = v.trim().toLowerCase();
-    if (s === "true" || s === "yes" || s === "on" || s === "1") return true;
-    if (s === "false" || s === "no" || s === "off" || s === "0") return false;
-  }
-  return fallback;
-}
-function asHoldMinutes(v, fallback) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(0, Math.floor(n));
-}
-function asThreshold(v, fallback) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  const i = Math.floor(n);
-  return i >= 1 ? i : fallback;
-}
-function asClassifyMode(v, fallback) {
-  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
-  return CLASSIFY_MODES.includes(s) ? s : fallback;
-}
-function normalizeNewsEngagement(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const d = DEFAULT_NEWS_ENGAGEMENT;
-  const tier = typeof src.tier === "string" && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase()) ? src.tier.trim().toLowerCase() : d.tier;
-  return Object.freeze({
-    enabled: asBool(src.enabled, d.enabled),
-    open_threshold: asThreshold(src.open_threshold, d.open_threshold),
-    tier,
-    comment_autopost: asBool(src.comment_autopost, d.comment_autopost)
-  });
-}
-function normalizeTemplates(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const out = {};
-  for (const t of TEMPLATE_TYPES) {
-    const v = typeof src[t] === "string" ? src[t].trim() : "";
-    const d = DEFAULT_TEMPLATES[t];
-    if (v) out[t] = v;
-    else if (d) out[t] = d;
-  }
-  return Object.freeze(out);
-}
-function normalizeChannelTemplates(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const out = {};
-  for (const ch of TEMPLATE_CHANNELS) {
-    const block = src[ch];
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    const kept = {};
-    for (const t of TEMPLATE_TYPES) {
-      const v = typeof block[t] === "string" ? block[t].trim() : "";
-      if (v) kept[t] = v;
-    }
-    if (Object.keys(kept).length) out[ch] = Object.freeze(kept);
-  }
-  return Object.freeze(out);
-}
-function normalizeConfiguredTemplates(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const out = {};
-  for (const t of TEMPLATE_TYPES) {
-    const v = typeof src[t] === "string" ? src[t].trim() : "";
-    if (v) out[t] = v;
-  }
-  return Object.freeze(out);
-}
-function normalizeChannels(raw) {
-  const out = {};
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  for (const name of CHANNELS) out[name] = asBool(src[name], DEFAULT_SYNDICATION_CONFIG.channels[name]);
-  return Object.freeze(out);
-}
-function normalizeManualAssist(raw) {
-  const list = Array.isArray(raw) ? raw : [];
-  const out = [];
-  for (const v of list) {
-    const s = String(v ?? "").trim();
-    if (CHANNELS.includes(s) && !out.includes(s)) out.push(s);
-  }
-  return Object.freeze(out);
-}
-function asAutoMode(v, fallback) {
-  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
-  return AUTO_MODES.includes(s) ? s : fallback;
-}
-function normalizeAutoMatrix(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const out = {};
-  for (const t of AUTO_TYPES) {
-    const row = src[t] && typeof src[t] === "object" && !Array.isArray(src[t]) ? src[t] : {};
-    out[t] = {};
-    for (const ch of MATRIX_CHANNELS) {
-      let m = asAutoMode(row[ch], defaultAutoMode(t));
-      if (m === "on" && channelCapability(ch) === "manual") m = "on-manual";
-      out[t][ch] = m;
-    }
-    Object.freeze(out[t]);
-  }
-  return Object.freeze(out);
-}
-function normalizeChannelHoldMinutes(raw) {
-  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const out = {};
-  for (const ch of CHANNELS) {
-    if (src[ch] === void 0 || src[ch] === null || src[ch] === "") continue;
-    const n = Number(src[ch]);
-    if (Number.isFinite(n)) out[ch] = Math.max(0, Math.floor(n));
-  }
-  return Object.freeze(out);
-}
-function syndicationConfigFromParsed(parsed) {
-  const raw = parsed?.syndication ?? parsed ?? {};
-  const d = DEFAULT_SYNDICATION_CONFIG;
-  return Object.freeze({
-    enabled: asBool(raw.enabled, d.enabled),
-    require_approval: asBool(raw.require_approval, d.require_approval),
-    hold_minutes: asHoldMinutes(raw.hold_minutes, d.hold_minutes),
-    classify: asClassifyMode(raw.classify, d.classify),
-    templates: normalizeTemplates(raw.templates),
-    channel_templates: normalizeChannelTemplates(raw.channel_templates),
-    stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
-    channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
-    news_engagement: normalizeNewsEngagement(raw.news_engagement),
-    channels: normalizeChannels(raw.channels),
-    manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels),
-    // SOW-121
-    auto_matrix: normalizeAutoMatrix(raw.auto_matrix),
-    // SOW-125
-    channel_hold_minutes: normalizeChannelHoldMinutes(raw.channel_hold_minutes)
-    // SOW-125
-  });
-}
-function newsEngagement(cfg) {
-  return normalizeNewsEngagement(cfg?.news_engagement);
-}
 
 // membership/syndication-template-edits.mjs
 var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
@@ -21147,8 +20878,6 @@ var NEWS_BANWORDS_PATH = "house/news-banwords.yml";
 var NEWS_SOURCE_WEIGHTS_PATH = "house/news-source-weights.yml";
 var QUOTES_PATH = "house/quotes.yml";
 var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
-var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
-var SYNDICATION_CONFIG_PATH = "house/syndication-config.yml";
 var SITE_SETTINGS_PATH = "house/site-settings.yml";
 var DIGEST_CONFIG_PATH = "house/digest-config.yml";
 var CTAS_PATH = "house/ctas.yml";
@@ -21187,11 +20916,6 @@ async function getContentChannelPool(ctx) {
   const parsed = await readYaml(ctx, CONTENT_CHANNELS_PATH);
   return { channels: Array.isArray(parsed.channels) ? parsed.channels : [] };
 }
-async function getModerationFlagPool(ctx) {
-  const parsed = await readYaml(ctx, MODERATION_FLAGS_PATH);
-  const lists = parsed.lists && typeof parsed.lists === "object" && !Array.isArray(parsed.lists) ? parsed.lists : {};
-  return { lists };
-}
 async function getSiteSettings(ctx) {
   const parsed = await readYaml(ctx, SITE_SETTINGS_PATH);
   return {
@@ -21216,44 +20940,6 @@ async function getSponsorInquiries2(ctx) {
 async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
-}
-async function getSyndicationTemplatePool(ctx) {
-  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
-  const cfg = syndicationConfigFromParsed(parsed);
-  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
-}
-async function getSyndicationSettings(ctx) {
-  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
-  const cfg = syndicationConfigFromParsed(parsed);
-  const channels = {};
-  for (const name of SYNDICATION_CHANNEL_NAMES) channels[name] = Boolean(cfg.channels?.[name]);
-  const autoMatrix = {};
-  for (const t of AUTO_TYPES) {
-    autoMatrix[t] = {};
-    for (const ch of MATRIX_CHANNELS) autoMatrix[t][ch] = cfg.auto_matrix?.[t]?.[ch] ?? "off";
-  }
-  return {
-    settings: {
-      enabled: cfg.enabled,
-      requireApproval: cfg.require_approval,
-      holdMinutes: cfg.hold_minutes,
-      channels,
-      autoMatrix,
-      channelHoldMinutes: { ...cfg.channel_hold_minutes }
-    },
-    channelNames: [...SYNDICATION_CHANNEL_NAMES],
-    // SOW-125: matrixChannels (auto + manual) drive the matrix columns; autoChannels (auto-only) drive the
-    // per-channel delay inputs; capability lets the UI derive auto/manual/building from ONE source.
-    autoTypes: [...AUTO_TYPES],
-    matrixChannels: [...MATRIX_CHANNELS],
-    autoChannels: [...AUTO_CHANNELS],
-    autoModes: [...AUTO_MODES],
-    capability: { ...CHANNEL_CAPABILITY }
-  };
-}
-async function getNewsEngagementSettings(ctx) {
-  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
-  return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
 }
 
 // extension/src/ext-dispatch.mjs
@@ -21321,14 +21007,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/news-source-pool") return ok(await getNewsSourcePool(ctx));
     if (pathname === "/api/quote-pool") return ok(await getQuotePool(ctx));
     if (pathname === "/api/content-channel-pool") return ok(await getContentChannelPool(ctx));
-    if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
-    if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === "/api/coupon-pool") return ok(await getCouponPool2(ctx));
     if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
     if (pathname === "/api/digest-config") return ok(await getDigestConfig(ctx));
     if (pathname === "/api/cta-pool") return ok(await getCtaPool(ctx));
-    if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
-    if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");
     switch (pathname) {
@@ -21413,16 +21095,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
-      case "/api/syndication":
-        return ok(await getSyndicationQueue2(ctx));
-      case "/api/syndication/approve":
-        return ok(await approveSyndication2(ctx, body ?? {}));
-      case "/api/syndication/cancel":
-        return ok(await cancelSyndication2(ctx, body ?? {}));
-      case "/api/syndicate-now":
-        return ok(method === "POST" ? await syndicateNow2(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
-      case "/api/social-queue":
-        return ok(method === "POST" ? await socialQueueAction2(ctx, body ?? {}) : await getSocialQueue2(ctx));
+      // sow-399 (owner, 2026-09-24): the syndication queue, approve/cancel, Manually syndicate and the Social Queue
+      // relays are gone. Syndication moved to the website, which calls the Worker directly over its session.
       case "/api/discord-channels":
         return ok(await listDiscordChannels(ctx));
       case "/api/admin-ops":

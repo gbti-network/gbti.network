@@ -47,6 +47,8 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
           Edit
         </a>
       )}
+      {/* sow-399: superadmin tools (Manually syndicate). This layout has no rail, so they lead the card. */}
+      <slot name="tools" />
       <header class="tcenter">
         {category && <p class="eyebrow"><a href={`/articles/?cat=${encodeURIComponent(topKey(d.categories))}`}>{category}</a></p>}
         <h1 data-gbti-region="title" class="h1 mt-8">{d.title}</h1>

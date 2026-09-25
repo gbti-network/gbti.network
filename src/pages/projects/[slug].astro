@@ -37,6 +37,8 @@ import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // so
 import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered partner CTA, when a superadmin assigned one
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import ApprovePill from '../../components/ApprovePill.astro'; // sow-323: the superadmin approval, beside Edit
+import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
+import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
 import {
   normalizeGallery,
   hasCaptions,
@@ -71,6 +73,8 @@ const { project } = Astro.props;
 const d = project.data;
 const { Content, headings } = await render(project);
 const productUrl = new URL(`/projects/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
+const synProfile = (await getCollection('profile')).find((p) => p.data.username === d.author)?.data; // sow-399
+const synThumb = (await resolveThumb(d, 'project')).thumb;
 
 const stub = isStub(project);
 const links = d.links ?? [];
@@ -354,6 +358,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
             before." The rail follows the write-up in the source, so a phone stacks it after the column and before the
             closing sections; the two-column page places it by grid position (gbti-v3.css, .pd-rail), either side. */}
         <aside class="pd-rail">
+          <SyndicateNow type="project" slug={d.slug} author={d.author || 'gbti'} authorName={synProfile?.displayName} title={d.title} blurb={d.shortDescription} url={productUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={synProfile?.links} image={synThumb ?? undefined} />
           {toc.length > 0 && (
             <nav class="pd-toc" aria-label="Contents" data-pd-toc>
               <span class="pd-rail-lab">Contents</span>

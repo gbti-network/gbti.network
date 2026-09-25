@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { dispatch } from '../extension/src/ext-dispatch.mjs';
+import { getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings } from '../client/src/admin-ops.mjs'; // sow-399: still served by the agent server, tested here directly
 import { buildExtContext } from '../extension/src/ext-context.mjs';
 import { esc } from '../client-ui/src/base.mjs'; // sow-387: the retired toolbar page carried its own copy; this is the one the extension pages render with
 
@@ -101,6 +102,24 @@ const REMOVED_BY_SOW_204 = [
   ['GET', '/api/contributions'], ['GET', '/api/contribution'], ['POST', '/api/contribution-review'],
 ];
 
+// sow-399 (owner, 2026-09-24): syndication moved to the website. Every route only the Syndication tab, the Social
+// Queue or the reader's Manually syndicate button used is gone from the extension, and answers 404 rather than
+// quietly serving a surface the extension no longer has.
+const REMOVED_BY_SOW_399 = [
+  ['GET', '/api/syndication'], ['POST', '/api/syndication/approve'], ['POST', '/api/syndication/cancel'],
+  ['GET', '/api/syndicate-now'], ['POST', '/api/syndicate-now'], ['GET', '/api/social-queue'], ['POST', '/api/social-queue'],
+  ['GET', '/api/moderation-flag-pool'], ['GET', '/api/syndication-template-pool'], ['GET', '/api/news-engagement'], ['GET', '/api/syndication-settings'],
+];
+test('sow-399: the syndication routes are GONE from the extension host, and the Categories channel read stays', async () => {
+  const ctx = ctxFor({ repo: {}, files: { 'house/content-channels.yml': 'channels:\n  - category: ai\n    channelId: "1"\n' } });
+  for (const [method, pathname] of REMOVED_BY_SOW_399) {
+    const r = await dispatch(ctx, { method, pathname, body: {}, query: {} });
+    assert.equal(r.status, 404, `${method} ${pathname} still answers ${r.status} in the extension; syndication moved to the website`);
+  }
+  const kept = await dispatch(ctx, { pathname: '/api/content-channel-pool' });
+  assert.equal(kept.status, 200, 'control: the Categories tab still reads the channel map through the extension');
+});
+
 test('sow-204: the twelve authoring routes are GONE from the extension host (404 not_found, not a silent 200)', async () => {
   const ctx = ctxFor({ repo: {}, files: { 'members/alice/posts/hello/index.md': POST } });
   for (const [method, pathname] of REMOVED_BY_SOW_204) {
@@ -180,9 +199,10 @@ test('SOW-079: the public admin reads (taxonomy / news-source-pool / quote-pool)
   assert.equal(q.json.quotes.length, 1);
 });
 
-test('SOW-079: syndication + admin writes STILL require identity (only the public reads were ungated)', async () => {
-  const synd = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/syndication' });
-  assert.equal(synd.status, 409);
+test('SOW-079: gated reads + admin writes STILL require identity (only the public reads were ungated)', async () => {
+  // sow-399: this used /api/syndication, which left the extension; /api/open-pulls is another gated staff read.
+  const gated = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/open-pulls' });
+  assert.equal(gated.status, 409);
   const write = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/admin', method: 'POST', body: { action: 'quote-add', text: 'x', author: 'y' } });
   assert.equal(write.status, 409);
 });
@@ -330,13 +350,13 @@ test('SOW-087: the channel-map public reads load WITHOUT identity', async () => 
   const pool = await dispatch(noId(), { pathname: '/api/content-channel-pool' });
   assert.equal(pool.status, 200);
   assert.deepEqual(pool.json.channels, [{ category: 'ai', channelId: '11111' }]);
-  const flags = await dispatch(noId(), { pathname: '/api/moderation-flag-pool' });
-  assert.equal(flags.status, 200);
-  assert.deepEqual(flags.json.lists.political, ['election']);
-  const tmpl = await dispatch(noId(), { pathname: '/api/syndication-template-pool' });
-  assert.equal(tmpl.status, 200);
-  assert.equal(tmpl.json.templates.share, 'Shared by {memberdiscord} {shareurl}');
-  assert.ok(tmpl.json.types.includes('share'));
+  // sow-399: the word lists and templates are no longer relayed by the extension (the Syndication tab moved to the
+  // website). The agent server still serves them, so the reads are checked directly against the same repo files.
+  const flags = await getModerationFlagPool(noId());
+  assert.deepEqual(flags.lists.political, ['election']);
+  const tmpl = await getSyndicationTemplatePool(noId());
+  assert.equal(tmpl.templates.share, 'Shared by {memberdiscord} {shareurl}');
+  assert.ok(tmpl.types.includes('share'));
 });
 
 test('sow-274: a channel-map write is handed to the network under the name the network knows', async () => {
@@ -373,10 +393,10 @@ test('SOW-111: the news-engagement settings read is public; the write goes to th
   const files = {
     'house/syndication-config.yml': 'syndication:\n  enabled: true\n  news_engagement:\n    enabled: true\n    open_threshold: 3\n    tier: paid-trial\n',
   };
-  const pool = await dispatch(ctxFor({ identity: null, token: null, files }), { pathname: '/api/news-engagement' });
-  assert.equal(pool.status, 200);
-  assert.deepEqual(pool.json.settings, { enabled: true, open_threshold: 3, tier: 'paid-trial', comment_autopost: true });
-  assert.ok(pool.json.tiers.includes('signed-in'));
+  // sow-399: read directly (the extension no longer relays it; the agent server does).
+  const pool = await getNewsEngagementSettings(ctxFor({ identity: null, token: null, files }));
+  assert.deepEqual(pool.settings, { enabled: true, open_threshold: 3, tier: 'paid-trial', comment_autopost: true });
+  assert.ok(pool.tiers.includes('signed-in'));
 
   const worker = recordingWorker();
   const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };

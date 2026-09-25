@@ -212,7 +212,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     constructor() {
       super();
       if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
-      this._onClient = () => this.isConnected && this.skipClientRender?.() !== true && this.render?.();
+      this._ownClient = null;
+      this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
     }
     connectedCallback() {
       SUBSCRIBERS.add(this._onClient);
@@ -225,7 +226,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._detachCdnFallback = null;
     }
     get client() {
-      return getClient();
+      return this._ownClient || getClient();
+    }
+    /**
+     * sow-399: give ONE element its own client. The website has many independent components that each call
+     * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
+     * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
+     * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
+     * The Worker re-checks the role on every call; this only decides which methods the element can reach.
+     */
+    set client(c) {
+      this._ownClient = c || null;
+      if (this.isConnected) this.render?.();
     }
     /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
     css(extra = "") {
@@ -438,14 +450,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!bare && rest.trim() === "") return null;
     return { style: normalizeListStyle(m[2], !!ordered), rest };
   }
-  var LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
-  function stripListStyleSuffix(line) {
-    const m = LINE_RE.exec(String(line ?? ""));
-    if (!m) return String(line ?? "");
-    const split = splitListSuffix(m[4], /^\d/.test(m[2]));
-    if (!split) return String(line);
-    return `${m[1]}${m[2]}${m[3]}${split.rest}`;
-  }
 
   // client/src/list-items.mjs
   var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
@@ -576,7 +580,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v) => `class="${v ? `${v} ` : ""}${cls}"`);
     return `${a ? `${a} ` : ""}class="${cls}"`;
   }
-  function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
+  function listHtml(items, inline3 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
     const norm2 = normalizeListItems(items, ordered);
     let html = "";
     const open = [];
@@ -596,11 +600,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (cur.ordered !== it.ordered) {
           closeList();
           openList(it);
-          html += `<li>${inline4(it.text)}`;
-        } else html += `</li><li>${inline4(it.text)}`;
+          html += `<li>${inline3(it.text)}`;
+        } else html += `</li><li>${inline3(it.text)}`;
       } else {
         openList(it);
-        html += `<li>${inline4(it.text)}`;
+        html += `<li>${inline3(it.text)}`;
       }
     }
     while (open.length) closeList();
@@ -800,8 +804,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
   var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
-  function serializeBlocks(blocks2) {
-    return (Array.isArray(blocks2) ? blocks2 : []).map(serializeBlock).join("\n\n");
+  function serializeBlocks(blocks) {
+    return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join("\n\n");
   }
   function serializeBlock(b) {
     if (!b || typeof b !== "object") return "";
@@ -853,7 +857,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function parseBlocks(md) {
     const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const blocks2 = [];
+    const blocks = [];
     const n = lines.length;
     let i = 0;
     while (i < n) {
@@ -863,7 +867,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isMarker(line)) {
-        blocks2.push({ type: "members" });
+        blocks.push({ type: "members" });
         i++;
         continue;
       }
@@ -881,14 +885,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           i++;
         }
         i++;
-        if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
-        else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim() });
-        else blocks2.push({ type: "code", lang, code: code.join("\n") });
+        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
+        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim() });
+        else blocks.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
       let m = line.match(/^(#{1,6})\s+(.*)$/);
       if (m) {
-        blocks2.push({ type: "heading", level: m[1].length, text: m[2] });
+        blocks.push({ type: "heading", level: m[1].length, text: m[2] });
         i++;
         continue;
       }
@@ -898,14 +902,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           q.push(lines[i].replace(/^>\s?/, ""));
           i++;
         }
-        blocks2.push({ type: "quote", text: q.join("\n") });
+        blocks.push({ type: "quote", text: q.join("\n") });
         continue;
       }
       if (isListItem(line)) {
         const run = takeListRun(lines, i);
         const ordered = !!run.items[0]?.ordered;
         const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
-        blocks2.push({ type: "list", ordered, items });
+        blocks.push({ type: "list", ordered, items });
         i = run.next;
         continue;
       }
@@ -922,17 +926,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           rows.push(row);
           i++;
         }
-        blocks2.push({ type: "table", head, aligns, rows });
+        blocks.push({ type: "table", head, aligns, rows });
         continue;
       }
       const im = parseImageLine(line);
       if (im) {
-        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
+        blocks.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
         i++;
         continue;
       }
       if (isBareUrl(line) && isVideoUrl(line)) {
-        blocks2.push({ type: "embed", url: line.trim() });
+        blocks.push({ type: "embed", url: line.trim() });
         i++;
         continue;
       }
@@ -943,10 +947,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         para.push(l);
         i++;
       }
-      if (para.length) blocks2.push({ type: "paragraph", text: para.join("\n") });
+      if (para.length) blocks.push({ type: "paragraph", text: para.join("\n") });
       else i++;
     }
-    return blocks2;
+    return blocks;
   }
   function emptyBlock(type) {
     switch (type) {
@@ -2270,12 +2274,12 @@ ${listStyleProseCss(".doc-blocks")}
     // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
     // instead of re-rendering so an author who is already typing keeps their caret.
     async _rehydrateStaged() {
-      const blocks2 = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
-      if (!blocks2.length) return;
-      const found = await loadStagedImages(blocks2.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
+      const blocks = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
+      if (!blocks.length) return;
+      const found = await loadStagedImages(blocks.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
-      for (const b of blocks2) {
+      for (const b of blocks) {
         const src = found[b.url];
         const img = src && this.$(`[data-imgfile="${b._id}"]`)?.closest(".imgframe")?.querySelector("img");
         if (img) img.src = src;
@@ -2383,10 +2387,10 @@ ${listStyleProseCss(".doc-blocks")}
       return CONVERT.slice();
     }
     _render() {
-      const blocks2 = this._blocks || [];
-      const hasMembers = blocks2.some((b) => b.type === "members");
+      const blocks = this._blocks || [];
+      const hasMembers = blocks.some((b) => b.type === "members");
       let inMem = false;
-      const parts = blocks2.map((b) => {
+      const parts = blocks.map((b) => {
         if (b.type === "members") {
           inMem = true;
           return this._memberDivider(b);
@@ -4393,7 +4397,7 @@ ${listStyleProseCss(".doc-blocks")}
   var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-embed(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
   var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
   var hasBlockChild = (n) => kids(n).some(isBlock);
-  var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
+  var flat = (blocks) => blocks.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
   var inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
   function codeText(el) {
     const html = String(el?.innerHTML ?? "");
@@ -4502,11 +4506,11 @@ ${listStyleProseCss(".doc-blocks")}
   function domToMarkdown(root) {
     const out = [];
     walk(root, out);
-    const blocks2 = [];
+    const blocks = [];
     let run = null;
     const closeRun = () => {
       if (!run) return;
-      if (run.length) blocks2.push(run.join("\n>\n"));
+      if (run.length) blocks.push(run.join("\n>\n"));
       run = null;
     };
     for (const b of out) {
@@ -4516,10 +4520,10 @@ ${listStyleProseCss(".doc-blocks")}
         continue;
       }
       closeRun();
-      if (typeof b === "string" && b.trim()) blocks2.push(b);
+      if (typeof b === "string" && b.trim()) blocks.push(b);
     }
     closeRun();
-    return blocks2.join("\n\n");
+    return blocks.join("\n\n");
   }
 
   // client-ui/src/elements/gbti-prose-editor.mjs
@@ -7768,8 +7772,8 @@ ${listStyleProseCss(".doc-blocks")}
         this._slugVal = v;
         const mirror = this.$('[data-key="slug"]');
         if (mirror) mirror.value = v;
-        const inline4 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline4) inline4.textContent = v;
+        const inline3 = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline3) inline3.textContent = v;
         const note = input.closest(".fld")?.querySelector(".urlprev");
         if (note && this.itemPath) {
           note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
@@ -18789,8 +18793,8 @@ ${BLOCKED_PILL_CSS}
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc11 = c | 32;
-      if (lc11 >= 97 && lc11 <= 102) return lc11 - 97 + 10;
+      const lc10 = c | 32;
+      if (lc10 >= 97 && lc10 <= 102) return lc10 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -23334,22 +23338,23 @@ ${BLOCKED_PILL_CSS}
           ts: toMs(it.enqueuedAt),
           title: it.title || it.targetSlug || "Untitled",
           sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
-          href: "admin.html#tab=syndication"
+          // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
+          href: `${SITE15}/admin/#tab=syndication&sub=activity`
         };
       });
     }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};
       return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => {
-        const lc11 = prLifecycle(p, null);
+        const lc10 = prLifecycle(p, null);
         return {
           id: p.number,
           // Both hosts read the Worker's my-pulls, which carries the merge and close times (sow-221). Unread for
           // PRs is the seen-set of numbers, so this only orders the rows and says when.
           ts: prTime(p),
           title: p.title || `PR #${p.number}`,
-          sub: lc11.needsAttention ? "Declined: open to see why" : "Accepted",
-          href: lc11.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE15
+          sub: lc10.needsAttention ? "Declined: open to see why" : "Accepted",
+          href: lc10.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE15
         };
       });
     }
@@ -23392,14 +23397,14 @@ ${BLOCKED_PILL_CSS}
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc11 = String(login).toLowerCase();
+      const lc10 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc11).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc10).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc11).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc10).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -24227,10 +24232,10 @@ ${BLOCKED_PILL_CSS}
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count2 = s.count != null ? `${s.count} items` : "";
-        const inline4 = [domain, count2].filter(Boolean).join(" · ");
+        const inline3 = [domain, count2].filter(Boolean).join(" · ");
         const showDesc = s.description && lc4(s.description) !== lc4(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc(count2)}</span>` : "") + `</div>`;
-        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline4 ? `<span class="d">${esc(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline3 ? `<span class="d">${esc(inline3)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
       host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
       this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
@@ -24533,986 +24538,15 @@ ${BLOCKED_PILL_CSS}
     return _directory;
   }
 
-  // membership/syndication-format.mjs
-  var TYPE_LABEL6 = { post: "article", project: "project", prompt: "prompt", share: "link" };
-  function sanitizeMentions(text2) {
-    return String(text2 || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
-  }
-  function truncate2(text2, limit) {
-    const s = String(text2 || "");
-    if (!Number.isFinite(limit) || s.length <= limit) return s;
-    return s.slice(0, Math.max(0, limit - 1)).trimEnd() + "…";
-  }
-  function xHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.)?(?:x|twitter|mobile\.twitter)\.com\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, "").trim();
-    return /^[A-Za-z0-9_]{1,15}$/.test(s) ? s : "";
-  }
-  function blueskyHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.)?bsky\.app\/profile\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, "").trim();
-    return /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i.test(s) ? s : "";
-  }
-  function mastodonHandleFrom(value) {
-    const raw = String(value || "").trim();
-    if (!raw) return "";
-    const domain = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i;
-    const url = raw.match(/^https?:\/\/([^/]+)\/@([A-Za-z0-9_]+)\/?$/i);
-    if (url && domain.test(url[1])) return `${url[2]}@${url[1].toLowerCase()}`;
-    const parts = raw.replace(/^@/, "").split("@");
-    if (parts.length === 2 && /^[A-Za-z0-9_]+$/.test(parts[0]) && domain.test(parts[1])) return `${parts[0]}@${parts[1].toLowerCase()}`;
-    return "";
-  }
-  function redditHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.|old\.)?reddit\.com\/u(?:ser)?\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^\/?u\//i, "").replace(/^@/, "").trim();
-    return /^[A-Za-z0-9_-]{3,20}$/.test(s) ? s : "";
-  }
-  function devtoHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.)?dev\.to\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, "").trim();
-    return /^[A-Za-z0-9_]{1,30}$/.test(s) ? s : "";
-  }
-  function toHashtag(label) {
-    const parts = String(label || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
-    if (!parts.length) return "";
-    const body = parts.length === 1 ? parts[0] : parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("");
-    return body ? `#${body}` : "";
-  }
-  var HASHTAG_BRAND = "gbti";
-  var HASHTAG_MAX = 5;
-  function hashtagList(labels, { max = 0, brand = "" } = {}) {
-    const seen = /* @__PURE__ */ new Set();
-    const out = [];
-    for (const l of Array.isArray(labels) ? labels : []) {
-      const h = toHashtag(l);
-      const key = h.toLowerCase();
-      if (h && !seen.has(key)) {
-        seen.add(key);
-        out.push(h);
-      }
-    }
-    const brandTag = brand ? toHashtag(brand) : "";
-    if (!brandTag && !(max > 0)) return out.join(" ");
-    const cap = max > 0 ? max : out.length + 1;
-    const topical = brandTag ? out.filter((h) => h.toLowerCase() !== brandTag.toLowerCase()) : out;
-    const kept = topical.slice(0, brandTag ? Math.max(0, cap - 1) : cap);
-    if (brandTag) kept.push(brandTag);
-    return kept.join(" ");
-  }
-  function dropTrailingHashtagsToFit(text2, limit) {
-    let s = String(text2 || "");
-    if (!Number.isFinite(limit) || s.length <= limit) return s;
-    while (s.length > limit && /\s#[^\s#]+$/.test(s)) s = s.replace(/\s#[^\s#]+$/, "");
-    return s;
-  }
-  function renderTemplate(template, item = {}, { limit = 2e3, previewMention = null } = {}) {
-    const mention = /^<@!?\d+>$/.test(String(item.mention || "")) ? item.mention : null;
-    const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : "a member"));
-    const rawHandle = String(item.authorDiscord || "").trim().replace(/^@/, "");
-    const discordHandle = /^[A-Za-z0-9._]{2,32}$/.test(rawHandle) && !/[\/:]/.test(rawHandle) ? rawHandle : "";
-    const previewM = !mention && previewMention ? String(previewMention) : null;
-    const discordUsername = mention || previewM || sanitizeMentions(`@${discordHandle || item.author || "a member"}`);
-    const vars = {
-      memberdiscord: mention || previewM || fullName,
-      // the owner-decided fallback: full name, no ping
-      memberdiscordusername: discordUsername,
-      contenttype: TYPE_LABEL6[item.source] || "item",
-      // {content-type}: article / product / prompt / link
-      fullname: fullName,
-      author: sanitizeMentions(item.author ? `@${item.author}` : "a member"),
-      shareurl: String(item.url || ""),
-      url: String(item.url || ""),
-      title: sanitizeMentions(item.title || ""),
-      category: sanitizeMentions(item.category || ""),
-      authornote: sanitizeMentions(item.authorNote || ""),
-      // {author-note}: the from-the-author intro (public items only)
-      // {author-note-italic}: the intro in markdown ITALICS for channels that render it (Reddit does).
-      // Markdown italics never span line breaks, so each non-empty LINE is wrapped, not the whole block.
-      authornoteitalic: sanitizeMentions(item.authorNote || "").split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n"),
-      // {author-note-block}: the whole labelled, quoted "From the author:" paragraph set (for long-form channels
-      // like LinkedIn), or EMPTY when the item has no from-the-author note (a note-less post shows no dangling
-      // label). Real newlines; sanitized. Projects/prompts always carry a note; posts may not.
-      authornoteblock: String(item.authorNote || "").trim() ? `
-
-From the author:
-
-"${sanitizeMentions(String(item.authorNote).trim())}"` : "",
-      // {author-note-quoted-italic}: the italicized note WITH its surrounding quotes, or EMPTY. Same
-      // empty-awareness as {author-note-block} above, for a template that wants the bare quoted note rather than
-      // the labelled paragraph. 2026-08-11: the stored reddit-comment template wrote the quotes itself around
-      // {author-note-italic}, so a note-less article syndicated to Reddit as a lone "". Punctuation that belongs
-      // to an optional value has to travel WITH it; a template cannot know whether the value showed up.
-      authornotequoteditalic: String(item.authorNote || "").trim() ? `"${sanitizeMentions(String(item.authorNote).trim()).split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n")}"` : "",
-      memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : "",
-      // {member-url}: the public profile
-      shortdescription: sanitizeMentions(item.blurb || ""),
-      // {short-description}: the item's shortDescription (the queue item's blurb)
-      // SOW-120 follow-up: {member-x-handle} is the member's OWN validated X handle rendered as a real
-      // @mention (X @mentions tag a user, they are not a mass broadcast like Discord, and xHandleFrom
-      // strictly validates the shape), else the sanitized full name. {category-hashtag} / {tags-hashtags} /
-      // {hashtags} are alphanumeric-only, so they carry no mention risk.
-      memberxhandle: xHandleFrom(item.authorX) ? `@${xHandleFrom(item.authorX)}` : fullName,
-      // SOW-122: {member-bluesky-handle} = the member's Bluesky @handle (from profile links.bluesky), else the
-      // full name. On Bluesky a plain @handle is not a live mention; the bluesky adapter adds a resolved-DID
-      // FACET over this handle so it links + notifies.
-      memberblueskyhandle: blueskyHandleFrom(item.authorBluesky) ? `@${blueskyHandleFrom(item.authorBluesky)}` : fullName,
-      // SOW-123: {member-mastodon-handle} = the member's Mastodon @user@instance (from profile links.mastodon),
-      // else the full name. Mastodon renders @user@instance in status text as a native mention (no facet).
-      membermastodonhandle: mastodonHandleFrom(item.authorMastodon) ? `@${mastodonHandleFrom(item.authorMastodon)}` : fullName,
-      // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
-      // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
-      memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
-      // sow-260: {author-note-attributed} = the author note as an ATTRIBUTED markdown BLOCKQUOTE, addressed with
-      // the member's Reddit handle, or EMPTY when the item has no note. This is the whole Reddit FIRST COMMENT.
-      // Reddit gives a manual poster the preview card OR body text, never both (the API could do both via
-      // kind=link plus selftext; the web composer cannot), so the owner chose the card and moved the note into a
-      // comment. The label travels WITH the value on purpose: a template writing "From {member-reddit-handle}:"
-      // itself would leave that line dangling over nothing for a note-less item, which is the exact defect
-      // {author-note-block} and {author-note-quoted-italic} were both created to avoid.
-      authornoteattributed: String(item.authorNote || "").trim() ? `From ${redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName}:
-
-` + `"${sanitizeMentions(String(item.authorNote).trim())}"`.split("\n").map((l) => l.trim() ? `> ${l.trim()}` : ">").join("\n") : "",
-      // SOW-140: {member-devto-handle} = the member's OWN dev.to @handle (from profile links.devto) rendered as a
-      // native dev.to mention, else the sanitized full name (mirrors {member-x-handle}). Used in the dev.to byline.
-      memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,
-      categoryhashtag: toHashtag(item.category),
-      tagshashtags: hashtagList(item.tags),
-      // sow-303: the merged token is the one that carries the cap and the brand tag. The two split tokens
-      // above stay exactly as they were, so a template using them is unaffected.
-      // THE BRAND TAG IS SHARES ONLY, and that is the owner's scope rather than a technical limit. The ruling
-      // ("up to five and include #gbti always", 2026-09-02) answered a question about SHARE posts. The merged
-      // token is not share-only though: LinkedIn's post, product and prompt templates use it too, so branding
-      // the helper unconditionally would have put #gbti on article syndication nobody asked about. Two existing
-      // tests caught it, both asserting a PROMPT's hashtag tail.
-      // Extending it to every type is deleting the condition on this line.
-      hashtags: hashtagList(
-        [item.category, ...Array.isArray(item.tags) ? item.tags : []],
-        { max: HASHTAG_MAX, brand: item.source === "share" ? HASHTAG_BRAND : "" }
-      )
-    };
-    const text2 = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
-      const val = vars[name.toLowerCase().replace(/-/g, "")] ?? "";
-      return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
-    }).replace(/\\n/g, "\n").replace(/(^|\s)(""|''|“”|‘’|\(\)|\[\])(?=\s|$)/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-    return truncate2(dropTrailingHashtagsToFit(text2, limit), limit);
-  }
-  function renderBodyTemplate(template, item = {}, rawBody = "") {
-    const body = String(rawBody ?? "");
-    const tmpl = String(template ?? "").trim() || "{body}";
-    const SENTINEL = "GBTIBODY";
-    const withSentinel = tmpl.replace(/\{body\}/gi, `${SENTINEL}`);
-    const rendered = renderTemplate(withSentinel, item, { limit: 2e4 });
-    return rendered.split(`${SENTINEL}`).join(body);
-  }
-  function recordDestinations(rec) {
-    const merged = { ...rec?.perChannel || {}, ...rec?.channels || {} };
-    const out = /* @__PURE__ */ new Set();
-    for (const [k, v] of Object.entries(merged)) {
-      const status = v && typeof v === "object" ? v.status : v;
-      if (status && status !== "sent" && status !== "queued-manual") continue;
-      out.add(k.split(":")[0].replace(/^discord-forward$/, "discord"));
-    }
-    if (!out.size && rec?.destination) out.add(rec.destination);
-    if (!out.size && !Object.keys(merged).length) out.add("discord");
-    return out;
-  }
-
-  // membership/syndication-channels.mjs
-  var CHANNEL_LIMITS = Object.freeze({
-    discord: 2e3,
-    "discord-category": 2e3,
-    // SOW-087: the category-channel Discord post
-    x: 280,
-    linkedin: 3e3,
-    mastodon: 500,
-    bluesky: 300,
-    reddit: 300,
-    // the Reddit post-title cap (SOW-088: the template renders the title)
-    devto: 128,
-    // the dev.to title cap (the article body is not template-limited)
-    hashnode: 250,
-    // SOW-134: the Hashnode title cap (the article body is not template-limited)
-    dailydev: 300
-    // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
-  });
-  var CHANNEL_SECRET_KEYS = Object.freeze({
-    discord: ["DISCORD_BOT_TOKEN"],
-    "discord-category": ["DISCORD_BOT_TOKEN"],
-    // SOW-087: the same bot posts the category-channel copy
-    x: ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
-    linkedin: ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_ORG_URN"],
-    mastodon: ["MASTODON_BASE_URL", "MASTODON_ACCESS_TOKEN"],
-    bluesky: ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
-    // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
-    // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
-    // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
-    // needs no credential at all, so listing dead keys here would only make a working channel report itself
-    // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
-    reddit: ["REDDIT_SUBREDDIT"],
-    // SOW-088, narrowed by sow-260
-    devto: ["DEVTO_API_KEY", "DEVTO_ORG_ID"],
-    // SOW-088: full-body crossposts to the GBTI dev.to organization
-    hashnode: ["HASHNODE_TOKEN", "HASHNODE_PUBLICATION_ID"]
-    // SOW-134: PAT + the gbti.hashnode.dev publication id
-  });
-  var CHANNEL_MARKDOWN = Object.freeze({
-    discord: true,
-    // a Discord message, and Discord renders markdown natively
-    "discord-category": true,
-    // the same bot, the same rendering
-    // EVERY OTHER CHANNEL IS FALSE, INCLUDING dev.to AND HASHNODE, and those two are the ones that look wrong.
-    // They are markdown platforms. But this map governs the text renderChannelText produces, and on dev.to and
-    // Hashnode that text is the post TITLE (see the channelOnly note in syndication-config-core.mjs), which is
-    // a plain-text field on both. Their article BODIES never pass through here: they are built by
-    // renderBodyTemplate and keep their markdown untouched. Flip either of these to true and you put
-    // asterisks in an article title.
-    devto: false,
-    hashnode: false,
-    reddit: false,
-    // the manual rail is the rich-text composer, not the markdown editor
-    x: false,
-    bluesky: false,
-    mastodon: false,
-    linkedin: false,
-    dailydev: false
-  });
-  function rendersMarkdown(name) {
-    return CHANNEL_MARKDOWN[name] === true;
-  }
-
-  // membership/markdown-plain.mjs
-  var MASK = "\0";
-  var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
-  var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function maskRuns(text2, store2) {
-    const push = (raw, kind2) => {
-      store2.push({ raw, kind: kind2 });
-      return `${MASK}${store2.length - 1}${MASK}`;
-    };
-    return String(text2).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
-  }
-  function inline3(text2, { bold, italic, strike, link }) {
-    return String(text2).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
-  }
-  function blocks(md) {
-    const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
-    const isQuote2 = (l) => /^\s*>/.test(l);
-    const isHeading2 = (l) => /^\s{0,3}#{1,6}\s/.test(l);
-    const isUl = (l) => /^\s*[-*+]\s+\S/.test(l);
-    const isOl = (l) => /^\s*\d+[.)]\s+\S/.test(l);
-    const isFence2 = (l) => /^\s*(```+|~~~+)/.test(l);
-    const isHr = (l) => /^\s*([-*_])(\s*\1){2,}\s*$/.test(l);
-    const out = [];
-    let i = 0;
-    while (i < lines.length) {
-      const l = lines[i];
-      const fence = l.match(/^\s*(```+|~~~+)/);
-      if (fence) {
-        const close = fence[1][0] === "`" ? /^\s*```+\s*$/ : /^\s*~~~+\s*$/;
-        const body = [];
-        i++;
-        while (i < lines.length && !close.test(lines[i])) {
-          body.push(lines[i]);
-          i++;
-        }
-        i++;
-        out.push({ kind: "fence", lines: body });
-        continue;
-      }
-      if (/^\s*$/.test(l)) {
-        out.push({ kind: "blank" });
-        i++;
-        continue;
-      }
-      if (isHr(l)) {
-        out.push({ kind: "hr" });
-        i++;
-        continue;
-      }
-      const heading = l.match(/^\s{0,3}(#{1,6})\s+(.*)$/);
-      if (heading) {
-        out.push({ kind: "heading", level: heading[1].length, text: heading[2].trim() });
-        i++;
-        continue;
-      }
-      if (isQuote2(l)) {
-        const body = [];
-        while (i < lines.length && isQuote2(lines[i])) {
-          body.push(lines[i].replace(/^\s*>\s?/, ""));
-          i++;
-        }
-        out.push({ kind: "quote", lines: body });
-        continue;
-      }
-      if (isUl(l)) {
-        const items = [];
-        while (i < lines.length && isUl(lines[i])) {
-          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*[-*+]\s+/, ""));
-          i++;
-        }
-        out.push({ kind: "ul", items });
-        continue;
-      }
-      if (isOl(l)) {
-        const items = [];
-        while (i < lines.length && isOl(lines[i])) {
-          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*\d+[.)]\s+/, ""));
-          i++;
-        }
-        out.push({ kind: "ol", items });
-        continue;
-      }
-      const para = [];
-      while (i < lines.length && !/^\s*$/.test(lines[i]) && !isQuote2(lines[i]) && !isHeading2(lines[i]) && !isUl(lines[i]) && !isOl(lines[i]) && !isFence2(lines[i]) && !isHr(lines[i])) {
-        para.push(lines[i]);
-        i++;
-      }
-      out.push({ kind: "p", lines: para });
-    }
-    return out;
-  }
-  function mdToPlain(md) {
-    const render2 = (text2) => {
-      const store2 = [];
-      const masked = maskRuns(text2, store2);
-      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
-      const done = inline3(masked, {
-        bold: (t) => t,
-        italic: (t) => t,
-        strike: (t) => t,
-        link: (label, url) => {
-          const dest = resolve(url);
-          const l = resolve(String(label || "")).trim();
-          return !l || l === dest ? dest : `${l} (${dest})`;
-        }
-      });
-      return resolve(done);
-    };
-    const parts = [];
-    for (const b of blocks(md)) {
-      if (b.kind === "blank" || b.kind === "hr") {
-        parts.push("");
-        continue;
-      }
-      if (b.kind === "quote") {
-        parts.push(mdToPlain(b.lines.join("\n")));
-        continue;
-      }
-      if (b.kind === "fence") {
-        parts.push(["```", ...b.lines, "```"].join("\n"));
-        continue;
-      }
-      if (b.kind === "heading") {
-        parts.push(render2(b.text));
-        continue;
-      }
-      if (b.kind === "ul") {
-        parts.push(b.items.map((it) => `- ${render2(it)}`).join("\n"));
-        continue;
-      }
-      if (b.kind === "ol") {
-        parts.push(b.items.map((it, n) => `${n + 1}. ${render2(it)}`).join("\n"));
-        continue;
-      }
-      parts.push(b.lines.map(render2).join("\n"));
-    }
-    return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  }
-
-  // membership/news-channels.mjs
-  var lc7 = (s) => String(s ?? "").trim().toLowerCase();
-  function newsChannelMap(parsed) {
-    const out = /* @__PURE__ */ new Map();
-    const list = Array.isArray(parsed?.channels) ? parsed.channels : [];
-    for (const e of list) {
-      const cat = lc7(e?.category);
-      const ch = String(e?.channelId ?? "").trim();
-      if (cat && ch) out.set(cat, ch);
-    }
-    return out;
-  }
-  function channelForCategory(parsed, category) {
-    return newsChannelMap(parsed).get(lc7(category)) ?? null;
-  }
-  function channelForCategoryPath(parsed, path) {
-    const arr = Array.isArray(path) ? path : path ? [path] : [];
-    for (let i = arr.length - 1; i >= 0; i--) {
-      const hit = channelForCategory(parsed, arr[i]);
-      if (hit) return hit;
-    }
-    return null;
-  }
-
-  // client-ui/src/elements/gbti-syndicate-now.mjs
-  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn" };
-  var FULL_BODY_DESTS = /* @__PURE__ */ new Set(["devto"]);
-  var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
-  var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
-  var localSendsAll = () => {
-    try {
-      const a = JSON.parse(localStorage.getItem(LOCAL_SENDS_KEY) || "[]");
-      return Array.isArray(a) ? a : [];
-    } catch {
-      return [];
-    }
-  };
-  var localSendsSave = (list) => {
-    try {
-      localStorage.setItem(LOCAL_SENDS_KEY, JSON.stringify(list.slice(-50)));
-    } catch {
-    }
-  };
-  var CSS43 = `
-  :host { display:block; }
-  .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
-  .snbtn:hover { border-color:var(--accent); color:var(--accent); }
-  .overlay { position:fixed; inset:0; background:rgba(10,12,11,.62); z-index:60; display:flex; align-items:center; justify-content:center; }
-  .panel { width:min(560px, calc(100% - 32px)); max-height:calc(100vh - 48px); overflow-y:auto; background:var(--bg, #16181a); color:var(--fg); border:1.5px solid var(--line); border-radius:12px; padding:18px 20px; }
-  .panel h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:17px; }
-  .sub { color:var(--muted); font-size:12.5px; margin:0 0 14px; }
-  .tiles { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
-  .tile { font:inherit; font-weight:700; font-size:13px; padding:14px 10px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); cursor:pointer; text-align:center; }
-  .tile:hover:not([disabled]) { border-color:var(--accent); color:var(--accent); }
-  .tile[disabled] { opacity:.45; cursor:default; }
-  .tile .why { display:block; font-weight:400; font-size:10.5px; color:var(--muted); margin-top:4px; }
-  .tile .sentb { display:block; font-weight:600; font-size:10.5px; color:#d8a13d; margin-top:4px; }
-  .info { color:var(--muted); font-size:12.5px; margin-top:10px; }
-  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 4px; }
-  textarea, select { width:100%; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
-  textarea { min-height:74px; font-family:var(--font-mono, monospace); font-size:12.5px; }
-  .preview { border:1.5px dashed var(--line); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; word-break:break-word; background:var(--hover, rgba(0,0,0,.15)); }
-  .warn { color:#d8a13d; font-size:12.5px; margin-top:10px; }
-  .err { color:#e06c6c; font-size:12.5px; margin-top:10px; }
-  .okmsg { color:var(--accent); font-size:13px; margin-top:10px; }
-  .okmsg a { color:var(--accent); }
-  .actions { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; }
-  .go { font:inherit; font-weight:700; font-size:13.5px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
-  .go[disabled] { opacity:.55; cursor:default; }
-  .ghost { font:inherit; font-size:13px; padding:8px 14px; border:1.5px solid var(--line); border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; }
-  .ghost:hover { color:var(--fg); }
-  .spin { display:inline-block; width:12px; height:12px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sn-spin .7s linear infinite; vertical-align:-1px; margin-right:7px; }
-  @keyframes sn-spin { to { transform:rotate(360deg); } }
-`;
-  var GbtiSyndicateNow = class extends GbtiElement {
-    render() {
-      if (!this.client) {
-        this.set("");
-        return;
-      }
-      if (this._role === void 0 && !this._loading) {
-        this._loading = true;
-        this._gate();
-      }
-      if (this._role !== "superadmin") {
-        this.set("");
-        return;
-      }
-      this.set(this.css(CSS43) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
-      this.on(".snbtn", "click", () => {
-        this._open = true;
-        this._step = "dest";
-        this._result = null;
-        this._err = null;
-        this.render();
-        this._loadInfo();
-      });
-      if (this._open) this._wireModal();
-    }
-    async _gate() {
-      try {
-        const st = await this.client.status();
-        this._role = st?.role || "member";
-        this._me = String(st?.identity?.username || st?.identity?.login || "").toLowerCase();
-      } catch {
-        this._role = "member";
-        this._me = "";
-      }
-      this._loading = false;
-      this.render();
-    }
-    _item() {
-      const d = this.dataset || {};
-      return {
-        source: d.gbtiType || "",
-        targetSlug: d.gbtiSlug || "",
-        targetType: d.gbtiType || "",
-        author: d.gbtiAuthor || "",
-        authorName: d.gbtiAuthorName || void 0,
-        // SOW-088 {fullName}: the profile displayName (else @login)
-        title: d.gbtiTitle || "",
-        blurb: d.gbtiBlurb || void 0,
-        // SOW-088 {short-description}: the item's shortDescription
-        url: d.gbtiUrl || "",
-        image: d.gbtiImage || void 0,
-        category: d.gbtiCategory || void 0,
-        categoryPath: d.gbtiCategoryPath ? d.gbtiCategoryPath.split(",").filter(Boolean) : void 0,
-        // SOW-088: leaf-first routing
-        authorDiscord: d.gbtiDiscord || void 0,
-        // SOW-088: the public profile Discord handle
-        authorX: d.gbtiX || void 0,
-        // SOW-120: the public profile X handle ({member-x-handle})
-        authorBluesky: d.gbtiBluesky || void 0,
-        // SOW-122: the public profile Bluesky handle ({member-bluesky-handle})
-        authorMastodon: d.gbtiMastodon || void 0,
-        // SOW-123: the public profile Mastodon handle ({member-mastodon-handle})
-        authorReddit: d.gbtiReddit || void 0,
-        // the public profile Reddit username ({member-reddit-handle})
-        authorDevto: d.gbtiDevto || void 0,
-        // SOW-140: the public profile dev.to handle ({member-devto-handle})
-        tags: d.gbtiTags ? d.gbtiTags.split(",").map((t) => t.trim()).filter(Boolean) : void 0,
-        // SOW-120: {tags-hashtags}
-        authorNote: this._authorNote || void 0,
-        // SOW-088 {author-note}: the from-the-author intro comment
-        visibility: d.gbtiVisibility === "members" ? "members" : "public"
-        // SOW-088 Proposal A: drives the STUB template set
-      };
-    }
-    async _loadInfo() {
-      try {
-        const it0 = this._item();
-        const [info, queue, thread] = await Promise.all([
-          this.client.getSyndicateNow(),
-          this.client.syndicationQueue().catch(() => null),
-          // The {author-note} token: the from-the-author intro comment (public, flagged authorNote).
-          this.client.listComments({ targetType: it0.targetType, targetSlug: it0.targetSlug }).catch(() => null)
-        ]);
-        this._info = info;
-        const note = (thread?.items ?? thread?.comments ?? []).find((c) => c?.authorNote && typeof c.body === "string" && c.body.trim());
-        this._authorNote = note ? note.body.trim() : null;
-        try {
-          this._discordLinked = Boolean((await this.client.discordLinkStatus?.())?.linked);
-        } catch {
-          this._discordLinked = false;
-        }
-        const key = `${this._item().source}:${this._item().targetSlug}`;
-        const prior = [...queue?.sent ?? [], ...queue?.failed ?? []].filter((it) => (it.id || "").startsWith(key + "#"));
-        this._prior = prior.filter((it) => it.status === "sent");
-        this._mergeLocalSends(key);
-      } catch (err) {
-        this._err = err?.message || "Could not load the syndication destinations.";
-      }
-      this.render();
-    }
-    /** Merge the locally-remembered sends for this item into _prior (KV list-lag cover, see LOCAL_SENDS_KEY);
-     *  a local entry the tracker now carries is pruned, so the memory converges to the server record. */
-    _mergeLocalSends(key) {
-      const now = Date.now();
-      const all = localSendsAll().filter((s) => s && typeof s === "object" && now - (s.at || 0) < LOCAL_SENDS_MAX_AGE);
-      const mine = all.filter((s) => s.key === key);
-      if (!mine.length) {
-        localSendsSave(all);
-        return;
-      }
-      const covered = (s) => (this._prior || []).some((rec) => {
-        const at = rec.sentAt || rec.enqueuedAt || 0;
-        return recordDestinations(rec).has(s.dest) && at >= (s.at || 0) - 12e4;
-      });
-      const still = [];
-      for (const s of mine) {
-        if (covered(s)) continue;
-        still.push(s);
-        this._prior = [...this._prior || [], { status: "sent", sentAt: s.at, trigger: "manual", manualBy: "local", channels: { [s.dest]: { status: "sent" } } }];
-      }
-      localSendsSave([...all.filter((s) => s.key !== key), ...still]);
-    }
-    _modalHtml() {
-      const body = !this._info && !this._err ? `<p class="sub"><span class="spin"></span>Loading destinations…</p>` : this._err && !this._info ? `<p class="err">${esc(this._err)}</p>` : this._step === "dest" ? this._destHtml() : this._composeHtml();
-      return `<div class="overlay" data-overlay><div class="panel">
-      <h3>Manually Syndicate</h3>
-      <p class="sub">${esc(this._item().title || this._item().targetSlug)}</p>
-      ${body}
-    </div></div>`;
-    }
-    /** Per-DESTINATION send history from the tracker records: destination -> { count, last, manual }.
-     *  Derived from each record's channels map keys (`discord:<id>` / `discord-forward:<id>` / `reddit` ...),
-     *  so "already syndicated" can say WHERE it went and by WHAT (a manual post vs the auto pipeline). */
-    _destSends() {
-      const map = {};
-      for (const rec of this._prior || []) {
-        const at = rec.sentAt || rec.enqueuedAt || 0;
-        const manual = rec.trigger === "manual" || !!rec.manualBy;
-        const dests = recordDestinations(rec);
-        for (const d of dests) {
-          const cur = map[d] || { count: 0, last: 0, manual: false };
-          map[d] = { count: cur.count + 1, last: Math.max(cur.last, at), manual: cur.manual || manual };
-        }
-      }
-      return map;
-    }
-    _sendPhrase(d, s) {
-      return `${DEST_LABEL[d] || d} ${s.count === 1 ? "once" : `${s.count} times`} (${s.manual ? "manually" : "by the auto pipeline"}, last ${esc(new Date(s.last).toLocaleString())})`;
-    }
-    _destHtml() {
-      const sends = this._destSends();
-      const tiles = (this._info?.destinations ?? []).map((d) => {
-        const label = DEST_LABEL[d.id] || d.id;
-        const s = sends[d.id];
-        const badge = s ? `<span class="sentb">sent ${esc(new Date(s.last).toLocaleDateString())}${s.manual ? " (manual)" : ""}</span>` : "";
-        const shareBlocked = d.id === "devto" && this._item().source === "share";
-        return d.ready && !shareBlocked ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>` : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(shareBlocked ? "content items only" : d.reason || "not available")}</span>${badge}</button>`;
-      }).join("");
-      const sent = Object.keys(sends);
-      const prior = sent.length ? `<p class="warn">Already posted to ${sent.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p><p class="info">Destinations without a badge have not received this item yet.</p>` : "";
-      return `<label>Destination</label><div class="tiles">${tiles}</div>${prior}
-      <div class="actions"><button class="ghost" type="button" data-close>Cancel</button><span></span></div>`;
-    }
-    /** The template that WILL be sent: an explicit edit, else the per-destination default. ONE definition
-     *  shared by the compose view and _publish (they diverged once: the preview said {title} while publish
-     *  fell back to the stored per-type template, so a Reddit send ignored what the preview showed). */
-    _effectiveTemplate() {
-      const src = this._item().source;
-      if (this._dest === "reddit" || this._dest === "devto") {
-        const stub = this._isStub() ? this._info?.channelTemplatesStub?.[this._dest]?.[src] || this._info?.stubDefaults?.[this._dest]?.[src] || "" : "";
-        const pub = this._info?.channelTemplates?.[this._dest]?.[src] || "";
-        return this._template ?? (stub || pub || "{title}");
-      }
-      const stored = this._stored(this._dest, src);
-      return this._template ?? (stored || "{title} {url}");
-    }
-    _isStub() {
-      return this._item().visibility === "members";
-    }
-    /** The ADMIN-stored template for a channel key, stub-aware: for a members item the STUB chain runs
-     *  first (channel stub -> shared stub -> the built-in stub maps served by the GET), then the public
-     *  chain (mirroring templateFor in the core). */
-    _stored(channel, key) {
-      if (this._isStub()) {
-        const stub = this._info?.channelTemplatesStub?.[channel]?.[key] || this._info?.stubTemplates?.[key] || this._info?.stubDefaults?.[channel]?.[key] || this._info?.stubDefaults?.[""]?.[key] || "";
-        if (stub) return stub;
-      }
-      return this._info?.channelTemplates?.[channel]?.[key] || this._info?.templates?.[key] || "";
-    }
-    /** The reddit-key resolver, guarded so a template referencing {author-note} never pre-fills for a
-     *  no-intro item (empty quotes read broken). */
-    _redditStored(key) {
-      const tpl = this._stored("reddit", key);
-      return tpl && (this._authorNote || !/\{author-note(-italic)?\}/.test(tpl)) ? tpl : "";
-    }
-    /** The Reddit BODY template (the DESCRIPTION under the title; the embed card comes from the item URL):
-     *  an explicit edit wins, else the stored reddit-body template. A text post appends the link when the
-     *  template lacks {url}, since the body is the whole post there. */
-    _effectiveBody() {
-      if (this._bodyTemplate != null) return this._bodyTemplate;
-      const tpl = this._redditStored("reddit-body");
-      if (tpl) return tpl + (this._redditKind === "self" && !/\{url\}/.test(tpl) ? "\n\n{url}" : "");
-      return this._redditKind === "self" ? "{url}" : "";
-    }
-    /** The separately-templated FIRST COMMENT (owner-directed): an explicit edit wins, else the stored
-     *  reddit-comment template; blank = no comment is posted. */
-    _effectiveComment() {
-      if (this._commentTemplate != null) return this._commentTemplate;
-      return this._redditStored("reddit-comment");
-    }
-    /** The dev.to BYLINE prepended to the crosspost: an edit wins, else the stored devto-intro. */
-    _effectiveDevtoIntro() {
-      if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
-      return this._stored("devto", "devto-intro");
-    }
-    /** The STUB middle for a members item on dev.to: an edit wins, else the stored devto-stub chain. */
-    _effectiveDevtoStub() {
-      if (this._devtoStubTemplate != null) return this._devtoStubTemplate;
-      return this._stored("devto", "devto-stub");
-    }
-    /** The CTA FOOTER appended to every dev.to post (full and stub): an edit wins, else the stored devto-footer. */
-    _effectiveDevtoFooter() {
-      if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
-      return this._stored("devto", "devto-footer");
-    }
-    /** The PUBLIC BODY template for a dev.to crosspost (SOW-138): an edit wins, else the stored devto-body,
-     *  else the built-in {body} (the article verbatim). Members items post the stub, not this. */
-    _effectiveDevtoBody() {
-      if (this._devtoBodyTemplate != null) return this._devtoBodyTemplate;
-      return this._stored("devto", "devto-body") || "{body}";
-    }
-    _composeHtml() {
-      const dest = this._dest;
-      const item = this._item();
-      const template = this._effectiveTemplate();
-      const authorIsMe = this._me && String(item.author || "").toLowerCase() === this._me;
-      const previewMention = dest === "discord" && authorIsMe && this._discordLinked ? "[you will be @mentioned on Discord]" : null;
-      const rawPreview = renderTemplate(template, item, { limit: 2e3, previewMention });
-      const preview = rendersMarkdown(dest) ? rawPreview : mdToPlain(rawPreview);
-      let channelRow = "";
-      if (dest === "discord") {
-        const groups = /* @__PURE__ */ new Map();
-        for (const c of this._channels || []) {
-          const sec = c.section || "Channels";
-          if (!groups.has(sec)) groups.set(sec, []);
-          groups.get(sec).push(c);
-        }
-        const selected = this._channelId || "";
-        const opts = [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
-        const fwdSelected = this._forwardId ?? "";
-        const fwdOpts = `<option value=""${fwdSelected ? "" : " selected"}>Do not forward</option>` + [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === fwdSelected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
-        const preNote = this._preselectedNote === "featured" ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>` : this._preselectedNote === "category" ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : "";
-        channelRow = opts ? `<label>Channel${preNote}</label>
-          <select data-channel>${opts}</select>
-          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the deepest mapped category` : ""})</span></label>
-          <select data-forward>${fwdOpts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
-          <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
-      }
-      let redditRows = "";
-      if (dest === "reddit") {
-        const kind2 = this._redditKind || "link";
-        const bodyTemplate = this._effectiveBody();
-        const bodyPreview = bodyTemplate ? renderTemplate(bodyTemplate, item, { limit: 2e3 }) : "";
-        const commentTemplate = this._effectiveComment();
-        const commentPreview = commentTemplate ? renderTemplate(commentTemplate, item, { limit: 2e3 }) : "";
-        redditRows = `<label>Post kind</label>
-        <select data-reddit-kind>
-          <option value="link"${kind2 === "link" ? " selected" : ""}>Link post (the item URL is the link)</option>
-          <option value="self"${kind2 === "self" ? " selected" : ""}>Text post (the body below is the content)</option>
-        </select>
-        <label>Body template <span style="font-weight:400">(the description under the title; optional; same tokens as the title)</span></label>
-        <textarea data-reddit-body>${esc(bodyTemplate)}</textarea>
-        <label>Body preview</label>
-        <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>
-        <label>First comment template <span style="font-weight:400">(optional; posts as the brand account's first comment; blank = none)</span></label>
-        <textarea data-reddit-comment>${esc(commentTemplate)}</textarea>
-        <label>Comment preview</label>
-        <div class="preview" data-reddit-comment-preview>${esc(commentPreview)}</div>`;
-      }
-      let devtoRows = "";
-      if (dest === "devto") {
-        const introTemplate = this._effectiveDevtoIntro();
-        const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : "";
-        const footerTemplate = this._effectiveDevtoFooter();
-        const footerPreview = footerTemplate ? renderTemplate(footerTemplate, item, { limit: 1200 }) : "";
-        const stubRows = this._isStub() ? (() => {
-          const stubTemplate = this._effectiveDevtoStub();
-          const stubPreview = stubTemplate ? renderTemplate(stubTemplate, item, { limit: 1200 }) : "";
-          return `<label>Stub template <span style="font-weight:400">(the members-only teaser body; markdown; same tokens)</span></label>
-        <textarea data-devto-stub>${esc(stubTemplate)}</textarea>
-        <label>Stub preview</label>
-        <div class="preview" data-devto-stub-preview>${esc(stubPreview)}</div>`;
-        })() : "";
-        const bodyRows = this._isStub() ? "" : (() => {
-          const bodyTemplate = this._effectiveDevtoBody();
-          const bodyPreview = renderBodyTemplate(bodyTemplate, item, "[the full article body]");
-          return `<label>Body template <span style="font-weight:400">({body} = the full article verbatim; wrap it or replace it; markdown; same tokens)</span></label>
-        <textarea data-devto-body>${esc(bodyTemplate)}</textarea>
-        <label>Body preview</label>
-        <div class="preview" data-devto-body-preview>${esc(bodyPreview)}</div>`;
-        })();
-        devtoRows = `${this._isStub() ? '<p class="warn">Members-only item: the STUB templates apply (description + link, never the body).</p>' : ""}
-        <label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
-        <textarea data-devto-intro>${esc(introTemplate)}</textarea>
-        <label>Byline preview</label>
-        <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
-        ${bodyRows}
-        <label>CTA footer template <span style="font-weight:400">(appended to the post; markdown; same tokens)</span></label>
-        <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
-        <label>CTA preview</label>
-        <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
-        ${stubRows}
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? " checked" : ""} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
-      }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : dest === "devto" ? `<p class="sub" style="margin:8px 0 0">Posts to dev.to under the GBTI organization with a canonical link back to gbti.network: a PUBLIC item crossposts in full; a members-only item posts only its description plus a read-it-on-gbti.network link. The CTA footer is appended either way.</p>` : "";
-      const sends = this._destSends();
-      const here = sends[dest];
-      const elsewhere = Object.keys(sends).filter((d) => d !== dest);
-      const prior = here ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>` : elsewhere.length ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p>` : "";
-      const cmtState = this._result?.comment ? this._result.comment.error ? ` The first comment failed: ${esc(this._result.comment.error)}.` : " The first comment posted." : "";
-      const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
-      const result = this._result ? `<p class="okmsg">${this._result.queued ? "Queued to the Social Queue. Open it from your avatar menu to post it by hand (this channel is manual-assist, so nothing is charged)." : this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}`}${fwdState}${cmtState}</p>` : "";
-      const stubNote = this._isStub() && dest !== "devto" ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : "";
-      return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      ${stubNote}
-      ${FULL_BODY_DESTS.has(dest) ? `<label>Article title <span style="font-weight:400">(${esc(DEST_LABEL[dest] || dest)} cross-posts the FULL article body: this field is ONLY the post title, not the body. The body is the whole article, wrapped by the byline and CTA footer below. {title} {content-type} {category}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>` : `<label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description} {category-hashtag} {tags-hashtags} {hashtags} {member-x-handle} {member-bluesky-handle} {member-reddit-handle}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>`}
-      <textarea data-template>${esc(template)}</textarea>
-      <label>${FULL_BODY_DESTS.has(dest) ? "Title preview" : "Preview"}</label>
-      <div class="preview" data-preview>${esc(preview)}</div>
-      ${channelRow}${redditRows}${devtoRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
-      <div class="actions">
-        <button class="ghost" type="button" data-close>${this._result ? "Done" : "Cancel"}</button>
-        <button class="go" type="button" data-publish ${this._busy || this._result ? "disabled" : ""}>${this._busy ? '<span class="spin"></span>Publishing...' : "Publish"}</button>
-      </div>`;
-    }
-    _wireModal() {
-      this.on("[data-close]", "click", () => {
-        this._open = false;
-        this._template = null;
-        this._err = null;
-        this.render();
-      });
-      this.on("[data-back]", "click", () => {
-        this._step = "dest";
-        this._err = null;
-        this._result = null;
-        this.render();
-      });
-      this.$$("[data-dest]").forEach((b) => b.addEventListener("click", () => this._pickDest(b.dataset.dest)));
-      const ta = this.$("[data-template]");
-      if (ta) ta.addEventListener("input", () => {
-        this._template = ta.value;
-        const pv = this.$("[data-preview]");
-        if (pv) pv.textContent = renderTemplate(ta.value, this._item(), { limit: 2e3 });
-      });
-      const sel = this.$("[data-channel]");
-      if (sel) sel.addEventListener("change", () => {
-        this._channelId = sel.value;
-      });
-      const manual = this.$("[data-channel-manual]");
-      if (manual) manual.addEventListener("input", () => {
-        this._channelId = manual.value.trim();
-      });
-      const fwd = this.$("[data-forward]");
-      if (fwd) fwd.addEventListener("change", () => {
-        this._forwardId = fwd.value;
-      });
-      const rk = this.$("[data-reddit-kind]");
-      if (rk) rk.addEventListener("change", () => {
-        this._redditKind = rk.value === "self" ? "self" : "link";
-        this.render();
-      });
-      const rb = this.$("[data-reddit-body]");
-      if (rb) rb.addEventListener("input", () => {
-        this._bodyTemplate = rb.value;
-        const pv = this.$("[data-reddit-body-preview]");
-        if (pv) pv.textContent = rb.value ? renderTemplate(rb.value, this._item(), { limit: 2e3 }) : "";
-      });
-      const di = this.$("[data-devto-intro]");
-      if (di) di.addEventListener("input", () => {
-        this._devtoIntroTemplate = di.value;
-        const pv = this.$("[data-devto-intro-preview]");
-        if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : "";
-      });
-      const db = this.$("[data-devto-body]");
-      if (db) db.addEventListener("input", () => {
-        this._devtoBodyTemplate = db.value;
-        const pv = this.$("[data-devto-body-preview]");
-        if (pv) pv.textContent = renderBodyTemplate(db.value, this._item(), "[the full article body]");
-      });
-      const df = this.$("[data-devto-footer]");
-      if (df) df.addEventListener("input", () => {
-        this._devtoFooterTemplate = df.value;
-        const pv = this.$("[data-devto-footer-preview]");
-        if (pv) pv.textContent = df.value ? renderTemplate(df.value, this._item(), { limit: 1200 }) : "";
-      });
-      const ds = this.$("[data-devto-stub]");
-      if (ds) ds.addEventListener("input", () => {
-        this._devtoStubTemplate = ds.value;
-        const pv = this.$("[data-devto-stub-preview]");
-        if (pv) pv.textContent = ds.value ? renderTemplate(ds.value, this._item(), { limit: 1200 }) : "";
-      });
-      const dd = this.$("[data-devto-draft]");
-      if (dd) dd.addEventListener("change", () => {
-        this._devtoDraft = dd.checked;
-      });
-      const rc = this.$("[data-reddit-comment]");
-      if (rc) rc.addEventListener("input", () => {
-        this._commentTemplate = rc.value;
-        const pv = this.$("[data-reddit-comment-preview]");
-        if (pv) pv.textContent = rc.value ? renderTemplate(rc.value, this._item(), { limit: 2e3 }) : "";
-      });
-      this.on("[data-publish]", "click", () => this._publish());
-    }
-    async _pickDest(dest) {
-      if (dest !== this._dest) {
-        this._template = null;
-        this._bodyTemplate = null;
-        this._commentTemplate = null;
-        this._devtoIntroTemplate = null;
-        this._devtoBodyTemplate = null;
-        this._devtoFooterTemplate = null;
-        this._devtoStubTemplate = null;
-        this._devtoDraft = false;
-        this._redditKind = "link";
-      }
-      this._dest = dest;
-      this._step = "compose";
-      this._err = null;
-      this._result = null;
-      if (dest === "discord" && !this._channels) {
-        try {
-          const r = await this.client.discordChannels();
-          const all = r?.channels ?? [];
-          const sections = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
-          this._channels = all.filter((c) => c.type === 0 || c.type === 5).map((c) => ({ ...c, section: sections.get(c.parentId) || "Channels" }));
-          this._chErr = null;
-        } catch (err) {
-          this._channels = [];
-          this._chErr = err?.message || "request failed";
-        }
-        const it0 = this._item();
-        const mapped = channelForCategoryPath({ channels: this._info?.channelMap ?? [] }, it0.categoryPath?.length ? it0.categoryPath : [it0.category]);
-        const featured = this._info?.featured?.[this._item().source] || null;
-        this._channelId = featured || mapped || this._channels[0]?.id || "";
-        this._preselectedNote = featured ? "featured" : mapped ? "category" : "";
-        this._forwardId = mapped && mapped !== this._channelId ? mapped : "";
-        this._forwardNote = Boolean(this._forwardId);
-      }
-      this.render();
-    }
-    async _publish() {
-      const item = this._item();
-      const template = this._effectiveTemplate().trim();
-      if (!template) {
-        this._err = "A message template is required.";
-        this.render();
-        return;
-      }
-      this._busy = true;
-      this._err = null;
-      this.render();
-      try {
-        const payload = { destination: this._dest, item, template };
-        if (this._dest === "reddit") {
-          payload.redditKind = this._redditKind === "self" ? "self" : "link";
-          const body = this._effectiveBody().trim();
-          if (body) payload.bodyTemplate = body;
-          const comment = this._effectiveComment().trim();
-          if (comment) payload.commentTemplate = comment;
-        }
-        if (this._dest === "devto") {
-          const intro = this._effectiveDevtoIntro().trim();
-          if (intro) payload.devtoIntroTemplate = intro;
-          const footer = this._effectiveDevtoFooter().trim();
-          if (footer) payload.devtoFooterTemplate = footer;
-          const stubT = this._isStub() ? this._effectiveDevtoStub().trim() : "";
-          if (stubT) payload.devtoStubTemplate = stubT;
-          const bodyT = this._isStub() ? "" : this._effectiveDevtoBody().trim();
-          if (bodyT) payload.devtoBodyTemplate = bodyT;
-          if (this._devtoDraft) payload.devtoDraft = true;
-        }
-        if (this._dest === "discord") {
-          payload.channelId = this._channelId;
-          if (this._forwardId && this._forwardId !== this._channelId) payload.forwardChannelId = this._forwardId;
-        }
-        this._result = await this.client.syndicateNow(payload);
-        this._prior = [...this._prior || [], { status: "sent", sentAt: Date.now(), trigger: "manual", channels: { [this._dest]: { status: "sent" } } }];
-        localSendsSave([...localSendsAll(), { key: `${item.source}:${item.targetSlug}`, dest: this._dest, at: Date.now() }]);
-      } catch (err) {
-        this._err = err?.message || "The post failed.";
-      }
-      this._busy = false;
-      this.render();
-    }
-  };
-  define("gbti-syndicate-now", GbtiSyndicateNow);
-
   // client-ui/src/elements/gbti-reader.mjs
   var SITE19 = "https://gbti.network";
-  var lc8 = (s) => String(s || "").toLowerCase();
+  var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
-    const x = lc8(a);
+    const x = lc7(a);
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
-  var githubLogin = (a) => lc8(a) === "gbti" || lc8(a) === "house" ? "gbti-network" : a;
+  var githubLogin = (a) => lc7(a) === "gbti" || lc7(a) === "house" ? "gbti-network" : a;
   var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -25520,7 +24554,7 @@ From the author:
     const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
     return m ? m[1] : "";
   }
-  var TYPE_LABEL7 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
+  var TYPE_LABEL6 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
       return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
@@ -25572,7 +24606,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS44 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -25820,21 +24854,21 @@ From the author:
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
     async _resolveAuthor(it) {
-      const username = lc8(it.author);
+      const username = lc7(it.author);
       if (isHouse(username)) return { house: true };
       const [dir, status] = await Promise.all([
         loadDirectory(),
         this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
       ]);
       const entry = dir.get(username) || null;
-      const me = lc8(status?.identity?.username || status?.identity?.login);
+      const me = lc7(status?.identity?.username || status?.identity?.login);
       const canFollow = !!status?.canFollow;
       let following = false;
       if (canFollow && this.client.getFollows) {
         try {
           const f = await this.client.getFollows();
           const list = Array.isArray(f) ? f : f?.following ?? [];
-          following = list.some((x) => lc8(x.username) === username);
+          following = list.some((x) => lc7(x.username) === username);
         } catch {
         }
       }
@@ -25857,7 +24891,7 @@ From the author:
       return html;
     }
     _metaHtml(it, when) {
-      const t = TYPE_LABEL7[it.type] || it.type || "";
+      const t = TYPE_LABEL6[it.type] || it.type || "";
       const name = authorName4(it.author);
       const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
@@ -25906,7 +24940,7 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS44));
+        this.set(this.css(CSS43));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
@@ -25933,20 +24967,8 @@ From the author:
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
       const srcCard = it.type === "share" && it.url ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName4(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName }) : null;
       const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>` : "";
-      const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
-      const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
-      const syndUrl = it.url ? it.type === "share" ? it.url : SITE19 + it.url : "";
-      const authorDiscord = this._author?.entry?.links?.discord || "";
-      const authorX = this._author?.entry?.links?.x || "";
-      const authorDevto = this._author?.entry?.links?.devto || "";
-      const authorBluesky = this._author?.entry?.links?.bluesky || "";
-      const authorMastodon = this._author?.entry?.links?.mastodon || "";
-      const authorReddit = this._author?.entry?.links?.reddit || "";
-      const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : Array.isArray(it.tags) ? it.tags : [];
-      const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
-      const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
-      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+      this.set(this.css(CSS43) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -26045,16 +25067,16 @@ From the author:
   define("gbti-reader", GbtiReader);
 
   // client-ui/src/member-view-core.mjs
-  var lc9 = (s) => String(s || "").toLowerCase();
+  var lc8 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
     { type: "post", json: "blog-index.json", label: "Articles" },
     { type: "project", json: "projects-index.json", label: "Projects" },
     { type: "prompt", json: "prompts-index.json", label: "Prompts" }
   ]);
   function memberContent(items, username, cap = 24) {
-    const u = lc9(username);
+    const u = lc8(username);
     if (!u || u === "gbti" || u === "house" || !Array.isArray(items)) return [];
-    const mine = items.filter((it) => it && lc9(it.author) === u);
+    const mine = items.filter((it) => it && lc8(it.author) === u);
     mine.sort((a, b) => {
       const av = Number.isFinite(a?.publishedAt) ? a.publishedAt : -Infinity;
       const bv = Number.isFinite(b?.publishedAt) ? b.publishedAt : -Infinity;
@@ -26066,11 +25088,11 @@ From the author:
 
   // client-ui/src/elements/gbti-member-view.mjs
   var SITE20 = "https://gbti.network";
-  var lc10 = (s) => String(s || "").toLowerCase();
+  var lc9 = (s) => String(s || "").toLowerCase();
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS45 = `
+  var CSS44 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -26124,7 +25146,7 @@ From the author:
       this.setAttribute("data-gbti-username", String(username || ""));
     }
     get _username() {
-      const u = lc10(this.getAttribute("data-gbti-username") || "").trim();
+      const u = lc9(this.getAttribute("data-gbti-username") || "").trim();
       return USERNAME_RE.test(u) ? u : "";
     }
     async _load() {
@@ -26142,7 +25164,7 @@ From the author:
           ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE20}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
-        const me = lc10(status?.identity?.username || status?.identity?.login || "");
+        const me = lc9(status?.identity?.username || status?.identity?.login || "");
         this._isSelf = !!me && me === username;
         MEMBER_SECTIONS.forEach((s, i) => {
           this._sections[s.type] = memberContent(idx[i]?.items || [], username, 24);
@@ -26196,7 +25218,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS45) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS44) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -26204,7 +25226,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS45) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS44) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -26248,7 +25270,7 @@ From the author:
     } catch {
     }
   }
-  var CSS46 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -26382,7 +25404,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS46) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS45) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -26395,7 +25417,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS46) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS45) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];

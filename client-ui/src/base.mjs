@@ -54,7 +54,10 @@ export class GbtiElement extends Base {
     // this lands while an editor is open rather than only at startup. Narrow on purpose: the client-ready
     // load race (a one-shot connectedCallback load that sticks on "Loading..." and is retried from this
     // broadcast) is unaffected, because an UNTOUCHED element never declines.
-    this._onClient = () => this.isConnected && this.skipClientRender?.() !== true && this.render?.();
+    // sow-399: an element holding its OWN client (set via `el.client = ...`) ignores the page-wide broadcast,
+    // because the page's client is not the one it talks to and a re-render would only reset it.
+    this._ownClient = null;
+    this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
   }
 
   connectedCallback() {
@@ -76,7 +79,18 @@ export class GbtiElement extends Base {
   }
 
   get client() {
-    return getClient();
+    return this._ownClient || getClient();
+  }
+  /**
+   * sow-399: give ONE element its own client. The website has many independent components that each call
+   * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
+   * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
+   * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
+   * The Worker re-checks the role on every call; this only decides which methods the element can reach.
+   */
+  set client(c) {
+    this._ownClient = c || null;
+    if (this.isConnected) this.render?.();
   }
 
   /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */

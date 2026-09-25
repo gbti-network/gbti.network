@@ -26,7 +26,6 @@ import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbo
 import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the share source favicon (meta stack + side card)
 import { loadMembersDirectory } from '../members-index.mjs'; // SOW-143: the shared /members-index.json loader (one cache across elements)
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
-import './gbti-syndicate-now.mjs'; // SOW-088: the superadmin Manually Syndicate control (self-gates)
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
 
 const SITE = 'https://gbti.network';
@@ -537,26 +536,11 @@ class GbtiReader extends GbtiElement {
     const sideLink = srcCard
       ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>`
       : '';
-    // SOW-088: the superadmin Manually Syndicate control (self-gates to superadmin; the Worker enforces).
-    // The category attribute carries the RAW top-level taxonomy key (a share's flat topic, or the first
-    // segment of the frontmatter path) so the popup can pre-select the mapped Discord channel.
-    const syndCategory = it.type === 'share' ? (it.category || '') : (this._fmCategories?.[0] || '');
-    const syndPath = it.type === 'share' ? '' : (this._fmCategories || []).join(','); // SOW-088: leaf-first routing
-    const syndUrl = it.url ? (it.type === 'share' ? it.url : SITE + it.url) : '';
-    const authorDiscord = this._author?.entry?.links?.discord || '';
-    // SOW-120: the author's public X handle ({member-x-handle}) + the item's tags ({tags-hashtags}).
-    const authorX = this._author?.entry?.links?.x || '';
-    const authorDevto = this._author?.entry?.links?.devto || ''; // SOW-140: feeds {member-devto-handle} on the dev.to byline
-    const authorBluesky = this._author?.entry?.links?.bluesky || ''; // SOW-122: {member-bluesky-handle}
-    const authorMastodon = this._author?.entry?.links?.mastodon || ''; // SOW-123: {member-mastodon-handle}
-    const authorReddit = this._author?.entry?.links?.reddit || ''; // {member-reddit-handle}
-    const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : (Array.isArray(it.tags) ? it.tags : []);
-    const syndTags = tagsList.filter((t) => typeof t === 'string' && t.trim()).join(',');
-    const synd = (resolved && slug && ['post', 'project', 'prompt', 'share'].includes(it.type))
-      ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || '')}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ''} data-gbti-title="${esc(it.title || '')}"${(it.shortDescription || this._fm?.shortDescription) ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ''} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || 'public'))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ''}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ''}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ''}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ''}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ''}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ''}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ''}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ''}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ''}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ''}></gbti-syndicate-now>`
-      : '';
+    // sow-399 (owner, 2026-09-24): the SOW-088 Manually Syndicate control that sat here moved to the website's
+    // content pages (src/components/SyndicateNow.astro, attributes by src/lib/syndicate-attrs.mjs) with the rest of
+    // syndication. The extension is a reader.
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
-    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
+    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
 
 
     this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);

@@ -26,6 +26,8 @@ import CtaCard from '../../components/CtaCard.astro'; // sow-281: the registered
 import { promptImageFraming } from '../../lib/prompt-page.mjs';
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import ApprovePill from '../../components/ApprovePill.astro'; // sow-323: the superadmin approval, beside Edit
+import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
+import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
 
 export async function getStaticPaths() {
   const prompts = (await getCollection('prompt')).filter(hasPublicPage);
@@ -66,6 +68,7 @@ const linkLabel = (l: { type: string; label?: string }) => l.label ?? LINK_LABEL
 
 // Canonical URL for the unified share control (ContentActions -> ShareRow builds the per-platform links).
 const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
+const synThumb = (await resolveThumb(d, 'prompt')).thumb; // sow-399
 
 // sow-183: the owner/superadmin Edit affordance, matching the project page's hero pill. The href is public
 // build-time data; only visibility is a runtime decision (this page's own script block, below).
@@ -155,6 +158,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
 
         <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->
         <aside class="detail-aside flex col g20">
+          <SyndicateNow type="prompt" slug={d.slug} author={d.author || 'gbti'} authorName={profile?.displayName} title={d.title} blurb={d.shortDescription} url={shareUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={profile?.links} image={synThumb ?? undefined} />
           <div class="card" style="padding:22px">
             <p class="eyebrow">Author</p>
             <div class="flex items-center g12 mt16">

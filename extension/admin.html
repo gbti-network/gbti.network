@@ -84,7 +84,6 @@
         <button class="admin-tab" type="button" data-tab="coupons">Coupons</button>
         <button class="admin-tab" type="button" data-tab="editorial" data-min="superadmin">Editorial review</button>
         <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
-        <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
         <button class="admin-tab" type="button" data-tab="outbound-links">Outbound links</button>
         <button class="admin-tab" type="button" data-tab="ctas">CTAs</button>
         <button class="admin-tab" type="button" data-tab="digest" data-min="superadmin">Weekly email</button>
@@ -138,12 +137,8 @@
           <div class="admin-card-h"><h2>Site settings</h2><p>Site-wide presentation toggles. Superadmin only. Edits open a house PR and go live on the next site deploy.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-site-settings-manager></gbti-site-settings-manager></div></div>
         </section>
-        <section class="admin-card" data-panel="syndication">
-          <!-- SOW-088: the former Syndication (queue) + Channels tabs combined; the workspace nests the
-               Publishing Activity kanban plus pipeline, per-channel templates, auto-share, and word lists. -->
-          <div class="admin-card-h"><h2>Syndication</h2><p>Publishing activity, the pipeline, per-channel templates, news auto-share, and the moderation word lists.</p></div>
-          <div class="admin-card-b"><div class="admin-sub"><gbti-channel-map-manager></gbti-channel-map-manager></div></div>
-        </section>
+        <!-- sow-399 (owner, 2026-09-24): Syndication (the publishing queue, pipeline, templates, news auto-share and the
+             word lists) moved to the website: gbti.network/admin/#tab=syndication. The extension is a reader. -->
         <section class="admin-card" data-panel="outbound-links">
           <!-- sow-289: read-only. The partner redirect paths (house/outbound-links.yml) beside their estimated daily
                clicks (house/outbound-clicks.yml, rolled up by reconcile). Editing links is a later phase. -->

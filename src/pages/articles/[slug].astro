@@ -24,6 +24,8 @@ import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rena
 import { hasPublicPage, isStub as isStubFn } from '../../lib/content';
 import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
 import { buildArticleToc } from '../../lib/article-page.mjs';
+import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
+import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
 
 export async function getStaticPaths() {
   const posts = (await getCollection('post')).filter(hasPublicPage);
@@ -37,7 +39,10 @@ const stub = isStubFn(post);
 const postUrl = new URL(`/articles/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
 const toc = buildArticleToc(headings, { hasBody: !stub, hasDiscussion: true });
 
-const avatarIndex = buildAvatarIndex(await getCollection('profile'));
+const profiles = await getCollection('profile');
+const avatarIndex = buildAvatarIndex(profiles);
+const authorProfile = profiles.find((p) => p.data.username === d.author)?.data; // sow-399: the author's handles for Manually syndicate
+const synThumb = (await resolveThumb(d, 'post')).thumb;
 const stack = avatarStack({
   author: d.author,
   contributors: d.contributors,
@@ -66,6 +71,7 @@ const unindexed = contentFlagsOf('post', d.slug).unindexed;
   <DeployStatusNotice type="post" slug={d.slug} updatedAt={d.updatedAt} />
   <Layout d={d} isStub={stub} postId={post.id} postUrl={postUrl} stack={stack} toc={toc}>
     <Content slot="body" />
+    <SyndicateNow slot="tools" type="post" slug={d.slug} author={d.author || 'gbti'} authorName={authorProfile?.displayName} title={d.title} blurb={d.shortDescription} url={postUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={authorProfile?.links} image={synThumb ?? undefined} />
     <ContentFooter slot="closing" type="post" slug={d.slug} author={d.author} publishedAt={d.publishedAt} aliases={aliasSlugsOf(d)} />
     <OpenHistory slot="closing" filePath={post.filePath} author={d.author} contributors={d.contributors} />
     <RelatedPosts slot="closing" post={post} />

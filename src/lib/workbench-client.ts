@@ -630,6 +630,16 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     removeNewsItem(guid: string) { return workerPost('/membership/admin/news-item', { action: 'remove', guid }); },
     restoreNewsItem(guid: string) { return workerPost('/membership/admin/news-item', { action: 'restore', guid }); },
     async setNewsSourceWeight(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-weight', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-399: the rest of syndication, moved here from the extension. Publishing Activity (the queue with approve
+    // and cancel), the Social Queue, and Manually syndicate. The same Worker routes the extension used, now
+    // cookie-enabled; a write carries the CSRF echo (workerPost) and the Worker re-checks superadmin on each one.
+    syndicationQueue() { return workerGet('/membership/syndication'); }, // { pending, approved, sent, cancelled, failed }
+    approveSyndication({ id }: { id: string }) { return workerPost('/membership/syndication/approve', { id }); },
+    cancelSyndication({ id }: { id: string }) { return workerPost('/membership/syndication/cancel', { id }); },
+    socialQueue() { return workerGet('/membership/social-queue'); }, // { pending, done }
+    socialQueueAction({ action, id, ...rest }: any = {}) { return workerPost('/membership/social-queue', { action, id, ...rest }); },
+    getSyndicateNow() { return workerGet('/membership/syndicate-now'); }, // destinations + templates + channel map
+    syndicateNow(p: any = {}) { return workerPost('/membership/syndicate-now', p); }, // every field passes through
   } : {};
 
   return {

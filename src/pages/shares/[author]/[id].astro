@@ -21,7 +21,8 @@ import { authorDisplay, formatDate, authorAvatar, isNetworkAuthor } from '../../
 import { profileHref } from '../../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { isPublicShare, decodeEntities, utmUrl } from '../../../lib/home-feed.mjs';
 import { favoriteCount } from '../../../lib/favorites';
-import { parseShareCoverUrl, shareImageForSite } from '../../../../membership/share-cover-url.mjs';
+import { parseShareCoverUrl, shareImageForSite, isShareCoverUrl, shareCoverUrl } from '../../../../membership/share-cover-url.mjs';
+import SyndicateNow from '../../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
 import sharp from 'sharp';
 import path from 'node:path';
 
@@ -140,6 +141,7 @@ if (cover && cover.author === d.author && cover.id === d.id) {
 
     {/* The extension-style right sidebar (owner QA, 2026-07-21): the member card + the source card. */}
     <aside class="detail-side">
+      <SyndicateNow type="share" id={d.id} author={d.author} authorName={profile?.data.displayName} title={d.title || ''} blurb={d.shortDescription} url={d.url} visibility={d.visibility} category={d.category} tags={d.tags} links={profile?.data.links} image={isShareCoverUrl(d.image) ? shareCoverUrl(parseShareCoverUrl(d.image).author, parseShareCoverUrl(d.image).file) : undefined} />
       <div class="card side-author-card">
         <a href={profileHref(d.author)} class="sac-head">
           <Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={52} />

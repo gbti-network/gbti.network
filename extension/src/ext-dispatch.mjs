@@ -10,14 +10,13 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
-  getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
-  socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
+  getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
   listEditorialOp, decideEditorialOp } from '../../client/src/operations.mjs'; // sow-323
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
 import { toWorkerRequest } from '../../client/src/admin-worker-actions.mjs'; // sow-274: the one admin action table
-import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, getNewsEngagementSettings, getSyndicationSettings, getCouponPool, getSiteSettings, getCtaPool, getDigestConfig, getSponsorInquiries } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
+import { getTaxonomy, getNewsSourcePool, getQuotePool, getContentChannelPool, getCouponPool, getSiteSettings, getCtaPool, getDigestConfig, getSponsorInquiries } from '../../client/src/admin-ops.mjs'; // sow-274: READS only; every admin WRITE goes to the Worker
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
@@ -100,20 +99,18 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
 
     // SOW-079: the admin MANAGER reads are public git-native data (house/taxonomy.yml, house/news-sources.yml,
     // house/quotes.yml); they must load WITHOUT a signed-in identity (and tokenless once the repo is public), so they
-    // sit BEFORE the identity gate. Every WRITE (/api/admin) + the Worker-backed /api/syndication stay gated below.
+    // sit BEFORE the identity gate. Every WRITE (/api/admin) stays gated below.
     if (pathname === '/api/taxonomy') return ok(await getTaxonomy(ctx));
     if (pathname === '/api/news-source-pool') return ok(await getNewsSourcePool(ctx));
     if (pathname === '/api/quote-pool') return ok(await getQuotePool(ctx));
-    // SOW-087: the channel-map / moderation-flag / template pools are public git data (display reads).
+    // SOW-087: the category -> channel map is public git data (a display read for the Categories tab). sow-399: the
+    // syndication-only reads that sat beside it (word lists, templates, news engagement, settings) left with the
+    // Syndication tab, which moved to the website.
     if (pathname === '/api/content-channel-pool') return ok(await getContentChannelPool(ctx));
-    if (pathname === '/api/moderation-flag-pool') return ok(await getModerationFlagPool(ctx));
-    if (pathname === '/api/syndication-template-pool') return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === '/api/coupon-pool') return ok(await getCouponPool(ctx)); // SOW-119 QA: was npm-host-only, so the extension Coupons card showed "No coupons yet"
     if (pathname === '/api/site-settings') return ok(await getSiteSettings(ctx));
     if (pathname === '/api/digest-config') return ok(await getDigestConfig(ctx)); // sow-266: the digest pitch + sponsor slot, as stored
     if (pathname === '/api/cta-pool') return ok(await getCtaPool(ctx)); // sow-281: the CTA registry (public git data; the writes stay gated below) // sow-271: site-wide presentation toggles (public git data; the WRITE stays gated below via /api/admin)
-    if (pathname === '/api/news-engagement') return ok(await getNewsEngagementSettings(ctx));
-    if (pathname === '/api/syndication-settings') return ok(await getSyndicationSettings(ctx)); // SOW-088
 
     const username = id?.username;
     if (!username) throw new OperationError('no-identity', 'no signed-in identity; sign in first');
@@ -194,16 +191,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case '/api/open-pulls': // SOW-038 P2: the open content-PR queue (admin-gated)
         return ok(await getOpenPulls(ctx));
-      case '/api/syndication': // SOW-058: the superadmin syndication tracker (admin-gated, via the Worker)
-        return ok(await getSyndicationQueue(ctx));
-      case '/api/syndication/approve': // SOW-058: approve a pending syndication item (superadmin only)
-        return ok(await approveSyndication(ctx, body ?? {}));
-      case '/api/syndication/cancel': // SOW-058: cancel/reject a pending or approved syndication item (superadmin only)
-        return ok(await cancelSyndication(ctx, body ?? {}));
-      case '/api/syndicate-now': // SOW-088: manual syndicate (GET readiness/templates, POST direct post; superadmin only)
-        return ok(method === 'POST' ? await syndicateNow(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
-      case '/api/social-queue': // SOW-121: the superadmin Social Queue (GET tasks, POST done/delete)
-        return ok(method === 'POST' ? await socialQueueAction(ctx, body ?? {}) : await getSocialQueue(ctx));
+      // sow-399 (owner, 2026-09-24): the syndication queue, approve/cancel, Manually syndicate and the Social Queue
+      // relays are gone. Syndication moved to the website, which calls the Worker directly over its session.
       case '/api/discord-channels': // SOW-100: the guild channel names (admin-gated by the Worker). Was npm-host-only, so the extension pickers showed "No channels loaded".
         return ok(await listDiscordChannels(ctx));
       case '/api/admin-ops': // SOW-038 P3: trigger reconcile / E2E-smoke (admin-gated; the Worker holds the dispatch token)

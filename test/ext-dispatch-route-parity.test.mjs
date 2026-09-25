@@ -61,6 +61,14 @@ const WEBSITE_ONLY = {
       '/api/my-shares', // sow-304: the WorkBench Shares tab lists the member's own shares for editing; the extension has no such tab
     ],
   },
+  WEBSITE_SYNDICATION: {
+    reason: 'sow-399 (owner, 2026-09-24): syndication moved from the extension to the website, where superadmins reach it over the web session (Admin tools > Syndication, the avatar-menu Social Queue, and Manually syndicate on each content page). The extension lost the Syndication tab, the Social Queue item and the reader button in the same change, so no extension caller is left for the queue, approve/cancel, manual posting, the Social Queue, or the four reads only the Syndication tool made. The agent server keeps them.',
+    routes: [
+      '/api/syndication', '/api/syndication/approve', '/api/syndication/cancel',
+      '/api/syndicate-now', '/api/social-queue',
+      '/api/moderation-flag-pool', '/api/syndication-template-pool', '/api/news-engagement', '/api/syndication-settings',
+    ],
+  },
   WEBSITE_FILESYSTEM: {
     reason: 'npm CMS host only: it manages the node autostart (peg-startup), a filesystem feature the extension does not have (sow-036). The ops live in client/src/settings-ops.mjs, absent from ext-dispatch and operations.mjs.',
     routes: ['/api/settings'],
@@ -70,7 +78,7 @@ const WEBSITE_ONLY = {
 // Routes the EXTENSION serves and the website/npm host deliberately does not.
 const EXTENSION_ONLY = {
   EXTENSION_DISCORD_LINK: {
-    reason: 'the extension\'s Discord-link reads. sow-387 took the welcome wizard out of the extension (it minted the link URL and polled the status); the status is still read by the background welcome handoff (loadProgress) and by gbti-syndicate-now, optional-chained, which degrades to no @mention preview. /api/discord-link has no extension caller left and is kept, with /api/onboarding-status and /api/discord-unlink, as a recorded sow-387 follow-up. api.mjs does not import the ops.',
+    reason: 'the extension\'s Discord-link reads. sow-387 took the welcome wizard out of the extension (it minted the link URL and polled the status); the status is still read by the background welcome handoff (loadProgress) and, before sow-399 moved it to the website, by gbti-syndicate-now (optional-chained, degrading to no @mention preview). /api/discord-link has no extension caller left and is kept, with /api/onboarding-status and /api/discord-unlink, as a recorded sow-387 follow-up. api.mjs does not import the ops.',
     routes: ['/api/discord-link', '/api/discord-link/status'],
   },
 };
@@ -138,11 +146,11 @@ const PRE_AUTH = new Set([
   '/api/onboarding-status',   // SOW-026: drives the first-run sign-in step; must answer before sign-in
   // SOW-079/087: the admin MANAGER reads are public git-native data (house/*.yml), so they load tokenless.
   '/api/taxonomy', '/api/news-source-pool', '/api/quote-pool',
-  '/api/content-channel-pool', '/api/moderation-flag-pool', '/api/syndication-template-pool',
-  '/api/coupon-pool', '/api/news-engagement', '/api/syndication-settings',
+  '/api/content-channel-pool', // the Categories tab's channel column; the syndication-only reads left in sow-399
+  '/api/coupon-pool',
   '/api/site-settings', // sow-271: the site-wide presentation toggles (public git-native read)
   '/api/cta-pool', // sow-281: the CTA registry (public git-native read; the writes are superadmin)
-  // sow-266: the digest pitch + sponsor slot. PUBLIC for the same reason as the eight above, and the reason is
+  // sow-266: the digest pitch + sponsor slot. PUBLIC for the same reason as the reads above, and the reason is
   // worth stating plainly because it is tempting to reach for the other one: house/digest-config.yml is committed
   // to a PUBLIC repository, so a read gate here would protect nothing a person could not read on GitHub. The
   // writes are superadmin, and that is where the boundary actually is.

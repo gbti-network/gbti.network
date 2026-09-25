@@ -1,0 +1,84 @@
+---
+// sow-399: MANUALLY SYNDICATE, on the item's own page (owner, 2026-09-24). This lived in the extension's reader; it
+// moved here with the rest of syndication. SUPERADMIN ONLY, with a web session: the slot renders hidden and is
+// revealed client-side from the member signal, as the Edit and Approve pills beside it are, because these pages
+// are static and cached. This is UX, never the boundary: the Worker re-checks superadmin on every call.
+//
+// The element waits in an inert <template> until the viewer qualifies. Only then is its module loaded and a copy
+// made, handed its OWN superadmin client, and inserted. Two reasons: a visitor never loads the module, and the
+// element never renders against the page's shared client, which most pages build without the superadmin methods
+// (whichever component calls setClient last wins). The attributes come from src/lib/syndicate-attrs.mjs, which
+// fills them by the rules the extension reader used.
+import { syndicateAttrs } from '../lib/syndicate-attrs.mjs';
+
+interface Props {
+  type: 'post' | 'project' | 'prompt' | 'share';
+  slug?: string;
+  id?: string;
+  author?: string;
+  authorName?: string;
+  title?: string;
+  blurb?: string;
+  url?: string;
+  visibility?: string;
+  categories?: string[];
+  category?: string;
+  tags?: string[];
+  links?: Record<string, string | undefined>;
+  image?: string;
+}
+const attrs = syndicateAttrs(Astro.props as Props);
+---
+
+{attrs && (
+  <span class="synd-now" data-synd-now hidden>
+    <template data-synd-now-tpl><gbti-syndicate-now {...attrs}></gbti-syndicate-now></template>
+  </span>
+)}
+
+<style>
+  .synd-now { display: block; } /* the element is a full-width sidebar block, as it was in the extension reader */
+  .synd-now[hidden] { display: none !important; }
+</style>
+
+<script>
+  import { readMemberSignal, currentIdentity, onMemberSignal } from '../lib/member-signal';
+
+  const slot = document.querySelector<HTMLElement>('[data-synd-now]');
+  const tpl = slot?.querySelector<HTMLTemplateElement>('template[data-synd-now-tpl]');
+  const readCookie = (name: string) => document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1) || '';
+  let mounted = false;
+
+  // A superadmin signed in on the WEBSITE. An extension-only signal carries no web session, so it could not
+  // authenticate the calls.
+  const qualifies = (identity: any) => !!(identity && identity.login && identity.role === 'superadmin' && readCookie('gbti_csrf'));
+
+  async function apply(identity: any) {
+    if (!slot || !tpl) return;
+    if (!qualifies(identity)) { slot.hidden = true; return; }
+    if (mounted) { slot.hidden = false; return; }
+    mounted = true;
+    const signupBase = document.documentElement.dataset.signupBase || '';
+    const [{ createWorkbenchClient }] = await Promise.all([
+      import('../lib/workbench-client'),
+      import('../../client-ui/src/elements/gbti-syndicate-now.mjs'),
+    ]);
+    // createElement after the definition exists gives a real, upgraded <gbti-syndicate-now>, so the client setter
+    // below is the element's own. (Set on an un-upgraded tag, it would land as a plain property and be ignored.)
+    const src = tpl.content.querySelector('gbti-syndicate-now');
+    if (!src) return;
+    const el = document.createElement('gbti-syndicate-now') as HTMLElement & { client?: unknown };
+    for (const a of Array.from(src.attributes)) el.setAttribute(a.name, a.value);
+    el.client = createWorkbenchClient({
+      signupBase,
+      login: String(identity.login),
+      githubId: identity.githubId != null ? String(identity.githubId) : null,
+      isSuperadmin: true,
+    });
+    slot.appendChild(el);
+    slot.hidden = false;
+  }
+
+  apply(currentIdentity(readMemberSignal()));
+  onMemberSignal(apply);
+</script>

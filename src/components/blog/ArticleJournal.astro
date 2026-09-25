@@ -80,6 +80,8 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
         before the closing sections; the two-column page pins it to the left column by grid position instead
         (gbti-v3.css, .art-j-rail), so the desktop layout is unchanged. */}
     <aside class="art-j-rail art-rail">
+      {/* sow-399: superadmin tools (Manually syndicate) head the rail, where the extension reader had them. */}
+      <slot name="tools" />
       <div>
         <div class="mt-12">
           <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} />

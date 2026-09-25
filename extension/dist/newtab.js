@@ -817,8 +817,8 @@
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc11 = c | 32;
-      if (lc11 >= 97 && lc11 <= 102) return lc11 - 97 + 10;
+      const lc10 = c | 32;
+      if (lc10 >= 97 && lc10 <= 102) return lc10 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -2869,7 +2869,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     constructor() {
       super();
       if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
-      this._onClient = () => this.isConnected && this.skipClientRender?.() !== true && this.render?.();
+      this._ownClient = null;
+      this._onClient = () => this.isConnected && !this._ownClient && this.skipClientRender?.() !== true && this.render?.();
     }
     connectedCallback() {
       SUBSCRIBERS.add(this._onClient);
@@ -2882,7 +2883,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._detachCdnFallback = null;
     }
     get client() {
-      return getClient();
+      return this._ownClient || getClient();
+    }
+    /**
+     * sow-399: give ONE element its own client. The website has many independent components that each call
+     * setClient, the last caller wins, and most of them build a client without the superadmin methods. A
+     * superadmin tool mounted on an ordinary page (the Social Queue popup, the Manually syndicate button) is handed
+     * a superadmin client directly, so it does not depend on which component happened to set the page's client last.
+     * The Worker re-checks the role on every call; this only decides which methods the element can reach.
+     */
+    set client(c) {
+      this._ownClient = c || null;
+      if (this.isConnected) this.render?.();
     }
     /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
     css(extra = "") {
@@ -4017,14 +4029,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!bare && rest.trim() === "") return null;
     return { style: normalizeListStyle(m[2], !!ordered), rest };
   }
-  var LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
-  function stripListStyleSuffix(line) {
-    const m = LINE_RE.exec(String(line ?? ""));
-    if (!m) return String(line ?? "");
-    const split = splitListSuffix(m[4], /^\d/.test(m[2]));
-    if (!split) return String(line);
-    return `${m[1]}${m[2]}${m[3]}${split.rest}`;
-  }
 
   // client/src/list-items.mjs
   var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
@@ -4155,7 +4159,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v) => `class="${v ? `${v} ` : ""}${cls}"`);
     return `${a ? `${a} ` : ""}class="${cls}"`;
   }
-  function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
+  function listHtml(items, inline3 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
     const norm2 = normalizeListItems(items, ordered);
     let html = "";
     const open = [];
@@ -4175,11 +4179,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (cur.ordered !== it.ordered) {
           closeList();
           openList(it);
-          html += `<li>${inline4(it.text)}`;
-        } else html += `</li><li>${inline4(it.text)}`;
+          html += `<li>${inline3(it.text)}`;
+        } else html += `</li><li>${inline3(it.text)}`;
       } else {
         openList(it);
-        html += `<li>${inline4(it.text)}`;
+        html += `<li>${inline3(it.text)}`;
       }
     }
     while (open.length) closeList();
@@ -4379,8 +4383,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
   var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
-  function serializeBlocks(blocks2) {
-    return (Array.isArray(blocks2) ? blocks2 : []).map(serializeBlock).join("\n\n");
+  function serializeBlocks(blocks) {
+    return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join("\n\n");
   }
   function serializeBlock(b) {
     if (!b || typeof b !== "object") return "";
@@ -4432,7 +4436,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function parseBlocks(md) {
     const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const blocks2 = [];
+    const blocks = [];
     const n = lines.length;
     let i = 0;
     while (i < n) {
@@ -4442,7 +4446,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isMarker(line)) {
-        blocks2.push({ type: "members" });
+        blocks.push({ type: "members" });
         i++;
         continue;
       }
@@ -4460,14 +4464,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           i++;
         }
         i++;
-        if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
-        else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim() });
-        else blocks2.push({ type: "code", lang, code: code.join("\n") });
+        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
+        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim() });
+        else blocks.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
       let m = line.match(/^(#{1,6})\s+(.*)$/);
       if (m) {
-        blocks2.push({ type: "heading", level: m[1].length, text: m[2] });
+        blocks.push({ type: "heading", level: m[1].length, text: m[2] });
         i++;
         continue;
       }
@@ -4477,14 +4481,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           q.push(lines[i].replace(/^>\s?/, ""));
           i++;
         }
-        blocks2.push({ type: "quote", text: q.join("\n") });
+        blocks.push({ type: "quote", text: q.join("\n") });
         continue;
       }
       if (isListItem(line)) {
         const run = takeListRun(lines, i);
         const ordered = !!run.items[0]?.ordered;
         const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
-        blocks2.push({ type: "list", ordered, items });
+        blocks.push({ type: "list", ordered, items });
         i = run.next;
         continue;
       }
@@ -4501,17 +4505,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           rows.push(row);
           i++;
         }
-        blocks2.push({ type: "table", head, aligns, rows });
+        blocks.push({ type: "table", head, aligns, rows });
         continue;
       }
       const im = parseImageLine(line);
       if (im) {
-        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
+        blocks.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
         i++;
         continue;
       }
       if (isBareUrl(line) && isVideoUrl(line)) {
-        blocks2.push({ type: "embed", url: line.trim() });
+        blocks.push({ type: "embed", url: line.trim() });
         i++;
         continue;
       }
@@ -4522,10 +4526,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         para.push(l);
         i++;
       }
-      if (para.length) blocks2.push({ type: "paragraph", text: para.join("\n") });
+      if (para.length) blocks.push({ type: "paragraph", text: para.join("\n") });
       else i++;
     }
-    return blocks2;
+    return blocks;
   }
   function emptyBlock(type) {
     switch (type) {
@@ -5014,9 +5018,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           continue;
         }
       }
-      const esc6 = escapeKeepingLinks(line, linkKeep);
+      const esc5 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc6)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc5)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -5083,7 +5087,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc6, line)];
+      const para = [hardBreak(esc5, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -6297,22 +6301,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           ts: toMs(it.enqueuedAt),
           title: it.title || it.targetSlug || "Untitled",
           sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
-          href: "admin.html#tab=syndication"
+          // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
+          href: `${SITE3}/admin/#tab=syndication&sub=activity`
         };
       });
     }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};
       return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => {
-        const lc11 = prLifecycle(p, null);
+        const lc10 = prLifecycle(p, null);
         return {
           id: p.number,
           // Both hosts read the Worker's my-pulls, which carries the merge and close times (sow-221). Unread for
           // PRs is the seen-set of numbers, so this only orders the rows and says when.
           ts: prTime(p),
           title: p.title || `PR #${p.number}`,
-          sub: lc11.needsAttention ? "Declined: open to see why" : "Accepted",
-          href: lc11.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
+          sub: lc10.needsAttention ? "Declined: open to see why" : "Accepted",
+          href: lc10.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
         };
       });
     }
@@ -6355,14 +6360,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc11 = String(login).toLowerCase();
+      const lc10 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc11).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc10).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc11).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc10).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -6465,997 +6470,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-activity-bell", GbtiActivityBell);
 
-  // client-ui/src/social-icons.mjs
-  var LINKEDIN_PATH = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
-  var WEBSITE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z";
-  var SOCIAL_ICON_PATHS = {
-    github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
-    x: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z",
-    bluesky: "M5.202 2.857C7.954 4.922 10.913 9.11 12 11.358c1.087-2.247 4.046-6.436 6.798-8.501C20.783 1.366 24 .213 24 3.883c0 .732-.42 6.156-.667 7.037-.856 3.061-3.978 3.842-6.755 3.37 4.854.826 6.089 3.562 3.422 6.299-5.065 5.196-7.28-1.304-7.847-2.97-.104-.305-.152-.448-.153-.327 0-.121-.05.022-.153.327-.568 1.666-2.782 8.166-7.847 2.97-2.667-2.737-1.432-5.473 3.422-6.3-2.777.473-5.899-.308-6.755-3.369C.42 10.04 0 4.615 0 3.883c0-3.67 3.217-2.517 5.202-1.026",
-    youtube: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
-    devto: "M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.91-.02-1.96-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.73-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.3zm4.68 5.45c-.17.43-.64.79-1 .79-.18 0-.45-.15-.67-.39-.32-.32-.45-.63-.82-2.08l-.9-3.39-.45-1.67h.76c.4 0 .75.02.75.05 0 .06 1.16 4.54 1.26 4.83.04.15.32-.7.73-2.3l.66-2.52.74-.04c.4-.02.73 0 .73.04 0 .14-1.67 6.38-1.8 6.68z",
-    reddit: "M12 0C5.373 0 0 5.373 0 12c0 3.314 1.343 6.314 3.515 8.485l-2.286 2.286C.775 23.225 1.097 24 1.738 24H12c6.627 0 12-5.373 12-12S18.627 0 12 0Zm4.388 3.199c1.104 0 1.999.895 1.999 1.999 0 1.105-.895 2-1.999 2-.946 0-1.739-.657-1.947-1.539v.002c-1.147.162-2.032 1.15-2.032 2.341v.007c1.776.067 3.4.567 4.686 1.363.473-.363 1.064-.58 1.707-.58 1.547 0 2.802 1.254 2.802 2.802 0 1.117-.655 2.081-1.601 2.531-.088 3.256-3.637 5.876-7.997 5.876-4.361 0-7.905-2.617-7.998-5.87-.954-.447-1.614-1.415-1.614-2.538 0-1.548 1.255-2.802 2.803-2.802.645 0 1.239.218 1.712.585 1.275-.79 2.881-1.291 4.64-1.365v-.01c0-1.663 1.263-3.034 2.88-3.207.188-.911.993-1.595 1.959-1.595Zm-8.085 8.376c-.784 0-1.459.78-1.506 1.797-.047 1.016.64 1.429 1.426 1.429.786 0 1.371-.369 1.418-1.385.047-1.017-.553-1.841-1.338-1.841Zm7.406 0c-.786 0-1.385.824-1.338 1.841.047 1.017.634 1.385 1.418 1.385.785 0 1.473-.413 1.426-1.429-.046-1.017-.721-1.797-1.506-1.797Zm-3.703 4.013c-.974 0-1.907.048-2.77.135-.147.015-.241.168-.183.305.483 1.154 1.622 1.964 2.953 1.964 1.33 0 2.47-.81 2.953-1.964.057-.137-.037-.29-.184-.305-.863-.087-1.795-.135-2.769-.135Z",
-    discord: "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z",
-    linkedin: LINKEDIN_PATH,
-    website: WEBSITE_PATH,
-    // SOW-129: the comprehensive set (inlined from the same simple-icons package the site uses).
-    instagram: "M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077",
-    threads: "M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.478-2.256h.044c3.194.02 5.097 1.975 5.287 5.388.108.046.216.094.321.142 1.49.7 2.58 1.761 3.154 3.07.797 1.82.871 4.79-1.548 7.158-1.85 1.81-4.094 2.628-7.277 2.65Zm1.003-11.69c-.242 0-.487.007-.739.021-1.836.103-2.98.946-2.916 2.143.067 1.256 1.452 1.839 2.784 1.767 1.224-.065 2.818-.543 3.086-3.71a10.5 10.5 0 0 0-2.215-.221z",
-    tiktok: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
-    twitch: "M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z",
-    facebook: "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z",
-    dailydev: "M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z",
-    producthunt: "M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.805-1.799-1.801-1.799zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.199 0 2.321-1.881 4.201-4.201 4.201z",
-    rumble: "M14.4528 13.5458c.8064-.6542.9297-1.8381.2756-2.6445a1.8802 1.8802 0 0 0-.2756-.2756 21.2127 21.2127 0 0 0-4.3121-2.776c-1.066-.51-2.256.2-2.4261 1.414a23.5226 23.5226 0 0 0-.14 5.5021c.116 1.23 1.292 1.964 2.372 1.492a19.6285 19.6285 0 0 0 4.5062-2.704v-.008zm6.9322-5.4002c2.0335 2.228 2.0396 5.637.014 7.8723A26.1487 26.1487 0 0 1 8.2946 23.846c-2.6848.6713-5.4168-.914-6.1662-3.5781-1.524-5.2002-1.3-11.0803.17-16.3045.772-2.744 3.3521-4.4661 6.0102-3.832 4.9242 1.174 9.5443 4.196 13.0764 8.0121v.002z",
-    // SOW-131: audio, publishing, dev, and creator platforms (inlined from simple-icons).
-    soundcloud: "M23.999 14.165c-.052 1.796-1.612 3.169-3.4 3.169h-8.18a.68.68 0 0 1-.675-.683V7.862a.747.747 0 0 1 .452-.724s.75-.513 2.333-.513a5.364 5.364 0 0 1 2.763.755 5.433 5.433 0 0 1 2.57 3.54c.282-.08.574-.121.868-.12.884 0 1.73.358 2.347.992s.948 1.49.922 2.373ZM10.721 8.421c.247 2.98.427 5.697 0 8.672a.264.264 0 0 1-.53 0c-.395-2.946-.22-5.718 0-8.672a.264.264 0 0 1 .53 0ZM9.072 9.448c.285 2.659.37 4.986-.006 7.655a.277.277 0 0 1-.55 0c-.331-2.63-.256-5.02 0-7.655a.277.277 0 0 1 .556 0Zm-1.663-.257c.27 2.726.39 5.171 0 7.904a.266.266 0 0 1-.532 0c-.38-2.69-.257-5.21 0-7.904a.266.266 0 0 1 .532 0Zm-1.647.77a26.108 26.108 0 0 1-.008 7.147.272.272 0 0 1-.542 0 27.955 27.955 0 0 1 0-7.147.275.275 0 0 1 .55 0Zm-1.67 1.769c.421 1.865.228 3.5-.029 5.388a.257.257 0 0 1-.514 0c-.21-1.858-.398-3.549 0-5.389a.272.272 0 0 1 .543 0Zm-1.655-.273c.388 1.897.26 3.508-.01 5.412-.026.28-.514.283-.54 0-.244-1.878-.347-3.54-.01-5.412a.283.283 0 0 1 .56 0Zm-1.668.911c.4 1.268.257 2.292-.026 3.572a.257.257 0 0 1-.514 0c-.241-1.262-.354-2.312-.023-3.572a.283.283 0 0 1 .563 0Z",
-    mixcloud: "M2.462 8.596l1.372 6.49h.319l1.372-6.49h2.462v6.808H6.742v-5.68l.232-.81h-.402l-1.43 6.49H2.854l-1.44-6.49h-.391l.222.81v5.68H0V8.596zM24 8.63v1.429L21.257 12 24 13.941v1.43l-3.235-2.329h-.348l-3.226 2.329v-1.43l2.734-1.94-2.733-1.942V8.63l3.225 2.338h.348zm-7.869 2.75v1.24H9.304v-1.24z",
-    spotify: "M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z",
-    bandcamp: "M0 18.75l7.437-13.5H24l-7.438 13.5H0z",
-    wordpress: "M21.469 6.825c.84 1.537 1.318 3.3 1.318 5.175 0 3.979-2.156 7.456-5.363 9.325l3.295-9.527c.615-1.54.82-2.771.82-3.864 0-.405-.026-.78-.07-1.11m-7.981.105c.647-.03 1.232-.105 1.232-.105.582-.075.514-.93-.067-.899 0 0-1.755.135-2.88.135-1.064 0-2.85-.15-2.85-.15-.585-.03-.661.855-.075.885 0 0 .54.061 1.125.09l1.68 4.605-2.37 7.08L5.354 6.9c.649-.03 1.234-.1 1.234-.1.585-.075.516-.93-.065-.896 0 0-1.746.138-2.874.138-.2 0-.438-.008-.69-.015C4.911 3.15 8.235 1.215 12 1.215c2.809 0 5.365 1.072 7.286 2.833-.046-.003-.091-.009-.141-.009-1.06 0-1.812.923-1.812 1.914 0 .89.513 1.643 1.06 2.531.411.72.89 1.643.89 2.977 0 .915-.354 1.994-.821 3.479l-1.075 3.585-3.9-11.61.001.014zM12 22.784c-1.059 0-2.081-.153-3.048-.437l3.237-9.406 3.315 9.087c.024.053.05.101.078.149-1.12.393-2.325.609-3.582.609M1.211 12c0-1.564.336-3.05.935-4.39L7.29 21.709C3.694 19.96 1.212 16.271 1.211 12M12 0C5.385 0 0 5.385 0 12s5.385 12 12 12 12-5.385 12-12S18.615 0 12 0",
-    substack: "M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z",
-    medium: "M4.21 0A4.201 4.201 0 0 0 0 4.21v15.58A4.201 4.201 0 0 0 4.21 24h15.58A4.201 4.201 0 0 0 24 19.79v-1.093c-.137.013-.278.02-.422.02-2.577 0-4.027-2.146-4.09-4.832a7.592 7.592 0 0 1 .022-.708c.093-1.186.475-2.241 1.105-3.022a3.885 3.885 0 0 1 1.395-1.1c.468-.237 1.127-.367 1.664-.367h.023c.101 0 .202.004.303.01V4.211A4.201 4.201 0 0 0 19.79 0Zm.198 5.583h4.165l3.588 8.435 3.59-8.435h3.864v.146l-.019.004c-.705.16-1.063.397-1.063 1.254h-.003l.003 10.274c.06.676.424.885 1.063 1.03l.02.004v.145h-4.923v-.145l.019-.005c.639-.144.994-.353 1.054-1.03V7.267l-4.745 11.15h-.261L6.15 7.569v9.445c0 .857.358 1.094 1.063 1.253l.02.004v.147H4.405v-.147l.019-.004c.705-.16 1.065-.397 1.065-1.253V6.987c0-.857-.358-1.094-1.064-1.254l-.018-.004zm19.25 3.668c-1.086.023-1.733 1.323-1.813 3.124H24V9.298a1.378 1.378 0 0 0-.342-.047Zm-1.862 3.632c-.1 1.756.86 3.239 2.204 3.634v-3.634z",
-    hashnode: "M22.351 8.019l-6.37-6.37a5.63 5.63 0 0 0-7.962 0l-6.37 6.37a5.63 5.63 0 0 0 0 7.962l6.37 6.37a5.63 5.63 0 0 0 7.962 0l6.37-6.37a5.63 5.63 0 0 0 0-7.962zM12 15.953a3.953 3.953 0 1 1 0-7.906 3.953 3.953 0 0 1 0 7.906z",
-    peerlist: "M12 0C2.667 0 0 2.667 0 12s2.673 12 12 12 12-2.667 12-12S21.327 0 12 0zm8.892 20.894c-1.57 1.569-4.247 2.249-8.892 2.249s-7.322-.68-8.892-2.25C1.735 19.522 1.041 17.3.89 13.654A39.74 39.74 0 0 1 .857 12c0-1.162.043-2.201.13-3.13.177-1.859.537-3.278 1.106-4.366.284-.544.62-1.006 1.013-1.398s.854-.729 1.398-1.013C5.592 1.524 7.01 1.164 8.87.988 9.799.9 10.838.858 12 .858c4.645 0 7.322.68 8.892 2.248 1.569 1.569 2.25 4.246 2.25 8.894s-.681 7.325-2.25 8.894zM20.538 3.46C19.064 1.986 16.51 1.357 12 1.357c-4.513 0-7.067.629-8.54 2.103C1.986 4.933 1.357 7.487 1.357 12c0 4.511.63 7.065 2.105 8.54C4.936 22.014 7.49 22.643 12 22.643s7.064-.629 8.538-2.103c1.475-1.475 2.105-4.029 2.105-8.54s-.63-7.065-2.105-8.54zM14.25 16.49a6.097 6.097 0 0 1-2.442.59v2.706H10.45v.357H6.429V5.57h.357V4.214h5.676c3.565 0 6.467 2.81 6.467 6.262 0 2.852-1.981 5.26-4.68 6.013zm-1.788-8.728H10.45v5.428h2.011c1.532 0 2.802-1.2 2.802-2.714s-1.27-2.714-2.802-2.714zm.901 4.351c.117-.239.186-.502.186-.78 0-1.01-.855-1.857-1.945-1.857h-.296V8.62h1.154c1.09 0 1.945.847 1.945 1.857 0 .705-.422 1.323-1.044 1.637zm4.104 1.493c.043-.063.083-.129.123-.194a5.653 5.653 0 0 0 .526-1.103 5.56 5.56 0 0 0 .11-.362c.02-.076.042-.15.06-.227a5.58 5.58 0 0 0 .073-.41c.01-.068.025-.134.032-.203.024-.207.038-.417.038-.63 0-3.198-2.687-5.763-5.967-5.763H7.286v14.572h4.022v-3.048h1.154c1.43 0 2.747-.488 3.778-1.303a5.92 5.92 0 0 0 .46-.406c.035-.034.066-.07.1-.105.107-.11.21-.22.308-.337.044-.053.084-.108.126-.162.081-.104.16-.21.233-.319zm-5.005 1.775H10.45v3.048H8.143V5.57h4.319c2.837 0 5.11 2.211 5.11 4.905s-2.273 4.905-5.11 4.905z",
-    gitlab: "m23.6004 9.5927-.0337-.0862L20.3.9814a.851.851 0 0 0-.3362-.405.8748.8748 0 0 0-.9997.0539.8748.8748 0 0 0-.29.4399l-2.2055 6.748H7.5375l-2.2057-6.748a.8573.8573 0 0 0-.29-.4412.8748.8748 0 0 0-.9997-.0537.8585.8585 0 0 0-.3362.4049L.4332 9.5015l-.0325.0862a6.0657 6.0657 0 0 0 2.0119 7.0105l.0113.0087.03.0213 4.976 3.7264 2.462 1.8633 1.4995 1.1321a1.0085 1.0085 0 0 0 1.2197 0l1.4995-1.1321 2.4619-1.8633 5.006-3.7489.0125-.01a6.0682 6.0682 0 0 0 2.0094-7.003z",
-    stackoverflow: "M15.725 0l-1.72 1.277 6.39 8.588 1.716-1.277L15.725 0zm-3.94 3.418l-1.369 1.644 8.225 6.85 1.369-1.644-8.225-6.85zm-3.15 4.465l-.905 1.94 9.702 4.517.904-1.94-9.701-4.517zm-1.85 4.86l-.44 2.093 10.473 2.201.44-2.092-10.473-2.203zM1.89 15.47V24h19.19v-8.53h-2.133v6.397H4.021v-6.396H1.89zm4.265 2.133v2.13h10.66v-2.13H6.154Z",
-    patreon: "M22.957 7.21c-.004-3.064-2.391-5.576-5.191-6.482-3.478-1.125-8.064-.962-11.384.604C2.357 3.231 1.093 7.391 1.046 11.54c-.039 3.411.302 12.396 5.369 12.46 3.765.047 4.326-4.804 6.068-7.141 1.24-1.662 2.836-2.132 4.801-2.618 3.376-.836 5.678-3.501 5.673-7.031Z",
-    kofi: "M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298",
-    telegram: "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
-  };
-  function socialIcon(key, size = 15) {
-    const d = SOCIAL_ICON_PATHS[String(key || "").toLowerCase()];
-    if (!d) return "";
-    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="currentColor"><path d="${d}"/></svg>`;
-  }
-  var SOCIAL_KEYS = [
-    // sow-159: 'mastodon' removed from the offered-keys enumerator (retirement); its icon path + label +
-    // URL-builder below stay on disk inert so re-enabling is just re-adding the key here.
-    "github",
-    "website",
-    "x",
-    "bluesky",
-    "linkedin",
-    "youtube",
-    "discord",
-    "reddit",
-    "devto",
-    "instagram",
-    "threads",
-    "tiktok",
-    "twitch",
-    "facebook",
-    "dailydev",
-    "producthunt",
-    "rumble",
-    // SOW-131: audio, publishing, dev, and creator platforms.
-    "soundcloud",
-    "mixcloud",
-    "spotify",
-    "bandcamp",
-    "wordpress",
-    "substack",
-    "medium",
-    "hashnode",
-    "peerlist",
-    "gitlab",
-    "stackoverflow",
-    "patreon",
-    "kofi",
-    "telegram"
-  ];
-  var SOCIAL_LABELS = {
-    github: "GitHub",
-    website: "Website",
-    x: "X",
-    bluesky: "Bluesky",
-    linkedin: "LinkedIn",
-    youtube: "YouTube",
-    discord: "Discord",
-    reddit: "Reddit",
-    devto: "Dev.to",
-    instagram: "Instagram",
-    threads: "Threads",
-    tiktok: "TikTok",
-    twitch: "Twitch",
-    facebook: "Facebook",
-    dailydev: "daily.dev",
-    producthunt: "Product Hunt",
-    rumble: "Rumble",
-    soundcloud: "SoundCloud",
-    mixcloud: "Mixcloud",
-    spotify: "Spotify",
-    bandcamp: "Bandcamp",
-    wordpress: "WordPress",
-    substack: "Substack",
-    medium: "Medium",
-    hashnode: "Hashnode",
-    peerlist: "Peerlist",
-    gitlab: "GitLab",
-    stackoverflow: "Stack Overflow",
-    patreon: "Patreon",
-    kofi: "Ko-fi",
-    telegram: "Telegram"
-  };
-  var SOCIAL_URL_BASE = {
-    github: "https://github.com/",
-    x: "https://x.com/",
-    bluesky: "https://bsky.app/profile/",
-    youtube: "https://www.youtube.com/@",
-    devto: "https://dev.to/",
-    reddit: "https://www.reddit.com/user/",
-    linkedin: "https://www.linkedin.com/in/",
-    instagram: "https://www.instagram.com/",
-    threads: "https://www.threads.net/@",
-    tiktok: "https://www.tiktok.com/@",
-    twitch: "https://www.twitch.tv/",
-    facebook: "https://www.facebook.com/",
-    dailydev: "https://app.daily.dev/",
-    producthunt: "https://www.producthunt.com/@",
-    rumble: "https://rumble.com/user/",
-    // SOW-131:
-    soundcloud: "https://soundcloud.com/",
-    mixcloud: "https://www.mixcloud.com/",
-    wordpress: "https://profiles.wordpress.org/",
-    substack: "https://substack.com/@",
-    medium: "https://medium.com/@",
-    hashnode: "https://hashnode.com/@",
-    peerlist: "https://peerlist.io/",
-    gitlab: "https://gitlab.com/",
-    patreon: "https://www.patreon.com/",
-    kofi: "https://ko-fi.com/",
-    telegram: "https://t.me/"
-  };
-  function buildSocialUrl(key, raw) {
-    const value = String(raw == null ? "" : raw).trim();
-    if (!value) return "";
-    const k = String(key || "").toLowerCase();
-    if (/^https?:\/\//i.test(value)) return value;
-    if (k === "discord") return value;
-    if (k === "website") return "https://" + value.replace(/^\/+/, "");
-    const handle = value.replace(/^@+/, "");
-    const base = SOCIAL_URL_BASE[k];
-    return base ? base + handle : value;
-  }
-
-  // client-ui/src/social-queue-core.mjs
-  var LISTS = ["pending", "done"];
-  function locate(data, id) {
-    for (const list of LISTS) {
-      const arr = Array.isArray(data?.[list]) ? data[list] : [];
-      const index = arr.findIndex((r) => r && r.id === id);
-      if (index !== -1) return { list, index, row: arr[index] };
-    }
-    return null;
-  }
-  function applyQueueAction(data, action, id, { now = null } = {}) {
-    if (!data || !id) return null;
-    if (action !== "done" && action !== "delete") return null;
-    const found = locate(data, id);
-    if (!found) return null;
-    const next = { ...data };
-    for (const list of LISTS) next[list] = Array.isArray(data[list]) ? [...data[list]] : [];
-    next[found.list].splice(found.index, 1);
-    const undo = { removed: { list: found.list, index: found.index, row: found.row }, added: null };
-    if (action === "done") {
-      if (found.list === "done") return null;
-      const stamped = { ...found.row, doneAt: found.row.doneAt ?? (now ?? Date.now()) };
-      next.done = [stamped, ...next.done];
-      undo.added = { list: "done", id };
-    }
-    return { next, undo };
-  }
-  function revertQueueAction(data, undo) {
-    if (!data || !undo?.removed) return data;
-    const next = { ...data };
-    for (const list2 of LISTS) next[list2] = Array.isArray(data[list2]) ? [...data[list2]] : [];
-    if (undo.added) {
-      const arr = next[undo.added.list];
-      const at = arr.findIndex((r) => r && r.id === undo.added.id);
-      if (at !== -1) arr.splice(at, 1);
-    }
-    const { list, index, row } = undo.removed;
-    const target = next[list];
-    target.splice(Math.min(index, target.length), 0, row);
-    return next;
-  }
-
-  // membership/syndication-config-core.mjs
-  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
-  var CHANNEL_CAPABILITY = Object.freeze({
-    discord: "auto",
-    "discord-category": "auto",
-    // sow-260 (2026-08-26): MANUAL. Reddit banned the gbti-labs account for self-promotion on 2026-08-25 and
-    // reinstated it the same day, but the ban DESTROYED the OAuth application the adapter authenticated as,
-    // which is why every token refresh returned 401 afterwards. It cannot be recreated: Reddit closed
-    // self-service app creation in November 2025 under the Responsible Builder Policy, and the create-app form
-    // refuses even after registering for API access. Devvit, the platform Reddit now points developers to,
-    // was investigated and rejected (it cannot fetch a first-party domain, and it would post from a bot
-    // account holding full mod permissions). The owner's call is that SELECTIVE pushing is the goal anyway,
-    // and a human choosing what to post needs no API at all. Same shape as x/dailydev/linkedin below: the
-    // adapter still renders the text, a superadmin posts it by hand from the Social Queue.
-    reddit: "manual",
-    devto: "auto",
-    // DORMANT (sow-217, 2026-08-12): Hashnode is RETIRED and out of CHANNELS, so this entry is never consulted.
-    // Kept deliberately so a revival is a one-line change rather than a rebuild. History: SOW-134 built the
-    // full-body auto adapter; Hashnode paywalled its whole GraphQL API behind Pro on 2026-05-13 (reads included,
-    // not just publishing), which demoted this to 'manual'; then it required a custom domain on Pro, which is
-    // what ended it. Revival = re-add 'hashnode' to CHANNELS + the two hand-maintained duplicates, and flip this
-    // to 'auto' only if the Pro plan is actually bought (the adapter cannot work without it).
-    hashnode: "manual",
-    mastodon: "auto",
-    // SOW-123
-    bluesky: "auto",
-    // SOW-122
-    x: "manual",
-    // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
-    dailydev: "manual",
-    // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
-    linkedin: "manual"
-    // SOW-127: manual-assist until Community Management API access is granted (business
-    // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
-    // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
-  });
-  function channelCapability(name) {
-    return CHANNEL_CAPABILITY[name] ?? "building";
-  }
-  var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
-  var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
-  var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-  var AUTO_MODES = Object.freeze(["off", "on", "on-manual"]);
-  function defaultAutoMode(type) {
-    return type === "share" ? "off" : "on";
-  }
-  var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
-  var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
-  var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
-    enabled: false,
-    // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
-    open_threshold: 2,
-    // distinct members opening the detail view before the item auto-posts
-    tier: "paid",
-    // whose engagement counts (owner-toggleable in the admin Channels tab)
-    comment_autopost: true
-    // one comment posts immediately (deliberate engagement)
-  });
-  var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
-  var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
-  var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
-  var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
-  var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Supporter]({member-url}).** Originally published on [gbti.network]({url}).";
-  var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Supporter.** Originally published on [gbti.network]({url}).";
-  var DEFAULT_DEVTO_BODY = "{body}";
-  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-  var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
-  var DEFAULT_TEMPLATES = Object.freeze({
-    share: DEFAULT_SHARE_FORMAT,
-    // sow-180: content-first, no member credit
-    post: DEFAULT_FORMAT,
-    project: DEFAULT_FORMAT,
-    prompt: DEFAULT_FORMAT,
-    "reddit-body": DEFAULT_REDDIT_BODY,
-    "reddit-comment": DEFAULT_REDDIT_COMMENT,
-    "devto-intro": DEFAULT_DEVTO_INTRO,
-    "devto-body": DEFAULT_DEVTO_BODY,
-    // SOW-138
-    "devto-footer": DEFAULT_DEVTO_FOOTER,
-    // SOW-134: Hashnode reuses the same CTA footer as dev.to (both are full-body crossposts with a canonical link
-    // home); admins can diverge them per channel. SOW-140: the byline default is NAME-based here (not the dev.to
-    // handle), since a member's dev.to profile is the wrong platform to mention on Hashnode.
-    "hashnode-intro": DEFAULT_HASHNODE_INTRO,
-    "hashnode-body": DEFAULT_DEVTO_BODY,
-    // SOW-138
-    "hashnode-footer": DEFAULT_DEVTO_FOOTER
-  });
-  var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
-  var SHARE_STUB_FORMAT = 'A members-only link on the GBTI Network: "{title}". {short-description} Join to open it: {url}';
-  var DEFAULT_STUB_TEMPLATES = Object.freeze({
-    share: SHARE_STUB_FORMAT,
-    // sow-180: content-first, no member credit
-    post: STUB_FORMAT,
-    project: STUB_FORMAT,
-    prompt: STUB_FORMAT,
-    "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
-    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.",
-    "hashnode-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
-    // SOW-134
-  });
-  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
-  var DISCORD_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}" {url}';
-  var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
-  var DISCORD_CAT_SHARE_STUB = 'A members-only link in {category}: "{title}" {url}';
-  var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
-  var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
-  var X_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
-  var LINKEDIN_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Join the co-op to unlock it. {url}';
-  var LINKEDIN_SHARE_STUB = 'A members-only find on the GBTI Network: "{title}". Join the co-op to open it. {url}';
-  var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
-  var BLUESKY_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it.';
-  var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
-  var MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
-  var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
-  var DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
-  var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
-    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
-    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
-    // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
-    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
-    // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
-    // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
-    // its members stub is sentence-shaped like the other manual channels.
-    hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
-    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, project: X_STUB, prompt: X_STUB }),
-    linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, project: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
-    // SOW-127
-    dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
-    // SOW-135
-    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
-    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB })
-  });
-  var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
-    enabled: false,
-    require_approval: true,
-    // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
-    hold_minutes: 60,
-    classify: "ai",
-    // SOW-087: the share category suggestion mode
-    templates: DEFAULT_TEMPLATES,
-    // SOW-087: per-type Discord templates (missing/empty type = its default)
-    channel_templates: Object.freeze({}),
-    // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
-    stub_templates: Object.freeze({}),
-    // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
-    channel_templates_stub: Object.freeze({}),
-    // SOW-088 Proposal A: per-channel stub overrides
-    news_engagement: DEFAULT_NEWS_ENGAGEMENT,
-    // SOW-111: engagement-triggered news auto-share
-    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
-    // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
-    // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
-    // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
-    // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
-    manual_assist_channels: Object.freeze([]),
-    // SOW-125: per-type-per-channel auto-share modes (off | on | on-manual). Layers on `channels` (a channel must
-    // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
-    auto_matrix: buildDefaultAutoMatrix(),
-    // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
-    // sooner/later than another for the same item.
-    channel_hold_minutes: Object.freeze({})
-  });
-  function buildDefaultAutoMatrix() {
-    const m = {};
-    for (const t of AUTO_TYPES) {
-      m[t] = {};
-      for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t);
-      Object.freeze(m[t]);
-    }
-    return Object.freeze(m);
-  }
-
-  // membership/syndication-channels.mjs
-  var CHANNEL_LIMITS = Object.freeze({
-    discord: 2e3,
-    "discord-category": 2e3,
-    // SOW-087: the category-channel Discord post
-    x: 280,
-    linkedin: 3e3,
-    mastodon: 500,
-    bluesky: 300,
-    reddit: 300,
-    // the Reddit post-title cap (SOW-088: the template renders the title)
-    devto: 128,
-    // the dev.to title cap (the article body is not template-limited)
-    hashnode: 250,
-    // SOW-134: the Hashnode title cap (the article body is not template-limited)
-    dailydev: 300
-    // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
-  });
-  var CHANNEL_SECRET_KEYS = Object.freeze({
-    discord: ["DISCORD_BOT_TOKEN"],
-    "discord-category": ["DISCORD_BOT_TOKEN"],
-    // SOW-087: the same bot posts the category-channel copy
-    x: ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
-    linkedin: ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_ORG_URN"],
-    mastodon: ["MASTODON_BASE_URL", "MASTODON_ACCESS_TOKEN"],
-    bluesky: ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
-    // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
-    // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
-    // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
-    // needs no credential at all, so listing dead keys here would only make a working channel report itself
-    // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
-    reddit: ["REDDIT_SUBREDDIT"],
-    // SOW-088, narrowed by sow-260
-    devto: ["DEVTO_API_KEY", "DEVTO_ORG_ID"],
-    // SOW-088: full-body crossposts to the GBTI dev.to organization
-    hashnode: ["HASHNODE_TOKEN", "HASHNODE_PUBLICATION_ID"]
-    // SOW-134: PAT + the gbti.hashnode.dev publication id
-  });
-  var CHANNEL_MARKDOWN = Object.freeze({
-    discord: true,
-    // a Discord message, and Discord renders markdown natively
-    "discord-category": true,
-    // the same bot, the same rendering
-    // EVERY OTHER CHANNEL IS FALSE, INCLUDING dev.to AND HASHNODE, and those two are the ones that look wrong.
-    // They are markdown platforms. But this map governs the text renderChannelText produces, and on dev.to and
-    // Hashnode that text is the post TITLE (see the channelOnly note in syndication-config-core.mjs), which is
-    // a plain-text field on both. Their article BODIES never pass through here: they are built by
-    // renderBodyTemplate and keep their markdown untouched. Flip either of these to true and you put
-    // asterisks in an article title.
-    devto: false,
-    hashnode: false,
-    reddit: false,
-    // the manual rail is the rich-text composer, not the markdown editor
-    x: false,
-    bluesky: false,
-    mastodon: false,
-    linkedin: false,
-    dailydev: false
-  });
-  function rendersMarkdown(name) {
-    return CHANNEL_MARKDOWN[name] === true;
-  }
-
-  // membership/markdown-plain.mjs
-  var MASK = "\0";
-  var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
-  var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function esc2(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-  function safeHref(url) {
-    const u = String(url || "").replace(/\u200B/g, "").trim();
-    return /^(https?:\/\/|mailto:)/i.test(u) ? u : "";
-  }
-  function maskRuns(text2, store2) {
-    const push = (raw, kind2) => {
-      store2.push({ raw, kind: kind2 });
-      return `${MASK}${store2.length - 1}${MASK}`;
-    };
-    return String(text2).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
-  }
-  function inline2(text2, { bold, italic, strike, link }) {
-    return String(text2).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
-  }
-  function blocks(md) {
-    const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
-    const isQuote2 = (l) => /^\s*>/.test(l);
-    const isHeading2 = (l) => /^\s{0,3}#{1,6}\s/.test(l);
-    const isUl = (l) => /^\s*[-*+]\s+\S/.test(l);
-    const isOl = (l) => /^\s*\d+[.)]\s+\S/.test(l);
-    const isFence2 = (l) => /^\s*(```+|~~~+)/.test(l);
-    const isHr = (l) => /^\s*([-*_])(\s*\1){2,}\s*$/.test(l);
-    const out = [];
-    let i = 0;
-    while (i < lines.length) {
-      const l = lines[i];
-      const fence = l.match(/^\s*(```+|~~~+)/);
-      if (fence) {
-        const close = fence[1][0] === "`" ? /^\s*```+\s*$/ : /^\s*~~~+\s*$/;
-        const body = [];
-        i++;
-        while (i < lines.length && !close.test(lines[i])) {
-          body.push(lines[i]);
-          i++;
-        }
-        i++;
-        out.push({ kind: "fence", lines: body });
-        continue;
-      }
-      if (/^\s*$/.test(l)) {
-        out.push({ kind: "blank" });
-        i++;
-        continue;
-      }
-      if (isHr(l)) {
-        out.push({ kind: "hr" });
-        i++;
-        continue;
-      }
-      const heading = l.match(/^\s{0,3}(#{1,6})\s+(.*)$/);
-      if (heading) {
-        out.push({ kind: "heading", level: heading[1].length, text: heading[2].trim() });
-        i++;
-        continue;
-      }
-      if (isQuote2(l)) {
-        const body = [];
-        while (i < lines.length && isQuote2(lines[i])) {
-          body.push(lines[i].replace(/^\s*>\s?/, ""));
-          i++;
-        }
-        out.push({ kind: "quote", lines: body });
-        continue;
-      }
-      if (isUl(l)) {
-        const items = [];
-        while (i < lines.length && isUl(lines[i])) {
-          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*[-*+]\s+/, ""));
-          i++;
-        }
-        out.push({ kind: "ul", items });
-        continue;
-      }
-      if (isOl(l)) {
-        const items = [];
-        while (i < lines.length && isOl(lines[i])) {
-          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*\d+[.)]\s+/, ""));
-          i++;
-        }
-        out.push({ kind: "ol", items });
-        continue;
-      }
-      const para = [];
-      while (i < lines.length && !/^\s*$/.test(lines[i]) && !isQuote2(lines[i]) && !isHeading2(lines[i]) && !isUl(lines[i]) && !isOl(lines[i]) && !isFence2(lines[i]) && !isHr(lines[i])) {
-        para.push(lines[i]);
-        i++;
-      }
-      out.push({ kind: "p", lines: para });
-    }
-    return out;
-  }
-  function mdToPlain(md) {
-    const render2 = (text2) => {
-      const store2 = [];
-      const masked = maskRuns(text2, store2);
-      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
-      const done = inline2(masked, {
-        bold: (t) => t,
-        italic: (t) => t,
-        strike: (t) => t,
-        link: (label, url) => {
-          const dest = resolve(url);
-          const l = resolve(String(label || "")).trim();
-          return !l || l === dest ? dest : `${l} (${dest})`;
-        }
-      });
-      return resolve(done);
-    };
-    const parts = [];
-    for (const b of blocks(md)) {
-      if (b.kind === "blank" || b.kind === "hr") {
-        parts.push("");
-        continue;
-      }
-      if (b.kind === "quote") {
-        parts.push(mdToPlain(b.lines.join("\n")));
-        continue;
-      }
-      if (b.kind === "fence") {
-        parts.push(["```", ...b.lines, "```"].join("\n"));
-        continue;
-      }
-      if (b.kind === "heading") {
-        parts.push(render2(b.text));
-        continue;
-      }
-      if (b.kind === "ul") {
-        parts.push(b.items.map((it) => `- ${render2(it)}`).join("\n"));
-        continue;
-      }
-      if (b.kind === "ol") {
-        parts.push(b.items.map((it, n) => `${n + 1}. ${render2(it)}`).join("\n"));
-        continue;
-      }
-      parts.push(b.lines.map(render2).join("\n"));
-    }
-    return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  }
-  function mdToHtml(md) {
-    const render2 = (text2) => {
-      const store2 = [];
-      const masked = maskRuns(text2, store2);
-      const safe = esc2(masked);
-      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
-      const done = inline2(safe, {
-        bold: (t) => `<strong>${t}</strong>`,
-        italic: (t) => `<em>${t}</em>`,
-        strike: (t) => `<del>${t}</del>`,
-        link: (label, url) => {
-          const href = safeHref(resolve(url));
-          const inner = String(label || "").trim() || esc2(resolve(url));
-          return href ? `<a href="${esc2(href)}">${inner}</a>` : inner;
-        }
-      });
-      return done.replace(MASK_RE, (_m, i) => {
-        const run = store2[Number(i)];
-        if (!run) return "";
-        return run.kind === "code" ? `<code>${esc2(run.raw)}</code>` : esc2(run.raw);
-      });
-    };
-    const out = [];
-    for (const b of blocks(md)) {
-      if (b.kind === "blank") continue;
-      if (b.kind === "hr") {
-        out.push("<hr>");
-        continue;
-      }
-      if (b.kind === "fence") {
-        out.push(`<pre><code>${esc2(b.lines.join("\n"))}</code></pre>`);
-        continue;
-      }
-      if (b.kind === "heading") {
-        out.push(`<h${b.level}>${render2(b.text)}</h${b.level}>`);
-        continue;
-      }
-      if (b.kind === "quote") {
-        out.push(`<blockquote>${mdToHtml(b.lines.join("\n"))}</blockquote>`);
-        continue;
-      }
-      if (b.kind === "ul" || b.kind === "ol") {
-        const tag = b.kind === "ul" ? "ul" : "ol";
-        out.push(`<${tag}>${b.items.map((it) => `<li>${render2(it)}</li>`).join("")}</${tag}>`);
-        continue;
-      }
-      out.push(`<p>${b.lines.map(render2).join(" ")}</p>`);
-    }
-    return out.join("");
-  }
-
-  // client-ui/src/elements/gbti-social-queue.mjs
-  var REDDIT_SUB = "GBTI_network";
-  var composeUrl = (task) => {
-    const channel = task?.channel;
-    const text2 = String(task?.text || "");
-    const t = encodeURIComponent(text2);
-    if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
-    if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
-    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
-    if (channel === "hashnode") return "https://hashnode.com/draft";
-    if (channel === "reddit") {
-      const u = String(task?.url || "");
-      return `https://www.reddit.com/r/${REDDIT_SUB}/submit?title=${t}${u ? `&url=${encodeURIComponent(u)}` : ""}`;
-    }
-    return null;
-  };
-  var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky" };
-  var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky" };
-  var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
-  var PAGE_SIZE = 12;
-  var fmtDate = (ms) => {
-    try {
-      return new Date(ms).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    } catch {
-      return "";
-    }
-  };
-  var CSS5 = `
-  :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
-    background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
-  .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
-  .hd h2 { margin:0; font-family:var(--font-display, inherit); font-weight:800; font-size:16px; letter-spacing:.02em; text-transform:uppercase; flex:1; }
-  .hd .x { background:none; border:1.5px solid var(--line); border-radius:7px; color:var(--fg-mute, var(--muted)); width:32px; height:32px; cursor:pointer; font-size:15px; line-height:1; }
-  .hd .x:hover { border-color:var(--fg-mute, var(--muted)); }
-  .body { padding:12px 18px 16px; overflow:auto; flex:1; }
-  .tabs { display:flex; gap:5px; margin:0 0 10px; }
-  .tab { font:inherit; font-size:12.5px; font-weight:700; color:var(--muted); background:none; border:1.5px solid var(--line); border-radius:7px; padding:5px 12px; cursor:pointer; }
-  .tab.on { color:var(--brand); border-color:var(--brand); background:var(--brand-tint, rgba(31,158,95,.1)); }
-  .tab .n { font-family:var(--font-mono, monospace); font-size:10.5px; opacity:.8; margin-left:5px; }
-  .hint { color:var(--muted); font-size:11.5px; margin:0 0 10px; line-height:1.5; }
-  .msg { font-size:12.5px; color:var(--accent); margin:0 0 10px; } .msg.err { color:var(--danger, #e06c6c); }
-  .empty { padding:26px 10px; text-align:center; color:var(--muted); font-family:var(--font-mono, monospace); font-size:12px; }
-  .busy { opacity:.55; pointer-events:none; }
-
-  .fbar { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; align-items:center; }
-  .fbar select, .fbar input { width:auto; font:inherit; font-size:12px; color:var(--fg); background:var(--bg); border:1.5px solid var(--line); border-radius:7px; padding:6px 9px; outline:none; }
-  .fbar select:focus, .fbar input:focus { border-color:var(--brand); }
-  .fbar input { flex:1; min-width:150px; }
-  .fbar .count { align-self:center; font-family:var(--font-mono, monospace); font-size:11px; color:var(--muted); margin-left:auto; }
-
-  /* compact rows */
-  .row { display:flex; align-items:center; gap:10px; padding:8px 11px; border:1.5px solid var(--line); border-radius:7px; margin:0 0 7px; }
-  .row .src { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); border:1px solid var(--line); border-radius:7px; padding:2px 7px; flex:none; }
-  .row .ti { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .row .ti a { color:var(--fg); text-decoration:none; } .row .ti a:hover { color:var(--accent); }
-  .row .when { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; flex:none; }
-  .chans { display:flex; gap:5px; flex:none; }
-  .chip { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); border:1px solid var(--line); border-radius:7px; padding:2px 6px; white-space:nowrap; }
-  .chip svg { width:12px; height:12px; flex:none; }
-  .chip.sent { color:var(--brand); border-color:var(--brand); } .chip.failed { color:var(--danger, #e06c6c); border-color:var(--danger, #e06c6c); }
-  .chip.big { font-size:11px; padding:3px 8px; } .chip.big svg { width:14px; height:14px; }
-
-  /* to-do task (needs the text + actions) */
-  .task { border:1.5px solid var(--line); border-radius:7px; padding:11px 12px; margin:0 0 9px; }
-  .task .top { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
-  .task .ti { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .task .txt { font-size:12px; color:var(--fg-soft, var(--fg)); background:var(--hover); border-radius:7px; padding:8px 10px; margin:0 0 9px; white-space:pre-wrap; word-break:break-word; line-height:1.5; max-height:100px; overflow:auto; }
-  /* sow-260: Reddit tasks carry a second block, the description that goes under the link. It is marked off
-     from the title above it so the two are not mistaken for one pasteable blob. */
-  .task .txt.body { position:relative; padding-top:20px; max-height:160px; }
-  .task .txt.body .blabel { position:absolute; top:5px; left:10px; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-mute, var(--fg-soft)); }
-  .acts { display:flex; gap:7px; flex-wrap:wrap; }
-  .btn { font:inherit; font-size:12px; font-weight:700; border-radius:7px; padding:6px 11px; cursor:pointer; border:1.5px solid var(--line); background:none; color:var(--fg); display:inline-flex; align-items:center; gap:6px; }
-  .btn svg { width:13px; height:13px; }
-  .btn.assist { color:#fff; background:var(--brand); border-color:var(--brand); } .btn.assist:hover { filter:brightness(1.06); }
-  .btn.done { color:var(--brand); border-color:var(--brand); }
-  .btn.del { color:var(--danger, #e06c6c); } .btn.del:hover { border-color:var(--danger, #e06c6c); }
-  .btn:hover { border-color:var(--fg-mute, var(--muted)); }
-
-  .pager { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; }
-  .pager button { font:inherit; font-size:12px; font-weight:700; border:1.5px solid var(--line); border-radius:7px; background:none; color:var(--fg); padding:5px 12px; cursor:pointer; }
-  .pager button:disabled { opacity:.4; cursor:default; }
-  .pager .pg { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); }
-`;
-  var GbtiSocialQueue = class extends GbtiElement {
-    connectedCallback() {
-      super.connectedCallback();
-      this._tab = this._tab || "todo";
-      this._page = 0;
-      this._fType = "all";
-      this._fChannel = "all";
-      this._fQ = "";
-      this._data = null;
-      this._auto = null;
-      this._msg = "";
-      this._err = false;
-      this._rowBusy = null;
-      if (this.client) this.load();
-      else this.render();
-    }
-    async load() {
-      if (!this.client) {
-        this.render();
-        return;
-      }
-      this._loading = true;
-      try {
-        this._data = await this.client.socialQueue();
-        this._err = false;
-      } catch (e) {
-        this._err = true;
-        this._msg = e?.message || "Could not load the Social Queue.";
-      }
-      this._loading = false;
-      this.render();
-    }
-    async _loadAuto() {
-      if (this._auto || !this.client) return;
-      try {
-        const q = await this.client.syndicationQueue();
-        this._auto = Array.isArray(q?.sent) ? q.sent : [];
-      } catch {
-        this._auto = [];
-      }
-      this.render();
-    }
-    _rawList() {
-      if (this._tab === "todo") return this._data?.pending || [];
-      if (this._tab === "manual") return this._data?.done || [];
-      return this._auto || [];
-    }
-    _chansOf(row) {
-      return this._tab === "auto" ? Object.keys(row.perChannel || {}) : [row.channel];
-    }
-    _filtered() {
-      const q = this._fQ.trim().toLowerCase();
-      return this._rawList().filter((r) => (this._fType === "all" || (r.source || "") === this._fType) && (this._fChannel === "all" || this._chansOf(r).includes(this._fChannel)) && (!q || String(r.title || r.targetSlug || "").toLowerCase().includes(q)));
-    }
-    _channelOptions() {
-      const set = /* @__PURE__ */ new Set();
-      for (const r of this._rawList()) for (const c of this._chansOf(r)) if (c) set.add(c);
-      return [...set];
-    }
-    render() {
-      if (!this.client) {
-        this.set(this.css(CSS5) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
-        this._wire();
-        return;
-      }
-      if (this._err) {
-        this.set(this.css(CSS5) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
-        this._wire();
-        this.$("[data-reload]")?.addEventListener("click", () => this.load());
-        return;
-      }
-      if (!this._data) {
-        if (!this._loading) this.load();
-        this.set(this.css(CSS5) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
-        this._wire();
-        return;
-      }
-      const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
-      const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
-      const hint = this._tab === "todo" ? "Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on X and LinkedIn, Assist opens the free web composer (or Copy the text), post it by hand, then mark it Done." : this._tab === "manual" ? "Posts completed from this queue (Post now or by hand)." : "Posts the system sent automatically (the On-Automatic channels).";
-      const filtered = this._filtered();
-      const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-      if (this._page >= pages) this._page = pages - 1;
-      const paged = filtered.slice(this._page * PAGE_SIZE, this._page * PAGE_SIZE + PAGE_SIZE);
-      const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
-      const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
-      const chOpts = this._channelOptions();
-      this.set(this.css(CSS5) + this._shell(`
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
-      <p class="hint">${esc(hint)}</p>
-      <div class="fbar">
-        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
-        <select data-f="channel" aria-label="Filter by channel">${opt("all", "All channels", this._fChannel)}${chOpts.map((c) => opt(c, CH_LABEL[c] || c, this._fChannel)).join("")}</select>
-        <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
-        <span class="count">${filtered.length} item${filtered.length === 1 ? "" : "s"}</span>
-      </div>
-      <div>${rows}</div>
-      ${pages > 1 ? `<div class="pager"><button data-pg="prev" type="button" ${this._page === 0 ? "disabled" : ""}>Prev</button><span class="pg">Page ${this._page + 1} of ${pages}</span><button data-pg="next" type="button" ${this._page >= pages - 1 ? "disabled" : ""}>Next</button></div>` : ""}
-    `));
-      this._wire();
-      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
-        this._tab = b.dataset.tab;
-        this._page = 0;
-        this._fChannel = "all";
-        if (this._tab === "auto") this._loadAuto();
-        this.render();
-      }));
-      this.$$("[data-f]").forEach((el) => el.addEventListener(el.dataset.f === "q" ? "input" : "change", () => {
-        if (el.dataset.f === "type") this._fType = el.value;
-        else if (el.dataset.f === "channel") this._fChannel = el.value;
-        else this._fQ = el.value;
-        this._page = 0;
-        const focusQ = el.dataset.f === "q";
-        this.render();
-        if (focusQ) {
-          const q = this.$('[data-f="q"]');
-          if (q) {
-            q.focus();
-            q.setSelectionRange(q.value.length, q.value.length);
-          }
-        }
-      }));
-      this.$$("[data-pg]").forEach((b) => b.addEventListener("click", () => {
-        this._page += b.dataset.pg === "next" ? 1 : -1;
-        this.render();
-      }));
-      this.$$("[data-assist]").forEach((b) => b.addEventListener("click", () => this._assist(b.dataset.assist)));
-      this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
-      this.$$("[data-copybody]").forEach((b) => b.addEventListener("click", () => {
-        const t = this._byId(b.dataset.copybody);
-        this._copy(b.dataset.copybody, this._extra(t)?.field || "bodyText");
-      }));
-      this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
-      this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
-      this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
-    }
-    _shell(inner) {
-      return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`;
-    }
-    _wire() {
-      this.$("[data-close]")?.addEventListener("click", () => this.dispatchEvent(new CustomEvent("gbti-social-close", { bubbles: true, composed: true })));
-    }
-    _byId(id) {
-      return (this._data?.pending || []).find((t) => t.id === id) || (this._data?.done || []).find((t) => t.id === id) || null;
-    }
-    _chip(channel, status, big) {
-      return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ""}</span>`;
-    }
-    // sow-260: a Reddit task carries a SECOND thing to paste. Since 2026-08-27 that is the author note as a
-    // first COMMENT (a manual Reddit submission is a link post, which earns the preview card but has no body).
-    // Tasks queued before that date carry a `bodyText` instead, so both are read and the label follows the
-    // field rather than being written twice, which is how a label and its copy button drift apart.
-    _extra(t) {
-      if (t?.commentText) return { field: "commentText", label: "First comment", copy: "Copy comment" };
-      if (t?.bodyText) return { field: "bodyText", label: "Body", copy: "Copy body" };
-      return null;
-    }
-    _todoRow(t) {
-      const label = CH_LABEL[t.channel] || t.channel;
-      const url = composeUrl(t);
-      const x = this._extra(t);
-      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
-      return `<div class="task${this._rowBusy === t.id ? " busy" : ""}">
-      <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ""}</span></div>
-      <div class="txt">${esc(this._pasteText(t, "text"))}</div>
-      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(this._pasteText(t, x.field))}</div>` : ""}
-      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? " title" : ""}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
-    </div>`;
-    }
-    _doneRow(t) {
-      return `<div class="row"><span class="src">${esc(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, "sent")}<span class="ti">${esc(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc(fmtDate(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
-    }
-    _autoRow(it) {
-      const chans = Object.entries(it.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || "sent")).join("");
-      const title = it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title || it.targetSlug || "(untitled)")}</a>` : esc(it.title || it.targetSlug || "(untitled)");
-      return `<div class="row"><span class="src">${esc(SRC_LABEL[it.source] || it.source || "")}</span><span class="ti">${title}</span><span class="chans">${chans}</span><span class="when">${it.sentAt ? esc(fmtDate(it.sentAt)) : ""}</span></div>`;
-    }
-    _assist(id) {
-      const t = this._byId(id);
-      if (!t) return;
-      const url = composeUrl(t);
-      if (url) {
-        try {
-          window.open(url, "_blank", "noopener");
-        } catch {
-        }
-      }
-      const x = this._extra(t);
-      this._msg = x?.field === "commentText" ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".' : x ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
-      this.render();
-    }
-    // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
-    // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here
-    // put raw asterisks and `> ` in front of the reader, which is the defect that started this.
-    _pasteText(t, field2) {
-      const raw = t?.[field2] || "";
-      return rendersMarkdown(t?.channel) ? raw : mdToPlain(raw);
-    }
-    // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
-    // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
-    //
-    // sow-300: TWO CLIPBOARD FLAVOURS, but only for the Reddit first comment.
-    //
-    // Reddit's rich-text composer reads `text/html` on paste and turns it into its own formatting nodes, which
-    // is how the author note arrives as a real quote block with real bold instead of literal `> ` and `**`.
-    // Every other target gets plain text only, and that is deliberate rather than lazy: LinkedIn's composer is
-    // also rich, and handing it HTML turns the item URL into an <a>, which is not the bare URL its link-preview
-    // detector scans for. Losing the article card to gain bold on a channel that has no author markdown left
-    // after the strip is a bad trade. A post TITLE should never carry <strong> either.
-    //
-    // NOTHING IS AWAITED BEFORE THE CLIPBOARD CALL. Transient user activation is what authorizes a write, and
-    // an await ahead of it spends the gesture; mdToHtml is synchronous for exactly this reason. The catch is
-    // not decoration: Firefox ships ClipboardItem with `write` behind a pref, so feature-detection alone would
-    // pass and then throw. Activation survives the rejection, so the plain fallback still lands.
-    async _copy(id, field2 = "text") {
-      const t = this._byId(id);
-      if (!t) return;
-      const what = field2 === "commentText" ? "first comment" : field2 === "bodyText" ? "body" : "post text";
-      const raw = t[field2] || "";
-      const plain = this._pasteText(t, field2);
-      const rich = field2 === "commentText" && t.channel === "reddit";
-      try {
-        if (rich && typeof ClipboardItem === "function" && navigator.clipboard?.write) {
-          await navigator.clipboard.write([new ClipboardItem({
-            "text/html": new Blob([mdToHtml(raw)], { type: "text/html" }),
-            "text/plain": new Blob([plain], { type: "text/plain" })
-          })]);
-        } else {
-          await navigator.clipboard.writeText(plain);
-        }
-        this._msg = `Copied the ${what}.`;
-      } catch {
-        try {
-          await navigator.clipboard?.writeText?.(plain);
-          this._msg = `Copied the ${what}.`;
-        } catch {
-          this._msg = "Could not copy automatically; select the text to copy it.";
-        }
-      }
-      this.render();
-    }
-    async _action(action, id) {
-      if (!id) return;
-      if (action === "delete" && typeof confirm === "function" && !confirm("Delete this item from the Social Queue?")) return;
-      if (action === "post") {
-        const t = this._byId(id);
-        const label = t ? CH_LABEL[t.channel] || t.channel : "the channel";
-        if (typeof confirm === "function" && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
-      }
-      const opt = applyQueueAction(this._data, action, id);
-      if (opt) {
-        this._data = opt.next;
-        this._msg = action === "done" ? "Marked done." : "Deleted.";
-        this.render();
-        try {
-          await this.client.socialQueueAction({ action, id });
-        } catch (e) {
-          this._data = revertQueueAction(this._data, opt.undo);
-          this._msg = e?.message || "Action failed.";
-          this.render();
-        }
-        return;
-      }
-      this._rowBusy = id;
-      this.render();
-      try {
-        await this.client.socialQueueAction({ action, id });
-        this._msg = action === "post" ? "Posted." : "Done.";
-        await this.load();
-      } catch (e) {
-        this._msg = e?.message || "Action failed.";
-      } finally {
-        this._rowBusy = null;
-        this.render();
-      }
-    }
-  };
-  define("gbti-social-queue", GbtiSocialQueue);
-
   // client-ui/src/elements/gbti-debug-panel.mjs
   var fmtTime = (ms) => {
     try {
@@ -7473,7 +6487,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS6 = `
+  var CSS5 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -7580,7 +6594,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc(e.realm || "app")}</span></td>
             <td>${esc(e.area)}</td><td class="msg">${esc(e.msg)}</td>
             <td class="data">${esc(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS6) + `
+      this.set(this.css(CSS5) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -7622,7 +6636,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
   var shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
   var REASSURANCE = `<b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network uses your sign-in only to know who you are. It does not ask for access to your repositories, and it cannot read your private code or change your account. You can remove it at any time in your GitHub settings.`;
-  var CSS7 = `
+  var CSS6 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
@@ -7701,7 +6715,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc(who)}` : "Sign in with GitHub"}</button>${useCode}`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS7) + `<div class="splashwrap">
+      this.set(this.css(CSS6) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -7804,7 +6818,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc3 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -7885,7 +6899,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <a class="mi" role="menuitem" href="${SITE5}/workbench/" target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
-        <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
         <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
@@ -7903,14 +6916,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function railHtml(active, nav = "workbench") {
     const rail = RAILS[nav] || RAIL_WORKBENCH;
     const items = rail.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc3(r.group)}</div>`;
+      if (r.group) return `<div class="nt-rail-h">${esc2(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
       const on = r.key === active ? " on" : "";
       const admin = r.adminOnly ? " data-admin-only hidden" : "";
-      const sub = r.sub ? `<span class="sub">${esc3(r.sub)}</span>` : "";
+      const sub = r.sub ? `<span class="sub">${esc2(r.sub)}</span>` : "";
       const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc3(r.nm)}</span>${sub}</span></a>`;
-      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc3(c.nm)}</span></span></a>`).join("");
+      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
+      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc2(c.nm)}</span></span></a>`).join("");
       return self + kids2;
     }).join("");
     return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE5}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
@@ -7949,7 +6962,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         av.alt = `@${login}`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc3(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc2(login)}</b>`;
       const showAdmin = (RANK2[status.role] ?? 0) >= RANK2.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;
@@ -8097,10 +7110,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       location.reload();
     });
-    root.querySelector("[data-social-queue]")?.addEventListener("click", () => {
-      close();
-      openSocialQueueModal();
-    });
     root.querySelector("[data-debug-panel]")?.addEventListener("click", () => {
       close();
       openDebugPanelModal();
@@ -8147,25 +7156,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       }
     };
-    document.body.appendChild(overlay);
-  }
-  function openSocialQueueModal() {
-    if (document.querySelector(".social-modal")) return;
-    const overlay = document.createElement("div");
-    overlay.className = "compose-modal social-modal";
-    overlay.innerHTML = `<gbti-social-queue></gbti-social-queue>`;
-    const onEsc = (e) => {
-      if (e.key === "Escape") close();
-    };
-    const close = () => {
-      overlay.remove();
-      document.removeEventListener("keydown", onEsc);
-    };
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
-    overlay.addEventListener("gbti-social-close", close);
-    document.addEventListener("keydown", onEsc);
     document.body.appendChild(overlay);
   }
   function openComposeModal() {
@@ -9626,12 +8616,12 @@ ${listStyleProseCss(".doc-blocks")}
     // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
     // instead of re-rendering so an author who is already typing keeps their caret.
     async _rehydrateStaged() {
-      const blocks2 = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
-      if (!blocks2.length) return;
-      const found = await loadStagedImages(blocks2.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
+      const blocks = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
+      if (!blocks.length) return;
+      const found = await loadStagedImages(blocks.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
-      for (const b of blocks2) {
+      for (const b of blocks) {
         const src = found[b.url];
         const img = src && this.$(`[data-imgfile="${b._id}"]`)?.closest(".imgframe")?.querySelector("img");
         if (img) img.src = src;
@@ -9739,10 +8729,10 @@ ${listStyleProseCss(".doc-blocks")}
       return CONVERT.slice();
     }
     _render() {
-      const blocks2 = this._blocks || [];
-      const hasMembers = blocks2.some((b) => b.type === "members");
+      const blocks = this._blocks || [];
+      const hasMembers = blocks.some((b) => b.type === "members");
       let inMem = false;
-      const parts = blocks2.map((b) => {
+      const parts = blocks.map((b) => {
         if (b.type === "members") {
           inMem = true;
           return this._memberDivider(b);
@@ -10733,7 +9723,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/editor-core.mjs
-  function fmtDate2(value) {
+  function fmtDate(value) {
     if (!value) return "";
     const t = new Date(value);
     return Number.isNaN(t.getTime()) ? "" : t.toISOString().slice(0, 10);
@@ -10741,7 +9731,7 @@ ${listStyleProseCss(".doc-blocks")}
   function editorStatus({ staged = false, status = "", publishedAt = "" } = {}) {
     if (staged) return { label: "Staged draft", tone: "staged", publishedLabel: "" };
     if (String(status).toLowerCase() === "published") {
-      return { label: "Live", tone: "live", publishedLabel: fmtDate2(publishedAt) };
+      return { label: "Live", tone: "live", publishedLabel: fmtDate(publishedAt) };
     }
     return { label: "Draft", tone: "draft", publishedLabel: "" };
   }
@@ -10979,8 +9969,8 @@ ${listStyleProseCss(".doc-blocks")}
   var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-embed(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
   var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
   var hasBlockChild = (n) => kids(n).some(isBlock);
-  var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
-  var inline3 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
+  var flat = (blocks) => blocks.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
+  var inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
   function codeText(el) {
     const html = String(el?.innerHTML ?? "");
     const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -10995,7 +9985,7 @@ ${listStyleProseCss(".doc-blocks")}
   function walk(node, out) {
     let buf = "";
     const flush = () => {
-      const t = inline3(buf);
+      const t = inline2(buf);
       if (t.trim()) out.push(t);
       buf = "";
     };
@@ -11029,7 +10019,7 @@ ${listStyleProseCss(".doc-blocks")}
         walk(n, out);
         return;
       }
-      const text2 = inline3(n.innerHTML);
+      const text2 = inline2(n.innerHTML);
       if (text2.trim()) out.push(text2);
       return;
     }
@@ -11037,7 +10027,7 @@ ${listStyleProseCss(".doc-blocks")}
       const inner = [];
       if (hasBlockChild(n)) walk(n, inner);
       else {
-        const text2 = inline3(n.innerHTML);
+        const text2 = inline2(n.innerHTML);
         if (text2.trim()) inner.push(text2);
       }
       const paras = flat(inner);
@@ -11053,7 +10043,7 @@ ${listStyleProseCss(".doc-blocks")}
           const inner = [];
           walk(li, inner);
           text2 = flat(inner).join("\n").split("\n").map((l, i) => i === 0 ? l : l ? `  ${l}` : "").join("\n");
-        } else text2 = inline3(li.innerHTML);
+        } else text2 = inline2(li.innerHTML);
         if (text2.trim()) items.push(text2);
       }
       if (!items.length) return;
@@ -11066,7 +10056,7 @@ ${listStyleProseCss(".doc-blocks")}
       return;
     }
     if (/^H[1-6]$/.test(t)) {
-      const text2 = inline3(n.innerHTML);
+      const text2 = inline2(n.innerHTML);
       if (text2.trim()) out.push(`${"#".repeat(Number(t[1]))} ${text2}`);
       return;
     }
@@ -11075,12 +10065,12 @@ ${listStyleProseCss(".doc-blocks")}
       return;
     }
     if (t === "LI") {
-      const text2 = inline3(n.innerHTML);
+      const text2 = inline2(n.innerHTML);
       if (text2.trim()) out.push(`- ${text2}`);
       return;
     }
     if (t === "TABLE") {
-      const text2 = inline3(n.innerHTML);
+      const text2 = inline2(n.innerHTML);
       if (text2.trim()) out.push(text2);
       return;
     }
@@ -11088,11 +10078,11 @@ ${listStyleProseCss(".doc-blocks")}
   function domToMarkdown(root) {
     const out = [];
     walk(root, out);
-    const blocks2 = [];
+    const blocks = [];
     let run = null;
     const closeRun = () => {
       if (!run) return;
-      if (run.length) blocks2.push(run.join("\n>\n"));
+      if (run.length) blocks.push(run.join("\n>\n"));
       run = null;
     };
     for (const b of out) {
@@ -11102,10 +10092,10 @@ ${listStyleProseCss(".doc-blocks")}
         continue;
       }
       closeRun();
-      if (typeof b === "string" && b.trim()) blocks2.push(b);
+      if (typeof b === "string" && b.trim()) blocks.push(b);
     }
     closeRun();
-    return blocks2.join("\n\n");
+    return blocks.join("\n\n");
   }
 
   // client-ui/src/elements/gbti-prose-editor.mjs
@@ -11120,7 +10110,7 @@ ${listStyleProseCss(".doc-blocks")}
     x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
   };
   var svg3 = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic2[k] || ""}</svg>`;
-  var CSS8 = `
+  var CSS7 = `
   :host { display: block; width: 100%; font-family: var(--font-body); color: var(--fg); }
   .box { position: relative; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); }
   .box:focus-within { border-color: var(--brand); }
@@ -11179,7 +10169,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (this._rendered) return;
       this._rendered = true;
       const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc(c.label)}" aria-label="${esc(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg3(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
-      this.set(this.css(CSS8) + `<div class="box" data-box>
+      this.set(this.css(CSS7) + `<div class="box" data-box>
       <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
       <div class="vid" data-vid hidden>
         <input type="url" data-vid-url placeholder="Paste a YouTube or Vimeo link" aria-label="Video link" />
@@ -11496,7 +10486,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS9 = `
+  var CSS8 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
   .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size: 13.5px; color: var(--muted); }
   .nudge a { color: var(--brand); font-weight: 600; }
@@ -11556,14 +10546,14 @@ ${listStyleProseCss(".doc-blocks")}
     _renderEditAffordance() {
       this._fullRow(false);
       if (!this._identity || this._identity.username !== this._editAuthor) {
-        this.set(this.css(CSS9) + "");
+        this.set(this.css(CSS8) + "");
         return;
       }
-      this.set(this.css(CSS9) + `<button class="edit" type="button">Edit</button>`);
+      this.set(this.css(CSS8) + `<button class="edit" type="button">Edit</button>`);
       this.on(".edit", "click", () => this._openEdit());
     }
     async _openEdit() {
-      this.set(this.css(CSS9) + `<p class="msg">Loading…</p>`);
+      this.set(this.css(CSS8) + `<p class="msg">Loading…</p>`);
       let body = "";
       let visibility = "members";
       try {
@@ -11571,7 +10561,7 @@ ${listStyleProseCss(".doc-blocks")}
         body = c?.body ?? "";
         visibility = c?.visibility ?? c?.frontmatter?.visibility ?? "members";
       } catch {
-        this.set(this.css(CSS9) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.set(this.css(CSS8) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
         this.on(".edit", "click", () => this._openEdit());
         return;
       }
@@ -11580,19 +10570,19 @@ ${listStyleProseCss(".doc-blocks")}
     // ---- COMPOSE mode ----
     _renderCompose() {
       if (LOCKED.has(this._membership)) {
-        this.set(this.css(CSS9) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        this.set(this.css(CSS8) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
         return;
       }
       if (this._membership === "trialing") {
-        this.set(this.css(CSS9) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        this.set(this.css(CSS8) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
         return;
       }
       if (!this._identity) {
-        this.set(this.css(CSS9) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS8) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
         return;
       }
       this._fullRow(false);
-      this.set(this.css(CSS9) + `<button class="open" type="button">Write a comment</button>`);
+      this.set(this.css(CSS8) + `<button class="open" type="button">Write a comment</button>`);
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit, visibility = "members" }) {
@@ -11604,7 +10594,7 @@ ${listStyleProseCss(".doc-blocks")}
         <button type="button" data-vis="members" class="${vis === "members" ? "on" : ""}" aria-pressed="${vis === "members"}">Members only</button>
         <button type="button" data-vis="public" class="${vis === "public" ? "on" : ""}" aria-pressed="${vis === "public"}">Public</button>
       </div>`;
-      this.set(this.css(CSS9) + `
+      this.set(this.css(CSS8) + `
       <div class="form">
         <gbti-prose-editor data-editor></gbti-prose-editor>
         <div class="row">
@@ -11757,7 +10747,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-discussion.mjs
-  var CSS10 = `
+  var CSS9 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
@@ -11850,11 +10840,11 @@ ${listStyleProseCss(".doc-blocks")}
       const targetType = this._type();
       const targetSlug = this._slug();
       if (!targetType || !targetSlug) {
-        this.set(this.css(CSS10));
+        this.set(this.css(CSS9));
         return;
       }
       if (!this.client) {
-        this.set(this.css(CSS10) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
+        this.set(this.css(CSS9) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
         return;
       }
       if (this._role == null) {
@@ -11867,7 +10857,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._me = null;
         }
       }
-      if (!this._loaded) this.set(this.css(CSS10) + `<p class="empty">Loading the discussion…</p>`);
+      if (!this._loaded) this.set(this.css(CSS9) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
       const cacheKey = `comments-${targetType}`;
       if (!this._painted) {
@@ -11889,13 +10879,13 @@ ${listStyleProseCss(".doc-blocks")}
         wbCacheSet(targetSlug, cacheKey, items).catch(() => {
         });
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS10) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS9) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
       try {
         await this._resolveAndRender(targetType, targetSlug, items);
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS10) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS9) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
       }
       this._loaded = true;
     }
@@ -11944,7 +10934,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div></div>`;
       }).join("");
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
-      this.set(this.css(CSS10) + threadHtml + this._composeHtml(targetType, targetSlug));
+      this.set(this.css(CSS9) + threadHtml + this._composeHtml(targetType, targetSlug));
       wireEmbedPosters(this.root);
       this.$$("[data-fold]").forEach((b) => b.addEventListener("click", () => this._toggleFold(b.dataset.fold)));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec, b.dataset.authornote === "1")));
@@ -12022,7 +11012,7 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/elements/gbti-cta-assignment.mjs
   var SITE6 = "https://gbti.network";
   var ADMIN = `${SITE6}/admin/`;
-  var CSS11 = `
+  var CSS10 = `
   :host { display:block; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); line-height:1.5; }
   b { color:var(--fg); font-weight:600; }
   a { color:var(--accent); }
@@ -12066,26 +11056,26 @@ ${listStyleProseCss(".doc-blocks")}
       const type = this.getAttribute("type") || "";
       const ref = (this.getAttribute("ref") || "").trim();
       if (!type || !ref) {
-        this.set(this.css(CSS11) + `<span>CTA: none yet. Save the item with a permalink first; a superadmin assigns a CTA in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+        this.set(this.css(CSS10) + `<span>CTA: none yet. Save the item with a permalink first; a superadmin assigns a CTA in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS11) + `<span>${esc(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS10) + `<span>${esc(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._ctas) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS11) + `<span>CTA: checking...</span>`);
+        this.set(this.css(CSS10) + `<span>CTA: checking...</span>`);
         return;
       }
       const m = this.matches;
       if (!m.length) {
-        this.set(this.css(CSS11) + `<span>CTA: <b>none</b>. A superadmin assigns one in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+        this.set(this.css(CSS10) + `<span>CTA: <b>none</b>. A superadmin assigns one in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
         return;
       }
       const parts = m.map((c) => `<b>${esc(c.label || c.id)}</b>${c.enabled ? "" : ' <span class="off">(disabled, so it does not render)</span>'}`);
-      this.set(this.css(CSS11) + `<span>CTA: ${parts.join(", ")}. Managed by a superadmin in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
+      this.set(this.css(CSS10) + `<span>CTA: ${parts.join(", ")}. Managed by a superadmin in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
     }
   };
   function matchesFor(ctas, type, ref) {
@@ -13814,8 +12804,8 @@ ${listStyleProseCss(".doc-blocks")}
         this._slugVal = v;
         const mirror = this.$('[data-key="slug"]');
         if (mirror) mirror.value = v;
-        const inline4 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline4) inline4.textContent = v;
+        const inline3 = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline3) inline3.textContent = v;
         const note = input.closest(".fld")?.querySelector(".urlprev");
         if (note && this.itemPath) {
           note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
@@ -14548,7 +13538,7 @@ ${listStyleProseCss(".doc-blocks")}
     banned: "Suspended",
     unknown: "Unknown"
   };
-  var CSS12 = `
+  var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -14660,7 +13650,7 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS12) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
+        this.set(this.css(CSS11) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
         return;
       }
       let appearance = "";
@@ -14669,12 +13659,12 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS12) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
+        this.set(this.css(CSS11) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
         this._wire();
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS12) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE7}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS11) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE7}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -14684,7 +13674,7 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS12) + sections);
+      this.set(this.css(CSS11) + sections);
       this._wire();
     }
     _account() {
@@ -14874,7 +13864,7 @@ ${listStyleProseCss(".doc-blocks")}
     unindex: "Unindex this item? Its page asks search engines not to index it and it leaves the sitemap; the site still points at it (reversible).",
     reindex: "Reindex this item? Search engines are allowed to index it again."
   };
-  var CSS13 = `
+  var CSS12 = `
   :host { display:inline-flex; }
   .mod { display:inline-flex; gap:6px; align-items:center; }
   .ma { font:inherit; font-size:12px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
@@ -14908,7 +13898,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       const btns = actions.map((a) => `<button class="ma ma-${a}" type="button" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
-      this.set(this.css(CSS13) + `<span class="mod">${btns}</span>`);
+      this.set(this.css(CSS12) + `<span class="mod">${btns}</span>`);
       this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._do(b.dataset.act)));
     }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
@@ -14962,7 +13952,7 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/elements/gbti-admin.mjs
   var RANK5 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS14 = `
+  var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .rolebar { display:flex; align-items:center; gap:8px; margin:0 0 2px; }
   .rolebar .lbl { font-size:13px; color:var(--muted); }
@@ -14997,7 +13987,7 @@ ${listStyleProseCss(".doc-blocks")}
   var GbtiAdmin = class extends GbtiElement {
     async render() {
       if (!this.client) {
-        this.set(this.css(CSS14) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
+        this.set(this.css(CSS13) + `<p class="nudge">Open in the GBTI client to use the admin actions.</p>`);
         return;
       }
       let role = "member";
@@ -15007,13 +13997,13 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const rank = RANK5[role] ?? 0;
       if (rank < RANK5.moderator) {
-        this.set(this.css(CSS14) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
+        this.set(this.css(CSS13) + `<p class="nudge">Admin actions are available to moderators and above.</p>`);
         return;
       }
       const caps = this.hasAttribute("caps") ? this.getAttribute("caps").split(",").map((s) => s.trim()).filter(Boolean) : null;
       const capOn = (g) => !caps || caps.includes(g);
       this.set(
-        this.css(CSS14) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
+        this.css(CSS13) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
 
          <div class="grp">
            <h4>Content moderation</h4>
@@ -15154,7 +14144,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE8 = "https://gbti.network";
-  var CSS15 = `
+  var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
   .chip { font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; }
@@ -15349,19 +14339,19 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
         return;
       }
       if (this._error === "forbidden") {
-        this.set(this.css(CSS15) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
         return;
       }
       if (this._error === "auth") {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in to view the member roster.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Sign in to view the member roster.</p>`);
         return;
       }
       if (this._error) {
-        this.set(this.css(CSS15) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
         return;
       }
       if (!this._data) {
@@ -15369,7 +14359,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this._load();
         }
-        this.set(this.css(CSS15) + `<p class="muted">Loading the member roster...</p>`);
+        this.set(this.css(CSS14) + `<p class="muted">Loading the member roster...</p>`);
         return;
       }
       const s = this._data.summary || {};
@@ -15410,7 +14400,7 @@ ${listStyleProseCss(".doc-blocks")}
         const panel = canManage && this._managing === m.githubId ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : "";
         return main + panel;
       }).join("");
-      this.set(this.css(CSS15) + `${chips}
+      this.set(this.css(CSS14) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Tier &amp; flags</th><th>Content</th><th>github_id</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status and tier follow ban &gt; staff &gt; grandfather &gt; Stripe. The override tiers (ban / staff / grandfather) are always authoritative from the public repo; the live Stripe tier shows when the admin Stripe endpoint is reachable. A <b>pending</b> (dashed) tag is a coupon grant a member has redeemed but reconcile has not yet folded into the repo: it is an annotation, not effective access yet, and it clears once the grant is recorded. Member actions open a house PR and take effect once it merges.</p>
       ${this._pullsSection()}
@@ -15432,7 +14422,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-category-manager.mjs
   var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
-  var CSS16 = `
+  var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; line-height:1.5; }
   .muted { color:var(--muted); font-size:13.5px; }
@@ -15483,7 +14473,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -15491,11 +14481,11 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS16) + `<p class="muted">Loading categories...</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Loading categories...</p>`);
         return;
       }
       this._paths = this._flatten(this._tree);
-      this.set(this.css(CSS16) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add-top">
         <input class="key" data-newtop-key type="text" placeholder="new-key (kebab-case)" />
@@ -15628,7 +14618,7 @@ ${listStyleProseCss(".doc-blocks")}
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
-  var CSS17 = `
+  var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; --r7:7px; } /* default border radius is 7px (owner) */
   .muted { color:var(--muted); font-size:13.5px; }
   button { font:inherit; cursor:pointer; }
@@ -15871,7 +14861,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS17) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
         return;
       }
       if (!this._tree) {
@@ -15879,7 +14869,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS17) + `<p class="muted">Loading the taxonomy…</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading the taxonomy…</p>`);
         return;
       }
       const plan = batchPlan(this._pending);
@@ -15892,7 +14882,7 @@ ${listStyleProseCss(".doc-blocks")}
       </div>`;
       const body = `${this._newOpen ? this._newCatHtml() : ""}<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
       ${this._msg ? `<p class="msg">${this._msg}</p>` : ""}`;
-      this.set(this.css(CSS17) + header + body);
+      this.set(this.css(CSS16) + header + body);
       this._wire();
     }
     // SOW-100 QA (owner): a real add-category form — key, label, and a PARENT picker over the whole tree —
@@ -16290,7 +15280,7 @@ ${listStyleProseCss(".doc-blocks")}
     archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>'
   };
   var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
-  var CSS18 = `
+  var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     --panel2:color-mix(in srgb, var(--fg) 5%, var(--panel));
     --raise:color-mix(in srgb, var(--fg) 8%, var(--panel));
@@ -16511,7 +15501,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS18) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Aggregating tags from the content indexes…</p>`);
         return;
       }
       const list = this._filtered();
@@ -16554,7 +15544,7 @@ ${listStyleProseCss(".doc-blocks")}
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
         </a>`).join("")}</div>
       </div>` : `<div class="detail empty"><div><div class="ico">${TAG_ICO}</div><p>Select a tag to see the content carrying it.</p></div></div>`;
-      this.set(this.css(CSS18) + `
+      this.set(this.css(CSS17) + `
       <div class="top"><div><div class="eyebrow">Admin · Tags</div><div class="title">Tag manager</div></div>
         <div class="count"><b>${list.length}</b> of <b>${this._rows.length}</b> tags · <b>${uses}</b> uses</div></div>
       <div class="toolbar">
@@ -16657,7 +15647,7 @@ ${listStyleProseCss(".doc-blocks")}
       return url || "";
     }
   };
-  var CSS19 = `
+  var CSS18 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -16749,7 +15739,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`);
         return;
       }
       if (!this._sources) {
@@ -16757,11 +15747,11 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS19) + `<p class="muted">Loading news sources...</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Loading news sources...</p>`);
         return;
       }
       const view = this._view;
-      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
       <div class="subtabs" role="tablist" aria-label="News settings">
         <button class="subtab" type="button" role="tab" data-view="sources" aria-selected="${view === "sources"}">Sources <span class="count">${this._sources.length}</span></button>
         <button class="subtab" type="button" role="tab" data-view="banwords" aria-selected="${view === "banwords"}">Blocked words <span class="count">${(this._banwords || []).length}</span></button>
@@ -16885,7 +15875,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
   // client-ui/src/elements/gbti-quote-manager.mjs
-  var CSS20 = `
+  var CSS19 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -16931,7 +15921,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
         return;
       }
       if (!this._quotes) {
@@ -16939,7 +15929,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS20) + `<p class="muted">Loading quotes...</p>`);
+        this.set(this.css(CSS19) + `<p class="muted">Loading quotes...</p>`);
         return;
       }
       const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
@@ -16947,7 +15937,7 @@ ${listStyleProseCss(".doc-blocks")}
         const on = q && q.enabled !== false;
         return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc(q.text || "")}</span><span class="by">${esc(q.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc(q.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(q.text || "")}">Remove</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS20) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._quotes.length} quotes, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -17038,7 +16028,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var CSS21 = `
+  var CSS20 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
@@ -17120,7 +16110,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
         return;
       }
       if (!this._coupons) {
@@ -17128,7 +16118,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS21) + `<p class="muted">Loading coupons...</p>`);
+        this.set(this.css(CSS20) + `<p class="muted">Loading coupons...</p>`);
         return;
       }
       const rows = this._coupons.map((c) => {
@@ -17149,7 +16139,7 @@ ${listStyleProseCss(".doc-blocks")}
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
-      this.set(this.css(CSS21) + `
+      this.set(this.css(CSS20) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
@@ -17322,7 +16312,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-editorial-manager.mjs
-  var CSS22 = `
+  var CSS21 = `
   :host { display:block; }
   [hidden] { display:none !important; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -17372,21 +16362,21 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS22) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Open in the GBTI client as a superadmin to review member content.</p>');
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS22) + `<p class="msg">${esc(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS21) + `<p class="msg">${esc(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._items) {
         if (!this._loading) this.load();
-        this.set(this.css(CSS22) + '<p class="muted">Loading the review queue...</p>');
+        this.set(this.css(CSS21) + '<p class="muted">Loading the review queue...</p>');
         return;
       }
       const rows = this._items.map((i) => this._rowHtml(i)).join("");
-      this.set(this.css(CSS22) + `
+      this.set(this.css(CSS21) + `
       <div class="head">
         <h3>Editorial review</h3>
         <span class="hint">${esc(queueSummary(this._items))}</span>
@@ -17433,7 +16423,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-editorial-manager", GbtiEditorialManager);
 
   // client-ui/src/elements/gbti-site-settings-manager.mjs
-  var CSS23 = `
+  var CSS22 = `
   :host { display:block; }
   .hint { font-size:12.5px; color:var(--muted); }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
@@ -17478,7 +16468,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client (superadmin) to manage site settings.</p>`);
         return;
       }
       if (!this._toggles) {
@@ -17486,14 +16476,14 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS23) + `<p class="muted">Loading site settings...</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Loading site settings...</p>`);
         return;
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
         return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc(t.label || t.key)}</span><span class="desc">${esc(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
-      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS22) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
@@ -17637,7 +16627,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-digest-manager.mjs
-  var CSS24 = `
+  var CSS23 = `
   :host { display:block; }
   .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
   .busy { opacity:.55; pointer-events:none; }
@@ -17751,27 +16741,27 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client (superadmin) to manage the digest.</p>`);
         return;
       }
       if (this._status === "idle") {
         this.load();
-        this.set(this.css(CSS24) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "loading") {
-        this.set(this.css(CSS24) + `<p class="muted">Loading the digest settings...</p>`);
+        this.set(this.css(CSS23) + `<p class="muted">Loading the digest settings...</p>`);
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS24) + `<p class="msg">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS23) + `<p class="msg">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
         });
         return;
       }
-      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
@@ -18370,7 +17360,7 @@ ${listStyleProseCss(".doc-blocks")}
     const words = L === "below" || L === "first" || L === "compact" || L === "text";
     return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
   }
-  var esc4 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc3 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function destinationHost(destination) {
     try {
@@ -18382,31 +17372,31 @@ ${listStyleProseCss(".doc-blocks")}
   function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
     const L = ctaLayoutOf(cta);
     const uses = layoutUses(L);
-    const href = esc4(hrefOverride || cta?.destination);
+    const href = esc3(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
     const dim = (k, v) => Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : "";
-    const img = (alt) => image && image.url ? `<img src="${esc4(image.url)}" alt="${esc4(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    const img = (alt) => image && image.url ? `<img src="${esc3(image.url)}" alt="${esc3(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
     if (L === "image") {
-      return `${linkOpen("pcta-io", ` aria-label="${esc4(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc4(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+      return `${linkOpen("pcta-io", ` aria-label="${esc3(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc3(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
     }
     const parts = [];
     if (L === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
-    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc4(cta?.label)}</p><p class="pcta-line">${esc4(cta?.line)}</p></div></div>`);
+    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc3(cta?.label)}</p><p class="pcta-line">${esc3(cta?.line)}</p></div></div>`);
     const showTitle = L === "below" || L === "first" || L === "text" || L === "html" && cta?.showTitle !== false;
-    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc4(cta?.label)}</p>`);
-    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc4(cta?.line)}</p>`);
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc3(cta?.label)}</p>`);
+    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc3(cta?.line)}</p>`);
     if (L === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
     if (L === "html") {
       const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
       if (preview) {
-        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc4(h)}</span>`).join("");
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc3(h)}</span>`).join("");
         parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
       } else {
         parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
       }
     }
-    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc4(cta?.button)}</span>${ARROW}${linkClose}`);
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc3(cta?.button)}</span>${ARROW}${linkClose}`);
     return parts.join("");
   }
   var CTA_CARD_CSS = `
@@ -18843,7 +17833,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/cta-manager-view.mjs
-  var esc5 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc4 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var SVG2 = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -18866,23 +17856,23 @@ ${listStyleProseCss(".doc-blocks")}
     return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
   }
   var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
-  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc5(problem)}).</p>
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc4(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
     const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
-      return `<li class="${on ? "c" : "c off"}" data-cta="${esc5(c.id)}">
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc4(c.id)}">
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
-        <div class="top"><span class="label">${esc5(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc5(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc5(rowSummary2(c))}</p>
-        <p class="sub mono">${esc5(c.partner || "no partner")} · on ${plural(n)}</p>
-        ${clicks ? `<p class="sub mono tracked">${esc5(clicks)}</p>` : ""}
+        <div class="top"><span class="label">${esc4(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc4(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc4(rowSummary2(c))}</p>
+        <p class="sub mono">${esc4(c.partner || "no partner")} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc4(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
-        <button class="lk" type="button" data-act="edit" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>Edit</button>
-        <button class="lk" type="button" data-act="toggle" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+        <button class="lk" type="button" data-act="edit" data-id="${esc4(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc4(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
       </div>
     </li>`;
     }).join("");
@@ -18891,7 +17881,7 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
       <button class="btn" type="button" data-act="new">New call-to-action</button>
     </div>
-    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc5(msg)}</p>` : ""}
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc4(msg)}</p>` : ""}
     <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
   </div>`;
   }
@@ -18900,13 +17890,13 @@ ${listStyleProseCss(".doc-blocks")}
   function field(st, k, label, { wide = false, area = false, placeholder = "" } = {}) {
     const err = shownError(st, k);
     const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
-    const control = area ? `<textarea data-f="${k}" placeholder="${esc5(placeholder)}">${esc5(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc5(st.d[k])}" placeholder="${esc5(placeholder)}">`;
-    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc5(err)}</span></label>`;
+    const control = area ? `<textarea data-f="${k}" placeholder="${esc4(placeholder)}">${esc4(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc4(st.d[k])}" placeholder="${esc4(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc4(err)}</span></label>`;
   }
   function layoutSection(st) {
     const tiles = CTA_LAYOUTS.map((k) => `<button class="${st.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st.d.layout === k}">
-    ${SKETCH[k]}<div><p class="tile-n">${esc5(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc5(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
-    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc5(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+    ${SKETCH[k]}<div><p class="tile-n">${esc4(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc4(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc4(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
   }
   function wordsSection(st) {
     const u = layoutUses(st.d.layout);
@@ -18917,7 +17907,7 @@ ${listStyleProseCss(".doc-blocks")}
     ${u.line ? field(st, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
     ${u.button ? field(st, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
     ${u.link ? field(st, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
-    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc5(st.d.note)}</textarea></label>
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc4(st.d.note)}</textarea></label>
     <label class="check fld wide"><input type="checkbox" data-f="enabled"${st.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
   </div></div>`;
   }
@@ -18937,8 +17927,8 @@ ${listStyleProseCss(".doc-blocks")}
       const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
       const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
       body = `<div class="imgrow">
-      ${img.url ? `<img src="${esc5(img.url)}" alt="" data-stored-img>` : ""}
-      <div class="imgmeta"><p class="imgname">${esc5(name)}</p>
+      ${img.url ? `<img src="${esc4(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc4(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
         <p class="imginfo"><span class="shield">${SVG2.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
@@ -18946,24 +17936,24 @@ ${listStyleProseCss(".doc-blocks")}
     </div>`;
     }
     return `${body}${st.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
-    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc5(err)}</p>
-    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc5(st.imageMsg)}</p>` : ""}`;
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc4(err)}</p>
+    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc4(st.imageMsg)}</p>` : ""}`;
   }
   function iconResults(st) {
     const ic3 = st.icons;
-    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc5(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc4(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
     if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
     const q = st.iconQuery.trim();
     const count2 = !q ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
     const sel = st.d.icon;
-    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc5(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc5(i.name)}</span></button>`).join("");
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc4(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc4(i.name)}</span></button>`).join("");
     return `<p class="ip-count">${count2}</p><div class="ip-grid">${cells}</div>`;
   }
   function iconSection(st) {
     const sel = st.d.icon;
-    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc5(s.id)}">${esc5(s.name)}</button>`).join("") : "";
+    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc4(s.id)}">${esc4(s.name)}</button>`).join("") : "";
     const pop = st.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc5(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc4(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
       <div data-region="icons">${iconResults(st)}</div>
     </div>` : "";
@@ -18971,46 +17961,46 @@ ${listStyleProseCss(".doc-blocks")}
     <div class="ip-row">
       <button class="${st.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc5(sel ? sel.name : "Choose an icon")}</b><span>${esc5(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
+        <span class="ip-name"><b>${esc4(sel ? sel.name : "Choose an icon")}</b><span>${esc4(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
   }
   function foundLine(found) {
     if (!found.length) return "";
-    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc5(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc5(h)}">Allow</button>`).join("")}</div>`;
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc4(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc4(h)}">Allow</button>`).join("")}</div>`;
   }
   function htmlSection(st, found) {
     const d = st.d;
-    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc5(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc5(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc4(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc4(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
     <div class="warnbox">${SVG2.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
-        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc5(d.html)}</textarea>
-        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc5(err)}</span></label>
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc4(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc4(err)}</span></label>
     </div>
     <div style="margin-top: 16px">
       <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
       ${hosts}
       <div data-region="found">${foundLine(found)}</div>
-      <div class="hostadd"><input type="text" data-q="host" value="${esc5(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
-      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc5(st.hostErr)}</p>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc4(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc4(st.hostErr)}</p>
     </div></div>`;
   }
   function candidateList(st) {
     if (!st.pageQuery.trim()) return "";
     if (!st.cands.length) return '<p class="empty">No pages match.</p>';
-    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc5(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc5(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc4(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc4(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
   }
   function pagesSection(st) {
     const d = st.d;
-    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc5(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc5(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc4(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc4(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc5(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc4(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st)}</div></div>`;
   }
   function previewCard(st) {
@@ -19040,7 +18030,7 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="segs">${seg(!st.pvPhone, "pv-side", "Sidebar")}${seg(st.pvPhone, "pv-phone", "Phone")}</div>
     </div>
     <div class="${st.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st)}</div>
-    <p class="pv-note" data-region="pvnote">${esc5(previewNote(st.d))}</p>
+    <p class="pv-note" data-region="pvnote">${esc4(previewNote(st.d))}</p>
   </aside>`;
   }
   function editorView(st, found = []) {
@@ -19048,11 +18038,11 @@ ${listStyleProseCss(".doc-blocks")}
     return `<div class="mgr">
     <div class="ed-head">
       <button class="lk" type="button" data-act="back">${SVG2.back}All call-to-actions</button>
-      <h3 class="ed-title" data-region="title">${esc5(editTitle(st))}</h3>
+      <h3 class="ed-title" data-region="title">${esc4(editTitle(st))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
         <button class="btn" type="button" data-act="save"${st.saving ? " disabled" : ""}>${st.saving ? "Saving…" : st.isNew ? "Add call-to-action" : "Save"}</button></div>
     </div>
-    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc5(st.msg)}</p>
+    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc4(st.msg)}</p>
     <div class="ed-grid">
       <div class="ed-form">
         ${layoutSection(st)}
@@ -19904,7 +18894,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS25 = `
+  var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -19961,7 +18951,7 @@ ${listStyleProseCss(".doc-blocks")}
   var CACHE_FRESH_MS = 3e4;
   var QUEUE_TRIED_AT = 0;
   var QUEUE_REFRESH_FAILED = false;
-  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
+  var SRC_LABEL = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
   var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
     // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
@@ -20010,11 +19000,11 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS25) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS24) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -20023,7 +19013,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS25) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -20033,13 +19023,13 @@ ${listStyleProseCss(".doc-blocks")}
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
       <div class="fbar">
         <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
-        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL2).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
+        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
         <select data-f="trigger" aria-label="Filter by trigger">${opt("all", "Manual + auto", this._fTrigger)}${opt("manual", "Manual only", this._fTrigger)}${opt("auto", "Auto only", this._fTrigger)}</select>
         <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
         <span class="count">${rows.length} item${rows.length === 1 ? "" : "s"}</span>
@@ -20080,7 +19070,7 @@ ${listStyleProseCss(".doc-blocks")}
       const t = it.url ? `<a class="t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(title)}</a>` : `<span class="t">${esc(title)}</span>`;
       return `<tr>
       <td><span class="st st-${esc(st)}"><span class="dot"></span>${esc(st)}</span></td>
-      <td><span class="src">${esc(SRC_LABEL2[it.source] || it.source || "")}</span></td>
+      <td><span class="src">${esc(SRC_LABEL[it.source] || it.source || "")}</span></td>
       <td class="ti">${t}${manual}${flags}${sub ? `<span class="r">${esc(sub)}</span>` : ""}</td>
       <td><span class="chs">${this._channels(it.perChannel)}</span></td>
       <td class="wh">${when ? esc(new Date(when).toLocaleString()) : ""}</td>
@@ -20128,9 +19118,182 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
+  // membership/syndication-config-core.mjs
+  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "bluesky", "reddit", "devto", "dailydev"]);
+  var CHANNEL_CAPABILITY = Object.freeze({
+    discord: "auto",
+    "discord-category": "auto",
+    // sow-260 (2026-08-26): MANUAL. Reddit banned the gbti-labs account for self-promotion on 2026-08-25 and
+    // reinstated it the same day, but the ban DESTROYED the OAuth application the adapter authenticated as,
+    // which is why every token refresh returned 401 afterwards. It cannot be recreated: Reddit closed
+    // self-service app creation in November 2025 under the Responsible Builder Policy, and the create-app form
+    // refuses even after registering for API access. Devvit, the platform Reddit now points developers to,
+    // was investigated and rejected (it cannot fetch a first-party domain, and it would post from a bot
+    // account holding full mod permissions). The owner's call is that SELECTIVE pushing is the goal anyway,
+    // and a human choosing what to post needs no API at all. Same shape as x/dailydev/linkedin below: the
+    // adapter still renders the text, a superadmin posts it by hand from the Social Queue.
+    reddit: "manual",
+    devto: "auto",
+    // DORMANT (sow-217, 2026-08-12): Hashnode is RETIRED and out of CHANNELS, so this entry is never consulted.
+    // Kept deliberately so a revival is a one-line change rather than a rebuild. History: SOW-134 built the
+    // full-body auto adapter; Hashnode paywalled its whole GraphQL API behind Pro on 2026-05-13 (reads included,
+    // not just publishing), which demoted this to 'manual'; then it required a custom domain on Pro, which is
+    // what ended it. Revival = re-add 'hashnode' to CHANNELS + the two hand-maintained duplicates, and flip this
+    // to 'auto' only if the Pro plan is actually bought (the adapter cannot work without it).
+    hashnode: "manual",
+    mastodon: "auto",
+    // SOW-123
+    bluesky: "auto",
+    // SOW-122
+    x: "manual",
+    // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+    dailydev: "manual",
+    // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
+    linkedin: "manual"
+    // SOW-127: manual-assist until Community Management API access is granted (business
+    // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
+    // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
+  });
+  function channelCapability(name) {
+    return CHANNEL_CAPABILITY[name] ?? "building";
+  }
+  var AUTO_TYPES = Object.freeze(["share", "post", "project", "prompt"]);
+  var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
+  var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
+  var AUTO_MODES = Object.freeze(["off", "on", "on-manual"]);
+  function defaultAutoMode(type) {
+    return type === "share" ? "off" : "on";
+  }
+  var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
+  var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
+  var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
+    enabled: false,
+    // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
+    open_threshold: 2,
+    // distinct members opening the detail view before the item auto-posts
+    tier: "paid",
+    // whose engagement counts (owner-toggleable in the admin Channels tab)
+    comment_autopost: true
+    // one comment posts immediately (deliberate engagement)
+  });
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "project", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
+  var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
+  var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
+  var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
+  var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Supporter]({member-url}).** Originally published on [gbti.network]({url}).";
+  var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Supporter.** Originally published on [gbti.network]({url}).";
+  var DEFAULT_DEVTO_BODY = "{body}";
+  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or project developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
+  var DEFAULT_TEMPLATES = Object.freeze({
+    share: DEFAULT_SHARE_FORMAT,
+    // sow-180: content-first, no member credit
+    post: DEFAULT_FORMAT,
+    project: DEFAULT_FORMAT,
+    prompt: DEFAULT_FORMAT,
+    "reddit-body": DEFAULT_REDDIT_BODY,
+    "reddit-comment": DEFAULT_REDDIT_COMMENT,
+    "devto-intro": DEFAULT_DEVTO_INTRO,
+    "devto-body": DEFAULT_DEVTO_BODY,
+    // SOW-138
+    "devto-footer": DEFAULT_DEVTO_FOOTER,
+    // SOW-134: Hashnode reuses the same CTA footer as dev.to (both are full-body crossposts with a canonical link
+    // home); admins can diverge them per channel. SOW-140: the byline default is NAME-based here (not the dev.to
+    // handle), since a member's dev.to profile is the wrong platform to mention on Hashnode.
+    "hashnode-intro": DEFAULT_HASHNODE_INTRO,
+    "hashnode-body": DEFAULT_DEVTO_BODY,
+    // SOW-138
+    "hashnode-footer": DEFAULT_DEVTO_FOOTER
+  });
+  var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
+  var SHARE_STUB_FORMAT = 'A members-only link on the GBTI Network: "{title}". {short-description} Join to open it: {url}';
+  var DEFAULT_STUB_TEMPLATES = Object.freeze({
+    share: SHARE_STUB_FORMAT,
+    // sow-180: content-first, no member credit
+    post: STUB_FORMAT,
+    project: STUB_FORMAT,
+    prompt: STUB_FORMAT,
+    "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
+    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.",
+    "hashnode-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
+    // SOW-134
+  });
+  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
+  var DISCORD_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}" {url}';
+  var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+  var DISCORD_CAT_SHARE_STUB = 'A members-only link in {category}: "{title}" {url}';
+  var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
+  var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var X_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
+  var LINKEDIN_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Join the co-op to unlock it. {url}';
+  var LINKEDIN_SHARE_STUB = 'A members-only find on the GBTI Network: "{title}". Join the co-op to open it. {url}';
+  var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
+  var BLUESKY_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it.';
+  var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var MASTODON_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
+  var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var DAILYDEV_SHARE_STUB = 'A members-only link on the GBTI Network: "{title}". Join to open it. {url}';
+  var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
+    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, project: DISCORD_STUB, prompt: DISCORD_STUB }),
+    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, project: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
+    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, project: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
+    // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
+    // its members stub is sentence-shaped like the other manual channels.
+    hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, project: X_STUB, prompt: X_STUB }),
+    linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, project: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
+    // SOW-127
+    dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, project: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+    // SOW-135
+    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, project: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, project: MASTODON_STUB, prompt: MASTODON_STUB })
+  });
+  var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
+    enabled: false,
+    require_approval: true,
+    // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
+    hold_minutes: 60,
+    classify: "ai",
+    // SOW-087: the share category suggestion mode
+    templates: DEFAULT_TEMPLATES,
+    // SOW-087: per-type Discord templates (missing/empty type = its default)
+    channel_templates: Object.freeze({}),
+    // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
+    stub_templates: Object.freeze({}),
+    // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
+    channel_templates_stub: Object.freeze({}),
+    // SOW-088 Proposal A: per-channel stub overrides
+    news_engagement: DEFAULT_NEWS_ENGAGEMENT,
+    // SOW-111: engagement-triggered news auto-share
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
+    // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
+    // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
+    // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
+    // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
+    manual_assist_channels: Object.freeze([]),
+    // SOW-125: per-type-per-channel auto-share modes (off | on | on-manual). Layers on `channels` (a channel must
+    // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
+    auto_matrix: buildDefaultAutoMatrix(),
+    // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
+    // sooner/later than another for the same item.
+    channel_hold_minutes: Object.freeze({})
+  });
+  function buildDefaultAutoMatrix() {
+    const m = {};
+    for (const t of AUTO_TYPES) {
+      m[t] = {};
+      for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t);
+      Object.freeze(m[t]);
+    }
+    return Object.freeze(m);
+  }
+
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS26 = `
+  var CSS25 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -20629,7 +19792,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -20638,7 +19801,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS26) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS25) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -20651,7 +19814,7 @@ ${listStyleProseCss(".doc-blocks")}
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS26) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS25) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -20664,7 +19827,7 @@ ${listStyleProseCss(".doc-blocks")}
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS26) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS25) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -21272,7 +20435,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS27 = `
+  var CSS26 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -21308,7 +20471,7 @@ ${listStyleProseCss(".doc-blocks")}
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS27) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS26) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -21345,7 +20508,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS28 = `
+  var CSS27 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -21385,7 +20548,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS28) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS27) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -21618,7 +20781,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS29 = `
+  var CSS28 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -21682,7 +20845,7 @@ ${BLOCKED_PILL_CSS}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS29));
+      this.set(this.css(CSS28));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -21755,13 +20918,13 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS29));
+        this.set(this.css(CSS28));
         return;
       }
       const u = esc(this._username || "");
       const av = `https://github.com/${u}.png?size=80`;
       if (!this._loaded) {
-        this.set(this.css(CSS29) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS28) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -21773,7 +20936,7 @@ ${BLOCKED_PILL_CSS}
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS29) + `
+      this.set(this.css(CSS28) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -21860,7 +21023,7 @@ ${BLOCKED_PILL_CSS}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS30 = `
+  var CSS29 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -21922,7 +21085,7 @@ ${BLOCKED_PILL_CSS}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS30) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS29) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -22063,7 +21226,7 @@ ${BLOCKED_PILL_CSS}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS31 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -22269,11 +21432,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS31) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS30) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS31) + body);
+      this.set(this.css(CSS30) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -22384,7 +21547,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS32 = `
+  var CSS31 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -22510,10 +21673,10 @@ ${BLOCKED_PILL_CSS}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS31) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS31) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -22530,7 +21693,7 @@ ${BLOCKED_PILL_CSS}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS31) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -22556,12 +21719,12 @@ ${BLOCKED_PILL_CSS}
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS32) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS31) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS32) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS31) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -22633,7 +21796,7 @@ ${BLOCKED_PILL_CSS}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS32) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS31) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -22676,21 +21839,21 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _splash() {
-      this.set(this.css(CSS32) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS31) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS33 = `
+  var CSS32 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS33) + `<div class="stack">
+      this.set(this.css(CSS32) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -22700,7 +21863,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS34 = `
+  var CSS33 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -22718,7 +21881,7 @@ ${BLOCKED_PILL_CSS}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS34) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS33) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -22727,7 +21890,7 @@ ${BLOCKED_PILL_CSS}
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS34) + `<div class="splash">
+        this.set(this.css(CSS33) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc(c.heading)}</h2>
         <p>${esc(c.body)}</p>
@@ -22735,7 +21898,7 @@ ${BLOCKED_PILL_CSS}
       </div>`);
         return;
       }
-      this.set(this.css(CSS34) + `<slot></slot>`);
+      this.set(this.css(CSS33) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -22743,7 +21906,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS2 = 15e3;
   var POLL_MAX = 20;
-  var CSS35 = `
+  var CSS34 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -22814,7 +21977,7 @@ ${BLOCKED_PILL_CSS}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS35) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS34) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -23012,7 +22175,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE13 = "https://gbti.network";
-  var CSS36 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -23084,15 +22247,15 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -23108,7 +22271,7 @@ ${BLOCKED_PILL_CSS}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS35) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -23168,7 +22331,7 @@ ${BLOCKED_PILL_CSS}
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
   var CHECK4 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var CSS37 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
   .sw { position:relative; flex:1; min-width:220px; }
@@ -23258,14 +22421,14 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS37) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS37) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS36) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS37) + `
+      this.set(this.css(CSS36) + `
       <div class="bar">
         <div class="sw"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" /></div>
         <span class="cnt" data-cnt></span>
@@ -23330,7 +22493,7 @@ ${BLOCKED_PILL_CSS}
   var SITE15 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS38 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -23413,11 +22576,11 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS38) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -23426,7 +22589,7 @@ ${BLOCKED_PILL_CSS}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS38) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -23595,6 +22758,159 @@ ${BLOCKED_PILL_CSS}
     return { steps, complete: outstanding === 0, known, outstanding };
   }
 
+  // client-ui/src/social-icons.mjs
+  var LINKEDIN_PATH = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
+  var WEBSITE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z";
+  var SOCIAL_ICON_PATHS = {
+    github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
+    x: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z",
+    bluesky: "M5.202 2.857C7.954 4.922 10.913 9.11 12 11.358c1.087-2.247 4.046-6.436 6.798-8.501C20.783 1.366 24 .213 24 3.883c0 .732-.42 6.156-.667 7.037-.856 3.061-3.978 3.842-6.755 3.37 4.854.826 6.089 3.562 3.422 6.299-5.065 5.196-7.28-1.304-7.847-2.97-.104-.305-.152-.448-.153-.327 0-.121-.05.022-.153.327-.568 1.666-2.782 8.166-7.847 2.97-2.667-2.737-1.432-5.473 3.422-6.3-2.777.473-5.899-.308-6.755-3.369C.42 10.04 0 4.615 0 3.883c0-3.67 3.217-2.517 5.202-1.026",
+    youtube: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
+    devto: "M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.91-.02-1.96-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.73-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.3zm4.68 5.45c-.17.43-.64.79-1 .79-.18 0-.45-.15-.67-.39-.32-.32-.45-.63-.82-2.08l-.9-3.39-.45-1.67h.76c.4 0 .75.02.75.05 0 .06 1.16 4.54 1.26 4.83.04.15.32-.7.73-2.3l.66-2.52.74-.04c.4-.02.73 0 .73.04 0 .14-1.67 6.38-1.8 6.68z",
+    reddit: "M12 0C5.373 0 0 5.373 0 12c0 3.314 1.343 6.314 3.515 8.485l-2.286 2.286C.775 23.225 1.097 24 1.738 24H12c6.627 0 12-5.373 12-12S18.627 0 12 0Zm4.388 3.199c1.104 0 1.999.895 1.999 1.999 0 1.105-.895 2-1.999 2-.946 0-1.739-.657-1.947-1.539v.002c-1.147.162-2.032 1.15-2.032 2.341v.007c1.776.067 3.4.567 4.686 1.363.473-.363 1.064-.58 1.707-.58 1.547 0 2.802 1.254 2.802 2.802 0 1.117-.655 2.081-1.601 2.531-.088 3.256-3.637 5.876-7.997 5.876-4.361 0-7.905-2.617-7.998-5.87-.954-.447-1.614-1.415-1.614-2.538 0-1.548 1.255-2.802 2.803-2.802.645 0 1.239.218 1.712.585 1.275-.79 2.881-1.291 4.64-1.365v-.01c0-1.663 1.263-3.034 2.88-3.207.188-.911.993-1.595 1.959-1.595Zm-8.085 8.376c-.784 0-1.459.78-1.506 1.797-.047 1.016.64 1.429 1.426 1.429.786 0 1.371-.369 1.418-1.385.047-1.017-.553-1.841-1.338-1.841Zm7.406 0c-.786 0-1.385.824-1.338 1.841.047 1.017.634 1.385 1.418 1.385.785 0 1.473-.413 1.426-1.429-.046-1.017-.721-1.797-1.506-1.797Zm-3.703 4.013c-.974 0-1.907.048-2.77.135-.147.015-.241.168-.183.305.483 1.154 1.622 1.964 2.953 1.964 1.33 0 2.47-.81 2.953-1.964.057-.137-.037-.29-.184-.305-.863-.087-1.795-.135-2.769-.135Z",
+    discord: "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z",
+    linkedin: LINKEDIN_PATH,
+    website: WEBSITE_PATH,
+    // SOW-129: the comprehensive set (inlined from the same simple-icons package the site uses).
+    instagram: "M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077",
+    threads: "M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.478-2.256h.044c3.194.02 5.097 1.975 5.287 5.388.108.046.216.094.321.142 1.49.7 2.58 1.761 3.154 3.07.797 1.82.871 4.79-1.548 7.158-1.85 1.81-4.094 2.628-7.277 2.65Zm1.003-11.69c-.242 0-.487.007-.739.021-1.836.103-2.98.946-2.916 2.143.067 1.256 1.452 1.839 2.784 1.767 1.224-.065 2.818-.543 3.086-3.71a10.5 10.5 0 0 0-2.215-.221z",
+    tiktok: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
+    twitch: "M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z",
+    facebook: "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z",
+    dailydev: "M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z",
+    producthunt: "M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.805-1.799-1.801-1.799zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.199 0 2.321-1.881 4.201-4.201 4.201z",
+    rumble: "M14.4528 13.5458c.8064-.6542.9297-1.8381.2756-2.6445a1.8802 1.8802 0 0 0-.2756-.2756 21.2127 21.2127 0 0 0-4.3121-2.776c-1.066-.51-2.256.2-2.4261 1.414a23.5226 23.5226 0 0 0-.14 5.5021c.116 1.23 1.292 1.964 2.372 1.492a19.6285 19.6285 0 0 0 4.5062-2.704v-.008zm6.9322-5.4002c2.0335 2.228 2.0396 5.637.014 7.8723A26.1487 26.1487 0 0 1 8.2946 23.846c-2.6848.6713-5.4168-.914-6.1662-3.5781-1.524-5.2002-1.3-11.0803.17-16.3045.772-2.744 3.3521-4.4661 6.0102-3.832 4.9242 1.174 9.5443 4.196 13.0764 8.0121v.002z",
+    // SOW-131: audio, publishing, dev, and creator platforms (inlined from simple-icons).
+    soundcloud: "M23.999 14.165c-.052 1.796-1.612 3.169-3.4 3.169h-8.18a.68.68 0 0 1-.675-.683V7.862a.747.747 0 0 1 .452-.724s.75-.513 2.333-.513a5.364 5.364 0 0 1 2.763.755 5.433 5.433 0 0 1 2.57 3.54c.282-.08.574-.121.868-.12.884 0 1.73.358 2.347.992s.948 1.49.922 2.373ZM10.721 8.421c.247 2.98.427 5.697 0 8.672a.264.264 0 0 1-.53 0c-.395-2.946-.22-5.718 0-8.672a.264.264 0 0 1 .53 0ZM9.072 9.448c.285 2.659.37 4.986-.006 7.655a.277.277 0 0 1-.55 0c-.331-2.63-.256-5.02 0-7.655a.277.277 0 0 1 .556 0Zm-1.663-.257c.27 2.726.39 5.171 0 7.904a.266.266 0 0 1-.532 0c-.38-2.69-.257-5.21 0-7.904a.266.266 0 0 1 .532 0Zm-1.647.77a26.108 26.108 0 0 1-.008 7.147.272.272 0 0 1-.542 0 27.955 27.955 0 0 1 0-7.147.275.275 0 0 1 .55 0Zm-1.67 1.769c.421 1.865.228 3.5-.029 5.388a.257.257 0 0 1-.514 0c-.21-1.858-.398-3.549 0-5.389a.272.272 0 0 1 .543 0Zm-1.655-.273c.388 1.897.26 3.508-.01 5.412-.026.28-.514.283-.54 0-.244-1.878-.347-3.54-.01-5.412a.283.283 0 0 1 .56 0Zm-1.668.911c.4 1.268.257 2.292-.026 3.572a.257.257 0 0 1-.514 0c-.241-1.262-.354-2.312-.023-3.572a.283.283 0 0 1 .563 0Z",
+    mixcloud: "M2.462 8.596l1.372 6.49h.319l1.372-6.49h2.462v6.808H6.742v-5.68l.232-.81h-.402l-1.43 6.49H2.854l-1.44-6.49h-.391l.222.81v5.68H0V8.596zM24 8.63v1.429L21.257 12 24 13.941v1.43l-3.235-2.329h-.348l-3.226 2.329v-1.43l2.734-1.94-2.733-1.942V8.63l3.225 2.338h.348zm-7.869 2.75v1.24H9.304v-1.24z",
+    spotify: "M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z",
+    bandcamp: "M0 18.75l7.437-13.5H24l-7.438 13.5H0z",
+    wordpress: "M21.469 6.825c.84 1.537 1.318 3.3 1.318 5.175 0 3.979-2.156 7.456-5.363 9.325l3.295-9.527c.615-1.54.82-2.771.82-3.864 0-.405-.026-.78-.07-1.11m-7.981.105c.647-.03 1.232-.105 1.232-.105.582-.075.514-.93-.067-.899 0 0-1.755.135-2.88.135-1.064 0-2.85-.15-2.85-.15-.585-.03-.661.855-.075.885 0 0 .54.061 1.125.09l1.68 4.605-2.37 7.08L5.354 6.9c.649-.03 1.234-.1 1.234-.1.585-.075.516-.93-.065-.896 0 0-1.746.138-2.874.138-.2 0-.438-.008-.69-.015C4.911 3.15 8.235 1.215 12 1.215c2.809 0 5.365 1.072 7.286 2.833-.046-.003-.091-.009-.141-.009-1.06 0-1.812.923-1.812 1.914 0 .89.513 1.643 1.06 2.531.411.72.89 1.643.89 2.977 0 .915-.354 1.994-.821 3.479l-1.075 3.585-3.9-11.61.001.014zM12 22.784c-1.059 0-2.081-.153-3.048-.437l3.237-9.406 3.315 9.087c.024.053.05.101.078.149-1.12.393-2.325.609-3.582.609M1.211 12c0-1.564.336-3.05.935-4.39L7.29 21.709C3.694 19.96 1.212 16.271 1.211 12M12 0C5.385 0 0 5.385 0 12s5.385 12 12 12 12-5.385 12-12S18.615 0 12 0",
+    substack: "M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z",
+    medium: "M4.21 0A4.201 4.201 0 0 0 0 4.21v15.58A4.201 4.201 0 0 0 4.21 24h15.58A4.201 4.201 0 0 0 24 19.79v-1.093c-.137.013-.278.02-.422.02-2.577 0-4.027-2.146-4.09-4.832a7.592 7.592 0 0 1 .022-.708c.093-1.186.475-2.241 1.105-3.022a3.885 3.885 0 0 1 1.395-1.1c.468-.237 1.127-.367 1.664-.367h.023c.101 0 .202.004.303.01V4.211A4.201 4.201 0 0 0 19.79 0Zm.198 5.583h4.165l3.588 8.435 3.59-8.435h3.864v.146l-.019.004c-.705.16-1.063.397-1.063 1.254h-.003l.003 10.274c.06.676.424.885 1.063 1.03l.02.004v.145h-4.923v-.145l.019-.005c.639-.144.994-.353 1.054-1.03V7.267l-4.745 11.15h-.261L6.15 7.569v9.445c0 .857.358 1.094 1.063 1.253l.02.004v.147H4.405v-.147l.019-.004c.705-.16 1.065-.397 1.065-1.253V6.987c0-.857-.358-1.094-1.064-1.254l-.018-.004zm19.25 3.668c-1.086.023-1.733 1.323-1.813 3.124H24V9.298a1.378 1.378 0 0 0-.342-.047Zm-1.862 3.632c-.1 1.756.86 3.239 2.204 3.634v-3.634z",
+    hashnode: "M22.351 8.019l-6.37-6.37a5.63 5.63 0 0 0-7.962 0l-6.37 6.37a5.63 5.63 0 0 0 0 7.962l6.37 6.37a5.63 5.63 0 0 0 7.962 0l6.37-6.37a5.63 5.63 0 0 0 0-7.962zM12 15.953a3.953 3.953 0 1 1 0-7.906 3.953 3.953 0 0 1 0 7.906z",
+    peerlist: "M12 0C2.667 0 0 2.667 0 12s2.673 12 12 12 12-2.667 12-12S21.327 0 12 0zm8.892 20.894c-1.57 1.569-4.247 2.249-8.892 2.249s-7.322-.68-8.892-2.25C1.735 19.522 1.041 17.3.89 13.654A39.74 39.74 0 0 1 .857 12c0-1.162.043-2.201.13-3.13.177-1.859.537-3.278 1.106-4.366.284-.544.62-1.006 1.013-1.398s.854-.729 1.398-1.013C5.592 1.524 7.01 1.164 8.87.988 9.799.9 10.838.858 12 .858c4.645 0 7.322.68 8.892 2.248 1.569 1.569 2.25 4.246 2.25 8.894s-.681 7.325-2.25 8.894zM20.538 3.46C19.064 1.986 16.51 1.357 12 1.357c-4.513 0-7.067.629-8.54 2.103C1.986 4.933 1.357 7.487 1.357 12c0 4.511.63 7.065 2.105 8.54C4.936 22.014 7.49 22.643 12 22.643s7.064-.629 8.538-2.103c1.475-1.475 2.105-4.029 2.105-8.54s-.63-7.065-2.105-8.54zM14.25 16.49a6.097 6.097 0 0 1-2.442.59v2.706H10.45v.357H6.429V5.57h.357V4.214h5.676c3.565 0 6.467 2.81 6.467 6.262 0 2.852-1.981 5.26-4.68 6.013zm-1.788-8.728H10.45v5.428h2.011c1.532 0 2.802-1.2 2.802-2.714s-1.27-2.714-2.802-2.714zm.901 4.351c.117-.239.186-.502.186-.78 0-1.01-.855-1.857-1.945-1.857h-.296V8.62h1.154c1.09 0 1.945.847 1.945 1.857 0 .705-.422 1.323-1.044 1.637zm4.104 1.493c.043-.063.083-.129.123-.194a5.653 5.653 0 0 0 .526-1.103 5.56 5.56 0 0 0 .11-.362c.02-.076.042-.15.06-.227a5.58 5.58 0 0 0 .073-.41c.01-.068.025-.134.032-.203.024-.207.038-.417.038-.63 0-3.198-2.687-5.763-5.967-5.763H7.286v14.572h4.022v-3.048h1.154c1.43 0 2.747-.488 3.778-1.303a5.92 5.92 0 0 0 .46-.406c.035-.034.066-.07.1-.105.107-.11.21-.22.308-.337.044-.053.084-.108.126-.162.081-.104.16-.21.233-.319zm-5.005 1.775H10.45v3.048H8.143V5.57h4.319c2.837 0 5.11 2.211 5.11 4.905s-2.273 4.905-5.11 4.905z",
+    gitlab: "m23.6004 9.5927-.0337-.0862L20.3.9814a.851.851 0 0 0-.3362-.405.8748.8748 0 0 0-.9997.0539.8748.8748 0 0 0-.29.4399l-2.2055 6.748H7.5375l-2.2057-6.748a.8573.8573 0 0 0-.29-.4412.8748.8748 0 0 0-.9997-.0537.8585.8585 0 0 0-.3362.4049L.4332 9.5015l-.0325.0862a6.0657 6.0657 0 0 0 2.0119 7.0105l.0113.0087.03.0213 4.976 3.7264 2.462 1.8633 1.4995 1.1321a1.0085 1.0085 0 0 0 1.2197 0l1.4995-1.1321 2.4619-1.8633 5.006-3.7489.0125-.01a6.0682 6.0682 0 0 0 2.0094-7.003z",
+    stackoverflow: "M15.725 0l-1.72 1.277 6.39 8.588 1.716-1.277L15.725 0zm-3.94 3.418l-1.369 1.644 8.225 6.85 1.369-1.644-8.225-6.85zm-3.15 4.465l-.905 1.94 9.702 4.517.904-1.94-9.701-4.517zm-1.85 4.86l-.44 2.093 10.473 2.201.44-2.092-10.473-2.203zM1.89 15.47V24h19.19v-8.53h-2.133v6.397H4.021v-6.396H1.89zm4.265 2.133v2.13h10.66v-2.13H6.154Z",
+    patreon: "M22.957 7.21c-.004-3.064-2.391-5.576-5.191-6.482-3.478-1.125-8.064-.962-11.384.604C2.357 3.231 1.093 7.391 1.046 11.54c-.039 3.411.302 12.396 5.369 12.46 3.765.047 4.326-4.804 6.068-7.141 1.24-1.662 2.836-2.132 4.801-2.618 3.376-.836 5.678-3.501 5.673-7.031Z",
+    kofi: "M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298",
+    telegram: "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
+  };
+  function socialIcon(key, size = 15) {
+    const d = SOCIAL_ICON_PATHS[String(key || "").toLowerCase()];
+    if (!d) return "";
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="currentColor"><path d="${d}"/></svg>`;
+  }
+  var SOCIAL_KEYS = [
+    // sow-159: 'mastodon' removed from the offered-keys enumerator (retirement); its icon path + label +
+    // URL-builder below stay on disk inert so re-enabling is just re-adding the key here.
+    "github",
+    "website",
+    "x",
+    "bluesky",
+    "linkedin",
+    "youtube",
+    "discord",
+    "reddit",
+    "devto",
+    "instagram",
+    "threads",
+    "tiktok",
+    "twitch",
+    "facebook",
+    "dailydev",
+    "producthunt",
+    "rumble",
+    // SOW-131: audio, publishing, dev, and creator platforms.
+    "soundcloud",
+    "mixcloud",
+    "spotify",
+    "bandcamp",
+    "wordpress",
+    "substack",
+    "medium",
+    "hashnode",
+    "peerlist",
+    "gitlab",
+    "stackoverflow",
+    "patreon",
+    "kofi",
+    "telegram"
+  ];
+  var SOCIAL_LABELS = {
+    github: "GitHub",
+    website: "Website",
+    x: "X",
+    bluesky: "Bluesky",
+    linkedin: "LinkedIn",
+    youtube: "YouTube",
+    discord: "Discord",
+    reddit: "Reddit",
+    devto: "Dev.to",
+    instagram: "Instagram",
+    threads: "Threads",
+    tiktok: "TikTok",
+    twitch: "Twitch",
+    facebook: "Facebook",
+    dailydev: "daily.dev",
+    producthunt: "Product Hunt",
+    rumble: "Rumble",
+    soundcloud: "SoundCloud",
+    mixcloud: "Mixcloud",
+    spotify: "Spotify",
+    bandcamp: "Bandcamp",
+    wordpress: "WordPress",
+    substack: "Substack",
+    medium: "Medium",
+    hashnode: "Hashnode",
+    peerlist: "Peerlist",
+    gitlab: "GitLab",
+    stackoverflow: "Stack Overflow",
+    patreon: "Patreon",
+    kofi: "Ko-fi",
+    telegram: "Telegram"
+  };
+  var SOCIAL_URL_BASE = {
+    github: "https://github.com/",
+    x: "https://x.com/",
+    bluesky: "https://bsky.app/profile/",
+    youtube: "https://www.youtube.com/@",
+    devto: "https://dev.to/",
+    reddit: "https://www.reddit.com/user/",
+    linkedin: "https://www.linkedin.com/in/",
+    instagram: "https://www.instagram.com/",
+    threads: "https://www.threads.net/@",
+    tiktok: "https://www.tiktok.com/@",
+    twitch: "https://www.twitch.tv/",
+    facebook: "https://www.facebook.com/",
+    dailydev: "https://app.daily.dev/",
+    producthunt: "https://www.producthunt.com/@",
+    rumble: "https://rumble.com/user/",
+    // SOW-131:
+    soundcloud: "https://soundcloud.com/",
+    mixcloud: "https://www.mixcloud.com/",
+    wordpress: "https://profiles.wordpress.org/",
+    substack: "https://substack.com/@",
+    medium: "https://medium.com/@",
+    hashnode: "https://hashnode.com/@",
+    peerlist: "https://peerlist.io/",
+    gitlab: "https://gitlab.com/",
+    patreon: "https://www.patreon.com/",
+    kofi: "https://ko-fi.com/",
+    telegram: "https://t.me/"
+  };
+  function buildSocialUrl(key, raw) {
+    const value = String(raw == null ? "" : raw).trim();
+    if (!value) return "";
+    const k = String(key || "").toLowerCase();
+    if (/^https?:\/\//i.test(value)) return value;
+    if (k === "discord") return value;
+    if (k === "website") return "https://" + value.replace(/^\/+/, "");
+    const handle = value.replace(/^@+/, "");
+    const base = SOCIAL_URL_BASE[k];
+    return base ? base + handle : value;
+  }
+
   // client-ui/src/own-profile.mjs
   async function readOwnProfile(client, { identity } = {}) {
     if (!client?.getContentItem) return { state: "failed", path: null, item: null };
@@ -23686,7 +23002,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS39 = `
+  var CSS38 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -23727,7 +23043,7 @@ ${BLOCKED_PILL_CSS}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS39) + html : "");
+      this.set(html ? this.css(CSS38) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
@@ -23780,7 +23096,7 @@ ${BLOCKED_PILL_CSS}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-  var CSS40 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -23964,19 +23280,19 @@ ${BLOCKED_PILL_CSS}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS40) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS39) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS40) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS39) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS40) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS39) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS40) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS39) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -23986,7 +23302,7 @@ ${BLOCKED_PILL_CSS}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS40) + sections);
+      this.set(this.css(CSS39) + sections);
       this._wire();
     }
     _identity(m) {
@@ -24253,7 +23569,7 @@ ${BLOCKED_PILL_CSS}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS41 = `
+  var CSS40 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -24828,7 +24144,7 @@ ${BLOCKED_PILL_CSS}
       if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS41) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS40) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -24864,7 +24180,7 @@ ${BLOCKED_PILL_CSS}
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS41) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS40) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -25273,7 +24589,7 @@ ${BLOCKED_PILL_CSS}
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS42 = `
+  var CSS41 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -25422,7 +24738,7 @@ ${BLOCKED_PILL_CSS}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS42) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS41) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -25477,7 +24793,7 @@ ${BLOCKED_PILL_CSS}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS43 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -25582,11 +24898,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS43) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS42) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS43) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS42) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -25609,7 +24925,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE18}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS43) + `
+      this.set(this.css(CSS42) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -25710,7 +25026,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS44 = `
+  var CSS43 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -25870,12 +25186,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS43) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS44) + head + `<div data-body></div>`);
+      this.set(this.css(CSS43) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -25973,10 +25289,10 @@ ${BLOCKED_PILL_CSS}
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count2 = s.count != null ? `${s.count} items` : "";
-        const inline4 = [domain, count2].filter(Boolean).join(" · ");
+        const inline3 = [domain, count2].filter(Boolean).join(" · ");
         const showDesc = s.description && lc4(s.description) !== lc4(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc(count2)}</span>` : "") + `</div>`;
-        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline4 ? `<span class="d">${esc(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline3 ? `<span class="d">${esc(inline3)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
       host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
       this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
@@ -25986,7 +25302,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc5 = (s) => String(s ?? "").toLowerCase();
-  var CSS45 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -26099,12 +25415,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS45) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS44) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -26122,7 +25438,7 @@ ${BLOCKED_PILL_CSS}
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -26279,784 +25595,15 @@ ${BLOCKED_PILL_CSS}
     return _directory;
   }
 
-  // membership/syndication-format.mjs
-  var TYPE_LABEL6 = { post: "article", project: "project", prompt: "prompt", share: "link" };
-  function sanitizeMentions(text2) {
-    return String(text2 || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
-  }
-  function truncate2(text2, limit) {
-    const s = String(text2 || "");
-    if (!Number.isFinite(limit) || s.length <= limit) return s;
-    return s.slice(0, Math.max(0, limit - 1)).trimEnd() + "…";
-  }
-  function xHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.)?(?:x|twitter|mobile\.twitter)\.com\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, "").trim();
-    return /^[A-Za-z0-9_]{1,15}$/.test(s) ? s : "";
-  }
-  function blueskyHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.)?bsky\.app\/profile\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, "").trim();
-    return /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i.test(s) ? s : "";
-  }
-  function mastodonHandleFrom(value) {
-    const raw = String(value || "").trim();
-    if (!raw) return "";
-    const domain = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i;
-    const url = raw.match(/^https?:\/\/([^/]+)\/@([A-Za-z0-9_]+)\/?$/i);
-    if (url && domain.test(url[1])) return `${url[2]}@${url[1].toLowerCase()}`;
-    const parts = raw.replace(/^@/, "").split("@");
-    if (parts.length === 2 && /^[A-Za-z0-9_]+$/.test(parts[0]) && domain.test(parts[1])) return `${parts[0]}@${parts[1].toLowerCase()}`;
-    return "";
-  }
-  function redditHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.|old\.)?reddit\.com\/u(?:ser)?\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^\/?u\//i, "").replace(/^@/, "").trim();
-    return /^[A-Za-z0-9_-]{3,20}$/.test(s) ? s : "";
-  }
-  function devtoHandleFrom(value) {
-    let s = String(value || "").trim();
-    if (!s) return "";
-    const m = s.match(/^https?:\/\/(?:www\.)?dev\.to\/([^/?#]+)/i);
-    if (m) s = m[1];
-    s = s.replace(/^@/, "").trim();
-    return /^[A-Za-z0-9_]{1,30}$/.test(s) ? s : "";
-  }
-  function toHashtag(label) {
-    const parts = String(label || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
-    if (!parts.length) return "";
-    const body = parts.length === 1 ? parts[0] : parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("");
-    return body ? `#${body}` : "";
-  }
-  var HASHTAG_BRAND = "gbti";
-  var HASHTAG_MAX = 5;
-  function hashtagList(labels, { max = 0, brand = "" } = {}) {
-    const seen = /* @__PURE__ */ new Set();
-    const out = [];
-    for (const l of Array.isArray(labels) ? labels : []) {
-      const h = toHashtag(l);
-      const key = h.toLowerCase();
-      if (h && !seen.has(key)) {
-        seen.add(key);
-        out.push(h);
-      }
-    }
-    const brandTag = brand ? toHashtag(brand) : "";
-    if (!brandTag && !(max > 0)) return out.join(" ");
-    const cap = max > 0 ? max : out.length + 1;
-    const topical = brandTag ? out.filter((h) => h.toLowerCase() !== brandTag.toLowerCase()) : out;
-    const kept = topical.slice(0, brandTag ? Math.max(0, cap - 1) : cap);
-    if (brandTag) kept.push(brandTag);
-    return kept.join(" ");
-  }
-  function dropTrailingHashtagsToFit(text2, limit) {
-    let s = String(text2 || "");
-    if (!Number.isFinite(limit) || s.length <= limit) return s;
-    while (s.length > limit && /\s#[^\s#]+$/.test(s)) s = s.replace(/\s#[^\s#]+$/, "");
-    return s;
-  }
-  function renderTemplate(template, item = {}, { limit = 2e3, previewMention = null } = {}) {
-    const mention = /^<@!?\d+>$/.test(String(item.mention || "")) ? item.mention : null;
-    const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : "a member"));
-    const rawHandle = String(item.authorDiscord || "").trim().replace(/^@/, "");
-    const discordHandle = /^[A-Za-z0-9._]{2,32}$/.test(rawHandle) && !/[\/:]/.test(rawHandle) ? rawHandle : "";
-    const previewM = !mention && previewMention ? String(previewMention) : null;
-    const discordUsername = mention || previewM || sanitizeMentions(`@${discordHandle || item.author || "a member"}`);
-    const vars = {
-      memberdiscord: mention || previewM || fullName,
-      // the owner-decided fallback: full name, no ping
-      memberdiscordusername: discordUsername,
-      contenttype: TYPE_LABEL6[item.source] || "item",
-      // {content-type}: article / product / prompt / link
-      fullname: fullName,
-      author: sanitizeMentions(item.author ? `@${item.author}` : "a member"),
-      shareurl: String(item.url || ""),
-      url: String(item.url || ""),
-      title: sanitizeMentions(item.title || ""),
-      category: sanitizeMentions(item.category || ""),
-      authornote: sanitizeMentions(item.authorNote || ""),
-      // {author-note}: the from-the-author intro (public items only)
-      // {author-note-italic}: the intro in markdown ITALICS for channels that render it (Reddit does).
-      // Markdown italics never span line breaks, so each non-empty LINE is wrapped, not the whole block.
-      authornoteitalic: sanitizeMentions(item.authorNote || "").split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n"),
-      // {author-note-block}: the whole labelled, quoted "From the author:" paragraph set (for long-form channels
-      // like LinkedIn), or EMPTY when the item has no from-the-author note (a note-less post shows no dangling
-      // label). Real newlines; sanitized. Projects/prompts always carry a note; posts may not.
-      authornoteblock: String(item.authorNote || "").trim() ? `
-
-From the author:
-
-"${sanitizeMentions(String(item.authorNote).trim())}"` : "",
-      // {author-note-quoted-italic}: the italicized note WITH its surrounding quotes, or EMPTY. Same
-      // empty-awareness as {author-note-block} above, for a template that wants the bare quoted note rather than
-      // the labelled paragraph. 2026-08-11: the stored reddit-comment template wrote the quotes itself around
-      // {author-note-italic}, so a note-less article syndicated to Reddit as a lone "". Punctuation that belongs
-      // to an optional value has to travel WITH it; a template cannot know whether the value showed up.
-      authornotequoteditalic: String(item.authorNote || "").trim() ? `"${sanitizeMentions(String(item.authorNote).trim()).split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n")}"` : "",
-      memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : "",
-      // {member-url}: the public profile
-      shortdescription: sanitizeMentions(item.blurb || ""),
-      // {short-description}: the item's shortDescription (the queue item's blurb)
-      // SOW-120 follow-up: {member-x-handle} is the member's OWN validated X handle rendered as a real
-      // @mention (X @mentions tag a user, they are not a mass broadcast like Discord, and xHandleFrom
-      // strictly validates the shape), else the sanitized full name. {category-hashtag} / {tags-hashtags} /
-      // {hashtags} are alphanumeric-only, so they carry no mention risk.
-      memberxhandle: xHandleFrom(item.authorX) ? `@${xHandleFrom(item.authorX)}` : fullName,
-      // SOW-122: {member-bluesky-handle} = the member's Bluesky @handle (from profile links.bluesky), else the
-      // full name. On Bluesky a plain @handle is not a live mention; the bluesky adapter adds a resolved-DID
-      // FACET over this handle so it links + notifies.
-      memberblueskyhandle: blueskyHandleFrom(item.authorBluesky) ? `@${blueskyHandleFrom(item.authorBluesky)}` : fullName,
-      // SOW-123: {member-mastodon-handle} = the member's Mastodon @user@instance (from profile links.mastodon),
-      // else the full name. Mastodon renders @user@instance in status text as a native mention (no facet).
-      membermastodonhandle: mastodonHandleFrom(item.authorMastodon) ? `@${mastodonHandleFrom(item.authorMastodon)}` : fullName,
-      // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
-      // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
-      memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
-      // sow-260: {author-note-attributed} = the author note as an ATTRIBUTED markdown BLOCKQUOTE, addressed with
-      // the member's Reddit handle, or EMPTY when the item has no note. This is the whole Reddit FIRST COMMENT.
-      // Reddit gives a manual poster the preview card OR body text, never both (the API could do both via
-      // kind=link plus selftext; the web composer cannot), so the owner chose the card and moved the note into a
-      // comment. The label travels WITH the value on purpose: a template writing "From {member-reddit-handle}:"
-      // itself would leave that line dangling over nothing for a note-less item, which is the exact defect
-      // {author-note-block} and {author-note-quoted-italic} were both created to avoid.
-      authornoteattributed: String(item.authorNote || "").trim() ? `From ${redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName}:
-
-` + `"${sanitizeMentions(String(item.authorNote).trim())}"`.split("\n").map((l) => l.trim() ? `> ${l.trim()}` : ">").join("\n") : "",
-      // SOW-140: {member-devto-handle} = the member's OWN dev.to @handle (from profile links.devto) rendered as a
-      // native dev.to mention, else the sanitized full name (mirrors {member-x-handle}). Used in the dev.to byline.
-      memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,
-      categoryhashtag: toHashtag(item.category),
-      tagshashtags: hashtagList(item.tags),
-      // sow-303: the merged token is the one that carries the cap and the brand tag. The two split tokens
-      // above stay exactly as they were, so a template using them is unaffected.
-      // THE BRAND TAG IS SHARES ONLY, and that is the owner's scope rather than a technical limit. The ruling
-      // ("up to five and include #gbti always", 2026-09-02) answered a question about SHARE posts. The merged
-      // token is not share-only though: LinkedIn's post, product and prompt templates use it too, so branding
-      // the helper unconditionally would have put #gbti on article syndication nobody asked about. Two existing
-      // tests caught it, both asserting a PROMPT's hashtag tail.
-      // Extending it to every type is deleting the condition on this line.
-      hashtags: hashtagList(
-        [item.category, ...Array.isArray(item.tags) ? item.tags : []],
-        { max: HASHTAG_MAX, brand: item.source === "share" ? HASHTAG_BRAND : "" }
-      )
-    };
-    const text2 = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
-      const val = vars[name.toLowerCase().replace(/-/g, "")] ?? "";
-      return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
-    }).replace(/\\n/g, "\n").replace(/(^|\s)(""|''|“”|‘’|\(\)|\[\])(?=\s|$)/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-    return truncate2(dropTrailingHashtagsToFit(text2, limit), limit);
-  }
-  function renderBodyTemplate(template, item = {}, rawBody = "") {
-    const body = String(rawBody ?? "");
-    const tmpl = String(template ?? "").trim() || "{body}";
-    const SENTINEL = "GBTIBODY";
-    const withSentinel = tmpl.replace(/\{body\}/gi, `${SENTINEL}`);
-    const rendered = renderTemplate(withSentinel, item, { limit: 2e4 });
-    return rendered.split(`${SENTINEL}`).join(body);
-  }
-  function recordDestinations(rec) {
-    const merged = { ...rec?.perChannel || {}, ...rec?.channels || {} };
-    const out = /* @__PURE__ */ new Set();
-    for (const [k, v] of Object.entries(merged)) {
-      const status = v && typeof v === "object" ? v.status : v;
-      if (status && status !== "sent" && status !== "queued-manual") continue;
-      out.add(k.split(":")[0].replace(/^discord-forward$/, "discord"));
-    }
-    if (!out.size && rec?.destination) out.add(rec.destination);
-    if (!out.size && !Object.keys(merged).length) out.add("discord");
-    return out;
-  }
-
-  // membership/news-channels.mjs
-  var lc7 = (s) => String(s ?? "").trim().toLowerCase();
-  function newsChannelMap(parsed) {
-    const out = /* @__PURE__ */ new Map();
-    const list = Array.isArray(parsed?.channels) ? parsed.channels : [];
-    for (const e of list) {
-      const cat = lc7(e?.category);
-      const ch = String(e?.channelId ?? "").trim();
-      if (cat && ch) out.set(cat, ch);
-    }
-    return out;
-  }
-  function channelForCategory(parsed, category) {
-    return newsChannelMap(parsed).get(lc7(category)) ?? null;
-  }
-  function channelForCategoryPath(parsed, path) {
-    const arr = Array.isArray(path) ? path : path ? [path] : [];
-    for (let i = arr.length - 1; i >= 0; i--) {
-      const hit = channelForCategory(parsed, arr[i]);
-      if (hit) return hit;
-    }
-    return null;
-  }
-
-  // client-ui/src/elements/gbti-syndicate-now.mjs
-  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", dailydev: "daily.dev", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn" };
-  var FULL_BODY_DESTS = /* @__PURE__ */ new Set(["devto"]);
-  var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
-  var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
-  var localSendsAll = () => {
-    try {
-      const a = JSON.parse(localStorage.getItem(LOCAL_SENDS_KEY) || "[]");
-      return Array.isArray(a) ? a : [];
-    } catch {
-      return [];
-    }
-  };
-  var localSendsSave = (list) => {
-    try {
-      localStorage.setItem(LOCAL_SENDS_KEY, JSON.stringify(list.slice(-50)));
-    } catch {
-    }
-  };
-  var CSS46 = `
-  :host { display:block; }
-  .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
-  .snbtn:hover { border-color:var(--accent); color:var(--accent); }
-  .overlay { position:fixed; inset:0; background:rgba(10,12,11,.62); z-index:60; display:flex; align-items:center; justify-content:center; }
-  .panel { width:min(560px, calc(100% - 32px)); max-height:calc(100vh - 48px); overflow-y:auto; background:var(--bg, #16181a); color:var(--fg); border:1.5px solid var(--line); border-radius:12px; padding:18px 20px; }
-  .panel h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:17px; }
-  .sub { color:var(--muted); font-size:12.5px; margin:0 0 14px; }
-  .tiles { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
-  .tile { font:inherit; font-weight:700; font-size:13px; padding:14px 10px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); cursor:pointer; text-align:center; }
-  .tile:hover:not([disabled]) { border-color:var(--accent); color:var(--accent); }
-  .tile[disabled] { opacity:.45; cursor:default; }
-  .tile .why { display:block; font-weight:400; font-size:10.5px; color:var(--muted); margin-top:4px; }
-  .tile .sentb { display:block; font-weight:600; font-size:10.5px; color:#d8a13d; margin-top:4px; }
-  .info { color:var(--muted); font-size:12.5px; margin-top:10px; }
-  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 4px; }
-  textarea, select { width:100%; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
-  textarea { min-height:74px; font-family:var(--font-mono, monospace); font-size:12.5px; }
-  .preview { border:1.5px dashed var(--line); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; word-break:break-word; background:var(--hover, rgba(0,0,0,.15)); }
-  .warn { color:#d8a13d; font-size:12.5px; margin-top:10px; }
-  .err { color:#e06c6c; font-size:12.5px; margin-top:10px; }
-  .okmsg { color:var(--accent); font-size:13px; margin-top:10px; }
-  .okmsg a { color:var(--accent); }
-  .actions { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; }
-  .go { font:inherit; font-weight:700; font-size:13.5px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
-  .go[disabled] { opacity:.55; cursor:default; }
-  .ghost { font:inherit; font-size:13px; padding:8px 14px; border:1.5px solid var(--line); border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; }
-  .ghost:hover { color:var(--fg); }
-  .spin { display:inline-block; width:12px; height:12px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sn-spin .7s linear infinite; vertical-align:-1px; margin-right:7px; }
-  @keyframes sn-spin { to { transform:rotate(360deg); } }
-`;
-  var GbtiSyndicateNow = class extends GbtiElement {
-    render() {
-      if (!this.client) {
-        this.set("");
-        return;
-      }
-      if (this._role === void 0 && !this._loading) {
-        this._loading = true;
-        this._gate();
-      }
-      if (this._role !== "superadmin") {
-        this.set("");
-        return;
-      }
-      this.set(this.css(CSS46) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
-      this.on(".snbtn", "click", () => {
-        this._open = true;
-        this._step = "dest";
-        this._result = null;
-        this._err = null;
-        this.render();
-        this._loadInfo();
-      });
-      if (this._open) this._wireModal();
-    }
-    async _gate() {
-      try {
-        const st = await this.client.status();
-        this._role = st?.role || "member";
-        this._me = String(st?.identity?.username || st?.identity?.login || "").toLowerCase();
-      } catch {
-        this._role = "member";
-        this._me = "";
-      }
-      this._loading = false;
-      this.render();
-    }
-    _item() {
-      const d = this.dataset || {};
-      return {
-        source: d.gbtiType || "",
-        targetSlug: d.gbtiSlug || "",
-        targetType: d.gbtiType || "",
-        author: d.gbtiAuthor || "",
-        authorName: d.gbtiAuthorName || void 0,
-        // SOW-088 {fullName}: the profile displayName (else @login)
-        title: d.gbtiTitle || "",
-        blurb: d.gbtiBlurb || void 0,
-        // SOW-088 {short-description}: the item's shortDescription
-        url: d.gbtiUrl || "",
-        image: d.gbtiImage || void 0,
-        category: d.gbtiCategory || void 0,
-        categoryPath: d.gbtiCategoryPath ? d.gbtiCategoryPath.split(",").filter(Boolean) : void 0,
-        // SOW-088: leaf-first routing
-        authorDiscord: d.gbtiDiscord || void 0,
-        // SOW-088: the public profile Discord handle
-        authorX: d.gbtiX || void 0,
-        // SOW-120: the public profile X handle ({member-x-handle})
-        authorBluesky: d.gbtiBluesky || void 0,
-        // SOW-122: the public profile Bluesky handle ({member-bluesky-handle})
-        authorMastodon: d.gbtiMastodon || void 0,
-        // SOW-123: the public profile Mastodon handle ({member-mastodon-handle})
-        authorReddit: d.gbtiReddit || void 0,
-        // the public profile Reddit username ({member-reddit-handle})
-        authorDevto: d.gbtiDevto || void 0,
-        // SOW-140: the public profile dev.to handle ({member-devto-handle})
-        tags: d.gbtiTags ? d.gbtiTags.split(",").map((t) => t.trim()).filter(Boolean) : void 0,
-        // SOW-120: {tags-hashtags}
-        authorNote: this._authorNote || void 0,
-        // SOW-088 {author-note}: the from-the-author intro comment
-        visibility: d.gbtiVisibility === "members" ? "members" : "public"
-        // SOW-088 Proposal A: drives the STUB template set
-      };
-    }
-    async _loadInfo() {
-      try {
-        const it0 = this._item();
-        const [info, queue, thread] = await Promise.all([
-          this.client.getSyndicateNow(),
-          this.client.syndicationQueue().catch(() => null),
-          // The {author-note} token: the from-the-author intro comment (public, flagged authorNote).
-          this.client.listComments({ targetType: it0.targetType, targetSlug: it0.targetSlug }).catch(() => null)
-        ]);
-        this._info = info;
-        const note = (thread?.items ?? thread?.comments ?? []).find((c) => c?.authorNote && typeof c.body === "string" && c.body.trim());
-        this._authorNote = note ? note.body.trim() : null;
-        try {
-          this._discordLinked = Boolean((await this.client.discordLinkStatus?.())?.linked);
-        } catch {
-          this._discordLinked = false;
-        }
-        const key = `${this._item().source}:${this._item().targetSlug}`;
-        const prior = [...queue?.sent ?? [], ...queue?.failed ?? []].filter((it) => (it.id || "").startsWith(key + "#"));
-        this._prior = prior.filter((it) => it.status === "sent");
-        this._mergeLocalSends(key);
-      } catch (err) {
-        this._err = err?.message || "Could not load the syndication destinations.";
-      }
-      this.render();
-    }
-    /** Merge the locally-remembered sends for this item into _prior (KV list-lag cover, see LOCAL_SENDS_KEY);
-     *  a local entry the tracker now carries is pruned, so the memory converges to the server record. */
-    _mergeLocalSends(key) {
-      const now = Date.now();
-      const all = localSendsAll().filter((s) => s && typeof s === "object" && now - (s.at || 0) < LOCAL_SENDS_MAX_AGE);
-      const mine = all.filter((s) => s.key === key);
-      if (!mine.length) {
-        localSendsSave(all);
-        return;
-      }
-      const covered = (s) => (this._prior || []).some((rec) => {
-        const at = rec.sentAt || rec.enqueuedAt || 0;
-        return recordDestinations(rec).has(s.dest) && at >= (s.at || 0) - 12e4;
-      });
-      const still = [];
-      for (const s of mine) {
-        if (covered(s)) continue;
-        still.push(s);
-        this._prior = [...this._prior || [], { status: "sent", sentAt: s.at, trigger: "manual", manualBy: "local", channels: { [s.dest]: { status: "sent" } } }];
-      }
-      localSendsSave([...all.filter((s) => s.key !== key), ...still]);
-    }
-    _modalHtml() {
-      const body = !this._info && !this._err ? `<p class="sub"><span class="spin"></span>Loading destinations…</p>` : this._err && !this._info ? `<p class="err">${esc(this._err)}</p>` : this._step === "dest" ? this._destHtml() : this._composeHtml();
-      return `<div class="overlay" data-overlay><div class="panel">
-      <h3>Manually Syndicate</h3>
-      <p class="sub">${esc(this._item().title || this._item().targetSlug)}</p>
-      ${body}
-    </div></div>`;
-    }
-    /** Per-DESTINATION send history from the tracker records: destination -> { count, last, manual }.
-     *  Derived from each record's channels map keys (`discord:<id>` / `discord-forward:<id>` / `reddit` ...),
-     *  so "already syndicated" can say WHERE it went and by WHAT (a manual post vs the auto pipeline). */
-    _destSends() {
-      const map = {};
-      for (const rec of this._prior || []) {
-        const at = rec.sentAt || rec.enqueuedAt || 0;
-        const manual = rec.trigger === "manual" || !!rec.manualBy;
-        const dests = recordDestinations(rec);
-        for (const d of dests) {
-          const cur = map[d] || { count: 0, last: 0, manual: false };
-          map[d] = { count: cur.count + 1, last: Math.max(cur.last, at), manual: cur.manual || manual };
-        }
-      }
-      return map;
-    }
-    _sendPhrase(d, s) {
-      return `${DEST_LABEL[d] || d} ${s.count === 1 ? "once" : `${s.count} times`} (${s.manual ? "manually" : "by the auto pipeline"}, last ${esc(new Date(s.last).toLocaleString())})`;
-    }
-    _destHtml() {
-      const sends = this._destSends();
-      const tiles = (this._info?.destinations ?? []).map((d) => {
-        const label = DEST_LABEL[d.id] || d.id;
-        const s = sends[d.id];
-        const badge = s ? `<span class="sentb">sent ${esc(new Date(s.last).toLocaleDateString())}${s.manual ? " (manual)" : ""}</span>` : "";
-        const shareBlocked = d.id === "devto" && this._item().source === "share";
-        return d.ready && !shareBlocked ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>` : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(shareBlocked ? "content items only" : d.reason || "not available")}</span>${badge}</button>`;
-      }).join("");
-      const sent = Object.keys(sends);
-      const prior = sent.length ? `<p class="warn">Already posted to ${sent.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p><p class="info">Destinations without a badge have not received this item yet.</p>` : "";
-      return `<label>Destination</label><div class="tiles">${tiles}</div>${prior}
-      <div class="actions"><button class="ghost" type="button" data-close>Cancel</button><span></span></div>`;
-    }
-    /** The template that WILL be sent: an explicit edit, else the per-destination default. ONE definition
-     *  shared by the compose view and _publish (they diverged once: the preview said {title} while publish
-     *  fell back to the stored per-type template, so a Reddit send ignored what the preview showed). */
-    _effectiveTemplate() {
-      const src = this._item().source;
-      if (this._dest === "reddit" || this._dest === "devto") {
-        const stub = this._isStub() ? this._info?.channelTemplatesStub?.[this._dest]?.[src] || this._info?.stubDefaults?.[this._dest]?.[src] || "" : "";
-        const pub = this._info?.channelTemplates?.[this._dest]?.[src] || "";
-        return this._template ?? (stub || pub || "{title}");
-      }
-      const stored = this._stored(this._dest, src);
-      return this._template ?? (stored || "{title} {url}");
-    }
-    _isStub() {
-      return this._item().visibility === "members";
-    }
-    /** The ADMIN-stored template for a channel key, stub-aware: for a members item the STUB chain runs
-     *  first (channel stub -> shared stub -> the built-in stub maps served by the GET), then the public
-     *  chain (mirroring templateFor in the core). */
-    _stored(channel, key) {
-      if (this._isStub()) {
-        const stub = this._info?.channelTemplatesStub?.[channel]?.[key] || this._info?.stubTemplates?.[key] || this._info?.stubDefaults?.[channel]?.[key] || this._info?.stubDefaults?.[""]?.[key] || "";
-        if (stub) return stub;
-      }
-      return this._info?.channelTemplates?.[channel]?.[key] || this._info?.templates?.[key] || "";
-    }
-    /** The reddit-key resolver, guarded so a template referencing {author-note} never pre-fills for a
-     *  no-intro item (empty quotes read broken). */
-    _redditStored(key) {
-      const tpl = this._stored("reddit", key);
-      return tpl && (this._authorNote || !/\{author-note(-italic)?\}/.test(tpl)) ? tpl : "";
-    }
-    /** The Reddit BODY template (the DESCRIPTION under the title; the embed card comes from the item URL):
-     *  an explicit edit wins, else the stored reddit-body template. A text post appends the link when the
-     *  template lacks {url}, since the body is the whole post there. */
-    _effectiveBody() {
-      if (this._bodyTemplate != null) return this._bodyTemplate;
-      const tpl = this._redditStored("reddit-body");
-      if (tpl) return tpl + (this._redditKind === "self" && !/\{url\}/.test(tpl) ? "\n\n{url}" : "");
-      return this._redditKind === "self" ? "{url}" : "";
-    }
-    /** The separately-templated FIRST COMMENT (owner-directed): an explicit edit wins, else the stored
-     *  reddit-comment template; blank = no comment is posted. */
-    _effectiveComment() {
-      if (this._commentTemplate != null) return this._commentTemplate;
-      return this._redditStored("reddit-comment");
-    }
-    /** The dev.to BYLINE prepended to the crosspost: an edit wins, else the stored devto-intro. */
-    _effectiveDevtoIntro() {
-      if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
-      return this._stored("devto", "devto-intro");
-    }
-    /** The STUB middle for a members item on dev.to: an edit wins, else the stored devto-stub chain. */
-    _effectiveDevtoStub() {
-      if (this._devtoStubTemplate != null) return this._devtoStubTemplate;
-      return this._stored("devto", "devto-stub");
-    }
-    /** The CTA FOOTER appended to every dev.to post (full and stub): an edit wins, else the stored devto-footer. */
-    _effectiveDevtoFooter() {
-      if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
-      return this._stored("devto", "devto-footer");
-    }
-    /** The PUBLIC BODY template for a dev.to crosspost (SOW-138): an edit wins, else the stored devto-body,
-     *  else the built-in {body} (the article verbatim). Members items post the stub, not this. */
-    _effectiveDevtoBody() {
-      if (this._devtoBodyTemplate != null) return this._devtoBodyTemplate;
-      return this._stored("devto", "devto-body") || "{body}";
-    }
-    _composeHtml() {
-      const dest = this._dest;
-      const item = this._item();
-      const template = this._effectiveTemplate();
-      const authorIsMe = this._me && String(item.author || "").toLowerCase() === this._me;
-      const previewMention = dest === "discord" && authorIsMe && this._discordLinked ? "[you will be @mentioned on Discord]" : null;
-      const rawPreview = renderTemplate(template, item, { limit: 2e3, previewMention });
-      const preview = rendersMarkdown(dest) ? rawPreview : mdToPlain(rawPreview);
-      let channelRow = "";
-      if (dest === "discord") {
-        const groups = /* @__PURE__ */ new Map();
-        for (const c of this._channels || []) {
-          const sec = c.section || "Channels";
-          if (!groups.has(sec)) groups.set(sec, []);
-          groups.get(sec).push(c);
-        }
-        const selected = this._channelId || "";
-        const opts = [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
-        const fwdSelected = this._forwardId ?? "";
-        const fwdOpts = `<option value=""${fwdSelected ? "" : " selected"}>Do not forward</option>` + [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === fwdSelected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
-        const preNote = this._preselectedNote === "featured" ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>` : this._preselectedNote === "category" ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : "";
-        channelRow = opts ? `<label>Channel${preNote}</label>
-          <select data-channel>${opts}</select>
-          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the deepest mapped category` : ""})</span></label>
-          <select data-forward>${fwdOpts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
-          <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
-      }
-      let redditRows = "";
-      if (dest === "reddit") {
-        const kind2 = this._redditKind || "link";
-        const bodyTemplate = this._effectiveBody();
-        const bodyPreview = bodyTemplate ? renderTemplate(bodyTemplate, item, { limit: 2e3 }) : "";
-        const commentTemplate = this._effectiveComment();
-        const commentPreview = commentTemplate ? renderTemplate(commentTemplate, item, { limit: 2e3 }) : "";
-        redditRows = `<label>Post kind</label>
-        <select data-reddit-kind>
-          <option value="link"${kind2 === "link" ? " selected" : ""}>Link post (the item URL is the link)</option>
-          <option value="self"${kind2 === "self" ? " selected" : ""}>Text post (the body below is the content)</option>
-        </select>
-        <label>Body template <span style="font-weight:400">(the description under the title; optional; same tokens as the title)</span></label>
-        <textarea data-reddit-body>${esc(bodyTemplate)}</textarea>
-        <label>Body preview</label>
-        <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>
-        <label>First comment template <span style="font-weight:400">(optional; posts as the brand account's first comment; blank = none)</span></label>
-        <textarea data-reddit-comment>${esc(commentTemplate)}</textarea>
-        <label>Comment preview</label>
-        <div class="preview" data-reddit-comment-preview>${esc(commentPreview)}</div>`;
-      }
-      let devtoRows = "";
-      if (dest === "devto") {
-        const introTemplate = this._effectiveDevtoIntro();
-        const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : "";
-        const footerTemplate = this._effectiveDevtoFooter();
-        const footerPreview = footerTemplate ? renderTemplate(footerTemplate, item, { limit: 1200 }) : "";
-        const stubRows = this._isStub() ? (() => {
-          const stubTemplate = this._effectiveDevtoStub();
-          const stubPreview = stubTemplate ? renderTemplate(stubTemplate, item, { limit: 1200 }) : "";
-          return `<label>Stub template <span style="font-weight:400">(the members-only teaser body; markdown; same tokens)</span></label>
-        <textarea data-devto-stub>${esc(stubTemplate)}</textarea>
-        <label>Stub preview</label>
-        <div class="preview" data-devto-stub-preview>${esc(stubPreview)}</div>`;
-        })() : "";
-        const bodyRows = this._isStub() ? "" : (() => {
-          const bodyTemplate = this._effectiveDevtoBody();
-          const bodyPreview = renderBodyTemplate(bodyTemplate, item, "[the full article body]");
-          return `<label>Body template <span style="font-weight:400">({body} = the full article verbatim; wrap it or replace it; markdown; same tokens)</span></label>
-        <textarea data-devto-body>${esc(bodyTemplate)}</textarea>
-        <label>Body preview</label>
-        <div class="preview" data-devto-body-preview>${esc(bodyPreview)}</div>`;
-        })();
-        devtoRows = `${this._isStub() ? '<p class="warn">Members-only item: the STUB templates apply (description + link, never the body).</p>' : ""}
-        <label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
-        <textarea data-devto-intro>${esc(introTemplate)}</textarea>
-        <label>Byline preview</label>
-        <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
-        ${bodyRows}
-        <label>CTA footer template <span style="font-weight:400">(appended to the post; markdown; same tokens)</span></label>
-        <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
-        <label>CTA preview</label>
-        <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
-        ${stubRows}
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? " checked" : ""} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
-      }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : dest === "devto" ? `<p class="sub" style="margin:8px 0 0">Posts to dev.to under the GBTI organization with a canonical link back to gbti.network: a PUBLIC item crossposts in full; a members-only item posts only its description plus a read-it-on-gbti.network link. The CTA footer is appended either way.</p>` : "";
-      const sends = this._destSends();
-      const here = sends[dest];
-      const elsewhere = Object.keys(sends).filter((d) => d !== dest);
-      const prior = here ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>` : elsewhere.length ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p>` : "";
-      const cmtState = this._result?.comment ? this._result.comment.error ? ` The first comment failed: ${esc(this._result.comment.error)}.` : " The first comment posted." : "";
-      const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
-      const result = this._result ? `<p class="okmsg">${this._result.queued ? "Queued to the Social Queue. Open it from your avatar menu to post it by hand (this channel is manual-assist, so nothing is charged)." : this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}`}${fwdState}${cmtState}</p>` : "";
-      const stubNote = this._isStub() && dest !== "devto" ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : "";
-      return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      ${stubNote}
-      ${FULL_BODY_DESTS.has(dest) ? `<label>Article title <span style="font-weight:400">(${esc(DEST_LABEL[dest] || dest)} cross-posts the FULL article body: this field is ONLY the post title, not the body. The body is the whole article, wrapped by the byline and CTA footer below. {title} {content-type} {category}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>` : `<label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description} {category-hashtag} {tags-hashtags} {hashtags} {member-x-handle} {member-bluesky-handle} {member-reddit-handle}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>`}
-      <textarea data-template>${esc(template)}</textarea>
-      <label>${FULL_BODY_DESTS.has(dest) ? "Title preview" : "Preview"}</label>
-      <div class="preview" data-preview>${esc(preview)}</div>
-      ${channelRow}${redditRows}${devtoRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
-      <div class="actions">
-        <button class="ghost" type="button" data-close>${this._result ? "Done" : "Cancel"}</button>
-        <button class="go" type="button" data-publish ${this._busy || this._result ? "disabled" : ""}>${this._busy ? '<span class="spin"></span>Publishing...' : "Publish"}</button>
-      </div>`;
-    }
-    _wireModal() {
-      this.on("[data-close]", "click", () => {
-        this._open = false;
-        this._template = null;
-        this._err = null;
-        this.render();
-      });
-      this.on("[data-back]", "click", () => {
-        this._step = "dest";
-        this._err = null;
-        this._result = null;
-        this.render();
-      });
-      this.$$("[data-dest]").forEach((b) => b.addEventListener("click", () => this._pickDest(b.dataset.dest)));
-      const ta = this.$("[data-template]");
-      if (ta) ta.addEventListener("input", () => {
-        this._template = ta.value;
-        const pv = this.$("[data-preview]");
-        if (pv) pv.textContent = renderTemplate(ta.value, this._item(), { limit: 2e3 });
-      });
-      const sel = this.$("[data-channel]");
-      if (sel) sel.addEventListener("change", () => {
-        this._channelId = sel.value;
-      });
-      const manual = this.$("[data-channel-manual]");
-      if (manual) manual.addEventListener("input", () => {
-        this._channelId = manual.value.trim();
-      });
-      const fwd = this.$("[data-forward]");
-      if (fwd) fwd.addEventListener("change", () => {
-        this._forwardId = fwd.value;
-      });
-      const rk = this.$("[data-reddit-kind]");
-      if (rk) rk.addEventListener("change", () => {
-        this._redditKind = rk.value === "self" ? "self" : "link";
-        this.render();
-      });
-      const rb = this.$("[data-reddit-body]");
-      if (rb) rb.addEventListener("input", () => {
-        this._bodyTemplate = rb.value;
-        const pv = this.$("[data-reddit-body-preview]");
-        if (pv) pv.textContent = rb.value ? renderTemplate(rb.value, this._item(), { limit: 2e3 }) : "";
-      });
-      const di = this.$("[data-devto-intro]");
-      if (di) di.addEventListener("input", () => {
-        this._devtoIntroTemplate = di.value;
-        const pv = this.$("[data-devto-intro-preview]");
-        if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : "";
-      });
-      const db = this.$("[data-devto-body]");
-      if (db) db.addEventListener("input", () => {
-        this._devtoBodyTemplate = db.value;
-        const pv = this.$("[data-devto-body-preview]");
-        if (pv) pv.textContent = renderBodyTemplate(db.value, this._item(), "[the full article body]");
-      });
-      const df = this.$("[data-devto-footer]");
-      if (df) df.addEventListener("input", () => {
-        this._devtoFooterTemplate = df.value;
-        const pv = this.$("[data-devto-footer-preview]");
-        if (pv) pv.textContent = df.value ? renderTemplate(df.value, this._item(), { limit: 1200 }) : "";
-      });
-      const ds = this.$("[data-devto-stub]");
-      if (ds) ds.addEventListener("input", () => {
-        this._devtoStubTemplate = ds.value;
-        const pv = this.$("[data-devto-stub-preview]");
-        if (pv) pv.textContent = ds.value ? renderTemplate(ds.value, this._item(), { limit: 1200 }) : "";
-      });
-      const dd = this.$("[data-devto-draft]");
-      if (dd) dd.addEventListener("change", () => {
-        this._devtoDraft = dd.checked;
-      });
-      const rc = this.$("[data-reddit-comment]");
-      if (rc) rc.addEventListener("input", () => {
-        this._commentTemplate = rc.value;
-        const pv = this.$("[data-reddit-comment-preview]");
-        if (pv) pv.textContent = rc.value ? renderTemplate(rc.value, this._item(), { limit: 2e3 }) : "";
-      });
-      this.on("[data-publish]", "click", () => this._publish());
-    }
-    async _pickDest(dest) {
-      if (dest !== this._dest) {
-        this._template = null;
-        this._bodyTemplate = null;
-        this._commentTemplate = null;
-        this._devtoIntroTemplate = null;
-        this._devtoBodyTemplate = null;
-        this._devtoFooterTemplate = null;
-        this._devtoStubTemplate = null;
-        this._devtoDraft = false;
-        this._redditKind = "link";
-      }
-      this._dest = dest;
-      this._step = "compose";
-      this._err = null;
-      this._result = null;
-      if (dest === "discord" && !this._channels) {
-        try {
-          const r = await this.client.discordChannels();
-          const all = r?.channels ?? [];
-          const sections = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
-          this._channels = all.filter((c) => c.type === 0 || c.type === 5).map((c) => ({ ...c, section: sections.get(c.parentId) || "Channels" }));
-          this._chErr = null;
-        } catch (err) {
-          this._channels = [];
-          this._chErr = err?.message || "request failed";
-        }
-        const it0 = this._item();
-        const mapped = channelForCategoryPath({ channels: this._info?.channelMap ?? [] }, it0.categoryPath?.length ? it0.categoryPath : [it0.category]);
-        const featured = this._info?.featured?.[this._item().source] || null;
-        this._channelId = featured || mapped || this._channels[0]?.id || "";
-        this._preselectedNote = featured ? "featured" : mapped ? "category" : "";
-        this._forwardId = mapped && mapped !== this._channelId ? mapped : "";
-        this._forwardNote = Boolean(this._forwardId);
-      }
-      this.render();
-    }
-    async _publish() {
-      const item = this._item();
-      const template = this._effectiveTemplate().trim();
-      if (!template) {
-        this._err = "A message template is required.";
-        this.render();
-        return;
-      }
-      this._busy = true;
-      this._err = null;
-      this.render();
-      try {
-        const payload = { destination: this._dest, item, template };
-        if (this._dest === "reddit") {
-          payload.redditKind = this._redditKind === "self" ? "self" : "link";
-          const body = this._effectiveBody().trim();
-          if (body) payload.bodyTemplate = body;
-          const comment = this._effectiveComment().trim();
-          if (comment) payload.commentTemplate = comment;
-        }
-        if (this._dest === "devto") {
-          const intro = this._effectiveDevtoIntro().trim();
-          if (intro) payload.devtoIntroTemplate = intro;
-          const footer = this._effectiveDevtoFooter().trim();
-          if (footer) payload.devtoFooterTemplate = footer;
-          const stubT = this._isStub() ? this._effectiveDevtoStub().trim() : "";
-          if (stubT) payload.devtoStubTemplate = stubT;
-          const bodyT = this._isStub() ? "" : this._effectiveDevtoBody().trim();
-          if (bodyT) payload.devtoBodyTemplate = bodyT;
-          if (this._devtoDraft) payload.devtoDraft = true;
-        }
-        if (this._dest === "discord") {
-          payload.channelId = this._channelId;
-          if (this._forwardId && this._forwardId !== this._channelId) payload.forwardChannelId = this._forwardId;
-        }
-        this._result = await this.client.syndicateNow(payload);
-        this._prior = [...this._prior || [], { status: "sent", sentAt: Date.now(), trigger: "manual", channels: { [this._dest]: { status: "sent" } } }];
-        localSendsSave([...localSendsAll(), { key: `${item.source}:${item.targetSlug}`, dest: this._dest, at: Date.now() }]);
-      } catch (err) {
-        this._err = err?.message || "The post failed.";
-      }
-      this._busy = false;
-      this.render();
-    }
-  };
-  define("gbti-syndicate-now", GbtiSyndicateNow);
-
   // client-ui/src/elements/gbti-reader.mjs
   var SITE21 = "https://gbti.network";
-  var lc8 = (s) => String(s || "").toLowerCase();
+  var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
-    const x = lc8(a);
+    const x = lc7(a);
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
-  var githubLogin = (a) => lc8(a) === "gbti" || lc8(a) === "house" ? "gbti-network" : a;
+  var githubLogin = (a) => lc7(a) === "gbti" || lc7(a) === "house" ? "gbti-network" : a;
   var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -27064,7 +25611,7 @@ From the author:
     const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
     return m ? m[1] : "";
   }
-  var TYPE_LABEL7 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
+  var TYPE_LABEL6 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
       return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
@@ -27116,7 +25663,7 @@ From the author:
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS47 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -27364,21 +25911,21 @@ From the author:
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
     async _resolveAuthor(it) {
-      const username = lc8(it.author);
+      const username = lc7(it.author);
       if (isHouse(username)) return { house: true };
       const [dir, status] = await Promise.all([
         loadDirectory(),
         this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
       ]);
       const entry = dir.get(username) || null;
-      const me = lc8(status?.identity?.username || status?.identity?.login);
+      const me = lc7(status?.identity?.username || status?.identity?.login);
       const canFollow = !!status?.canFollow;
       let following = false;
       if (canFollow && this.client.getFollows) {
         try {
           const f = await this.client.getFollows();
           const list = Array.isArray(f) ? f : f?.following ?? [];
-          following = list.some((x) => lc8(x.username) === username);
+          following = list.some((x) => lc7(x.username) === username);
         } catch {
         }
       }
@@ -27401,7 +25948,7 @@ From the author:
       return html;
     }
     _metaHtml(it, when) {
-      const t = TYPE_LABEL7[it.type] || it.type || "";
+      const t = TYPE_LABEL6[it.type] || it.type || "";
       const name = authorName4(it.author);
       const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
@@ -27450,7 +25997,7 @@ From the author:
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS47));
+        this.set(this.css(CSS45));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
@@ -27477,20 +26024,8 @@ From the author:
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
       const srcCard = it.type === "share" && it.url ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName4(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName }) : null;
       const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>` : "";
-      const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
-      const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
-      const syndUrl = it.url ? it.type === "share" ? it.url : SITE21 + it.url : "";
-      const authorDiscord = this._author?.entry?.links?.discord || "";
-      const authorX = this._author?.entry?.links?.x || "";
-      const authorDevto = this._author?.entry?.links?.devto || "";
-      const authorBluesky = this._author?.entry?.links?.bluesky || "";
-      const authorMastodon = this._author?.entry?.links?.mastodon || "";
-      const authorReddit = this._author?.entry?.links?.reddit || "";
-      const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : Array.isArray(it.tags) ? it.tags : [];
-      const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
-      const synd = resolved && slug && ["post", "project", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
-      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS47) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+      this.set(this.css(CSS45) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -27589,16 +26124,16 @@ From the author:
   define("gbti-reader", GbtiReader);
 
   // client-ui/src/member-view-core.mjs
-  var lc9 = (s) => String(s || "").toLowerCase();
+  var lc8 = (s) => String(s || "").toLowerCase();
   var MEMBER_SECTIONS = Object.freeze([
     { type: "post", json: "blog-index.json", label: "Articles" },
     { type: "project", json: "projects-index.json", label: "Projects" },
     { type: "prompt", json: "prompts-index.json", label: "Prompts" }
   ]);
   function memberContent(items, username, cap = 24) {
-    const u = lc9(username);
+    const u = lc8(username);
     if (!u || u === "gbti" || u === "house" || !Array.isArray(items)) return [];
-    const mine = items.filter((it) => it && lc9(it.author) === u);
+    const mine = items.filter((it) => it && lc8(it.author) === u);
     mine.sort((a, b) => {
       const av = Number.isFinite(a?.publishedAt) ? a.publishedAt : -Infinity;
       const bv = Number.isFinite(b?.publishedAt) ? b.publishedAt : -Infinity;
@@ -27610,11 +26145,11 @@ From the author:
 
   // client-ui/src/elements/gbti-member-view.mjs
   var SITE22 = "https://gbti.network";
-  var lc10 = (s) => String(s || "").toLowerCase();
+  var lc9 = (s) => String(s || "").toLowerCase();
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS48 = `
+  var CSS46 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -27668,7 +26203,7 @@ From the author:
       this.setAttribute("data-gbti-username", String(username || ""));
     }
     get _username() {
-      const u = lc10(this.getAttribute("data-gbti-username") || "").trim();
+      const u = lc9(this.getAttribute("data-gbti-username") || "").trim();
       return USERNAME_RE2.test(u) ? u : "";
     }
     async _load() {
@@ -27686,7 +26221,7 @@ From the author:
           ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE22}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
-        const me = lc10(status?.identity?.username || status?.identity?.login || "");
+        const me = lc9(status?.identity?.username || status?.identity?.login || "");
         this._isSelf = !!me && me === username;
         MEMBER_SECTIONS.forEach((s, i) => {
           this._sections[s.type] = memberContent(idx[i]?.items || [], username, 24);
@@ -27740,7 +26275,7 @@ From the author:
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS48) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS46) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -27748,7 +26283,7 @@ From the author:
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS48) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -27792,7 +26327,7 @@ From the author:
     } catch {
     }
   }
-  var CSS49 = `
+  var CSS47 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -27926,7 +26461,7 @@ From the author:
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS49) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -27939,7 +26474,7 @@ From the author:
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS49) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -28448,8 +26983,8 @@ From the author:
   var SHARES_LOADED_AT = null;
   var NEWS = null;
   var NEWS_LOADED = false;
-  var PAGE_SIZE2 = 40;
-  var VISIBLE = PAGE_SIZE2;
+  var PAGE_SIZE = 40;
+  var VISIBLE = PAGE_SIZE;
   var PAGE_KEY = "";
   var MORE_IO = null;
   var toCardItem = (e) => ({
@@ -28488,7 +27023,7 @@ From the author:
     const pageKey = `${VIEW}|${TYPE}|${q}`;
     if (pageKey !== PAGE_KEY) {
       PAGE_KEY = pageKey;
-      VISIBLE = PAGE_SIZE2;
+      VISIBLE = PAGE_SIZE;
     }
     const total = rows.length;
     rows = rows.slice(0, VISIBLE);
@@ -28516,7 +27051,7 @@ From the author:
         if (!ents.some((x) => x.isIntersecting)) return;
         MORE_IO.disconnect();
         MORE_IO = null;
-        VISIBLE += PAGE_SIZE2;
+        VISIBLE += PAGE_SIZE;
         renderFeed($("[data-filter]")?.value || "");
       }, { rootMargin: "600px" });
       MORE_IO.observe(sentinel);

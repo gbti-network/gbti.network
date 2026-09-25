@@ -134,7 +134,8 @@ class GbtiActivityBell extends GbtiElement {
         ts: toMs(it.enqueuedAt),
         title: it.title || it.targetSlug || 'Untitled',
         sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
-        href: 'admin.html#tab=syndication',
+        // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
+        href: `${SITE}/admin/#tab=syndication&sub=activity`,
       };
     });
   }

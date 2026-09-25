@@ -22,7 +22,8 @@ mountPageClient();
 // SOW-052: mount the shell with the WorkBench rail; Admin is its "Admin tools" section (role-gated in the rail).
 const shell = initShell({ active: 'admin', nav: 'workbench' });
 
-// SOW-070: sub-section navigation -- the Members / Content / Syndication tabs show one parent group at a time
+// SOW-070: sub-section navigation -- the admin tabs show one parent group at a time (Syndication moved to the
+// website in sow-399)
 // (the last choice persists). The hidden panels still upgrade + load their data, so switching tabs is instant.
 // sow-228: wired AFTER the template is cloned, because before that none of these nodes exist.
 const ADMIN_TAB_KEY = 'gbti-admin-tab';
@@ -36,8 +37,9 @@ function wireAdminTabs() {
     try { localStorage.setItem(ADMIN_TAB_KEY, name); } catch (e) { /* storage unavailable */ }
   }
   adminTabs.forEach((t) => t.addEventListener('click', () => showAdminTab(t.dataset.tab)));
-  // SOW-088: a `#tab=<name>` deep link (the activity bell's "To approve" notice links to
-  // admin.html#tab=syndication) wins over the persisted tab; falls back to the stored tab, then members.
+  // SOW-088: a `#tab=<name>` deep link wins over the persisted tab; falls back to the stored tab, then members. (The
+  // bell's "To approve" notice linked here until sow-399 moved syndication to the website; an old link lands on
+  // Members.)
   function tabFromHash() {
     const m = /(?:^|[#&])tab=([a-z-]+)/.exec(location.hash || '');
     return m && adminPanels.some((p) => p.dataset.panel === m[1]) ? m[1] : null;

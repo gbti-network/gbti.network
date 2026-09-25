@@ -138,7 +138,9 @@ test('getComment defaults to the caller and only widens when asked', () => {
 
 test('an element can decline a client-broadcast re-render', () => {
   const s = src('client-ui/src/base.mjs');
-  assert.match(s, /this\._onClient = \(\) => this\.isConnected && this\.skipClientRender\?\.\(\) !== true && this\.render\?\.\(\)/,
+  // sow-399 added the own-client clause (an element holding its own client ignores the page-wide broadcast); the
+  // decline hook this test protects is unchanged.
+  assert.match(s, /this\._onClient = \(\) => this\.isConnected && !this\._ownClient && this\.skipClientRender\?\.\(\) !== true && this\.render\?\.\(\)/,
     'the setClient fan-out reaches the editor directly, bypassing the workspace own !this._editing guards');
 });
 

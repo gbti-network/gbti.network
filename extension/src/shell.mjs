@@ -7,7 +7,6 @@
 
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
 import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
-import '../../client-ui/src/elements/gbti-social-queue.mjs'; // SOW-121: the avatar-menu Social Queue popup
 import '../../client-ui/src/elements/gbti-debug-panel.mjs'; // SOW-124: the superadmin Debug panel (devlog viewer)
 // sow-387: the sign-in wall's own element. It replaces <gbti-welcome auth-gate>, which could fail open into the setup
 // wizard, and the wizard itself no longer ships in the extension: setup lives on the website.
@@ -113,7 +112,6 @@ function controlsHtml({ compose = true } = {}) {
         <a class="mi" role="menuitem" href="${SITE}/workbench/" target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
-        <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
         <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
@@ -200,7 +198,8 @@ function applyAccount(root, status) {
     // self-gates each tool and the SOW-005 gate + CODEOWNERS stay the real boundary.
     const showAdmin = (RANK[status.role] ?? 0) >= RANK.moderator;
     root.querySelectorAll('[data-admin-only]').forEach((el) => { el.hidden = !showAdmin; });
-    // SOW-121: the Social Queue is superadmin-only (the Worker read is superadmin-gated too).
+    // Superadmin-only items ([data-super-only]: the Debug panel). sow-399: the Social Queue that also sat here moved to
+    // the website's avatar menu with the rest of syndication.
     const showSuper = (RANK[status.role] ?? 0) >= RANK.superadmin;
     root.querySelectorAll('[data-super-only]').forEach((el) => { el.hidden = !showSuper; });
     if (meBtn) meBtn.hidden = false;
@@ -362,8 +361,6 @@ function wireAccount(root) {
     try { await chrome.runtime.sendMessage({ type: 'signout' }); } catch (e) { /* worker unreachable */ }
     location.reload(); // re-evaluate identity + the membership lock gate on this page
   });
-  // SOW-121: the superadmin Social Queue opens as a centered popup (the item is superadmin-gated in render()).
-  root.querySelector('[data-social-queue]')?.addEventListener('click', () => { close(); openSocialQueueModal(); });
   // SOW-124: the superadmin Debug panel (the devlog viewer; the item is superadmin-gated by [data-super-only]).
   root.querySelector('[data-debug-panel]')?.addEventListener('click', () => { close(); openDebugPanelModal(); });
 }
@@ -397,21 +394,8 @@ function openDebugPanelModal() {
   document.body.appendChild(overlay);
 }
 
-// SOW-121: the avatar-menu "Social Queue" opens a centered popup mounting <gbti-social-queue> (the superadmin
-// manual-assist worklist). Reuses the .compose-modal overlay (backdrop + Esc); the component's X close button
-// dispatches gbti-social-close, which we catch to close.
-function openSocialQueueModal() {
-  if (document.querySelector('.social-modal')) return; // already open
-  const overlay = document.createElement('div');
-  overlay.className = 'compose-modal social-modal';
-  overlay.innerHTML = `<gbti-social-queue></gbti-social-queue>`;
-  const onEsc = (e) => { if (e.key === 'Escape') close(); };
-  const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop click closes
-  overlay.addEventListener('gbti-social-close', close);
-  document.addEventListener('keydown', onEsc);
-  document.body.appendChild(overlay);
-}
+// sow-399 (owner, 2026-09-24): the SOW-121 Social Queue popup that opened from this menu moved to the website's
+// avatar menu (src/components/Header.astro) with the rest of syndication. The extension is a reader.
 
 // SOW-041 P5: the top-bar "+" opens a modal that mounts the existing <gbti-share-composer> (the literal owner ask:
 // a URL + a comment -> the members-only Shares area). The composer self-gates paid/trial/locked and routes through

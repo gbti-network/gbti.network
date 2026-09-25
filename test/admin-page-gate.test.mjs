@@ -49,7 +49,8 @@ test('sow-228: the panels are still PRESENT, inside the template (the gate must 
     'gbti-news-source-manager',
     'gbti-quote-manager',
     'gbti-coupon-manager',
-    'gbti-channel-map-manager',
+    // sow-399: gbti-channel-map-manager (Syndication) moved to the website; test/syndication-left-the-extension
+    // pins its absence here.
   ]) {
     assert.ok(tpl[1].includes(`<${el}`), `${el} must live inside the gated template`);
   }

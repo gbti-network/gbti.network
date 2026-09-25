@@ -2,7 +2,7 @@
 // sow-161: the native site admin surface, the primary admin surface (the extension relays to it). Staff sign in over
 // the httpOnly-cookie session. <gbti-admin> mounts with caps="moderation,membership,roles", so content moderation,
 // bans and grants, and role assignment all render here; the tab bar below adds the config managers (admin and up) and
-// the superadmin tools (site settings, channels, creator applications, member lookup). Each tab shows only when the
+// the superadmin tools (site settings, syndication, creator applications, member lookup). Each tab shows only when the
 // caller's rank clears its data-min. The Worker + the SOW-005 gate are the real boundary (the role is re-checked
 // server-side + at merge); this page is UX only. noindex: a per-staff surface.
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -30,7 +30,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="categories" data-min="admin" aria-selected="false" hidden>Categories</button>
           <button type="button" role="tab" data-tab="tags" data-min="admin" aria-selected="false" hidden>Tags</button>
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
-          <button type="button" role="tab" data-tab="channels" data-min="superadmin" aria-selected="false" hidden>Channels</button>
+          <button type="button" role="tab" data-tab="syndication" data-min="superadmin" aria-selected="false" hidden>Syndication</button>{/* sow-399: was Channels */}
           <button type="button" role="tab" data-tab="editorial" data-min="superadmin" aria-selected="false" hidden>Editorial review</button>{/* sow-323 */}
           <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
           <button type="button" role="tab" data-tab="outbound-links" data-min="superadmin" aria-selected="false" hidden>Outbound links</button>{/* sow-289 */}
@@ -90,9 +90,12 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         {/* sow-161 B: SUPERADMIN. The shared channel-map manager (channels x auto-share matrix, syndication
             templates + settings, engagement thresholds, moderation flag lists). The tab carries
             data-min="superadmin" and the module below is imported only for superadmin, so an admin never upgrades
-            the element; every write lands as an auto-gated PR against superadmin-pinned house files. */}
-        <div class="adm-card" data-panel="channels" hidden>
-          <h2 class="h2">Channels</h2>
+            the element; every write lands as an auto-gated PR against superadmin-pinned house files.
+            sow-399 (owner, 2026-09-24): syndication moved here from the extension in full, so the tab takes the
+            name the owner knows it by (was Channels; #tab=channels still lands here). Publishing Activity, the
+            queue with Approve and Cancel, works now that the website client carries those calls. */}
+        <div class="adm-card" data-panel="syndication" hidden>
+          <h2 class="h2">Syndication</h2>
           <gbti-channel-map-manager></gbti-channel-map-manager>
         </div>
         {/* sow-331: SUPERADMIN. Search an email address or a GitHub username and see everything held about the
@@ -166,7 +169,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
       // imports it, so the tag stays inert and the card stays hidden even if the tab were somehow revealed.
       if (rank >= RANK.superadmin) {
         await import('../../client-ui/src/elements/gbti-site-settings-manager.mjs');
-        await import('../../client-ui/src/elements/gbti-channel-map-manager.mjs'); // sow-161 B: the superadmin Channels workspace
+        await import('../../client-ui/src/elements/gbti-channel-map-manager.mjs'); // sow-161 B: the superadmin Syndication workspace (was Channels)
         await import('../../client-ui/src/elements/gbti-outbound-link-manager.mjs'); // sow-289: the read-only outbound link board
         await import('../../client-ui/src/elements/gbti-cta-manager.mjs'); // sow-281: the CTA registry manager
         await import('../../client-ui/src/elements/gbti-editorial-manager.mjs'); // sow-323: the editorial review queue
@@ -193,17 +196,24 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
       eligible.forEach((b) => b.removeAttribute('hidden'));
       const names = eligible.map((b) => b.dataset.tab as string);
 
-      const hashName = (location.hash.match(/^#tab=([a-z-]+)/) || [])[1] || '';
+      // sow-399: the Channels tab became Syndication; an old link (a bookmark, the extension bell) still lands.
+      const TAB_ALIASES: Record<string, string> = { channels: 'syndication' };
+      const rawHash = (location.hash.match(/^#tab=([a-z-]+)/) || [])[1] || '';
+      const hashName = TAB_ALIASES[rawHash] || rawHash;
       const initial = names.indexOf(hashName) >= 0 ? hashName : names[0];
+      // The rest of a deep link after the tab (e.g. "&sub=activity", which the Syndication tool reads to open a
+      // section) is kept on the FIRST show only. Rewriting the hash to "#tab=<name>" used to drop it before the
+      // tool read it, so a link to Publishing Activity opened whatever section was last used.
+      const deepRest = (location.hash.match(/^#tab=[a-z-]+(&.*)$/) || [])[1] || '';
 
-      function show(name: string) {
+      function show(name: string, keepRest = false) {
         for (const n of names) { const c = cardOf(n); if (c) c.hidden = n !== name; }
         for (const b of eligible) {
           const on = b.dataset.tab === name;
           b.setAttribute('aria-selected', on ? 'true' : 'false');
           b.classList.toggle('on', on);
         }
-        try { history.replaceState(null, '', '#tab=' + name); } catch { /* hash update is best-effort */ }
+        try { history.replaceState(null, '', '#tab=' + name + (keepRest ? deepRest : '')); } catch { /* hash update is best-effort */ }
       }
 
       if (eligible.length > 1) {
@@ -214,7 +224,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         });
       }
 
-      show(initial);
+      show(initial, initial === hashName);
     }
 
     // sow-158 re-login fix: on a TRANSIENT status failure (deploy window / network blip) keep the valid session
