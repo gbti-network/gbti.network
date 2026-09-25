@@ -21194,6 +21194,16 @@ ${BLOCKED_PILL_CSS}
     return TYPE_ACCENT[String(type || "").toLowerCase()] || OTHER_ACCENT;
   }
 
+  // client-ui/src/target-slug.mjs
+  function targetSlugFor(it) {
+    if (!it) return "";
+    if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
+    if (it.slug) return String(it.slug);
+    const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
+    return m ? m[1] : "";
+  }
+  var SAVABLE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share"]);
+
   // client-ui/src/elements/gbti-card-list.mjs
   var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
   var TYPE_LABEL5 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share", news: "News" };
@@ -21270,7 +21280,9 @@ ${BLOCKED_PILL_CSS}
   /* MODES compact + detailed — a continuous DIVIDED list (hairline separators, no per-row box) */
   .compact, .detailed { display:flex; flex-direction:column; }
   .row-c, .row-d { position:relative; cursor:pointer; border-bottom:1px solid var(--line); transition:background .14s; }
-  .row-c:last-child, .row-d:last-child { border-bottom:0; }
+  /* sow-398: each card sits in an .it wrapper (so its heart + Save can be a SIBLING of the card link), which makes
+     every row the last child of its own wrapper: the last-row rule reads the wrapper instead. */
+  .it:last-child > .row-c, .it:last-child > .row-d { border-bottom:0; }
   .row-c:hover, .row-d:hover { background:var(--hover); }
 
   .row-c { display:flex; align-items:center; gap:12px; padding:12px 8px 12px 15px; }
@@ -21335,6 +21347,21 @@ ${BLOCKED_PILL_CSS}
   :host-context([data-layout="glass"]) .row-c[data-type]:not([data-type="news"]):hover,
   :host-context([data-layout="glass"]) .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 26%, transparent); }
   :host-context([data-layout="glass"]) .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 16%, var(--panel)); }
+
+  /* sow-398: heart + Save. A card is ONE link (or one role=button), and a control inside a link is invalid HTML and
+     would open the card, so the controls are a sibling of the card inside its .it wrapper, laid over the card's own
+     box, with room reserved so they never cover text: lower left under the excerpt (detailed, card), the right end
+     of a compact row. Same placement as the website feed card's .feed-foot (src/components/feeds/FeedCard.astro). */
+  .it { position:relative; }
+  .card > .it { display:flex; flex-direction:column; }
+  .card > .it > .card-i { flex:1; }
+  .acts { position:absolute; z-index:2; display:flex; align-items:center; gap:8px; }
+  .detailed .acts { left:17px; bottom:16px; }
+  .detailed .it.has-acts > .row-d { padding-bottom:62px; }
+  .card .acts { left:14px; bottom:12px; }
+  .card .it.has-acts .cbody { padding-bottom:54px; }
+  .compact .acts { right:10px; top:50%; transform:translateY(-50%); }
+  .compact .it.has-acts > .row-c { padding-right:190px; }
 
   /* Phones (responsive rule: shrink/drop the competing secondary metadata before the title loses its room). The
      compact + detailed rows otherwise crush the title to a few characters because the avatar + relative date hold
@@ -21420,14 +21447,28 @@ ${BLOCKED_PILL_CSS}
     _close(item) {
       return item.openHref ? "</a>" : "</div>";
     }
+    // sow-398: the heart + Save for an item the member can favorite and collect (posts, projects, prompts, shares; not
+    // news), keyed exactly as the reader keys them. '' for anything else, so the card renders as before.
+    _acts(item) {
+      const t = lc2(item.type);
+      const slug = SAVABLE_TYPES.has(t) ? targetSlugFor({ ...item, type: t }) : "";
+      if (!slug) return "";
+      const a = `data-gbti-target-type="${esc(t)}" data-gbti-target-slug="${esc(slug)}"`;
+      return `<div class="acts"><gbti-favorite ${a} data-gbti-region="favorite"></gbti-favorite><gbti-collection ${a}></gbti-collection></div>`;
+    }
+    // The wrapper that lets the controls sit beside the card link rather than inside it.
+    _wrap(item, inner) {
+      const acts = this._acts(item);
+      return `<div class="it${acts ? " has-acts" : ""}">${inner}${acts}</div>`;
+    }
     _compact(items) {
-      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="compact">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`)).join("") + `</div>`;
     }
     _detailed(items) {
-      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}</div>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="detailed">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}</div>${this._close(it)}`)).join("") + `</div>`;
     }
     _card(items) {
-      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="card">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`)).join("") + `</div>`;
     }
     render() {
       if (!this._items) return;
@@ -25605,12 +25646,6 @@ ${BLOCKED_PILL_CSS}
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
   var githubLogin = (a) => lc7(a) === "gbti" || lc7(a) === "house" ? "gbti-network" : a;
   var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
-  function targetSlugFor(it) {
-    if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
-    if (it.slug) return String(it.slug);
-    const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
-    return m ? m[1] : "";
-  }
   var TYPE_LABEL6 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
@@ -25862,7 +25897,7 @@ ${BLOCKED_PILL_CSS}
       const act = it?.doAction;
       if (!act || this._doDone) return;
       this._doDone = true;
-      if (!this.client || it.type === "share") return;
+      if (!this.client) return;
       const slug = targetSlugFor(it);
       if (!slug) return;
       if (act === "favorite") {
@@ -25955,10 +25990,10 @@ ${BLOCKED_PILL_CSS}
       const srcFav = it.type === "share" && it.url ? faviconFor(it.url) : "";
       const av = srcFav ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt="">${avUrl ? `<img class="src-mini" src="${esc(avUrl)}" alt="">` : ""}</span>` : `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
       const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join("")}</span>` : "";
-      const slug = it.type === "share" ? "" : targetSlugFor(it);
+      const slug = targetSlugFor(it);
       const HEART = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20.3S3.6 15.2 3.6 9.5A4 4 0 0 1 12 7.3a4 4 0 0 1 8.4 2.2c0 5.7-8.4 10.8-8.4 10.8z"/></svg>';
       const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
-      const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || "")}" data-gbti-slug="${esc(slug)}"></gbti-mod-actions></span>` : "";
+      const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || "")}" data-gbti-slug="${esc(slug)}"${it.type === "share" ? ` data-gbti-id="${esc(it.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
       return `<div class="meta"><span class="badge">${esc(t)}</span><span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
     }
     _authorCardHtml(it) {

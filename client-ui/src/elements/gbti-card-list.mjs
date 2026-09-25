@@ -11,6 +11,10 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { glyphFor, typeAccent } from '../cat-glyph.mjs';
 import { resolveAsset } from '../assets.mjs';
+// sow-398 (owner, 2026-09-24): heart + Save on the cards, as the website's feed cards carry them.
+import { targetSlugFor, SAVABLE_TYPES } from '../target-slug.mjs';
+import './gbti-favorite.mjs';
+import './gbti-collection.mjs';
 
 const MODES = new Set(['compact', 'detailed', 'card']);
 const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', share: 'Share', news: 'News' };
@@ -105,7 +109,9 @@ const CSS = `
   /* MODES compact + detailed — a continuous DIVIDED list (hairline separators, no per-row box) */
   .compact, .detailed { display:flex; flex-direction:column; }
   .row-c, .row-d { position:relative; cursor:pointer; border-bottom:1px solid var(--line); transition:background .14s; }
-  .row-c:last-child, .row-d:last-child { border-bottom:0; }
+  /* sow-398: each card sits in an .it wrapper (so its heart + Save can be a SIBLING of the card link), which makes
+     every row the last child of its own wrapper: the last-row rule reads the wrapper instead. */
+  .it:last-child > .row-c, .it:last-child > .row-d { border-bottom:0; }
   .row-c:hover, .row-d:hover { background:var(--hover); }
 
   .row-c { display:flex; align-items:center; gap:12px; padding:12px 8px 12px 15px; }
@@ -170,6 +176,21 @@ const CSS = `
   :host-context([data-layout="glass"]) .row-c[data-type]:not([data-type="news"]):hover,
   :host-context([data-layout="glass"]) .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 26%, transparent); }
   :host-context([data-layout="glass"]) .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 16%, var(--panel)); }
+
+  /* sow-398: heart + Save. A card is ONE link (or one role=button), and a control inside a link is invalid HTML and
+     would open the card, so the controls are a sibling of the card inside its .it wrapper, laid over the card's own
+     box, with room reserved so they never cover text: lower left under the excerpt (detailed, card), the right end
+     of a compact row. Same placement as the website feed card's .feed-foot (src/components/feeds/FeedCard.astro). */
+  .it { position:relative; }
+  .card > .it { display:flex; flex-direction:column; }
+  .card > .it > .card-i { flex:1; }
+  .acts { position:absolute; z-index:2; display:flex; align-items:center; gap:8px; }
+  .detailed .acts { left:17px; bottom:16px; }
+  .detailed .it.has-acts > .row-d { padding-bottom:62px; }
+  .card .acts { left:14px; bottom:12px; }
+  .card .it.has-acts .cbody { padding-bottom:54px; }
+  .compact .acts { right:10px; top:50%; transform:translateY(-50%); }
+  .compact .it.has-acts > .row-c { padding-right:190px; }
 
   /* Phones (responsive rule: shrink/drop the competing secondary metadata before the title loses its room). The
      compact + detailed rows otherwise crush the title to a few characters because the avatar + relative date hold
@@ -255,19 +276,34 @@ class GbtiCardList extends GbtiElement {
   }
   _close(item) { return item.openHref ? '</a>' : '</div>'; }
 
+  // sow-398: the heart + Save for an item the member can favorite and collect (posts, projects, prompts, shares; not
+  // news), keyed exactly as the reader keys them. '' for anything else, so the card renders as before.
+  _acts(item) {
+    const t = lc(item.type);
+    const slug = SAVABLE_TYPES.has(t) ? targetSlugFor({ ...item, type: t }) : '';
+    if (!slug) return '';
+    const a = `data-gbti-target-type="${esc(t)}" data-gbti-target-slug="${esc(slug)}"`;
+    return `<div class="acts"><gbti-favorite ${a} data-gbti-region="favorite"></gbti-favorite><gbti-collection ${a}></gbti-collection></div>`;
+  }
+  // The wrapper that lets the controls sit beside the card link rather than inside it.
+  _wrap(item, inner) {
+    const acts = this._acts(item);
+    return `<div class="it${acts ? ' has-acts' : ''}">${inner}${acts}</div>`;
+  }
+
   _compact(items) {
-    return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, 'row-c')}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`).join('') + `</div>`;
+    return `<div class="compact">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, 'row-c')}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`)).join('') + `</div>`;
   }
   _detailed(items) {
     // sow-296: meta first, then the title and the excerpt, with the cover on the right (CSS order), matching the
     // website feed card's reading order.
-    return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, 'row-d')}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ''}</div>${this._close(it)}`).join('') + `</div>`;
+    return `<div class="detailed">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, 'row-d')}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ''}</div>${this._close(it)}`)).join('') + `</div>`;
   }
   _card(items) {
     // Image-led card (matches the /prompts grid card): the media leads at the TOP, full-bleed + 4:3, then a
     // padded body. Because the media meets the body below it, its bottom edge stays square (the card only rounds
     // the top corners) — no rounded bottom on the image.
-    return `<div class="card">` + items.map((it, i) => `${this._open(it, i, 'card-i')}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join('') + `</div>`;
+    return `<div class="card">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, 'card-i')}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`)).join('') + `</div>`;
   }
 
   render() {

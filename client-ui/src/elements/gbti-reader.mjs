@@ -27,6 +27,9 @@ import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the s
 import { loadMembersDirectory } from '../members-index.mjs'; // SOW-143: the shared /members-index.json loader (one cache across elements)
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
+// SOW-041: the comment/favorite key for an item (a post/project/prompt's slug, a Share's "<author>/<shareId>").
+// sow-398: it moved to ../target-slug.mjs so the feed cards key their heart and Save the same way.
+import { targetSlugFor } from '../target-slug.mjs';
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
@@ -35,14 +38,6 @@ const authorName = (a) => (isHouse(a) ? 'GBTI Network' : a);
 const githubLogin = (a) => (lc(a) === 'gbti' || lc(a) === 'house' ? 'gbti-network' : a);
 const githubAvatar = (a) => (a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : '');
 
-// SOW-041: the comment targetSlug for an item. A post/product/prompt keys on its content slug (matching the
-// public Comments.astro); a Share keys on the composite "<author>/<shareId>". Empty -> no discussion is shown.
-function targetSlugFor(it) {
-  if (it.type === 'share') return it.author && it.id ? `${it.author}/${it.id}` : '';
-  if (it.slug) return String(it.slug);
-  const m = String(it.path || '').match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
-  return m ? m[1] : '';
-}
 const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', share: 'Share' };
 const dateStr = (ms) => { try { return ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''; } catch { return ''; } };
 const lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
@@ -301,7 +296,7 @@ class GbtiReader extends GbtiElement {
     const act = it?.doAction;
     if (!act || this._doDone) return;
     this._doDone = true;
-    if (!this.client || it.type === 'share') return;
+    if (!this.client) return; // sow-398: a share is favoritable and collectable like any other item
     const slug = targetSlugFor(it);
     if (!slug) return;
     if (act === 'favorite') {
@@ -408,14 +403,18 @@ class GbtiReader extends GbtiElement {
       ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join('')}</span>` : '';
     // SOW-013/064: favorite + add-to-collection, on the meta row (right-justified on desktop, a right-justified row
     // ABOVE the meta on mobile via the .m-actions order/width rules). The inert buttons upgrade to the working
-    // controls once the client is present (extension/CMS). Shares are not favoritable here.
-    const slug = it.type === 'share' ? '' : targetSlugFor(it);
+    // controls once the client is present (extension/CMS). sow-398 (owner, 2026-09-24): a Share gets them too, keyed
+    // "<author>/<id>", as on the website share page; they were left off shares here, and the server has accepted
+    // shares since SOW-050.
+    const slug = targetSlugFor(it);
     const HEART = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20.3S3.6 15.2 3.6 9.5A4 4 0 0 1 12 7.3a4 4 0 0 1 8.4 2.2c0 5.7-8.4 10.8-8.4 10.8z"/></svg>';
     const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
     const acts = slug ? `<span class="m-actions">`
       + `<gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite>`
       + `<gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection>`
-      + `<gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || '')}" data-gbti-slug="${esc(slug)}"></gbti-mod-actions>` // SOW-071: moderator+ only (self-gates; renders nothing otherwise)
+      // SOW-071: moderator+ only (self-gates; renders nothing otherwise). sow-398: a share's canonical path is built
+      // from its id (modPathFor, as gbti-shares-feed passes it), so a share carries data-gbti-id as well.
+      + `<gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || '')}" data-gbti-slug="${esc(slug)}"${it.type === 'share' ? ` data-gbti-id="${esc(it.id || '')}"` : ''}></gbti-mod-actions>`
       + `</span>` : '';
     return `<div class="meta"><span class="badge">${esc(t)}</span>`
       + `<span class="who">${av}<b>${esc(name)}</b></span>`
