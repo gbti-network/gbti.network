@@ -150,11 +150,11 @@ test('the Pull requests tab loads nothing before the role is known', async () =>
 
 // ---- the extension menu ----
 
-test('the extension menu item is marked superadmin-only', () => {
+// sow-406 superseded the extension half the same day: the extension has no WorkBench, so no Pull requests item and no
+// tab at all (a superadmin uses the website WorkBench, which keeps the superadmin-only tab above).
+test('the extension has no Pull requests menu item at all', () => {
   const src = read('extension/src/shell.mjs');
-  assert.match(src, /\{ key: 'prs',[^\n]*superOnly: true \}/);
-  assert.match(src, /r\.superOnly \? ' data-super-only hidden'/);
-  assert.match(src, /querySelectorAll\('\[data-super-only\]'\)\.forEach\(\(el\) => \{ el\.hidden = !showSuper; \}\)/);
+  assert.equal(/key: 'prs'|tab=prs|Pull requests/.test(src), false);
 });
 
 // ---- nothing else points members at pull requests ----
@@ -170,11 +170,9 @@ test('member-facing pages and notes no longer send people to pull requests', () 
 
 // ---- the Profile links (owner, 2026-09-25, during this build): "The profile link should go to the members profile" ----
 
-test('the extension Profile links open the member\'s own public page, as the website does', () => {
+test('the extension Profile link opens the member\'s own public page, as the website does', () => {
   const src = read('extension/src/shell.mjs');
-  assert.match(src, /\{ key: 'profile', href: `\$\{SITE\}\/members\/`, ext: true, meProfile: true,/, 'the rail item');
   assert.match(src, /href="\$\{SITE\}\/members\/" data-me-profile target="_blank" rel="noopener">Profile<\/a>/, 'the avatar menu item');
-  assert.match(src, /const me = r\.meProfile \? ' data-me-profile' : '';/, 'the rail renderer marks it');
   assert.match(src, /querySelectorAll\('\[data-me-profile\]'\)\.forEach\(\(a\) => \{ a\.href = `\$\{SITE\}\/members\/\$\{encodeURIComponent\(folder\)\}\/`; \}\);/, 'filled in from the login');
-  assert.equal(/Profile<\/a>/.test(src) && /href="\$\{SITE\}\/workbench\/"[^>]*>Profile</.test(src), false, 'a Profile link still opens the WorkBench');
+  assert.equal(/href="\$\{SITE\}\/workbench\/"[^>]*>Profile</.test(src), false, 'a Profile link still opens the WorkBench');
 });

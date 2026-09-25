@@ -1,6 +1,6 @@
 <!doctype html>
-<!-- SOW-036/038: the GBTI extension's Admin page, inside the shared member-hub shell (top bar + left rail injected
-     by shell.mjs). Reached from the avatar menu's "Admin tools" entry (shown only for moderator+).
+<!-- SOW-036/038: the GBTI extension's Admin page, inside the shared member-hub shell (the top row injected
+     by shell.mjs; no left menu since sow-406). Reached from the avatar menu's "Admin tools" entry (shown only for moderator+).
 
      sow-228: THE STAFF SURFACE LIVES IN AN INERT <template> AND IS CLONED IN ONLY FOR A RESOLVED STAFF ROLE.
      This comment used to say opening the page "is harmless for a plain member" because <gbti-admin> self-gates.
@@ -26,6 +26,8 @@
   <style>
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
+    /* sow-406: the heading sits under the top row, as on Settings, because the top row holds the brand and controls. */
+    .hub-head { margin: 6px 0 20px; }
     .hub-h2 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; margin: 28px 0 12px; }
     /* SOW-070: settings-style cards per admin section (cohesive with the member Settings page; frosts in Glass). */
     .admin-col { max-width: 1720px; margin: 0 auto; display: flex; flex-direction: column; } /* SOW-100: the categories workspace uses the full width (was 880px for the single-column managers) */
@@ -60,9 +62,8 @@
 <body>
   <div class="nt" data-shell>
     <main class="nt-main">
-      <div class="nt-top" data-topbar>
-        <div><h1 class="hub-h">Admin tools</h1><p class="hub-sub">Governance and moderation.</p></div>
-      </div>
+      <div class="nt-top" data-topbar></div>
+      <div class="hub-head"><h1 class="hub-h"><span class="head-ico" data-ico="lock" aria-hidden="true"></span>Admin tools</h1><p class="hub-sub">Governance and moderation.</p></div>
       <!-- sow-228: shown only when the role resolves BELOW moderator. Never shown while the role is still
            unresolved, so a legitimate admin does not see a denial flash on a slow status call. -->
       <div class="admin-deny" data-admin-deny hidden>

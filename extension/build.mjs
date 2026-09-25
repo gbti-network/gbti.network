@@ -1,6 +1,6 @@
 // Build the MV3 extension bundles (SOW-006 v2 P4). esbuild bundles the core + @gbti/client-ui + deps into the
 // contexts: the background worker (ESM, MV3 type:module), the content script (IIFE, classic script), and the
-// extension pages (IIFE: newtab, shares, workspace, admin, account; the onboarding page was retired by sow-387). chrome.* stay as globals (provided by the extension
+// extension pages (IIFE: newtab, shares, saved, admin, account; the onboarding page was retired by sow-387). chrome.* stay as globals (provided by the extension
 // runtime). Build-time only; the dist/ output is what loads. Re-run after changing any src or the shared
 // core / client-ui.
 //   node extension/build.mjs
@@ -39,7 +39,9 @@ await build({ ...common, entryPoints: [src('background.mjs')], format: 'esm', ou
 await build({ ...common, entryPoints: [src('content.mjs')], format: 'iife', outfile: out('content.js') });
 await build({ ...common, entryPoints: [src('newtab.mjs')], format: 'iife', outfile: out('newtab.js') }); // SOW-017
 await build({ ...common, entryPoints: [src('shares.mjs')], format: 'iife', outfile: out('shares.js') }); // SOW-018 Shares page
-await build({ ...common, entryPoints: [src('workspace.mjs')], format: 'iife', outfile: out('workspace.js') }); // SOW-033 Workspace page
+// sow-406: the SOW-033 Workspace page entry is REMOVED with the extension's WorkBench (owner, 2026-09-25). Its
+// favorites and collections moved to the saved page below; everything else lives on the website WorkBench.
+await build({ ...common, entryPoints: [src('saved.mjs')], format: 'iife', outfile: out('saved.js') }); // sow-406 Favorites and collections
 await build({ ...common, entryPoints: [src('admin.mjs')], format: 'iife', outfile: out('admin.js') }); // SOW-036/038 Admin page
 await build({ ...common, entryPoints: [src('account.mjs')], format: 'iife', outfile: out('account.js') }); // SOW-040 Account page
 // sow-204: the SOW-129 Profile page entry is REMOVED. The extension stops being an authoring host; profile
@@ -58,7 +60,7 @@ const clientSrc = (f) => path.join(dir, '..', 'client', 'src', f);
 const nodeBundle = { bundle: true, target: 'node18', platform: 'node', format: 'esm', charset: 'utf8', legalComments: 'none', preserveSymlinks: true }; // sow-237: see the note above `common`
 await build({ ...nodeBundle, entryPoints: [clientSrc('mcp-stdio.mjs')], outfile: mcp('gbti-network-mcp.mjs') });
 
-console.log('built extension/dist/{theme-init,background,content,newtab,shares,workspace,admin,account}.js + extension/mcp/gbti-network-mcp.mjs');
+console.log('built extension/dist/{theme-init,background,content,newtab,shares,saved,admin,account}.js + extension/mcp/gbti-network-mcp.mjs');
 if (mode !== 'classic') {
   console.log(`  (${mode.toUpperCase()} mode inlined: client id ${values.GBTI_GITHUB_APP_CLIENT_ID}, slug ${values.GBTI_GITHUB_APP_SLUG})`);
 }

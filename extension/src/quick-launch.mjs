@@ -82,9 +82,15 @@ async function lookupSite(url) {
 }
 
 // ---------------------------------------------------------------------------------------------------- the bar
+// sow-406 (owner, 2026-09-25): "we want the GBTI quick launch icon to launch the public website and have our icon as
+// the icon." It was a "GBTI" text label that opened nothing. It is now the GBTI mark (the packaged icon the brand in
+// the top row uses) and opens gbti.network in a new tab, like every other quick launch site.
+const GBTI_MARK = '<img class="gbti-mk" src="icons/icon-128.png" alt="" width="22" height="22" />';
+const GBTI_CHIP = `<a class="nt-app gbti" href="https://gbti.network/" target="_blank" rel="noopener" title="GBTI Network" aria-label="GBTI Network, opens in a new tab">${GBTI_MARK}</a>`;
+
 function barHtml() {
   const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc(it.name)}" aria-label="${esc(it.name)}, opens in a new tab">${markHtml(it, ICONS)}</a>`).join('');
-  return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph('gear')}</button><span class="ql-sep" aria-hidden="true"></span></span><span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>${links}`;
+  return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph('gear')}</button><span class="ql-sep" aria-hidden="true"></span></span>${GBTI_CHIP}${links}`;
 }
 
 function renderBars() {
@@ -164,7 +170,7 @@ function listsHtml() {
 function previewHtml() {
   const items = barItems(STATE);
   const icons = items.map((it) => `<span class="ql-pv" title="${esc(it.name)}">${markHtml(it, ICONS)}</span>`).join('');
-  return `<span class="nt-app gbti" aria-hidden="true">GBTI</span>${icons}`;
+  return `<span class="nt-app gbti" aria-hidden="true">${GBTI_MARK}</span>${icons}`;
 }
 
 function formHtml({ id = '', url = '', name = '' } = {}) {

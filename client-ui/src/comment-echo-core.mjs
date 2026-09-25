@@ -27,11 +27,11 @@ export function pullOutcome(pulls, number) {
  * The status note under a pending row. `terminal` says polling can stop. The copy states what actually
  * happens: the merge is automatic and quick, the rebuild is the wait.
  */
-export function echoNote({ outcome = 'unknown', prNumber = null } = {}) {
-  const pr = prNumber ? `Pull request #${prNumber}` : 'Its pull request';
+export function echoNote({ outcome = 'unknown' } = {}) { // callers still pass prNumber; it is not shown (sow-404/406)
   if (outcome === 'merged') return { text: 'Merged. Everyone sees this after the next site rebuild, in about 2 to 3 minutes.', tone: 'ok', terminal: true };
-  if (outcome === 'closed') return { text: 'This comment was declined. Track it in your WorkBench.', tone: 'bad', terminal: true };
-  return { text: `Posting. ${pr} merges automatically; everyone sees this after the site rebuilds, in about 2 to 3 minutes.`, tone: 'pending', terminal: false };
+  // sow-404/406: no pull request and no WorkBench in a member's note (the extension has none, and members do not care).
+  if (outcome === 'closed') return { text: 'This comment was declined.', tone: 'bad', terminal: true };
+  return { text: 'Posting. Everyone sees this after the site rebuilds, in about 2 to 3 minutes.', tone: 'pending', terminal: false };
 }
 
 /** The pull list shapes the two hosts return ({ prs } on the extension client, { items } on the website Worker read). */

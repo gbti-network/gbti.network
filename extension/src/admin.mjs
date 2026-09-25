@@ -19,8 +19,8 @@ import { initShell, shouldGateStaff, shouldGateTab } from './shell.mjs';
 
 mountPageClient();
 
-// SOW-052: mount the shell with the WorkBench rail; Admin is its "Admin tools" section (role-gated in the rail).
-const shell = initShell({ active: 'admin', nav: 'workbench' });
+// sow-406: no left menu; the page is reached from the avatar menu's Admin tools (role-gated there, and gated here).
+const shell = initShell({ compose: true });
 
 // SOW-070: sub-section navigation -- the admin tabs show one parent group at a time (Syndication moved to the
 // website in sow-399)

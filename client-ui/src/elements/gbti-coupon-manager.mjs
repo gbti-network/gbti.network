@@ -5,7 +5,7 @@
 // share URL is the plain visible /codeable-invite/?coupon=<CODE> (QA 2026-07-18: no minted token links).
 // Inert in public (no injected client). Host-agnostic. A sibling of <gbti-news-source-manager>.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck } from '../workspace-core.mjs';
+import { houseEditAck } from '../workspace-core.mjs';
 import { landerFor } from '../../../membership/invites.mjs';
 
 // sow-231 Phase 3: THE SHARE URL IS NO LONGER ONE HARDCODED PATH. It was `/codeable-invite/?coupon=` for
@@ -229,7 +229,7 @@ class GbtiCouponManager extends GbtiElement {
   async _run(fn, okMsg) {
     try {
       const r = await fn();
-      this._msg = r?.prNumber ? `${okMsg}. ${submitAck({ prNumber: r.prNumber })}` : okMsg;
+      this._msg = r?.prNumber ? `${okMsg}. ${houseEditAck({ prNumber: r.prNumber, autoMerge: true })}` : okMsg; // sow-406: staff keep the PR number
     } catch (err) {
       this._msg = err?.message || 'The action failed.';
     }

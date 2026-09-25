@@ -21257,7 +21257,8 @@ async function deviceFlowLogin({
 // extension/src/open-page.mjs
 var PAGES = /* @__PURE__ */ new Set([
   "newtab.html",
-  "workspace.html",
+  // sow-406: the WorkBench page left with the extension's WorkBench; saved.html (favorites and collections) replaced it.
+  "saved.html",
   "browse.html",
   // RETIRED page, aliased to newtab.html below (old locked-content CTAs still send it)
   "shares.html",

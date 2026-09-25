@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- SOW-018 + SOW-036: the GBTI extension's Shares page (extension-only; Shares have no public website surface),
-     inside the shared member-hub shell (top bar + left rail injected by shell.mjs). Mounts <gbti-shares> (the
+     inside the shared member-hub shell (the top row is injected by shell.mjs; no left menu since sow-406). Mounts <gbti-shares> (the
      composer over the co-op reading feed) behind the membership lock gate. The token stays in the worker. -->
 <html lang="en">
 <head>
@@ -13,14 +13,15 @@
   <style>
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
+    /* sow-406: the heading sits under the top row, as on Settings, because the top row holds the brand and controls. */
+    .hub-head { margin: 6px 0 20px; }
   </style>
 </head>
 <body>
   <div class="nt" data-shell>
     <main class="nt-main">
-      <div class="nt-top" data-topbar>
-        <div><h1 class="hub-h">Shares</h1><p class="hub-sub">The co-op stream.</p></div>
-      </div>
+      <div class="nt-top" data-topbar></div>
+      <div class="hub-head"><h1 class="hub-h"><span class="head-ico" data-ico="share" aria-hidden="true"></span>Shares</h1><p class="hub-sub">The co-op stream.</p></div>
       <gbti-lock-gate>
         <gbti-shares></gbti-shares>
       </gbti-lock-gate>

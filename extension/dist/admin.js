@@ -3236,12 +3236,12 @@ ${listStyleProseCss(".doc-blocks")}
       reason: needsAttention ? descIsReason && desc || fallback : desc
     };
   }
-  function submitAck({ prNumber = null, autoMerge = true } = {}) {
-    const pr = prNumber ? ` (PR #${prNumber})` : "";
-    return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+  function submitAck({ autoMerge = true } = {}) {
+    return autoMerge ? "Submitted. It appears in about 2 to 3 minutes." : "Submitted. It is awaiting review.";
   }
   function houseEditAck(r) {
-    return submitAck({ prNumber: r?.prNumber ?? null, autoMerge: r?.autoMerge === true });
+    const pr = r?.prNumber ? ` (PR #${r.prNumber})` : "";
+    return r?.autoMerge === true ? `Submitted${pr}. It merges automatically and appears shortly.` : `Submitted${pr}. It is awaiting review.`;
   }
   function failHint(err) {
     const code = err?.code || "";
@@ -5173,11 +5173,10 @@ ${listStyleProseCss(".doc-blocks")}
     if (pr.state === "closed") return "closed";
     return "open";
   }
-  function echoNote({ outcome = "unknown", prNumber = null } = {}) {
-    const pr = prNumber ? `Pull request #${prNumber}` : "Its pull request";
+  function echoNote({ outcome = "unknown" } = {}) {
     if (outcome === "merged") return { text: "Merged. Everyone sees this after the next site rebuild, in about 2 to 3 minutes.", tone: "ok", terminal: true };
-    if (outcome === "closed") return { text: "This comment was declined. Track it in your WorkBench.", tone: "bad", terminal: true };
-    return { text: `Posting. ${pr} merges automatically; everyone sees this after the site rebuilds, in about 2 to 3 minutes.`, tone: "pending", terminal: false };
+    if (outcome === "closed") return { text: "This comment was declined.", tone: "bad", terminal: true };
+    return { text: "Posting. Everyone sees this after the site rebuilds, in about 2 to 3 minutes.", tone: "pending", terminal: false };
   }
   function pullsOf(res) {
     if (Array.isArray(res?.prs)) return res.prs;
@@ -9120,6 +9119,11 @@ ${listStyleProseCss(".doc-blocks")}
       collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) }))
     };
   }
+  var SAVED_SECTIONS = ["favorites", "collections"];
+  function savedSectionFromHash(hash) {
+    const h = String(hash ?? "").replace(/^#/, "").trim().toLowerCase();
+    return SAVED_SECTIONS.includes(h) ? h : null;
+  }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE5 = "https://gbti.network";
@@ -11229,7 +11233,7 @@ ${listStyleProseCss(".doc-blocks")}
     async _run(fn, okMsg) {
       try {
         const r = await fn();
-        this._msg = r?.prNumber ? `${okMsg}. ${submitAck({ prNumber: r.prNumber })}` : okMsg;
+        this._msg = r?.prNumber ? `${okMsg}. ${houseEditAck({ prNumber: r.prNumber, autoMerge: true })}` : okMsg;
       } catch (err) {
         this._msg = err?.message || "The action failed.";
       }
@@ -20767,6 +20771,15 @@ ${BLOCKED_PILL_CSS}
   .busy { opacity:.6; pointer-events:none; }
 `;
   var GbtiSaved = class extends GbtiElement {
+    // sow-406: `section` (favorites | collections) scrolls that section into view once the list has rendered. The
+    // extension's avatar menu sets it; the website WorkBench tab never does.
+    static get observedAttributes() {
+      return ["section"];
+    }
+    attributeChangedCallback() {
+      this._scrolled = false;
+      this._scrollToSection();
+    }
     connectedCallback() {
       this._activity = null;
       this._index = null;
@@ -20832,11 +20845,24 @@ ${BLOCKED_PILL_CSS}
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
       this.set(this.css(CSS32) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
-      <section class="sec"><h3>Favorites</h3>${favHtml}</section>
-      <section class="sec"><h3>Collections</h3>${collHtml}
+      <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
+      <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
       </section></div>`);
       this._wire();
+      this._scrollToSection();
+    }
+    /** sow-406: bring the named section into view, once per `section` value, after the list has rendered. */
+    _scrollToSection() {
+      const want = savedSectionFromHash(typeof this.getAttribute === "function" ? this.getAttribute("section") : null);
+      if (!want || this._scrolled || !this._activity || this._activity.error) return;
+      const sec = this.$?.(`[data-sec="${want}"]`);
+      if (!sec) return;
+      this._scrolled = true;
+      try {
+        sec.scrollIntoView({ block: "start", behavior: "smooth" });
+      } catch {
+      }
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
@@ -24930,8 +24956,10 @@ ${BLOCKED_PILL_CSS}
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
       const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
       let follow = "";
-      const wsBase = typeof location !== "undefined" && location.protocol === "chrome-extension:" ? "workspace.html" : "/workbench/";
-      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
+      const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
+      const wsBase = inExt ? `${SITE19}/workbench/` : "/workbench/";
+      const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
+      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE19}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
@@ -26567,9 +26595,11 @@ ${BLOCKED_PILL_CSS}
       return null;
     }
   }
+  var GBTI_MARK = '<img class="gbti-mk" src="icons/icon-128.png" alt="" width="22" height="22" />';
+  var GBTI_CHIP = `<a class="nt-app gbti" href="https://gbti.network/" target="_blank" rel="noopener" title="GBTI Network" aria-label="GBTI Network, opens in a new tab">${GBTI_MARK}</a>`;
   function barHtml() {
     const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc4(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc4(it.name)}" aria-label="${esc4(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
-    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span><span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>${links}`;
+    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${GBTI_CHIP}${links}`;
   }
   function renderBars() {
     const html = barHtml();
@@ -26644,7 +26674,7 @@ ${BLOCKED_PILL_CSS}
   function previewHtml() {
     const items = barItems(STATE);
     const icons = items.map((it) => `<span class="ql-pv" title="${esc4(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
-    return `<span class="nt-app gbti" aria-hidden="true">GBTI</span>${icons}`;
+    return `<span class="nt-app gbti" aria-hidden="true">${GBTI_MARK}</span>${icons}`;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
     return `<form class="ql-form" data-ql-form="${esc4(id)}" novalidate>
@@ -26935,35 +26965,8 @@ ${BLOCKED_PILL_CSS}
     network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
   var ico = (k) => SVG2[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>` : "";
-  var RAIL_WORKBENCH = [
-    // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
-    { key: "network", href: "newtab.html", ico: "network", nm: "Network", sub: "Exit WorkBench" },
-    // Explicit #tab=overview so clicking it ON workspace.html is a same-document switch (no reload), like the others.
-    { key: "overview", href: "workspace.html#tab=overview", ico: "grid", nm: "Overview", sub: "Your hub at a glance" },
-    { group: "My Content" },
-    { key: "post", href: "workspace.html#tab=post", ico: "article", nm: "Articles", sub: "Your posts" },
-    { key: "prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Your prompts" },
-    { key: "project", href: "workspace.html#tab=project", ico: "project", nm: "Projects", sub: "Your projects" },
-    { group: "Activity" },
-    // sow-404 (owner, 2026-09-25): "Only superadmins should be interested in pull requests."
-    { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted", superOnly: true },
-    { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved", sub: "Favorites + collections" },
-    { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following", sub: "Members, channels, topics" },
-    { key: "earnings", href: "workspace.html#tab=earnings", ico: "coin", nm: "Earnings", sub: "Referrals + rewards" },
-    { div: true },
-    // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
-    // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-    // SOW-129, repointed sow-204, then (owner, 2026-09-25) "The profile link should go to the members profile": the
-    // member's public page, as the website's avatar menu does. `meProfile` marks it for applyAccount, which fills in
-    // the login; until then it is the member directory, the website's own fallback.
-    { key: "profile", href: `${SITE23}/members/`, ext: true, meProfile: true, ico: "user", nm: "Profile", sub: "Your public profile" },
-    { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
-    { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
-  ];
-  var RAILS = { workbench: RAIL_WORKBENCH };
-  function controlsHtml({ compose = true } = {}) {
+  function controlsHtml({ compose = false } = {}) {
     return `<div class="nt-controls" data-controls>
-    <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
     <gbti-activity-bell></gbti-activity-bell>
@@ -26976,7 +26979,10 @@ ${BLOCKED_PILL_CSS}
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
+        <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
+        <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
+        <a class="mi" role="menuitem" href="${SITE23}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE23}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
         <a class="mi" role="menuitem" href="${SITE23}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
@@ -26993,39 +26999,6 @@ ${BLOCKED_PILL_CSS}
     <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
     <span class="nt-brand-tx">GBTI <b>Network</b></span>
   </a>`;
-  }
-  function railHtml(active, nav = "workbench") {
-    const rail = RAILS[nav] || RAIL_WORKBENCH;
-    const items = rail.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc5(r.group)}</div>`;
-      if (r.div) return `<hr class="nt-rail-div" />`;
-      const on = r.key === active ? " on" : "";
-      const admin = r.adminOnly ? " data-admin-only hidden" : r.superOnly ? " data-super-only hidden" : "";
-      const sub = r.sub ? `<span class="sub">${esc5(r.sub)}</span>` : "";
-      const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const me = r.meProfile ? " data-me-profile" : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin}${me} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc5(r.nm)}</span>${sub}</span></a>`;
-      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc5(c.nm)}</span></span></a>`).join("");
-      return self + kids2;
-    }).join("");
-    return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE23}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
-  }
-  function applyHeadingIcon(key) {
-    const h1 = document.querySelector("[data-topbar] h1");
-    if (!h1) return;
-    const icoKey = key ? document.querySelector(`.nt-rail .nav-i[data-key="${key}"] [data-ico]`)?.dataset.ico : null;
-    let holder = h1.querySelector(".head-ico");
-    if (!icoKey) {
-      holder?.remove();
-      return;
-    }
-    if (!holder) {
-      holder = document.createElement("span");
-      holder.className = "head-ico";
-      holder.setAttribute("aria-hidden", "true");
-      h1.prepend(holder);
-    }
-    holder.innerHTML = ico(icoKey);
   }
   async function api(pathname, query = {}) {
     try {
@@ -27292,44 +27265,11 @@ ${BLOCKED_PILL_CSS}
     mountQuickLaunch(root.querySelector("[data-apps]")).catch(() => {
     });
   }
-  function wireDrawer(root) {
-    const rail = root.querySelector(".nt-rail");
-    const btn = root.querySelector("[data-drawer-toggle]");
-    if (!rail || !btn) return;
-    let scrim = document.querySelector(".nt-scrim");
-    if (!scrim) {
-      scrim = document.createElement("div");
-      scrim.className = "nt-scrim";
-      document.body.appendChild(scrim);
-    }
-    const close = () => {
-      rail.classList.remove("open");
-      scrim.classList.remove("open");
-      btn.setAttribute("aria-expanded", "false");
-    };
-    const open = () => {
-      rail.classList.add("open");
-      scrim.classList.add("open");
-      btn.setAttribute("aria-expanded", "true");
-    };
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      rail.classList.contains("open") ? close() : open();
-    });
-    scrim.addEventListener("click", close);
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && rail.classList.contains("open")) close();
-    });
-    rail.querySelectorAll("a").forEach((a) => a.addEventListener("click", close));
-  }
-  function initShell({ active = null, nav = "workbench" } = {}) {
+  function initShell({ compose = false } = {}) {
     const root = document.querySelector("[data-shell]");
     if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
     const main = root.querySelector(".nt-main");
-    const railless = nav === "none";
-    if (railless) root.classList.add("nt-norail");
-    else if (main) main.insertAdjacentHTML("beforebegin", railHtml(active, nav));
-    else root.insertAdjacentHTML("afterbegin", railHtml(active, nav));
+    root.classList.add("nt-norail");
     if (main) {
       let topbar = main.querySelector("[data-topbar]");
       if (!topbar) {
@@ -27338,13 +27278,12 @@ ${BLOCKED_PILL_CSS}
         topbar.setAttribute("data-topbar", "");
         main.prepend(topbar);
       }
-      if (railless) topbar.insertAdjacentHTML("afterbegin", brandHtml());
-      topbar.insertAdjacentHTML("beforeend", controlsHtml({ compose: !railless }));
+      topbar.insertAdjacentHTML("afterbegin", brandHtml());
+      topbar.insertAdjacentHTML("beforeend", controlsHtml({ compose }));
     }
     root.querySelectorAll("[data-ico]").forEach((el) => {
       el.innerHTML = ico(el.dataset.ico);
     });
-    applyHeadingIcon(active);
     const themeBtn = root.querySelector("[data-theme-toggle]");
     if (themeBtn) {
       themeBtn.innerHTML = ico(document.documentElement.getAttribute("data-theme") === "dark" ? "sun" : "moon");
@@ -27353,7 +27292,6 @@ ${BLOCKED_PILL_CSS}
     wireApps(root);
     wireAccount(root);
     wireCompose(root);
-    wireDrawer(root);
     loadShellAccount(root).then((status) => {
       if (!status) {
         mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
@@ -27419,7 +27357,7 @@ ${BLOCKED_PILL_CSS}
 
   // extension/src/admin.mjs
   mountPageClient();
-  var shell = initShell({ active: "admin", nav: "workbench" });
+  var shell = initShell({ compose: true });
   var ADMIN_TAB_KEY = "gbti-admin-tab";
   function wireAdminTabs() {
     const adminTabs = Array.from(document.querySelectorAll("[data-tab]"));

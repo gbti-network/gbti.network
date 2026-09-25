@@ -214,14 +214,14 @@ export function prLifecycle(pull = {}, status = null) {
 }
 
 // SOW-072 P2: the ONE submit-acknowledgement copy, so every composer confirms a submission the SAME accurate way.
-// The old acks guessed ("it appears after the next build") or named only the PR; this states what actually happens
-// (auto-merge makes it fast) and points at the WorkBench, where the PR is tracked and a rejection surfaces with its
-// reason. `autoMerge` true = an own-folder paid publish (merges + goes live automatically); false = review-gated.
-export function submitAck({ prNumber = null, autoMerge = true } = {}) {
-  const pr = prNumber ? ` (PR #${prNumber})` : '';
+// `autoMerge` true = an own-folder paid publish (goes live on its own); false = review-gated.
+// sow-404/406 (owner, 2026-09-25): members no longer care about pull requests and the extension has no WorkBench, so
+// a member's ack names neither: no "(PR #N)", no "Track it in your WorkBench". Callers still pass `prNumber`; it is
+// ignored. Staff edits to house configuration keep the number (houseEditAck below).
+export function submitAck({ autoMerge = true } = {}) {
   return autoMerge
-    ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.`
-    : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+    ? 'Submitted. It appears in about 2 to 3 minutes.'
+    : 'Submitted. It is awaiting review.';
 }
 
 // sow-275: the acknowledgement for a HOUSE CONFIG edit (quotes, news sources, categories, the channel map, site
@@ -232,7 +232,10 @@ export function submitAck({ prNumber = null, autoMerge = true } = {}) {
 // automatically", so a response that does not carry the field (an older Worker) keeps the review wording rather
 // than promising a merge nobody reported.
 export function houseEditAck(r) {
-  return submitAck({ prNumber: r?.prNumber ?? null, autoMerge: r?.autoMerge === true });
+  // Staff-facing (superadmins and admins editing house configuration), so the pull request number stays: for them it
+  // is the record of the change. Only an explicit autoMerge: true says "merges automatically" (see above).
+  const pr = r?.prNumber ? ` (PR #${r.prNumber})` : '';
+  return r?.autoMerge === true ? `Submitted${pr}. It merges automatically and appears shortly.` : `Submitted${pr}. It is awaiting review.`;
 }
 
 // SOW-072 P3: map a publish/comment FAILURE to consistent author-facing guidance, so every composer reports a

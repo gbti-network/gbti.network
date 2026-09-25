@@ -99,12 +99,13 @@ test('prLifecycle: an open, passing/checking PR is pending — no attention, no 
   }
 });
 
-// SOW-072 P2: submitAck is the one consistent submission confirmation.
-test('submitAck: states the real auto-merge flow + the WorkBench, with the PR number when known', () => {
+// SOW-072 P2: submitAck is the one consistent submission confirmation. sow-404/406 (owner, 2026-09-25): members no
+// longer care about pull requests and the extension has no WorkBench, so a member's ack names neither. It used to say
+// "(PR #42) ... merges automatically ... Track it in your WorkBench"; staff house edits keep the number (houseEditAck).
+test('submitAck: says when it appears, with no pull request number and no WorkBench', () => {
   const auto = submitAck({ prNumber: 42 });
-  assert.match(auto, /PR #42/);
-  assert.match(auto, /merges automatically/);
-  assert.match(auto, /WorkBench/);
+  assert.equal(auto, 'Submitted. It appears in about 2 to 3 minutes.');
+  assert.doesNotMatch(auto, /PR|#42|WorkBench/);
   assert.match(submitAck({ prNumber: 7, autoMerge: false }), /awaiting review/);
   // no PR number yet -> no dangling "#"
   assert.doesNotMatch(submitAck({}), /#/);

@@ -93,3 +93,11 @@ export function savedCount(activity = {}) {
     : 0;
   return { favorites: favs, inCollections: coll };
 }
+
+// sow-406: the extension's avatar menu opens the Saved view at one of its two sections (saved.html#favorites,
+// saved.html#collections). Anything else names no section and leaves the page at the top.
+export const SAVED_SECTIONS = ['favorites', 'collections'];
+export function savedSectionFromHash(hash) {
+  const h = String(hash ?? '').replace(/^#/, '').trim().toLowerCase();
+  return SAVED_SECTIONS.includes(h) ? h : null;
+}

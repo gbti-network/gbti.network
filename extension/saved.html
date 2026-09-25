@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- sow-406: the GBTI extension's Favorites and collections page, inside the shared member-hub shell (the top row is
+     injected by shell.mjs; no left menu). The avatar menu's Favorites and Collections items open it at their section
+     (saved.html#favorites, saved.html#collections). Mounts <gbti-saved>, which was the WorkBench's Saved tab before
+     the WorkBench left the extension (owner, 2026-09-25). NOT behind the membership lock gate: saving is a free-tier
+     perk, and the Worker refuses a banned account on its own. The token stays in the background worker. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Favorites and collections · GBTI Network</title>
+  <!-- No-flash theme: external (not inline) because MV3 extension_pages CSP forbids inline scripts. -->
+  <script src="dist/theme-init.js"></script>
+  <link rel="stylesheet" href="shell.css" />
+  <style>
+    .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
+    .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
+    gbti-saved { display: block; max-width: 720px; margin: 0 auto; }
+    /* The heading sits under the top row, in the same column as the list, as on Settings. */
+    .hub-head { max-width: 720px; margin: 6px auto 20px; }
+  </style>
+</head>
+<body>
+  <div class="nt" data-shell>
+    <main class="nt-main">
+      <div class="nt-top" data-topbar></div>
+      <div class="hub-head"><h1 class="hub-h"><span class="head-ico" data-ico="bookmark" aria-hidden="true"></span>Favorites and collections</h1><p class="hub-sub">What you have saved, and the collections you keep.</p></div>
+      <!-- saved.mjs creates <gbti-saved> here AFTER the client is set: the element loads once, on connect, so one
+           written into this markup would upgrade before the client exists and sit on "Loading" for good. -->
+      <div data-saved-slot></div>
+    </main>
+  </div>
+  <script src="dist/saved.js"></script>
+</body>
+</html>

@@ -21,12 +21,12 @@
     };
     const pinned = new RegExp(`^https://cdn\\.jsdelivr\\.net/gh/${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@[0-9a-f]{40}/`);
     const onError = (ev) => {
-      const el = ev.target;
-      if (!el || el.tagName !== "IMG" || el.dataset?.cdnRetried) return;
-      const src = String(el.getAttribute("src") || "");
+      const el2 = ev.target;
+      if (!el2 || el2.tagName !== "IMG" || el2.dataset?.cdnRetried) return;
+      const src = String(el2.getAttribute("src") || "");
       if (!pinned.test(src)) return;
-      el.dataset.cdnRetried = "1";
-      el.setAttribute("src", src.replace(/@[0-9a-f]{40}\//, `@${DEFAULT_REF}/`));
+      el2.dataset.cdnRetried = "1";
+      el2.setAttribute("src", src.replace(/@[0-9a-f]{40}\//, `@${DEFAULT_REF}/`));
     };
     root.addEventListener("error", onError, true);
     return () => root.removeEventListener("error", onError, true);
@@ -182,8 +182,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var CLIENT = null;
   var IDENTITY = null;
   var SUBSCRIBERS = /* @__PURE__ */ new Set();
-  function setClient(client2) {
-    CLIENT = client2;
+  function setClient(client) {
+    CLIENT = client;
     IDENTITY = null;
     for (const fn of SUBSCRIBERS) {
       try {
@@ -253,8 +253,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return this.root ? [...this.root.querySelectorAll(sel)] : [];
     }
     on(sel, event, handler) {
-      const el = this.$(sel);
-      if (el) el.addEventListener(event, handler);
+      const el2 = this.$(sel);
+      if (el2) el2.addEventListener(event, handler);
     }
     emit(name, detail) {
       this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
@@ -1235,7 +1235,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/block-commit.mjs
-  function readListDom(el, md) {
+  function readListDom(el2, md) {
     const out = [];
     const tagOf2 = (n) => String(n?.tagName || "").toUpperCase();
     const classOf = (n) => (typeof n?.getAttribute === "function" ? n.getAttribute("class") : n?.className) || "";
@@ -1249,15 +1249,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         for (const sub of Array.from(li.children || [])) if (tagOf2(sub) === "UL" || tagOf2(sub) === "OL") walk2(sub, depth + 1);
       }
     };
-    walk2(el, 0);
+    walk2(el2, 0);
     return out;
   }
-  function listItemAtSelection(el, sel) {
+  function listItemAtSelection(el2, sel) {
     let n = sel?.anchorNode || null;
     if (n && n.nodeType !== 1) n = n.parentNode;
-    while (n && n !== el && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
-    if (!n || n === el) return { li: null, index: -1 };
-    const all = Array.from(el.querySelectorAll("li"));
+    while (n && n !== el2 && String(n.tagName || "").toUpperCase() !== "LI") n = n.parentNode;
+    if (!n || n === el2) return { li: null, index: -1 };
+    const all = Array.from(el2.querySelectorAll("li"));
     return { li: n, index: all.indexOf(n) };
   }
   function caretAtEndOfItem(li, sel) {
@@ -1349,10 +1349,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const root = host.getRootNode ? host.getRootNode() : document;
     const target = root && root.nodeType === 11 ? root : document.head;
     if (!target || target.querySelector(`#${STYLE_ID}`)) return;
-    const el = document.createElement("style");
-    el.id = STYLE_ID;
-    el.textContent = SELECTION_TOOLBAR_CSS;
-    target.appendChild(el);
+    const el2 = document.createElement("style");
+    el2.id = STYLE_ID;
+    el2.textContent = SELECTION_TOOLBAR_CSS;
+    target.appendChild(el2);
   }
   function linkRel({ nofollow = false, blank = false } = {}) {
     return [nofollow ? "nofollow" : null, blank ? "noopener" : null].filter(Boolean).join(" ");
@@ -1450,8 +1450,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
     const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
     function buildTb() {
-      const el = document.createElement("div");
-      el.className = "gbti-stb";
+      const el2 = document.createElement("div");
+      el2.className = "gbti-stb";
       let html = '<button type="button" data-w="bold" title="Bold">B</button><button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button><button type="button" data-w="code" title="Inline code" style="font-family:var(--f-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>';
       if (typeof onRetype === "function") {
         html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="h2" title="Heading">H2</button><button type="button" data-w="h3" title="Subheading">H3</button><button type="button" data-w="p" title="Body text">P</button>';
@@ -1459,12 +1459,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (typeof listItemImages === "function") {
         html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="image" title="Insert image">Img</button>';
       }
-      el.innerHTML = html;
-      el.querySelectorAll("button").forEach((b) => b.addEventListener("mousedown", (e) => {
+      el2.innerHTML = html;
+      el2.querySelectorAll("button").forEach((b) => b.addEventListener("mousedown", (e) => {
         e.preventDefault();
         wrap(b.dataset.w);
       }));
-      return el;
+      return el2;
     }
     function update() {
       if (anyPanelOpen()) return;
@@ -1481,8 +1481,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (list) showListTools(list);
         return;
       }
-      const el = editableOf(sel.anchorNode);
-      if (!el) {
+      const el2 = editableOf(sel.anchorNode);
+      if (!el2) {
         hideTb();
         if (list) showListTools(list);
         return;
@@ -1498,25 +1498,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     function wrap(w) {
       const sel = getSel();
       if (!sel || sel.isCollapsed) return;
-      const el = editableOf(sel.anchorNode);
-      if (!el) return;
+      const el2 = editableOf(sel.anchorNode);
+      if (!el2) return;
       if (w === "image") {
-        openImagePanel(sel, el);
+        openImagePanel(sel, el2);
         return;
       }
       if (w === "h2" || w === "h3" || w === "p") {
-        if (typeof onRetype === "function") onRetype(el, w === "p" ? "paragraph" : "heading", w === "h2" ? 2 : w === "h3" ? 3 : null);
+        if (typeof onRetype === "function") onRetype(el2, w === "p" ? "paragraph" : "heading", w === "h2" ? 2 : w === "h3" ? 3 : null);
         hideTb();
         return;
       }
-      if (!allowInline(el)) return;
+      if (!allowInline(el2)) return;
       if (w === "link") {
-        openPanel(sel, el);
+        openPanel(sel, el2);
         return;
       }
       if (w === "code") toggleInline(sel, "code");
       else if (typeof document !== "undefined") document.execCommand(w);
-      onCommit(el, "format");
+      onCommit(el2, "format");
       hideTb();
     }
     function toggleInline(sel, tag) {
@@ -1545,30 +1545,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return null;
     }
     function buildPanel() {
-      const el = document.createElement("div");
-      el.className = "gbti-lp";
-      el.innerHTML = '<input type="text" data-lk-text placeholder="Link text" /><input type="url" data-lk-url placeholder="https://..." /><label><input type="checkbox" data-lk-nofollow /> nofollow</label><label><input type="checkbox" data-lk-blank /> New tab</label><div class="lp-btns"><button type="button" data-lk-apply>Apply</button><button type="button" data-lk-remove title="Remove link">Remove</button></div>';
-      el.addEventListener("mousedown", (e) => {
+      const el2 = document.createElement("div");
+      el2.className = "gbti-lp";
+      el2.innerHTML = '<input type="text" data-lk-text placeholder="Link text" /><input type="url" data-lk-url placeholder="https://..." /><label><input type="checkbox" data-lk-nofollow /> nofollow</label><label><input type="checkbox" data-lk-blank /> New tab</label><div class="lp-btns"><button type="button" data-lk-apply>Apply</button><button type="button" data-lk-remove title="Remove link">Remove</button></div>';
+      el2.addEventListener("mousedown", (e) => {
         if (e.target.tagName !== "INPUT") e.preventDefault();
       });
-      el.querySelector("[data-lk-apply]").addEventListener("click", () => apply(false));
-      el.querySelector("[data-lk-remove]").addEventListener("click", () => apply(true));
-      el.querySelectorAll('input[type="text"], input[type="url"]').forEach((i) => i.addEventListener("keydown", (e) => {
+      el2.querySelector("[data-lk-apply]").addEventListener("click", () => apply2(false));
+      el2.querySelector("[data-lk-remove]").addEventListener("click", () => apply2(true));
+      el2.querySelectorAll('input[type="text"], input[type="url"]').forEach((i) => i.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          apply(false);
+          apply2(false);
         }
         if (e.key === "Escape") {
           e.preventDefault();
           hidePanel();
         }
       }));
-      return el;
+      return el2;
     }
-    function openPanel(sel, el) {
+    function openPanel(sel, el2) {
       const range = sel.getRangeAt(0).cloneRange();
-      const existing = anchorIn(range, el);
-      lk = { range, el, existing };
+      const existing = anchorIn(range, el2);
+      lk = { range, el: el2, existing };
       if (!lp) lp = buildPanel();
       const rel = existing ? existing.getAttribute("rel") || "" : "";
       lp.querySelector("[data-lk-text]").value = existing ? existing.textContent || "" : String(range.toString() || "");
@@ -1580,9 +1580,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       hideTb();
       setTimeout(() => lp.querySelector("[data-lk-url]").focus(), 0);
     }
-    function apply(remove) {
+    function apply2(remove) {
       if (!lk) return;
-      const el = lk.el;
+      const el2 = lk.el;
       const text2 = String(lp.querySelector("[data-lk-text]").value || "").trim();
       const url = String(lp.querySelector("[data-lk-url]").value || "").trim();
       const nofollow = lp.querySelector("[data-lk-nofollow]").checked;
@@ -1601,7 +1601,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       try {
-        el.focus();
+        el2.focus();
         const s = getSel();
         s.removeAllRanges();
         s.addRange(lk.range);
@@ -1635,20 +1635,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       }
       hidePanel();
-      onCommit(el, "link");
+      onCommit(el2, "link");
     }
     function buildImagePanel() {
-      const el = document.createElement("div");
-      el.className = "gbti-lp gbti-ip";
-      el.innerHTML = '<div class="ip-head">Insert image</div><div class="ip-grid" data-ip-grid></div><div class="ip-empty" data-ip-empty hidden>No images are attached to this item yet. Add one in the editor first.</div>';
-      el.addEventListener("mousedown", (e) => {
+      const el2 = document.createElement("div");
+      el2.className = "gbti-lp gbti-ip";
+      el2.innerHTML = '<div class="ip-head">Insert image</div><div class="ip-grid" data-ip-grid></div><div class="ip-empty" data-ip-empty hidden>No images are attached to this item yet. Add one in the editor first.</div>';
+      el2.addEventListener("mousedown", (e) => {
         if (!(e.target.closest && e.target.closest(".ip-thumb"))) e.preventDefault();
       });
-      return el;
+      return el2;
     }
-    function openImagePanel(sel, el) {
+    function openImagePanel(sel, el2) {
       const range = sel.getRangeAt(0).cloneRange();
-      ik = { el };
+      ik = { el: el2 };
       if (!ip) ip = buildImagePanel();
       const grid = ip.querySelector("[data-ip-grid]");
       const empty = ip.querySelector("[data-ip-empty]");
@@ -1684,9 +1684,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       place(ip, range.getBoundingClientRect(), false);
       hideTb();
     }
-    const layoutOfEl = (el) => {
+    const layoutOfEl = (el2) => {
       try {
-        return typeof imageTools?.layoutOf === "function" && imageTools.layoutOf(el) || {};
+        return typeof imageTools?.layoutOf === "function" && imageTools.layoutOf(el2) || {};
       } catch {
         return {};
       }
@@ -1696,30 +1696,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ib.innerHTML = imageLayoutButtonsHtml(layout) + '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-il="caption" title="Add or edit the caption under the image">Caption</button><button type="button" data-il="remove" title="Remove this image">Remove</button>';
     }
     function buildCaptionPanel() {
-      const el = document.createElement("div");
-      el.className = "gbti-lp gbti-ic";
-      el.innerHTML = '<input type="text" data-ic-text placeholder="Caption under the image" maxlength="300" /><div class="lp-btns"><button type="button" data-lk-apply data-ic-apply>Apply</button><button type="button" data-ic-remove title="Remove the caption">Remove</button></div>';
-      el.addEventListener("mousedown", (e) => {
+      const el2 = document.createElement("div");
+      el2.className = "gbti-lp gbti-ic";
+      el2.innerHTML = '<input type="text" data-ic-text placeholder="Caption under the image" maxlength="300" /><div class="lp-btns"><button type="button" data-lk-apply data-ic-apply>Apply</button><button type="button" data-ic-remove title="Remove the caption">Remove</button></div>';
+      el2.addEventListener("mousedown", (e) => {
         if (e.target.tagName !== "INPUT") e.preventDefault();
       });
-      const apply2 = (text2) => {
+      const apply3 = (text2) => {
         const target = ibEl;
         hideCaptionPanel();
         if (target && typeof imageTools?.onCaption === "function") imageTools.onCaption(target, String(text2 ?? ""));
       };
-      el.querySelector("[data-ic-apply]").addEventListener("click", () => apply2(el.querySelector("[data-ic-text]").value));
-      el.querySelector("[data-ic-remove]").addEventListener("click", () => apply2(""));
-      el.querySelector("[data-ic-text]").addEventListener("keydown", (e) => {
+      el2.querySelector("[data-ic-apply]").addEventListener("click", () => apply3(el2.querySelector("[data-ic-text]").value));
+      el2.querySelector("[data-ic-remove]").addEventListener("click", () => apply3(""));
+      el2.querySelector("[data-ic-text]").addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          apply2(el.querySelector("[data-ic-text]").value);
+          apply3(el2.querySelector("[data-ic-text]").value);
         }
         if (e.key === "Escape") {
           e.preventDefault();
           hideCaptionPanel();
         }
       });
-      return el;
+      return el2;
     }
     function openCaptionPanel(target) {
       if (!ic3) ic3 = buildCaptionPanel();
@@ -1737,10 +1737,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       setTimeout(() => input.focus(), 0);
     }
     function buildImageBar() {
-      const el = document.createElement("div");
-      el.className = "gbti-stb gbti-imgbar";
-      el.addEventListener("mousedown", (e) => e.preventDefault());
-      el.addEventListener("click", (e) => {
+      const el2 = document.createElement("div");
+      el2.className = "gbti-stb gbti-imgbar";
+      el2.addEventListener("mousedown", (e) => e.preventDefault());
+      el2.addEventListener("click", (e) => {
         const b = e.target && e.target.closest ? e.target.closest("button[data-il]") : null;
         const target = ibEl;
         if (!b || !target || b.disabled) return;
@@ -1758,23 +1758,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         paintImageBar(next);
         if (typeof imageTools?.onLayout === "function") imageTools.onLayout(target, next);
       });
-      return el;
+      return el2;
     }
-    function showImageTools(el) {
-      if (!el || !imageTools) return;
+    function showImageTools(el2) {
+      if (!el2 || !imageTools) return;
       hideTb();
       hidePanel();
       hideImagePanel();
       hideCaptionPanel();
       if (!ib) ib = buildImageBar();
-      ibEl = el;
-      paintImageBar(layoutOfEl(el));
-      const img = el.querySelector && el.querySelector("img") || el;
+      ibEl = el2;
+      paintImageBar(layoutOfEl(el2));
+      const img = el2.querySelector && el2.querySelector("img") || el2;
       place(ib, img.getBoundingClientRect(), true);
     }
-    const stateOfEl = (el, index) => {
+    const stateOfEl = (el2, index) => {
       try {
-        return typeof listTools?.stateOf === "function" && listTools.stateOf(el, index) || { ordered: false, style: null };
+        return typeof listTools?.stateOf === "function" && listTools.stateOf(el2, index) || { ordered: false, style: null };
       } catch {
         return { ordered: false, style: null };
       }
@@ -1783,10 +1783,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (lb) lb.innerHTML = listStyleButtonsHtml(state);
     }
     function buildListBar() {
-      const el = document.createElement("div");
-      el.className = "gbti-stb gbti-listbar";
-      el.addEventListener("mousedown", (e) => e.preventDefault());
-      el.addEventListener("click", (e) => {
+      const el2 = document.createElement("div");
+      el2.className = "gbti-stb gbti-listbar";
+      el2.addEventListener("mousedown", (e) => e.preventDefault());
+      el2.addEventListener("click", (e) => {
         const b = e.target && e.target.closest ? e.target.closest("button[data-la]") : null;
         const target = lbEl;
         const index = lbIndex;
@@ -1795,21 +1795,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (act === "unwrap") hideListBar();
         if (typeof listTools?.onAction === "function") listTools.onAction(target, index, act);
       });
-      return el;
+      return el2;
     }
-    function showListTools(el, index, { lift = false } = {}) {
-      if (!el || !listTools) return;
+    function showListTools(el2, index, { lift = false } = {}) {
+      if (!el2 || !listTools) return;
       hideImageBar();
       hideImagePanel();
       if (!lb) lb = buildListBar();
-      let idx = Number.isInteger(index) ? index : listItemAtSelection(el, getSel()).index;
+      let idx = Number.isInteger(index) ? index : listItemAtSelection(el2, getSel()).index;
       if (idx < 0) idx = 0;
-      lbEl = el;
+      lbEl = el2;
       lbIndex = idx;
       lb.dataset.item = String(idx);
-      paintListBar(stateOfEl(el, idx));
+      paintListBar(stateOfEl(el2, idx));
       const hr = hostEl().getBoundingClientRect();
-      const blockRect = el.getBoundingClientRect();
+      const blockRect = el2.getBoundingClientRect();
       const pinned = blockRect.top < 48;
       place(lb, blockRect, true);
       if (pinned) lb.style.top = `${8 - hr.top}px`;
@@ -1837,12 +1837,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         hideListBar();
       },
       /** Show the image bar over an image block (see imageTools). A no-op when the host did not opt in. */
-      showImageTools(el) {
-        showImageTools(el);
+      showImageTools(el2) {
+        showImageTools(el2);
       },
       /** Show the list bar above item `index` of a list block (the caret's item when omitted). See listTools. */
-      showListTools(el, index) {
-        showListTools(el, index);
+      showListTools(el2, index) {
+        showListTools(el2, index);
       },
       /**
        * Open the link manager for an existing anchor, without going through the selection. A single click on a link
@@ -1850,12 +1850,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
        * the link reads as dead unless the host wires this. Builds its own Range rather than touching
        * document.getSelection(), so the selectionchange listener cannot flash the B/I/Link bar in behind the panel.
        */
-      editLink(el, anchor) {
-        if (!el || !anchor) return;
+      editLink(el2, anchor) {
+        if (!el2 || !anchor) return;
         const range = document.createRange();
         range.selectNodeContents(anchor);
         hideTb();
-        openPanel({ getRangeAt: () => range }, el);
+        openPanel({ getRangeAt: () => range }, el2);
       },
       destroy() {
         document.removeEventListener("selectionchange", onSel);
@@ -1881,16 +1881,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/list-editing.mjs
-  function listTabKeydown(e, { el, ordered = false, selection, apply }) {
-    if (!e || e.key !== "Tab" || !el) return false;
+  function listTabKeydown(e, { el: el2, ordered = false, selection, apply: apply2 }) {
+    if (!e || e.key !== "Tab" || !el2) return false;
     const sel = selection || (typeof document !== "undefined" ? document.getSelection() : null);
-    const { index } = listItemAtSelection(el, sel);
+    const { index } = listItemAtSelection(el2, sel);
     if (index < 0) return false;
     e.preventDefault();
-    const current = readListDom(el, (h) => inlineHtmlToMd(h));
+    const current = readListDom(el2, (h) => inlineHtmlToMd(h));
     const next = indentListItem(current, index, e.shiftKey ? -1 : 1, !!ordered);
     if (!next) return true;
-    const again = apply(isFlatList(next) ? next.map((it) => it.text) : next);
+    const again = apply2(isFlatList(next) ? next.map((it) => it.text) : next);
     const li = again ? again.querySelectorAll("li")[index] : null;
     if (again) again.focus();
     if (li) caretAtEndOfItem(li, sel);
@@ -1904,14 +1904,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const ce = host.ceOf(node);
         return ce && ce.dataset && ce.dataset.edit === "list" ? ce : null;
       },
-      stateOf: (el, index) => {
-        const b = host.byId(el.dataset.id);
+      stateOf: (el2, index) => {
+        const b = host.byId(el2.dataset.id);
         return b ? listRunState(b.items, !!b.ordered, index) : { ordered: false, style: null, depth: 0 };
       },
-      onAction: (el, index, action) => {
-        const b = host.byId(el.dataset.id);
+      onAction: (el2, index, action) => {
+        const b = host.byId(el2.dataset.id);
         if (!b) return;
-        const current = readListDom(el, md);
+        const current = readListDom(el2, md);
         if (action === "unwrap") {
           const i = host.indexOf(b._id);
           if (i < 0) return;
@@ -2360,18 +2360,18 @@ ${listStyleProseCss(".doc-blocks")}
     highlightBlock(i) {
       const b = (this._blocks || [])[Number(i)];
       if (!b) return false;
-      const el = this.root?.querySelector(`.blk[data-id="${b._id}"]`);
-      if (!el) return false;
+      const el2 = this.root?.querySelector(`.blk[data-id="${b._id}"]`);
+      if (!el2) return false;
       try {
-        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        el2.scrollIntoView({ block: "center", behavior: "smooth" });
       } catch {
-        el.scrollIntoView();
+        el2.scrollIntoView();
       }
-      el.classList.remove("blk-flash");
-      void el.offsetWidth;
-      el.classList.add("blk-flash");
+      el2.classList.remove("blk-flash");
+      void el2.offsetWidth;
+      el2.classList.add("blk-flash");
       clearTimeout(this._flashT);
-      this._flashT = setTimeout(() => el.classList.remove("blk-flash"), 1800);
+      this._flashT = setTimeout(() => el2.classList.remove("blk-flash"), 1800);
       return true;
     }
     _byId(id) {
@@ -2496,14 +2496,14 @@ ${listStyleProseCss(".doc-blocks")}
       return `<div class="mem-div" data-id="${b._id}">${svg("lock")} Members only <span>· only members see the content below</span><button class="bt danger rm" type="button" data-del="${b._id}" title="Remove the members-only split">${svg("x")}</button></div>`;
     }
     _wire() {
-      this.$$("[data-edit]").forEach((el) => {
+      this.$$("[data-edit]").forEach((el2) => {
         const on = () => {
-          if (el._composing) return;
-          const b = this._byId(el.dataset.id);
+          if (el2._composing) return;
+          const b = this._byId(el2.dataset.id);
           if (!b) return;
-          const f = el.dataset.edit;
+          const f = el2.dataset.edit;
           if (f === "text") {
-            const plain = el.innerText.replace(/\n$/, "");
+            const plain = el2.innerText.replace(/\n$/, "");
             if (b.type === "paragraph") {
               const sc = this._shortcut(plain);
               if (sc) {
@@ -2514,52 +2514,52 @@ ${listStyleProseCss(".doc-blocks")}
                 this._change();
                 return;
               }
-              if (plain.startsWith("/")) this._openSlash(el, plain.slice(1));
+              if (plain.startsWith("/")) this._openSlash(el2, plain.slice(1));
               else this._closeSlash();
             }
-            b.text = textBlockFromHtml(el.innerHTML);
-          } else if (f === "code") b.code = el.innerText.replace(/\n$/, "");
+            b.text = textBlockFromHtml(el2.innerHTML);
+          } else if (f === "code") b.code = el2.innerText.replace(/\n$/, "");
           else if (f === "list") {
-            const items = readListDom(el, (h) => inlineHtmlToMd(h));
+            const items = readListDom(el2, (h) => inlineHtmlToMd(h));
             b.items = isFlatList(items) ? items.map((it) => it.text) : items;
           } else if (f === "cell") {
-            const r = Number(el.dataset.r);
-            const c = Number(el.dataset.c);
+            const r = Number(el2.dataset.r);
+            const c = Number(el2.dataset.c);
             if (Number.isNaN(r) || Number.isNaN(c) || c < 0) return;
-            const md = inlineHtmlToMd(el.innerHTML).replace(/\n$/, "");
+            const md = inlineHtmlToMd(el2.innerHTML).replace(/\n$/, "");
             if (r < 0) {
               if (!Array.isArray(b.head)) b.head = [];
               if (c < b.head.length) b.head[c] = md;
             } else if (Array.isArray(b.rows) && r < b.rows.length && Array.isArray(b.rows[r]) && c < b.rows[r].length) {
               b.rows[r][c] = md;
             }
-          } else b[f] = el.value;
+          } else b[f] = el2.value;
           this._change();
         };
-        el.addEventListener("input", on);
-        el.addEventListener("compositionstart", () => {
-          el._composing = true;
+        el2.addEventListener("input", on);
+        el2.addEventListener("compositionstart", () => {
+          el2._composing = true;
         });
-        el.addEventListener("compositionend", () => {
-          el._composing = false;
+        el2.addEventListener("compositionend", () => {
+          el2._composing = false;
           on();
         });
-        if (el.classList.contains("ce") || el.classList.contains("tc")) {
-          el.addEventListener("paste", (e) => {
+        if (el2.classList.contains("ce") || el2.classList.contains("tc")) {
+          el2.addEventListener("paste", (e) => {
             e.preventDefault();
             const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
             document.execCommand("insertText", false, t);
           });
         }
       });
-      this.$$("[data-convert]").forEach((el) => el.addEventListener("click", (e) => {
+      this.$$("[data-convert]").forEach((el2) => el2.addEventListener("click", (e) => {
         e.stopPropagation();
-        this._openConvert(el, el.dataset.convert);
+        this._openConvert(el2, el2.dataset.convert);
       }));
-      this.$$("[data-cvar]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.cvar);
+      this.$$("[data-cvar]").forEach((el2) => el2.addEventListener("click", () => {
+        const b = this._byId(el2.dataset.cvar);
         if (b) {
-          b.variant = el.dataset.cval;
+          b.variant = el2.dataset.cval;
           this._render();
           this._focusBlock(b._id);
           this._change();
@@ -2579,16 +2579,16 @@ ${listStyleProseCss(".doc-blocks")}
           return row;
         });
       };
-      this.$$("[data-taddrow]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.taddrow);
+      this.$$("[data-taddrow]").forEach((el2) => el2.addEventListener("click", () => {
+        const b = this._byId(el2.dataset.taddrow);
         if (!b) return;
         tblNorm(b);
         b.rows.push(new Array(tblCols(b)).fill(""));
         this._render();
         this._change();
       }));
-      this.$$("[data-taddcol]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.taddcol);
+      this.$$("[data-taddcol]").forEach((el2) => el2.addEventListener("click", () => {
+        const b = this._byId(el2.dataset.taddcol);
         if (!b) return;
         tblNorm(b);
         b.head.push("");
@@ -2597,18 +2597,18 @@ ${listStyleProseCss(".doc-blocks")}
         this._render();
         this._change();
       }));
-      this.$$("[data-trowrm]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.trowrm);
+      this.$$("[data-trowrm]").forEach((el2) => el2.addEventListener("click", () => {
+        const b = this._byId(el2.dataset.trowrm);
         if (!b) return;
-        const r = Number(el.dataset.r);
+        const r = Number(el2.dataset.r);
         if (Array.isArray(b.rows)) b.rows.splice(r, 1);
         this._render();
         this._change();
       }));
-      this.$$("[data-tcolrm]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.tcolrm);
+      this.$$("[data-tcolrm]").forEach((el2) => el2.addEventListener("click", () => {
+        const b = this._byId(el2.dataset.tcolrm);
         if (!b) return;
-        const c = Number(el.dataset.c);
+        const c = Number(el2.dataset.c);
         if (tblCols(b) <= 1) {
           const i = this._indexOf(b._id);
           if (i >= 0) {
@@ -2624,19 +2624,19 @@ ${listStyleProseCss(".doc-blocks")}
         this._render();
         this._change();
       }));
-      this.$$("[data-talign]").forEach((el) => el.addEventListener("click", () => {
-        const b = this._byId(el.dataset.talign);
+      this.$$("[data-talign]").forEach((el2) => el2.addEventListener("click", () => {
+        const b = this._byId(el2.dataset.talign);
         if (!b) return;
-        const c = Number(el.dataset.c);
+        const c = Number(el2.dataset.c);
         const order = ["", "left", "center", "right"];
         if (!Array.isArray(b.aligns)) b.aligns = [];
         b.aligns[c] = order[(order.indexOf(b.aligns[c] || "") + 1) % order.length];
         this._render();
         this._change();
       }));
-      this.$$("[data-up]").forEach((el) => el.addEventListener("click", () => this._move(el.dataset.up, -1)));
-      this.$$("[data-down]").forEach((el) => el.addEventListener("click", () => this._move(el.dataset.down, 1)));
-      this.$$("[data-del]").forEach((el) => el.addEventListener("click", () => this._deleteBlock(el.dataset.del)));
+      this.$$("[data-up]").forEach((el2) => el2.addEventListener("click", () => this._move(el2.dataset.up, -1)));
+      this.$$("[data-down]").forEach((el2) => el2.addEventListener("click", () => this._move(el2.dataset.down, 1)));
+      this.$$("[data-del]").forEach((el2) => el2.addEventListener("click", () => this._deleteBlock(el2.dataset.del)));
       const menuBtn = this.$("[data-addmenu]");
       const pop = this.$("[data-addpop]");
       if (menuBtn && pop) {
@@ -2718,14 +2718,14 @@ ${listStyleProseCss(".doc-blocks")}
           this._change();
         });
       });
-      this.$$("[data-imgpick]").forEach((el) => {
-        const id = el.dataset.imgpick;
+      this.$$("[data-imgpick]").forEach((el2) => {
+        const id = el2.dataset.imgpick;
         const fileEl = this.$(`[data-imgfile="${id}"]`);
-        el.addEventListener("click", () => fileEl?.click());
+        el2.addEventListener("click", () => fileEl?.click());
         fileEl?.addEventListener("change", (e) => this._uploadImage(e.target.files?.[0], id));
       });
-      this.$$("[data-imgreuse]").forEach((el) => {
-        el.addEventListener("click", () => this._openMediaPicker(el, el.dataset.imgreuse));
+      this.$$("[data-imgreuse]").forEach((el2) => {
+        el2.addEventListener("click", () => this._openMediaPicker(el2, el2.dataset.imgreuse));
       });
       this.$$("[data-imgdrop]").forEach((zone) => {
         const id = zone.dataset.imgdrop;
@@ -2751,11 +2751,11 @@ ${listStyleProseCss(".doc-blocks")}
         if (!ce) return;
         this._seltb?.editLink(ce, a);
       }));
-      this.$$('.ce[data-edit="list"]').forEach((el) => el.addEventListener("keydown", (e) => {
-        const b = this._byId(el.dataset.id);
+      this.$$('.ce[data-edit="list"]').forEach((el2) => el2.addEventListener("keydown", (e) => {
+        const b = this._byId(el2.dataset.id);
         if (!b) return;
         listTabKeydown(e, {
-          el,
+          el: el2,
           ordered: !!b.ordered,
           selection: this.root.getSelection ? this.root.getSelection() : document.getSelection(),
           apply: (items) => {
@@ -2766,8 +2766,8 @@ ${listStyleProseCss(".doc-blocks")}
           }
         });
       }));
-      this.$$('.ce[data-edit="text"]').forEach((el) => el.addEventListener("keydown", (e) => {
-        if (this._slash && this._slash.el === el) {
+      this.$$('.ce[data-edit="text"]').forEach((el2) => el2.addEventListener("keydown", (e) => {
+        if (this._slash && this._slash.el === el2) {
           if (e.key === "ArrowDown") {
             e.preventDefault();
             return this._moveSlash(1);
@@ -2786,7 +2786,7 @@ ${listStyleProseCss(".doc-blocks")}
           }
         }
         if (e.key === "Backspace") {
-          const b = this._byId(el.dataset.id);
+          const b = this._byId(el2.dataset.id);
           const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
           const atStart = sel && sel.isCollapsed && sel.focusOffset === 0;
           if (b && atStart && !String(b.text || "")) {
@@ -2807,9 +2807,9 @@ ${listStyleProseCss(".doc-blocks")}
           }
         }
         if (e.key === "Enter" && !e.shiftKey) {
-          const b = this._byId(el.dataset.id);
+          const b = this._byId(el2.dataset.id);
           const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
-          const atEnd = sel && sel.focusOffset === (el.innerText || "").length;
+          const atEnd = sel && sel.focusOffset === (el2.innerText || "").length;
           if (b && atEnd) {
             e.preventDefault();
             const i = this._indexOf(b._id);
@@ -2823,12 +2823,12 @@ ${listStyleProseCss(".doc-blocks")}
       }));
     }
     _focusBlock(id) {
-      const el = this.$(`.blk[data-id="${id}"] .ce`) || this.$(`.blk[data-id="${id}"] input`);
-      if (!el) return;
-      el.focus();
+      const el2 = this.$(`.blk[data-id="${id}"] .ce`) || this.$(`.blk[data-id="${id}"] input`);
+      if (!el2) return;
+      el2.focus();
       try {
         const r = document.createRange();
-        r.selectNodeContents(el);
+        r.selectNodeContents(el2);
         r.collapse(false);
         const sel = document.getSelection();
         sel.removeAllRanges();
@@ -3032,12 +3032,12 @@ ${listStyleProseCss(".doc-blocks")}
       this._focusBlock(next._id);
       this._change();
     }
-    _openSlash(el, query) {
+    _openSlash(el2, query) {
       const q = String(query || "").toLowerCase();
       const matches = this._palette().filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q));
       this._closeSlash();
       const host = this.$(".doc-blocks");
-      const blk = el.closest(".blk");
+      const blk = el2.closest(".blk");
       if (!matches.length || !host || !blk) return;
       const pop = document.createElement("div");
       pop.className = "slash-pop";
@@ -3049,7 +3049,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._pickSlash(Number(b.dataset.si));
       }));
       host.appendChild(pop);
-      this._slash = { el, matches, idx: 0, pop };
+      this._slash = { el: el2, matches, idx: 0, pop };
     }
     _closeSlash() {
       if (this._slash && this._slash.pop) this._slash.pop.remove();
@@ -3236,12 +3236,12 @@ ${listStyleProseCss(".doc-blocks")}
       reason: needsAttention ? descIsReason && desc || fallback : desc
     };
   }
-  function submitAck({ prNumber = null, autoMerge = true } = {}) {
-    const pr = prNumber ? ` (PR #${prNumber})` : "";
-    return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+  function submitAck({ autoMerge = true } = {}) {
+    return autoMerge ? "Submitted. It appears in about 2 to 3 minutes." : "Submitted. It is awaiting review.";
   }
   function houseEditAck(r) {
-    return submitAck({ prNumber: r?.prNumber ?? null, autoMerge: r?.autoMerge === true });
+    const pr = r?.prNumber ? ` (PR #${r.prNumber})` : "";
+    return r?.autoMerge === true ? `Submitted${pr}. It merges automatically and appears shortly.` : `Submitted${pr}. It is awaiting review.`;
   }
   function failHint(err) {
     const code = err?.code || "";
@@ -4410,16 +4410,16 @@ ${listStyleProseCss(".doc-blocks")}
   var hasBlockChild = (n) => kids(n).some(isBlock);
   var flat = (blocks) => blocks.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
   var inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
-  function codeText(el) {
-    const html = String(el?.innerHTML ?? "");
+  function codeText(el2) {
+    const html = String(el2?.innerHTML ?? "");
     const t = html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?div[^>]*>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     return t.replace(/\n+$/, "");
   }
   function codeLang(pre) {
     const code = kids(pre).find((c) => c.nodeType === ELEMENT && tagOf(c) === "CODE") || null;
-    const el = code || pre;
-    const lang = attr(el, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el, "class")) || [])[1] || "";
-    return { el, lang: String(lang).replace(/[^\w+-]/g, "") };
+    const el2 = code || pre;
+    const lang = attr(el2, "data-lang") || (/(?:^|\s)language-([\w+-]+)/.exec(attr(el2, "class")) || [])[1] || "";
+    return { el: el2, lang: String(lang).replace(/[^\w+-]/g, "") };
   }
   function walk(node, out) {
     let buf = "";
@@ -4490,8 +4490,8 @@ ${listStyleProseCss(".doc-blocks")}
       return;
     }
     if (t === "PRE") {
-      const { el, lang } = codeLang(n);
-      out.push("```" + lang + "\n" + codeText(el) + "\n```");
+      const { el: el2, lang } = codeLang(n);
+      out.push("```" + lang + "\n" + codeText(el2) + "\n```");
       return;
     }
     if (/^H[1-6]$/.test(t)) {
@@ -4768,7 +4768,7 @@ ${listStyleProseCss(".doc-blocks")}
      *  by execCommand('outdent'), which re-coloured the lifted text with inline styles and lost its bold on the way
      *  back to markdown (measured in Chrome, 2026-09-16). */
     _liftLine(quote, line) {
-      const has = (el) => !!(el.textContent.trim() || el.querySelector("img, [data-embed-url]"));
+      const has = (el2) => !!(el2.textContent.trim() || el2.querySelector("img, [data-embed-url]"));
       const rest = document.createElement("blockquote");
       while (line.nextSibling) rest.appendChild(line.nextSibling);
       const p = document.createElement("p");
@@ -4861,10 +4861,10 @@ ${listStyleProseCss(".doc-blocks")}
         }
       }
     }
-    _caretIn(el) {
+    _caretIn(el2) {
       try {
         const r = document.createRange();
-        r.selectNodeContents(el);
+        r.selectNodeContents(el2);
         r.collapse(true);
         const sel = this._sel();
         sel.removeAllRanges();
@@ -5134,10 +5134,10 @@ ${listStyleProseCss(".doc-blocks")}
       const h = failHint(err);
       this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, "err");
     }
-    _say(el, text2, kind2) {
-      if (el) {
-        el.textContent = text2;
-        el.className = `msg ${kind2 || ""}`;
+    _say(el2, text2, kind2) {
+      if (el2) {
+        el2.textContent = text2;
+        el2.className = `msg ${kind2 || ""}`;
       }
     }
   };
@@ -5173,11 +5173,10 @@ ${listStyleProseCss(".doc-blocks")}
     if (pr.state === "closed") return "closed";
     return "open";
   }
-  function echoNote({ outcome = "unknown", prNumber = null } = {}) {
-    const pr = prNumber ? `Pull request #${prNumber}` : "Its pull request";
+  function echoNote({ outcome = "unknown" } = {}) {
     if (outcome === "merged") return { text: "Merged. Everyone sees this after the next site rebuild, in about 2 to 3 minutes.", tone: "ok", terminal: true };
-    if (outcome === "closed") return { text: "This comment was declined. Track it in your WorkBench.", tone: "bad", terminal: true };
-    return { text: `Posting. ${pr} merges automatically; everyone sees this after the site rebuilds, in about 2 to 3 minutes.`, tone: "pending", terminal: false };
+    if (outcome === "closed") return { text: "This comment was declined.", tone: "bad", terminal: true };
+    return { text: "Posting. Everyone sees this after the site rebuilds, in about 2 to 3 minutes.", tone: "pending", terminal: false };
   }
   function pullsOf(res) {
     if (Array.isArray(res?.prs)) return res.prs;
@@ -6400,8 +6399,8 @@ ${listStyleProseCss(".doc-blocks")}
     // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
     async _rehydrateStaged() {
       const paths = [
-        ...this.$$('[data-key][data-kind="image"]').map((el) => el.value),
-        ...this.$$(".galrow .gr-src").map((el) => el.value),
+        ...this.$$('[data-key][data-kind="image"]').map((el2) => el2.value),
+        ...this.$$(".galrow .gr-src").map((el2) => el2.value),
         ...referencedDraftImages(this.preset?.input || {}, this.$("#body")?.value || "")
       ];
       const item = this.itemToken;
@@ -6921,7 +6920,7 @@ ${listStyleProseCss(".doc-blocks")}
          </div>`
       );
       this.on("#mdref", "click", () => this.$("#mdrefmodal")?.classList.add("show"));
-      this.$$("[data-mrclose]").forEach((el) => el.addEventListener("click", () => this.$("#mdrefmodal")?.classList.remove("show")));
+      this.$$("[data-mrclose]").forEach((el2) => el2.addEventListener("click", () => this.$("#mdrefmodal")?.classList.remove("show")));
       if (!this._escWired) {
         this._escWired = true;
         document.addEventListener("keydown", (e) => {
@@ -6981,14 +6980,14 @@ ${listStyleProseCss(".doc-blocks")}
       }
       if (showStats) {
         const setStat = (key, n) => {
-          const el = this.$(`[data-statn="${key}"]`);
-          if (el && n != null) el.textContent = String(n);
+          const el2 = this.$(`[data-statn="${key}"]`);
+          if (el2 && n != null) el2.textContent = String(n);
         };
         const failStat = (key, why) => {
-          const el = this.$(`[data-statn="${key}"]`);
-          if (el) {
-            el.textContent = "n/a";
-            el.title = why;
+          const el2 = this.$(`[data-statn="${key}"]`);
+          if (el2) {
+            el2.textContent = "n/a";
+            el2.title = why;
           }
         };
         const credited = this.preset?.input?.contributors;
@@ -7042,10 +7041,10 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
       for (const dep of deps) {
-        const el = this.$(`[data-key="${dep}"]`);
-        if (el) {
-          el.addEventListener("input", () => this.syncConditional());
-          el.addEventListener("change", () => this.syncConditional());
+        const el2 = this.$(`[data-key="${dep}"]`);
+        if (el2) {
+          el2.addEventListener("input", () => this.syncConditional());
+          el2.addEventListener("change", () => this.syncConditional());
         }
       }
       this._rehydrateStaged().catch(() => {
@@ -7601,8 +7600,8 @@ ${listStyleProseCss(".doc-blocks")}
       control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
       const pick = control.querySelector("[data-cover-pick]");
       if (pick) pick.textContent = "Replace image";
-      const el = control.querySelector('[data-key][data-kind="image"]');
-      if (el) el.value = path;
+      const el2 = control.querySelector('[data-key][data-kind="image"]');
+      if (el2) el2.value = path;
       const swatches = control.querySelector("[data-swatches]");
       if (swatches) {
         swatches.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("on"));
@@ -7695,8 +7694,8 @@ ${listStyleProseCss(".doc-blocks")}
     /** Recompute conditional fields from the live DOM and toggle their wrappers. */
     syncConditional() {
       const getVal = (k) => {
-        const el = this.$(`[data-key="${k}"]`);
-        return el ? el.type === "checkbox" ? el.checked : el.value : "";
+        const el2 = this.$(`[data-key="${k}"]`);
+        return el2 ? el2.type === "checkbox" ? el2.checked : el2.value : "";
       };
       for (const f of this.fields) {
         if (!f.showIf) continue;
@@ -7707,27 +7706,27 @@ ${listStyleProseCss(".doc-blocks")}
     /** Read raw value for a field key from the rendered inputs (DOM side of the pure gatherInput). */
     rawGetter() {
       return (key, kind2) => {
-        const el = this.$(`[data-key="${key}"]`);
-        if (!el) return void 0;
-        if (kind2 === "boolean") return el.checked;
-        return el.value;
+        const el2 = this.$(`[data-key="${key}"]`);
+        if (!el2) return void 0;
+        if (kind2 === "boolean") return el2.checked;
+        return el2.value;
       };
     }
     // SOW-062 P6: two-way bind the inline document header (title/tagline/slug contenteditables) to their hidden
     // [data-key] meta inputs, so gather() -- which reads [data-key] -- stays the single source of truth for publish.
     _bindHeader() {
-      this.$$("[data-header]").forEach((el) => {
-        const input = this.$(`[data-key="${el.dataset.header}"]`);
+      this.$$("[data-header]").forEach((el2) => {
+        const input = this.$(`[data-key="${el2.dataset.header}"]`);
         if (!input) return;
         const sync = () => {
-          input.value = el.textContent.trim();
+          input.value = el2.textContent.trim();
         };
-        el.addEventListener("input", sync);
-        el.addEventListener("blur", sync);
-        el.addEventListener("keydown", (e) => {
+        el2.addEventListener("input", sync);
+        el2.addEventListener("blur", sync);
+        el2.addEventListener("keydown", (e) => {
           if (e.key === "Enter") e.preventDefault();
         });
-        el.addEventListener("paste", (e) => {
+        el2.addEventListener("paste", (e) => {
           e.preventDefault();
           const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
           if (typeof document !== "undefined") document.execCommand("insertText", false, t.replace(/\s+/g, " ").trim());
@@ -7736,13 +7735,13 @@ ${listStyleProseCss(".doc-blocks")}
       });
     }
     gather() {
-      this.$$("[data-header]").forEach((el) => {
-        const i = this.$(`[data-key="${el.dataset.header}"]`);
-        if (i) i.value = el.textContent.trim();
+      this.$$("[data-header]").forEach((el2) => {
+        const i = this.$(`[data-key="${el2.dataset.header}"]`);
+        if (i) i.value = el2.textContent.trim();
       });
       const getVal = (k) => {
-        const el = this.$(`[data-key="${k}"]`);
-        return el ? el.type === "checkbox" ? el.checked : el.value : "";
+        const el2 = this.$(`[data-key="${k}"]`);
+        return el2 ? el2.type === "checkbox" ? el2.checked : el2.value : "";
       };
       const visible = this.fields.filter((f) => this.fieldVisible(f, getVal));
       return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$("#body")?.value ?? "" };
@@ -7936,9 +7935,9 @@ ${listStyleProseCss(".doc-blocks")}
           draftNote
         });
         box.innerHTML = this._changesHtml(res);
-        this.$$("[data-jump]").forEach((el) => el.addEventListener("click", () => {
-          const ok = this.$("#body")?.highlightBlock?.(Number(el.dataset.jump));
-          if (ok === false) el.classList.add("chg-gone");
+        this.$$("[data-jump]").forEach((el2) => el2.addEventListener("click", () => {
+          const ok = this.$("#body")?.highlightBlock?.(Number(el2.dataset.jump));
+          if (ok === false) el2.classList.add("chg-gone");
         }));
       } catch {
         box.innerHTML = '<p class="chg-msg">Could not read the live version to compare against. Your changes are still saved.</p>';
@@ -8124,10 +8123,10 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.itemToken });
         const imgField = this.fields.find((f) => f.kind === "image");
-        const el = imgField && this.$(`[data-key="${imgField.key}"]`);
+        const el2 = imgField && this.$(`[data-key="${imgField.key}"]`);
         const wrap = imgField && this.$(`.field[data-fkey="${imgField.key}"]`);
-        if (el && !el.value && wrap && !wrap.hidden) {
-          el.value = res.path;
+        if (el2 && !el2.value && wrap && !wrap.hidden) {
+          el2.value = res.path;
           this.out(`Image staged into <code>${esc(imgField.label || imgField.key)}</code>: <code>${esc(res.path)}</code>`);
         } else {
           this.out(`Image staged: <code>${esc(res.path)}</code> (reference it in your body)`);
@@ -8159,8 +8158,8 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
         (this._stagedSrc ||= {})[res.path] = dataUrl;
-        const el = control.querySelector('[data-key][data-kind="image"]');
-        if (el) el.value = res.path;
+        const el2 = control.querySelector('[data-key][data-kind="image"]');
+        if (el2) el2.value = res.path;
         this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
         const swatches = control.querySelector("[data-swatches]");
         if (swatches) {
@@ -8175,8 +8174,8 @@ ${listStyleProseCss(".doc-blocks")}
     }
     clearCover(control) {
       if (!control) return;
-      const el = control.querySelector('[data-key][data-kind="image"]');
-      if (el) el.value = "";
+      const el2 = control.querySelector('[data-key][data-kind="image"]');
+      if (el2) el2.value = "";
       const cf = control.querySelector("[data-coverframe]");
       if (cf) cf.innerHTML = this._coverFrameInner("");
       control.querySelector("[data-cover-clear]")?.setAttribute("hidden", "");
@@ -8769,10 +8768,10 @@ ${listStyleProseCss(".doc-blocks")}
         this.render();
       }));
       this.$$("[data-set-pubfav]").forEach((b) => b.addEventListener("click", () => this._setPubFav(b.dataset.setPubfav)));
-      const liveRange = (sel, apply, outSel) => {
-        const el = this.$(sel);
-        if (el) el.addEventListener("input", () => {
-          const p = apply(el.value);
+      const liveRange = (sel, apply2, outSel) => {
+        const el2 = this.$(sel);
+        if (el2) el2.addEventListener("input", () => {
+          const p = apply2(el2.value);
           const out = this.$(outSel);
           if (out) out.textContent = `${p}%`;
         });
@@ -8787,12 +8786,12 @@ ${listStyleProseCss(".doc-blocks")}
       this.on("[data-delete]", "click", () => this._requestDeletion());
     }
     async _copy(id) {
-      const el = this.$(`#${id}`);
-      if (!el) return;
+      const el2 = this.$(`#${id}`);
+      if (!el2) return;
       try {
-        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(el.value);
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(el2.value);
         else {
-          el.select();
+          el2.select();
           document.execCommand?.("copy");
         }
         this._say("[data-ref-msg]", "Copied to your clipboard.", "ok");
@@ -8821,10 +8820,10 @@ ${listStyleProseCss(".doc-blocks")}
       setTimeout(() => this.emit("gbti:request-signout"), 2500);
     }
     _say(sel, text2, kind2) {
-      const el = this.$(sel);
-      if (el) {
-        el.textContent = text2;
-        el.className = `msg ${kind2 || ""}`;
+      const el2 = this.$(sel);
+      if (el2) {
+        el2.textContent = text2;
+        el2.className = `msg ${kind2 || ""}`;
       }
     }
   };
@@ -9119,6 +9118,11 @@ ${listStyleProseCss(".doc-blocks")}
       favorites: (activity.favorites || []).filter((f) => f?.type === type),
       collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) }))
     };
+  }
+  var SAVED_SECTIONS = ["favorites", "collections"];
+  function savedSectionFromHash(hash) {
+    const h = String(hash ?? "").replace(/^#/, "").trim().toLowerCase();
+    return SAVED_SECTIONS.includes(h) ? h : null;
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
@@ -10042,8 +10046,8 @@ ${listStyleProseCss(".doc-blocks")}
         this._q = e.target.value;
         this.render();
         this.$("#tsearch")?.focus();
-        const el = this.$("#tsearch");
-        if (el) el.setSelectionRange(el.value.length, el.value.length);
+        const el2 = this.$("#tsearch");
+        if (el2) el2.setSelectionRange(el2.value.length, el2.value.length);
       });
       this.$$("[data-sel]").forEach((b) => b.addEventListener("click", (e) => {
         if (e.target.closest("[data-car]") && b.dataset.kids === "1") return;
@@ -10538,9 +10542,9 @@ ${listStyleProseCss(".doc-blocks")}
       this.$("#q")?.addEventListener("input", (e) => {
         this._q = e.target.value;
         this.render();
-        const el = this.$("#q");
-        el?.focus();
-        el?.setSelectionRange(el.value.length, el.value.length);
+        const el2 = this.$("#q");
+        el2?.focus();
+        el2?.setSelectionRange(el2.value.length, el2.value.length);
       });
       this.$$(".seg button").forEach((b) => b.addEventListener("click", () => {
         this._type = b.dataset.t;
@@ -11229,7 +11233,7 @@ ${listStyleProseCss(".doc-blocks")}
     async _run(fn, okMsg) {
       try {
         const r = await fn();
-        this._msg = r?.prNumber ? `${okMsg}. ${submitAck({ prNumber: r.prNumber })}` : okMsg;
+        this._msg = r?.prNumber ? `${okMsg}. ${houseEditAck({ prNumber: r.prNumber, autoMerge: true })}` : okMsg;
       } catch (err) {
         this._msg = err?.message || "The action failed.";
       }
@@ -11881,10 +11885,10 @@ ${listStyleProseCss(".doc-blocks")}
       return JSON.stringify(this._draft?.[block]) === JSON.stringify(this._saved?.[block]);
     }
     _wire() {
-      const retype = (el, block, key) => el.addEventListener("input", () => {
-        this._draft[block][key] = el.value;
-        const id = el.id;
-        const at = el.selectionStart;
+      const retype = (el2, block, key) => el2.addEventListener("input", () => {
+        this._draft[block][key] = el2.value;
+        const id = el2.id;
+        const at = el2.selectionStart;
         this.render();
         const next = id ? this.$(`#${id}`) : null;
         if (next) {
@@ -11895,8 +11899,8 @@ ${listStyleProseCss(".doc-blocks")}
           }
         }
       });
-      this.$$("[data-cta]").forEach((el) => retype(el, "cta", el.dataset.cta));
-      this.$$("[data-sponsor]").forEach((el) => retype(el, "sponsor", el.dataset.sponsor));
+      this.$$("[data-cta]").forEach((el2) => retype(el2, "cta", el2.dataset.cta));
+      this.$$("[data-sponsor]").forEach((el2) => retype(el2, "sponsor", el2.dataset.sponsor));
       this.$("[data-cta-toggle]")?.addEventListener("click", () => {
         this._draft.cta.enabled = !this._draft.cta.enabled;
         this.render();
@@ -13537,9 +13541,9 @@ ${listStyleProseCss(".doc-blocks")}
       if (title) title.textContent = editTitle(st);
       for (const k of FIELD_KEYS) {
         const msg = shownError(st, k);
-        this.$$(`[data-err="${k}"]`).forEach((el) => {
-          el.textContent = msg;
-          el.hidden = !msg;
+        this.$$(`[data-err="${k}"]`).forEach((el2) => {
+          el2.textContent = msg;
+          el2.hidden = !msg;
         });
         this.$(`[data-fld="${k}"]`)?.classList.toggle("err", !!msg);
       }
@@ -13553,8 +13557,8 @@ ${listStyleProseCss(".doc-blocks")}
       if (stage) stage.innerHTML = previewCard(st);
       const note = this.$('[data-region="pvnote"]');
       if (note) note.textContent = previewNote(st.d);
-      this.$$("[data-count]").forEach((el) => {
-        el.textContent = plural(st.d.items.length);
+      this.$$("[data-count]").forEach((el2) => {
+        el2.textContent = plural(st.d.items.length);
       });
       if (found) {
         const f = this.$('[data-region="found"]');
@@ -13593,9 +13597,9 @@ ${listStyleProseCss(".doc-blocks")}
       this.render();
     }
     _redrawImage() {
-      const el = this.$('[data-region="image"]');
-      if (el) {
-        el.innerHTML = imageBody(this._st);
+      const el2 = this.$('[data-region="image"]');
+      if (el2) {
+        el2.innerHTML = imageBody(this._st);
         this._afterEditorPaint();
       }
     }
@@ -13604,10 +13608,10 @@ ${listStyleProseCss(".doc-blocks")}
       const n = normalizeHost(raw ?? st.hostDraft);
       if (!n.ok) {
         st.hostErr = n.problem;
-        const el = this.$('[data-region="hosterr"]');
-        if (el) {
-          el.textContent = n.problem;
-          el.hidden = false;
+        const el2 = this.$('[data-region="hosterr"]');
+        if (el2) {
+          el2.textContent = n.problem;
+          el2.hidden = false;
         }
         return;
       }
@@ -13629,14 +13633,14 @@ ${listStyleProseCss(".doc-blocks")}
         st.icons = { ...st.icons, status: "ready", total, results: icons };
         if (first) this.render();
         else {
-          const el = this.$('[data-region="icons"]');
-          if (el) el.innerHTML = iconResults(st);
+          const el2 = this.$('[data-region="icons"]');
+          if (el2) el2.innerHTML = iconResults(st);
         }
       } catch (e) {
         if (this._st !== st || token !== this._iconToken) return;
         st.icons = { ...st.icons, status: "failed", problem: e?.message || "unknown error" };
-        const el = this.$('[data-region="icons"]');
-        if (el) el.innerHTML = iconResults(st);
+        const el2 = this.$('[data-region="icons"]');
+        if (el2) el2.innerHTML = iconResults(st);
         else this.render();
       }
     }
@@ -13751,14 +13755,14 @@ ${listStyleProseCss(".doc-blocks")}
       } else if (q === "pages") {
         st.pageQuery = t.value;
         st.cands = pageCandidates(this._pages, st.pageQuery, st.d.items);
-        const el = this.$('[data-region="cands"]');
-        if (el) el.innerHTML = candidateList(st);
+        const el2 = this.$('[data-region="cands"]');
+        if (el2) el2.innerHTML = candidateList(st);
       } else if (q === "host") {
         st.hostDraft = t.value;
         if (st.hostErr) {
           st.hostErr = "";
-          const el = this.$('[data-region="hosterr"]');
-          if (el) el.hidden = true;
+          const el2 = this.$('[data-region="hosterr"]');
+          if (el2) el2.hidden = true;
         }
       }
     }
@@ -14018,12 +14022,12 @@ ${listStyleProseCss(".doc-blocks")}
         <tbody>${body || `<tr><td colspan="6"><div class="empty">Nothing matches the filters.</div></td></tr>`}</tbody>
       </table></div>
     </div>`);
-      this.$$("[data-f]").forEach((el) => el.addEventListener(el.dataset.f === "q" ? "input" : "change", () => {
-        if (el.dataset.f === "status") this._fStatus = el.value;
-        else if (el.dataset.f === "type") this._fType = el.value;
-        else if (el.dataset.f === "trigger") this._fTrigger = el.value;
-        else this._fQ = el.value;
-        const focusQ = el.dataset.f === "q";
+      this.$$("[data-f]").forEach((el2) => el2.addEventListener(el2.dataset.f === "q" ? "input" : "change", () => {
+        if (el2.dataset.f === "status") this._fStatus = el2.value;
+        else if (el2.dataset.f === "type") this._fType = el2.value;
+        else if (el2.dataset.f === "trigger") this._fTrigger = el2.value;
+        else this._fQ = el2.value;
+        const focusQ = el2.dataset.f === "q";
         this.render();
         if (focusQ) {
           const q = this.$('[data-f="q"]');
@@ -14837,24 +14841,24 @@ ${listStyleProseCss(".doc-blocks")}
         this.render();
       }));
       ["[data-pipe-enabled]", "[data-pipe-ready]", "[data-pipe-hold]"].forEach((sel) => {
-        const el = this.$(sel);
-        if (el) {
-          el.addEventListener("change", () => {
+        const el2 = this.$(sel);
+        if (el2) {
+          el2.addEventListener("change", () => {
             this._pipeDirty = true;
             this._markDirty("sec-pipeline");
           });
-          el.addEventListener("input", () => {
+          el2.addEventListener("input", () => {
             this._pipeDirty = true;
             this._markDirty("sec-pipeline");
           });
         }
       });
-      this.$$("[data-matrix-cell], [data-chan-hold]").forEach((el) => {
-        el.addEventListener("change", () => {
+      this.$$("[data-matrix-cell], [data-chan-hold]").forEach((el2) => {
+        el2.addEventListener("change", () => {
           this._pipeDirty = true;
           this._markDirty("sec-pipeline");
         });
-        el.addEventListener("input", () => {
+        el2.addEventListener("input", () => {
           this._pipeDirty = true;
           this._markDirty("sec-pipeline");
         });
@@ -14898,13 +14902,13 @@ ${listStyleProseCss(".doc-blocks")}
       }));
       this.on("[data-save-tmpl]", "click", () => this._saveTemplates());
       ["[data-eng-enabled]", "[data-eng-threshold]", "[data-eng-tier]", "[data-eng-comment]"].forEach((sel) => {
-        const el = this.$(sel);
-        if (el) {
-          el.addEventListener("change", () => {
+        const el2 = this.$(sel);
+        if (el2) {
+          el2.addEventListener("change", () => {
             this._engDirty = true;
             this._markDirty("sec-autoshare");
           });
-          el.addEventListener("input", () => {
+          el2.addEventListener("input", () => {
             this._engDirty = true;
             this._markDirty("sec-autoshare");
           });
@@ -14947,9 +14951,9 @@ ${listStyleProseCss(".doc-blocks")}
       if (filter) filter.addEventListener("input", () => {
         this._termFilter = filter.value;
         const q = filter.value.trim().toLowerCase();
-        this.$$(".term").forEach((el) => {
-          const w = el.querySelector("span")?.textContent || "";
-          el.classList.toggle("hidden", Boolean(q) && !w.toLowerCase().includes(q));
+        this.$$(".term").forEach((el2) => {
+          const w = el2.querySelector("span")?.textContent || "";
+          el2.classList.toggle("hidden", Boolean(q) && !w.toLowerCase().includes(q));
         });
       });
       const addTerm = () => {
@@ -15065,7 +15069,7 @@ ${listStyleProseCss(".doc-blocks")}
     // local state so they stay visible; a full reload (readYaml) reads the file BEFORE the superadmin auto-merge PR
     // lands and reverts the just-edited values to the stored defaults (the matrix "reset to zero on save" report).
     // git + the mirror catch up in the background.
-    async _saveOptimistic(fn, apply) {
+    async _saveOptimistic(fn, apply2) {
       this._busy = true;
       this._msg = "";
       this.render();
@@ -15080,7 +15084,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       this._busy = false;
       try {
-        apply(r);
+        apply2(r);
       } catch {
       }
       this._msg = this._ackMsg(r);
@@ -15245,10 +15249,10 @@ ${listStyleProseCss(".doc-blocks")}
       if (body && restore && this.original?.bodyHtml != null) body.innerHTML = this.original.bodyHtml;
     }
     flash(msg, bad = false) {
-      const el = this.$("#msg") || this.$(".muted");
-      if (el) {
-        el.textContent = msg;
-        el.className = bad ? "danger" : "muted";
+      const el2 = this.$("#msg") || this.$(".muted");
+      if (el2) {
+        el2.textContent = msg;
+        el2.className = bad ? "danger" : "muted";
       }
     }
   };
@@ -15370,28 +15374,28 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/activity-state.mjs
   var CACHE = /* @__PURE__ */ new WeakMap();
   var EMPTY = () => ({ favorites: [], collections: [] });
-  function primeActivity(client2) {
-    if (!client2 || typeof client2.getActivity !== "function") return Promise.resolve(EMPTY());
-    const hit = CACHE.get(client2);
+  function primeActivity(client) {
+    if (!client || typeof client.getActivity !== "function") return Promise.resolve(EMPTY());
+    const hit = CACHE.get(client);
     if (hit) return hit.promise;
     const entry = { promise: null, activity: null };
-    entry.promise = Promise.resolve().then(() => client2.getActivity()).then((a) => {
+    entry.promise = Promise.resolve().then(() => client.getActivity()).then((a) => {
       entry.activity = normalize2(a);
       return entry.activity;
     }).catch((err) => {
-      CACHE.delete(client2);
+      CACHE.delete(client);
       throw err;
     });
-    CACHE.set(client2, entry);
+    CACHE.set(client, entry);
     return entry.promise;
   }
-  function noteActivity(client2, activity) {
-    if (!client2 || !activity) return;
+  function noteActivity(client, activity) {
+    if (!client || !activity) return;
     const a = normalize2(activity);
-    CACHE.set(client2, { promise: Promise.resolve(a), activity: a });
+    CACHE.set(client, { promise: Promise.resolve(a), activity: a });
   }
-  function invalidateActivity(client2) {
-    if (client2) CACHE.delete(client2);
+  function invalidateActivity(client) {
+    if (client) CACHE.delete(client);
   }
   function normalize2(a) {
     return {
@@ -15981,10 +15985,10 @@ ${BLOCKED_PILL_CSS}
       this._wire();
     }
     _wire() {
-      this.$$("[data-close]").forEach((el) => el.addEventListener("click", () => this.close()));
-      this.$$("[data-mode]").forEach((el) => el.addEventListener("click", () => this._setMode(el.dataset.mode)));
-      this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el) => el.addEventListener("click", () => {
-        const [k, c] = el.dataset.cell.split(":");
+      this.$$("[data-close]").forEach((el2) => el2.addEventListener("click", () => this.close()));
+      this.$$("[data-mode]").forEach((el2) => el2.addEventListener("click", () => this._setMode(el2.dataset.mode)));
+      this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el2) => el2.addEventListener("click", () => {
+        const [k, c] = el2.dataset.cell.split(":");
         this._toggle(k, c);
       }));
       this.on("[data-save]", "click", () => this._save());
@@ -16731,8 +16735,8 @@ ${BLOCKED_PILL_CSS}
         }
       }
       const set = (sel, v) => {
-        const el = this.$(sel);
-        if (el) el.value = v == null ? "" : String(v);
+        const el2 = this.$(sel);
+        if (el2) el2.value = v == null ? "" : String(v);
       };
       set("input[type=url]", item.url || "");
       set("input.title", item.title || "");
@@ -17091,8 +17095,8 @@ ${BLOCKED_PILL_CSS}
         const res = await this.client.postShare({ input, body, ...authorTarget ? { authorTarget } : {} });
         this._say(msg, `${authorTarget ? `Posted as @${authorTarget}. ` : ""}${submitAck({ prNumber: res?.prNumber, autoMerge: true })}`, "ok");
         for (const sel of ["input.title", "input.desc", "textarea", "input[type=url]"]) {
-          const el = this.$(sel);
-          if (el) el.value = "";
+          const el2 = this.$(sel);
+          if (el2) el2.value = "";
         }
         const cat = this.$(".cat");
         if (cat) cat.value = "";
@@ -17129,10 +17133,10 @@ ${BLOCKED_PILL_CSS}
         this._syncPostReady();
       }
     }
-    _say(el, text2, kind2) {
-      if (!el) return;
-      el.textContent = text2;
-      el.className = `msg ${kind2 || ""}`;
+    _say(el2, text2, kind2) {
+      if (!el2) return;
+      el2.textContent = text2;
+      el2.className = `msg ${kind2 || ""}`;
     }
   };
   define("gbti-share-composer", GbtiShareComposer);
@@ -17610,11 +17614,11 @@ ${BLOCKED_PILL_CSS}
         }, true);
         this._wiredErr = true;
       }
-      this.$$("[data-card]").forEach((el) => {
-        if (el.tagName === "A") return;
-        const open = () => this.emit("card-open", { item: this._items[Number(el.dataset.card)] });
-        el.addEventListener("click", open);
-        el.addEventListener("keydown", (e) => {
+      this.$$("[data-card]").forEach((el2) => {
+        if (el2.tagName === "A") return;
+        const open = () => this.emit("card-open", { item: this._items[Number(el2.dataset.card)] });
+        el2.addEventListener("click", open);
+        el2.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             open();
@@ -17968,10 +17972,10 @@ ${BLOCKED_PILL_CSS}
     }
     async _fillBody(share) {
       const html = await this._resolveBody(share);
-      const el = this.$("[data-body]");
-      if (!el) return;
-      if (html && html.locked) el.innerHTML = `<div class="locked">This Share is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`;
-      else el.innerHTML = typeof html === "string" && html ? html : `<p class="muted">No note.</p>`;
+      const el2 = this.$("[data-body]");
+      if (!el2) return;
+      if (html && html.locked) el2.innerHTML = `<div class="locked">This Share is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`;
+      else el2.innerHTML = typeof html === "string" && html ? html : `<p class="muted">No note.</p>`;
     }
     async _resolveBody(it) {
       try {
@@ -20767,6 +20771,15 @@ ${BLOCKED_PILL_CSS}
   .busy { opacity:.6; pointer-events:none; }
 `;
   var GbtiSaved = class extends GbtiElement {
+    // sow-406: `section` (favorites | collections) scrolls that section into view once the list has rendered. The
+    // extension's avatar menu sets it; the website WorkBench tab never does.
+    static get observedAttributes() {
+      return ["section"];
+    }
+    attributeChangedCallback() {
+      this._scrolled = false;
+      this._scrollToSection();
+    }
     connectedCallback() {
       this._activity = null;
       this._index = null;
@@ -20832,11 +20845,24 @@ ${BLOCKED_PILL_CSS}
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
       this.set(this.css(CSS32) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
-      <section class="sec"><h3>Favorites</h3>${favHtml}</section>
-      <section class="sec"><h3>Collections</h3>${collHtml}
+      <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
+      <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
       </section></div>`);
       this._wire();
+      this._scrollToSection();
+    }
+    /** sow-406: bring the named section into view, once per `section` value, after the list has rendered. */
+    _scrollToSection() {
+      const want = savedSectionFromHash(typeof this.getAttribute === "function" ? this.getAttribute("section") : null);
+      if (!want || this._scrolled || !this._activity || this._activity.error) return;
+      const sec = this.$?.(`[data-sec="${want}"]`);
+      if (!sec) return;
+      this._scrolled = true;
+      try {
+        sec.scrollIntoView({ block: "start", behavior: "smooth" });
+      } catch {
+      }
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
@@ -21471,19 +21497,19 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/own-profile.mjs
-  async function readOwnProfile(client2, { identity } = {}) {
-    if (!client2?.getContentItem) return { state: "failed", path: null, item: null };
+  async function readOwnProfile(client, { identity } = {}) {
+    if (!client?.getContentItem) return { state: "failed", path: null, item: null };
     let who = identity;
     if (who === void 0) {
       try {
-        who = (await client2.status())?.identity ?? null;
+        who = (await client.status())?.identity ?? null;
       } catch {
         who = null;
       }
     }
     let listed = null;
     try {
-      listed = (await client2.listContent?.({ type: "profile" }))?.items?.[0]?.path || null;
+      listed = (await client.listContent?.({ type: "profile" }))?.items?.[0]?.path || null;
     } catch {
       listed = null;
     }
@@ -21491,7 +21517,7 @@ ${BLOCKED_PILL_CSS}
     const path = listed || (name ? `members/${name}/profile.md` : null);
     if (!path) return { state: "failed", path: null, item: null };
     try {
-      const item = await client2.getContentItem({ path });
+      const item = await client.getContentItem({ path });
       if (!item) return { state: "failed", path, item: null };
       return { state: "found", path, item: { path, frontmatter: item.frontmatter || {}, body: item.body || "" } };
     } catch (e) {
@@ -21502,15 +21528,15 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/onboarding-card-core.mjs
   var WELCOME_SITE_URL = "https://gbti.network/welcome/";
   var answer = (p) => Promise.resolve().then(p).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
-  async function loadOnboardingState(client2) {
-    if (!client2) return {};
-    const status = await answer(() => client2.status());
+  async function loadOnboardingState(client) {
+    if (!client) return {};
+    const status = await answer(() => client.status());
     const [prefs, follows, discord, profile] = await Promise.all([
-      answer(() => client2.getPrefs()),
-      answer(() => client2.getFollows()),
-      answer(() => client2.discordLinkStatus()),
+      answer(() => client.getPrefs()),
+      answer(() => client.getFollows()),
+      answer(() => client.discordLinkStatus()),
       answer(async () => {
-        const r = await readOwnProfile(client2, { identity: status.ok ? status.v?.identity ?? null : null });
+        const r = await readOwnProfile(client, { identity: status.ok ? status.v?.identity ?? null : null });
         if (r.state === "failed") throw new Error("the profile could not be read");
         return r.item;
       })
@@ -21528,8 +21554,8 @@ ${BLOCKED_PILL_CSS}
       record: prefs.ok ? prefs.v?.onboarding ?? null : void 0
     };
   }
-  async function loadProgress(client2) {
-    return onboardingProgress(await loadOnboardingState(client2));
+  async function loadProgress(client) {
+    return onboardingProgress(await loadOnboardingState(client));
   }
   var CACHE2 = /* @__PURE__ */ new Map();
   var LAST = null;
@@ -23903,11 +23929,11 @@ ${BLOCKED_PILL_CSS}
       this._wire();
     }
     _wire() {
-      this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el) => el.addEventListener("click", () => {
-        const [k, c] = el.dataset.cell.split(":");
+      this.$$('[data-cell]:not([aria-disabled="true"])').forEach((el2) => el2.addEventListener("click", () => {
+        const [k, c] = el2.dataset.cell.split(":");
         this._toggleDefault(k, c);
       }));
-      this.$$("[data-follow]").forEach((el) => el.addEventListener("click", () => this._openFollow(el.dataset.follow)));
+      this.$$("[data-follow]").forEach((el2) => el2.addEventListener("click", () => this._openFollow(el2.dataset.follow)));
     }
   };
   define("gbti-notifications-settings", GbtiNotificationsSettings);
@@ -24930,8 +24956,10 @@ ${BLOCKED_PILL_CSS}
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
       const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
       let follow = "";
-      const wsBase = typeof location !== "undefined" && location.protocol === "chrome-extension:" ? "workspace.html" : "/workbench/";
-      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
+      const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
+      const wsBase = inExt ? `${SITE19}/workbench/` : "/workbench/";
+      const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
+      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE19}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
@@ -25537,9 +25565,9 @@ ${BLOCKED_PILL_CSS}
          </div>`
       );
       const pane = this.$("#pane");
-      const el = document.createElement(tabs.find((t) => t.id === active).tag);
-      if (active === "author") this.editor = el;
-      pane.replaceChildren(el);
+      const el2 = document.createElement(tabs.find((t) => t.id === active).tag);
+      if (active === "author") this.editor = el2;
+      pane.replaceChildren(el2);
       this.$$("nav button").forEach(
         (b) => b.addEventListener("click", () => {
           this.active = b.dataset.id;
@@ -25830,6 +25858,38 @@ ${BLOCKED_PILL_CSS}
       adminOp: (action, params) => request("POST", "/api/admin-ops", params ? { action, params } : { action })
       // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
     };
+  }
+
+  // extension/src/page-client.mjs
+  async function messagingFetch(url, init = {}) {
+    const u = new URL(url, "https://gbti.network");
+    const req = {
+      method: init.method || "GET",
+      pathname: u.pathname,
+      query: Object.fromEntries(u.searchParams.entries()),
+      body: init.body ? JSON.parse(init.body) : void 0
+    };
+    const result = await chrome.runtime.sendMessage({ type: "api", req });
+    const r = result || { status: 500, json: { error: "no_response" } };
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json };
+  }
+  function mountPageClient() {
+    const client = createHttpClient({ baseUrl: "", token: "extension", fetch: messagingFetch });
+    client.login = (onPrompt) => new Promise((resolve, reject) => {
+      const onPromptMsg = (m) => {
+        if (m?.type === "login-prompt") onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
+      };
+      chrome.runtime.onMessage.addListener(onPromptMsg);
+      chrome.runtime.sendMessage({ type: "login" }).then((r) => {
+        chrome.runtime.onMessage.removeListener(onPromptMsg);
+        r?.ok ? resolve(r) : reject(new Error(r?.error || "sign-in failed"));
+      }).catch((e) => {
+        chrome.runtime.onMessage.removeListener(onPromptMsg);
+        reject(e);
+      });
+    });
+    setClient(client);
+    return client;
   }
 
   // client-ui/src/elements/gbti-debug-panel.mjs
@@ -26535,35 +26595,37 @@ ${BLOCKED_PILL_CSS}
       return null;
     }
   }
+  var GBTI_MARK = '<img class="gbti-mk" src="icons/icon-128.png" alt="" width="22" height="22" />';
+  var GBTI_CHIP = `<a class="nt-app gbti" href="https://gbti.network/" target="_blank" rel="noopener" title="GBTI Network" aria-label="GBTI Network, opens in a new tab">${GBTI_MARK}</a>`;
   function barHtml() {
     const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc4(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc4(it.name)}" aria-label="${esc4(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
-    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span><span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>${links}`;
+    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${GBTI_CHIP}${links}`;
   }
   function renderBars() {
     const html = barHtml();
     const empty = barItems(STATE).length === 0;
-    for (const el of BARS) {
-      if (!el.isConnected) {
-        BARS.delete(el);
+    for (const el2 of BARS) {
+      if (!el2.isConnected) {
+        BARS.delete(el2);
         continue;
       }
-      el.innerHTML = html;
-      el.classList.toggle("is-empty", empty);
+      el2.innerHTML = html;
+      el2.classList.toggle("is-empty", empty);
     }
   }
-  async function mountQuickLaunch(el) {
-    if (!el) return;
-    BARS.add(el);
-    el.setAttribute("role", "group");
-    el.setAttribute("aria-label", "Quick launch");
-    el.addEventListener("click", (e) => {
+  async function mountQuickLaunch(el2) {
+    if (!el2) return;
+    BARS.add(el2);
+    el2.setAttribute("role", "group");
+    el2.setAttribute("aria-label", "Quick launch");
+    el2.addEventListener("click", (e) => {
       if (e.target.closest("[data-ql-settings]")) openQuickLaunchSettings(e.target.closest("[data-ql-settings]"));
     });
     const [stored, icons, seen] = await Promise.all([read2("sync", QL_SYNC_KEY), read2("local", QL_ICONS_KEY), read2("local", DAILYDEV_SEEN_KEY)]);
     ICONS3 = icons && typeof icons === "object" ? icons : {};
     const { state, changed } = applyDailydevDetection(mergeState(stored), seen === true);
     commit(state, { save: changed });
-    el.classList.add("show");
+    el2.classList.add("show");
     if (listening) return;
     listening = true;
     try {
@@ -26612,7 +26674,7 @@ ${BLOCKED_PILL_CSS}
   function previewHtml() {
     const items = barItems(STATE);
     const icons = items.map((it) => `<span class="ql-pv" title="${esc4(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
-    return `<span class="nt-app gbti" aria-hidden="true">GBTI</span>${icons}`;
+    return `<span class="nt-app gbti" aria-hidden="true">${GBTI_MARK}</span>${icons}`;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
     return `<form class="ql-form" data-ql-form="${esc4(id)}" novalidate>
@@ -26656,8 +26718,8 @@ ${BLOCKED_PILL_CSS}
       $("[data-ql-lists]").innerHTML = listsHtml();
       if (focusKey) overlay.querySelector(focusKey)?.focus();
     };
-    const keyOf = (el) => {
-      for (const a of ["data-ql-toggle", "data-ql-grip", "data-ql-edit", "data-ql-remove"]) if (el.hasAttribute?.(a)) return `[${a}="${CSS.escape(el.getAttribute(a))}"]`;
+    const keyOf = (el2) => {
+      for (const a of ["data-ql-toggle", "data-ql-grip", "data-ql-edit", "data-ql-remove"]) if (el2.hasAttribute?.(a)) return `[${a}="${CSS.escape(el2.getAttribute(a))}"]`;
       return null;
     };
     const closeForm = () => {
@@ -26903,35 +26965,8 @@ ${BLOCKED_PILL_CSS}
     network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
   var ico = (k) => SVG2[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG2[k]}</svg>` : "";
-  var RAIL_WORKBENCH = [
-    // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
-    { key: "network", href: "newtab.html", ico: "network", nm: "Network", sub: "Exit WorkBench" },
-    // Explicit #tab=overview so clicking it ON workspace.html is a same-document switch (no reload), like the others.
-    { key: "overview", href: "workspace.html#tab=overview", ico: "grid", nm: "Overview", sub: "Your hub at a glance" },
-    { group: "My Content" },
-    { key: "post", href: "workspace.html#tab=post", ico: "article", nm: "Articles", sub: "Your posts" },
-    { key: "prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Your prompts" },
-    { key: "project", href: "workspace.html#tab=project", ico: "project", nm: "Projects", sub: "Your projects" },
-    { group: "Activity" },
-    // sow-404 (owner, 2026-09-25): "Only superadmins should be interested in pull requests."
-    { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted", superOnly: true },
-    { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved", sub: "Favorites + collections" },
-    { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following", sub: "Members, channels, topics" },
-    { key: "earnings", href: "workspace.html#tab=earnings", ico: "coin", nm: "Earnings", sub: "Referrals + rewards" },
-    { div: true },
-    // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
-    // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-    // SOW-129, repointed sow-204, then (owner, 2026-09-25) "The profile link should go to the members profile": the
-    // member's public page, as the website's avatar menu does. `meProfile` marks it for applyAccount, which fills in
-    // the login; until then it is the member directory, the website's own fallback.
-    { key: "profile", href: `${SITE23}/members/`, ext: true, meProfile: true, ico: "user", nm: "Profile", sub: "Your public profile" },
-    { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
-    { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
-  ];
-  var RAILS = { workbench: RAIL_WORKBENCH };
-  function controlsHtml({ compose = true } = {}) {
+  function controlsHtml({ compose = false } = {}) {
     return `<div class="nt-controls" data-controls>
-    <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
     <gbti-activity-bell></gbti-activity-bell>
@@ -26944,7 +26979,10 @@ ${BLOCKED_PILL_CSS}
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
+        <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
+        <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
+        <a class="mi" role="menuitem" href="${SITE23}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE23}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
         <a class="mi" role="menuitem" href="${SITE23}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
@@ -26961,43 +26999,6 @@ ${BLOCKED_PILL_CSS}
     <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
     <span class="nt-brand-tx">GBTI <b>Network</b></span>
   </a>`;
-  }
-  function railHtml(active, nav = "workbench") {
-    const rail = RAILS[nav] || RAIL_WORKBENCH;
-    const items = rail.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc5(r.group)}</div>`;
-      if (r.div) return `<hr class="nt-rail-div" />`;
-      const on = r.key === active ? " on" : "";
-      const admin = r.adminOnly ? " data-admin-only hidden" : r.superOnly ? " data-super-only hidden" : "";
-      const sub = r.sub ? `<span class="sub">${esc5(r.sub)}</span>` : "";
-      const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const me = r.meProfile ? " data-me-profile" : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin}${me} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc5(r.nm)}</span>${sub}</span></a>`;
-      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc5(c.nm)}</span></span></a>`).join("");
-      return self + kids2;
-    }).join("");
-    return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE23}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
-  }
-  function setRailActive(key) {
-    document.querySelectorAll(".nt-rail .nav-i").forEach((a) => a.classList.toggle("on", a.dataset.key === key));
-    applyHeadingIcon(key);
-  }
-  function applyHeadingIcon(key) {
-    const h1 = document.querySelector("[data-topbar] h1");
-    if (!h1) return;
-    const icoKey = key ? document.querySelector(`.nt-rail .nav-i[data-key="${key}"] [data-ico]`)?.dataset.ico : null;
-    let holder = h1.querySelector(".head-ico");
-    if (!icoKey) {
-      holder?.remove();
-      return;
-    }
-    if (!holder) {
-      holder = document.createElement("span");
-      holder.className = "head-ico";
-      holder.setAttribute("aria-hidden", "true");
-      h1.prepend(holder);
-    }
-    holder.innerHTML = ico(icoKey);
   }
   async function api(pathname, query = {}) {
     try {
@@ -27022,12 +27023,12 @@ ${BLOCKED_PILL_CSS}
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc5(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
-      root.querySelectorAll("[data-admin-only]").forEach((el) => {
-        el.hidden = !showAdmin;
+      root.querySelectorAll("[data-admin-only]").forEach((el2) => {
+        el2.hidden = !showAdmin;
       });
       const showSuper = (RANK6[status.role] ?? 0) >= RANK6.superadmin;
-      root.querySelectorAll("[data-super-only]").forEach((el) => {
-        el.hidden = !showSuper;
+      root.querySelectorAll("[data-super-only]").forEach((el2) => {
+        el2.hidden = !showSuper;
       });
       if (meBtn) meBtn.hidden = false;
     } else {
@@ -27085,9 +27086,9 @@ ${BLOCKED_PILL_CSS}
     document.documentElement.setAttribute("data-unauth", "1");
     const wrap = document.createElement("div");
     wrap.className = "gbti-authwrap";
-    const el = document.createElement("gbti-signin-splash");
-    if (expired) el.setAttribute("expired", "");
-    wrap.appendChild(el);
+    const el2 = document.createElement("gbti-signin-splash");
+    if (expired) el2.setAttribute("expired", "");
+    wrap.appendChild(el2);
     root.appendChild(wrap);
     const why = {
       closed: "The sign-in window was closed before it finished.",
@@ -27095,25 +27096,25 @@ ${BLOCKED_PILL_CSS}
       expired: "That sign-in waited too long. Please try again."
     };
     let active = null;
-    el.addEventListener("gbti:signin-start", (e) => {
+    el2.addEventListener("gbti:signin-start", (e) => {
       const method = e?.detail?.method === "code" ? "code" : "web";
       if (active?.method === "code") return;
-      el.setNote?.("");
-      if (method === "web") el.setWaiting?.(true);
-      const run = method === "web" ? shellWebLogin(el.getAttribute("known-login") || "") : shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri));
+      el2.setNote?.("");
+      if (method === "web") el2.setWaiting?.(true);
+      const run = method === "web" ? shellWebLogin(el2.getAttribute("known-login") || "") : shellLogin(({ userCode, verificationUri }) => el2.setCode?.(userCode, verificationUri));
       const me = { method, run };
       active = me;
       run.then(() => location.reload()).catch((err) => {
         if (active !== me) return;
         active = null;
-        el.setCode?.(null);
-        el.setWaiting?.(false);
-        el.setNote?.(Object.hasOwn(why, err?.message) && why[err.message] || "Sign-in did not finish. Try again, or use a code instead.");
+        el2.setCode?.(null);
+        el2.setWaiting?.(false);
+        el2.setNote?.(Object.hasOwn(why, err?.message) && why[err.message] || "Sign-in did not finish. Try again, or use a code instead.");
       });
     });
     try {
       chrome.runtime.sendMessage({ type: "web-session-peek" }).then((r) => {
-        if (r?.login) el.setAttribute("known-login", r.login);
+        if (r?.login) el2.setAttribute("known-login", r.login);
       }).catch(() => {
       });
     } catch {
@@ -27251,44 +27252,11 @@ ${BLOCKED_PILL_CSS}
     mountQuickLaunch(root.querySelector("[data-apps]")).catch(() => {
     });
   }
-  function wireDrawer(root) {
-    const rail = root.querySelector(".nt-rail");
-    const btn = root.querySelector("[data-drawer-toggle]");
-    if (!rail || !btn) return;
-    let scrim = document.querySelector(".nt-scrim");
-    if (!scrim) {
-      scrim = document.createElement("div");
-      scrim.className = "nt-scrim";
-      document.body.appendChild(scrim);
-    }
-    const close = () => {
-      rail.classList.remove("open");
-      scrim.classList.remove("open");
-      btn.setAttribute("aria-expanded", "false");
-    };
-    const open = () => {
-      rail.classList.add("open");
-      scrim.classList.add("open");
-      btn.setAttribute("aria-expanded", "true");
-    };
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      rail.classList.contains("open") ? close() : open();
-    });
-    scrim.addEventListener("click", close);
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && rail.classList.contains("open")) close();
-    });
-    rail.querySelectorAll("a").forEach((a) => a.addEventListener("click", close));
-  }
-  function initShell({ active = null, nav = "workbench" } = {}) {
+  function initShell({ compose = false } = {}) {
     const root = document.querySelector("[data-shell]");
     if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
     const main = root.querySelector(".nt-main");
-    const railless = nav === "none";
-    if (railless) root.classList.add("nt-norail");
-    else if (main) main.insertAdjacentHTML("beforebegin", railHtml(active, nav));
-    else root.insertAdjacentHTML("afterbegin", railHtml(active, nav));
+    root.classList.add("nt-norail");
     if (main) {
       let topbar = main.querySelector("[data-topbar]");
       if (!topbar) {
@@ -27297,13 +27265,12 @@ ${BLOCKED_PILL_CSS}
         topbar.setAttribute("data-topbar", "");
         main.prepend(topbar);
       }
-      if (railless) topbar.insertAdjacentHTML("afterbegin", brandHtml());
-      topbar.insertAdjacentHTML("beforeend", controlsHtml({ compose: !railless }));
+      topbar.insertAdjacentHTML("afterbegin", brandHtml());
+      topbar.insertAdjacentHTML("beforeend", controlsHtml({ compose }));
     }
-    root.querySelectorAll("[data-ico]").forEach((el) => {
-      el.innerHTML = ico(el.dataset.ico);
+    root.querySelectorAll("[data-ico]").forEach((el2) => {
+      el2.innerHTML = ico(el2.dataset.ico);
     });
-    applyHeadingIcon(active);
     const themeBtn = root.querySelector("[data-theme-toggle]");
     if (themeBtn) {
       themeBtn.innerHTML = ico(document.documentElement.getAttribute("data-theme") === "dark" ? "sun" : "moon");
@@ -27312,7 +27279,6 @@ ${BLOCKED_PILL_CSS}
     wireApps(root);
     wireAccount(root);
     wireCompose(root);
-    wireDrawer(root);
     loadShellAccount(root).then((status) => {
       if (!status) {
         mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
@@ -27376,35 +27342,15 @@ ${BLOCKED_PILL_CSS}
     document.body.appendChild(overlay);
   }
 
-  // extension/src/workspace.mjs
-  async function messagingFetch(url, init = {}) {
-    const u = new URL(url, "https://gbti.network");
-    const req = {
-      method: init.method || "GET",
-      pathname: u.pathname,
-      query: Object.fromEntries(u.searchParams.entries()),
-      body: init.body ? JSON.parse(init.body) : void 0
-    };
-    const result = await chrome.runtime.sendMessage({ type: "api", req });
-    const r = result || { status: 500, json: { error: "no_response" } };
-    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json };
-  }
-  var client = createHttpClient({ baseUrl: "", token: "extension", fetch: messagingFetch });
-  client.login = (onPrompt) => new Promise((resolve, reject) => {
-    const onPromptMsg = (m) => {
-      if (m?.type === "login-prompt") onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
-    };
-    chrome.runtime.onMessage.addListener(onPromptMsg);
-    chrome.runtime.sendMessage({ type: "login" }).then((r) => {
-      chrome.runtime.onMessage.removeListener(onPromptMsg);
-      r?.ok ? resolve(r) : reject(new Error(r?.error || "sign-in failed"));
-    }).catch((e) => {
-      chrome.runtime.onMessage.removeListener(onPromptMsg);
-      reject(e);
-    });
-  });
-  setClient(client);
-  var wbTab = () => parseWorkspaceTab(location.hash) || "overview";
-  initShell({ active: wbTab(), nav: "workbench" });
-  window.addEventListener("hashchange", () => setRailActive(wbTab()));
+  // extension/src/saved.mjs
+  mountPageClient();
+  initShell();
+  var el = document.createElement("gbti-saved");
+  var apply = () => {
+    const s = savedSectionFromHash(location.hash);
+    if (s) el.setAttribute("section", s);
+  };
+  apply();
+  document.querySelector("[data-saved-slot]")?.replaceWith(el);
+  window.addEventListener("hashchange", apply);
 })();

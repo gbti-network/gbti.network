@@ -35,5 +35,5 @@ client.login = (onPrompt) =>
 
 setClient(client);
 
-// SOW-052: mount the shell with the WorkBench rail (consistent management chrome; Shares has no rail destination).
-initShell({ active: null, nav: 'workbench' });
+// sow-406: no left menu. The "+" stays, because this page has no hero share bar of its own at the top.
+initShell({ compose: true });

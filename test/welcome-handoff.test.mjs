@@ -220,7 +220,7 @@ test('no extension bundle carries the welcome wizard', () => {
     assert.ok(!js.includes('// client-ui/src/elements/gbti-welcome.mjs'), `${f} bundles the wizard source`);
   }
   // The sign-in screen does ship, in every page bundle that can show the wall.
-  for (const f of ['newtab.js', 'shares.js', 'workspace.js', 'admin.js', 'account.js']) {
+  for (const f of ['newtab.js', 'shares.js', 'saved.js', 'admin.js', 'account.js']) { // sow-406: saved.js replaced workspace.js
     assert.ok(readFileSync(new URL(f, dir), 'utf8').includes('define("gbti-signin-splash"'), `${f} lacks the sign-in screen`);
   }
 });

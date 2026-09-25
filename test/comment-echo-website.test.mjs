@@ -28,7 +28,9 @@ test('pure: pending rows are the merge\'s _pending tags; the pull outcome reads 
 
 test('pure: the status note names the rebuild as the wait, marks merged and declined as terminal, and never uses a dash', () => {
   const posting = echoNote({ outcome: 'unknown', prNumber: 436 });
-  assert.match(posting.text, /^Posting\. Pull request #436 merges automatically; everyone sees this after the site rebuilds, in about 2 to 3 minutes\.$/);
+  // sow-404/406: the note no longer names the pull request; members do not care about them.
+  assert.match(posting.text, /^Posting\. Everyone sees this after the site rebuilds, in about 2 to 3 minutes\.$/);
+  assert.doesNotMatch(posting.text, /pull request|#436/i);
   assert.equal(posting.terminal, false);
   assert.equal(echoNote({ outcome: 'open' }).terminal, false);
   const merged = echoNote({ outcome: 'merged', prNumber: 436 });

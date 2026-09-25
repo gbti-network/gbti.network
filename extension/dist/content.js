@@ -3236,12 +3236,12 @@ ${listStyleProseCss(".doc-blocks")}
       reason: needsAttention ? descIsReason && desc || fallback : desc
     };
   }
-  function submitAck({ prNumber = null, autoMerge = true } = {}) {
-    const pr = prNumber ? ` (PR #${prNumber})` : "";
-    return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+  function submitAck({ autoMerge = true } = {}) {
+    return autoMerge ? "Submitted. It appears in about 2 to 3 minutes." : "Submitted. It is awaiting review.";
   }
   function houseEditAck(r) {
-    return submitAck({ prNumber: r?.prNumber ?? null, autoMerge: r?.autoMerge === true });
+    const pr = r?.prNumber ? ` (PR #${r.prNumber})` : "";
+    return r?.autoMerge === true ? `Submitted${pr}. It merges automatically and appears shortly.` : `Submitted${pr}. It is awaiting review.`;
   }
   function failHint(err) {
     const code = err?.code || "";
@@ -5173,11 +5173,10 @@ ${listStyleProseCss(".doc-blocks")}
     if (pr.state === "closed") return "closed";
     return "open";
   }
-  function echoNote({ outcome = "unknown", prNumber = null } = {}) {
-    const pr = prNumber ? `Pull request #${prNumber}` : "Its pull request";
+  function echoNote({ outcome = "unknown" } = {}) {
     if (outcome === "merged") return { text: "Merged. Everyone sees this after the next site rebuild, in about 2 to 3 minutes.", tone: "ok", terminal: true };
-    if (outcome === "closed") return { text: "This comment was declined. Track it in your WorkBench.", tone: "bad", terminal: true };
-    return { text: `Posting. ${pr} merges automatically; everyone sees this after the site rebuilds, in about 2 to 3 minutes.`, tone: "pending", terminal: false };
+    if (outcome === "closed") return { text: "This comment was declined.", tone: "bad", terminal: true };
+    return { text: "Posting. Everyone sees this after the site rebuilds, in about 2 to 3 minutes.", tone: "pending", terminal: false };
   }
   function pullsOf(res) {
     if (Array.isArray(res?.prs)) return res.prs;
@@ -9120,6 +9119,11 @@ ${listStyleProseCss(".doc-blocks")}
       collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) }))
     };
   }
+  var SAVED_SECTIONS = ["favorites", "collections"];
+  function savedSectionFromHash(hash) {
+    const h = String(hash ?? "").replace(/^#/, "").trim().toLowerCase();
+    return SAVED_SECTIONS.includes(h) ? h : null;
+  }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE5 = "https://gbti.network";
@@ -11229,7 +11233,7 @@ ${listStyleProseCss(".doc-blocks")}
     async _run(fn, okMsg) {
       try {
         const r = await fn();
-        this._msg = r?.prNumber ? `${okMsg}. ${submitAck({ prNumber: r.prNumber })}` : okMsg;
+        this._msg = r?.prNumber ? `${okMsg}. ${houseEditAck({ prNumber: r.prNumber, autoMerge: true })}` : okMsg;
       } catch (err) {
         this._msg = err?.message || "The action failed.";
       }
@@ -20767,6 +20771,15 @@ ${BLOCKED_PILL_CSS}
   .busy { opacity:.6; pointer-events:none; }
 `;
   var GbtiSaved = class extends GbtiElement {
+    // sow-406: `section` (favorites | collections) scrolls that section into view once the list has rendered. The
+    // extension's avatar menu sets it; the website WorkBench tab never does.
+    static get observedAttributes() {
+      return ["section"];
+    }
+    attributeChangedCallback() {
+      this._scrolled = false;
+      this._scrollToSection();
+    }
     connectedCallback() {
       this._activity = null;
       this._index = null;
@@ -20832,11 +20845,24 @@ ${BLOCKED_PILL_CSS}
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
       this.set(this.css(CSS32) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
-      <section class="sec"><h3>Favorites</h3>${favHtml}</section>
-      <section class="sec"><h3>Collections</h3>${collHtml}
+      <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
+      <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
       </section></div>`);
       this._wire();
+      this._scrollToSection();
+    }
+    /** sow-406: bring the named section into view, once per `section` value, after the list has rendered. */
+    _scrollToSection() {
+      const want = savedSectionFromHash(typeof this.getAttribute === "function" ? this.getAttribute("section") : null);
+      if (!want || this._scrolled || !this._activity || this._activity.error) return;
+      const sec = this.$?.(`[data-sec="${want}"]`);
+      if (!sec) return;
+      this._scrolled = true;
+      try {
+        sec.scrollIntoView({ block: "start", behavior: "smooth" });
+      } catch {
+      }
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
@@ -24930,8 +24956,10 @@ ${BLOCKED_PILL_CSS}
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
       const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
       let follow = "";
-      const wsBase = typeof location !== "undefined" && location.protocol === "chrome-extension:" ? "workspace.html" : "/workbench/";
-      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}">Edit in workspace</a>` : "";
+      const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
+      const wsBase = inExt ? `${SITE19}/workbench/` : "/workbench/";
+      const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
+      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE19}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
@@ -25860,7 +25888,8 @@ ${BLOCKED_PILL_CSS}
   // extension/src/open-page.mjs
   var PAGES = /* @__PURE__ */ new Set([
     "newtab.html",
-    "workspace.html",
+    // sow-406: the WorkBench page left with the extension's WorkBench; saved.html (favorites and collections) replaced it.
+    "saved.html",
     "browse.html",
     // RETIRED page, aliased to newtab.html below (old locked-content CTAs still send it)
     "shares.html",

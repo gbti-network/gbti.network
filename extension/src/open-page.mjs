@@ -11,7 +11,8 @@
 // (onboarding.html), so it is no longer openable: nothing names it, and the new tab is the one sign-in screen.
 const PAGES = new Set([
   'newtab.html',
-  'workspace.html',
+  // sow-406: the WorkBench page left with the extension's WorkBench; saved.html (favorites and collections) replaced it.
+  'saved.html',
   'browse.html', // RETIRED page, aliased to newtab.html below (old locked-content CTAs still send it)
   'shares.html',
   'admin.html',

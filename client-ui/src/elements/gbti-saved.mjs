@@ -5,7 +5,7 @@
 // addToCollection (remove item), createCollection / renameCollection / deleteCollection. Host-agnostic + inert in
 // public (no client -> a sign-in nudge). The GitHub token never reaches the page (the host holds it).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildItemIndex, resolveItem, groupFavoritesByType, indexFileFor, typeLabel, SAVED_TYPES, savedTypeChips, filterSavedByType } from '../saved-core.mjs';
+import { buildItemIndex, resolveItem, groupFavoritesByType, indexFileFor, typeLabel, SAVED_TYPES, savedTypeChips, filterSavedByType, savedSectionFromHash } from '../saved-core.mjs';
 
 const SITE = 'https://gbti.network';
 
@@ -43,6 +43,11 @@ const CSS = `
 `;
 
 class GbtiSaved extends GbtiElement {
+  // sow-406: `section` (favorites | collections) scrolls that section into view once the list has rendered. The
+  // extension's avatar menu sets it; the website WorkBench tab never does.
+  static get observedAttributes() { return ['section']; }
+  attributeChangedCallback() { this._scrolled = false; this._scrollToSection(); }
+
   connectedCallback() {
     this._activity = null; // { favorites, collections, error? }
     this._index = null; // Map "type:slug" -> item
@@ -110,11 +115,22 @@ class GbtiSaved extends GbtiElement {
 
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       ${chipsHtml}
-      <section class="sec"><h3>Favorites</h3>${favHtml}</section>
-      <section class="sec"><h3>Collections</h3>${collHtml}
+      <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
+      <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
       </section></div>`);
     this._wire();
+    this._scrollToSection();
+  }
+
+  /** sow-406: bring the named section into view, once per `section` value, after the list has rendered. */
+  _scrollToSection() {
+    const want = savedSectionFromHash(typeof this.getAttribute === 'function' ? this.getAttribute('section') : null);
+    if (!want || this._scrolled || !this._activity || this._activity.error) return;
+    const sec = this.$?.(`[data-sec="${want}"]`);
+    if (!sec) return;
+    this._scrolled = true;
+    try { sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch { /* an engine without options: nothing to do */ }
   }
 
   _itemRow(item, { fav, cid } = {}) {

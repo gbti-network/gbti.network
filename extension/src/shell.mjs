@@ -1,8 +1,8 @@
-// extension/src/shell.mjs (SOW-036/039): the SHARED member-hub shell for every extension page. initShell({active})
-// injects the top bar + the left rail into the [data-shell] container (before its <main class="nt-main">) and
-// wires the theme toggle, the quick launch (sow-397), and the account dropdown (identity, sign-out, role-gated Admin).
-// A signed-out page shows the sign-in wall instead (mountAuthGate), which is the extension's only sign-in screen. One implementation so the chrome stays identical across newtab / browse / workspace
-// / shares / admin. CSP-safe: trusted constant markup, no inline handlers, inline-SVG icons. The icon set + esc are
+// extension/src/shell.mjs (SOW-036/039): the SHARED member-hub shell for every extension page. initShell() puts the
+// brand and the controls in the page's top row (no left menu since sow-406) and wires the theme toggle, the quick
+// launch (sow-397), and the account dropdown (identity, sign-out, role-gated Admin).
+// A signed-out page shows the sign-in wall instead (mountAuthGate), which is the extension's only sign-in screen. One
+// implementation so the chrome stays identical across newtab / saved / shares / account / admin. CSP-safe: trusted constant markup, no inline handlers, inline-SVG icons. The icon set + esc are
 // exported so the new-tab feed reuses them.
 
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
@@ -54,48 +54,20 @@ export const SVG = {
 };
 export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : '');
 
-// sow-296: there is ONE rail variant now. The FEED rail is gone: the new tab renders the shared FEED_TABS row
-// under its hero instead of a left sidebar (owner, 2026-09-22, "Drop it, use a row of tabs"), so it calls
-// initShell({ nav: 'none' }) and gets the top bar with no rail at all. The WORKBENCH rail (workspace / account /
-// admin / shares) is the member's management nav and is unchanged.
-const RAIL_WORKBENCH = [
-  // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
-  { key: 'network', href: 'newtab.html', ico: 'network', nm: 'Network', sub: 'Exit WorkBench' },
-  // Explicit #tab=overview so clicking it ON workspace.html is a same-document switch (no reload), like the others.
-  { key: 'overview', href: 'workspace.html#tab=overview', ico: 'grid', nm: 'Overview', sub: 'Your hub at a glance' },
-  { group: 'My Content' },
-  { key: 'post', href: 'workspace.html#tab=post', ico: 'article', nm: 'Articles', sub: 'Your posts' },
-  { key: 'prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Your prompts' },
-  { key: 'project', href: 'workspace.html#tab=project', ico: 'project', nm: 'Projects', sub: 'Your projects' },
-  { group: 'Activity' },
-  // sow-404 (owner, 2026-09-25): "Only superadmins should be interested in pull requests."
-  { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted', superOnly: true },
-  { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved', sub: 'Favorites + collections' },
-  { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following', sub: 'Members, channels, topics' },
-  { key: 'earnings', href: 'workspace.html#tab=earnings', ico: 'coin', nm: 'Earnings', sub: 'Referrals + rewards' },
-  { div: true },
-  // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
-  // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-  // SOW-129, repointed sow-204, then (owner, 2026-09-25) "The profile link should go to the members profile": the
-  // member's public page, as the website's avatar menu does. `meProfile` marks it for applyAccount, which fills in
-  // the login; until then it is the member directory, the website's own fallback.
-  { key: 'profile', href: `${SITE}/members/`, ext: true, meProfile: true, ico: 'user', nm: 'Profile', sub: 'Your public profile' },
-  { key: 'settings', href: 'account.html', ico: 'gear', nm: 'Settings', sub: 'Membership + account' },
-  { key: 'admin', href: 'admin.html', ico: 'lock', nm: 'Admin tools', sub: 'Moderation', adminOnly: true },
-];
-
-const RAILS = { workbench: RAIL_WORKBENCH };
+// sow-406 (owner, 2026-09-25): "no workbench support from the extension". The WorkBench page and the left menu that
+// carried it on the Shares, Admin tools and WorkBench pages are gone; every extension page now has the new tab's
+// railless layout (sow-296): the brand and the controls share the top row. What members still reach from here is in
+// the avatar menu below: favorites and collections (an extension page), Following and Earnings (the website
+// WorkBench), Profile, Settings and the staff tools.
 
 // SOW-052: the relocatable control cluster (no longer a full-width bar). initShell appends it to the page's
 // top-right [data-topbar] slot. Order: apps, the view-mode slot (the new tab moves its .nt-modes here), bell,
-// theme, account. The account dropdown is collapsed to just "My WorkBench" + Sign out (the old section
-// deep-links moved to the WorkBench rail).
-// sow-296: the "+" stays for the RAILED pages (workspace, shares, account, admin), which have no other way to
-// post. The new tab passes compose:false, because its hero share bar is the compose affordance there and two
-// controls for one action beside each other is worse than one. wireCompose binds whichever of the two exists.
-function controlsHtml({ compose = true } = {}) {
+// theme, account.
+// sow-296: the "+" is for the pages with no other way to post (Shares, Admin tools: they pass compose:true). The new
+// tab leaves it off, because its hero share bar is the compose affordance there and two controls for one action
+// beside each other is worse than one. wireCompose binds whichever of the two exists.
+function controlsHtml({ compose = false } = {}) {
   return `<div class="nt-controls" data-controls>
-    <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
     <gbti-activity-bell></gbti-activity-bell>
@@ -108,7 +80,10 @@ function controlsHtml({ compose = true } = {}) {
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
+        <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
+        <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
+        <a class="mi" role="menuitem" href="${SITE}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
         <a class="mi" role="menuitem" href="${SITE}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
@@ -121,57 +96,13 @@ function controlsHtml({ compose = true } = {}) {
   </div>`;
 }
 
-// SOW-052: the GBTI Network brand mark, pinned to the very top of the rail (above the feed search / workbench
-// nav). Links home (newtab.html). The icon is the packaged extension logo, accessible by a page-relative path.
+// SOW-052: the GBTI Network brand mark, at the start of the top row (sow-296 moved it there from the old rail).
+// Links home (newtab.html). The icon is the packaged extension logo, accessible by a page-relative path.
 function brandHtml() {
   return `<a class="nt-brand" href="newtab.html" aria-label="GBTI Network home">
     <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
     <span class="nt-brand-tx">GBTI <b>Network</b></span>
   </a>`;
-}
-
-function railHtml(active, nav = 'workbench') {
-  const rail = RAILS[nav] || RAIL_WORKBENCH;
-  const items = rail.map((r) => {
-    if (r.group) return `<div class="nt-rail-h">${esc(r.group)}</div>`;
-    if (r.div) return `<hr class="nt-rail-div" />`;
-    const on = r.key === active ? ' on' : '';
-    // Role-gated after /api/status resolves: staff for adminOnly, superadmin for superOnly (sow-404).
-    const admin = r.adminOnly ? ' data-admin-only hidden' : (r.superOnly ? ' data-super-only hidden' : '');
-    const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : '';
-    // sow-204: an `ext` entry leaves the extension for gbti.network, so it opens in a new tab and never
-    // hands the site a window opener over an extension page.
-    const ext = r.ext ? ' target="_blank" rel="noopener"' : '';
-    const me = r.meProfile ? ' data-me-profile' : '';
-    const self = `<a class="nav-i${on}" data-key="${r.key}"${admin}${me} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
-    // SOW-069: a rail item may carry indented child links (WorkBench -> quick deep-links into the workspace tabs).
-    const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? ' on' : ''}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc(c.nm)}</span></span></a>`).join('');
-    return self + kids;
-  }).join('');
-  // The brand sits at the very top of the rail.
-  return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
-}
-
-/** Re-highlight the rail to `key` (or clear when null). The rail renders its active item ONCE at initShell, but
- *  the new-tab feed switches type via same-document hash navigation (no reload), so it calls this to keep the
- *  left rail in lockstep with the chips + feed. */
-export function setRailActive(key) {
-  document.querySelectorAll('.nt-rail .nav-i').forEach((a) => a.classList.toggle('on', a.dataset.key === key));
-  applyHeadingIcon(key);
-}
-
-// SOW-064: prefix the page's main heading (the [data-topbar] <h1>) with the ACTIVE rail item's icon, sized to the
-// heading, so the section the member is in is echoed at the start of the welcome/heading line. The icon key is read
-// from the active rail item in the DOM, so this is nav-agnostic and follows the selection (initShell sets it once;
-// setRailActive updates it when the new-tab feed switches Activity <-> News, etc.).
-function applyHeadingIcon(key) {
-  const h1 = document.querySelector('[data-topbar] h1');
-  if (!h1) return;
-  const icoKey = key ? document.querySelector(`.nt-rail .nav-i[data-key="${key}"] [data-ico]`)?.dataset.ico : null;
-  let holder = h1.querySelector('.head-ico');
-  if (!icoKey) { holder?.remove(); return; }
-  if (!holder) { holder = document.createElement('span'); holder.className = 'head-ico'; holder.setAttribute('aria-hidden', 'true'); h1.prepend(holder); }
-  holder.innerHTML = ico(icoKey);
 }
 
 /** GET /api/* via the background worker; null on any failure. */
@@ -193,14 +124,13 @@ function applyAccount(root, status) {
       av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
       av.alt = `@${login}`;
     });
-    // The rail's Profile and the avatar menu's Profile open the member's own public page (owner, 2026-09-25).
+    // The avatar menu's Profile opens the member's own public page (owner, 2026-09-25).
     // The member folder name, as the website's Header does (username, else login).
     const folder = status.identity.username || String(login).toLowerCase();
     root.querySelectorAll('[data-me-profile]').forEach((a) => { a.href = `${SITE}/members/${encodeURIComponent(folder)}/`; });
     const head = root.querySelector('[data-me-head]');
     if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
-    // The Admin entry lives in BOTH the WorkBench rail and (re-added) the avatar dropdown, so role-gate EVERY
-    // [data-admin-only] node (querySelectorAll, not querySelector). Shown for staff (moderator and up); admin.html
+    // Role-gate EVERY [data-admin-only] node (querySelectorAll, not querySelector): a page may carry more than one. Shown for staff (moderator and up); admin.html
     // self-gates each tool and the SOW-005 gate + CODEOWNERS stay the real boundary.
     const showAdmin = (RANK[status.role] ?? 0) >= RANK.moderator;
     root.querySelectorAll('[data-admin-only]').forEach((el) => { el.hidden = !showAdmin; });
@@ -421,7 +351,7 @@ function openComposeModal() {
   overlay.querySelector('.share-x')?.addEventListener('click', close);
   // SOW-092: posted -> close, then redirect the member to their new share. A page with a share reader
   // (the new-tab feed, the shares feed) claims the event during dispatch (detail.handled) and opens it in
-  // place; on a page with no reader (workspace/admin/account) we stash the optimistic item and land on
+  // place; on a page with no reader (saved/admin/account) we stash the optimistic item and land on
   // shares.html, whose feed opens it on connect. Deferred a tick so the document listeners run first.
   overlay.addEventListener('gbti-share-posted', (e) => {
     close();
@@ -457,48 +387,24 @@ function wireApps(root) {
   mountQuickLaunch(root.querySelector('[data-apps]')).catch(() => {});
 }
 
-/** Inject + wire the shell into [data-shell]. `active` = the rail key to highlight (or null); `nav` = which rail
- *  variant ('feed' for the new tab, 'workbench' for the management pages). SOW-052: there is no top bar anymore —
- *  the control cluster is appended to the page's top-right [data-topbar] slot (created at the top of <main> if the
- *  page does not provide one), and the rail varies by `nav`. */
-// SOW-062 5e: under 800px the rail becomes an off-canvas drawer; the top-bar hamburger toggles it. Mirrors
-// wireAccount (outside-click + Escape close); tapping a rail link closes it. Above 800px the rail is static (the
-// hamburger is CSS-hidden), so this is inert on desktop.
-function wireDrawer(root) {
-  const rail = root.querySelector('.nt-rail');
-  const btn = root.querySelector('[data-drawer-toggle]');
-  if (!rail || !btn) return;
-  let scrim = document.querySelector('.nt-scrim');
-  if (!scrim) { scrim = document.createElement('div'); scrim.className = 'nt-scrim'; document.body.appendChild(scrim); }
-  const close = () => { rail.classList.remove('open'); scrim.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); };
-  const open = () => { rail.classList.add('open'); scrim.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); };
-  btn.addEventListener('click', (e) => { e.stopPropagation(); rail.classList.contains('open') ? close() : open(); });
-  scrim.addEventListener('click', close);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rail.classList.contains('open')) close(); });
-  rail.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
-}
-
-export function initShell({ active = null, nav = 'workbench' } = {}) {
+/** Inject + wire the shell into [data-shell]. SOW-052: there is no top bar: the control cluster is appended to the
+ *  page's top-right [data-topbar] slot (created at the top of <main> if the page does not provide one). sow-406: no
+ *  page has a left menu; `compose` adds the "+" for pages with no other way to post. */
+export function initShell({ compose = false } = {}) {
   const root = document.querySelector('[data-shell]');
   if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
   const main = root.querySelector('.nt-main');
-  // sow-296: nav 'none' is a RAILLESS page (the new tab). It gets the same top bar and the same wiring, with the
-  // brand mark moved into the top bar, because the rail used to be the only thing carrying it.
-  const railless = nav === 'none';
-  if (railless) root.classList.add('nt-norail');
-  else if (main) main.insertAdjacentHTML('beforebegin', railHtml(active, nav));
-  else root.insertAdjacentHTML('afterbegin', railHtml(active, nav));
+  root.classList.add('nt-norail'); // sow-296 layout, on every page since sow-406
   // The controls live top-right of the content: append them to the page's [data-topbar] row (create a bare one at
   // the top of <main> when the page does not wrap its heading in one).
   if (main) {
     let topbar = main.querySelector('[data-topbar]');
     if (!topbar) { topbar = document.createElement('div'); topbar.className = 'nt-top'; topbar.setAttribute('data-topbar', ''); main.prepend(topbar); }
-    if (railless) topbar.insertAdjacentHTML('afterbegin', brandHtml());
-    topbar.insertAdjacentHTML('beforeend', controlsHtml({ compose: !railless }));
+    topbar.insertAdjacentHTML('afterbegin', brandHtml());
+    topbar.insertAdjacentHTML('beforeend', controlsHtml({ compose }));
   }
-  // Fill the inline-SVG glyphs (rail + controls + any static [data-ico] in the page main). Trusted constants.
+  // Fill the inline-SVG glyphs (controls + any static [data-ico] in the page main). Trusted constants.
   root.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = ico(el.dataset.ico); });
-  applyHeadingIcon(active); // SOW-064: lead the page heading with the active section's icon
   const themeBtn = root.querySelector('[data-theme-toggle]');
   if (themeBtn) {
     themeBtn.innerHTML = ico(document.documentElement.getAttribute('data-theme') === 'dark' ? 'sun' : 'moon');
@@ -507,7 +413,6 @@ export function initShell({ active = null, nav = 'workbench' } = {}) {
   wireApps(root);
   wireAccount(root);
   wireCompose(root);
-  wireDrawer(root);
   // SOW-048: gate AFTER the status round-trip. Signed in -> the app stays; signed out -> the login splash overlays
   // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
   loadShellAccount(root).then((status) => {
