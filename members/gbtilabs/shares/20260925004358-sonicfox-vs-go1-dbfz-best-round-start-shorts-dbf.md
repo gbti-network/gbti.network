@@ -2,9 +2,9 @@
 status: published
 id: 20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf
 createdAt: '2026-09-25T00:43:58.791Z'
-updatedAt: '2026-09-25T01:01:59.198Z'
+updatedAt: '2026-09-25T01:26:55.569Z'
 url: https://www.youtube.com/shorts/uK5G_Z0gvqg
-title: SonicFox vs Go1 DBFZ in the Best Fight Opener Ever
+title: GO1 v SonicFox in Iconic 2026 Dragon Ball FighterZ Competition
 shortDescription: >-
   Two longtime DBFZ rivals briefly turned their 2026 match into a coordinated performance before
   returning to competition.
