@@ -46,6 +46,20 @@ export async function getOverridesMaps({ token, signupBase, fetch = globalThis.f
   return { bans: data?.bans ?? { bans: [] }, grandfathered: data?.grandfathered ?? { grandfathered: [] } };
 }
 
+/** sow-403: the members a SUPERADMIN may post a share as (sow-183's Author picker), read from the Worker's
+ *  member index. Superadmin-only; the Worker re-verifies the caller, so a refusal throws here. */
+export async function getAuthorTargets({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/author/targets', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `author targets request failed (${res.status})`);
+  return Array.isArray(data?.members) ? data.members : [];
+}
+
 /** SOW-100: the guild's Discord channels (id, name, type, parentId) for the categories workspace.
  *  Admin-only (the Worker enforces it; KV-cached an hour server-side). */
 export async function getDiscordChannels({ token, signupBase, fetch = globalThis.fetch }) {

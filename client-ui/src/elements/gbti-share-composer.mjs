@@ -631,9 +631,9 @@ class GbtiShareComposer extends GbtiElement {
 
   /**
    * sow-183 for shares (owner, 2026-09-10): the Author picker. Sourced from the OPTIONAL client capability
-   * client.authorTargets, which only the website adapter implements and which only ever succeeds for a superadmin,
-   * so a plain member, or the extension, gets no options and the row stays hidden. UX gating only: the Worker
-   * re-verifies the caller before accepting a write into another member's folder.
+   * client.authorTargets, which the website adapter and (since sow-403) the extension and agent server implement,
+   * and which only ever returns members for a superadmin, so a plain member gets no options and the row stays
+   * hidden. UX gating only: the Worker re-verifies the caller before accepting a write into another member's folder.
    */
   async _loadAuthorTargets() {
     if (this._authorMembers === undefined) {

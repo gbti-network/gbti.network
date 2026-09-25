@@ -90,6 +90,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     renameContent: ({ path, newSlug }) => request('POST', '/api/content/rename', { path, newSlug }), // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
     deleteComment: ({ id }) => request('POST', '/api/comment/delete', { id }), // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
     discordChannels: () => request('GET', '/api/discord-channels'), // SOW-100: [{id, name, type, parentId}] (admin)
+    authorTargets: () => request('GET', '/api/author-targets'), // sow-403: { members: [{ githubId, username }] }, empty unless superadmin
     postComment: (b) => request('POST', '/api/comment', b), // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request('POST', '/api/comment/edit', b), // SOW-027: { id, body, authorNote? } -> { id, edited }
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }

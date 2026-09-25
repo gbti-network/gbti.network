@@ -9,7 +9,7 @@
 import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft, readDraft, publishShare, listShares, listShareComments, readContent,
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
-  publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
+  publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, listAuthorTargets, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
   listEditorialOp, decideEditorialOp } from '../../client/src/operations.mjs'; // sow-323
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
@@ -195,6 +195,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       // relays are gone. Syndication moved to the website, which calls the Worker directly over its session.
       case '/api/discord-channels': // SOW-100: the guild channel names (admin-gated by the Worker). Was npm-host-only, so the extension pickers showed "No channels loaded".
         return ok(await listDiscordChannels(ctx));
+      case '/api/author-targets': // sow-403: the Share composer's Author picker (empty unless superadmin; the Worker re-verifies)
+        return ok(await listAuthorTargets(ctx));
       case '/api/admin-ops': // SOW-038 P3: trigger reconcile / E2E-smoke (admin-gated; the Worker holds the dispatch token)
         return ok(await triggerAdminOp(ctx, body ?? {}));
       // sow-266 Phase 4: the sponsorship inquiries. BELOW the identity gate, unlike the manager reads above it,

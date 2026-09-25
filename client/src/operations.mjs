@@ -91,6 +91,7 @@ export {
   getOverridesRoster,
   getOpenPulls,
   listDiscordChannels,
+  listAuthorTargets, // sow-403
   getCouponUsageOp,
   listInvitesOp,
   listEditorialOp,

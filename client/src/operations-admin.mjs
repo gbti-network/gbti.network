@@ -9,7 +9,7 @@ import { fetchStripeStatus } from './membership.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, getAuthorTargets as workerGetAuthorTargets, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, editorialAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 
 export async function getOverridesRoster(ctx) {
@@ -74,6 +74,26 @@ export async function listDiscordChannels(ctx) {
   return { channels };
 }
 
+
+/**
+ * sow-403: the Author picker's member list for the Share composer, so a superadmin can post as another member from
+ * the extension as they already can on the website. Anyone but a superadmin gets an empty list and NO network call,
+ * which keeps the picker hidden without a 403 per composer open. That check is UX only: the Worker re-verifies
+ * superadmin on this read and again on the write (/membership/author), and those are the boundary.
+ */
+export async function listAuthorTargets(ctx) {
+  let role = null;
+  try { ({ role } = await requireAdmin(ctx)); } catch { return { members: [] }; }
+  if (role !== 'superadmin') return { members: [] };
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  try {
+    const members = await workerGetAuthorTargets({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return { members };
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'could not read the member list');
+  }
+}
 
 /** SOW-119: per-coupon usage (the Worker is the authority; admin-gated there). Sharing is the plain
  *  visible /codeable-invite/?coupon=<CODE> URL since the 2026-07-18 QA feedback; no link state exists. */

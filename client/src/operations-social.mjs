@@ -22,8 +22,13 @@ import { decryptMemberAsset } from './operations-drafts.mjs';
  * stub .md + a sibling .enc in ONE PR; a public Share is a single plain .md. Paid-only (SOW-011): a known
  * non-paid member is blocked BEFORE any PR opens. The id is a sortable timestamp-slug derived from createdAt.
  */
-export async function publishShare(ctx, { input = {}, body = '', removeEnc = null, title } = {}) {
+export async function publishShare(ctx, { input = {}, body = '', removeEnc = null, title, authorTarget } = {}) {
   const id = requireIdentity(ctx);
+  // sow-403: the Share composer's Author picker (sow-183) lets a SUPERADMIN post under another member's folder,
+  // as the website already does. A well-formed username becomes the folder; anything else is ignored and the share
+  // goes under the caller, as before. No role check here on purpose: the Worker re-verifies superadmin before it
+  // accepts a file outside the caller's own folder, so a member who sends a target is refused there.
+  const owner = typeof authorTarget === 'string' && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : id.username;
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.', { membership });
@@ -36,7 +41,7 @@ export async function publishShare(ctx, { input = {}, body = '', removeEnc = nul
   let built;
   try {
     const { encryptedBody: _stale, ...clean } = input; // sow-304: never carried; planMemberFiles re-derives it
-    built = buildShareFile({ username: id.username, input: { ...clean, id: id_, createdAt }, body });
+    built = buildShareFile({ username: owner, input: { ...clean, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
@@ -54,9 +59,9 @@ export async function publishShare(ctx, { input = {}, body = '', removeEnc = nul
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   // sow-304: an EDIT (input.id names an existing share) that flips a members share public leaves its old
-  // ciphertext orphaned; the composer passes the stored pointer and it is deleted in the same PR. Own _enc/ only.
+  // ciphertext orphaned; the composer passes the stored pointer and it is deleted in the same PR. The owning folder's _enc/ only.
   const isEdit = !!input.id;
-  if (isEdit && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
+  if (isEdit && typeof removeEnc === 'string' && removeEnc.startsWith(`members/${owner}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
   const shareTitle = title ?? `${isEdit ? 'Update Share' : 'New Share'}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ''}`;
   // Idempotent by item: re-publishing the same share id reuses one network branch and pull request.
   const pr = await hostedPublishFiles(ctx, { branch: `gbti/share-${id_}`, files, title: shareTitle });

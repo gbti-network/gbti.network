@@ -5725,9 +5725,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     /**
      * sow-183 for shares (owner, 2026-09-10): the Author picker. Sourced from the OPTIONAL client capability
-     * client.authorTargets, which only the website adapter implements and which only ever succeeds for a superadmin,
-     * so a plain member, or the extension, gets no options and the row stays hidden. UX gating only: the Worker
-     * re-verifies the caller before accepting a write into another member's folder.
+     * client.authorTargets, which the website adapter and (since sow-403) the extension and agent server implement,
+     * and which only ever returns members for a superadmin, so a plain member gets no options and the row stays
+     * hidden. UX gating only: the Worker re-verifies the caller before accepting a write into another member's folder.
      */
     async _loadAuthorTargets() {
       if (this._authorMembers === void 0) {
@@ -27304,6 +27304,8 @@ ${BLOCKED_PILL_CSS}
       // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
       discordChannels: () => request("GET", "/api/discord-channels"),
       // SOW-100: [{id, name, type, parentId}] (admin)
+      authorTargets: () => request("GET", "/api/author-targets"),
+      // sow-403: { members: [{ githubId, username }] }, empty unless superadmin
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),

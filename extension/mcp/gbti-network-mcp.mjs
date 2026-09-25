@@ -19219,8 +19219,9 @@ async function decryptMemberAsset(ctx2, { encPath } = {}) {
 }
 
 // client/src/operations-social.mjs
-async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, title } = {}) {
+async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, title, authorTarget } = {}) {
   const id = requireIdentity(ctx2);
+  const owner = typeof authorTarget === "string" && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : id.username;
   const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.", { membership });
@@ -19230,7 +19231,7 @@ async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, tit
   let built;
   try {
     const { encryptedBody: _stale, ...clean } = input;
-    built = buildShareFile({ username: id.username, input: { ...clean, id: id_, createdAt }, body });
+    built = buildShareFile({ username: owner, input: { ...clean, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -19247,7 +19248,7 @@ async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, tit
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   const isEdit = !!input.id;
-  if (isEdit && typeof removeEnc === "string" && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
+  if (isEdit && typeof removeEnc === "string" && removeEnc.startsWith(`members/${owner}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
   const shareTitle = title ?? `${isEdit ? "Update Share" : "New Share"}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`;
   const pr = await hostedPublishFiles(ctx2, { branch: `gbti/share-${id_}`, files, title: shareTitle });
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };

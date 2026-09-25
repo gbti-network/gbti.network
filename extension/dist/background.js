@@ -18631,8 +18631,9 @@ async function decryptMemberAsset(ctx, { encPath } = {}) {
 }
 
 // client/src/operations-social.mjs
-async function publishShare(ctx, { input = {}, body = "", removeEnc = null, title } = {}) {
+async function publishShare(ctx, { input = {}, body = "", removeEnc = null, title, authorTarget } = {}) {
   const id = requireIdentity(ctx);
+  const owner = typeof authorTarget === "string" && /^[a-z0-9][a-z0-9-]*$/i.test(authorTarget) ? authorTarget.toLowerCase() : id.username;
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.", { membership });
@@ -18642,7 +18643,7 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, titl
   let built;
   try {
     const { encryptedBody: _stale, ...clean3 } = input;
-    built = buildShareFile({ username: id.username, input: { ...clean3, id: id_, createdAt }, body });
+    built = buildShareFile({ username: owner, input: { ...clean3, id: id_, createdAt }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -18659,7 +18660,7 @@ async function publishShare(ctx, { input = {}, body = "", removeEnc = null, titl
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   const isEdit = !!input.id;
-  if (isEdit && typeof removeEnc === "string" && removeEnc.startsWith(`members/${id.username}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
+  if (isEdit && typeof removeEnc === "string" && removeEnc.startsWith(`members/${owner}/_enc/`) && !plan?.encPath) files.push({ path: removeEnc, content: null });
   const shareTitle = title ?? `${isEdit ? "Update Share" : "New Share"}${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`;
   const pr = await hostedPublishFiles(ctx, { branch: `gbti/share-${id_}`, files, title: shareTitle });
   return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", status: built.frontmatter.status ?? "published", encrypted: Boolean(plan?.encPath), edited: isEdit };
@@ -19094,6 +19095,20 @@ async function getOverridesMaps({ token, signupBase, fetch: fetch2 = globalThis.
   }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin overrides request failed (${res.status})`);
   return { bans: data?.bans ?? { bans: [] }, grandfathered: data?.grandfathered ?? { grandfathered: [] } };
+}
+async function getAuthorTargets({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + "/membership/author/targets", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `author targets request failed (${res.status})`);
+  return Array.isArray(data?.members) ? data.members : [];
 }
 async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
@@ -19610,6 +19625,23 @@ async function listDiscordChannels(ctx) {
   const token = ctx.store?.get?.("githubToken");
   const channels = await getDiscordChannels({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   return { channels };
+}
+async function listAuthorTargets(ctx) {
+  let role = null;
+  try {
+    ({ role } = await requireAdmin(ctx));
+  } catch {
+    return { members: [] };
+  }
+  if (role !== "superadmin") return { members: [] };
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  try {
+    const members = await getAuthorTargets({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return { members };
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "could not read the member list");
+  }
 }
 async function getCouponUsageOp(ctx) {
   await requireAdmin(ctx);
@@ -21099,6 +21131,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // relays are gone. Syndication moved to the website, which calls the Worker directly over its session.
       case "/api/discord-channels":
         return ok(await listDiscordChannels(ctx));
+      case "/api/author-targets":
+        return ok(await listAuthorTargets(ctx));
       case "/api/admin-ops":
         return ok(await triggerAdminOp2(ctx, body ?? {}));
       // sow-266 Phase 4: the sponsorship inquiries. BELOW the identity gate, unlike the manager reads above it,
@@ -21353,6 +21387,8 @@ function createHttpClient({ baseUrl = "", token, fetch: fetch2 = globalThis.fetc
     // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
     discordChannels: () => request("GET", "/api/discord-channels"),
     // SOW-100: [{id, name, type, parentId}] (admin)
+    authorTargets: () => request("GET", "/api/author-targets"),
+    // sow-403: { members: [{ githubId, username }] }, empty unless superadmin
     postComment: (b) => request("POST", "/api/comment", b),
     // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request("POST", "/api/comment/edit", b),
