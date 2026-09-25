@@ -1,6 +1,6 @@
 // extension/src/shell.mjs (SOW-036/039): the SHARED member-hub shell for every extension page. initShell({active})
 // injects the top bar + the left rail into the [data-shell] container (before its <main class="nt-main">) and
-// wires the theme toggle, the daily.dev switcher, and the account dropdown (identity, sign-out, role-gated Admin).
+// wires the theme toggle, the quick launch (sow-397), and the account dropdown (identity, sign-out, role-gated Admin).
 // A signed-out page shows the sign-in wall instead (mountAuthGate), which is the extension's only sign-in screen. One implementation so the chrome stays identical across newtab / browse / workspace
 // / shares / admin. CSP-safe: trusted constant markup, no inline handlers, inline-SVG icons. The icon set + esc are
 // exported so the new-tab feed reuses them.
@@ -14,10 +14,9 @@ import '../../client-ui/src/elements/gbti-signin-splash.mjs';
 import { makePkce, startUrl, readRedirectResult, REDIRECT_PATH } from './web-signin.mjs'; // sow-393: the website sign-in
 import { expiryPopupDecision, expiryPopupCopy } from '../../client-ui/src/membership-expiry.mjs'; // SOW-119 QA: the coupon-expiry countdown
 import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
+import { mountQuickLaunch } from './quick-launch.mjs'; // sow-397: the quick launch pill + its settings popup
 
 const SITE = 'https://gbti.network';
-const DAILYDEV_ID = 'jlmpjdjjbgclbocgajdjefcidcncaied';
-const DAILYDEV_APP_URL = 'https://app.daily.dev/';
 const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -93,10 +92,7 @@ const RAILS = { workbench: RAIL_WORKBENCH };
 function controlsHtml({ compose = true } = {}) {
   return `<div class="nt-controls" data-controls>
     <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
-    <span class="nt-apps" data-apps>
-      <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
-      <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
-    </span>
+    <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
@@ -444,15 +440,11 @@ function wireCompose(root) {
   root.querySelector('[data-compose]')?.addEventListener('click', () => openComposeModal());
 }
 
-async function wireApps(root) {
-  const apps = root.querySelector('[data-apps]');
-  if (!apps) return;
-  apps.querySelector('[data-open-dailydev]')?.addEventListener('click', () => { window.location.href = DAILYDEV_APP_URL; });
-  const img = apps.querySelector('[data-dd-img]');
-  img?.addEventListener('error', () => { const b = document.createElement('span'); b.className = 'dd'; b.textContent = 'dd'; img.replaceWith(b); }, { once: true });
-  let installed = null;
-  try { if (chrome.management?.get) { const info = await chrome.management.get(DAILYDEV_ID).catch(() => null); installed = Boolean(info && info.enabled); } } catch { /* no management permission */ }
-  if (installed === true || installed === null) apps.classList.add('show'); // show when present, or when we cannot tell
+// sow-397: the pill used to be a daily.dev switcher that asked chrome.management whether daily.dev was installed. The
+// extension never had that permission, so it could not tell and always showed. It is now the quick launch, and
+// daily.dev is one of its destinations, switched on once when the content script on gbti.network detects it.
+function wireApps(root) {
+  mountQuickLaunch(root.querySelector('[data-apps]')).catch(() => {});
 }
 
 /** Inject + wire the shell into [data-shell]. `active` = the rail key to highlight (or null); `nav` = which rail

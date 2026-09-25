@@ -19351,12 +19351,12 @@ async function editComment(ctx2, { id, body, authorNote, visibility } = {}) {
 var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
-async function ogPreview({ url: url2, token, signupBase, fetch = globalThis.fetch }) {
+async function ogPreview({ url: url2, icon = false, token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
   const res = await fetch(trimBase4(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ url: url2 })
+    body: JSON.stringify(icon === true ? { url: url2, icon: true } : { url: url2 })
   });
   let data = null;
   try {
@@ -19379,11 +19379,11 @@ function canonicalType(type) {
 }
 
 // client/src/operations-member.mjs
-async function ogPreview2(ctx2, { url: url2 } = {}) {
+async function ogPreview2(ctx2, { url: url2, icon } = {}) {
   requireIdentity(ctx2);
   const token = ctx2.store?.get?.("githubToken");
   try {
-    return await ogPreview({ url: url2, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+    return await ogPreview({ url: url2, icon: icon === true, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   } catch (err) {
     if (err instanceof OgClientError) throw new OperationError("og-preview-failed", err.message);
     throw err;

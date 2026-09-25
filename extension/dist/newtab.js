@@ -2458,11 +2458,11 @@
     const ring = [];
     const emit = typeof sink === "function" ? sink : sink && typeof sink.log === "function" ? (...a) => sink.log(...a) : () => {
     };
-    const devlog2 = (area, msg, data) => {
+    const devlog2 = (area2, msg, data) => {
       if (!isOn(gate)) return;
       const t = now();
       const safe = data === void 0 ? void 0 : redactDeep(data);
-      const entry = { t, area: String(area || "app"), msg: String(msg == null ? "" : msg) };
+      const entry = { t, area: String(area2 || "app"), msg: String(msg == null ? "" : msg) };
       if (safe !== void 0) entry.data = safe;
       ring.push(entry);
       if (ring.length > ringSize) ring.splice(0, ring.length - ringSize);
@@ -2490,8 +2490,8 @@
       FLAG = r?.[DEVLOG_FLAG_KEY] === true;
     })?.catch?.(() => {
     });
-    chrome?.storage?.onChanged?.addListener?.((changes, area) => {
-      if (area === "local" && changes?.[DEVLOG_FLAG_KEY]) FLAG = changes[DEVLOG_FLAG_KEY].newValue === true;
+    chrome?.storage?.onChanged?.addListener?.((changes, area2) => {
+      if (area2 === "local" && changes?.[DEVLOG_FLAG_KEY]) FLAG = changes[DEVLOG_FLAG_KEY].newValue === true;
     });
   } catch {
   }
@@ -2626,16 +2626,16 @@
     const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
     const tabC = tabM ? canonicalType(tabM[1]) : null;
     const tab = tabC && TAB_IDS.has(tabC) ? tabC : null;
-    let read2 = null;
+    let read3 = null;
     if (readM) {
       try {
-        read2 = decodeURIComponent(readM[1]);
+        read3 = decodeURIComponent(readM[1]);
       } catch {
-        read2 = readM[1];
+        read3 = readM[1];
       }
     }
     const action = doM && DO_ACTIONS.has(doM[1]) ? doM[1] : null;
-    return { tab, read: read2, action };
+    return { tab, read: read3, action };
   }
   function stripDoParam(hash) {
     const s = String(hash || "").replace(/^#/, "");
@@ -2969,10 +2969,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (tabHash !== tab && !editing) return { action: "switchTab", tab: tabHash };
     return { action: "none" };
   }
-  function profileStrip(read2, tab) {
-    if (!read2 || tab === "profile") return null;
-    if (read2.state === "found") return { name: String(read2.item?.frontmatter?.displayName || "Your profile"), action: "Edit profile" };
-    if (read2.state === "absent") return { name: "You have no public profile yet", action: "Create your profile" };
+  function profileStrip(read3, tab) {
+    if (!read3 || tab === "profile") return null;
+    if (read3.state === "found") return { name: String(read3.item?.frontmatter?.displayName || "Your profile"), action: "Edit profile" };
+    if (read3.state === "absent") return { name: "You have no public profile yet", action: "Create your profile" };
     return null;
   }
   var isProfilePath = (path) => /^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/.test(String(path || ""));
@@ -5018,9 +5018,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           continue;
         }
       }
-      const esc5 = escapeKeepingLinks(line, linkKeep);
+      const esc6 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc5)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc6)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -5087,7 +5087,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc5, line)];
+      const para = [hardBreak(esc6, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -5297,8 +5297,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           return this._renderComposer();
       }
     }
-    _noticeHtml(title, body, glyph) {
-      return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
+    _noticeHtml(title, body, glyph2) {
+      return `<div class="notice"><span class="lock">${glyph2}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
       this.set(this.css(CSS3) + this._noticeHtml(
@@ -6813,12 +6813,610 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { headline, dateLabel, count: Math.max(0, calDays) };
   }
 
+  // extension/src/quick-launch-core.mjs
+  var QL_CAP = 8;
+  var QL_SYNC_KEY = "quickLaunch";
+  var QL_ICONS_KEY = "quickLaunchIcons";
+  var QL_MAX_CUSTOM = 16;
+  var QL_NAME_MAX = 40;
+  var QL_URL_MAX = 256;
+  var DAILYDEV_EXTENSION_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
+  var DAILYDEV_PROBE_URL = `chrome-extension://${DAILYDEV_EXTENSION_ID}/css/companion.css`;
+  var DAILYDEV_SEEN_KEY = "dailydevDetected";
+  var PROBE_EVERY_MS = 24 * 60 * 60 * 1e3;
+  var GROUPS = Object.freeze([
+    { key: "ai", label: "Frontier AI" },
+    { key: "social", label: "Social" },
+    { key: "custom", label: "Your destinations" }
+  ]);
+  var DEFAULTS = Object.freeze([
+    { id: "chatgpt", name: "ChatGPT", url: "https://chatgpt.com/", group: "ai" },
+    { id: "claude", name: "Claude", url: "https://claude.ai/", group: "ai" },
+    { id: "gemini", name: "Gemini", url: "https://gemini.google.com/", group: "ai" },
+    { id: "grok", name: "Grok", url: "https://grok.com/", group: "ai" },
+    { id: "perplexity", name: "Perplexity", url: "https://www.perplexity.ai/", group: "ai" },
+    { id: "x", name: "X", url: "https://x.com/", group: "social" },
+    { id: "bluesky", name: "Bluesky", url: "https://bsky.app/", group: "social" },
+    { id: "linkedin", name: "LinkedIn", url: "https://www.linkedin.com/", group: "social" },
+    { id: "reddit", name: "Reddit", url: "https://www.reddit.com/", group: "social" },
+    { id: "discord", name: "Discord", url: "https://discord.com/channels/1073029070411006053", group: "social" },
+    { id: "devto", name: "DEV", url: "https://dev.to/", group: "social" },
+    { id: "dailydev", name: "daily.dev", url: "https://app.daily.dev/", group: "social" },
+    { id: "substack", name: "Substack", url: "https://substack.com/", group: "social" }
+  ]);
+  var DEFAULT_BY_ID = new Map(DEFAULTS.map((d) => [d.id, d]));
+  var GROUP_RANK = Object.fromEntries(GROUPS.map((g, i) => [g.key, i]));
+  var CUSTOM_ID_RE = /^c-[a-z0-9]{1,24}$/;
+  function normalizeUrl(raw) {
+    let s = String(raw ?? "").trim();
+    if (!s || s.length > QL_URL_MAX) return null;
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = `https://${s.replace(/^\/+/, "")}`;
+    let u;
+    try {
+      u = new URL(s);
+    } catch {
+      return null;
+    }
+    if (u.protocol !== "https:") return null;
+    if (u.username || u.password) return null;
+    const host = u.hostname.toLowerCase();
+    if (!host.includes(".") || host.startsWith(".") || host.endsWith(".")) return null;
+    const href = u.toString();
+    return href.length > QL_URL_MAX ? null : href;
+  }
+  function displayHost(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./i, "");
+    } catch {
+      return "";
+    }
+  }
+  function cleanName(raw) {
+    return String(raw ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, QL_NAME_MAX).trim();
+  }
+  function letterFor(name) {
+    const m = String(name || "").match(/[\p{L}\p{N}]/u);
+    return m ? m[0].toUpperCase() : "?";
+  }
+  function groupSort(items) {
+    return items.map((it, i) => [it, i]).sort((a, b) => GROUP_RANK[a[0].group] - GROUP_RANK[b[0].group] || a[1] - b[1]).map(([it]) => it);
+  }
+  function mergeState(stored) {
+    const st = stored && typeof stored === "object" ? stored : {};
+    const customs = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const c of Array.isArray(st.custom) ? st.custom : []) {
+      if (customs.length >= QL_MAX_CUSTOM) break;
+      const id = String(c?.id || "");
+      const url = normalizeUrl(c?.url);
+      if (!CUSTOM_ID_RE.test(id) || seen.has(id) || !url) continue;
+      seen.add(id);
+      customs.push({ id, name: cleanName(c?.name) || displayHost(url), url, group: "custom", custom: true });
+    }
+    const known = new Map([...DEFAULTS.map((d) => [d.id, { ...d, custom: false }]), ...customs.map((c) => [c.id, c])]);
+    const order = [];
+    for (const id of Array.isArray(st.order) ? st.order : []) if (known.has(id) && !order.includes(id)) order.push(id);
+    for (const id of known.keys()) if (!order.includes(id)) order.push(id);
+    const on = new Set((Array.isArray(st.on) ? st.on : []).filter((id) => known.has(id)));
+    const items = groupSort(order.map((id) => ({ ...known.get(id), on: on.has(id) })));
+    return { items, dailydevAuto: st.dailydevAuto === true };
+  }
+  function toStored(state) {
+    return {
+      v: 1,
+      order: state.items.map((it) => it.id),
+      on: state.items.filter((it) => it.on).map((it) => it.id),
+      custom: state.items.filter((it) => it.custom).map(({ id, name, url }) => ({ id, name, url })),
+      dailydevAuto: state.dailydevAuto === true
+    };
+  }
+  function barItems(state) {
+    return state.items.filter((it) => it.on).slice(0, QL_CAP);
+  }
+  function overflowItems(state) {
+    return state.items.filter((it) => it.on).slice(QL_CAP);
+  }
+  var withItems = (state, items) => ({ ...state, items: groupSort(items) });
+  function setOn(state, id, on) {
+    return withItems(state, state.items.map((it) => it.id === id ? { ...it, on: on === true } : it));
+  }
+  function move(state, id, delta) {
+    const items = [...state.items];
+    const i = items.findIndex((it) => it.id === id);
+    if (i < 0) return state;
+    const j = i + (delta < 0 ? -1 : 1);
+    if (j < 0 || j >= items.length || items[j].group !== items[i].group) return state;
+    [items[i], items[j]] = [items[j], items[i]];
+    return withItems(state, items);
+  }
+  function moveBefore(state, id, beforeId) {
+    const it = state.items.find((x) => x.id === id);
+    if (!it || id === beforeId) return state;
+    const rest = state.items.filter((x) => x.id !== id);
+    let at;
+    if (beforeId == null) {
+      const lastOfGroup = rest.map((x) => x.group).lastIndexOf(it.group);
+      at = lastOfGroup + 1;
+    } else {
+      at = rest.findIndex((x) => x.id === beforeId);
+      if (at < 0 || rest[at].group !== it.group) return state;
+    }
+    rest.splice(at, 0, it);
+    return withItems(state, rest);
+  }
+  function addCustom(state, { url, name } = {}, newId = () => `c-${Math.random().toString(36).slice(2, 12)}`) {
+    const href = normalizeUrl(url);
+    if (!href) return { error: "invalid-url" };
+    const customs = state.items.filter((it) => it.custom);
+    if (customs.length >= QL_MAX_CUSTOM) return { error: "too-many" };
+    if (customs.some((it) => it.url === href)) return { error: "duplicate" };
+    let id = newId();
+    while (state.items.some((it) => it.id === id) || !CUSTOM_ID_RE.test(id)) id = `c-${Math.random().toString(36).slice(2, 12)}`;
+    const item = { id, name: cleanName(name) || displayHost(href), url: href, group: "custom", custom: true, on: true };
+    return { state: withItems(state, [...state.items, item]), item };
+  }
+  function updateCustom(state, id, { url, name } = {}) {
+    const cur = state.items.find((it) => it.id === id && it.custom);
+    if (!cur) return { error: "not-found" };
+    const href = url === void 0 ? cur.url : normalizeUrl(url);
+    if (!href) return { error: "invalid-url" };
+    if (state.items.some((it) => it.custom && it.id !== id && it.url === href)) return { error: "duplicate" };
+    const next = { ...cur, url: href, name: cleanName(name ?? cur.name) || displayHost(href) };
+    return { state: withItems(state, state.items.map((it) => it.id === id ? next : it)) };
+  }
+  function removeCustom(state, id) {
+    return withItems(state, state.items.filter((it) => !(it.id === id && it.custom)));
+  }
+  function restoreDefaults(state) {
+    const customs = state.items.filter((it) => it.custom);
+    return withItems(state, [...DEFAULTS.map((d) => ({ ...d, custom: false, on: false })), ...customs]);
+  }
+  function applyDailydevDetection(state, detected) {
+    if (detected !== true || state.dailydevAuto === true) return { state, changed: false };
+    const next = setOn(state, "dailydev", true);
+    return { state: { ...next, dailydevAuto: true }, changed: true };
+  }
+
+  // extension/src/quick-launch-marks.mjs
+  var SI = {
+    claude: { hex: "#D97757", path: "m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z" },
+    // siClaude
+    gemini: { hex: "#8E75B2", path: "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" },
+    // siGooglegemini
+    perplexity: { hex: "#1FB8CD", path: "M22.3977 7.0896h-2.3106V.0676l-7.5094 6.3542V.1577h-1.1554v6.1966L4.4904 0v7.0896H1.6023v10.3976h2.8882V24l6.932-6.3591v6.2005h1.1554v-6.0469l6.9318 6.1807v-6.4879h2.8882V7.0896zm-3.4657-4.531v4.531h-5.355l5.355-4.531zm-13.2862.0676 4.8691 4.4634H5.6458V2.6262zM2.7576 16.332V8.245h7.8476l-6.1149 6.1147v1.9723H2.7576zm2.8882 5.0404v-3.8852h.0001v-2.6488l5.7763-5.7764v7.0111l-5.7764 5.2993zm12.7086.0248-5.7766-5.1509V9.0618l5.7766 5.7766v6.5588zm2.8882-5.0652h-1.733v-1.9723L13.3948 8.245h7.8478v8.087z" },
+    // siPerplexity
+    x: { hex: "#000000", path: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z" },
+    // siX
+    bluesky: { hex: "#1185FE", path: "M5.202 2.857C7.954 4.922 10.913 9.11 12 11.358c1.087-2.247 4.046-6.436 6.798-8.501C20.783 1.366 24 .213 24 3.883c0 .732-.42 6.156-.667 7.037-.856 3.061-3.978 3.842-6.755 3.37 4.854.826 6.089 3.562 3.422 6.299-5.065 5.196-7.28-1.304-7.847-2.97-.104-.305-.152-.448-.153-.327 0-.121-.05.022-.153.327-.568 1.666-2.782 8.166-7.847 2.97-2.667-2.737-1.432-5.473 3.422-6.3-2.777.473-5.899-.308-6.755-3.369C.42 10.04 0 4.615 0 3.883c0-3.67 3.217-2.517 5.202-1.026" },
+    // siBluesky
+    reddit: { hex: "#FF4500", path: "M12 0C5.373 0 0 5.373 0 12c0 3.314 1.343 6.314 3.515 8.485l-2.286 2.286C.775 23.225 1.097 24 1.738 24H12c6.627 0 12-5.373 12-12S18.627 0 12 0Zm4.388 3.199c1.104 0 1.999.895 1.999 1.999 0 1.105-.895 2-1.999 2-.946 0-1.739-.657-1.947-1.539v.002c-1.147.162-2.032 1.15-2.032 2.341v.007c1.776.067 3.4.567 4.686 1.363.473-.363 1.064-.58 1.707-.58 1.547 0 2.802 1.254 2.802 2.802 0 1.117-.655 2.081-1.601 2.531-.088 3.256-3.637 5.876-7.997 5.876-4.361 0-7.905-2.617-7.998-5.87-.954-.447-1.614-1.415-1.614-2.538 0-1.548 1.255-2.802 2.803-2.802.645 0 1.239.218 1.712.585 1.275-.79 2.881-1.291 4.64-1.365v-.01c0-1.663 1.263-3.034 2.88-3.207.188-.911.993-1.595 1.959-1.595Zm-8.085 8.376c-.784 0-1.459.78-1.506 1.797-.047 1.016.64 1.429 1.426 1.429.786 0 1.371-.369 1.418-1.385.047-1.017-.553-1.841-1.338-1.841Zm7.406 0c-.786 0-1.385.824-1.338 1.841.047 1.017.634 1.385 1.418 1.385.785 0 1.473-.413 1.426-1.429-.046-1.017-.721-1.797-1.506-1.797Zm-3.703 4.013c-.974 0-1.907.048-2.77.135-.147.015-.241.168-.183.305.483 1.154 1.622 1.964 2.953 1.964 1.33 0 2.47-.81 2.953-1.964.057-.137-.037-.29-.184-.305-.863-.087-1.795-.135-2.769-.135Z" },
+    // siReddit
+    discord: { hex: "#5865F2", path: "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" },
+    // siDiscord
+    devto: { hex: "#0A0A0A", path: "M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.91-.02-1.96-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.73-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.3zm4.68 5.45c-.17.43-.64.79-1 .79-.18 0-.45-.15-.67-.39-.32-.32-.45-.63-.82-2.08l-.9-3.39-.45-1.67h.76c.4 0 .75.02.75.05 0 .06 1.16 4.54 1.26 4.83.04.15.32-.7.73-2.3l.66-2.52.74-.04c.4-.02.73 0 .73.04 0 .14-1.67 6.38-1.8 6.68z" },
+    // siDevdotto
+    dailydev: { hex: "#CE3DF3", path: "M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z" },
+    // siDailydotdev
+    substack: { hex: "#FF6719", path: "M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z" }
+    // siSubstack
+  };
+  var BRAND_MARKS = {
+    chatgpt: { hex: "#10a37f", viewBox: "0 0 100 100", paths: ["M38.355 36.52v-9.415c0-.793.297-1.388.99-1.784l18.93-10.902c2.578-1.486 5.65-2.18 8.82-2.18 11.894 0 19.426 9.218 19.426 19.029 0 .694 0 1.486-.1 2.28L66.799 22.05c-1.189-.694-2.379-.694-3.568 0L38.355 36.52Zm44.202 36.67V50.694c0-1.388-.596-2.38-1.785-3.073L55.897 33.15l8.126-4.658c.694-.396 1.289-.396 1.982 0l18.93 10.902c5.452 3.172 9.118 9.91 9.118 16.452 0 7.531-4.46 14.47-11.496 17.344Zm-50.05-19.82-8.127-4.757c-.693-.396-.99-.99-.99-1.784V25.025c0-10.605 8.126-18.633 19.127-18.633 4.163 0 8.028 1.388 11.3 3.865l-19.525 11.3c-1.189.693-1.784 1.684-1.784 3.072v28.74ZM50 63.478l-11.645-6.541V43.062L50 36.522l11.645 6.54v13.875L50 63.477Zm7.483 30.129c-4.163 0-8.028-1.388-11.3-3.865l19.525-11.3c1.189-.693 1.784-1.684 1.784-3.071V46.629l8.226 4.757c.694.396.991.991.991 1.784v21.803c0 10.605-8.226 18.633-19.226 18.633v.001Zm-23.49-22.101-18.93-10.902c-5.45-3.172-9.117-9.91-9.117-16.451 0-7.632 4.559-14.47 11.595-17.344v22.596c0 1.388.595 2.379 1.784 3.072l24.777 14.37-8.126 4.659c-.694.396-1.289.396-1.982 0ZM32.905 87.76c-11.2 0-19.425-8.425-19.425-18.83 0-.794.1-1.587.198-2.38L33.2 77.85c1.189.693 2.379.693 3.568 0l24.876-14.37v9.415c0 .793-.298 1.388-.992 1.784L41.724 85.58c-2.576 1.486-5.649 2.18-8.82 2.18h.001Zm24.579 11.793c11.992 0 22.001-8.523 24.281-19.822C92.864 76.857 100 66.451 100 55.846c0-6.937-2.973-13.676-8.325-18.533.496-2.081.793-4.163.793-6.243 0-14.172-11.496-24.777-24.777-24.777-2.676 0-5.253.396-7.83 1.288C55.401 3.221 49.257.445 42.517.445c-11.992 0-22.001 8.523-24.281 19.822C7.136 23.14 0 33.547 0 44.152c0 6.938 2.973 13.676 8.325 18.533-.496 2.081-.793 4.163-.793 6.243 0 14.172 11.497 24.778 24.777 24.778 2.676 0 5.253-.397 7.83-1.289 4.459 4.36 10.604 7.136 17.344 7.136Z"] },
+    grok: { hex: "#000000", viewBox: "56 56 400 400", paths: ["M210.484 312.759L343.465 210.383C349.984 205.364 359.302 207.322 362.408 215.117C378.758 256.231 371.454 305.64 338.925 339.563C306.397 373.487 261.137 380.927 219.768 363.983L174.577 385.803C239.394 432.008 318.104 420.581 367.289 369.251C406.303 328.564 418.386 273.104 407.088 223.091L407.19 223.198C390.807 149.726 411.218 120.359 453.03 60.3072C454.02 58.8833 455.01 57.4595 456 56L400.978 113.382V113.204L210.45 312.794", "M183.042 337.641C136.519 291.294 144.54 219.567 184.236 178.203C213.59 147.59 261.683 135.096 303.666 153.464L348.755 131.75C340.632 125.627 330.221 119.042 318.275 114.414C264.277 91.2407 199.63 102.774 155.735 148.516C113.513 192.549 100.236 260.254 123.036 318.027C140.069 361.206 112.148 391.748 84.0229 422.575C74.0561 433.503 64.0553 444.431 56 456L183.007 337.677"] },
+    linkedin: { hex: "#0a66c2", viewBox: "0 0 24 24", paths: ["M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452z"] },
+    ...Object.fromEntries(Object.entries(SI).map(([id, m]) => [id, { hex: m.hex, viewBox: "0 0 24 24", paths: [m.path] }]))
+  };
+
+  // extension/src/quick-launch.mjs
+  var esc2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var GLYPH = {
+    gear: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+    x: '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    grip: '<circle cx="9" cy="6" r="1.4" fill="currentColor"/><circle cx="15" cy="6" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="18" r="1.4" fill="currentColor"/><circle cx="15" cy="18" r="1.4" fill="currentColor"/>',
+    plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    pencil: '<path d="M4 20h4L19 9l-4-4L4 16z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    open: '<path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  var glyph = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${GLYPH[k]}</svg>`;
+  function markHtml(item, icons = {}) {
+    const m = !item.custom && BRAND_MARKS[item.id];
+    if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
+    const icon2 = icons[item.id];
+    if (typeof icon2 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon2)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon2}" alt="" /></span>`;
+    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc2(letterFor(item.name))}</span>`;
+  }
+  var area = (name) => {
+    try {
+      return globalThis.chrome?.storage?.[name] || null;
+    } catch {
+      return null;
+    }
+  };
+  async function read(name, key) {
+    try {
+      const a = area(name);
+      return a ? (await a.get(key))?.[key] : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  async function write(name, obj) {
+    try {
+      const a = area(name);
+      if (a) await a.set(obj);
+    } catch {
+    }
+  }
+  var STATE = mergeState(null);
+  var ICONS = {};
+  var BARS = /* @__PURE__ */ new Set();
+  var LISTENERS = /* @__PURE__ */ new Set();
+  var saveTimer = null;
+  var written = [];
+  var listening = false;
+  function commit(next, { save = true } = {}) {
+    STATE = next;
+    renderBars();
+    LISTENERS.forEach((fn) => fn());
+    if (!save) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const stored = toStored(STATE);
+      written.push(JSON.stringify(stored));
+      if (written.length > 6) written.shift();
+      write("sync", { [QL_SYNC_KEY]: stored });
+    }, 350);
+  }
+  async function saveIcon(id, dataUrl) {
+    ICONS = { ...ICONS };
+    if (dataUrl) ICONS[id] = dataUrl;
+    else delete ICONS[id];
+    await write("local", { [QL_ICONS_KEY]: ICONS });
+  }
+  async function lookupSite(url) {
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "POST", pathname: "/api/og-preview", query: {}, body: { url, icon: true } } });
+      return r && r.status >= 200 && r.status < 300 ? r.json || null : null;
+    } catch {
+      return null;
+    }
+  }
+  function barHtml() {
+    const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc2(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc2(it.name)}" aria-label="${esc2(it.name)}, opens in a new tab">${markHtml(it, ICONS)}</a>`).join("");
+    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span><span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>${links}`;
+  }
+  function renderBars() {
+    const html = barHtml();
+    const empty = barItems(STATE).length === 0;
+    for (const el of BARS) {
+      if (!el.isConnected) {
+        BARS.delete(el);
+        continue;
+      }
+      el.innerHTML = html;
+      el.classList.toggle("is-empty", empty);
+    }
+  }
+  async function mountQuickLaunch(el) {
+    if (!el) return;
+    BARS.add(el);
+    el.setAttribute("role", "group");
+    el.setAttribute("aria-label", "Quick launch");
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("[data-ql-settings]")) openQuickLaunchSettings(e.target.closest("[data-ql-settings]"));
+    });
+    const [stored, icons, seen] = await Promise.all([read("sync", QL_SYNC_KEY), read("local", QL_ICONS_KEY), read("local", DAILYDEV_SEEN_KEY)]);
+    ICONS = icons && typeof icons === "object" ? icons : {};
+    const { state, changed } = applyDailydevDetection(mergeState(stored), seen === true);
+    commit(state, { save: changed });
+    el.classList.add("show");
+    if (listening) return;
+    listening = true;
+    try {
+      chrome.storage.onChanged.addListener((changes, name) => {
+        if (name === "sync" && changes[QL_SYNC_KEY] && !saveTimer && !written.includes(JSON.stringify(changes[QL_SYNC_KEY].newValue))) {
+          commit(mergeState(changes[QL_SYNC_KEY].newValue), { save: false });
+        }
+        if (name === "local" && changes[QL_ICONS_KEY]) {
+          ICONS = changes[QL_ICONS_KEY].newValue || {};
+          commit(STATE, { save: false });
+        }
+        if (name === "local" && changes[DAILYDEV_SEEN_KEY]?.newValue === true) {
+          const r = applyDailydevDetection(STATE, true);
+          if (r.changed) commit(r.state);
+        }
+      });
+    } catch {
+    }
+  }
+  var ADD_COPY = {
+    "invalid-url": "Enter a web address that starts with https://, like https://news.ycombinator.com.",
+    "too-many": "You have added as many of your own sites as the bar can keep. Remove one to add another.",
+    duplicate: "That site is already in your list."
+  };
+  function rowHtml(it, rank) {
+    const inBar = it.on && rank < QL_CAP;
+    const left = it.on && !inBar;
+    const tools = it.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc2(it.id)}" aria-label="Edit ${esc2(it.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc2(it.id)}" aria-label="Remove ${esc2(it.name)}" title="Remove">${glyph("trash")}</button>` : "";
+    const open = left ? `<a class="ql-tool" href="${esc2(it.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc2(it.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
+    return `<li class="ql-row" data-ql-row="${esc2(it.id)}" data-group="${esc2(it.group)}" draggable="true">
+    <button class="ql-grip" type="button" data-ql-grip="${esc2(it.id)}" aria-label="Move ${esc2(it.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
+    ${markHtml(it, ICONS)}
+    <span class="ql-txt"><b>${esc2(it.name)}</b><small>${esc2(displayHost(it.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
+    ${open}${tools}
+    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc2(it.id)}" aria-checked="${it.on ? "true" : "false"}" aria-label="Show ${esc2(it.name)} in the bar"><span></span></button>
+  </li>`;
+  }
+  function listsHtml() {
+    const onRank = new Map(STATE.items.filter((it) => it.on).map((it, i) => [it.id, i]));
+    return GROUPS.map((g) => {
+      const rows = STATE.items.filter((it) => it.group === g.key);
+      const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it) => rowHtml(it, onRank.get(it.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
+      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc2(g.label)}</h3>${body}</section>`;
+    }).join("");
+  }
+  function previewHtml() {
+    const items = barItems(STATE);
+    const icons = items.map((it) => `<span class="ql-pv" title="${esc2(it.name)}">${markHtml(it, ICONS)}</span>`).join("");
+    return `<span class="nt-app gbti" aria-hidden="true">GBTI</span>${icons}`;
+  }
+  function formHtml({ id = "", url = "", name = "" } = {}) {
+    return `<form class="ql-form" data-ql-form="${esc2(id)}" novalidate>
+    <b class="ql-form-h">${id ? "Edit destination" : "Add a destination"}</b>
+    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc2(url)}" required /></label>
+    <div class="ql-form-row">
+      <span class="ql-form-ic" data-ql-form-ic>${markHtml({ id: id || "new", name: name || displayHost(url) || "?", custom: true }, ICONS)}</span>
+      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc2(name)}" placeholder="Found from the site" /></label>
+    </div>
+    <p class="ql-status" data-ql-status aria-live="polite"></p>
+    <div class="ql-form-acts"><button class="ql-btn" type="button" data-ql-cancel>Cancel</button><button class="ql-btn ql-primary" type="submit">${id ? "Save" : "Add to your bar"}</button></div>
+  </form>`;
+  }
+  var dialogOpen = null;
+  function openQuickLaunchSettings(opener = null) {
+    if (dialogOpen) return dialogOpen;
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal ql-overlay";
+    overlay.innerHTML = `<div class="ql-dialog" role="dialog" aria-modal="true" aria-labelledby="ql-title">
+    <button class="share-x" type="button" data-ql-close aria-label="Close">${glyph("x")}</button>
+    <div class="ql-head"><h2 id="ql-title">Quick launch</h2><p>Choose what sits in your bar. Drag to change the order, or add a site of your own.</p></div>
+    <div class="ql-preview"><span class="ql-eyebrow">Your bar</span><div class="ql-pbar" data-ql-preview></div><p class="ql-note" data-ql-note hidden></p></div>
+    <div data-ql-lists></div>
+    <div data-ql-add><button class="ql-addbtn" type="button" data-ql-add-open>${glyph("plus")}Add a destination</button></div>
+    <div class="ql-foot"><div data-ql-restore-slot><button class="ql-link" type="button" data-ql-restore>Restore defaults</button></div><button class="ql-btn ql-primary" type="button" data-ql-close>Done</button></div>
+    <p class="ql-sr" aria-live="polite" data-ql-live></p>
+  </div>`;
+    const $2 = (sel) => overlay.querySelector(sel);
+    const say = (msg) => {
+      const l = $2("[data-ql-live]");
+      if (l) l.textContent = msg;
+    };
+    let editing = null;
+    const paint = () => {
+      const focusKey = document.activeElement?.closest?.(".ql-dialog") ? keyOf(document.activeElement) : null;
+      $2("[data-ql-preview]").innerHTML = previewHtml();
+      const extra = overflowItems(STATE).length;
+      const note = $2("[data-ql-note]");
+      note.hidden = extra === 0;
+      note.textContent = extra ? `The bar holds ${QL_CAP}. ${extra === 1 ? "One more site is" : `${extra} more sites are`} switched on: move ${extra === 1 ? "it" : "them"} up to show ${extra === 1 ? "it" : "them"}, or open ${extra === 1 ? "it" : "them"} from the list.` : "";
+      $2("[data-ql-lists]").innerHTML = listsHtml();
+      if (focusKey) overlay.querySelector(focusKey)?.focus();
+    };
+    const keyOf = (el) => {
+      for (const a of ["data-ql-toggle", "data-ql-grip", "data-ql-edit", "data-ql-remove"]) if (el.hasAttribute?.(a)) return `[${a}="${CSS.escape(el.getAttribute(a))}"]`;
+      return null;
+    };
+    const closeForm = () => {
+      editing = null;
+      $2("[data-ql-add]").innerHTML = `<button class="ql-addbtn" type="button" data-ql-add-open>${glyph("plus")}Add a destination</button>`;
+    };
+    const openForm = (it = null) => {
+      editing = it ? it.id : "";
+      const slot = $2("[data-ql-add]");
+      slot.innerHTML = formHtml(it || {});
+      wireForm(slot.querySelector("form"), it);
+      slot.querySelector('input[name="url"]').focus();
+    };
+    function wireForm(form, current) {
+      const urlIn = form.querySelector('input[name="url"]');
+      const nameIn = form.querySelector('input[name="name"]');
+      const status = form.querySelector("[data-ql-status]");
+      const icSlot = form.querySelector("[data-ql-form-ic]");
+      let found = { url: current?.url || "", icon: current ? ICONS[current.id] || null : null };
+      let nameTouched = Boolean(current);
+      let seq = 0;
+      nameIn.addEventListener("input", () => {
+        nameTouched = true;
+      });
+      const showIcon = () => {
+        icSlot.innerHTML = markHtml({ id: "preview", name: nameIn.value || displayHost(found.url) || "?", custom: true }, found.icon ? { preview: found.icon } : {});
+      };
+      const look = async () => {
+        const href = normalizeUrl(urlIn.value);
+        if (!href) {
+          if (urlIn.value.trim()) status.textContent = ADD_COPY["invalid-url"];
+          return;
+        }
+        if (href === found.url && (found.icon || found.done)) return;
+        const mine = ++seq;
+        found = { url: href, icon: null };
+        status.textContent = "Looking up the site...";
+        showIcon();
+        const r = await lookupSite(href);
+        if (mine !== seq) return;
+        found = { url: href, icon: r?.icon || null, done: true };
+        if (!nameTouched && r?.title) nameIn.value = r.title;
+        if (!nameIn.value) nameIn.value = displayHost(href);
+        status.innerHTML = r?.icon ? `${glyph("check")}Found its name and icon` : "No icon found, so it shows as a letter.";
+        status.classList.toggle("ok", Boolean(r?.icon));
+        showIcon();
+      };
+      let t = null;
+      urlIn.addEventListener("input", () => {
+        status.textContent = "";
+        clearTimeout(t);
+        t = setTimeout(look, 700);
+      });
+      urlIn.addEventListener("change", look);
+      form.querySelector("[data-ql-cancel]").addEventListener("click", () => {
+        closeForm();
+        $2("[data-ql-add-open]")?.focus();
+      });
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const href = normalizeUrl(urlIn.value);
+        if (!href) {
+          status.textContent = ADD_COPY["invalid-url"];
+          urlIn.focus();
+          return;
+        }
+        if (href !== found.url) await look();
+        const res = current ? updateCustom(STATE, current.id, { url: href, name: nameIn.value }) : addCustom(STATE, { url: href, name: nameIn.value });
+        if (res.error) {
+          status.textContent = ADD_COPY[res.error] || "That did not work. Check the address and try again.";
+          return;
+        }
+        const id = current ? current.id : res.item.id;
+        if (!current || href !== current.url) await saveIcon(id, found.icon);
+        closeForm();
+        commit(res.state);
+        say(current ? `${nameIn.value || displayHost(href)} saved.` : `${res.item.name} added to your bar.`);
+        overlay.querySelector(`[data-ql-toggle="${CSS.escape(id)}"]`)?.focus();
+      });
+    }
+    overlay.addEventListener("click", async (e) => {
+      const t = e.target;
+      if (t === overlay) {
+        if (editing === null) close();
+        return;
+      }
+      const hit = (a) => t.closest(`[${a}]`)?.getAttribute(a);
+      if (t.closest("[data-ql-close]")) {
+        close();
+        return;
+      }
+      if (t.closest("[data-ql-add-open]")) {
+        openForm();
+        return;
+      }
+      const tog = hit("data-ql-toggle");
+      if (tog != null) {
+        const it = STATE.items.find((x) => x.id === tog);
+        commit(setOn(STATE, tog, !it.on));
+        const now = barItems(STATE).some((x) => x.id === tog);
+        say(it.on ? `${it.name} is off.` : now ? `${it.name} is in your bar.` : `${it.name} is on, but the bar holds ${QL_CAP}.`);
+        return;
+      }
+      const ed = hit("data-ql-edit");
+      if (ed != null) {
+        openForm(STATE.items.find((x) => x.id === ed));
+        return;
+      }
+      const rm = hit("data-ql-remove");
+      if (rm != null) {
+        const it = STATE.items.find((x) => x.id === rm);
+        commit(removeCustom(STATE, rm));
+        await saveIcon(rm, null);
+        say(`${it?.name || "The site"} removed.`);
+        $2("[data-ql-add-open]")?.focus();
+        return;
+      }
+      if (t.closest("[data-ql-restore]")) {
+        $2("[data-ql-restore-slot]").innerHTML = '<span class="ql-confirm">Switch every built-in site off and reset their order? Your own sites stay. <button class="ql-link" type="button" data-ql-restore-yes>Restore</button> <button class="ql-link" type="button" data-ql-restore-no>Keep</button></span>';
+        $2("[data-ql-restore-no]").focus();
+        return;
+      }
+      if (t.closest("[data-ql-restore-yes]") || t.closest("[data-ql-restore-no]")) {
+        if (t.closest("[data-ql-restore-yes]")) {
+          commit(restoreDefaults(STATE));
+          say("Defaults restored.");
+        }
+        $2("[data-ql-restore-slot]").innerHTML = '<button class="ql-link" type="button" data-ql-restore>Restore defaults</button>';
+        $2("[data-ql-restore]").focus();
+      }
+    });
+    overlay.addEventListener("keydown", (e) => {
+      const id = e.target.closest?.("[data-ql-grip]")?.getAttribute("data-ql-grip");
+      if (!id || e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      const next = move(STATE, id, e.key === "ArrowUp" ? -1 : 1);
+      if (next === STATE) return;
+      commit(next);
+      const it = STATE.items.find((x) => x.id === id);
+      const group = STATE.items.filter((x) => x.group === it.group);
+      say(`${it.name}, position ${group.findIndex((x) => x.id === id) + 1} of ${group.length}.`);
+      overlay.querySelector(`[data-ql-grip="${CSS.escape(id)}"]`)?.focus();
+    });
+    let dragId = null;
+    overlay.addEventListener("dragstart", (e) => {
+      const row = e.target.closest?.("[data-ql-row]");
+      if (!row) return;
+      dragId = row.getAttribute("data-ql-row");
+      row.classList.add("dragging");
+      try {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", dragId);
+      } catch {
+      }
+    });
+    overlay.addEventListener("dragover", (e) => {
+      const row = e.target.closest?.("[data-ql-row]");
+      const src = dragId && STATE.items.find((x) => x.id === dragId);
+      if (!row || !src || row.dataset.group !== src.group) return;
+      e.preventDefault();
+      overlay.querySelectorAll(".drop-before, .drop-after").forEach((r2) => r2.classList.remove("drop-before", "drop-after"));
+      const r = row.getBoundingClientRect();
+      row.classList.add(e.clientY < r.top + r.height / 2 ? "drop-before" : "drop-after");
+    });
+    overlay.addEventListener("drop", (e) => {
+      const row = e.target.closest?.("[data-ql-row]");
+      if (!row || !dragId) return;
+      e.preventDefault();
+      const after = row.classList.contains("drop-after");
+      let beforeId = row.getAttribute("data-ql-row");
+      if (after) {
+        const nx = row.nextElementSibling;
+        beforeId = nx ? nx.getAttribute("data-ql-row") : null;
+      }
+      if (beforeId !== dragId) commit(moveBefore(STATE, dragId, beforeId));
+    });
+    overlay.addEventListener("dragend", () => {
+      dragId = null;
+      overlay.querySelectorAll(".dragging, .drop-before, .drop-after").forEach((r) => r.classList.remove("dragging", "drop-before", "drop-after"));
+    });
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        if (editing !== null) {
+          closeForm();
+          $2("[data-ql-add-open]")?.focus();
+        } else close();
+      }
+    };
+    const onChange = () => paint();
+    function close() {
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc, true);
+      LISTENERS.delete(onChange);
+      dialogOpen = null;
+      (opener?.isConnected ? opener : document.querySelector("[data-apps] [data-ql-settings]"))?.focus?.();
+    }
+    document.addEventListener("keydown", onEsc, true);
+    LISTENERS.add(onChange);
+    document.body.appendChild(overlay);
+    paint();
+    $2(".ql-dialog [data-ql-close]").focus();
+    dialogOpen = { overlay, close };
+    return dialogOpen;
+  }
+
   // extension/src/shell.mjs
   var SITE5 = "https://gbti.network";
-  var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
-  var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc3 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -6880,10 +7478,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function controlsHtml({ compose = true } = {}) {
     return `<div class="nt-controls" data-controls>
     <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
-    <span class="nt-apps" data-apps>
-      <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
-      <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
-    </span>
+    <span class="nt-apps" data-apps></span>
     <span class="nt-modes-slot" data-modes-slot></span>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
@@ -6916,14 +7511,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function railHtml(active, nav = "workbench") {
     const rail = RAILS[nav] || RAIL_WORKBENCH;
     const items = rail.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc2(r.group)}</div>`;
+      if (r.group) return `<div class="nt-rail-h">${esc3(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
       const on = r.key === active ? " on" : "";
       const admin = r.adminOnly ? " data-admin-only hidden" : "";
-      const sub = r.sub ? `<span class="sub">${esc2(r.sub)}</span>` : "";
+      const sub = r.sub ? `<span class="sub">${esc3(r.sub)}</span>` : "";
       const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
-      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc2(c.nm)}</span></span></a>`).join("");
+      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc3(r.nm)}</span>${sub}</span></a>`;
+      const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc3(c.nm)}</span></span></a>`).join("");
       return self + kids2;
     }).join("");
     return `<nav class="nt-rail">${brandHtml()}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE5}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
@@ -6962,7 +7557,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         av.alt = `@${login}`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc2(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc3(login)}</b>`;
       const showAdmin = (RANK2[status.role] ?? 0) >= RANK2.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;
@@ -7189,28 +7784,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function wireCompose(root) {
     root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
   }
-  async function wireApps(root) {
-    const apps = root.querySelector("[data-apps]");
-    if (!apps) return;
-    apps.querySelector("[data-open-dailydev]")?.addEventListener("click", () => {
-      window.location.href = DAILYDEV_APP_URL;
+  function wireApps(root) {
+    mountQuickLaunch(root.querySelector("[data-apps]")).catch(() => {
     });
-    const img = apps.querySelector("[data-dd-img]");
-    img?.addEventListener("error", () => {
-      const b = document.createElement("span");
-      b.className = "dd";
-      b.textContent = "dd";
-      img.replaceWith(b);
-    }, { once: true });
-    let installed = null;
-    try {
-      if (chrome.management?.get) {
-        const info = await chrome.management.get(DAILYDEV_ID).catch(() => null);
-        installed = Boolean(info && info.enabled);
-      }
-    } catch {
-    }
-    if (installed === true || installed === null) apps.classList.add("show");
   }
   function wireDrawer(root) {
     const rail = root.querySelector(".nt-rail");
@@ -8338,16 +8914,16 @@ ${String(body ?? "")}`;
     const b64 = img?.dataBase64;
     return b64 ? `data:${img.contentType || "image/png"};base64,${b64}` : "";
   }
-  async function loadStagedImages(paths, read2, have = {}) {
+  async function loadStagedImages(paths, read3, have = {}) {
     const out = {};
-    if (typeof read2 !== "function") return out;
+    if (typeof read3 !== "function") return out;
     for (const raw of new Set(paths || [])) {
       const p = String(raw || "");
       const name = stagedImageName(p);
       if (!name || have[p] || out[p]) continue;
       let img = null;
       try {
-        img = await read2(name, p);
+        img = await read3(name, p);
       } catch {
         img = null;
       }
@@ -15274,12 +15850,12 @@ ${listStyleProseCss(".doc-blocks")}
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
   var TAG_ICO = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h7.9a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8Z"></path><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"></circle></svg>';
   var KEBAB = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
-  var ICONS = {
+  var ICONS2 = {
     pencil: '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/>',
     merge: '<path d="M6 3v6a4 4 0 0 0 4 4h8"/><path d="m15 10 3 3-3 3"/><path d="M6 21v-4"/>',
     archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>'
   };
-  var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
+  var icon = (n) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS2[n]}</svg>`;
   var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg);
     --panel2:color-mix(in srgb, var(--fg) 5%, var(--panel));
@@ -16392,11 +16968,11 @@ ${listStyleProseCss(".doc-blocks")}
       const path = String(item?.path || "");
       const title = item?.title || item?.slug || path || "an unnamed item";
       const decided = item?.decidedAt ? `<div class="sub">${esc(state)} by ${esc(item.decidedByLogin || item.decidedBy || "a superadmin")} on ${esc(String(item.decidedAt).slice(0, 10))}</div>` : "";
-      const read2 = item?.url ? `<a class="read" href="${esc(item.url)}" target="_blank" rel="noopener">Read it</a>` : "";
-      const acts = rowDecidable(item) ? `<div class="acts">${read2}
+      const read3 = item?.url ? `<a class="read" href="${esc(item.url)}" target="_blank" rel="noopener">Read it</a>` : "";
+      const acts = rowDecidable(item) ? `<div class="acts">${read3}
            <button data-decide="approve" data-path="${esc(path)}" type="button">Approve for the public site</button>
            <button data-decide="dismiss" data-path="${esc(path)}" type="button">Set aside</button>
-         </div>` : corrupt ? '<div class="acts"><button type="button" disabled>Cannot be decided: this record is malformed</button></div>' : read2 ? `<div class="acts">${read2}</div>` : "";
+         </div>` : corrupt ? '<div class="acts"><button type="button" disabled>Cannot be decided: this record is malformed</button></div>' : read3 ? `<div class="acts">${read3}</div>` : "";
       return `<div class="row${corrupt ? " corrupt" : ""}">
       <div class="top"><b>${esc(title)}</b><span class="st ${esc(state)}">${esc(corrupt ? "malformed" : state)}</span></div>
       <div class="sub">${esc(corrupt ? `${typeLabel2(item?.type)} at ${path}` : rowSummary(item))}</div>
@@ -17360,7 +17936,7 @@ ${listStyleProseCss(".doc-blocks")}
     const words = L === "below" || L === "first" || L === "compact" || L === "text";
     return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
   }
-  var esc3 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc4 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function destinationHost(destination) {
     try {
@@ -17372,31 +17948,31 @@ ${listStyleProseCss(".doc-blocks")}
   function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
     const L = ctaLayoutOf(cta);
     const uses = layoutUses(L);
-    const href = esc3(hrefOverride || cta?.destination);
+    const href = esc4(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
     const dim = (k, v) => Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : "";
-    const img = (alt) => image && image.url ? `<img src="${esc3(image.url)}" alt="${esc3(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    const img = (alt) => image && image.url ? `<img src="${esc4(image.url)}" alt="${esc4(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
     if (L === "image") {
-      return `${linkOpen("pcta-io", ` aria-label="${esc3(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc3(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+      return `${linkOpen("pcta-io", ` aria-label="${esc4(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc4(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
     }
     const parts = [];
     if (L === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
-    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc3(cta?.label)}</p><p class="pcta-line">${esc3(cta?.line)}</p></div></div>`);
+    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc4(cta?.label)}</p><p class="pcta-line">${esc4(cta?.line)}</p></div></div>`);
     const showTitle = L === "below" || L === "first" || L === "text" || L === "html" && cta?.showTitle !== false;
-    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc3(cta?.label)}</p>`);
-    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc3(cta?.line)}</p>`);
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc4(cta?.label)}</p>`);
+    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc4(cta?.line)}</p>`);
     if (L === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
     if (L === "html") {
       const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
       if (preview) {
-        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc3(h)}</span>`).join("");
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc4(h)}</span>`).join("");
         parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
       } else {
         parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
       }
     }
-    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc3(cta?.button)}</span>${ARROW}${linkClose}`);
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc4(cta?.button)}</span>${ARROW}${linkClose}`);
     return parts.join("");
   }
   var CTA_CARD_CSS = `
@@ -17833,7 +18409,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/cta-manager-view.mjs
-  var esc4 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc5 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var SVG2 = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -17856,23 +18432,23 @@ ${listStyleProseCss(".doc-blocks")}
     return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
   }
   var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
-  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc4(problem)}).</p>
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc5(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
     const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
-      return `<li class="${on ? "c" : "c off"}" data-cta="${esc4(c.id)}">
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc5(c.id)}">
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
-        <div class="top"><span class="label">${esc4(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc4(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc4(rowSummary2(c))}</p>
-        <p class="sub mono">${esc4(c.partner || "no partner")} · on ${plural(n)}</p>
-        ${clicks ? `<p class="sub mono tracked">${esc4(clicks)}</p>` : ""}
+        <div class="top"><span class="label">${esc5(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc5(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc5(rowSummary2(c))}</p>
+        <p class="sub mono">${esc5(c.partner || "no partner")} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc5(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
-        <button class="lk" type="button" data-act="edit" data-id="${esc4(c.id)}"${busy ? " disabled" : ""}>Edit</button>
-        <button class="lk" type="button" data-act="toggle" data-id="${esc4(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+        <button class="lk" type="button" data-act="edit" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
       </div>
     </li>`;
     }).join("");
@@ -17881,22 +18457,22 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
       <button class="btn" type="button" data-act="new">New call-to-action</button>
     </div>
-    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc4(msg)}</p>` : ""}
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc5(msg)}</p>` : ""}
     <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
   </div>`;
   }
   var editTitle = (st) => st.isNew ? "New call-to-action" : `Edit: ${st.d.label.trim() || "call-to-action"}`;
   var shownError = (st, k) => st.v.errors[k] && (st.tried || st.v.live[k]) ? st.v.errors[k] : "";
-  function field(st, k, label, { wide = false, area = false, placeholder = "" } = {}) {
+  function field(st, k, label, { wide = false, area: area2 = false, placeholder = "" } = {}) {
     const err = shownError(st, k);
     const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
-    const control = area ? `<textarea data-f="${k}" placeholder="${esc4(placeholder)}">${esc4(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc4(st.d[k])}" placeholder="${esc4(placeholder)}">`;
-    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc4(err)}</span></label>`;
+    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc5(placeholder)}">${esc5(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc5(st.d[k])}" placeholder="${esc5(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc5(err)}</span></label>`;
   }
   function layoutSection(st) {
     const tiles = CTA_LAYOUTS.map((k) => `<button class="${st.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st.d.layout === k}">
-    ${SKETCH[k]}<div><p class="tile-n">${esc4(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc4(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
-    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc4(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+    ${SKETCH[k]}<div><p class="tile-n">${esc5(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc5(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc5(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
   }
   function wordsSection(st) {
     const u = layoutUses(st.d.layout);
@@ -17907,7 +18483,7 @@ ${listStyleProseCss(".doc-blocks")}
     ${u.line ? field(st, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
     ${u.button ? field(st, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
     ${u.link ? field(st, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
-    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc4(st.d.note)}</textarea></label>
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc5(st.d.note)}</textarea></label>
     <label class="check fld wide"><input type="checkbox" data-f="enabled"${st.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
   </div></div>`;
   }
@@ -17927,8 +18503,8 @@ ${listStyleProseCss(".doc-blocks")}
       const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
       const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
       body = `<div class="imgrow">
-      ${img.url ? `<img src="${esc4(img.url)}" alt="" data-stored-img>` : ""}
-      <div class="imgmeta"><p class="imgname">${esc4(name)}</p>
+      ${img.url ? `<img src="${esc5(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc5(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
         <p class="imginfo"><span class="shield">${SVG2.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
@@ -17936,24 +18512,24 @@ ${listStyleProseCss(".doc-blocks")}
     </div>`;
     }
     return `${body}${st.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
-    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc4(err)}</p>
-    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc4(st.imageMsg)}</p>` : ""}`;
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc5(err)}</p>
+    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc5(st.imageMsg)}</p>` : ""}`;
   }
   function iconResults(st) {
     const ic3 = st.icons;
-    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc4(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc5(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
     if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
     const q = st.iconQuery.trim();
     const count2 = !q ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
     const sel = st.d.icon;
-    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc4(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc4(i.name)}</span></button>`).join("");
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc5(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc5(i.name)}</span></button>`).join("");
     return `<p class="ip-count">${count2}</p><div class="ip-grid">${cells}</div>`;
   }
   function iconSection(st) {
     const sel = st.d.icon;
-    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc4(s.id)}">${esc4(s.name)}</button>`).join("") : "";
+    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc5(s.id)}">${esc5(s.name)}</button>`).join("") : "";
     const pop = st.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc4(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc5(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
       <div data-region="icons">${iconResults(st)}</div>
     </div>` : "";
@@ -17961,46 +18537,46 @@ ${listStyleProseCss(".doc-blocks")}
     <div class="ip-row">
       <button class="${st.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc4(sel ? sel.name : "Choose an icon")}</b><span>${esc4(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
+        <span class="ip-name"><b>${esc5(sel ? sel.name : "Choose an icon")}</b><span>${esc5(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
   }
   function foundLine(found) {
     if (!found.length) return "";
-    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc4(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc4(h)}">Allow</button>`).join("")}</div>`;
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc5(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc5(h)}">Allow</button>`).join("")}</div>`;
   }
   function htmlSection(st, found) {
     const d = st.d;
-    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc4(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc4(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc5(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc5(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
     <div class="warnbox">${SVG2.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
-        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc4(d.html)}</textarea>
-        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc4(err)}</span></label>
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc5(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc5(err)}</span></label>
     </div>
     <div style="margin-top: 16px">
       <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
       ${hosts}
       <div data-region="found">${foundLine(found)}</div>
-      <div class="hostadd"><input type="text" data-q="host" value="${esc4(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
-      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc4(st.hostErr)}</p>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc5(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc5(st.hostErr)}</p>
     </div></div>`;
   }
   function candidateList(st) {
     if (!st.pageQuery.trim()) return "";
     if (!st.cands.length) return '<p class="empty">No pages match.</p>';
-    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc4(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc4(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc5(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc5(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
   }
   function pagesSection(st) {
     const d = st.d;
-    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc4(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc4(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc5(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc5(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc4(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc5(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st)}</div></div>`;
   }
   function previewCard(st) {
@@ -18030,7 +18606,7 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="segs">${seg(!st.pvPhone, "pv-side", "Sidebar")}${seg(st.pvPhone, "pv-phone", "Phone")}</div>
     </div>
     <div class="${st.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st)}</div>
-    <p class="pv-note" data-region="pvnote">${esc4(previewNote(st.d))}</p>
+    <p class="pv-note" data-region="pvnote">${esc5(previewNote(st.d))}</p>
   </aside>`;
   }
   function editorView(st, found = []) {
@@ -18038,11 +18614,11 @@ ${listStyleProseCss(".doc-blocks")}
     return `<div class="mgr">
     <div class="ed-head">
       <button class="lk" type="button" data-act="back">${SVG2.back}All call-to-actions</button>
-      <h3 class="ed-title" data-region="title">${esc4(editTitle(st))}</h3>
+      <h3 class="ed-title" data-region="title">${esc5(editTitle(st))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
         <button class="btn" type="button" data-act="save"${st.saving ? " disabled" : ""}>${st.saving ? "Saving…" : st.isNew ? "Add call-to-action" : "Save"}</button></div>
     </div>
-    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc4(st.msg)}</p>
+    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc5(st.msg)}</p>
     <div class="ed-grid">
       <div class="ed-form">
         ${layoutSection(st)}
@@ -19446,7 +20022,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   @media (max-width:760px){ .fgrid, .fgrid.c2 { grid-template-columns:1fr; } .tmpl { grid-template-columns:1fr; } }
 `;
-  var ICONS2 = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  var ICONS3 = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <g id="c-kanban"><rect x="4" y="4" width="4.6" height="16" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.7" y="4" width="4.6" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="15.4" y="4" width="4.6" height="7.5" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
   <g id="c-pipe"><path d="M4 7h16M4 12h10M4 17h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
   <g id="c-tmpl"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
@@ -19827,7 +20403,7 @@ ${listStyleProseCss(".doc-blocks")}
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS25) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS25) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -20930,7 +21506,7 @@ ${BLOCKED_PILL_CSS}
       }
       const custom = this._mode === "custom";
       const shown = custom ? this._matrix : defaultMatrix(this._global, ROWS);
-      const rowHtml = PERSON_ROWS.map((r) => {
+      const rowHtml2 = PERSON_ROWS.map((r) => {
         const cell = shown[r.key] || {};
         const pills = CHANNELS2.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key] })).join("");
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
@@ -20949,7 +21525,7 @@ ${BLOCKED_PILL_CSS}
             ${modeCard("default", "Use my default", "Follow whatever your default settings send.")}
             ${modeCard("custom", "Set separately", "Choose exactly what this one member sends you.")}
           </div>
-          <div class="grid"${custom ? "" : " data-locked"}>${rowHtml}</div>
+          <div class="grid"${custom ? "" : " data-locked"}>${rowHtml2}</div>
         </div>
         <div class="msg" aria-live="polite">${esc(this._err || "")}</div>
         <div class="ft">
@@ -21408,9 +21984,9 @@ ${BLOCKED_PILL_CSS}
       const thumb = this._thumbUrl(item);
       if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
-      const glyph = this.mode === "detailed" ? "" : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
+      const glyph2 = this.mode === "detailed" ? "" : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
       const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
-      return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
+      return `<span class="media" style="--ka:${esc(g.accent)}">${glyph2}${img}</span>`;
     }
     _chip(item) {
       const t = lc2(item.type);
@@ -21533,7 +22109,7 @@ ${BLOCKED_PILL_CSS}
       return null;
     }
   }
-  function read(store2) {
+  function read2(store2) {
     const s = store2 ?? defaultStore();
     if (!s) return {};
     try {
@@ -21544,7 +22120,7 @@ ${BLOCKED_PILL_CSS}
       return {};
     }
   }
-  function write(store2, map) {
+  function write2(store2, map) {
     const s = store2 ?? defaultStore();
     if (!s) return;
     try {
@@ -21556,25 +22132,25 @@ ${BLOCKED_PILL_CSS}
   function rememberPending({ item, prNumber = null, prUrl = "" } = {}, { store: store2, now = Date.now() } = {}) {
     const slug = shareSlug(item);
     if (!slug) return null;
-    const map = read(store2);
+    const map = read2(store2);
     const entry = { slug, author: item.author, id: item.id, title: pendingTitle(item), visibility: item.visibility || "members", prNumber, prUrl, at: now };
     map[slug] = entry;
-    write(store2, map);
+    write2(store2, map);
     return entry;
   }
   function livePending({ store: store2, now = Date.now(), maxAgeMs = PENDING_MAX_AGE_MS } = {}) {
-    const map = read(store2);
+    const map = read2(store2);
     const live = {};
     for (const slug of Object.keys(map)) {
       const e = map[slug];
       if (e && typeof e.at === "number" && now - e.at < maxAgeMs) live[slug] = e;
     }
-    if (Object.keys(live).length !== Object.keys(map).length) write(store2, live);
+    if (Object.keys(live).length !== Object.keys(map).length) write2(store2, live);
     return Object.values(live).sort((a, b) => b.at - a.at);
   }
   function dropPublished(publishedSlugs, { store: store2, now = Date.now(), maxAgeMs = PENDING_MAX_AGE_MS } = {}) {
     const published = new Set(publishedSlugs || []);
-    const map = read(store2);
+    const map = read2(store2);
     let changed = false;
     for (const slug of Object.keys(map)) {
       if (published.has(slug)) {
@@ -21582,7 +22158,7 @@ ${BLOCKED_PILL_CSS}
         changed = true;
       }
     }
-    if (changed) write(store2, map);
+    if (changed) write2(store2, map);
     return livePending({ store: store2, now, maxAgeMs });
   }
 
@@ -24069,8 +24645,8 @@ ${BLOCKED_PILL_CSS}
       try {
         const oc = globalThis.chrome?.storage?.onChanged;
         if (!oc?.addListener) return;
-        this._onStorage = async (changes, area) => {
-          if (area !== "local") return;
+        this._onStorage = async (changes, area2) => {
+          if (area2 !== "local") return;
           const key = await this._memberKey();
           if (!key) return;
           const prefix = `gbti:wb:${key}:`;
@@ -26395,9 +26971,9 @@ ${BLOCKED_PILL_CSS}
 `;
   var GbtiBrowse = class extends GbtiElement {
     connectedCallback() {
-      const { tab, read: read2, action } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+      const { tab, read: read3, action } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
       this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "all";
-      this._openPath = this._tab !== "share" && this._tab !== "all" && this._tab !== "news" ? read2 : null;
+      this._openPath = this._tab !== "share" && this._tab !== "all" && this._tab !== "news" ? read3 : null;
       this._openDo = this._openPath ? action : null;
       if (this._openDo) consumeDo();
       this._cache = {};
@@ -26411,12 +26987,12 @@ ${BLOCKED_PILL_CSS}
         if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
       }, true);
       this._onHash = () => {
-        const { tab: tab2, read: read3, action: action2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+        const { tab: tab2, read: read4, action: action2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
         const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
-        if (read3 && t !== "share" && t !== "all" && t !== "news") {
+        if (read4 && t !== "share" && t !== "all" && t !== "news") {
           this._tab = t;
-          const found = (this._cache[t] || []).find((x) => x.path === read3);
-          this._reading = { ...found || { type: t, path: read3 }, doAction: action2 || null };
+          const found = (this._cache[t] || []).find((x) => x.path === read4);
+          this._reading = { ...found || { type: t, path: read4 }, doAction: action2 || null };
           if (action2) consumeDo();
           this.render();
           this._ensure(t);
@@ -26981,8 +27557,8 @@ ${BLOCKED_PILL_CSS}
   var MODE = "compact";
   var hashStr = () => typeof location !== "undefined" && location.hash || "";
   var readFromHash = () => {
-    const { read: read2 } = parseBrowseHash(hashStr());
-    return read2 || null;
+    const { read: read3 } = parseBrowseHash(hashStr());
+    return read3 || null;
   };
   var memberFromHash = () => parseMemberHash(hashStr());
   var doFromHash = () => parseBrowseHash(hashStr()).action || null;

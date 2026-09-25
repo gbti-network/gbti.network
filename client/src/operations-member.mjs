@@ -110,11 +110,11 @@ export async function setFollow(ctx, { username, on = true, notify } = {}) {
 
 
 /** SOW-057: fetch a link's OpenGraph preview ({ image, title, description }) via the Worker (SSRF-guarded). */
-export async function ogPreview(ctx, { url } = {}) {
+export async function ogPreview(ctx, { url, icon } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   try {
-    return await workerOgPreview({ url, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return await workerOgPreview({ url, icon: icon === true, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
     if (err instanceof OgClientError) throw new OperationError('og-preview-failed', err.message);
     throw err;

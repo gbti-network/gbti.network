@@ -18875,12 +18875,12 @@ async function setFollow({ username, on = true, notify, ...opts }) {
 var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
-async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function ogPreview({ url: url2, icon = false, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
   const res = await fetch2(trimBase6(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ url: url2 })
+    body: JSON.stringify(icon === true ? { url: url2, icon: true } : { url: url2 })
   });
   let data = null;
   try {
@@ -19290,11 +19290,11 @@ async function setFollow2(ctx, { username, on = true, notify } = {}) {
     throw mapFollowsError(err);
   }
 }
-async function ogPreview2(ctx, { url: url2 } = {}) {
+async function ogPreview2(ctx, { url: url2, icon } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   try {
-    return await ogPreview({ url: url2, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return await ogPreview({ url: url2, icon: icon === true, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
     if (err instanceof OgClientError) throw new OperationError("og-preview-failed", err.message);
     throw err;

@@ -8,6 +8,7 @@
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
 import { buildMemberSignal } from './identity-signal.mjs';
 import { resolveOpenPage } from './open-page.mjs';
+import { DAILYDEV_PROBE_URL, DAILYDEV_SEEN_KEY, DAILYDEV_CHECKED_KEY, shouldProbeDailydev } from './quick-launch-core.mjs';
 
 /** Translate a /api/* request into a background-worker message (replaces the real network fetch). */
 async function messagingFetch(url, init = {}) {
@@ -104,3 +105,18 @@ try {
   stampMemberSignal();
   chrome.runtime.onMessage.addListener((m) => { if (m?.type === 'auth-changed') stampMemberSignal(); });
 } catch { /* no chrome runtime */ }
+
+// sow-397: find out whether daily.dev is installed, for the quick launch (which switches it on the first time it is
+// found). daily.dev's manifest makes css/companion.css readable by every http(s) page, and not by another extension's
+// pages, so the check runs here on gbti.network rather than in the new tab. It needs no permission. Only the yes or no
+// is kept, in this extension's own storage.
+async function probeDailydev() {
+  try {
+    const got = await chrome.storage.local.get([DAILYDEV_SEEN_KEY, DAILYDEV_CHECKED_KEY]);
+    if (!shouldProbeDailydev({ seen: got[DAILYDEV_SEEN_KEY], checkedAt: got[DAILYDEV_CHECKED_KEY] })) return;
+    let found = false;
+    try { found = (await fetch(DAILYDEV_PROBE_URL, { cache: 'no-store' })).ok; } catch { found = false; }
+    await chrome.storage.local.set({ [DAILYDEV_SEEN_KEY]: found, [DAILYDEV_CHECKED_KEY]: Date.now() });
+  } catch { /* no storage: the quick launch simply never switches daily.dev on */ }
+}
+probeDailydev();

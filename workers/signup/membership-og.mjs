@@ -17,6 +17,7 @@ import { scrapeOgPreview } from '../lib/og-scrape.mjs';
 import { oembedEndpointFor, previewFromOembed, maxresThumbCandidate } from '../lib/oembed-providers.mjs'; // SOW-102: provider fallback
 import { mediumFeedUrlFor, previewFromMediumFeed } from '../lib/medium-preview.mjs'; // Medium RSS fallback (bot-challenged pages)
 import { suggestTopic, suggestTags } from './topic-suggest.mjs';
+import { resolveSiteIcon } from './site-icon.mjs'; // sow-397: the quick launch's name + icon lookup
 
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_BYTES = 60000;
@@ -107,6 +108,12 @@ export async function handleOgPreview(request, env, {
 
   const target = safeFetchTarget(payload?.url);
   if (!target.ok) return { status: 400, body: { error: 'invalid_url', message: target.reason } };
+
+  // sow-397: the extension's quick launch asks for a site's name and icon when a member adds a destination. That is
+  // all it needs, so this path skips the provider fallbacks and the topic suggestion (a model call) entirely.
+  if (payload?.icon === true) {
+    return { status: 200, body: await resolveSiteIcon(target.url, { fetchImpl, timeoutMs, safeTarget: safeFetchTarget }) };
+  }
 
   // SOW-102: provider oEmbed FIRST for matched links (YouTube, Vimeo). These providers serve no OG markup
   // to a datacenter fetch (the generic scrape comes back empty), but their public oEmbed APIs answer with

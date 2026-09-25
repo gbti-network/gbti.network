@@ -7,12 +7,13 @@ const trimBase = (signupBase) => String(signupBase || '').replace(/\/$/, '');
 
 export class OgClientError extends Error {}
 
-export async function ogPreview({ url, token, signupBase, fetch = globalThis.fetch }) {
+// sow-397: `icon: true` asks for the site's name and icon instead (the extension's quick launch), as { title, icon }.
+export async function ogPreview({ url, icon = false, token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError('not signed in');
   const res = await fetch(trimBase(signupBase) + '/membership/og-preview', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(icon === true ? { url, icon: true } : { url }),
   });
   let data = null;
   try { data = await res.json(); } catch { /* ignore */ }

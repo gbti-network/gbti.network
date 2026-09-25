@@ -25897,6 +25897,40 @@ ${BLOCKED_PILL_CSS}
     return `${target}#${h}`;
   }
 
+  // extension/src/quick-launch-core.mjs
+  var DAILYDEV_EXTENSION_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
+  var DAILYDEV_PROBE_URL = `chrome-extension://${DAILYDEV_EXTENSION_ID}/css/companion.css`;
+  var DAILYDEV_SEEN_KEY = "dailydevDetected";
+  var DAILYDEV_CHECKED_KEY = "dailydevCheckedAt";
+  var PROBE_EVERY_MS = 24 * 60 * 60 * 1e3;
+  function shouldProbeDailydev({ seen, checkedAt, now = Date.now() } = {}) {
+    if (seen === true) return false;
+    const at = Number(checkedAt);
+    return !Number.isFinite(at) || at <= 0 || now - at >= PROBE_EVERY_MS || at > now;
+  }
+  var GROUPS = Object.freeze([
+    { key: "ai", label: "Frontier AI" },
+    { key: "social", label: "Social" },
+    { key: "custom", label: "Your destinations" }
+  ]);
+  var DEFAULTS = Object.freeze([
+    { id: "chatgpt", name: "ChatGPT", url: "https://chatgpt.com/", group: "ai" },
+    { id: "claude", name: "Claude", url: "https://claude.ai/", group: "ai" },
+    { id: "gemini", name: "Gemini", url: "https://gemini.google.com/", group: "ai" },
+    { id: "grok", name: "Grok", url: "https://grok.com/", group: "ai" },
+    { id: "perplexity", name: "Perplexity", url: "https://www.perplexity.ai/", group: "ai" },
+    { id: "x", name: "X", url: "https://x.com/", group: "social" },
+    { id: "bluesky", name: "Bluesky", url: "https://bsky.app/", group: "social" },
+    { id: "linkedin", name: "LinkedIn", url: "https://www.linkedin.com/", group: "social" },
+    { id: "reddit", name: "Reddit", url: "https://www.reddit.com/", group: "social" },
+    { id: "discord", name: "Discord", url: "https://discord.com/channels/1073029070411006053", group: "social" },
+    { id: "devto", name: "DEV", url: "https://dev.to/", group: "social" },
+    { id: "dailydev", name: "daily.dev", url: "https://app.daily.dev/", group: "social" },
+    { id: "substack", name: "Substack", url: "https://substack.com/", group: "social" }
+  ]);
+  var DEFAULT_BY_ID = new Map(DEFAULTS.map((d) => [d.id, d]));
+  var GROUP_RANK = Object.fromEntries(GROUPS.map((g, i) => [g.key, i]));
+
   // extension/src/content.mjs
   async function messagingFetch(url, init = {}) {
     const u = new URL(url, "https://gbti.network");
@@ -25967,4 +26001,19 @@ ${BLOCKED_PILL_CSS}
     });
   } catch {
   }
+  async function probeDailydev() {
+    try {
+      const got = await chrome.storage.local.get([DAILYDEV_SEEN_KEY, DAILYDEV_CHECKED_KEY]);
+      if (!shouldProbeDailydev({ seen: got[DAILYDEV_SEEN_KEY], checkedAt: got[DAILYDEV_CHECKED_KEY] })) return;
+      let found = false;
+      try {
+        found = (await fetch(DAILYDEV_PROBE_URL, { cache: "no-store" })).ok;
+      } catch {
+        found = false;
+      }
+      await chrome.storage.local.set({ [DAILYDEV_SEEN_KEY]: found, [DAILYDEV_CHECKED_KEY]: Date.now() });
+    } catch {
+    }
+  }
+  probeDailydev();
 })();
