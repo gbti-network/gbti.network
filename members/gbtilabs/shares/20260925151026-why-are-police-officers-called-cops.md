@@ -10,8 +10,8 @@ category: entertainment
 tags:
   - etymology
   - english
-image: >-
-  https://inbox-media-offload.wordsmarts.com/wp-content/uploads/2026/09/WS_Article_police-cops-origin.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260925151026-why-are-police-officers-called-cops-2d6a90e0.webp
+imageSource: https://inbox-media-offload.wordsmarts.com/wp-content/uploads/2026/09/WS_Article_police-cops-origin.jpg
 id: 20260925151026-why-are-police-officers-called-cops
 createdAt: '2026-09-25T15:10:26.128Z'
 type: share
