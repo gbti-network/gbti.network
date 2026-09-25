@@ -5990,8 +5990,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/activity-bell.mjs
   var BELL_GROUPS = [
-    { key: "approvals", label: "To approve" },
-    // superadmin-only: syndication items holding (early approval)
+    // superadmin-only. sow-407 (owner, 2026-09-25): "To approve" listed every post waiting its hour before going to the
+    // social channels, and those post on their own. Only the ones that genuinely need a superadmin show now.
+    { key: "approvals", label: "Needs your approval" },
     { key: "replies", label: "Replies" },
     { key: "following", label: "Following" }
     // sow-404: 'Your PRs' is gone (see the header).
@@ -6013,6 +6014,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const seen = {};
     for (const g of BELL_GROUPS) seen[g.key] = now;
     return seen;
+  }
+  var SYNDICATION_OVERDUE_MS = 30 * 60 * 1e3;
+  function approvalsNeeded(pending, now = Date.now()) {
+    const out = [];
+    for (const it of Array.isArray(pending) ? pending : []) {
+      if (!it || typeof it !== "object") continue;
+      if (Array.isArray(it.flags) && it.flags.length) {
+        out.push({ item: it, why: "flagged" });
+        continue;
+      }
+      const at = toMs(it.availableAt);
+      if (at && now - at > SYNDICATION_OVERDUE_MS) out.push({ item: it, why: "overdue" });
+    }
+    return out;
   }
 
   // membership/notify-resolve.mjs
@@ -6288,21 +6303,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ]);
       return { following, replies, approvals };
     }
-    // SOW-088: syndication items HOLDING (pending: still in the cancel window, or a flagged item awaiting
-    // approval). Surfacing them lets a superadmin APPROVE early so the item posts on the next drain tick
-    // instead of waiting out the hold. Approved items are already going out, so they are not notified.
+    // SOW-088, narrowed by sow-407: the syndication items a superadmin must act on (see approvalsNeeded): a FLAGGED item
+    // waits for approval, and an OVERDUE one did not go out on its own. An ordinary item still in its hour is left out,
+    // because it posts by itself; the website's Syndication page lists the whole queue.
     async _approvals() {
       const q = await this.client.syndicationQueue() || {};
-      const pending = Array.isArray(q.pending) ? q.pending : [];
       const TYPE2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
-      return pending.map((it) => {
-        const flagged = Array.isArray(it.flags) && it.flags.length;
+      return approvalsNeeded(q.pending).map(({ item: it, why }) => {
         const type = TYPE2[it.source] || "Item";
         return {
           id: `syn:${it.id}`,
           ts: toMs(it.enqueuedAt),
           title: it.title || it.targetSlug || "Untitled",
-          sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
+          sub: why === "flagged" ? `Flagged ${type.toLowerCase()}: approve or cancel it` : `${type} did not post on its own: approve to send it`,
           // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
           href: `${SITE3}/admin/#tab=syndication&sub=activity`
         };

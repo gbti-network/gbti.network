@@ -64,7 +64,8 @@ const WEBSITE_ONLY = {
   WEBSITE_SYNDICATION: {
     reason: 'sow-399 (owner, 2026-09-24): syndication moved from the extension to the website, where superadmins reach it over the web session (Admin tools > Syndication, the avatar-menu Social Queue, and Manually syndicate on each content page). The extension lost the Syndication tab, the Social Queue item and the reader button in the same change, so no extension caller is left for the queue, approve/cancel, manual posting, the Social Queue, or the four reads only the Syndication tool made. The agent server keeps them.',
     routes: [
-      '/api/syndication', '/api/syndication/approve', '/api/syndication/cancel',
+      // sow-407: '/api/syndication' (the queue READ) is served by both hosts again, for the activity bell.
+      '/api/syndication/approve', '/api/syndication/cancel',
       '/api/syndicate-now', '/api/social-queue',
       '/api/moderation-flag-pool', '/api/syndication-template-pool', '/api/news-engagement', '/api/syndication-settings',
     ],

@@ -19227,6 +19227,17 @@ async function editorialAdminRequest({ token, signupBase, method = "GET", body =
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `editorial review request failed (${res.status})`);
   return data;
 }
+async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndication queue request failed (${res.status})`);
+  return data;
+}
 
 // client/src/operations-member.mjs
 function mapActivityError(err) {
@@ -19314,6 +19325,11 @@ async function ogPreview2(ctx, { url: url2, icon } = {}) {
     if (err instanceof OgClientError) throw new OperationError("og-preview-failed", err.message);
     throw err;
   }
+}
+async function getSyndicationQueue2(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return getSyndicationQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -21127,8 +21143,14 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
-      // sow-399 (owner, 2026-09-24): the syndication queue, approve/cancel, Manually syndicate and the Social Queue
-      // relays are gone. Syndication moved to the website, which calls the Worker directly over its session.
+      // sow-399 (owner, 2026-09-24): approve/cancel, Manually syndicate and the Social Queue relays are gone.
+      // Syndication moved to the website, which calls the Worker directly over its session.
+      // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
+      // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
+      // Worker is still the gate (superadmin); approving or cancelling stays on the website.
+      case "/api/syndication":
+        if (method !== "GET") return { status: 404, json: { error: "not_found" } };
+        return ok(await getSyndicationQueue2(ctx));
       case "/api/discord-channels":
         return ok(await listDiscordChannels(ctx));
       case "/api/author-targets":

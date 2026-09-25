@@ -105,8 +105,9 @@ const REMOVED_BY_SOW_204 = [
 // sow-399 (owner, 2026-09-24): syndication moved to the website. Every route only the Syndication tab, the Social
 // Queue or the reader's Manually syndicate button used is gone from the extension, and answers 404 rather than
 // quietly serving a surface the extension no longer has.
+// sow-407: GET /api/syndication came BACK (the activity bell reads it for "Needs your approval"); only the read.
 const REMOVED_BY_SOW_399 = [
-  ['GET', '/api/syndication'], ['POST', '/api/syndication/approve'], ['POST', '/api/syndication/cancel'],
+  ['POST', '/api/syndication'], ['POST', '/api/syndication/approve'], ['POST', '/api/syndication/cancel'],
   ['GET', '/api/syndicate-now'], ['POST', '/api/syndicate-now'], ['GET', '/api/social-queue'], ['POST', '/api/social-queue'],
   ['GET', '/api/moderation-flag-pool'], ['GET', '/api/syndication-template-pool'], ['GET', '/api/news-engagement'], ['GET', '/api/syndication-settings'],
 ];

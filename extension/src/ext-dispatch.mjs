@@ -11,7 +11,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, listAuthorTargets, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
-  listEditorialOp, decideEditorialOp } from '../../client/src/operations.mjs'; // sow-323
+  listEditorialOp, decideEditorialOp, getSyndicationQueue } from '../../client/src/operations.mjs'; // sow-323; sow-407
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
@@ -191,8 +191,14 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case '/api/open-pulls': // SOW-038 P2: the open content-PR queue (admin-gated)
         return ok(await getOpenPulls(ctx));
-      // sow-399 (owner, 2026-09-24): the syndication queue, approve/cancel, Manually syndicate and the Social Queue
-      // relays are gone. Syndication moved to the website, which calls the Worker directly over its session.
+      // sow-399 (owner, 2026-09-24): approve/cancel, Manually syndicate and the Social Queue relays are gone.
+      // Syndication moved to the website, which calls the Worker directly over its session.
+      // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
+      // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
+      // Worker is still the gate (superadmin); approving or cancelling stays on the website.
+      case '/api/syndication':
+        if (method !== 'GET') return { status: 404, json: { error: 'not_found' } };
+        return ok(await getSyndicationQueue(ctx));
       case '/api/discord-channels': // SOW-100: the guild channel names (admin-gated by the Worker). Was npm-host-only, so the extension pickers showed "No channels loaded".
         return ok(await listDiscordChannels(ctx));
       case '/api/author-targets': // sow-403: the Share composer's Author picker (empty unless superadmin; the Worker re-verifies)

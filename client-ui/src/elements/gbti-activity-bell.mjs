@@ -9,7 +9,7 @@
 // light poll + on-open; the replies fan-out over the caller's own Shares is hard-bounded.
 // sow-404 (owner, 2026-09-25): the "Your PRs" group and its client.listPRs() read are gone, for every account.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildBell, markSeen } from '../activity-bell.mjs';
+import { buildBell, markSeen, approvalsNeeded } from '../activity-bell.mjs';
 import { canSeeShares, toMs } from '../all-merge.mjs';
 import { selectBellEntries } from '../notification-bell-core.mjs'; // sow-386: the In app settings, shared with the website bell
 import { buildReadHash } from '../browse-hash.mjs';
@@ -118,21 +118,19 @@ class GbtiActivityBell extends GbtiElement {
     return { following, replies, approvals };
   }
 
-  // SOW-088: syndication items HOLDING (pending: still in the cancel window, or a flagged item awaiting
-  // approval). Surfacing them lets a superadmin APPROVE early so the item posts on the next drain tick
-  // instead of waiting out the hold. Approved items are already going out, so they are not notified.
+  // SOW-088, narrowed by sow-407: the syndication items a superadmin must act on (see approvalsNeeded): a FLAGGED item
+  // waits for approval, and an OVERDUE one did not go out on its own. An ordinary item still in its hour is left out,
+  // because it posts by itself; the website's Syndication page lists the whole queue.
   async _approvals() {
     const q = (await this.client.syndicationQueue()) || {};
-    const pending = Array.isArray(q.pending) ? q.pending : [];
     const TYPE = { share: 'Share', post: 'Article', project: 'Project', prompt: 'Prompt' };
-    return pending.map((it) => {
-      const flagged = Array.isArray(it.flags) && it.flags.length;
+    return approvalsNeeded(q.pending).map(({ item: it, why }) => {
       const type = TYPE[it.source] || 'Item';
       return {
         id: `syn:${it.id}`,
         ts: toMs(it.enqueuedAt),
         title: it.title || it.targetSlug || 'Untitled',
-        sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
+        sub: why === 'flagged' ? `Flagged ${type.toLowerCase()}: approve or cancel it` : `${type} did not post on its own: approve to send it`,
         // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
         href: `${SITE}/admin/#tab=syndication&sub=activity`,
       };

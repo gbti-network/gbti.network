@@ -13,7 +13,9 @@
 import { toMs } from './all-merge.mjs';
 
 export const BELL_GROUPS = [
-  { key: 'approvals', label: 'To approve' }, // superadmin-only: syndication items holding (early approval)
+  // superadmin-only. sow-407 (owner, 2026-09-25): "To approve" listed every post waiting its hour before going to the
+  // social channels, and those post on their own. Only the ones that genuinely need a superadmin show now.
+  { key: 'approvals', label: 'Needs your approval' },
   { key: 'replies', label: 'Replies' },
   { key: 'following', label: 'Following' },
   // sow-404: 'Your PRs' is gone (see the header).
@@ -46,4 +48,27 @@ export function markSeen(sources = {}, now = Date.now()) {
   const seen = {};
   for (const g of BELL_GROUPS) seen[g.key] = now;
   return seen;
+}
+
+// sow-407: how long past its hold a pending item may wait for the drain before the bell treats it as stuck. The drain
+// runs on a cron, so an item a few minutes past its hour is normal; one half an hour past it did not go on its own.
+export const SYNDICATION_OVERDUE_MS = 30 * 60 * 1000;
+
+/**
+ * The syndication items a superadmin must act on, from the queue's `pending` list. Two kinds:
+ *   - FLAGGED: the moderation check flagged it, so it waits for an approval and never posts by itself;
+ *   - OVERDUE: its hold ended more than SYNDICATION_OVERDUE_MS ago and it is still pending, so it is not going out by
+ *     itself (approval is switched on, or it is stuck).
+ * An ordinary item still inside its hold is left out: it posts on its own when the hour is up.
+ * Returns [{ item, why: 'flagged' | 'overdue' }], in the queue's order.
+ */
+export function approvalsNeeded(pending, now = Date.now()) {
+  const out = [];
+  for (const it of Array.isArray(pending) ? pending : []) {
+    if (!it || typeof it !== 'object') continue;
+    if (Array.isArray(it.flags) && it.flags.length) { out.push({ item: it, why: 'flagged' }); continue; }
+    const at = toMs(it.availableAt);
+    if (at && now - at > SYNDICATION_OVERDUE_MS) out.push({ item: it, why: 'overdue' });
+  }
+  return out;
 }
