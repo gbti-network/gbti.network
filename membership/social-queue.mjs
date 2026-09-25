@@ -4,6 +4,23 @@
 // public-safe message text; a human posts it by hand through the free web composer, then marks it done. No IO
 // here (the KV store lives in workers/signup/social-queue-store.mjs); these are node-testable.
 
+import { channelLimit } from './syndication-channels.mjs';
+
+// sow-405: Bluesky is posted by hand now, from its own composer, so a Bluesky task's text is the whole post and has
+// to carry the link. The SOW-122 adapter attached it as a card instead, which is why the Bluesky article, project and
+// prompt templates were written without {url}. The templates carry it again; this is the backstop for a later
+// template edit that drops it, and it sits HERE because every path into the queue (the drain and "Syndicate now")
+// builds its task through this function, while the dormant adapter keeps its own contract untouched.
+const NEEDS_LINK_IN_TEXT = new Set(['bluesky']);
+export function withLink(text, url, limit) {
+  const t = String(text || '');
+  const link = String(url || '').trim();
+  if (!link || t.includes(link)) return t;
+  const room = limit - link.length - 1;
+  if (room <= 0) return link.slice(0, limit);
+  return `${t.slice(0, room).trimEnd()} ${link}`.trim();
+}
+
 /**
  * Build a manual-assist task from a queue item + the rendered channel text. The id is stable per item+channel
  * so a re-enqueue overwrites rather than duplicates. `trigger` records whether the drain (auto-eligible) or a
@@ -42,7 +59,7 @@ export function buildSocialTask({ item = {}, channel, text, bodyText = '', comme
     author: item.author || null,
     title: item.title || null,
     url: item.url || null,
-    text: String(text || ''),
+    text: NEEDS_LINK_IN_TEXT.has(String(channel || '')) ? withLink(text, item.url, channelLimit(String(channel))) : String(text || ''),
     bodyText: String(bodyText || ''),
     commentText: String(commentText || ''),
     item: itemSnapshot(item),

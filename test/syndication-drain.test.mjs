@@ -101,14 +101,14 @@ test('drain retries a failed channel, then marks failed after maxAttempts', asyn
 });
 
 test('a config-enabled AUTO channel with no secret is recorded skipped, not failed', async () => {
-  // SOW-125 / sow-159: use bluesky (an AUTO channel) with no secret; x would be hard-excluded (manual), never
-  // "skipped". (mastodon was the original fixture here; it is retired, so bluesky stands in.)
-  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg({ discord: true, bluesky: true }) }); // bluesky enabled but no secret in env
+  // SOW-125 / sow-159 / sow-405: use devto (an AUTO channel) with no secret; x would be hard-excluded (manual), never
+  // "skipped". (mastodon, then bluesky, stood in here; mastodon is retired and bluesky is assisted since sow-405.)
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg({ discord: true, devto: true }) }); // devto enabled but no secret in env
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/x', url: 'https://ex.com' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
-  assert.equal(item.perChannel.bluesky.status, 'skipped');
-  assert.equal(item.status, 'sent'); // discord sent, bluesky skipped -> no failure
+  assert.equal(item.perChannel.devto.status, 'skipped');
+  assert.equal(item.status, 'sent'); // discord sent, devto skipped -> no failure
 });
 
 // SOW-058 approval model (the DEFAULT): nothing posts until a superadmin approves it.
@@ -188,49 +188,49 @@ test('SOW-087: a flagged item never posts unapproved with require_approval off, 
 function twoChannelAdapters(dCalls, bCalls) {
   return {
     discord: { name: 'discord', enabled: () => true, post: async (i) => { dCalls.push(i.id); return { ok: true, id: 'd', url: 'u' }; } },
-    bluesky: { name: 'bluesky', enabled: () => true, post: async (i) => { bCalls.push(i.id); return { ok: true, id: 'b', url: 'u' }; } },
+    devto: { name: 'devto', enabled: () => true, post: async (i) => { bCalls.push(i.id); return { ok: true, id: 'b', url: 'u' }; } },
   };
 }
-const bskyEnv = (extra = {}) => env({ BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p', ...extra });
+const devtoEnv = (extra = {}) => env({ DEVTO_API_KEY: 'k', DEVTO_ORG_ID: 'o', ...extra });
 
 test('SOW-125: the drain posts ONLY the channels the matrix marks on for the item type', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true, bluesky: true }, auto_matrix: { post: { discord: 'on', bluesky: 'off' } } } }) });
+    channels: { discord: true, devto: true }, auto_matrix: { post: { discord: 'on', devto: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   const dCalls = [], bCalls = [];
-  const out = await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(dCalls, bCalls) });
+  const out = await drainSyndication(devtoEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(dCalls, bCalls) });
   assert.equal(out.drained, 1);
   assert.equal(dCalls.length, 1, 'discord (on) posted');
-  assert.equal(bCalls.length, 0, 'bluesky (off) never posted');
+  assert.equal(bCalls.length, 0, 'devto (off) never posted');
   const item = await getItem(kv, r.id);
   assert.equal(item.perChannel.discord.status, 'sent');
-  assert.equal(item.perChannel.bluesky.status, 'skipped');
-  assert.equal(item.perChannel.bluesky.reason, 'auto-off');
+  assert.equal(item.perChannel.devto.status, 'skipped');
+  assert.equal(item.perChannel.devto.reason, 'auto-off');
   assert.equal(item.status, 'sent');
 });
 
 test('SOW-125: per-channel delay posts a short-hold channel first and holds a long-hold channel on the same item', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true, bluesky: true }, auto_matrix: { post: { discord: 'on', bluesky: 'on' } },
-    channel_hold_minutes: { discord: 0, bluesky: 120 } } }) });
+    channels: { discord: true, devto: true }, auto_matrix: { post: { discord: 'on', devto: 'on' } },
+    channel_hold_minutes: { discord: 0, devto: 120 } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   const dCalls = [], bCalls = [];
   const adapters = twoChannelAdapters(dCalls, bCalls);
-  // availableAt = min channel hold = discord's 0, so the item is due at t=0. discord posts; bluesky (120m) holds.
-  await drainSyndication(bskyEnv(), { kv, now: at(0), adapters });
+  // availableAt = min channel hold = discord's 0, so the item is due at t=0. discord posts; devto (120m) holds.
+  await drainSyndication(devtoEnv(), { kv, now: at(0), adapters });
   assert.equal(dCalls.length, 1);
   assert.equal(bCalls.length, 0);
   let item = await getItem(kv, r.id);
-  assert.equal(item.status, 'pending'); // bluesky still holding -> the item is not terminalized
+  assert.equal(item.status, 'pending'); // devto still holding -> the item is not terminalized
   assert.equal(item.perChannel.discord.status, 'sent');
-  assert.ok(!item.perChannel.bluesky, 'a holding channel is never recorded');
-  // A tick well before bluesky's hold does nothing and does NOT burn an attempt (the item is left holding).
-  await drainSyndication(bskyEnv(), { kv, now: at(60 * 60_000), adapters });
+  assert.ok(!item.perChannel.devto, 'a holding channel is never recorded');
+  // A tick well before devto's hold does nothing and does NOT burn an attempt (the item is left holding).
+  await drainSyndication(devtoEnv(), { kv, now: at(60 * 60_000), adapters });
   item = await getItem(kv, r.id);
   assert.equal(item.attempts, 1, 'a pure holding tick does not increment attempts');
   assert.equal(bCalls.length, 0);
-  // After bluesky's 120-min hold: bluesky posts and the item terminalizes; discord is never re-posted.
-  await drainSyndication(bskyEnv(), { kv, now: at(121 * 60_000), adapters });
+  // After devto's 120-min hold: devto posts and the item terminalizes; discord is never re-posted.
+  await drainSyndication(devtoEnv(), { kv, now: at(121 * 60_000), adapters });
   assert.equal(dCalls.length, 1);
   assert.equal(bCalls.length, 1);
   item = await getItem(kv, r.id);
@@ -239,7 +239,7 @@ test('SOW-125: per-channel delay posts a short-hold channel first and holds a lo
 
 test('SOW-125: a type set off for a manual-assist channel creates no Social Queue task', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
@@ -251,7 +251,7 @@ test('SOW-125: a type set off for a manual-assist channel creates no Social Queu
 
 test('SOW-125: a type set on for a manual-assist channel DOES enqueue a Social Queue task', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
@@ -278,20 +278,20 @@ test('SOW-125: an approved item posts on the next tick (no override does NOT re-
 
 test('SOW-125: an approved item staggers an EXPLICIT per-channel override from the approval time', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true,
-    channels: { discord: true, bluesky: true }, auto_matrix: allOn({ discord: true, bluesky: true }),
-    channel_hold_minutes: { bluesky: 30 } } }) }); // require_approval defaults true
+    channels: { discord: true, devto: true }, auto_matrix: allOn({ discord: true, devto: true }),
+    channel_hold_minutes: { devto: 30 } } }) }); // require_approval defaults true
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   const item = await getItem(kv, r.id);
   await kv.put(`synd:item:${r.id}`, JSON.stringify({ ...item, status: 'approved', approvedAt: 1000, approvedBy: 'root' }));
   const dCalls = [], bCalls = [];
   const adapters = twoChannelAdapters(dCalls, bCalls);
-  // 5 min after approval: discord (no override -> 0) posts; bluesky (30 min) holds.
-  await drainSyndication(bskyEnv(), { kv, now: at(1000 + 5 * 60_000), adapters });
+  // 5 min after approval: discord (no override -> 0) posts; devto (30 min) holds.
+  await drainSyndication(devtoEnv(), { kv, now: at(1000 + 5 * 60_000), adapters });
   assert.equal(dCalls.length, 1);
   assert.equal(bCalls.length, 0);
   assert.equal((await getItem(kv, r.id)).status, 'approved'); // still pending its held channel (status stays approved)
-  // 31 min after approval: bluesky posts and the item terminalizes.
-  await drainSyndication(bskyEnv(), { kv, now: at(1000 + 31 * 60_000), adapters });
+  // 31 min after approval: devto posts and the item terminalizes.
+  await drainSyndication(devtoEnv(), { kv, now: at(1000 + 31 * 60_000), adapters });
   assert.equal(bCalls.length, 1);
   assert.equal((await getItem(kv, r.id)).status, 'sent');
 });
@@ -300,7 +300,7 @@ test('SOW-125: an approved item staggers an EXPLICIT per-channel override from t
 // 'sent' with the task lost; it retries, and a persistent failure fails out via maxAttempts.
 test('SOW-125: a manual-assist task write failure does not falsely mark the item sent (retries, then fails out)', async () => {
   const base = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off', bluesky: 'off' } } } }) });
   const throwing = { store: base.store, get: base.get.bind(base), delete: base.delete.bind(base), list: base.list.bind(base),
     put: async (k, v) => { if (String(k).startsWith('social:task:')) throw new Error('kv down'); return base.put(k, v); } };
   const r = await enqueue({ SIGNUP_KV: throwing }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv: throwing, now: at(0) });
@@ -323,10 +323,10 @@ test('SOW-125: a manual-assist task write failure does not falsely mark the item
 // nobody would notice if it silently vanished.
 test('sow-313: a stray trigger:popular item is treated as an ordinary item, not a special case', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true, bluesky: true }, auto_matrix: { post: { discord: 'on', bluesky: 'off' } } } }) });
+    channels: { discord: true, devto: true }, auto_matrix: { post: { discord: 'on', devto: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'popular' }, { kv, now: at(0) });
   const d = [], b = [];
-  await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(d, b) });
+  await drainSyndication(devtoEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(d, b) });
   assert.equal(d.length, 1, 'it delivers by the ordinary matrix now, rather than looking for a `popular` cell that can no longer exist');
   assert.equal(b.length, 0, 'an off cell is still off');
   assert.equal((await getItem(kv, r.id)).status, 'sent');
@@ -339,28 +339,28 @@ test('sow-313: a stray trigger:popular item is treated as an ordinary item, not 
 
 test('On-Manual: an AUTO-capability channel set on-manual queues a task, never posts, and settles', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { discord: 'on', bluesky: 'on-manual', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
+    auto_matrix: { post: { discord: 'on', devto: 'on-manual', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
   const dCalls = [];
   const adapters = {
     discord: { name: 'discord', enabled: () => true, post: async (i) => { dCalls.push(i); return { ok: true, id: 'd1' }; } },
-    bluesky: { name: 'bluesky', enabled: () => true, post: async () => { throw new Error('an on-manual channel must never auto-post'); } },
+    devto: { name: 'devto', enabled: () => true, post: async () => { throw new Error('an on-manual channel must never auto-post'); } },
   };
-  const out = await drainSyndication({ DISCORD_BOT_TOKEN: 't', BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' }, { kv, now: at(AFTER_HOLD), adapters });
+  const out = await drainSyndication({ DISCORD_BOT_TOKEN: 't', DEVTO_API_KEY: 'k', DEVTO_ORG_ID: 'o' }, { kv, now: at(AFTER_HOLD), adapters });
   assert.equal(out.drained, 1);
   const item = await getItem(kv, r.id);
   assert.equal(item.status, 'sent'); // queued-manual is terminal for the channel; the item settles
   assert.equal(item.perChannel.discord.status, 'sent');
-  assert.equal(item.perChannel.bluesky.status, 'queued-manual');
+  assert.equal(item.perChannel.devto.status, 'queued-manual');
   assert.equal(dCalls.length, 1);
   const taskKeys = [...kv.store.keys()].filter((k) => k.startsWith('social:task:'));
-  assert.equal(taskKeys.length, 1, 'one bluesky review task created');
-  assert.ok(taskKeys[0].includes('::bluesky'));
+  assert.equal(taskKeys.length, 1, 'one devto review task created');
+  assert.ok(taskKeys[0].includes('::devto'));
 });
 
 test('On-Manual: a transient task-write failure retries next tick (never stamped auto-off by the adapter loop)', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { discord: 'on', bluesky: 'on-manual', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
+    auto_matrix: { post: { discord: 'on', devto: 'on-manual', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
   let failTaskPuts = 1; // the first social:task write throws (a KV blip), then recovers
   const realPut = kv.put.bind(kv);
   kv.put = async (key, value) => {
@@ -371,17 +371,17 @@ test('On-Manual: a transient task-write failure retries next tick (never stamped
   const dCalls = [];
   const adapters = {
     discord: { name: 'discord', enabled: () => true, post: async (i) => { dCalls.push(i); return { ok: true, id: 'd1' }; } },
-    bluesky: { name: 'bluesky', enabled: () => true, post: async () => { throw new Error('an on-manual channel must never auto-post'); } },
+    devto: { name: 'devto', enabled: () => true, post: async () => { throw new Error('an on-manual channel must never auto-post'); } },
   };
-  const bskyEnv = { DISCORD_BOT_TOKEN: 't', BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' };
-  await drainSyndication(bskyEnv, { kv, now: at(AFTER_HOLD), adapters });
+  const devtoEnv = { DISCORD_BOT_TOKEN: 't', DEVTO_API_KEY: 'k', DEVTO_ORG_ID: 'o' };
+  await drainSyndication(devtoEnv, { kv, now: at(AFTER_HOLD), adapters });
   let item = await getItem(kv, r.id);
-  assert.ok(!item.perChannel?.bluesky, 'the failed task write leaves NO terminal marker (the retry must survive)');
+  assert.ok(!item.perChannel?.devto, 'the failed task write leaves NO terminal marker (the retry must survive)');
   assert.notEqual(item.status, 'sent');
   // Next tick: the write succeeds, the task exists, the item settles.
-  await drainSyndication(bskyEnv, { kv, now: at(AFTER_HOLD + 60_000), adapters });
+  await drainSyndication(devtoEnv, { kv, now: at(AFTER_HOLD + 60_000), adapters });
   item = await getItem(kv, r.id);
-  assert.equal(item.perChannel.bluesky.status, 'queued-manual');
+  assert.equal(item.perChannel.devto.status, 'queued-manual');
   assert.equal(item.status, 'sent');
   assert.equal([...kv.store.keys()].filter((k) => k.startsWith('social:task:')).length, 1);
   assert.equal(dCalls.length, 1, 'discord posted exactly once across both ticks');
@@ -389,12 +389,12 @@ test('On-Manual: a transient task-write failure retries next tick (never stamped
 
 test('On-Manual: an AUTO channel with NO secrets still queues its review task (no not-configured stamp)', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    auto_matrix: { post: { bluesky: 'on-manual', discord: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
+    auto_matrix: { post: { devto: 'on-manual', discord: 'off', 'discord-category': 'off', reddit: 'off', bluesky: 'off', mastodon: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
   const out = await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} }); // zero secrets anywhere
   assert.equal(out.drained, 1);
   const item = await getItem(kv, r.id);
-  assert.equal(item.perChannel.bluesky.status, 'queued-manual', 'a review task needs no adapter secrets');
+  assert.equal(item.perChannel.devto.status, 'queued-manual', 'a review task needs no adapter secrets');
   assert.equal([...kv.store.keys()].filter((k) => k.startsWith('social:task:')).length, 1);
   assert.equal(item.status, 'sent');
 });

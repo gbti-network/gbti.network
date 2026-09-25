@@ -26,6 +26,9 @@ const composeUrl = (task) => {
   const t = encodeURIComponent(text);
   if (channel === 'x') return `https://twitter.com/intent/tweet?text=${t}`;
   if (channel === 'linkedin') return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
+  // sow-405: Bluesky is assisted now. Its intent link opens the web composer with the text filled in, and Bluesky
+  // turns the link, the hashtags and any @handle in that text into a link card, tags and a mention itself.
+  if (channel === 'bluesky') return `https://bsky.app/intent/compose?text=${t}`;
   if (channel === 'dailydev') return 'https://app.daily.dev/squads/gbti_network'; // SOW-135: no text prefill; Assist opens the squad, the Copy button supplies the link
   if (channel === 'hashnode') return 'https://hashnode.com/draft'; // RETAINED for already-queued tasks, see below
   // sow-260: unlike X and LinkedIn, Reddit's submit form takes a REAL prefill, so Assist lands on a form with
@@ -161,7 +164,7 @@ class GbtiSocialQueue extends GbtiElement {
     const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
     const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? 'on' : ''}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
     const hint = this._tab === 'todo'
-      ? 'Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on X and LinkedIn, Assist opens the free web composer (or Copy the text), post it by hand, then mark it Done.'
+      ? 'Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on the channels posted by hand (X, LinkedIn, Reddit, daily.dev and Bluesky), Assist opens the site\'s own composer (or Copy the text), post it there, then mark it Done.'
       : this._tab === 'manual' ? 'Posts completed from this queue (Post now or by hand).' : 'Posts the system sent automatically (the On-Automatic channels).';
 
     const filtered = this._filtered();
@@ -222,7 +225,7 @@ class GbtiSocialQueue extends GbtiElement {
   }
   _todoRow(t) {
     // The primary action depends on the channel's capability: an AUTO channel (an On-Manual matrix cell put
-    // it here for review) posts through its adapter with one click; a MANUAL channel (x, linkedin) opens the
+    // it here for review) posts through its adapter with one click; a MANUAL channel (x, linkedin, bluesky) opens the
     // free web composer (Assist) or falls back to Copy, and a human marks it done.
     const label = CH_LABEL[t.channel] || t.channel;
     const url = composeUrl(t);

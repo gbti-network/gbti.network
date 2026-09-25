@@ -80,7 +80,11 @@ export const CHANNEL_CAPABILITY = Object.freeze({
   // to 'auto' only if the Pro plan is actually bought (the adapter cannot work without it).
   hashnode: 'manual',
   mastodon: 'auto', // SOW-123
-  bluesky: 'auto', // SOW-122
+  // sow-405 (owner, 2026-09-25): MANUAL. "We want to make bluesky an assisted post, not an automated post." The SOW-122
+  // adapter and its app password stay in place, dormant, so switching back is this one line. Same shape as Reddit
+  // above: the drain renders the text and queues it, and the Social Queue's Assist opens Bluesky's own composer
+  // (bsky.app/intent/compose) with the text filled in. Every `on` cell for Bluesky now reads `on-manual`.
+  bluesky: 'manual',
   x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
   dailydev: 'manual', // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
   linkedin: 'manual', // SOW-127: manual-assist until Community Management API access is granted (business

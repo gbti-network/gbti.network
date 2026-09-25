@@ -78,7 +78,7 @@ test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
 
 test('SOW-125: channelCapability derives auto/manual/building from the one map', () => {
   assert.equal(channelCapability('discord'), 'auto');
-  assert.equal(channelCapability('bluesky'), 'auto');
+  assert.equal(channelCapability('bluesky'), 'manual'); // sow-405: Bluesky is assisted posting now (owner, 2026-09-25)
   assert.equal(channelCapability('mastodon'), 'auto');
   assert.equal(channelCapability('x'), 'manual');
   assert.equal(channelCapability('linkedin'), 'manual'); // SOW-127: LinkedIn is now manual-assist
@@ -86,7 +86,7 @@ test('SOW-125: channelCapability derives auto/manual/building from the one map',
   assert.equal(channelCapability('hashnode'), 'manual'); // manual pivot: no Hashnode Pro, so hand-post via the Social Queue
   assert.equal(channelCapability('devto'), 'auto'); // dev.to stays the API-driven full-body channel
   assert.equal(channelCapability('nope'), 'building'); // an unknown channel defaults to building
-  assert.ok(AUTO_CHANNELS.includes('bluesky') && !AUTO_CHANNELS.includes('x') && !AUTO_CHANNELS.includes('hashnode'));
+  assert.ok(AUTO_CHANNELS.includes('devto') && !AUTO_CHANNELS.includes('bluesky') && !AUTO_CHANNELS.includes('x') && !AUTO_CHANNELS.includes('hashnode'));
 });
 
 test('SOW-125: the default matrix is shares off, every other type on, backward-compatible', () => {
@@ -100,16 +100,17 @@ test('SOW-125: the default matrix is shares off, every other type on, backward-c
 });
 
 test('SOW-125: autoModeFor coerces an unknown cell to the type default; unknown type/channel is off', () => {
-  const c = syndicationConfigFromParsed({ auto_matrix: { post: { bluesky: 'bogus', discord: 'off' } } });
-  assert.equal(autoModeFor(c, 'post', 'bluesky'), 'on'); // bogus -> default (post on)
+  const c = syndicationConfigFromParsed({ auto_matrix: { post: { devto: 'bogus', discord: 'off' } } });
+  assert.equal(autoModeFor(c, 'post', 'devto'), 'on'); // bogus -> default (post on)
   assert.equal(autoModeFor(c, 'post', 'discord'), 'off');
   // sow-313: `popular` is no longer a mode, so a stored one coerces to the type default like any other unknown.
   const stale = syndicationConfigFromParsed({ auto_matrix: { post: { discord: 'popular' } } });
   assert.equal(autoModeFor(stale, 'post', 'discord'), 'on', 'a retired `popular` cell must fall back, not stick');
-  assert.equal(autoModeFor(c, 'share', 'bluesky'), 'off'); // default share off
+  assert.equal(autoModeFor(c, 'share', 'devto'), 'off'); // default share off
   assert.equal(autoModeFor(c, 'unknown', 'discord'), 'off');
   assert.equal(autoModeFor(c, 'post', 'x'), 'on-manual'); // a MANUAL channel's default `on` coerces to on-manual
   assert.equal(autoModeFor(c, 'post', 'linkedin'), 'on-manual'); // SOW-127: same coercion for LinkedIn
+  assert.equal(autoModeFor(c, 'post', 'bluesky'), 'on-manual'); // sow-405: Bluesky too, now that it is assisted
   assert.equal(autoModeFor(c, 'post', 'nope'), 'off'); // an unknown (building) channel is not a matrix channel -> off
   assert.ok(!AUTO_MODES.includes('popular'), 'sow-313 retired the mode; leaving it selectable with no engine is a trap');
 });
@@ -127,7 +128,7 @@ test('SOW-125/131: isAutoOn + autoChannelsForType are MATRIX-ONLY (no channels g
   assert.deepEqual(autoChannelsForType(c, 'post').sort(), ['discord']);
   assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord only (overrides default off)
   // prompt: the default matrix is on for every AUTO channel, so all deliver. (sow-159: mastodon retired.)
-  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category']); // hashnode AND reddit are MANUAL now (sow-260), so neither is an auto channel
+  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['devto', 'discord', 'discord-category']); // hashnode AND reddit are MANUAL now (sow-260), so neither is an auto channel; bluesky too since sow-405
 });
 
 test('SOW-125: channelHoldMs uses the per-channel override, else the global hold', () => {
@@ -226,26 +227,26 @@ test('setSyndicationSettings writes the auto-share matrix + per-channel delay, v
   const { setSyndicationSettings, TemplateEditError } = await import('../membership/syndication-template-edits.mjs');
   const doc = { syndication: { enabled: true } };
   const ctx = { now: '2026-07-16T00:00:00.000Z', actor: { githubId: '1', login: 'atwellpub' } };
-  // Turn a share on for bluesky (default off) and delay bluesky 120 min.
-  const r = setSyndicationSettings(doc, { autoMatrix: { share: { bluesky: 'on' } }, channelHoldMinutes: { bluesky: 120 } }, ctx);
+  // Turn a share on for devto (default off) and delay devto 120 min.
+  const r = setSyndicationSettings(doc, { autoMatrix: { share: { devto: 'on' } }, channelHoldMinutes: { devto: 120 } }, ctx);
   assert.equal(r.changed, true);
-  assert.equal(r.next.syndication.auto_matrix.share.bluesky, 'on');
-  assert.equal(r.next.syndication.channel_hold_minutes.bluesky, 120);
+  assert.equal(r.next.syndication.auto_matrix.share.devto, 'on');
+  assert.equal(r.next.syndication.channel_hold_minutes.devto, 120);
   // A cell matching the effective default is NOT written (post is on by default -> no-op).
-  assert.equal(setSyndicationSettings(r.next, { autoMatrix: { post: { bluesky: 'on' } } }, ctx).changed, false);
+  assert.equal(setSyndicationSettings(r.next, { autoMatrix: { post: { devto: 'on' } } }, ctx).changed, false);
   // '' / null deletes a per-channel override.
-  const cleared = setSyndicationSettings(r.next, { channelHoldMinutes: { bluesky: '' } }, ctx);
+  const cleared = setSyndicationSettings(r.next, { channelHoldMinutes: { devto: '' } }, ctx);
   assert.equal(cleared.changed, true);
-  assert.equal(cleared.next.syndication.channel_hold_minutes.bluesky, undefined);
+  assert.equal(cleared.next.syndication.channel_hold_minutes.devto, undefined);
   // SOW-125: x (a MANUAL channel) IS a valid matrix cell -> the per-type manual-task control (F12).
   const xOn = setSyndicationSettings(doc, { autoMatrix: { post: { x: 'off' } } }, ctx); // post/x defaults on -> setting off is a change
   assert.equal(xOn.changed, true);
   assert.equal(xOn.next.syndication.auto_matrix.post.x, 'off');
   // Hard validation: unknown type, a non-matrix (building/unknown) channel, bad mode, out-of-range delay.
-  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { widget: { bluesky: 'on' } } }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { widget: { devto: 'on' } } }, ctx), TemplateEditError);
   assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { myspace: 'on' } } }, ctx), TemplateEditError); // myspace is not a matrix channel
-  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { bluesky: 'sometimes' } } }, ctx), TemplateEditError);
-  assert.throws(() => setSyndicationSettings(doc, { channelHoldMinutes: { bluesky: 99999 } }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { devto: 'sometimes' } } }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { channelHoldMinutes: { devto: 99999 } }, ctx), TemplateEditError);
 });
 
 // SOW-088: reddit-body is a first-class template type (the Reddit post body / link-post first comment),
@@ -395,13 +396,14 @@ test('On-Manual: the vocabulary, coercion, delivery, and the queue set', async (
 test('setSyndicationSettings: on-manual accepted anywhere; `on` rejected for a manual-capability channel', async () => {
   const { setSyndicationSettings, TemplateEditError: TErr } = await import('../membership/syndication-template-edits.mjs');
   const ctx = { login: 'root', githubId: '1' };
-  const r = setSyndicationSettings({}, { autoMatrix: { post: { bluesky: 'on-manual', x: 'on-manual' } } }, ctx);
+  const r = setSyndicationSettings({}, { autoMatrix: { post: { devto: 'on-manual', x: 'on-manual' } } }, ctx);
   assert.equal(r.changed, true);
-  assert.equal(r.next.syndication.auto_matrix.post.bluesky, 'on-manual');
+  assert.equal(r.next.syndication.auto_matrix.post.devto, 'on-manual');
   // x's EFFECTIVE default is already on-manual (the coerced `on`), so the idempotent writer skips the cell.
   assert.equal(r.next.syndication.auto_matrix.post.x, undefined);
   assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { x: 'on' } } }, ctx), TErr);
   assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { linkedin: 'on' } } }, ctx), TErr);
+  assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { bluesky: 'on' } } }, ctx), TErr); // sow-405
 });
 
 // sow-260 (2026-08-27): a guard on the REAL house/syndication-config.yml, not on the code defaults.

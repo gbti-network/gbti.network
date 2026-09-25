@@ -13,8 +13,8 @@
 # other type ON):
 #   on        = On-Automatic: the channel adapter posts after the hold window.
 #   on-manual = On-Manual: delivered as a superadmin SOCIAL QUEUE task for review. The queue's Post now sends
-#               it through the adapter; X and LinkedIn are posted by hand (they cannot auto-post, so this is
-#               their only deliverable mode; a legacy `on` coerces here, and the settings UI never offers
+#               it through the adapter; X, LinkedIn, Reddit, daily.dev and Bluesky are posted by hand (they
+#               cannot auto-post, so this is their only deliverable mode; a legacy `on` coerces here, and the settings UI never offers
 #               them On-Automatic).
 #   off       = never. popular = only when the engagement engine promotes the item (trigger: popular).
 # `manual_assist_channels` below is DEPRECATED for routing (per-cell on-manual + the code-level channel
@@ -31,6 +31,12 @@
 # so a title holding it too duplicates it in the submission and spends part of the 300-character cap on it.
 # That template said '{title} {shareurl}' until 2026-08-27 and was the last place the defect survived after
 # the code default was fixed.
+#
+# BLUESKY (sow-405, 2026-09-25): posted by hand, like X. The owner: "assisted post, not an automated post." Every
+# Bluesky cell reads on-manual, so each item lands in the Social Queue and Assist opens Bluesky's composer with
+# the text filled in. The Bluesky templates carry {url} because the text is now the whole post (the old adapter
+# attached the link as a card); the code also appends the link to a Bluesky task whose text lacks it.
+#
 # NOTE: an admin settings save rewrites this file and keeps ONLY this leading comment block, so durable
 # documentation belongs HERE, not beside the keys below.
 syndication:
@@ -112,9 +118,9 @@ syndication:
       prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       share: '"{title}" {url} {hashtags}'
     bluesky:
-      post: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
-      project: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
-      prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
+      post: 'New {content-type} by {member-bluesky-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      project: 'New {content-type} by {member-bluesky-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       share: '"{title}" {url} {hashtags}'
     linkedin:
       post: >-

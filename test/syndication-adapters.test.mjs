@@ -92,9 +92,14 @@ test('resolveAdapterRun splits ready (secrets) vs skipped (enabled-but-no-secret
   const env = { DISCORD_BOT_TOKEN: 't' };
   const { ready, skipped } = resolveAdapterRun({ cfg, env });
   assert.deepEqual(ready.map((a) => a.name).sort(), ['discord', 'discord-category']);
-  assert.deepEqual(skipped.sort(), ['bluesky', 'devto']); // sow-159: mastodon retired; hashnode + reddit are MANUAL: hard-excluded
+  assert.deepEqual(skipped.sort(), ['devto']); // sow-159: mastodon retired; hashnode, reddit and (sow-405) bluesky are MANUAL: hard-excluded
   assert.ok(!ready.some((a) => a.name === 'reddit'), 'reddit must never be in the auto-post set');
   assert.ok(!skipped.includes('reddit'), 'and not merely skipped: a manual channel is excluded before secrets are consulted');
+  // sow-405: Bluesky is assisted posting now, and unlike Reddit its app password STILL EXISTS in the Worker. So the
+  // load-bearing case is the one with the secret present: it must still never be picked up for an automatic post.
+  const withBsky = resolveAdapterRun({ cfg, env: { ...env, BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' } });
+  assert.ok(!withBsky.ready.some((a) => a.name === 'bluesky'), 'bluesky must never auto-post, even with its password configured');
+  assert.ok(!withBsky.skipped.includes('bluesky'));
 });
 
 // SOW-087: the second Discord post, routed by the item's category via the KV-mirrored map.
