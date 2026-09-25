@@ -35,6 +35,21 @@ export function contentFlagsFromParsed(parsed) {
   return out;
 }
 
+/**
+ * sow-409: the flags as the public `/content-flags.json` carries them: each key's booleans only. `at`, `by` and
+ * `reason` stay in the repository file; the superadmin "..." menu needs only which half of each pair applies.
+ */
+export function publicContentFlags(flags) {
+  const out = {};
+  for (const [key, e] of Object.entries(flags || {})) {
+    if (!KEY_RE.test(key) || !e || typeof e !== 'object') continue;
+    const o = {};
+    for (const f of CONTENT_FLAGS) if (e[f] === true) o[f] = true;
+    if (Object.keys(o).length) out[key] = o;
+  }
+  return out;
+}
+
 /** The key for an item: `post:<slug>`. */
 export const flagKey = (type, slug) => `${type}:${slug}`;
 

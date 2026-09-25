@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { contentFlagsFromParsed, flagsFor } from '../../membership/content-flags.mjs';
+import { contentFlagsFromParsed, flagsFor, publicContentFlags } from '../../membership/content-flags.mjs';
 
 type Flags = Record<string, { stale?: true; unindexed?: true }>;
 let cache: Flags | null = null;
@@ -20,4 +20,9 @@ function load(): Flags {
 /** `{ stale, unindexed }` for one item. Both false when unflagged. */
 export function contentFlagsOf(type: 'post' | 'project' | 'prompt', slug: string): { stale: boolean; unindexed: boolean } {
   return flagsFor(load(), type, slug);
+}
+
+/** sow-409: every flagged item's booleans, for the public /content-flags.json. */
+export function allPublicContentFlags(): Flags {
+  return publicContentFlags(load()) as Flags;
 }

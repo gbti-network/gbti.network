@@ -22,11 +22,36 @@ export function modPathFor({ type, author, slug, id } = {}) {
   return `members/${author}/${dir}/${slug}/index.md`;
 }
 
-/** The moderation actions a role may SEE: none below moderator; Hide/Unhide at moderator+; +Remove at admin+;
- *  +the sow-189 content flags (stale / unstale / unindex / reindex) at superadmin only. */
-export function visibleActions(role) {
-  const r = RANK[role] ?? 0;
-  if (r < RANK.moderator) return [];
-  if (r >= RANK.superadmin) return ['hide', 'unhide', 'remove', 'stale', 'unstale', 'unindex', 'reindex'];
-  return r >= RANK.admin ? ['hide', 'unhide', 'remove'] : ['hide', 'unhide'];
+// The content types the sow-189 marks apply to (membership/content-flags.mjs KEY_RE). A share cannot be marked: the
+// Worker derives the key from the path and refuses anything else, so the menu never offers it.
+const FLAGGABLE = { post: 'post', product: 'project', project: 'project', prompt: 'prompt' };
+
+/** The key an item's marks are published under in /content-flags.json (`post:<slug>`), or null for a share. */
+export function flagKeyFor(type, slug) {
+  const t = FLAGGABLE[type];
+  return t && SAFE.test(String(slug || '')) ? `${t}:${slug}` : null;
+}
+
+/**
+ * sow-409 (owner, 2026-09-25): the actions in the superadmin "..." menu, in order. Replaces the SOW-071 tiers, where
+ * a moderator saw Hide and Unhide and an admin added Remove: the owner made the menu superadmin-only.
+ *   - not superadmin: [] (nothing renders);
+ *   - Hide, never Unhide: the reader and the Shares feed only ever show live items;
+ *   - an article, project or prompt: the half of each mark pair that applies, from `flags` ({ stale, unindexed });
+ *     both halves when `flags` is null, because the marks could not be read;
+ *   - a share: no marks (they do not apply to shares);
+ *   - Remove last.
+ */
+export function menuActions({ role, type, flags = null } = {}) {
+  if (role !== 'superadmin') return [];
+  const out = ['hide'];
+  if (FLAGGABLE[type]) {
+    if (flags) {
+      out.push(flags.stale ? 'unstale' : 'stale', flags.unindexed ? 'reindex' : 'unindex');
+    } else {
+      out.push('stale', 'unstale', 'unindex', 'reindex');
+    }
+  }
+  out.push('remove');
+  return out;
 }

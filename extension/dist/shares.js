@@ -5154,11 +5154,23 @@ ${listStyleProseCss(".doc-blocks")}
     if (!dir || !SAFE.test(String(slug || ""))) return null;
     return `members/${author}/${dir}/${slug}/index.md`;
   }
-  function visibleActions(role) {
-    const r = RANK[role] ?? 0;
-    if (r < RANK.moderator) return [];
-    if (r >= RANK.superadmin) return ["hide", "unhide", "remove", "stale", "unstale", "unindex", "reindex"];
-    return r >= RANK.admin ? ["hide", "unhide", "remove"] : ["hide", "unhide"];
+  var FLAGGABLE = { post: "post", product: "project", project: "project", prompt: "prompt" };
+  function flagKeyFor(type, slug) {
+    const t = FLAGGABLE[type];
+    return t && SAFE.test(String(slug || "")) ? `${t}:${slug}` : null;
+  }
+  function menuActions({ role, type, flags = null } = {}) {
+    if (role !== "superadmin") return [];
+    const out = ["hide"];
+    if (FLAGGABLE[type]) {
+      if (flags) {
+        out.push(flags.stale ? "unstale" : "stale", flags.unindexed ? "reindex" : "unindex");
+      } else {
+        out.push("stale", "unstale", "unindex", "reindex");
+      }
+    }
+    out.push("remove");
+    return out;
   }
 
   // client-ui/src/comment-echo-core.mjs
@@ -8830,6 +8842,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-account", GbtiAccount);
 
   // client-ui/src/elements/gbti-mod-actions.mjs
+  var SITE5 = "https://gbti.network";
   var ACTION_LABEL = { hide: "Hide", unhide: "Unhide", remove: "Remove", stale: "Mark stale", unstale: "Unmark stale", unindex: "Unindex", reindex: "Reindex" };
   var ACTION_API = { hide: "deplatform", unhide: "republish", remove: "remove", stale: "stale", unstale: "unstale", unindex: "unindex", reindex: "reindex" };
   var ACTION_DONE = { hide: "Hidden", unhide: "Republished", remove: "Removed", stale: "Marked stale", unstale: "Stale cleared", unindex: "Unindexed", reindex: "Reindexed" };
@@ -8842,20 +8855,56 @@ ${listStyleProseCss(".doc-blocks")}
     unindex: "Unindex this item? Its page asks search engines not to index it and it leaves the sitemap; the site still points at it (reversible).",
     reindex: "Reindex this item? Search engines are allowed to index it again."
   };
+  var FLAG_AFTER = { stale: ["stale", true], unstale: ["stale", false], unindex: ["unindexed", true], reindex: ["unindexed", false] };
+  var FLAGS = null;
+  function loadFlags() {
+    if (!FLAGS) {
+      FLAGS = fetch(`${SITE5}/content-flags.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : Promise.reject(new Error(`http-${r.status}`))).then((d) => d && typeof d.flags === "object" && d.flags ? d.flags : {}).catch(() => {
+        FLAGS = null;
+        return null;
+      });
+    }
+    return FLAGS;
+  }
+  var DOTS = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
   var CSS8 = `
-  :host { display:inline-flex; }
-  .mod { display:inline-flex; gap:6px; align-items:center; }
-  .ma { font:inherit; font-size:12px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
-  .ma:hover { color:var(--fg); border-color:var(--accent); }
-  .ma-remove { color:#c0392b; }
-  .ma-remove:hover { border-color:#c0392b; }
-  .ma[disabled] { opacity:.6; cursor:default; }
+  :host { display:inline-flex; position:relative; }
+  [hidden] { display:none !important; }
+  .dots { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; border-radius:999px;
+    border:1px solid var(--line-2, var(--line)); background:transparent; color:var(--muted); cursor:pointer; }
+  .dots:hover, .dots[aria-expanded="true"] { color:var(--fg); border-color:var(--accent); background:transparent; }
+  .dots:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .dots svg { width:18px; height:18px; fill:currentColor; }
+  .menu { position:absolute; top:calc(100% + 8px); right:0; min-width:200px; z-index:80; padding:6px; display:flex; flex-direction:column;
+    background:var(--paper, var(--panel)); border:1.5px solid var(--line-2, var(--line)); border-radius:var(--r-lg, 16px);
+    box-shadow:var(--sh-md, 0 10px 28px -10px rgba(0,0,0,.22));
+    /* The Glass layout makes --paper translucent and frosts the avatar menu with --glass-blur (extension/shell.css);
+       that page rule cannot reach this shadow root, so the menu names it itself. Flat defines no --glass-blur: none. */
+    -webkit-backdrop-filter:var(--glass-blur, none); backdrop-filter:var(--glass-blur, none); }
+  .mi { display:block; width:100%; text-align:left; padding:8px 12px; border:0; border-radius:var(--r, 10px); background:transparent;
+    color:var(--fg); font:inherit; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; }
+  .mi:hover, .mi:focus-visible { background:var(--green-tint); color:var(--green-700, var(--accent)); outline:none; }
+  .mi-remove, .mi-remove:hover, .mi-remove:focus-visible { color:var(--danger, #c0392b); }
+  .mi-remove:hover, .mi-remove:focus-visible { background:color-mix(in srgb, var(--danger, #c0392b) 10%, transparent); }
+  .sep { height:1px; background:var(--line); margin:5px 4px; }
+  .said { margin-left:8px; font-size:12px; font-weight:700; color:var(--muted); white-space:nowrap; align-self:center; }
 `;
   var GbtiModActions = class extends GbtiElement {
     connectedCallback() {
       this._role = "member";
+      this._flags = void 0;
+      this._open = false;
+      this._said = "";
+      this._onDocClick = (e) => {
+        if (this._open && !(e.composedPath?.() || []).includes(this)) this._setOpen(false);
+      };
+      this._onKey = (e) => this._key(e);
       super.connectedCallback?.();
       this._load();
+    }
+    disconnectedCallback() {
+      this._unlisten();
+      super.disconnectedCallback?.();
     }
     async _load() {
       try {
@@ -8863,43 +8912,92 @@ ${listStyleProseCss(".doc-blocks")}
       } catch {
         this._role = "member";
       }
+      if (this._role === "superadmin" && flagKeyFor(this.dataset.gbtiType, this.dataset.gbtiSlug)) {
+        const all = await loadFlags();
+        const key = flagKeyFor(this.dataset.gbtiType, this.dataset.gbtiSlug);
+        this._flags = all ? { stale: all[key]?.stale === true, unindexed: all[key]?.unindexed === true } : null;
+      }
       this.render();
     }
     _path() {
       return modPathFor({ type: this.dataset.gbtiType, author: this.dataset.gbtiAuthor, slug: this.dataset.gbtiSlug, id: this.dataset.gbtiId });
     }
+    _actions() {
+      return this._path() ? menuActions({ role: this._role, type: this.dataset.gbtiType, flags: this._flags ?? null }) : [];
+    }
     render() {
-      const path = this._path();
-      const actions = path ? visibleActions(this._role) : [];
+      const actions = this._actions();
       if (!actions.length) {
+        this._unlisten();
         this.set("");
         return;
       }
-      const btns = actions.map((a) => `<button class="ma ma-${a}" type="button" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
-      this.set(this.css(CSS8) + `<span class="mod">${btns}</span>`);
+      const rows = actions.map((a) => `${a === "remove" && actions.length > 1 ? '<div class="sep" role="separator"></div>' : ""}<button class="mi mi-${a}" type="button" role="menuitem" data-act="${a}">${ACTION_LABEL[a]}</button>`).join("");
+      this.set(this.css(CSS8) + `<button class="dots" type="button" data-dots aria-label="Moderation actions" title="Moderation actions" aria-haspopup="menu" aria-expanded="${this._open}">${DOTS}</button><div class="menu" role="menu" aria-label="Moderation actions"${this._open ? "" : " hidden"}>${rows}</div>` + (this._said ? `<span class="said" role="status">${this._said}</span>` : ""));
+      this.$("[data-dots]")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._setOpen(!this._open);
+      });
       this.$$("[data-act]").forEach((b) => b.addEventListener("click", () => this._do(b.dataset.act)));
     }
+    _setOpen(open) {
+      this._open = open;
+      const menu = this.$(".menu");
+      const btn = this.$("[data-dots]");
+      if (menu) menu.hidden = !open;
+      if (btn) btn.setAttribute("aria-expanded", String(open));
+      if (open) {
+        document.addEventListener("click", this._onDocClick, true);
+        document.addEventListener("keydown", this._onKey, true);
+        this.$(".mi")?.focus?.();
+      } else {
+        this._unlisten();
+      }
+    }
+    _unlisten() {
+      if (typeof document === "undefined") return;
+      document.removeEventListener("click", this._onDocClick, true);
+      document.removeEventListener("keydown", this._onKey, true);
+    }
+    // Esc closes and returns focus to the button; the arrow keys move between rows (Enter and Space press a row, as
+    // any button does).
+    _key(e) {
+      if (!this._open) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this._setOpen(false);
+        this.$("[data-dots]")?.focus?.();
+        return;
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const items = this.$$(".mi");
+      if (!items.length) return;
+      e.preventDefault();
+      const at = items.indexOf(this.root?.activeElement ?? null);
+      const next = e.key === "ArrowDown" ? (at + 1) % items.length : at <= 0 ? items.length - 1 : at - 1;
+      items[next]?.focus?.();
+    }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
-    // Fail-soft: a forbidden/error shows inline; nothing changes locally.
+    // Fail-soft: a forbidden/error shows beside the button; nothing changes locally.
     async _do(act) {
       const path = this._path();
       if (!path) return;
+      this._setOpen(false);
       if (typeof confirm === "function" && !confirm(CONFIRM[act])) return;
-      const btn = this.$(`[data-act="${act}"]`);
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "...";
-      }
+      this._said = "...";
+      this.render();
       try {
         await this.client.admin(ACTION_API[act], { path });
-        if (btn) btn.textContent = ACTION_DONE[act];
-        this.dispatchEvent(new CustomEvent("mod-action", { detail: { action: act, path }, bubbles: true, composed: true }));
       } catch (err) {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = err?.code === "forbidden" ? "Not permitted" : `${ACTION_LABEL[act]} failed`;
-        }
+        this._said = err?.code === "forbidden" ? "Not permitted" : `${ACTION_LABEL[act]} failed`;
+        this.render();
+        return;
       }
+      this._said = ACTION_DONE[act];
+      const flip = FLAG_AFTER[act];
+      if (flip && this._flags) this._flags = { ...this._flags, [flip[0]]: flip[1] };
+      this.render();
+      this.dispatchEvent(new CustomEvent("mod-action", { detail: { action: act, path }, bubbles: true, composed: true }));
     }
   };
   define("gbti-mod-actions", GbtiModActions);
@@ -9126,7 +9224,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
-  var SITE5 = "https://gbti.network";
+  var SITE6 = "https://gbti.network";
   var CSS10 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
@@ -9209,7 +9307,7 @@ ${listStyleProseCss(".doc-blocks")}
       const counts = {};
       await Promise.all(SAVED_TYPES.map(async (t) => {
         try {
-          const res = await fetch(`${SITE5}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE6}/${indexFileFor(t)}`, { cache: "no-cache" });
           const items = res.ok ? (await res.json()).items || [] : [];
           for (const it of items) {
             const a = String(it?.author || "").toLowerCase();
@@ -9597,7 +9695,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-category-manager", GbtiCategoryManager);
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
-  var SITE6 = "https://gbti.network";
+  var SITE7 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
@@ -9797,7 +9895,7 @@ ${listStyleProseCss(".doc-blocks")}
       const items = {};
       await Promise.all(Object.entries(INDEXES).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE6}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE7}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           items[type] = Array.isArray(data) ? data : data?.items || [];
         } catch {
@@ -10016,7 +10114,7 @@ ${listStyleProseCss(".doc-blocks")}
         return `<button class="cbtab${t === this._cbType ? " on" : ""}" type="button" data-cbtab="${t}">${TYPE_LABEL3[t]}<span class="n">${n}</span></button>`;
       }).join("");
       const rows = pg.items.map((it) => `<div class="cbrow">
-        <div style="min-width:0"><a href="${SITE6}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
+        <div style="min-width:0"><a href="${SITE7}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
         <div class="sub">@${esc(it.author || "")}${it.publishedAt ? ` · ${esc(relAge(Number(it.publishedAt), now))}` : ""}</div></div>
       </div>`).join("");
       const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
@@ -10251,7 +10349,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
-  var SITE7 = "https://gbti.network";
+  var SITE8 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
@@ -10429,7 +10527,7 @@ ${listStyleProseCss(".doc-blocks")}
       const byTag = /* @__PURE__ */ new Map();
       await Promise.all(Object.entries(INDEXES2).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE7}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE8}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           for (const it of Array.isArray(data) ? data : data?.items || []) {
             for (const raw of it.tags || []) {
@@ -10522,7 +10620,7 @@ ${listStyleProseCss(".doc-blocks")}
           <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
         </div>
         ${this._actionUi(sel)}
-        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE7}${esc(i.url || "")}" target="_blank" rel="noopener">
+        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE8}${esc(i.url || "")}" target="_blank" rel="noopener">
           <div class="ititle">${esc(i.title)}</div>
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
         </a>`).join("")}</div>
@@ -12031,7 +12129,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
-  var SITE8 = "https://gbti.network";
+  var SITE9 = "https://gbti.network";
   var GbtiOutboundLinkManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -12044,11 +12142,11 @@ ${listStyleProseCss(".doc-blocks")}
       this.render();
       try {
         const [links, clicks] = await Promise.all([
-          fetch(`${SITE8}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE9}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`links ${r.status}`);
             return r.json();
           }),
-          fetch(`${SITE8}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE9}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`clicks ${r.status}`);
             return r.json();
           })
@@ -13364,7 +13462,7 @@ ${listStyleProseCss(".doc-blocks")}
 `;
 
   // client-ui/src/elements/gbti-cta-manager.mjs
-  var SITE9 = "https://gbti.network";
+  var SITE10 = "https://gbti.network";
   var SUBMITTED = "Submitted. It merges automatically and appears shortly. Track it in your WorkBench.";
   var FIELD_KEYS = ["id", "label", "partner", "line", "button", "destination", "image", "html"];
   var GbtiCtaManager = class extends GbtiElement {
@@ -13384,7 +13482,7 @@ ${listStyleProseCss(".doc-blocks")}
     get site() {
       const o = this.dataset?.siteOrigin;
       if (o === "page" && typeof location !== "undefined") return location.origin;
-      return SITE9;
+      return SITE10;
     }
     get icons() {
       if (!this._icons) this._icons = createIconLibrary({ base: this.site });
@@ -20740,7 +20838,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE10 = "https://gbti.network";
+  var SITE11 = "https://gbti.network";
   var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
@@ -20802,7 +20900,7 @@ ${BLOCKED_PILL_CSS}
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE10}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE11}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -20869,7 +20967,7 @@ ${BLOCKED_PILL_CSS}
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
-      const t = item.url ? `<a class="t" href="${SITE10}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE11}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
@@ -20914,7 +21012,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-topic-picker.mjs
-  var SITE11 = "https://gbti.network";
+  var SITE12 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
@@ -20954,7 +21052,7 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       try {
-        const data = await (await fetch(`${SITE11}/topics.json`, { cache: "no-cache" })).json();
+        const data = await (await fetch(`${SITE12}/topics.json`, { cache: "no-cache" })).json();
         this._topics = topicsFromJson(data);
         this._groupOrder = groupOrderFromJson(data);
       } catch {
@@ -21078,7 +21176,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE12 = "https://gbti.network";
+  var SITE13 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS34 = `
@@ -21189,20 +21287,20 @@ ${BLOCKED_PILL_CSS}
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE12}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE12}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
         const u = esc(f.username);
         return `<li class="row">
         <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
-        <a class="nm" href="${SITE12}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <a class="nm" href="${SITE13}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE12}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -21671,7 +21769,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-profile-editor.mjs
-  var SITE13 = "https://gbti.network";
+  var SITE14 = "https://gbti.network";
   var STATUS_LABEL2 = {
     paid: "Paid member",
     trialing: "Free trial",
@@ -21876,7 +21974,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS36) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE13}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS36) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE14}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
@@ -22134,7 +22232,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-workspace.mjs
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
-  var SITE14 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -22927,7 +23025,7 @@ ${BLOCKED_PILL_CSS}
       const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
       const pub = it.status === "published" ? publicPathFor({ type: it.type, path: it.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE14 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE15 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
       const who = this._scopeNow() === "house" && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : "";
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
@@ -23281,7 +23379,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
-  var SITE15 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var POLL_MS2 = 12e4;
   var SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
@@ -23418,7 +23516,7 @@ ${BLOCKED_PILL_CSS}
           title: it.title || it.targetSlug || "Untitled",
           sub: why === "flagged" ? `Flagged ${type.toLowerCase()}: approve or cancel it` : `${type} did not post on its own: approve to send it`,
           // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
-          href: `${SITE15}/admin/#tab=syndication&sub=activity`
+          href: `${SITE16}/admin/#tab=syndication&sub=activity`
         };
       });
     }
@@ -23428,7 +23526,7 @@ ${BLOCKED_PILL_CSS}
     // everything (the system default), and a refused news read (a free account) means no news rows.
     async _siteList(path) {
       try {
-        const res = await fetch(`${SITE15}${path}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE16}${path}`, { cache: "no-cache" });
         const data = res.ok ? await res.json() : {};
         return Array.isArray(data?.entries) ? data.entries : [];
       } catch {
@@ -23455,7 +23553,7 @@ ${BLOCKED_PILL_CSS}
         ts: r.ts,
         title: r.target || "New activity",
         sub: r.kind === "news" ? r.actor : `@${r.actor}`,
-        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE15}${r.url || ""}`
+        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE16}${r.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -23794,7 +23892,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
-  var SITE16 = "https://gbti.network";
+  var SITE17 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
@@ -23904,7 +24002,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS40) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE16}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS40) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE17}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
@@ -23928,7 +24026,7 @@ ${BLOCKED_PILL_CSS}
             <span class="tag${custom ? " custom" : ""}">${custom ? "Custom" : "Default"}</span>
             ${CHEV2}
           </button>`;
-      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE16}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
+      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE17}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
       this.set(this.css(CSS40) + `
@@ -24019,8 +24117,8 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE17 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE17}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE18 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE18}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc4 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -24125,7 +24223,7 @@ ${BLOCKED_PILL_CSS}
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE17}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE18}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -24588,7 +24686,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/members-index.mjs
-  var SITE18 = "https://gbti.network";
+  var SITE19 = "https://gbti.network";
   var lc6 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
@@ -24597,12 +24695,12 @@ ${BLOCKED_PILL_CSS}
   var _directory = null;
   function loadMembersDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE18}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE19}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE19 = "https://gbti.network";
+  var SITE20 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -24619,7 +24717,7 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE19}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE20}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var loadDirectory = loadMembersDirectory;
   var SOCIALS = [
@@ -24973,11 +25071,11 @@ ${BLOCKED_PILL_CSS}
       const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
       let follow = "";
       const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const wsBase = inExt ? `${SITE19}/workbench/` : "/workbench/";
+      const wsBase = inExt ? `${SITE20}/workbench/` : "/workbench/";
       const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
       if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE19}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE20}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
@@ -25003,13 +25101,13 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE19 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE20 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
       const copyAll = it.type === "prompt" && this._rawBody ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE19}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE20}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
@@ -25146,7 +25244,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
-  var SITE20 = "https://gbti.network";
+  var SITE21 = "https://gbti.network";
   var lc9 = (s) => String(s || "").toLowerCase();
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -25220,7 +25318,7 @@ ${BLOCKED_PILL_CSS}
         const [dir, status, ...idx] = await Promise.all([
           guard(loadMembersDirectory()),
           guard(this.client.status?.()),
-          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE20}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
+          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE21}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
         const me = lc9(status?.identity?.username || status?.identity?.login || "");
@@ -25251,8 +25349,8 @@ ${BLOCKED_PILL_CSS}
           since = "";
         }
       }
-      const action = this._isSelf ? `<a class="edit" href="${SITE20}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
-      const siteLink = utmLink(`${SITE20}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
+      const action = this._isSelf ? `<a class="edit" href="${SITE21}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
+      const siteLink = utmLink(`${SITE21}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
       const actions = `<div class="actions">${action}<a class="site" href="${esc(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
       const tagPills = [];
       for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole3(r))}</span>`);
@@ -25310,7 +25408,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE21 = "https://gbti.network";
+  var SITE22 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -25423,7 +25521,7 @@ ${BLOCKED_PILL_CSS}
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE21}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE22}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -26037,7 +26135,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-debug-panel", GbtiDebugPanel);
 
   // client-ui/src/elements/gbti-signin-splash.mjs
-  var SITE22 = "https://gbti.network";
+  var SITE23 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
   var shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
@@ -26129,7 +26227,7 @@ ${BLOCKED_PILL_CSS}
       </div>
       <div class="card">
         ${expired}${this._note ? `<p class="problem" role="alert">${esc(this._note)}</p>` : ""}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE22}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE23}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:signin-start", { method: "web" }));
       this.on("[data-auth-code]", "click", () => this.emit("gbti:signin-start", { method: "code" }));
@@ -26911,7 +27009,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // extension/src/shell.mjs
-  var SITE23 = "https://gbti.network";
+  var SITE24 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var esc5 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
@@ -26965,9 +27063,9 @@ ${BLOCKED_PILL_CSS}
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
-        <a class="mi" role="menuitem" href="${SITE23}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
-        <a class="mi" role="menuitem" href="${SITE23}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
-        <a class="mi" role="menuitem" href="${SITE23}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE24}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE24}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
+        <a class="mi" role="menuitem" href="${SITE24}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
@@ -27002,7 +27100,7 @@ ${BLOCKED_PILL_CSS}
       });
       const folder2 = status.identity.username || String(login).toLowerCase();
       root.querySelectorAll("[data-me-profile]").forEach((a) => {
-        a.href = `${SITE23}/members/${encodeURIComponent(folder2)}/`;
+        a.href = `${SITE24}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc5(login)}</b>`;

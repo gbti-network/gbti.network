@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
 
 import { contentFlagsFromParsed, flagsFor, flagKeyForPath, sitemapExcludes, setContentFlag, ContentFlagEditError, KEY_RE } from '../membership/content-flags.mjs';
-import { visibleActions } from '../client-ui/src/mod-actions-core.mjs';
+import { menuActions } from '../client-ui/src/mod-actions-core.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const CTX = { actor: { githubId: '1', login: 'hudson' }, now: '2026-09-08T22:00:00Z' };
@@ -74,9 +74,9 @@ test('the sitemap drops exactly the unindexed articles; stale alone stays advert
   assert.deepEqual([...sitemapExcludes({})], []);
 });
 
-test('the control: the four flag actions show for a superadmin only', () => {
-  assert.deepEqual(visibleActions('superadmin'), ['hide', 'unhide', 'remove', 'stale', 'unstale', 'unindex', 'reindex']);
-  assert.deepEqual(visibleActions('admin'), ['hide', 'unhide', 'remove']);
-  assert.deepEqual(visibleActions('moderator'), ['hide', 'unhide']);
-  assert.deepEqual(visibleActions('member'), []);
+// sow-409 (owner, 2026-09-25): the whole control is superadmin-only now, a "..." menu. The flag actions still show for
+// a superadmin only; what changed is that nobody else sees anything (the tiers this used to pin are gone).
+test('the control: the flag actions show for a superadmin only, and only the half that applies', () => {
+  assert.deepEqual(menuActions({ role: 'superadmin', type: 'post', flags: { stale: false, unindexed: false } }), ['hide', 'stale', 'unindex', 'remove']);
+  for (const role of ['admin', 'moderator', 'member']) assert.deepEqual(menuActions({ role, type: 'post', flags: null }), [], role);
 });
