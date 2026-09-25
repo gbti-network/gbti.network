@@ -14,7 +14,8 @@ tags:
   - esports
   - dragon-ball-games-battle-hour
   - masters-showdown
-image: https://i.ytimg.com/vi/uK5G_Z0gvqg/hq2.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf-a45dce08.webp
+imageSource: https://i.ytimg.com/vi/uK5G_Z0gvqg/hq2.jpg
 creatorUrl: https://www.youtube.com/@isaiahtheluigiYT
 creatorName: Isaiah the luigi
 id: 20260925004358-sonicfox-vs-go1-dbfz-best-round-start-shorts-dbf
