@@ -15,8 +15,9 @@ import { secretsPresent } from '../../membership/syndication-channels.mjs';
 import { listTasks, getTask, putTask, deleteTask } from './social-queue-store.mjs';
 import { readSyndicationConfig, readContentChannels } from './syndication-store.mjs';
 
-async function gate(request, env, { fetchImpl, authorize }) {
-  const auth = await authorize(request, env, { fetchImpl });
+// sow-399: allowCookie lets the website (cookie session, CSRF on POST) through the same gate as a bearer token.
+async function gate(request, env, { fetchImpl, authorize, allowCookie = false }) {
+  const auth = await authorize(request, env, { fetchImpl, allowCookie });
   if (!auth.ok) return { deny: auth };
   if (auth.role !== ROLE.superadmin) return { deny: { status: 403, body: { error: 'forbidden', message: 'superadmin access is required for the Social Queue' } } };
   return { auth };
@@ -24,9 +25,9 @@ async function gate(request, env, { fetchImpl, authorize }) {
 
 /** GET the manual-assist tasks split into pending (to do) + done (manual history). */
 export async function handleSocialQueueGet(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, limit = 500 } = deps;
+  const { kv = env?.SIGNUP_KV, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, limit = 500, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the social queue store is not configured' } };
-  const { deny } = await gate(request, env, { fetchImpl, authorize });
+  const { deny } = await gate(request, env, { fetchImpl, authorize, allowCookie });
   if (deny) return deny;
   const { pending, done } = splitTasks(await listTasks(kv, { limit }));
   return { status: 200, body: { ok: true, pending, done } };
@@ -35,10 +36,10 @@ export async function handleSocialQueueGet(request, env, deps = {}) {
 /** POST an action on one task: `done` (posted by hand -> history), `delete` (discard), or `post`
  *  (review-then-send: the adapter posts the reviewed text; auto-capability channels only). */
 export async function handleSocialQueueAction(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the social queue store is not configured' } };
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
-  const { auth, deny } = await gate(request, env, { fetchImpl, authorize });
+  const { auth, deny } = await gate(request, env, { fetchImpl, authorize, allowCookie });
   if (deny) return deny;
 
   let payload;

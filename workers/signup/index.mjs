@@ -1807,52 +1807,29 @@ export default {
         }
       }
 
-      // SOW-058: the superadmin syndication tracker (admin read) + cancel (superadmin only). Fail-closed via the
-      // overrides mirror; never cached, varied on the bearer.
-      if (pathname === '/membership/syndication') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'GET') {
-          const r = await handleSyndicationTracker(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-      if (pathname === '/membership/syndication/approve') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'POST') {
-          const r = await handleSyndicationApprove(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-      if (pathname === '/membership/syndication/cancel') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'POST') {
-          const r = await handleSyndicationCancel(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-      // SOW-121: the superadmin Social Queue (manual-assist worklist). GET the pending + done tasks; POST an
-      // action (done/delete). Fail-closed via the overrides mirror + superadmin role; never cached.
-      if (pathname === '/membership/social-queue') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'GET') {
-          const r = await handleSocialQueueGet(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-        if (method === 'POST') {
-          const r = await handleSocialQueueAction(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-      // SOW-088: the superadmin "Manually Syndicate" rail (GET readiness/templates, POST direct post now).
-      if (pathname === '/membership/syndicate-now') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'GET') {
-          const r = await handleSyndicateNowInfo(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-        if (method === 'POST') {
-          const r = await handleSyndicateNow(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+      // SOW-058: the superadmin syndication tracker (admin read) + approve/cancel (superadmin only), the SOW-121
+      // Social Queue and the SOW-088 "Manually Syndicate" rail. Fail-closed via the overrides mirror; never cached.
+      // sow-399: syndication management moved from the extension to the WEBSITE, which signs in by cookie. So these
+      // routes take credentialed CORS and pass allowCookie; a cookie POST must clear the double-submit CSRF gate
+      // (resolveIdentity). A bearer token (the agent server) still works. Vary keeps Origin (credentialed CORS
+      // reflects it) and adds Cookie, since the answer now depends on either credential.
+      {
+        const SYNDICATION_ROUTES = {
+          '/membership/syndication': { GET: handleSyndicationTracker },
+          '/membership/syndication/approve': { POST: handleSyndicationApprove },
+          '/membership/syndication/cancel': { POST: handleSyndicationCancel },
+          '/membership/social-queue': { GET: handleSocialQueueGet, POST: handleSocialQueueAction },
+          '/membership/syndicate-now': { GET: handleSyndicateNowInfo, POST: handleSyndicateNow },
+        };
+        const verbs = SYNDICATION_ROUTES[pathname];
+        if (verbs) {
+          const cors = corsHeaders(request, env, { credentials: true, methods: `${Object.keys(verbs).join(', ')}, OPTIONS` });
+          if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+          const handler = verbs[method];
+          if (handler) {
+            const r = await handler(request, env, { allowCookie: true });
+            return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Origin, Authorization, Cookie' });
+          }
         }
       }
 

@@ -4,6 +4,8 @@
 //   POST /membership/syndication/cancel     -> reject/cancel a pending or approved item (SUPERADMIN only)
 // All gate fail-closed via the reconcile-written overrides mirror (authorizeAdmin), so a missing/stale mirror or a
 // non-admin token is denied. Approve + cancel additionally require the superadmin role. Pure over injected deps.
+// sow-399: the routes pass allowCookie so the WEBSITE admin page (cookie session; CSRF on the POSTs, enforced in
+// resolveIdentity) reaches them as well as a bearer token. The role checks are unchanged.
 
 import { authorizeAdmin } from './membership-admin.mjs';
 import { ROLE } from '../../membership/overrides-core.mjs';
@@ -27,9 +29,9 @@ function bucketize(items, now) {
 
 /** GET the four-bucket queue view for the superadmin dashboard (admin/superadmin). */
 export async function handleSyndicationTracker(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, limit = 500 } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, limit = 500, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
-  const auth = await authorize(request, env, { fetchImpl });
+  const auth = await authorize(request, env, { fetchImpl, allowCookie });
   if (!auth.ok) return auth;
   const items = await listAll(kv, { limit });
   return { status: 200, body: { ok: true, ...bucketize(items, now) } };
@@ -37,10 +39,10 @@ export async function handleSyndicationTracker(request, env, deps = {}) {
 
 /** POST cancel a pending item (SUPERADMIN only). Idempotent: an already-terminal item returns cancelled:false. */
 export async function handleSyndicationCancel(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
-  const auth = await authorize(request, env, { fetchImpl });
+  const auth = await authorize(request, env, { fetchImpl, allowCookie });
   if (!auth.ok) return auth;
   if (auth.role !== ROLE.superadmin) return { status: 403, body: { error: 'forbidden', message: 'superadmin access is required to cancel syndication' } };
 
@@ -65,10 +67,10 @@ export async function handleSyndicationCancel(request, env, deps = {}) {
  * is still not-terminal) so the drain finds it.
  */
 export async function handleSyndicationApprove(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
-  const auth = await authorize(request, env, { fetchImpl });
+  const auth = await authorize(request, env, { fetchImpl, allowCookie });
   if (!auth.ok) return auth;
   if (auth.role !== ROLE.superadmin) return { status: 403, body: { error: 'forbidden', message: 'superadmin access is required to approve syndication' } };
 

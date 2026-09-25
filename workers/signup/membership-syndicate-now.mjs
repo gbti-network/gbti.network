@@ -40,8 +40,9 @@ const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'bluesky', 'devto', 
 // secret, and a mismatch there silently stops every project announcement reaching Discord.
 const FEATURED_ENV = { post: 'DISCORD_CHANNEL_POSTS', project: 'DISCORD_CHANNEL_PRODUCTS', prompt: 'DISCORD_CHANNEL_PROMPTS', share: 'DISCORD_CHANNEL_SHARES' };
 
-async function gate(request, env, { fetchImpl, authorize }) {
-  const auth = await authorize(request, env, { fetchImpl });
+// sow-399: allowCookie lets the website (cookie session, CSRF on POST) through the same gate as a bearer token.
+async function gate(request, env, { fetchImpl, authorize, allowCookie = false }) {
+  const auth = await authorize(request, env, { fetchImpl, allowCookie });
   if (!auth.ok) return { deny: auth };
   if (auth.role !== ROLE.superadmin) {
     return { deny: { status: 403, body: { error: 'forbidden', message: 'superadmin access is required to syndicate manually' } } };
@@ -51,9 +52,9 @@ async function gate(request, env, { fetchImpl, authorize }) {
 
 /** GET: readiness + templates + the category channel map, one call for the whole popup. */
 export async function handleSyndicateNowInfo(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, fetchImpl = globalThis.fetch, authorize = authorizeAdmin } = deps;
+  const { kv = env?.SIGNUP_KV, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
-  const g = await gate(request, env, { fetchImpl, authorize });
+  const g = await gate(request, env, { fetchImpl, authorize, allowCookie });
   if (g.deny) return g.deny;
 
   const cfg = await readSyndicationConfig(kv);
@@ -135,10 +136,10 @@ async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe,
 }
 
 export async function handleSyndicateNow(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, postDiscord = postToChannel, makeStripe = createStripeClient, makeDiscord = createDiscordClient } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, postDiscord = postToChannel, makeStripe = createStripeClient, makeDiscord = createDiscordClient, allowCookie = false } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
-  const g = await gate(request, env, { fetchImpl, authorize });
+  const g = await gate(request, env, { fetchImpl, authorize, allowCookie });
   if (g.deny) return g.deny;
 
   let payload;
