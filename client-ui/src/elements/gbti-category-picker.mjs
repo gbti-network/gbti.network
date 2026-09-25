@@ -3,6 +3,11 @@
 // both hosts: the share composer (vocab="topics", the share topics under the Categories screen's headings) and the
 // editor's Category field (vocab="tree", the content category tree, chosen as a full path).
 //
+// sow-408 (owner-approved canvas "Share Category Tree", 2026-09-25): the topics read as a two-level tree. Each group
+// is a parent row, pinned while its topics scroll, with its size ("24", or "2 of 9" while searching); the topics sit
+// one level in on the tree's elbow connector; the closed picker names the group, "DevOps — Hosting". What a share
+// stores is unchanged: still the topic key.
+//
 // It loads its own vocabulary from the public gbti.network JSON (/topics.json, /taxonomy.json), one fetch per page,
 // and never touches the client, so a client broadcast never re-renders it mid-search. It opens IN the flow of the
 // page rather than floating, so the share dialog and the extension panel cannot clip it.
@@ -69,7 +74,16 @@ const CSS = `
     box-shadow:0 0 0 3px var(--green-tint); background:var(--panel); color:var(--fg); outline:none; }
   .srch::placeholder { color:var(--fg-mute); }
   .list { max-height:288px; overflow-y:auto; margin-top:6px; display:flex; flex-direction:column; gap:1px; }
-  .grp { padding:10px 12px 4px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--fg-mute); }
+  /* sow-408: a topic group is a parent row that stays pinned while its own topics scroll under it (the owner's
+     screenshot, scrolled mid-group, had no heading in view). Glass makes --panel translucent, so the pinned row frosts
+     what passes beneath it; flat defines no --glass-blur and it is a no-op. */
+  .sec { display:flex; flex-direction:column; gap:1px; padding-bottom:6px; }
+  .grp { position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:8px; margin-bottom:2px; padding:9px 12px 7px;
+    font-size:14px; font-weight:700; color:var(--fg); background:var(--panel); border-bottom:1px solid var(--line); cursor:default;
+    -webkit-backdrop-filter:var(--glass-blur, none); backdrop-filter:var(--glass-blur, none); }
+  .gl { flex:1; min-width:0; }
+  .gc { font-family:${MONO}; font-size:11px; font-weight:500; color:var(--fg-mute); }
+  .sec .opt { scroll-margin-top:40px; }
   .opt { display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:8px; font-size:14px; line-height:1.35; font-weight:500; color:var(--fg); cursor:pointer; }
   .opt.top { font-weight:650; }
   .opt.muted { color:var(--fg-mute); }
@@ -189,17 +203,29 @@ class GbtiCategoryPicker extends GbtiElement {
     if (this._active >= options.length) this._active = options.length - 1;
     const tree = this._vocab.kind === 'tree';
     const q = this._query;
+    const searching = Boolean(String(q ?? '').trim());
     let i = -1;
-    list.innerHTML = options.length ? rows.map((r) => {
-      if (r.type === 'group') return `<div class="grp" role="presentation">${esc(r.label)}</div>`;
+    let inSec = false;
+    // sow-408: a topic group opens a section (role="group", named by its label) whose header is pinned; the header is
+    // hidden from assistive tech because the group's own name already says it. Topics sit one level in, on the same
+    // elbow connector as the tree, and a tree keeps its 20px per level.
+    const html = rows.map((r) => {
+      if (r.type === 'group') {
+        const open = `${inSec ? '</div>' : ''}<div class="sec" role="group" aria-label="${esc(r.label)}">`;
+        inSec = true;
+        return `${open}<div class="grp" aria-hidden="true"><span class="gl">${esc(r.label)}</span>`
+          + `<span class="gc">${searching ? `${r.count} of ${r.total}` : r.total}</span></div>`;
+      }
       i += 1;
       const sel = r.key === this._value;
       const p = highlightParts(r.label, r.muted ? '' : q);
       const cls = `opt${sel ? ' sel' : ''}${r.muted ? ' muted' : ''}${tree && r.depth === 0 ? ' top' : ''}`;
-      return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${12 + r.depth * 20}px">`
-        + `${tree && r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ''}`
+      const pad = tree ? 12 + r.depth * 20 : (r.depth ? 20 : 12);
+      return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">`
+        + `${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ''}`
         + `<span class="lb">${esc(p.pre)}${p.mid ? `<mark>${esc(p.mid)}</mark>` : ''}${esc(p.post)}</span>${sel ? CHECK : ''}</div>`;
-    }).join('') : '<div class="empty">Nothing matches that search.</div>';
+    }).join('') + (inSec ? '</div>' : '');
+    list.innerHTML = options.length ? html : '<div class="empty">Nothing matches that search.</div>';
     this._paintActive(true);
   }
 

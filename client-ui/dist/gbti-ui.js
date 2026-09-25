@@ -5812,11 +5812,13 @@ ${listStyleProseCss(".doc-blocks")}
     const rows = [];
     const options = [];
     const topics = vocab && Array.isArray(vocab.topics) ? vocab.topics : [];
-    for (const g of groupTopics(filterTopics(topics, q), vocab && vocab.groupOrder)) {
+    const order = vocab && vocab.groupOrder;
+    const totals = new Map(groupTopics(topics, order).map((g) => [g.group, g.topics.length]));
+    for (const g of groupTopics(filterTopics(topics, q), order)) {
       if (!g.topics.length) continue;
-      if (g.group) rows.push({ type: "group", label: g.group });
+      if (g.group) rows.push({ type: "group", label: g.group, count: g.topics.length, total: totals.get(g.group) ?? g.topics.length });
       for (const t of g.topics) {
-        const o = { type: "option", key: t.key, label: t.label, depth: 0, muted: false };
+        const o = { type: "option", key: t.key, label: t.label, depth: g.group ? 1 : 0, muted: false, ...g.group ? { group: g.group } : {} };
         rows.push(o);
         options.push(o);
       }
@@ -5833,7 +5835,7 @@ ${listStyleProseCss(".doc-blocks")}
       return n ? { state: "known", crumbs: n.crumbs, leaf: n.label } : { state: "unknown", crumbs: [], leaf: raw };
     }
     const t = (vocab.topics || []).find((x) => x.key === v);
-    return t ? { state: "known", crumbs: [], leaf: t.label } : { state: "unknown", crumbs: [], leaf: v };
+    return t ? { state: "known", crumbs: t.group ? [t.group] : [], leaf: t.label } : { state: "unknown", crumbs: [], leaf: v };
   }
   function moveActive(index, dir, length) {
     if (!length) return -1;
@@ -5896,7 +5898,16 @@ ${listStyleProseCss(".doc-blocks")}
     box-shadow:0 0 0 3px var(--green-tint); background:var(--panel); color:var(--fg); outline:none; }
   .srch::placeholder { color:var(--fg-mute); }
   .list { max-height:288px; overflow-y:auto; margin-top:6px; display:flex; flex-direction:column; gap:1px; }
-  .grp { padding:10px 12px 4px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--fg-mute); }
+  /* sow-408: a topic group is a parent row that stays pinned while its own topics scroll under it (the owner's
+     screenshot, scrolled mid-group, had no heading in view). Glass makes --panel translucent, so the pinned row frosts
+     what passes beneath it; flat defines no --glass-blur and it is a no-op. */
+  .sec { display:flex; flex-direction:column; gap:1px; padding-bottom:6px; }
+  .grp { position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:8px; margin-bottom:2px; padding:9px 12px 7px;
+    font-size:14px; font-weight:700; color:var(--fg); background:var(--panel); border-bottom:1px solid var(--line); cursor:default;
+    -webkit-backdrop-filter:var(--glass-blur, none); backdrop-filter:var(--glass-blur, none); }
+  .gl { flex:1; min-width:0; }
+  .gc { font-family:${MONO}; font-size:11px; font-weight:500; color:var(--fg-mute); }
+  .sec .opt { scroll-margin-top:40px; }
   .opt { display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:8px; font-size:14px; line-height:1.35; font-weight:500; color:var(--fg); cursor:pointer; }
   .opt.top { font-weight:650; }
   .opt.muted { color:var(--fg-mute); }
@@ -6033,15 +6044,23 @@ ${listStyleProseCss(".doc-blocks")}
       if (this._active >= options.length) this._active = options.length - 1;
       const tree = this._vocab.kind === "tree";
       const q = this._query;
+      const searching = Boolean(String(q ?? "").trim());
       let i = -1;
-      list.innerHTML = options.length ? rows.map((r) => {
-        if (r.type === "group") return `<div class="grp" role="presentation">${esc(r.label)}</div>`;
+      let inSec = false;
+      const html = rows.map((r) => {
+        if (r.type === "group") {
+          const open = `${inSec ? "</div>" : ""}<div class="sec" role="group" aria-label="${esc(r.label)}">`;
+          inSec = true;
+          return `${open}<div class="grp" aria-hidden="true"><span class="gl">${esc(r.label)}</span><span class="gc">${searching ? `${r.count} of ${r.total}` : r.total}</span></div>`;
+        }
         i += 1;
         const sel = r.key === this._value;
         const p = highlightParts(r.label, r.muted ? "" : q);
         const cls = `opt${sel ? " sel" : ""}${r.muted ? " muted" : ""}${tree && r.depth === 0 ? " top" : ""}`;
-        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${12 + r.depth * 20}px">${tree && r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc(p.pre)}${p.mid ? `<mark>${esc(p.mid)}</mark>` : ""}${esc(p.post)}</span>${sel ? CHECK : ""}</div>`;
-      }).join("") : '<div class="empty">Nothing matches that search.</div>';
+        const pad = tree ? 12 + r.depth * 20 : r.depth ? 20 : 12;
+        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc(p.pre)}${p.mid ? `<mark>${esc(p.mid)}</mark>` : ""}${esc(p.post)}</span>${sel ? CHECK : ""}</div>`;
+      }).join("") + (inSec ? "</div>" : "");
+      list.innerHTML = options.length ? html : '<div class="empty">Nothing matches that search.</div>';
       this._paintActive(true);
     }
     _paintActive(scroll) {

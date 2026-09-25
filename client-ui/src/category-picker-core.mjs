@@ -40,6 +40,10 @@ export function highlightParts(label, query) {
 /**
  * The rows a picker shows for a query, and the choosable options among them, in order.
  *   topics: a heading row per group (the Categories screen's order), then that group's matching topics.
+ *           sow-408 (owner, 2026-09-25: "not heigharchical like it is (should be)"): the topics read as a two-level
+ *           tree. A group row carries `count` (its matches) and `total` (its size), and a topic under a group is
+ *           depth 1 with its `group`. A group row is never an option, so the arrow keys never land on one. A payload
+ *           with no groups keeps the flat depth-0 list.
  *   tree:   every node that matches (by label or its own key), plus its ancestors so a match is never shown out of
  *           context. An ancestor kept only for context is `muted`, and is still choosable (a path may stop anywhere).
  * vocab is { kind: 'topics', topics, groupOrder } or { kind: 'tree', nodes }. Returns { rows, options }.
@@ -62,11 +66,13 @@ export function pickerRows(vocab, query) {
   const rows = [];
   const options = [];
   const topics = vocab && Array.isArray(vocab.topics) ? vocab.topics : [];
-  for (const g of groupTopics(filterTopics(topics, q), vocab && vocab.groupOrder)) {
+  const order = vocab && vocab.groupOrder;
+  const totals = new Map(groupTopics(topics, order).map((g) => [g.group, g.topics.length]));
+  for (const g of groupTopics(filterTopics(topics, q), order)) {
     if (!g.topics.length) continue;
-    if (g.group) rows.push({ type: 'group', label: g.group });
+    if (g.group) rows.push({ type: 'group', label: g.group, count: g.topics.length, total: totals.get(g.group) ?? g.topics.length });
     for (const t of g.topics) {
-      const o = { type: 'option', key: t.key, label: t.label, depth: 0, muted: false };
+      const o = { type: 'option', key: t.key, label: t.label, depth: g.group ? 1 : 0, muted: false, ...(g.group ? { group: g.group } : {}) };
       rows.push(o);
       options.push(o);
     }
@@ -78,7 +84,7 @@ export function pickerRows(vocab, query) {
  * What the closed picker shows for its value: { state, crumbs, leaf }.
  *   empty    nothing chosen
  *   loading  a value, before the vocabulary arrives (shown as written, never as unknown)
- *   known    found: the tree shows its parents as crumbs
+ *   known    found: the tree shows its parents as crumbs, and a topic its group (sow-408), "DevOps — Hosting"
  *   unknown  a stored value the vocabulary does not have. It is SHOWN, never dropped, so an item saved before a
  *            category was renamed tells its author instead of silently losing its category.
  */
@@ -92,7 +98,7 @@ export function valueDisplay(vocab, value) {
     return n ? { state: 'known', crumbs: n.crumbs, leaf: n.label } : { state: 'unknown', crumbs: [], leaf: raw };
   }
   const t = (vocab.topics || []).find((x) => x.key === v);
-  return t ? { state: 'known', crumbs: [], leaf: t.label } : { state: 'unknown', crumbs: [], leaf: v };
+  return t ? { state: 'known', crumbs: t.group ? [t.group] : [], leaf: t.label } : { state: 'unknown', crumbs: [], leaf: v };
 }
 
 /** Move the active option by `dir` (+1 / -1), clamped to the list (no wrap). -1 when there is nothing to move to. */

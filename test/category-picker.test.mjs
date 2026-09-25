@@ -64,6 +64,81 @@ test('topics are grouped under their headings in the given order, and a search d
   assert.deepEqual(hit.rows.map((r) => r.type === 'group' ? `# ${r.label}` : r.key), ['# AI', 'llm']);
 });
 
+// ---- sow-408: the topics read as a two-level tree ----
+
+test('sow-408: a group row carries its size and its matches, and its topics sit one level in', () => {
+  const all = pickerRows(TOPICS, '');
+  assert.deepEqual(all.rows.filter((r) => r.type === 'group').map((r) => [r.label, r.count, r.total]), [['DevOps', 2, 2], ['AI', 2, 2]]);
+  assert.deepEqual(all.options.map((o) => [o.key, o.depth, o.group]), [['docker', 1, 'DevOps'], ['node', 1, 'DevOps'], ['ai', 1, 'AI'], ['llm', 1, 'AI']]);
+  const hit = pickerRows(TOPICS, 'll');
+  assert.deepEqual(hit.rows.filter((r) => r.type === 'group').map((r) => [r.label, r.count, r.total]), [['AI', 1, 2]], 'the total is the whole group, not the matches');
+});
+
+test('sow-408: a group row is never an option, so the arrow keys can only land on topics', () => {
+  for (const q of ['', 'll', 'o']) {
+    const { rows, options } = pickerRows(TOPICS, q);
+    assert.ok(options.every((o) => o.type === 'option'), `no group among the options for "${q}"`);
+    assert.equal(options.length, rows.filter((r) => r.type === 'option').length);
+  }
+});
+
+test('sow-408: a payload without groups keeps the flat list it had', () => {
+  const flat = { kind: 'topics', groupOrder: [], topics: [{ key: 'go', label: 'Go' }, { key: 'rust', label: 'Rust' }] };
+  const { rows, options } = pickerRows(flat, '');
+  assert.equal(rows.some((r) => r.type === 'group'), false);
+  assert.deepEqual(options.map((o) => [o.key, o.depth, 'group' in o]), [['go', 0, false], ['rust', 0, false]]);
+  assert.deepEqual(valueDisplay(flat, 'go'), { state: 'known', crumbs: [], leaf: 'Go' });
+});
+
+// The element's list, rendered in node: $ hands back a stand-in list and nothing else exists.
+function renderList(vocab, attrs, { query = '', value = '' } = {}) {
+  const el = picker(vocab, attrs);
+  const list = { innerHTML: '' };
+  el.$ = (sel) => (sel === '.list' ? list : null);
+  el.$$ = () => [];
+  el._query = query;
+  el._value = value;
+  el._renderList();
+  return list.innerHTML;
+}
+
+test('sow-408: each group renders as a named section with a pinned header holding its count', () => {
+  const html = renderList(TOPICS, { vocab: 'topics' }, { value: 'node' });
+  assert.equal((html.match(/<div class="sec" role="group" aria-label="/g) || []).length, 2);
+  const devops = html.slice(html.indexOf('aria-label="DevOps"'), html.indexOf('aria-label="AI"'));
+  assert.match(devops, /<div class="grp" aria-hidden="true"><span class="gl">DevOps<\/span><span class="gc">2<\/span><\/div>/);
+  assert.match(devops, /data-i="0"[^>]*style="padding-left:20px"><span class="br" aria-hidden="true"><\/span><span class="lb">Docker/, 'Docker sits one level in, inside DevOps');
+  assert.match(devops, /class="opt sel"[^>]*aria-selected="true"/, 'the chosen topic is marked inside its group');
+  assert.equal((html.match(/<div/g) || []).length, (html.match(/<\/div>/g) || []).length, 'every section is closed');
+  assert.match(renderList(TOPICS, { vocab: 'topics' }, { query: 'll' }), /<span class="gc">1 of 2<\/span>/, 'a search says how many of the group match');
+});
+
+test('sow-408: the tree is untouched: no sections, 20px per level, the elbow only below the top', () => {
+  const html = renderList({ kind: 'tree', nodes: treeNodesFromJson(TREE) }, { vocab: 'tree' });
+  assert.doesNotMatch(html, /class="sec"|class="grp"/);
+  assert.match(html, /class="opt top"[^>]*style="padding-left:12px"><span class="lb">/);
+  assert.match(html, /style="padding-left:32px"><span class="br"/);
+});
+
+test('sow-408: the header is pinned, frosted under Glass, and keyboard movement never parks a row beneath it', () => {
+  const src = read('client-ui/src/elements/gbti-category-picker.mjs');
+  assert.match(src, /\.grp \{ position:sticky; top:0; z-index:1;/);
+  assert.match(src, /background:var\(--panel\);[^}]*backdrop-filter:var\(--glass-blur, none\); \}/);
+  assert.match(src, /\.sec \.opt \{ scroll-margin-top:40px; \}/);
+});
+
+test('sow-408: the closed picker names the group, on screen and to a screen reader', () => {
+  const el = picker(TOPICS, { vocab: 'topics', 'aria-label': 'Category' });
+  let out = '';
+  el.css = () => '';
+  el.set = (h) => { out = h; };
+  el.on = () => {};
+  el.value = 'docker';
+  el.render();
+  assert.match(out, new RegExp(`<span class="crumb">DevOps${PATH_SEP}</span><span class="leaf">Docker</span>`));
+  assert.match(out, /aria-label="Category: DevOps, Docker"/);
+});
+
 // ---- what the closed picker says ----
 
 test('the closed picker shows a full path, and never drops a value it does not know', () => {
@@ -72,7 +147,8 @@ test('the closed picker shows a full path, and never drops a value it does not k
   assert.deepEqual(valueDisplay(tree, 'devops/kubernetes'), { state: 'unknown', crumbs: [], leaf: `devops${PATH_SEP}kubernetes` });
   assert.deepEqual(valueDisplay(null, 'ai/llms'), { state: 'loading', crumbs: [], leaf: `ai${PATH_SEP}llms` }, 'not "unknown" while loading');
   assert.equal(valueDisplay(tree, '').state, 'empty');
-  assert.deepEqual(valueDisplay(TOPICS, 'docker'), { state: 'known', crumbs: [], leaf: 'Docker' });
+  // sow-408: a topic now names its group, so the closed picker reads "DevOps — Docker" (was crumbs: []).
+  assert.deepEqual(valueDisplay(TOPICS, 'docker'), { state: 'known', crumbs: ['DevOps'], leaf: 'Docker' });
   // Owner ruling 2026-09-24: an em dash is allowed as a separator inside a dropdown or selector, and the path uses it.
   assert.equal(PATH_SEP, ' — ', 'the levels of a path are separated by a spaced em dash');
   assert.equal(valueDisplay(TOPICS, 'retired-topic').state, 'unknown');
