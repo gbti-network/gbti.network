@@ -81,7 +81,6 @@ const CSS = `
   .pstub-tag { display:inline-block; font:700 10px/1 var(--font-mono, ui-monospace, monospace); letter-spacing:.09em; text-transform:uppercase; color:var(--s-amber-fg); }
   .pstub-title { margin-top:7px; font-size:14.5px; font-weight:700; color:var(--fg); }
   .pstub-note { margin:5px 0 0; font-size:13px; line-height:1.5; color:var(--muted); }
-  .pstub-link { color:var(--brand); font-weight:600; }
 `;
 
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a || 'A member');
@@ -188,7 +187,7 @@ class GbtiSharesFeed extends GbtiElement {
     // sow-224: an honest "in the publishing queue" stub for each Share this member just posted, prepended above
     // the live cards and dropped once the published item lands in the stream (dedupe by the composite slug).
     const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
-    const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join('');
+    const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join('');
     if (!items.length && !pending.length) {
       this.set(this.css(CSS) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
       this.on('.refresh', 'click', () => this.reload());
@@ -210,19 +209,12 @@ class GbtiSharesFeed extends GbtiElement {
     }
   }
 
-  /** sow-224: the host (website vs extension) for the stub's Pull-requests link. The website stamps
-   *  data-signup-base on <html> (BaseLayout); the extension pages do not. */
-  _host() {
-    try { return (typeof document !== 'undefined' && document.documentElement?.dataset?.signupBase) ? 'website' : 'extension'; }
-    catch { return 'extension'; }
-  }
 
-  /** sow-224: one pending stub card (amber "Queued", the shared copy, the per-host Pull-requests link). */
+  /** sow-224: one pending stub card (amber "Queued" and the shared copy; sow-404 removed its Pull requests link). */
   _pendingStubHtml(v) {
-    const link = v.prsHref ? ` <a class="pstub-link" href="${esc(v.prsHref)}">${esc(v.linkText)}</a>.` : '';
     return `<article class="pstub"><span class="pstub-tag">Queued</span>`
       + `<div class="pstub-title">${esc(v.title)}</div>`
-      + `<p class="pstub-note">${esc(v.note)}${link}</p></article>`;
+      + `<p class="pstub-note">${esc(v.note)}</p></article>`;
   }
 
   /** Append the next older page (website cookie adapter only; feature-detected by the nextBefore cursor). */

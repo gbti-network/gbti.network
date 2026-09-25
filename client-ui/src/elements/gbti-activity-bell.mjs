@@ -1,19 +1,19 @@
 // <gbti-activity-bell> (SOW-042 P3): the shell top-bar activity bell. v1 is a CLIENT-SIDE aggregator (no new Worker
-// route): it fans out IN PARALLEL to four existing per-member reads, each fail-closed to [], normalizes them, and
+// route): it fans out IN PARALLEL to existing per-member reads, each fail-closed to [], normalizes them, and
 // (via activity-bell.mjs) computes an unread badge + a grouped dropdown that deep-links into the relevant surface.
-//   - Your PRs    -> client.listPRs() (resolved only)  -> the PR's GitHub URL
+//   - To approve  -> the syndication queue (superadmin only) -> the website's Publishing Activity
 //   - Replies     -> replies on the caller's OWN Shares -> the Shares filter on the unified feed (newtab.html#tab=share)
 //   - Following   -> getFollows() ∩ the activity-index -> the in-extension reader (newtab feed deep-link)
 // Unread = items past a localStorage watermark (gbti-bell-seen), set when the panel opens. A Locked/unknown account
 // hides the bell entirely (no count). Content-item replies + a cross-device server marker defer to P4. Throttle: a
 // light poll + on-open; the replies fan-out over the caller's own Shares is hard-bounded.
+// sow-404 (owner, 2026-09-25): the "Your PRs" group and its client.listPRs() read are gone, for every account.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildBell, markSeen, prTime } from '../activity-bell.mjs';
+import { buildBell, markSeen } from '../activity-bell.mjs';
 import { canSeeShares, toMs } from '../all-merge.mjs';
 import { selectBellEntries } from '../notification-bell-core.mjs'; // sow-386: the In app settings, shared with the website bell
 import { buildReadHash } from '../browse-hash.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221 follow-up: the shared "time ago" + its tooltip
-import { prLifecycle } from '../workspace-core.mjs'; // SOW-072 P2: the shared PR-lifecycle model (rejection never silent)
 
 const SITE = 'https://gbti.network';
 const POLL_MS = 120000; // a light poll (the panel-open refresh is the responsive path)
@@ -108,15 +108,14 @@ class GbtiActivityBell extends GbtiElement {
   }
 
   async _fetchSources(login) {
-    const [prs, following, replies, approvals] = await Promise.all([
-      this._safe(() => this._prs()),
+    const [following, replies, approvals] = await Promise.all([
       this._safe(() => this._following(login)),
       this._safe(() => this._replies(login)),
       // SOW-088: superadmin-only. A non-superadmin never fetches (the Worker queue read is
       // superadmin-gated anyway, and _safe fails closed to []).
       this._role === 'superadmin' ? this._safe(() => this._approvals()) : Promise.resolve([]),
     ]);
-    return { prs, following, replies, approvals };
+    return { following, replies, approvals };
   }
 
   // SOW-088: syndication items HOLDING (pending: still in the cancel window, or a flagged item awaiting
@@ -138,27 +137,6 @@ class GbtiActivityBell extends GbtiElement {
         href: `${SITE}/admin/#tab=syndication&sub=activity`,
       };
     });
-  }
-
-  async _prs() {
-    const { prs = [] } = (await this.client.listPRs()) || {};
-    return prs
-      .filter((p) => p.merged === true || p.state === 'merged' || p.state === 'closed')
-      .map((p) => {
-        // SOW-072 P2: a Declined PR is a "needs attention" signal, never silence. The bell has no gate status, so a
-        // declined item routes to the workspace PR tab where the gate REASON is fetched + shown; an accepted one
-        // links to GitHub as before.
-        const lc = prLifecycle(p, null);
-        return {
-          id: p.number,
-          // Both hosts read the Worker's my-pulls, which carries the merge and close times (sow-221). Unread for
-          // PRs is the seen-set of numbers, so this only orders the rows and says when.
-          ts: prTime(p),
-          title: p.title || `PR #${p.number}`,
-          sub: lc.needsAttention ? 'Declined: open to see why' : 'Accepted',
-          href: lc.needsAttention ? 'workspace.html#tab=prs' : (p.html_url || SITE),
-        };
-      });
   }
 
   // sow-386: the Following group obeys the member's In app settings (selectBellEntries, the same filter the website
@@ -278,8 +256,7 @@ class GbtiActivityBell extends GbtiElement {
     const unreadSet = new Map(); // per-group: the set of unread item ids (for the dot)
     for (const g of (this._bell?.groups || [])) {
       const since = Number(seen[g.key]) || 0;
-      const seenIds = new Set((seen.prsSeen || []).map(String));
-      unreadSet.set(g.key, new Set(g.items.filter((it) => g.key === 'prs' ? !seenIds.has(String(it.id)) : toMs(it.ts) > since).map((it) => it.id)));
+      unreadSet.set(g.key, new Set(g.items.filter((it) => toMs(it.ts) > since).map((it) => it.id)));
     }
     const body = groups.length
       ? groups.map((g) => {

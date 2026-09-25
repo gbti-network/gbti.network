@@ -125,6 +125,19 @@ export function classifyPull(pr = {}, status = null) {
   }
 }
 
+/**
+ * The Overview's "Pull requests" list: the ones needing attention (declined, or still open), at
+ * most six, as display rows, in the order given. Moved out of the element by sow-404, which also made the list a superadmin's alone
+ * (the element passes nothing for anyone else).
+ */
+export function prAttention(prs) {
+  return (Array.isArray(prs) ? prs : [])
+    .map((pr) => ({ pr, c: classifyPull(pr, null) }))
+    .filter(({ pr, c }) => c.label === 'Declined' || (pr.state !== 'closed' && pr.merged !== true)) // declined or still open
+    .slice(0, 6)
+    .map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || '', label: c.label, tone: c.tone }));
+}
+
 // SOW-072 P2: the ONE authoring-lifecycle model, layered on classifyPull so every surface (the composer ack, the
 // workspace PR tab, the activity bell) speaks the same states AND surfaces a rejection with its reason — never
 // silence. Maps a PR + its gate status to:
@@ -466,23 +479,43 @@ export function authoringEnabled(attr, isExtension) {
 }
 
 /**
- * The tabs to render. Drops every tab flagged `authoring` when authoring is off; everything else is untouched,
- * IN ORDER, so curation keeps its position rather than being re-sorted into a different surface.
+ * sow-404 (owner, 2026-09-25): "Only superadmins should be interested in pull requests." A tab flagged
+ * `superadminOnly` shows for the `superadmin` role and nobody else. An absent role (unknown, or a caller that
+ * does not pass one) is not superadmin, so the tab is hidden: the safe direction.
  */
-export function visibleTabs(tabs, authoring) {
+function roleAllows(tab, role) {
+  return !tab?.superadminOnly || role === 'superadmin';
+}
+
+/**
+ * The tabs to render. Drops every tab flagged `authoring` when authoring is off, and every tab flagged
+ * `superadminOnly` unless the role is superadmin (sow-404); everything else is untouched, IN ORDER, so curation
+ * keeps its position rather than being re-sorted into a different surface.
+ */
+export function visibleTabs(tabs, authoring, role) {
   const all = Array.isArray(tabs) ? tabs : [];
-  return authoring ? all.slice() : all.filter((t) => !t?.authoring);
+  return all.filter((t) => (authoring || !t?.authoring) && roleAllows(t, role));
 }
 
 /**
  * The tab to land on, given the tab a caller asked for. A deep link (`#tab=post`) or a persisted tab can name
  * a tab this host no longer shows, and rendering an empty body would look like a broken page rather than a
  * removed feature. Falls back to the first visible tab.
+ *
+ * sow-404: while the role is still UNKNOWN (null or undefined: the Overview's status read has not landed), a
+ * requested `superadminOnly` tab is kept rather than bounced, so a superadmin's `#tab=prs` link does not land on
+ * the Overview just because it arrived first. The tab stays out of the tab strip until the role is known, and a
+ * resolved non-superadmin then falls back like any other hidden tab.
  */
-export function resolveTab(requested, tabs, authoring) {
-  const vis = visibleTabs(tabs, authoring);
+export function resolveTab(requested, tabs, authoring, role) {
+  const vis = visibleTabs(tabs, authoring, role);
   if (!vis.length) return null;
-  return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
+  if (vis.some((t) => t?.id === requested)) return requested;
+  if (role === undefined || role === null) {
+    const want = (Array.isArray(tabs) ? tabs : []).find((t) => t?.id === requested);
+    if (want?.superadminOnly && (authoring || !want.authoring)) return requested;
+  }
+  return vis[0].id;
 }
 
 /**
@@ -501,8 +534,8 @@ export function resolveTab(requested, tabs, authoring) {
  * Earnings, Settings, Admin and the PR attention list, every one of which survives, so hiding the hub would
  * remove working navigation in order to fix a copy problem.
  */
-export function visibleTiles(tiles, tabs, authoring) {
-  const shown = new Set(visibleTabs(tabs, authoring).map((t) => t?.id));
+export function visibleTiles(tiles, tabs, authoring, role) {
+  const shown = new Set(visibleTabs(tabs, authoring, role).map((t) => t?.id)); // sow-404: the role hides superadmin-only tiles too
   return (Array.isArray(tiles) ? tiles : []).filter((t) => {
     const m = /^#tab=([a-z]+)$/.exec(String(t?.href ?? ''));
     return !m || shown.has(m[1]);

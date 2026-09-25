@@ -3005,6 +3005,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return { label: "Proposed", tone: "" };
     }
   }
+  function prAttention(prs) {
+    return (Array.isArray(prs) ? prs : []).map((pr) => ({ pr, c: classifyPull(pr, null) })).filter(({ pr, c }) => c.label === "Declined" || pr.state !== "closed" && pr.merged !== true).slice(0, 6).map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || "", label: c.label, tone: c.tone }));
+  }
   function prEvent(pr = {}) {
     const at = (v) => typeof v === "string" && v ? v : null;
     if (pr.merged === true || pr.state === "merged") {
@@ -3171,17 +3174,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (attr2 === null || attr2 === void 0) return !isExtension;
     return String(attr2).trim().toLowerCase() !== "off";
   }
-  function visibleTabs(tabs, authoring) {
+  function roleAllows(tab, role) {
+    return !tab?.superadminOnly || role === "superadmin";
+  }
+  function visibleTabs(tabs, authoring, role) {
     const all = Array.isArray(tabs) ? tabs : [];
-    return authoring ? all.slice() : all.filter((t) => !t?.authoring);
+    return all.filter((t) => (authoring || !t?.authoring) && roleAllows(t, role));
   }
-  function resolveTab(requested, tabs, authoring) {
-    const vis = visibleTabs(tabs, authoring);
+  function resolveTab(requested, tabs, authoring, role) {
+    const vis = visibleTabs(tabs, authoring, role);
     if (!vis.length) return null;
-    return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
+    if (vis.some((t) => t?.id === requested)) return requested;
+    if (role === void 0 || role === null) {
+      const want = (Array.isArray(tabs) ? tabs : []).find((t) => t?.id === requested);
+      if (want?.superadminOnly && (authoring || !want.authoring)) return requested;
+    }
+    return vis[0].id;
   }
-  function visibleTiles(tiles, tabs, authoring) {
-    const shown = new Set(visibleTabs(tabs, authoring).map((t) => t?.id));
+  function visibleTiles(tiles, tabs, authoring, role) {
+    const shown = new Set(visibleTabs(tabs, authoring, role).map((t) => t?.id));
     return (Array.isArray(tiles) ? tiles : []).filter((t) => {
       const m = /^#tab=([a-z]+)$/.exec(String(t?.href ?? ""));
       return !m || shown.has(m[1]);
@@ -5982,16 +5993,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "approvals", label: "To approve" },
     // superadmin-only: syndication items holding (early approval)
     { key: "replies", label: "Replies" },
-    { key: "following", label: "Following" },
-    { key: "prs", label: "Your PRs" }
+    { key: "following", label: "Following" }
+    // sow-404: 'Your PRs' is gone (see the header).
     // sow-274: the 'To review' group (incoming contributions) is gone with the contribution review surface.
   ];
   function unreadItems(group, items, seen = {}) {
     const list = Array.isArray(items) ? items : [];
-    if (group === "prs") {
-      const seenIds = new Set((seen.prsSeen || []).map(String));
-      return list.filter((it) => !seenIds.has(String(it.id)));
-    }
     const since = Number(seen[group]) || 0;
     return list.filter((it) => toMs(it.ts) > since);
   }
@@ -6004,12 +6011,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function markSeen(sources = {}, now = Date.now()) {
     const seen = {};
-    for (const g of BELL_GROUPS) if (g.key !== "prs") seen[g.key] = now;
-    seen.prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
+    for (const g of BELL_GROUPS) seen[g.key] = now;
     return seen;
-  }
-  function prTime(p) {
-    return toMs(p?.mergedAt) || toMs(p?.closedAt) || toMs(p?.updatedAt) || 0;
   }
 
   // membership/notify-resolve.mjs
@@ -6276,15 +6279,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     async _fetchSources(login) {
-      const [prs, following, replies, approvals] = await Promise.all([
-        this._safe(() => this._prs()),
+      const [following, replies, approvals] = await Promise.all([
         this._safe(() => this._following(login)),
         this._safe(() => this._replies(login)),
         // SOW-088: superadmin-only. A non-superadmin never fetches (the Worker queue read is
         // superadmin-gated anyway, and _safe fails closed to []).
         this._role === "superadmin" ? this._safe(() => this._approvals()) : Promise.resolve([])
       ]);
-      return { prs, following, replies, approvals };
+      return { following, replies, approvals };
     }
     // SOW-088: syndication items HOLDING (pending: still in the cancel window, or a flagged item awaiting
     // approval). Surfacing them lets a superadmin APPROVE early so the item posts on the next drain tick
@@ -6303,21 +6305,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
           // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
           href: `${SITE3}/admin/#tab=syndication&sub=activity`
-        };
-      });
-    }
-    async _prs() {
-      const { prs = [] } = await this.client.listPRs() || {};
-      return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => {
-        const lc10 = prLifecycle(p, null);
-        return {
-          id: p.number,
-          // Both hosts read the Worker's my-pulls, which carries the merge and close times (sow-221). Unread for
-          // PRs is the seen-set of numbers, so this only orders the rows and says when.
-          ts: prTime(p),
-          title: p.title || `PR #${p.number}`,
-          sub: lc10.needsAttention ? "Declined: open to see why" : "Accepted",
-          href: lc10.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE3
         };
       });
     }
@@ -6449,8 +6436,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const unreadSet = /* @__PURE__ */ new Map();
       for (const g of this._bell?.groups || []) {
         const since = Number(seen[g.key]) || 0;
-        const seenIds = new Set((seen.prsSeen || []).map(String));
-        unreadSet.set(g.key, new Set(g.items.filter((it) => g.key === "prs" ? !seenIds.has(String(it.id)) : toMs(it.ts) > since).map((it) => it.id)));
+        unreadSet.set(g.key, new Set(g.items.filter((it) => toMs(it.ts) > since).map((it) => it.id)));
       }
       const body = groups.length ? groups.map((g) => {
         const un = unreadSet.get(g.key) || /* @__PURE__ */ new Set();
@@ -7462,15 +7448,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Your prompts" },
     { key: "project", href: "workspace.html#tab=project", ico: "project", nm: "Projects", sub: "Your projects" },
     { group: "Activity" },
-    { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted" },
+    // sow-404 (owner, 2026-09-25): "Only superadmins should be interested in pull requests."
+    { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted", superOnly: true },
     { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved", sub: "Favorites + collections" },
     { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following", sub: "Members, channels, topics" },
     { key: "earnings", href: "workspace.html#tab=earnings", ico: "coin", nm: "Earnings", sub: "Referrals + rewards" },
     { div: true },
     // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
     // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-    { key: "profile", href: `${SITE5}/workbench/`, ext: true, ico: "user", nm: "Profile", sub: "Your public profile" },
-    // SOW-129, repointed sow-204
+    // SOW-129, repointed sow-204, then (owner, 2026-09-25) "The profile link should go to the members profile": the
+    // member's public page, as the website's avatar menu does. `meProfile` marks it for applyAccount, which fills in
+    // the login; until then it is the member directory, the website's own fallback.
+    { key: "profile", href: `${SITE5}/members/`, ext: true, meProfile: true, ico: "user", nm: "Profile", sub: "Your public profile" },
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
   ];
@@ -7491,7 +7480,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
-        <a class="mi" role="menuitem" href="${SITE5}/workbench/" target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE5}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
@@ -7514,10 +7503,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (r.group) return `<div class="nt-rail-h">${esc3(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
       const on = r.key === active ? " on" : "";
-      const admin = r.adminOnly ? " data-admin-only hidden" : "";
+      const admin = r.adminOnly ? " data-admin-only hidden" : r.superOnly ? " data-super-only hidden" : "";
       const sub = r.sub ? `<span class="sub">${esc3(r.sub)}</span>` : "";
       const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc3(r.nm)}</span>${sub}</span></a>`;
+      const me = r.meProfile ? " data-me-profile" : "";
+      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin}${me} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc3(r.nm)}</span>${sub}</span></a>`;
       const kids2 = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc3(c.nm)}</span></span></a>`).join("");
       return self + kids2;
     }).join("");
@@ -7555,6 +7545,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       root.querySelectorAll("[data-me-av]").forEach((av) => {
         av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
         av.alt = `@${login}`;
+      });
+      const folder2 = status.identity.username || String(login).toLowerCase();
+      root.querySelectorAll("[data-me-profile]").forEach((a) => {
+        a.href = `${SITE5}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc3(login)}</b>`;
@@ -11487,7 +11481,7 @@ ${listStyleProseCss(".doc-blocks")}
           const t = this._tomb.get(tombKey);
           if (t.phase === "error") return `<div class="ctomb err">The deletion failed: ${esc(t.msg || "try again")}. The comment is still live.</div>`;
           if (t.phase === "busy") return `<div class="ctomb">Deleting the comment…</div>`;
-          return `<div class="ctomb">Comment deleted here right away. The removal merges automatically and the public site updates in about 2 to 3 minutes. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
+          return `<div class="ctomb">Comment deleted here right away. The public site updates in about 2 to 3 minutes.</div>`;
         }
         const reply = c.parentId ? " reply" : "";
         const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : "") + (c.visibility === "members" ? `<span class="cbadge">Members</span>` : "") + (c._pending ? `<span class="cbadge">Posting</span>` : "");
@@ -13578,7 +13572,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
         this.staged = false;
-        this._banner(`Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.`);
+        this._banner(`Publishing is not instant. The site rebuilds after you publish, so your change reaches the live site in about 2 to 3 minutes.`);
         const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : "";
         const ownerLabel = (o) => o?.scope === "house" ? "House / GBTI Network" : o?.username || "a member";
         const reassignNote = res?.reassigned ? ` This item moved from ${esc(ownerLabel(res.reassigned.from))} to ${esc(ownerLabel(res.reassigned.to))}.` : "";
@@ -22080,10 +22074,6 @@ ${BLOCKED_PILL_CSS}
   var PENDING_KEY = "gbti-pending-shares";
   var PENDING_MAX_AGE_MS = 15 * 60 * 1e3;
   var PENDING_NOTE = "In the publishing queue. It publishes to the site in about 2 to 3 minutes.";
-  var PENDING_LINK_TEXT = "Track it under Pull requests";
-  function prsHrefFor(host) {
-    return host === "extension" ? "workspace.html#tab=prs" : "/workbench/#tab=prs";
-  }
   function shareSlug(item) {
     const author = item && item.author;
     const id = item && item.id;
@@ -22092,13 +22082,11 @@ ${BLOCKED_PILL_CSS}
   function pendingTitle(item) {
     return item && (item.title || item.shortDescription) || "Your share";
   }
-  function pendingStubView(entry, { host } = {}) {
+  function pendingStubView(entry) {
     return {
       slug: entry.slug,
       title: entry.title || "Your share",
       note: PENDING_NOTE,
-      linkText: PENDING_LINK_TEXT,
-      prsHref: prsHrefFor(host),
       prUrl: entry.prUrl || ""
     };
   }
@@ -22220,7 +22208,6 @@ ${BLOCKED_PILL_CSS}
   .pstub-tag { display:inline-block; font:700 10px/1 var(--font-mono, ui-monospace, monospace); letter-spacing:.09em; text-transform:uppercase; color:var(--s-amber-fg); }
   .pstub-title { margin-top:7px; font-size:14.5px; font-weight:700; color:var(--fg); }
   .pstub-note { margin:5px 0 0; font-size:13px; line-height:1.5; color:var(--muted); }
-  .pstub-link { color:var(--brand); font-weight:600; }
 `;
   var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
   var GbtiSharesFeed = class extends GbtiElement {
@@ -22334,7 +22321,7 @@ ${BLOCKED_PILL_CSS}
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       const items = this._items || [];
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
-      const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p, { host: this._host() }))).join("");
+      const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
         this.set(this.css(CSS31) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
@@ -22358,19 +22345,9 @@ ${BLOCKED_PILL_CSS}
         this.$("[data-list]")?.replaceChildren(list);
       }
     }
-    /** sow-224: the host (website vs extension) for the stub's Pull-requests link. The website stamps
-     *  data-signup-base on <html> (BaseLayout); the extension pages do not. */
-    _host() {
-      try {
-        return typeof document !== "undefined" && document.documentElement?.dataset?.signupBase ? "website" : "extension";
-      } catch {
-        return "extension";
-      }
-    }
-    /** sow-224: one pending stub card (amber "Queued", the shared copy, the per-host Pull-requests link). */
+    /** sow-224: one pending stub card (amber "Queued" and the shared copy; sow-404 removed its Pull requests link). */
     _pendingStubHtml(v) {
-      const link = v.prsHref ? ` <a class="pstub-link" href="${esc(v.prsHref)}">${esc(v.linkText)}</a>.` : "";
-      return `<article class="pstub"><span class="pstub-tag">Queued</span><div class="pstub-title">${esc(v.title)}</div><p class="pstub-note">${esc(v.note)}${link}</p></article>`;
+      return `<article class="pstub"><span class="pstub-tag">Queued</span><div class="pstub-title">${esc(v.title)}</div><p class="pstub-note">${esc(v.note)}</p></article>`;
     }
     /** Append the next older page (website cookie adapter only; feature-detected by the nextBefore cursor). */
     async _loadOlder() {
@@ -24166,7 +24143,7 @@ ${BLOCKED_PILL_CSS}
   var SITE17 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
-    // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
+    // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
     { id: "post", label: "Articles", type: "post", authoring: true },
     { id: "prompt", label: "Prompts", type: "prompt", authoring: true },
     { id: "project", label: "Projects", type: "project", authoring: true },
@@ -24176,7 +24153,8 @@ ${BLOCKED_PILL_CSS}
     // sow-346: <gbti-profile-editor>, one instance kept across renders
     // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
     // type's list (a draft article under Articles), reached by the per-type Drafts filter.
-    { id: "prs", label: "Pull requests" },
+    { id: "prs", label: "Pull requests", superadminOnly: true },
+    // sow-404: "Only superadmins should be interested in pull requests" (owner, 2026-09-25)
     { id: "saved", label: "Saved" },
     // SOW-037: favorites + collections
     { id: "subs", label: "Following" },
@@ -24389,11 +24367,10 @@ ${BLOCKED_PILL_CSS}
         }
       }
       const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null);
-      const [post, prompt2, project, prs, activity, follows, status, shares] = await Promise.all([
+      const [post, prompt2, project, activity, follows, status, shares] = await Promise.all([
         num(this.client?.listContent?.({ type: "post" })),
         num(this.client?.listContent?.({ type: "prompt" })),
         num(this.client?.listContent?.({ type: "project" })),
-        num(this.client?.listPRs?.()),
         num(this.client?.getActivity?.()),
         num(this.client?.getFollows?.()),
         num(this.client?.status?.()),
@@ -24404,18 +24381,22 @@ ${BLOCKED_PILL_CSS}
       this._cache.post = items(post);
       this._cache.prompt = items(prompt2);
       this._cache.project = items(project);
-      this._prs = Array.isArray(prs?.prs) ? prs.prs : this._prs || [];
+      const trusted = !!(status && status.authenticated !== false);
+      const superadmin = trusted && status?.role === "superadmin";
+      if (superadmin) {
+        const prs = await num(this.client?.listPRs?.());
+        this._prs = Array.isArray(prs?.prs) ? prs.prs : this._prs || [];
+      }
       const drafts = [...items(post), ...items(prompt2), ...items(project)].filter((it) => it.status === "draft").length;
       const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
       const followN = Array.isArray(follows) ? follows.length : follows?.following?.length || 0;
-      const attention = (this._prs || []).map((pr) => ({ pr, c: classifyPull(pr, null) })).filter(({ pr, c }) => c.label === "Declined" || pr.state !== "closed" && pr.merged !== true).slice(0, 6).map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || "", label: c.label, tone: c.tone }));
-      const trusted = !!(status && status.authenticated !== false);
+      const attention = superadmin ? prAttention(this._prs) : [];
       this._overview = {
         membership: status?.membership || "unknown",
         role: status?.role || "member",
         paidTier: status?.paidTier || "none",
         // sow-316: the Curator banner reads this; absent -> 'none' -> banner shows, the safe direction
-        counts: { post: items(post).length, prompt: items(prompt2).length, project: items(project).length, share: items(shares).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+        counts: { post: items(post).length, prompt: items(prompt2).length, project: items(project).length, share: items(shares).length, prs: superadmin ? (this._prs || []).length : 0, saved: favs, subs: followN, drafts },
         attention,
         _trusted: trusted
       };
@@ -24426,7 +24407,7 @@ ${BLOCKED_PILL_CSS}
           wbCacheSet(ck, "post", this._cache.post, { allowEmpty: true });
           wbCacheSet(ck, "prompt", this._cache.prompt, { allowEmpty: true });
           wbCacheSet(ck, "project", this._cache.project, { allowEmpty: true });
-          if (Array.isArray(this._prs)) wbCacheSet(ck, "prs", this._prs, { allowEmpty: true });
+          if (superadmin && Array.isArray(this._prs)) wbCacheSet(ck, "prs", this._prs, { allowEmpty: true });
         }
       }
       if (trusted && !this._scopeResolved) {
@@ -24449,6 +24430,10 @@ ${BLOCKED_PILL_CSS}
         }
       }
       if (this._tab === "overview" && !this._editing) this.render();
+      if (trusted && this._tab === "prs" && !this._editing) {
+        if (superadmin) this._swrPrs("prs");
+        else this.render();
+      }
       if (!trusted && !this._overviewRetried) {
         this._overviewRetried = true;
         setTimeout(() => {
@@ -24510,7 +24495,7 @@ ${BLOCKED_PILL_CSS}
         this._loadDrafts(id);
         return;
       }
-      if (id === "prs") {
+      if (id === "prs" && this._role() === "superadmin") {
         await this._swrPrs(id);
       }
     }
@@ -24525,6 +24510,10 @@ ${BLOCKED_PILL_CSS}
     /** SOW-145: whether the superadmin scope toggle should render (a superadmin, from the trusted Overview). */
     _canScope() {
       return this._overview?.role === "superadmin";
+    }
+    /** sow-404: the role from a TRUSTED Overview; undefined before (superadmin-only tabs hidden, a deep link held). */
+    _role() {
+      return this._overview?._trusted ? this._overview.role || "member" : void 0;
     }
     /** SOW-073: the per-member cache key (immutable github_id, falling back to login). Cached after the first read. */
     async _memberKey() {
@@ -24790,8 +24779,8 @@ ${BLOCKED_PILL_CSS}
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
         return;
       }
-      const shown = visibleTabs(TABS, this._authoring());
-      this._tab = resolveTab(this._tab, TABS, this._authoring()) ?? this._tab;
+      const shown = visibleTabs(TABS, this._authoring(), this._role());
+      this._tab = resolveTab(this._tab, TABS, this._authoring(), this._role()) ?? this._tab;
       const tabs = shown.map((t) => {
         const n = this._tabCount(t);
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
@@ -24949,7 +24938,7 @@ ${BLOCKED_PILL_CSS}
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
-    // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
+    // and (superadmins only, sow-404) the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
     _overviewHtml() {
       const ov = this._overview;
       if (!ov) return `<p class="empty">Loading your WorkBench...</p>`;
@@ -24976,16 +24965,15 @@ ${BLOCKED_PILL_CSS}
         { nm: "Settings", href: settingsHref, n: null },
         ...isStaff ? [{ nm: "Admin tools", href: adminHref, n: null }] : []
       ];
-      const tileHtml = visibleTiles(tiles, TABS, this._authoring()).map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
+      const tileHtml = visibleTiles(tiles, TABS, this._authoring(), this._role()).map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
       const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
       const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring());
       const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div><a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
-      const att = ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`;
+      const att = this._role() !== "superadmin" ? "" : '<h3 class="ov-h3">Pull requests</h3>' + (ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`);
       return `<div class="ov">
       <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
       ${trialHtml}<gbti-onboarding-progress></gbti-onboarding-progress>
       <div class="ov-tiles">${tileHtml}</div>
-      <h3 class="ov-h3">Pull requests</h3>
       ${att}
     </div>`;
     }

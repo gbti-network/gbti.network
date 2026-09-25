@@ -1959,7 +1959,8 @@ class GbtiContentEditor extends GbtiElement {
       // just published successfully. The workspace clears its copy on the gbti-published event.
       this.staged = false;
       // SOW-112 QA (owner-directed): the publish-expectation banner appears only AFTER Publish is pressed.
-      this._banner(`Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.`);
+      // sow-404: members no longer see pull requests, so the banner no longer points at them.
+      this._banner(`Publishing is not instant. The site rebuilds after you publish, so your change reaches the live site in about 2 to 3 minutes.`);
       const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : '';
       const ownerLabel = (o) => (o?.scope === 'house' ? 'House / GBTI Network' : (o?.username || 'a member'));
       const reassignNote = res?.reassigned ? ` This item moved from ${esc(ownerLabel(res.reassigned.from))} to ${esc(ownerLabel(res.reassigned.to))}.` : '';

@@ -1,12 +1,12 @@
 // <gbti-workspace> (SOW-033): the member's management surface inside the extension. A tabbed view of everything
-// they own (Articles / Prompts / Projects) plus their pull requests with live gate status, and a pinned profile
+// they own (Articles / Prompts / Projects) plus (superadmins only, sow-404) their pull requests with live gate status, and a pinned profile
 // row. Each content row opens the item IN PLACE in an embedded <gbti-content-editor> (open-inside-the-extension,
 // the SOW-031 tie), reusing the exact gbti-content-list -> editor.load flow. PR rows classify into Proposed /
 // Needs changes / Accepted / Declined via the pure classifyPull helper. Host-agnostic (consumes only the
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
+import { prAttention, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceEditShare, parseWorkspaceDraft, planHashRoute, tabScrollLeft, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner, curatorBanner, audienceTag, authorsIn, filterByAuthor, authorOf, profileStrip, isProfilePath, pageWindow, WORKSPACE_PAGE_SIZE } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { setContentRef } from '../assets.mjs'; // sow-315: pin image URLs to the content commit
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
@@ -24,7 +24,7 @@ import './gbti-profile-editor.mjs'; // sow-346: the Profile tab
 import { readOwnProfile } from '../own-profile.mjs'; // sow-346: the profile strip reads found / absent / failed
 
 const TABS = [
-  { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
+  { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
   { id: 'post', label: 'Articles', type: 'post', authoring: true },
   { id: 'prompt', label: 'Prompts', type: 'prompt', authoring: true },
   { id: 'project', label: 'Projects', type: 'project', authoring: true },
@@ -32,7 +32,7 @@ const TABS = [
   { id: 'profile', label: 'Profile', authoring: true }, // sow-346: <gbti-profile-editor>, one instance kept across renders
   // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
   // type's list (a draft article under Articles), reached by the per-type Drafts filter.
-  { id: 'prs', label: 'Pull requests' },
+  { id: 'prs', label: 'Pull requests', superadminOnly: true }, // sow-404: "Only superadmins should be interested in pull requests" (owner, 2026-09-25)
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
   { id: 'subs', label: 'Following' }, // SOW-037: follows + membership (network members + news channels)
   { id: 'earnings', label: 'Earnings' }, // SOW-052: placeholder for referrals + rewards (SOW-007/008)
@@ -262,11 +262,10 @@ class GbtiWorkspace extends GbtiElement {
       if (cached?.items?.[0]) { this._overview = cached.items[0]; if (this._tab === 'overview' && !this._editing) this.render(); }
     }
     const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null); // tolerate a missing client method (undefined)
-    const [post, prompt, project, prs, activity, follows, status, shares] = await Promise.all([
+    const [post, prompt, project, activity, follows, status, shares] = await Promise.all([
       num(this.client?.listContent?.({ type: 'post' })),
       num(this.client?.listContent?.({ type: 'prompt' })),
       num(this.client?.listContent?.({ type: 'project' })),
-      num(this.client?.listPRs?.()),
       num(this.client?.getActivity?.()),
       num(this.client?.getFollows?.()),
       num(this.client?.status?.()),
@@ -274,23 +273,21 @@ class GbtiWorkspace extends GbtiElement {
     ]);
     const items = (r) => (Array.isArray(r?.items) ? r.items : []);
     this._cache.post = items(post); this._cache.prompt = items(prompt); this._cache.project = items(project);
-    this._prs = Array.isArray(prs?.prs) ? prs.prs : (this._prs || []);
-    const drafts = [...items(post), ...items(prompt), ...items(project)].filter((it) => it.status === 'draft').length;
-    const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
-    const followN = Array.isArray(follows) ? follows.length : (follows?.following?.length || 0);
-    const attention = (this._prs || [])
-      .map((pr) => ({ pr, c: classifyPull(pr, null) }))
-      .filter(({ pr, c }) => c.label === 'Declined' || (pr.state !== 'closed' && pr.merged !== true)) // declined or still open
-      .slice(0, 6)
-      .map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || '', label: c.label, tone: c.tone }));
     // `_trusted` = the status read came back authenticated. Only a trusted snapshot is cached permanently; an
     // untrusted one renders once (so the hub is not blank) but is re-fetched on the next call + the retry below.
     const trusted = !!(status && status.authenticated !== false);
+    // sow-404: pull requests are read for a SUPERADMIN only, once the status read says so (hence not in the batch).
+    const superadmin = trusted && status?.role === 'superadmin';
+    if (superadmin) { const prs = await num(this.client?.listPRs?.()); this._prs = Array.isArray(prs?.prs) ? prs.prs : (this._prs || []); }
+    const drafts = [...items(post), ...items(prompt), ...items(project)].filter((it) => it.status === 'draft').length;
+    const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
+    const followN = Array.isArray(follows) ? follows.length : (follows?.following?.length || 0);
+    const attention = superadmin ? prAttention(this._prs) : []; // sow-404: see prAttention in workspace-core
     this._overview = {
       membership: status?.membership || 'unknown',
       role: status?.role || 'member',
       paidTier: status?.paidTier || 'none', // sow-316: the Curator banner reads this; absent -> 'none' -> banner shows, the safe direction
-      counts: { post: items(post).length, prompt: items(prompt).length, project: items(project).length, share: items(shares).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+      counts: { post: items(post).length, prompt: items(prompt).length, project: items(project).length, share: items(shares).length, prs: superadmin ? (this._prs || []).length : 0, saved: favs, subs: followN, drafts },
       attention,
       _trusted: trusted,
     };
@@ -302,7 +299,7 @@ class GbtiWorkspace extends GbtiElement {
         wbCacheSet(ck, 'post', this._cache.post, { allowEmpty: true });
         wbCacheSet(ck, 'prompt', this._cache.prompt, { allowEmpty: true });
         wbCacheSet(ck, 'project', this._cache.project, { allowEmpty: true });
-        if (Array.isArray(this._prs)) wbCacheSet(ck, 'prs', this._prs, { allowEmpty: true });
+        if (superadmin && Array.isArray(this._prs)) wbCacheSet(ck, 'prs', this._prs, { allowEmpty: true });
       }
     }
     // SOW-145: resolve the content scope now that the caller's REAL role + personal counts are known (only on a
@@ -333,6 +330,8 @@ class GbtiWorkspace extends GbtiElement {
       }
     }
     if (this._tab === 'overview' && !this._editing) this.render();
+    // sow-404: a held #tab=prs deep link, now the role is known: a superadmin's list loads, anyone else falls back.
+    if (trusted && this._tab === 'prs' && !this._editing) { if (superadmin) this._swrPrs('prs'); else this.render(); }
     // Self-heal: if the session looked unauthenticated (a token that may have since recovered/refreshed), retry
     // ONCE shortly so the hub fills in without a manual page refresh.
     if (!trusted && !this._overviewRetried) {
@@ -386,7 +385,7 @@ class GbtiWorkspace extends GbtiElement {
     // Saved / Subscriptions load themselves on connect (render() mounted them): nothing to preload, no extra render.
     if (id === 'saved' || id === 'subs') return;
     if (tab.type) { await this._swrContent(id, tab.type); this._loadDrafts(id); return; } // SOW-106 QA + SOW-085: drafts feed the staged-edits chips AND merge into the list
-    if (id === 'prs') { await this._swrPrs(id); }
+    if (id === 'prs' && this._role() === 'superadmin') { await this._swrPrs(id); } // sow-404: before the role is known, _ensureOverview loads it
   }
 
   // SOW-145: the active scope (member until the Overview resolves it), and the scope-keyed content-cache key so
@@ -395,6 +394,8 @@ class GbtiWorkspace extends GbtiElement {
   _ck(type) { return this._scopeNow() === 'house' ? `house:${type}` : type; }
   /** SOW-145: whether the superadmin scope toggle should render (a superadmin, from the trusted Overview). */
   _canScope() { return this._overview?.role === 'superadmin'; }
+  /** sow-404: the role from a TRUSTED Overview; undefined before (superadmin-only tabs hidden, a deep link held). */
+  _role() { return this._overview?._trusted ? (this._overview.role || 'member') : undefined; }
 
   /** SOW-073: the per-member cache key (immutable github_id, falling back to login). Cached after the first read. */
   async _memberKey() {
@@ -657,12 +658,12 @@ class GbtiWorkspace extends GbtiElement {
       ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082
       return;
     }
-    const shown = visibleTabs(TABS, this._authoring());
+    const shown = visibleTabs(TABS, this._authoring(), this._role()); // sow-404: the role hides superadmin-only tabs
     // A deep link (#tab=post) or a persisted tab can name a tab this host no longer shows; landing on
     // it would paint an empty body, which reads as a broken page rather than a removed feature.
-    this._tab = resolveTab(this._tab, TABS, this._authoring()) ?? this._tab;
+    this._tab = resolveTab(this._tab, TABS, this._authoring(), this._role()) ?? this._tab;
     const tabs = shown.map((t) => {
-      // SOW-085: count badges on the content tabs + Pull requests, from already-loaded
+      // SOW-085: count badges on the content tabs + Pull requests (superadmins, sow-404), from already-loaded
       // data only; hidden while unknown or 0.
       const n = this._tabCount(t);
       const badge = n ? `<span class="tbadge">${esc(n)}</span>` : '';
@@ -876,7 +877,7 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
-  // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
+  // and (superadmins only, sow-404) the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
   _overviewHtml() {
     const ov = this._overview;
     if (!ov) return `<p class="empty">Loading your WorkBench...</p>`;
@@ -905,7 +906,7 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Settings', href: settingsHref, n: null },
       ...(isStaff ? [{ nm: 'Admin tools', href: adminHref, n: null }] : []),
     ];
-    const tileHtml = visibleTiles(tiles, TABS, this._authoring()) // sow-204: see visibleTiles in workspace-core
+    const tileHtml = visibleTiles(tiles, TABS, this._authoring(), this._role()) // sow-204 + sow-404: see visibleTiles in workspace-core
       .map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? '' : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join('');
     const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
     // SOW-075 / sow-316: the banner slot. A trial member (drafts only; publishing is paid) or a paid member below Curator
@@ -914,14 +915,13 @@ class GbtiWorkspace extends GbtiElement {
     const trialHtml = !tb ? ''
       : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div>`
         + `<a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
-    const att = ov.attention.length
+    const att = this._role() !== 'superadmin' ? '' : '<h3 class="ov-h3">Pull requests</h3>' + (ov.attention.length // sow-404: a superadmin's alone
       ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || '#')}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join('')}</ul>`
-      : `<p class="muted">No pull requests need your attention.</p>`;
+      : `<p class="muted">No pull requests need your attention.</p>`);
     return `<div class="ov">
       <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
       ${trialHtml}<gbti-onboarding-progress></gbti-onboarding-progress>
       <div class="ov-tiles">${tileHtml}</div>
-      <h3 class="ov-h3">Pull requests</h3>
       ${att}
     </div>`;
   }

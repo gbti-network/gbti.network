@@ -1,8 +1,9 @@
-// sow-224: the pending-share stub core. Pure store logic (injected clock + store), per-host link, copy.
+// sow-224: the pending-share stub core. Pure store logic (injected clock + store) and copy (sow-404 removed the per-host link).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  shareSlug, pendingTitle, prsHrefFor, pendingStubView,
+  shareSlug, pendingTitle, pendingStubView,
   rememberPending, livePending, dropPublished, clearPending,
   PENDING_NOTE, PENDING_MAX_AGE_MS,
 } from '../client-ui/src/share-pending-stub.mjs';
@@ -28,16 +29,23 @@ test('shareSlug + pendingTitle: composite slug, and the title fallback chain', (
   assert.equal(pendingTitle({}), 'Your share');
 });
 
-test('prsHrefFor + pendingStubView: the PRs link resolves per host and the copy is fixed', () => {
-  assert.equal(prsHrefFor('website'), '/workbench/#tab=prs');
-  assert.equal(prsHrefFor('extension'), 'workspace.html#tab=prs');
-  assert.equal(prsHrefFor(undefined), '/workbench/#tab=prs'); // default to the website link
+// sow-404 (owner, 2026-09-25): the stub used to end with "Track it under Pull requests", linking the member to a
+// tab that is now superadmin-only. The note stays; the link, its text and its per-host href are gone.
+test('pendingStubView: the fixed note, and no Pull requests link', () => {
   const entry = { slug: 'me/abc', title: 'Hello world', prUrl: 'https://github.com/o/r/pull/9' };
-  const web = pendingStubView(entry, { host: 'website' });
-  assert.equal(web.note, PENDING_NOTE);
-  assert.equal(web.prsHref, '/workbench/#tab=prs');
-  assert.equal(web.prUrl, 'https://github.com/o/r/pull/9');
-  assert.equal(pendingStubView(entry, { host: 'extension' }).prsHref, 'workspace.html#tab=prs');
+  const view = pendingStubView(entry);
+  assert.equal(view.note, PENDING_NOTE);
+  assert.equal(view.prUrl, 'https://github.com/o/r/pull/9');
+  assert.equal('prsHref' in view, false);
+  assert.equal('linkText' in view, false);
+});
+
+test('neither renderer links a queued share to Pull requests', () => {
+  for (const f of ['client-ui/src/elements/gbti-shares-feed.mjs', 'src/lib/feed-pending-stub.ts', 'client-ui/src/share-pending-stub.mjs']) {
+    const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.equal(src.includes('Track it under Pull requests'), false, `${f} still carries the link text`);
+    assert.equal(/#tab=prs/.test(src), false, `${f} still links the Pull requests tab`);
+  }
 });
 
 test('rememberPending stores by slug; livePending returns it newest-first', () => {

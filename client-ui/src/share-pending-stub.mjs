@@ -3,7 +3,7 @@
 // After a member posts a Share it moves through fork -> PR -> the sow-005 gate auto-merge -> the Cloudflare
 // Pages deploy, which is a few minutes end to end. The feed must say so honestly rather than presenting the
 // Share as already live (the sow-092 auto-open-reader did the latter). This module is the SHARED, pure core:
-// the copy, the per-host "Pull requests" link, and a small sessionStorage-backed store so the stub survives a
+// the copy and a small sessionStorage-backed store so the stub survives a
 // reload and is evicted when the published item lands. Node-free and dependency-free so BOTH the client-ui
 // shares feed AND the build-time site feed hook use it, and so it is unit-testable with an injected clock and
 // store.
@@ -14,12 +14,8 @@ export const PENDING_MAX_AGE_MS = 15 * 60 * 1000; // backstop: drop a stub after
 // The copy lives in ONE place, mirrored from the gbti-discussion tombstone so every "it is queued" surface
 // reads the same. No numeric promise beyond the deploy's real two to three minutes.
 export const PENDING_NOTE = 'In the publishing queue. It publishes to the site in about 2 to 3 minutes.';
-export const PENDING_LINK_TEXT = 'Track it under Pull requests';
-
-/** The per-host PRs-section link. Website: /workbench/#tab=prs. Extension pages: workspace.html#tab=prs. */
-export function prsHrefFor(host) {
-  return host === 'extension' ? 'workspace.html#tab=prs' : '/workbench/#tab=prs';
-}
+// sow-404 (owner, 2026-09-25): the link to the Pull requests tab is gone. Pull requests are a superadmin-only
+// tab now, so for everyone else the link led to a tab they cannot see. The note alone says what happens next.
 
 /** The composite slug for a Share item: "<author>/<id>". Empty string when either part is missing. */
 export function shareSlug(item) {
@@ -34,13 +30,11 @@ export function pendingTitle(item) {
 }
 
 /** The display data for one pending stub, resolved per host. Pure. */
-export function pendingStubView(entry, { host } = {}) {
+export function pendingStubView(entry) {
   return {
     slug: entry.slug,
     title: entry.title || 'Your share',
     note: PENDING_NOTE,
-    linkText: PENDING_LINK_TEXT,
-    prsHref: prsHrefFor(host),
     prUrl: entry.prUrl || '',
   };
 }

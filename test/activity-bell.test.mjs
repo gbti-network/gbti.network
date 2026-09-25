@@ -1,9 +1,10 @@
 // SOW-042 P3: the pure activity-bell aggregation (client-ui/src/activity-bell.mjs). Covers the SOW P5 contract:
-// an errored/missing source contributes ZERO (never a phantom unread), the per-source watermark (ms for the
-// timestamped groups, a seen-SET for PRs), and markSeen advancing the watermark on panel open.
+// an errored/missing source contributes ZERO (never a phantom unread), the per-source ms watermark, and markSeen
+// advancing the watermark on panel open. sow-404 removed the "Your PRs" group and its seen-SET of PR numbers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBell, unreadItems, markSeen, prTime, BELL_GROUPS } from '../client-ui/src/activity-bell.mjs';
+import { buildBell, unreadItems, markSeen, BELL_GROUPS } from '../client-ui/src/activity-bell.mjs';
+import * as bellModule from '../client-ui/src/activity-bell.mjs';
 
 const T0 = Date.parse('2026-06-10T00:00:00Z');
 const T1 = Date.parse('2026-06-16T00:00:00Z');
@@ -31,10 +32,9 @@ test('buildBell sorts each group newest-first', () => {
 });
 
 test('an errored/missing/non-array source contributes ZERO (no phantom unread)', () => {
-  const out = buildBell({ replies: null, following: undefined, prs: 'oops', approvals: [{ id: 'c1', ts: T1 }] }, {});
+  const out = buildBell({ replies: null, following: undefined, approvals: [{ id: 'c1', ts: T1 }] }, {});
   assert.equal(out.groups.find((g) => g.key === 'replies').unread, 0);
   assert.equal(out.groups.find((g) => g.key === 'following').unread, 0);
-  assert.equal(out.groups.find((g) => g.key === 'prs').unread, 0);
   assert.equal(out.groups.find((g) => g.key === 'approvals').unread, 1); // the one valid item
   assert.equal(out.total, 1);
 });
@@ -47,34 +47,39 @@ test('there is no To review group, and a stray review source counts for nothing'
   assert.equal(out.total, 0);
 });
 
-test('PRs use a seen-SET of ids, not a ms watermark', () => {
-  const prs = [{ id: 101, ts: 101 }, { id: 102, ts: 102 }];
-  assert.equal(unreadItems('prs', prs, {}).length, 2); // none seen
-  assert.equal(unreadItems('prs', prs, { prsSeen: ['101'] }).length, 1); // 101 acknowledged
-  assert.equal(unreadItems('prs', prs, { prsSeen: ['101', '102'] }).length, 0);
+// sow-404 (owner, 2026-09-25): "users do not care about pull requests anymore". The group is gone for every
+// account, superadmins included. These pin it gone, including against a caller that still hands over a `prs` list.
+test('the bell has exactly approvals, replies and following, in that order', () => {
+  assert.deepEqual(BELL_GROUPS.map((g) => g.key), ['approvals', 'replies', 'following']);
+  assert.equal(BELL_GROUPS.some((g) => /\bPRs?\b|pull request/i.test(g.label)), false); // not /pr/: "To approve" contains it
 });
 
-test('PR seen-set tolerates numeric vs string ids', () => {
-  assert.equal(unreadItems('prs', [{ id: 5, ts: 5 }], { prsSeen: [5] }).length, 0);
+test('a stray pull request source shows nothing and counts for nothing', () => {
+  const out = buildBell({ prs: [{ id: 101, ts: T1, title: 'New Share: x', sub: 'Accepted' }] }, {});
+  assert.equal(out.groups.some((g) => g.key === 'prs'), false);
+  assert.equal(out.total, 0, 'a pull request lit the badge');
+});
+
+test('the pull request helpers are gone with the group', () => {
+  assert.equal('prTime' in bellModule, false);
+  assert.equal(unreadItems('prs', [{ id: 5, ts: T1 }], { prsSeen: [5] }).length, 1, 'no seen-set rule is left: a prs list is just timestamps now');
 });
 
 test('an empty watermark makes every timestamped item unread', () => {
   assert.equal(unreadItems('replies', [reply('a', T0), reply('b', T1)], {}).length, 2);
 });
 
-test('markSeen advances the ms sources to now and records the current PR ids', () => {
+test('markSeen advances every group to now and writes no pull request set', () => {
   const sources = { replies: [reply('a', T0)], following: [], prs: [{ id: 7, ts: 7 }, { id: 8, ts: 8 }] };
   const seen = markSeen(sources, T1);
   assert.equal(seen.replies, T1);
   assert.equal(seen.following, T1);
+  assert.equal(seen.approvals, T1);
   assert.equal('review' in seen, false);
-  assert.deepEqual(seen.prsSeen, ['7', '8']);
+  assert.equal('prsSeen' in seen, false, 'sow-404: the pull request seen-set is gone');
+  assert.equal('prs' in seen, false);
   // After marking seen, nothing is unread.
   assert.equal(buildBell(sources, seen).total, 0);
-});
-
-test('markSeen on empty sources yields an empty PR set', () => {
-  assert.deepEqual(markSeen({}, T1).prsSeen, []);
 });
 
 // SOW-088: the superadmin approvals source aggregates + counts unread like any timestamped group.
@@ -92,7 +97,7 @@ test('buildBell counts holding approvals as unread past the watermark', () => {
 // fixture had no approvals. This one puts an item in EVERY group, so a group added later is covered automatically.
 test('markSeen clears every bell group, including approvals and any group added later', () => {
   const sources = {};
-  for (const g of BELL_GROUPS) sources[g.key] = [{ id: g.key === 'prs' ? 41 : `${g.key}:1`, ts: T0, title: 'x', sub: 'y' }];
+  for (const g of BELL_GROUPS) sources[g.key] = [{ id: `${g.key}:1`, ts: T0, title: 'x', sub: 'y' }];
   assert.ok(buildBell(sources, {}).total >= BELL_GROUPS.length, 'control: every group starts unread');
   const out = buildBell(sources, markSeen(sources, T1));
   for (const g of out.groups) assert.equal(g.unread, 0, `${g.key} still unread after Mark all read`);
@@ -100,12 +105,4 @@ test('markSeen clears every bell group, including approvals and any group added 
   // A holding item enqueued AFTER the mark badges again.
   sources.approvals.push({ id: 'syn:new', ts: T1 + 1000, title: 'New', sub: 'z' });
   assert.equal(buildBell(sources, markSeen({ ...sources, approvals: [] }, T1)).total, 1);
-});
-
-test('prTime uses the merge, close or update time, never the PR number', () => {
-  assert.equal(prTime({ number: 312, mergedAt: '2026-09-20T10:00:00Z', closedAt: '2026-09-20T10:00:00Z' }), Date.parse('2026-09-20T10:00:00Z'));
-  assert.equal(prTime({ number: 312, mergedAt: null, closedAt: '2026-09-19T08:00:00Z' }), Date.parse('2026-09-19T08:00:00Z'));
-  assert.equal(prTime({ number: 312, updatedAt: '2026-09-18T08:00:00Z' }), Date.parse('2026-09-18T08:00:00Z'));
-  assert.equal(prTime({ number: 312 }), 0, 'no time known shows no time (a number would read as 1970)');
-  assert.equal(prTime(null), 0);
 });

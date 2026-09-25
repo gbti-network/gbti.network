@@ -68,14 +68,18 @@ const RAIL_WORKBENCH = [
   { key: 'prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Your prompts' },
   { key: 'project', href: 'workspace.html#tab=project', ico: 'project', nm: 'Projects', sub: 'Your projects' },
   { group: 'Activity' },
-  { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted' },
+  // sow-404 (owner, 2026-09-25): "Only superadmins should be interested in pull requests."
+  { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted', superOnly: true },
   { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved', sub: 'Favorites + collections' },
   { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following', sub: 'Members, channels, topics' },
   { key: 'earnings', href: 'workspace.html#tab=earnings', ico: 'coin', nm: 'Earnings', sub: 'Referrals + rewards' },
   { div: true },
   // sow-204: the extension stops being an authoring host, so Profile opens the WEBSITE WorkBench instead of
   // a bundled page. `ext` marks it as leaving the extension, which the renderer turns into target/rel.
-  { key: 'profile', href: `${SITE}/workbench/`, ext: true, ico: 'user', nm: 'Profile', sub: 'Your public profile' }, // SOW-129, repointed sow-204
+  // SOW-129, repointed sow-204, then (owner, 2026-09-25) "The profile link should go to the members profile": the
+  // member's public page, as the website's avatar menu does. `meProfile` marks it for applyAccount, which fills in
+  // the login; until then it is the member directory, the website's own fallback.
+  { key: 'profile', href: `${SITE}/members/`, ext: true, meProfile: true, ico: 'user', nm: 'Profile', sub: 'Your public profile' },
   { key: 'settings', href: 'account.html', ico: 'gear', nm: 'Settings', sub: 'Membership + account' },
   { key: 'admin', href: 'admin.html', ico: 'lock', nm: 'Admin tools', sub: 'Moderation', adminOnly: true },
 ];
@@ -105,7 +109,7 @@ function controlsHtml({ compose = true } = {}) {
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
-        <a class="mi" role="menuitem" href="${SITE}/workbench/" target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
@@ -132,12 +136,14 @@ function railHtml(active, nav = 'workbench') {
     if (r.group) return `<div class="nt-rail-h">${esc(r.group)}</div>`;
     if (r.div) return `<hr class="nt-rail-div" />`;
     const on = r.key === active ? ' on' : '';
-    const admin = r.adminOnly ? ' data-admin-only hidden' : ''; // role-gated after /api/status resolves
+    // Role-gated after /api/status resolves: staff for adminOnly, superadmin for superOnly (sow-404).
+    const admin = r.adminOnly ? ' data-admin-only hidden' : (r.superOnly ? ' data-super-only hidden' : '');
     const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : '';
     // sow-204: an `ext` entry leaves the extension for gbti.network, so it opens in a new tab and never
     // hands the site a window opener over an extension page.
     const ext = r.ext ? ' target="_blank" rel="noopener"' : '';
-    const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
+    const me = r.meProfile ? ' data-me-profile' : '';
+    const self = `<a class="nav-i${on}" data-key="${r.key}"${admin}${me} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
     // SOW-069: a rail item may carry indented child links (WorkBench -> quick deep-links into the workspace tabs).
     const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? ' on' : ''}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc(c.nm)}</span></span></a>`).join('');
     return self + kids;
@@ -187,6 +193,10 @@ function applyAccount(root, status) {
       av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
       av.alt = `@${login}`;
     });
+    // The rail's Profile and the avatar menu's Profile open the member's own public page (owner, 2026-09-25).
+    // The member folder name, as the website's Header does (username, else login).
+    const folder = status.identity.username || String(login).toLowerCase();
+    root.querySelectorAll('[data-me-profile]').forEach((a) => { a.href = `${SITE}/members/${encodeURIComponent(folder)}/`; });
     const head = root.querySelector('[data-me-head]');
     if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
     // The Admin entry lives in BOTH the WorkBench rail and (re-added) the avatar dropdown, so role-gate EVERY

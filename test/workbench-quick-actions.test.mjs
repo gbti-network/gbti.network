@@ -15,7 +15,9 @@ test('the account page New rows open a blank editor (#new=), not the list tab', 
   // the rows are an object list (href: '...'), not markup
   for (const t of ['post', 'project', 'prompt']) assert.ok(src.includes(`href: '/workbench/#new=${t}'`), `#new=${t}`);
   for (const t of ['post', 'project', 'prompt']) assert.ok(!src.includes(`href: '/workbench/#tab=${t}'`), `no list-tab link for ${t}`);
-  for (const t of ['prs', 'saved', 'subs']) assert.ok(src.includes(`href: '/workbench/#tab=${t}'`), `#tab=${t} kept`);
+  for (const t of ['saved', 'subs']) assert.ok(src.includes(`href: '/workbench/#tab=${t}'`), `#tab=${t} kept`);
+  // sow-404: "My pull requests" left the account page; the tab is superadmin-only and reached from the WorkBench.
+  assert.ok(!src.includes(`href: '/workbench/#tab=prs'`), 'no pull request link on the account page');
 });
 
 test('the WorkBench page carries three New buttons, the share bar, the modal and the MCP tile', () => {

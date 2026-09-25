@@ -169,7 +169,8 @@ class GbtiDiscussion extends GbtiElement {
         const t = this._tomb.get(tombKey);
         if (t.phase === 'error') return `<div class="ctomb err">The deletion failed: ${esc(t.msg || 'try again')}. The comment is still live.</div>`;
         if (t.phase === 'busy') return `<div class="ctomb">Deleting the comment…</div>`;
-        return `<div class="ctomb">Comment deleted here right away. The removal merges automatically and the public site updates in about 2 to 3 minutes. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
+        // sow-404: no link to the Pull requests tab; it is superadmin-only now.
+        return `<div class="ctomb">Comment deleted here right away. The public site updates in about 2 to 3 minutes.</div>`;
       }
       const reply = c.parentId ? ' reply' : '';
       const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : '')

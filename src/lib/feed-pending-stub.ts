@@ -17,16 +17,15 @@ function publishedSlugs(list: Element): string[] {
     .filter(Boolean);
 }
 
-function stubEl(view: { slug: string; title: string; note: string; linkText: string; prsHref: string }): HTMLElement {
+function stubEl(view: { slug: string; title: string; note: string }): HTMLElement {
   const art = document.createElement('article');
   art.className = 'feed-item feed-pending nocover';
   art.setAttribute('data-fi', '');
   art.setAttribute('data-pending-slug', view.slug);
-  const link = view.prsHref ? ` <a class="fp-link" href="${escapeHtml(view.prsHref)}">${escapeHtml(view.linkText)}</a>.` : '';
   art.innerHTML = `<div class="feed-main">`
     + `<div class="feed-meta"><span class="fp-tag">Queued</span></div>`
     + `<h2 class="feed-title">${escapeHtml(view.title)}</h2>`
-    + `<p class="feed-ex">${escapeHtml(view.note)}${link}</p>`
+    + `<p class="feed-ex">${escapeHtml(view.note)}</p>` // sow-404: no Pull requests link (a superadmin-only tab now)
     + `</div>`;
   return art;
 }
@@ -35,7 +34,7 @@ function render(list: Element): void {
   list.querySelectorAll('.feed-pending').forEach((n) => n.remove()); // idempotent: clear then re-add
   const pending = dropPublished(publishedSlugs(list), {}).filter((e: any) => e.visibility === 'public');
   for (const entry of pending.slice().reverse()) { // reverse so newest ends up first after each insertBefore
-    list.insertBefore(stubEl(pendingStubView(entry, { host: 'website' })), list.firstChild);
+    list.insertBefore(stubEl(pendingStubView(entry)), list.firstChild);
   }
 }
 

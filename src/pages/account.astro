@@ -17,11 +17,11 @@ import { loadFeedItems } from '../lib/feed-items';
 const GRID = [
   { icon: 'grid', label: 'My Workbench', href: '/workbench/' },
   // sow-225: #new=<type> opens a BLANK editor of that type (the SOW-064 deep link); #tab= would only open the LIST,
-  // which is what these three did for a month. The three rows below stay #tab=, since there is no "new pull request".
+  // which is what these three did for a month. Saved and Following below stay #tab=, since they are lists. sow-404
+  // removed "My pull requests": that tab is superadmin-only now, and superadmins reach it from the WorkBench.
   { icon: 'pencil', label: 'New article', href: '/workbench/#new=post' },
   { icon: 'box', label: 'New product', href: '/workbench/#new=project' },
   { icon: 'terminal', label: 'New prompt', href: '/workbench/#new=prompt' },
-  { icon: 'merge', label: 'My pull requests', href: '/workbench/#tab=prs' },
   { icon: 'heart', label: 'Saved', href: '/workbench/#tab=saved' },
   { icon: 'users', label: 'Following', href: '/workbench/#tab=subs' },
   { icon: 'bell', label: 'Notifications', href: '/account/notifications/' },
