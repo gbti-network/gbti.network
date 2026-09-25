@@ -369,6 +369,11 @@ covers:
     file: 20260925151026-why-are-police-officers-called-cops-2d6a90e0.webp
     sha256: 2d6a90e0db2785b4716461211a75170a157ddc4c1952c2fea72668c9aa73d3cf
     copiedAt: '2026-09-25'
+  gbtilabs/20260925171257-homelabfest:
+    source: https://www.homelabfest.org/images/homelabfest-social.png
+    file: 20260925171257-homelabfest-62e1197c.webp
+    sha256: 62e1197c5f2a54fb42047e07cb9293a1eeeca1024e01159c9660fbb74dad4cf9
+    copiedAt: '2026-09-25'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
