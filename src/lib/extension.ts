@@ -8,7 +8,7 @@ import { WEB_STORE_URL } from './extension-store.mjs';
 export const EXTENSION = {
   name: 'GBTI Network',
   /** Mirrors public/extension/latest.json (written by `npm run build:extension`). */
-  version: '0.5.1',
+  version: '0.5.2',
   /** The Chrome Web Store listing, from src/lib/extension-store.mjs (shared with the packager). */
   webStoreUrl: WEB_STORE_URL,
   /** The install page: what the extension does, and the store button. */
