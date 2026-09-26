@@ -20,6 +20,7 @@
 # Each word: 2 to 40 characters, lowercase letters and digits, single spaces or hyphens between them, so a
 # phrase works and a regular expression does not. The build refuses anything else.
 words:
+  - bomb
   - covid
   - democrat
   - maga
