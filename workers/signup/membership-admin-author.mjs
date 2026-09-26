@@ -244,6 +244,19 @@ function setTemplatesBatch(parsed, { edits } = {}, ctx = {}) {
   return { next: doc, changed };
 }
 
+// sow-415: a validator written in a node-free membership core THROWS on a bad value and returns the bare args,
+// because the site build and the tests call it too. The dispatch below speaks { ok, args } instead. Handed a core
+// validator directly, the dispatch read `built.ok` as undefined, returned a result with no status and no body, and
+// the route answered 200 with an empty reply, which both managers reported as "Done." while nothing was written.
+// That is how the blocked words (sow-372) and the source weights (sow-338) shipped unable to save a single edit.
+// Wrap a core validator in this; never hand one to a row bare.
+function fromCore(validate) {
+  return (payload) => {
+    try { return { ok: true, args: validate(payload) }; }
+    catch (e) { return { ok: false, status: 400, body: { error: 'bad_request', message: e?.message || 'invalid input' } }; }
+  };
+}
+
 const CONFIG_ACTIONS = new Set([
   'quote-add', 'quote-remove', 'quote-toggle',
   'news-source-add', 'news-source-remove', 'news-source-toggle',
@@ -272,13 +285,13 @@ const CONFIG_OP = {
   // above are admin actions on house/news-sources.yml, and a superadmin-only field inside that file would either
   // hand weights to admins or take source edits away from them. house/news-source-weights.yml is pinned to the
   // superadmins in CODEOWNERS and in SUPERADMIN_HOUSE_FILES, so rankForPath agrees with this row.
-  'news-source-weight': { path: 'house/news-source-weights.yml', rank: ROLE_RANK.superadmin, fn: setSourceWeight, input: weightInput, slug: (a) => idSlug(a.id) },
+  'news-source-weight': { path: 'house/news-source-weights.yml', rank: ROLE_RANK.superadmin, fn: setSourceWeight, input: fromCore(weightInput), slug: (a) => idSlug(a.id) },
   // sow-372: the words that keep a story out of the news stream. Superadmin for the same reason as the weights
   // above, and in its own file because one file cannot be owned at two ranks: admins own which publications we
   // read (house/news-sources.yml), superadmins own what we refuse to republish. rankForPath agrees, and
   // test/path-rank.test.mjs holds this hardcode and CODEOWNERS in lockstep with it.
-  'news-banword-add': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: addBanword, input: banwordInput, slug: (a) => idSlug(a.word) },
-  'news-banword-remove': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: removeBanword, input: banwordInput, slug: (a) => idSlug(a.word) },
+  'news-banword-add': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: addBanword, input: fromCore(banwordInput), slug: (a) => idSlug(a.word) },
+  'news-banword-remove': { path: 'house/news-banwords.yml', rank: ROLE_RANK.superadmin, fn: removeBanword, input: fromCore(banwordInput), slug: (a) => idSlug(a.word) },
   // sow-266: what the weekly digest says about membership, and who sponsors it. SUPERADMIN, pinned in CODEOWNERS
   // and in SUPERADMIN_HOUSE_FILES, so rankForPath agrees with these two rows. TWO rows over one file, on purpose:
   // the pitch and the sponsor are edited at different moments by different reasoning, and one row would put a copy
@@ -641,7 +654,13 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     // fail-closed, apply the pure core, re-serialize with the comment; an already-satisfied action is a clean no-op.
     const op = CONFIG_OP[action];
     const built = op.input(payload);
-    if (!built.ok) return { status: built.status, body: built.body };
+    // sow-415: a result that is not an explicit success is a refusal, and one with no status of its own is OUR fault
+    // (a validator of the wrong shape), so it answers 500. Never let a missing status fall through to the route's 200.
+    if (built?.ok !== true) {
+      return typeof built?.status === 'number'
+        ? { status: built.status, body: built.body }
+        : { status: 500, body: { error: 'internal', message: 'this admin action could not check its input' } };
+    }
 
     // sow-291 Phase 2: a KV-BACKED config op (coupons) writes coupons:config STRAIGHT TO KV, marked source:'kv',
     // and opens NO PR. It reads the live registry, runs the SAME pure edit core against the blob's coupon list,

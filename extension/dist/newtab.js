@@ -16189,6 +16189,36 @@ ${listStyleProseCss(".doc-blocks")}
     return Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n));
   }
 
+  // client-ui/src/news-source-manager-core.mjs
+  function pendingEdits() {
+    return { words: /* @__PURE__ */ new Map(), weights: /* @__PURE__ */ new Map() };
+  }
+  function overlayWords(loaded, pending) {
+    const shown = new Set(Array.isArray(loaded) ? loaded : []);
+    const onMain = new Set(shown);
+    for (const [word, blocked] of [...pending?.words ?? /* @__PURE__ */ new Map()]) {
+      if (onMain.has(word) === blocked) {
+        pending.words.delete(word);
+        continue;
+      }
+      if (blocked) shown.add(word);
+      else shown.delete(word);
+    }
+    return [...shown].sort();
+  }
+  function overlayWeights(loaded, pending) {
+    const shown = { ...loaded && typeof loaded === "object" ? loaded : {} };
+    for (const [id, weight] of [...pending?.weights ?? /* @__PURE__ */ new Map()]) {
+      if ((Number(shown[id]) || 0) === weight) {
+        pending.weights.delete(id);
+        continue;
+      }
+      if (weight === 0) delete shown[id];
+      else shown[id] = weight;
+    }
+    return shown;
+  }
+
   // client-ui/src/elements/gbti-news-source-manager.mjs
   var hostOf2 = (url) => {
     try {
@@ -16272,8 +16302,8 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         const pool = await this.client.newsSourcePool();
         this._sources = pool?.sources || [];
-        this._banwords = Array.isArray(pool?.banwords) ? pool.banwords : [];
-        this._weights = pool?.weights && typeof pool.weights === "object" ? pool.weights : {};
+        this._banwords = overlayWords(Array.isArray(pool?.banwords) ? pool.banwords : [], this._held());
+        this._weights = overlayWeights(pool?.weights && typeof pool.weights === "object" ? pool.weights : {}, this._held());
       } catch {
         this._sources = [];
         this._banwords = [];
@@ -16282,6 +16312,10 @@ ${listStyleProseCss(".doc-blocks")}
       }
       this._loading = false;
       this.render();
+    }
+    /** sow-415: edits saved from this screen and not yet on main (see news-source-manager-core.mjs). */
+    _held() {
+      return this._pending ||= pendingEdits();
     }
     /** Which subtab is showing. Held on the element so a re-render after a save does not throw the reader back. */
     get _view() {
@@ -16367,17 +16401,17 @@ ${listStyleProseCss(".doc-blocks")}
           this.render();
           return;
         }
-        this._run(() => this.client.addNewsBanword({ word }));
+        this._run(() => this.client.addNewsBanword({ word }), () => this._held().words.set(word, true));
       });
       this.$$("[data-unban]").forEach((b) => b.addEventListener("click", () => {
         const word = b.dataset.unban;
         if (typeof confirm === "function" && !confirm(`Stop blocking "${word}"? Stories carrying it come back on the next hourly fetch.`)) return;
-        this._run(() => this.client.removeNewsBanword({ word }));
+        this._run(() => this.client.removeNewsBanword({ word }), () => this._held().words.set(word, false));
       }));
       this.$$("[data-wt]").forEach((b) => b.addEventListener("click", () => {
         const id = b.dataset.wt;
         const next = stepToward(Number(this._weights?.[id]) || 0, Number(b.dataset.dir));
-        this._run(() => this.client.setNewsSourceWeight({ id, weight: next }));
+        this._run(() => this.client.setNewsSourceWeight({ id, weight: next }), () => this._held().weights.set(id, next));
       }));
       this.on("[data-add]", "click", () => {
         const id = (this.$("[data-add-id]")?.value || "").trim();
@@ -16408,12 +16442,14 @@ ${listStyleProseCss(".doc-blocks")}
         this._run(() => this.client.removeNewsSource({ id }));
       }));
     }
-    async _run(fn) {
+    // sow-415: `onSaved` runs only for a save that changed something, to hold the edit until main shows it.
+    async _run(fn, onSaved) {
       this._busy = true;
       this._msg = "";
       this.render();
       try {
         const r = await fn();
+        if (!r?.noop) onSaved?.();
         this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? houseEditAck(r) : "Done.";
       } catch (e) {
         this._msg = e?.message || "That edit failed.";

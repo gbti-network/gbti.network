@@ -19,6 +19,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { houseEditAck } from '../workspace-core.mjs'; // SOW-072 P2 + sow-275: the one consistent ack, reporting whether the edit merges on its own
 import { normalizeBanword } from '../../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 import { weightLabel, stepToward, WEIGHT_MIN, WEIGHT_MAX } from '../../../membership/news-source-weight-edits.mjs'; // sow-338: how hard we lean on a source
+import { pendingEdits, overlayWords, overlayWeights } from '../news-source-manager-core.mjs'; // sow-415: a saved edit shows before it merges
 
 const hostOf = (url) => { try { return new URL(url).host; } catch { return url || ''; } };
 
@@ -94,14 +95,18 @@ class GbtiNewsSourceManager extends GbtiElement {
     try {
       const pool = await this.client.newsSourcePool();
       this._sources = pool?.sources || [];
-      this._banwords = Array.isArray(pool?.banwords) ? pool.banwords : [];
+      // sow-415: laid over any edit saved from this screen that main has not merged yet, so it does not vanish.
+      this._banwords = overlayWords(Array.isArray(pool?.banwords) ? pool.banwords : [], this._held());
       // sow-374: neutral is ABSENCE in the stored file, so a source missing from this map reads as 0 rather than
       // as unknown. That is the same convention the pipeline applies, and it is why an unweighted pool is empty.
-      this._weights = (pool?.weights && typeof pool.weights === 'object') ? pool.weights : {};
+      this._weights = overlayWeights((pool?.weights && typeof pool.weights === 'object') ? pool.weights : {}, this._held());
     } catch { this._sources = []; this._banwords = []; this._weights = {}; this._msg = 'Could not load the news sources.'; }
     this._loading = false;
     this.render();
   }
+
+  /** sow-415: edits saved from this screen and not yet on main (see news-source-manager-core.mjs). */
+  _held() { return (this._pending ||= pendingEdits()); }
 
   /** Which subtab is showing. Held on the element so a re-render after a save does not throw the reader back. */
   get _view() { return this._viewKey === 'banwords' ? 'banwords' : 'sources'; }
@@ -188,17 +193,17 @@ class GbtiNewsSourceManager extends GbtiElement {
       // Normalized here for immediate feedback, and again server-side, where it is the boundary.
       const word = normalizeBanword(raw);
       if (!word) { this._msg = 'A blocked word is 2 to 40 characters: letters and digits with at least one letter, single spaces or hyphens between them.'; this.render(); return; }
-      this._run(() => this.client.addNewsBanword({ word }));
+      this._run(() => this.client.addNewsBanword({ word }), () => this._held().words.set(word, true));
     });
     this.$$('[data-unban]').forEach((b) => b.addEventListener('click', () => {
       const word = b.dataset.unban;
       if (typeof confirm === 'function' && !confirm(`Stop blocking "${word}"? Stories carrying it come back on the next hourly fetch.`)) return;
-      this._run(() => this.client.removeNewsBanword({ word }));
+      this._run(() => this.client.removeNewsBanword({ word }), () => this._held().words.set(word, false));
     }));
     this.$$('[data-wt]').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.wt;
       const next = stepToward(Number(this._weights?.[id]) || 0, Number(b.dataset.dir));
-      this._run(() => this.client.setNewsSourceWeight({ id, weight: next }));
+      this._run(() => this.client.setNewsSourceWeight({ id, weight: next }), () => this._held().weights.set(id, next));
     }));
     this.on('[data-add]', 'click', () => {
       const id = (this.$('[data-add-id]')?.value || '').trim();
@@ -223,10 +228,12 @@ class GbtiNewsSourceManager extends GbtiElement {
     }));
   }
 
-  async _run(fn) {
+  // sow-415: `onSaved` runs only for a save that changed something, to hold the edit until main shows it.
+  async _run(fn, onSaved) {
     this._busy = true; this._msg = ''; this.render();
     try {
       const r = await fn();
+      if (!r?.noop) onSaved?.();
       this._msg = r?.noop ? 'No change (already in that state).'
         : (r?.prNumber ? houseEditAck(r) : 'Done.');
     } catch (e) {
