@@ -23,3 +23,7 @@ campaigns:
     tier: member
     active: true
     lander: /member-invite/
+  - id: XDMINTAKE
+    tier: member
+    active: true
+    lander: /member-invite/
