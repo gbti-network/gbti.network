@@ -27093,6 +27093,7 @@ ${BLOCKED_PILL_CSS}
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
+        <a class="mi" role="menuitem" href="${SITE24}/workbench/" target="_blank" rel="noopener">Workbench</a>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
         <a class="mi" role="menuitem" href="${SITE24}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>

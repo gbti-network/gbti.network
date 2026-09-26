@@ -59,6 +59,8 @@ export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"
 // railless layout (sow-296): the brand and the controls share the top row. What members still reach from here is in
 // the avatar menu below: favorites and collections (an extension page), Following and Earnings (the website
 // WorkBench), Profile, Settings and the staff tools.
+// sow-416 (owner, 2026-09-26): "add Workbench to the top of this dropdown that opens the public page workbench". A
+// LINK to the website's WorkBench, first in the menu. The extension still hosts no WorkBench of its own.
 
 // SOW-052: the relocatable control cluster (no longer a full-width bar). initShell appends it to the page's
 // top-right [data-topbar] slot. Order: apps, the view-mode slot (the new tab moves its .nt-modes here), bell,
@@ -80,6 +82,7 @@ function controlsHtml({ compose = false } = {}) {
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
+        <a class="mi" role="menuitem" href="${SITE}/workbench/" target="_blank" rel="noopener">Workbench</a>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
         <a class="mi" role="menuitem" href="${SITE}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
