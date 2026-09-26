@@ -167,15 +167,18 @@ const BG = read('extension/src/background.mjs');
 
 test('the login branch answers the sign-in page first and starts the handoff last', () => {
   const branch = BG.slice(BG.indexOf("} else if (msg?.type === 'login') {"), BG.indexOf("} else if (msg?.type === 'signout') {"));
-  const order = ['await handleLogin(store)', 'broadcastAuthChanged()', 'await focusTab(', 'sendResponse(res)', 'afterSignIn(store, sender?.tab)'];
+  // sow-410: the website sign-in is the only one left (the device code was removed).
+  const order = ['await handleWebLogin(store, msg)', 'broadcastAuthChanged()', 'await focusTab(', 'sendResponse(res)', 'afterSignIn(store, sender?.tab)'];
   let at = -1;
   for (const needle of order) {
     const i = branch.indexOf(needle);
     assert.ok(i > at, `"${needle}" is out of order in the login branch`);
     at = i;
   }
-  // handleLogin no longer mints: a slow Worker must never hold the sign-in screen.
-  const login = BG.slice(BG.indexOf('async function handleLogin('), BG.indexOf('async function refreshViaWorker('));
+  // Signing in never mints: a slow Worker must never hold the sign-in screen. (sow-410: handleLogin is gone, so this
+  // reads the website sign-in and the completion both sign-ins shared, and refuses an empty slice.)
+  const login = BG.slice(BG.indexOf('async function handleWebLogin('), BG.indexOf('async function refreshViaWorker('));
+  assert.ok(login.includes('async function completeLogin('), 'the slice holds the sign-in completion');
   assert.doesNotMatch(login, /mintWebSession\(/);
   assert.doesNotMatch(login, /webSessionMinted: true/);
 });

@@ -26093,20 +26093,6 @@ ${BLOCKED_PILL_CSS}
     };
   }
   var client = createHttpClient({ baseUrl: "", token: "extension", fetch: messagingFetch });
-  client.login = (onPrompt) => new Promise((resolve, reject) => {
-    const onPromptMsg = (m) => {
-      if (m?.type === "login-prompt") onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
-    };
-    chrome.runtime.onMessage.addListener(onPromptMsg);
-    chrome.runtime.sendMessage({ type: "login" }).then((r) => {
-      chrome.runtime.onMessage.removeListener(onPromptMsg);
-      if (r?.ok) resolve(r);
-      else reject(new Error(r?.error || "sign-in failed"));
-    }).catch((e) => {
-      chrome.runtime.onMessage.removeListener(onPromptMsg);
-      reject(e);
-    });
-  });
   setClient(client);
   try {
     const version = chrome.runtime.getManifest().version;

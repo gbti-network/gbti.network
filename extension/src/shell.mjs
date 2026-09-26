@@ -198,7 +198,7 @@ export async function loadShellAccount(root = document.querySelector('[data-shel
 
 // sow-393: the website sign-in, in Chrome's own sign-in window (chrome.identity.launchWebAuthFlow). This page keeps
 // the PKCE verifier and receives the one-time code from the window; no web page ever sees either. The background then
-// claims the tokens and stores them exactly as the device flow does. Rejects with a reason the gate explains: closed
+// claims the tokens and stores them. Since sow-410 it is the only sign-in the extension has. Rejects with a reason the gate explains: closed
 // (the member closed the window), declined, expired, failed.
 async function shellWebLogin(login) {
   const { verifier, challenge } = await makePkce();
@@ -214,21 +214,8 @@ async function shellWebLogin(login) {
   return r;
 }
 
-// SOW-048: run the GitHub App device flow via the background worker (the same contract as page-client). Since
-// sow-393 this is the "Use a code instead" fallback. `onPrompt` receives the user code to display; resolves on
-// success, rejects on failure/cancel.
-function shellLogin(onPrompt) {
-  return new Promise((resolve, reject) => {
-    const onMsg = (m) => { if (m?.type === 'login-prompt') onPrompt?.({ userCode: m.userCode, verificationUri: m.verificationUri }); };
-    try { chrome.runtime.onMessage.addListener(onMsg); } catch { reject(new Error('messaging unavailable')); return; }
-    chrome.runtime.sendMessage({ type: 'login' })
-      .then((r) => { chrome.runtime.onMessage.removeListener(onMsg); r?.ok ? resolve(r) : reject(new Error(r?.error || 'sign-in failed')); })
-      .catch((e) => { chrome.runtime.onMessage.removeListener(onMsg); reject(e); });
-  });
-}
-
 /** SOW-048: the forced-sign-in gate. With no token, hide the app (data-unauth) and overlay ONLY the sign-in screen
- *  (<gbti-signin-splash>, sow-387). Its Sign in button runs the device flow; on success we reload into the
+ *  (<gbti-signin-splash>, sow-387). Its Sign in button runs the website sign-in; on success we reload into the
  *  signed-in app (initShell re-runs, now signed in, no gate). Idempotent. The background worker opens the website
  *  welcome after a member's FIRST sign-in (extension/src/welcome-handoff.mjs), so nothing here does. */
 function mountAuthGate(root, { expired = false } = {}) {
@@ -240,31 +227,28 @@ function mountAuthGate(root, { expired = false } = {}) {
   if (expired) el.setAttribute('expired', ''); // SOW: token-expiry detected -> the splash explains the re-sign-in
   wrap.appendChild(el);
   root.appendChild(wrap);
-  // sow-393: the website sign-in is the default; 'code' is the device flow, kept as a fallback. Switching from the
-  // website sign-in to the code replaces it (its failure is no longer reported), but a second click on the code never
-  // starts a second device flow, which would leak prompt listeners. Whichever finishes first signs in and reloads.
+  // sow-393: the website sign-in, in Chrome's sign-in window. sow-410 removed the device-code fallback, so a click
+  // while a sign-in is still open is ignored rather than starting a second window.
   const why = {
     closed: 'The sign-in window was closed before it finished.',
     declined: 'GitHub was not authorized, so nothing changed.',
     expired: 'That sign-in waited too long. Please try again.',
   };
   let active = null;
-  el.addEventListener('gbti:signin-start', (e) => {
-    const method = e?.detail?.method === 'code' ? 'code' : 'web';
-    if (active?.method === 'code') return;
+  el.addEventListener('gbti:signin-start', () => {
+    if (active) return;
     el.setNote?.('');
-    if (method === 'web') el.setWaiting?.(true);
-    const run = method === 'web' ? shellWebLogin(el.getAttribute('known-login') || '') : shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri));
-    const me = { method, run };
+    el.setWaiting?.(true);
+    const run = shellWebLogin(el.getAttribute('known-login') || '');
+    const me = { run };
     active = me;
     run
       .then(() => location.reload())                          // signed in -> re-run initShell -> the app renders
       .catch((err) => {                                       // failed/cancelled -> allow another attempt
-        if (active !== me) return;                            // replaced by a newer attempt
+        if (active !== me) return;                            // not the attempt that is open
         active = null;
-        el.setCode?.(null);
         el.setWaiting?.(false);
-        el.setNote?.((Object.hasOwn(why, err?.message) && why[err.message]) || 'Sign-in did not finish. Try again, or use a code instead.');
+        el.setNote?.((Object.hasOwn(why, err?.message) && why[err.message]) || 'Sign-in did not finish. Please try again.');
       });
   });
   // sow-393: already signed in on the website? Then the button offers to continue as that account. Only the login

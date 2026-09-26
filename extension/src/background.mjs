@@ -1,5 +1,5 @@
 // The MV3 background service worker (SOW-006 v2 P4). It holds the GitHub token (chrome.storage.local, NEVER
-// exposed to the page), runs device-flow auth, and answers the content script's /api/* messages by running the
+// exposed to the page), completes the sign-in, and answers the content script's /api/* messages by running the
 // dispatcher against the extension ctx. The page can never read the token: it only sends messages and gets
 // back results. This is the privileged half of the extension client.
 
@@ -8,18 +8,13 @@ import { buildExtContext, UPSTREAM } from './ext-context.mjs';
 import { dispatch, computeRole } from './ext-dispatch.mjs';
 import { devlog } from './devlog.mjs';
 import { createGithubReader } from '../../client/src/github-reader.mjs';
-import { deviceFlowLogin } from '../../client/src/auth-device.mjs';
 import { createRepoClient } from '../../client/src/github-repo.mjs';
 import { resolveMembership } from '../../client/src/membership.mjs';
-import { GITHUB_CLIENT_ID, activeClientId, activeScope } from '../../client/src/signup-base.mjs';
 import { resolveOpenPage } from './open-page.mjs';
 import { needsRefresh, refreshPatch } from './token-refresh.mjs';
 import { claimHandoff, shouldOpenWelcome, createDispatchClient, withTimeout, seedOnUpdate } from './welcome-handoff.mjs'; // sow-387
 import { loadProgress, WELCOME_SITE_URL } from '../../client-ui/src/onboarding-card-core.mjs'; // sow-387: DOM-free
 import { claimTokens, knownLoginFrom, fromExtensionPage } from './web-signin.mjs'; // sow-393
-
-// GITHUB_CLIENT_ID is the PUBLIC device-flow OAuth app client id, single-sourced in signup-base.mjs (device flow
-// has no client secret, so it is safe to bundle). Baked into the extension at build time.
 
 // SOW-011: the signup Worker that answers the membership-status oracle. In host_permissions so the worker can
 // fetch it cross-origin (the token stays in the worker; only the derived status comes back).
@@ -35,36 +30,17 @@ function getStore() {
   return storePromise;
 }
 
-// The device-code sign-in, kept as the "Use a code instead" fallback (sow-393). The website sign-in is the default.
-async function handleLogin(store) {
-  const { accessToken, refreshToken, expiresIn } = await deviceFlowLogin({
-    // The extension bakes the GitHub App client (hosted mode) at build time and sends no scope: with no install
-    // requested, the token identifies the member and can touch nothing else (sow-274 Part 4). The MV3 worker has
-    // no process.env, so an unbaked bundle would fall back to the OAuth app, which asks for identity only too.
-    clientId: activeClientId(),
-    scope: activeScope(),
-    onPrompt: ({ userCode, verificationUri }) => {
-      // Surface the code to the page that started sign-in (the new-tab sign-in screen, sow-387). Do NOT auto-open the
-      // verification tab here: the GitHub App device flow returns no verification_uri_complete, so an auto-opened
-      // page cannot pre-fill the code anyway, and grabbing focus mid-flow is hostile. The page shows the code with a
-      // Copy button + an "Open github.com/login/device" button the member clicks themselves. The device flow keeps
-      // polling here.
-      chrome.runtime.sendMessage({ type: 'login-prompt', userCode, verificationUri }).catch(() => {});
-    },
-  });
-  return completeLogin(store, { accessToken, refreshToken, expiresIn });
-}
-
 // sow-393: the website sign-in. The sign-in page ran it in Chrome's own sign-in window (chrome.identity), which
 // handed back a one-time code that only this extension can see; the page's PKCE verifier proves it started the
-// flow. The Worker returns the same GitHub App token set the device flow produces.
+// flow. The Worker returns the token set. sow-410 (owner, 2026-09-25) removed the device-code sign-in, so this is the only
+// way a member signs in to the extension, and the extension no longer asks for github.com.
 async function handleWebLogin(store, { code, verifier } = {}) {
   const t = await claimTokens({ code, verifier });
   return completeLogin(store, { accessToken: t.access_token, refreshToken: t.refresh_token, expiresIn: t.expires_in });
 }
 
 // What every sign-in does once it holds a token, whichever way it got it: read who it belongs to, store it, and
-// resolve the membership. sow-393 split it out of handleLogin so both sign-ins store exactly the same record.
+// resolve the membership. sow-393 split it out of the device-code sign-in (removed in sow-410).
 async function completeLogin(store, { accessToken, refreshToken, expiresIn }) {
   const repo = createRepoClient({ token: accessToken, upstream: UPSTREAM });
   const u = await repo.getAuthUser();
@@ -270,10 +246,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } catch { login = null; }
         sendResponse({ ok: true, login });
       } else if (msg?.type === 'login') {
-        // sow-393: 'web' (the default sign-in) arrives with the code and verifier; anything else is the device code.
-        const res = msg.method === 'web' ? await handleWebLogin(store, msg) : await handleLogin(store);
-        // Device-flow sign-in ends on GitHub's "you're all set" page in a different tab. Route the member back
-        // to the tab that started sign-in (the new tab, or a gbti.network page), which then reloads into the feed.
+        // sow-393: the website sign-in arrives with the code and verifier. sow-410: it is the only one; anything else
+        // (an old page asking for the retired device code) is refused, so nothing can start a code sign-in.
+        if (msg.method !== 'web') { sendResponse({ ok: false, error: 'unsupported' }); return; }
+        const res = await handleWebLogin(store, msg);
+        // Route the member back to the tab that started sign-in (the new tab, or a gbti.network page), which then
+        // reloads into the feed.
         if (res?.ok) { broadcastAuthChanged(); await focusTab(sender?.tab?.id, sender?.tab?.windowId); }
         sendResponse(res);
         // sow-387: only now, with the sign-in page answered, the website session and (on a first sign-in) the

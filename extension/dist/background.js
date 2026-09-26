@@ -17763,12 +17763,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
 // client/src/signup-base.mjs
 var SIGNUP_BASE = globalThis.process?.env?.GBTI_SIGNUP_BASE || "https://signup.gbti.network";
 var GITHUB_CLIENT_ID = globalThis.process?.env?.GBTI_GITHUB_CLIENT_ID || "Ov23limR5x7taIm33sTY";
-var GITHUB_APP_CLIENT_ID = "Iv23lis8jbx62zI7cwE8";
 var UPSTREAM_REPO = globalThis.process?.env?.GBTI_UPSTREAM_REPO || "gbti-network/gbti.network";
-var rawAuthMode = "hosted";
-var AUTH_MODE = rawAuthMode === "app" ? "app" : rawAuthMode === "hosted" ? "hosted" : "classic";
-var activeClientId = () => AUTH_MODE === "classic" ? GITHUB_CLIENT_ID : GITHUB_APP_CLIENT_ID;
-var activeScope = () => AUTH_MODE === "classic" ? "read:user" : "";
 
 // client/src/github-repo.mjs
 var GitHubError = class extends Error {
@@ -21207,78 +21202,6 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
   }
 }
 
-// client/src/auth-device.mjs
-var GITHUB = "https://github.com";
-var FORM = { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" };
-async function requestDeviceCode({ clientId, scope = "read:user", fetch: fetch2 = globalThis.fetch }) {
-  if (!clientId) throw new Error("requestDeviceCode: clientId is required");
-  const res = await fetch2(`${GITHUB}/login/device/code`, {
-    method: "POST",
-    headers: FORM,
-    body: new URLSearchParams({ client_id: clientId, scope }).toString()
-  });
-  if (!res.ok) throw new Error(`device code request failed: ${res.status}`);
-  return res.json();
-}
-async function pollForToken({ clientId, deviceCode, fetch: fetch2 = globalThis.fetch }) {
-  const res = await fetch2(`${GITHUB}/login/oauth/access_token`, {
-    method: "POST",
-    headers: FORM,
-    body: new URLSearchParams({
-      client_id: clientId,
-      device_code: deviceCode,
-      grant_type: "urn:ietf:params:oauth:grant-type:device_code"
-    }).toString()
-  });
-  return res.json();
-}
-var defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function deviceFlowLogin({
-  clientId,
-  scope,
-  fetch: fetch2 = globalThis.fetch,
-  onPrompt,
-  sleep = defaultSleep,
-  now = () => Date.now()
-}) {
-  const dc = await requestDeviceCode({ clientId, scope, fetch: fetch2 });
-  if (typeof onPrompt === "function") {
-    onPrompt({ userCode: dc.user_code, verificationUri: dc.verification_uri, expiresIn: dc.expires_in });
-  }
-  let interval = (Number(dc.interval) || 5) * 1e3;
-  const deadline = now() + (Number(dc.expires_in) || 900) * 1e3;
-  for (; ; ) {
-    if (now() >= deadline) throw new Error("device flow expired before authorization");
-    await sleep(interval);
-    const r = await pollForToken({ clientId, deviceCode: dc.device_code, fetch: fetch2 });
-    if (r.access_token) {
-      return {
-        accessToken: r.access_token,
-        scope: r.scope,
-        refreshToken: r.refresh_token,
-        // present only when the App expires user tokens
-        expiresIn: Number(r.expires_in) || 0,
-        // seconds until the access token dies (~28800 = 8h)
-        refreshTokenExpiresIn: Number(r.refresh_token_expires_in) || 0
-        // ~15897600 = 6mo
-      };
-    }
-    switch (r.error) {
-      case "authorization_pending":
-        break;
-      case "slow_down":
-        interval += 5e3;
-        break;
-      case "expired_token":
-        throw new Error("device flow expired before authorization");
-      case "access_denied":
-        throw new Error("device flow denied by the user");
-      default:
-        throw new Error(`device flow error: ${r.error ?? "unknown"}`);
-    }
-  }
-}
-
 // extension/src/open-page.mjs
 var PAGES = /* @__PURE__ */ new Set([
   "newtab.html",
@@ -21870,20 +21793,6 @@ function getStore() {
   }
   return storePromise;
 }
-async function handleLogin(store) {
-  const { accessToken, refreshToken, expiresIn } = await deviceFlowLogin({
-    // The extension bakes the GitHub App client (hosted mode) at build time and sends no scope: with no install
-    // requested, the token identifies the member and can touch nothing else (sow-274 Part 4). The MV3 worker has
-    // no process.env, so an unbaked bundle would fall back to the OAuth app, which asks for identity only too.
-    clientId: activeClientId(),
-    scope: activeScope(),
-    onPrompt: ({ userCode, verificationUri }) => {
-      chrome.runtime.sendMessage({ type: "login-prompt", userCode, verificationUri }).catch(() => {
-      });
-    }
-  });
-  return completeLogin(store, { accessToken, refreshToken, expiresIn });
-}
 async function handleWebLogin(store, { code, verifier } = {}) {
   const t = await claimTokens({ code, verifier });
   return completeLogin(store, { accessToken: t.access_token, refreshToken: t.refresh_token, expiresIn: t.expires_in });
@@ -22051,7 +21960,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         sendResponse({ ok: true, login });
       } else if (msg?.type === "login") {
-        const res = msg.method === "web" ? await handleWebLogin(store, msg) : await handleLogin(store);
+        if (msg.method !== "web") {
+          sendResponse({ ok: false, error: "unsupported" });
+          return;
+        }
+        const res = await handleWebLogin(store, msg);
         if (res?.ok) {
           broadcastAuthChanged();
           await focusTab(sender?.tab?.id, sender?.tab?.windowId);

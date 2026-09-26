@@ -12,9 +12,7 @@
   "permissions": ["storage", "identity"],
   "host_permissions": [
     "https://gbti.network/*",
-    "https://signup.gbti.network/*",
-    "https://api.github.com/*",
-    "https://github.com/*"
+    "https://signup.gbti.network/*"
   ],
   "background": {
     "service_worker": "dist/background.js",

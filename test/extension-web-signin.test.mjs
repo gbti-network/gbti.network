@@ -77,18 +77,19 @@ test('"Continue as" only ever shows a well-formed GitHub login', () => {
 
 test('the sign-in page runs the flow in Chrome\'s own sign-in window and hands the background the code and verifier', () => {
   const shell = read('extension/src/shell.mjs');
-  const web = shell.slice(shell.indexOf('async function shellWebLogin('), shell.indexOf('function shellLogin('));
+  const web = shell.slice(shell.indexOf('async function shellWebLogin('), shell.indexOf('function mountAuthGate('));
   inOrder(web, ['makePkce()', 'chrome.identity.getRedirectURL(REDIRECT_PATH)', 'chrome.identity.launchWebAuthFlow({ url: startUrl({ challenge, redirect, login }), interactive: true })',
     'readRedirectResult(finalUrl, redirect)', "chrome.runtime.sendMessage({ type: 'login', method: 'web', code: got.code, verifier })"], 'shellWebLogin');
   assert.doesNotMatch(web, /tabs\.create|window\.open/, 'never an ordinary tab or window, which pages and other extensions can read');
   assert.match(read('extension/manifest.json'), /"permissions": \["storage", "identity"\]/, 'the identity permission the sign-in window needs');
 });
 
-test('the gate starts the website sign-in by default, keeps the code as a fallback, and explains a failure as text', () => {
+test('the gate starts the website sign-in, never a second one while it is open, and explains a failure as text', () => {
   const shell = read('extension/src/shell.mjs');
   const gate = shell.slice(shell.indexOf('function mountAuthGate('), shell.indexOf('function setTheme('));
-  assert.match(gate, /const method = e\?\.detail\?\.method === 'code' \? 'code' : 'web';/, 'anything but an explicit code request is the website sign-in');
-  assert.match(gate, /shellWebLogin\(el\.getAttribute\('known-login'\) \|\| ''\)/);
+  // sow-410: the code fallback is gone, so the website sign-in is the only thing the gate starts.
+  assert.match(gate, /if \(active\) return;\n\s+el\.setNote\?\.\(''\);\n\s+el\.setWaiting\?\.\(true\);\n\s+const run = shellWebLogin\(el\.getAttribute\('known-login'\) \|\| ''\);/);
+  assert.doesNotMatch(shell, /shellLogin\(|'code'|setCode/, 'no code sign-in left in the shell');
   assert.match(gate, /Object\.hasOwn\(why, err\?\.message\)/, 'an odd reason like "constructor" cannot pick a prototype member');
   assert.match(gate, /chrome\.runtime\.sendMessage\(\{ type: 'web-session-peek' \}\)/);
   assert.match(gate, /\.then\(\(\) => location\.reload\(\)\)/, 'whichever sign-in finishes, the page reloads signed in');
@@ -98,9 +99,9 @@ test('the background claims with the page\'s verifier, stores the same record as
   const BG = read('extension/src/background.mjs');
   const web = BG.slice(BG.indexOf('async function handleWebLogin('), BG.indexOf('async function completeLogin('));
   inOrder(web, ['claimTokens({ code, verifier })', 'completeLogin(store, { accessToken: t.access_token, refreshToken: t.refresh_token, expiresIn: t.expires_in })'], 'handleWebLogin');
-  assert.match(BG, /return completeLogin\(store, \{ accessToken, refreshToken, expiresIn \}\);/, 'the device flow goes through the same completion');
   const branch = BG.slice(BG.indexOf("} else if (msg?.type === 'login') {"), BG.indexOf("} else if (msg?.type === 'signout') {"));
-  inOrder(branch, ["msg.method === 'web' ? await handleWebLogin(store, msg) : await handleLogin(store)", 'broadcastAuthChanged()', 'await focusTab(', 'sendResponse(res)', 'afterSignIn(store, sender?.tab)'], 'the login branch');
+  // sow-410: anything but the website sign-in is refused before it can start, so no page can begin a code sign-in.
+  inOrder(branch, ["if (msg.method !== 'web') { sendResponse({ ok: false, error: 'unsupported' }); return; }", 'await handleWebLogin(store, msg)', 'broadcastAuthChanged()', 'await focusTab(', 'sendResponse(res)', 'afterSignIn(store, sender?.tab)'], 'the login branch');
   // The website sign-in and the "Continue as" read are refused before either branch runs unless an extension page sent
   // them, so a compromised web page's content script cannot plant tokens or read the website account.
   const guard = BG.indexOf("} else if ((msg?.type === 'web-session-peek' || (msg?.type === 'login' && msg.method === 'web')) && !fromExtensionPage(sender, chrome.runtime.getURL(''))) {");
@@ -112,20 +113,15 @@ test('the background claims with the page\'s verifier, stores the same record as
   assert.match(peek, /sendResponse\(\{ ok: true, login \}\)/);
 });
 
-test('the sign-in screen offers the website sign-in, "Continue as", and the code; a shown code replaces the waiting box', () => {
+test('the sign-in screen offers the website sign-in and "Continue as", and no code (sow-410)', () => {
   const splash = read('client-ui/src/elements/gbti-signin-splash.mjs');
   assert.match(splash, /this\.emit\('gbti:signin-start', \{ method: 'web' \}\)/);
-  assert.match(splash, /this\.emit\('gbti:signin-start', \{ method: 'code' \}\)/);
   assert.match(splash, /Continue as @\$\{esc\(who\)\}/);
-  const setCode = splash.slice(splash.indexOf('  setCode(userCode, verificationUri) {'), splash.indexOf('  setWaiting(on) {'));
-  assert.match(setCode, /if \(this\._code\) this\._waiting = false;/, 'switching to the code must not leave the waiting box up');
+  assert.doesNotMatch(splash, /Use a code instead|data-auth-code|setCode|github\.com\/login\/device|method: 'code'/, 'the code sign-in is gone');
 });
 
-test('the website sign-in says nothing about "Act on your behalf"; only the code, which still uses the GitHub App, explains it', () => {
+test('the sign-in screen says nothing about "Act on your behalf": the profile-only sign-in\'s page never shows it', () => {
+  // sow-393 kept that note beside the device code, which signed in through GBTI's GitHub App. sow-410 removed the code.
   const splash = read('client-ui/src/elements/gbti-signin-splash.mjs');
-  const waiting = splash.slice(splash.indexOf('const action = this._waiting'), splash.indexOf('      : code'));
-  assert.ok(waiting.length > 0, 'found the waiting box');
-  assert.doesNotMatch(waiting, /REASSURANCE|Act on your behalf/, 'the normal GitHub sign-in never shows that wording');
-  const codeBox = splash.slice(splash.indexOf('      : code'), splash.indexOf('data-auth-signin type="button">${githubIco}'));
-  assert.match(codeBox, /\$\{REASSURANCE\}/, 'the device code still goes through the GitHub App, whose page does');
+  assert.doesNotMatch(splash, /REASSURANCE|Act on your behalf"? is GitHub/);
 });

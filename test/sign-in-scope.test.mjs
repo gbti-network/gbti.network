@@ -73,7 +73,9 @@ test('the sign-in screen is sign-in only and promises no more than the sign-in a
   assert.doesNotMatch(splash, /data-open/, 'the sign-in screen sends the member to a GitHub page other than sign-in');
   assert.doesNotMatch(splash, /Make your copy|Give access|Install the GBTI app/);
   // What it tells the member matches the scope pinned above. It must not say the network writes to their copy.
-  assert.match(splash, /does not ask for access to your repositories/);
+  // sow-410: the note explaining GitHub's "Act on your behalf" wording went with the code sign-in, whose GitHub App
+  // page was the only one that showed it; the profile-only sign-in claims nothing about access, so none is promised.
+  assert.doesNotMatch(splash, /access to your repositories|Act on your behalf/);
   assert.doesNotMatch(splash, /to the copy you choose/);
   // And the retired page stays retired.
   for (const gone of ['extension/onboarding.html', 'extension/src/onboarding.mjs', 'client-ui/src/elements/gbti-onboarding.mjs']) {

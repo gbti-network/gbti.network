@@ -164,7 +164,9 @@ test('daily.dev is switched on the first time it is detected, and never again af
 test('no new permission: the manifest asks for exactly what it asked for before', () => {
   const m = JSON.parse(src('extension/manifest.json'));
   assert.deepEqual(m.permissions, ['storage', 'identity']);
-  assert.deepEqual(m.host_permissions, ['https://gbti.network/*', 'https://signup.gbti.network/*', 'https://api.github.com/*', 'https://github.com/*']);
+  // sow-410 (owner, 2026-09-25): github.com and api.github.com are gone. The code sign-in was github.com's only use,
+  // and GitHub's API answers any site, so the extension reads it without a permission.
+  assert.deepEqual(m.host_permissions, ['https://gbti.network/*', 'https://signup.gbti.network/*']);
   assert.equal(m.optional_permissions, undefined);
   assert.equal(DAILYDEV_PROBE_URL, 'chrome-extension://jlmpjdjjbgclbocgajdjefcidcncaied/css/companion.css');
 });

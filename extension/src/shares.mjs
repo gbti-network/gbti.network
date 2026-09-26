@@ -1,6 +1,6 @@
 // SOW-018: the extension's dedicated Shares page script. Shares are EXTENSION-ONLY (no public website surface),
 // so this extension page is where a member reads and posts the co-op stream. It reuses the SAME client-ui
-// components (<gbti-auth> for sign-in, <gbti-shares> = composer + reading feed) and the SAME messaging bridge
+// components (<gbti-shares> = composer + reading feed; sign-in is the shell's gate) and the SAME messaging bridge
 // the content script uses: /api/* requests are relayed to the background worker (which holds the token + does
 // the git work + calls the Worker to decrypt). The page never sees the token or the AES key.
 
@@ -22,16 +22,6 @@ async function messagingFetch(url, init = {}) {
 }
 
 const client = createHttpClient({ baseUrl: '', token: 'extension', fetch: messagingFetch });
-
-// Device-flow login surfaced to <gbti-auth> (the worker runs the polling; relay the user code).
-client.login = (onPrompt) =>
-  new Promise((resolve, reject) => {
-    const onPromptMsg = (m) => { if (m?.type === 'login-prompt') onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri }); };
-    chrome.runtime.onMessage.addListener(onPromptMsg);
-    chrome.runtime.sendMessage({ type: 'login' })
-      .then((r) => { chrome.runtime.onMessage.removeListener(onPromptMsg); r?.ok ? resolve(r) : reject(new Error(r?.error || 'sign-in failed')); })
-      .catch((e) => { chrome.runtime.onMessage.removeListener(onPromptMsg); reject(e); });
-  });
 
 setClient(client);
 

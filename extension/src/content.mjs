@@ -30,42 +30,20 @@ async function messagingFetch(url, init = {}) {
 
 const client = createHttpClient({ baseUrl: '', token: 'extension', fetch: messagingFetch });
 
-// Device-flow login is a HOST capability surfaced to <gbti-auth>: the worker runs the polling; we relay the
-// user code to the component's onPrompt.
-client.login = (onPrompt) =>
-  new Promise((resolve, reject) => {
-    const onPromptMsg = (m) => {
-      if (m?.type === 'login-prompt') onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
-    };
-    chrome.runtime.onMessage.addListener(onPromptMsg);
-    chrome.runtime
-      .sendMessage({ type: 'login' })
-      .then((r) => {
-        chrome.runtime.onMessage.removeListener(onPromptMsg);
-        if (r?.ok) resolve(r);
-        else reject(new Error(r?.error || 'sign-in failed'));
-      })
-      .catch((e) => {
-        chrome.runtime.onMessage.removeListener(onPromptMsg);
-        reject(e);
-      });
-  });
-
 setClient(client);
 // The page's inert <gbti-edit-panel> upgrades now that the elements are defined; it self-activates for the owner.
 
 // SOW-019: announce the extension to the page so the site's install-aware "Sign in" button can detect it.
 // Standard content-script marker pattern: no extension id, no externally_connectable. The site reads the
-// data-gbti-extension attribute (and/or listens for the event). A bare relay listener lets the site ask the
-// extension to start the device-flow sign-in.
+// data-gbti-extension attribute (and/or listens for the event). A bare relay listener passes the site's sign-in
+// request on as gbti:open-auth (sow-410: the device-code sign-in it once reached is gone; the relay starts nothing).
 try {
   const version = chrome.runtime.getManifest().version;
   document.documentElement.dataset.gbtiExtension = version;
   document.dispatchEvent(new CustomEvent('gbti:extension-ready', { detail: { version } }));
   document.addEventListener('gbti:request-signin', () => {
-    // The page asked to sign in. The <gbti-auth> component (already on the page) owns the device-flow UI;
-    // surface it by dispatching an event it listens for. Kept minimal: the onboarding tab (opened from the
-    // toolbar icon) remains the primary sign-in surface, this is the in-page convenience path.
+    // The page asked to sign in. Passed on as gbti:open-auth for any page element that offers sign-in; no
+    // extension or site element listens today, and it starts no sign-in (the new tab's sign-in screen does).
     document.dispatchEvent(new CustomEvent('gbti:open-auth'));
   });
   // SOW-036: the site header's avatar menu asks (via a page CustomEvent) to open an in-extension management page
