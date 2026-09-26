@@ -17,9 +17,9 @@
     position: sticky; top: calc(var(--head-h) + 1px); z-index: 40;
     margin: -34px calc(-1 * var(--gut)) 6px;
   }
-  /* Something shown above the feed keeps its spacing, and the bar sits under it until the page scrolls: the
-     extension promo (when the site setting turns it on) and a signed-in creator's share bar. */
-  .feedwrap:has(> .xbn:not([hidden]), > .home-share-bar:not([hidden])) .feed-fold[data-fold] { margin-top: 0; }
+  /* Something shown above the feed keeps its spacing, and the bar sits under it until the page scrolls: a
+     signed-in creator's share bar. (The extension promo used to sit here too; sow-400 moved it below the feed.) */
+  .feedwrap:has(> .home-share-bar:not([hidden])) .feed-fold[data-fold] { margin-top: 0; }
 
   /* The bar and the open panel wear the header's own background and blur (mirrors .site-head in gbti-v3.css). */
   .feed-fold[data-fold] .feed-fold-bar,

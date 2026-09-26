@@ -142,10 +142,6 @@ const SHOPTALK = {
   <!-- sow-392 (owner, 2026-09-24): the signed-out pricing accordion that sat here is removed. The plans live on
        /membership/ only, and the feed now starts at the top of the page. -->
 
-  <!-- "GBTI Homepage" design (owner-elected 2026-08-10): the logged-out Chrome-extension promo banner, above
-       the feed. Carries [data-home-joincard], so the mount script hides it for a signed-in member. -->
-  <ExtensionBanner />
-
   <!-- sow-192 Phase D: the Personalize modal + its build-time candidate lists (members/categories/tags). The
        modal itself is a fixed <dialog>, inert until the signed-in Personalize button opens it. -->
   <script type="application/json" id="gbti-personalize-data" set:html={JSON.stringify(personalizeData)}></script>
@@ -298,6 +294,11 @@ const SHOPTALK = {
 
 <!-- ============ SECTION BLOCKS (sow-192 Phase B; shown on the Everything tab, hidden under a content tab) ============ -->
 <div data-home-sections>
+
+  <!-- sow-400 (owner, 2026-09-26): the Chrome-extension promo banner, between the end of the feed and Articles.
+       Inside this wrapper so a content tab hides it with the sections. It gates itself on the extension CTA site
+       setting and hides for a reader who already has the extension (see the component). -->
+  <ExtensionBanner />
 
   {homeArticles.length > 0 && (
   <section class="band home-sec" aria-label="Articles">
