@@ -23,13 +23,21 @@ import { rankForPath, SUPERADMIN_HOUSE_FILES, ROLE_RANK } from '../membership/pa
 const ROOT = new URL('../', import.meta.url);
 const DOC = yaml.load(fs.readFileSync(new URL('house/news-banwords.yml', ROOT), 'utf8'));
 
-test('sow-372: the six words the owner gave are the six words in force', () => {
-  assert.deepEqual(readBanwords(DOC), ['covid', 'democrat', 'maga', 'pandemic', 'republican', 'trump']);
+// sow-415: this used to pin the file to the six words the owner seeded on 2026-09-19. Once the admin screen could
+// save (sow-415), the owner added four more the same day and the pin went red for an edit that was exactly what the
+// screen is for. WHICH words are blocked is the owner's call, made from Admin tools, so the test asks only that the
+// stored file is in the form the build and the managers read: every entry a valid word, lowercase, sorted, unique.
+const SEEDED = ['covid', 'democrat', 'maga', 'pandemic', 'republican', 'trump'];
+
+test('sow-372: the stored list is in canonical form, whatever words it holds', () => {
+  assert.ok(Array.isArray(DOC?.words) && DOC.words.length > 0, 'the file holds a words list');
+  assert.deepEqual(readBanwords(DOC), DOC.words, 'every stored entry survives the reader unchanged: valid, lowercase, sorted, unique');
 });
 
 test('sow-372: WHOLE WORD, which is the property that makes the list safe to use', () => {
-  // The whole reason a substring match was not used. Each left-hand string must NOT be blocked.
-  const m = banwordMatcher(readBanwords(DOC));
+  // The whole reason a substring match was not used. Each left-hand string must NOT be blocked. A fixed list (the
+  // seed), not the live file, so the owner removing a word cannot quietly empty this test.
+  const m = banwordMatcher(SEEDED);
   for (const safe of [
     'She played the trumpet at the gala',
     'Ten magazines that changed design',
