@@ -1,4 +1,4 @@
-// sow-397 (owner, 2026-09-24): the new tab's quick launch, the row of sites beside the GBTI chip. This file is PURE:
+// sow-397 (owner, 2026-09-24): the new tab's quick launch, the member's row of sites. This file is PURE:
 // the default destinations, the merge of what is stored over them, address checking, the cap, and the daily.dev rule.
 // The bar and the settings popup are extension/src/quick-launch.mjs.
 //

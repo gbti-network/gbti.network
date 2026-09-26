@@ -26675,11 +26675,9 @@ ${BLOCKED_PILL_CSS}
       return null;
     }
   }
-  var GBTI_MARK = '<img class="gbti-mk" src="icons/icon-128.png" alt="" width="22" height="22" />';
-  var GBTI_CHIP = `<a class="nt-app gbti" href="https://gbti.network/" target="_blank" rel="noopener" title="GBTI Network" aria-label="GBTI Network, opens in a new tab">${GBTI_MARK}</a>`;
   function barHtml() {
     const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc4(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc4(it.name)}" aria-label="${esc4(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
-    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${GBTI_CHIP}${links}`;
+    return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${links}`;
   }
   function renderBars() {
     const html = barHtml();
@@ -26754,7 +26752,7 @@ ${BLOCKED_PILL_CSS}
   function previewHtml() {
     const items = barItems(STATE);
     const icons = items.map((it) => `<span class="ql-pv" title="${esc4(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
-    return `<span class="nt-app gbti" aria-hidden="true">${GBTI_MARK}</span>${icons}`;
+    return icons;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
     return `<form class="ql-form" data-ql-form="${esc4(id)}" novalidate>
@@ -27075,9 +27073,9 @@ ${BLOCKED_PILL_CSS}
   </div>`;
   }
   function brandHtml() {
-    return `<a class="nt-brand" href="newtab.html" aria-label="GBTI Network home">
+    return `<a class="nt-brand" href="https://gbti.network/" target="_blank" rel="noopener" aria-label="GBTI Network website, opens in a new tab">
     <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
-    <span class="nt-brand-tx">GBTI <b>Network</b></span>
+    <span class="nt-brand-tx">GBTI</span>
   </a>`;
   }
   async function api(pathname, query = {}) {

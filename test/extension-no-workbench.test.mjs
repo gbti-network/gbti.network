@@ -121,16 +121,8 @@ test('the Saved view scrolls to the named section once it has rendered, and once
 });
 
 // ---- the GBTI quick launch chip ----
-
-test('the GBTI chip opens gbti.network in a new tab and shows the GBTI icon', () => {
-  const ql = read('extension/src/quick-launch.mjs');
-  assert.match(ql, /const GBTI_MARK = '<img class="gbti-mk" src="icons\/icon-128\.png" alt="" width="22" height="22" \/>';/);
-  assert.match(ql, /const GBTI_CHIP = `<a class="nt-app gbti" href="https:\/\/gbti\.network\/" target="_blank" rel="noopener" title="GBTI Network"/);
-  assert.match(ql, /\$\{GBTI_CHIP\}\$\{links\}`;/, 'the bar uses the chip');
-  assert.match(ql, /<span class="nt-app gbti" aria-hidden="true">\$\{GBTI_MARK\}<\/span>\$\{icons\}`;/, 'the settings preview uses the icon');
-  assert.equal(/>GBTI<\/span>/.test(ql), false, 'the text label is back');
-  assert.equal(/cursor: default/.test(read('extension/shell.css').match(/\.nt-app\.gbti \{[^}]*\}/)?.[0] || ''), false);
-});
+// sow-406 made the chip open gbti.network. sow-411 (owner, 2026-09-26) removed it: the logo at the top left opens the
+// site now, and the bar holds only the member's own destinations. test/extension-header-crumbs.test.mjs pins both.
 
 // ---- member-facing confirmations name no pull request and no WorkBench ----
 

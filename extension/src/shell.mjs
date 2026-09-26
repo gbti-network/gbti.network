@@ -96,12 +96,14 @@ function controlsHtml({ compose = false } = {}) {
   </div>`;
 }
 
-// SOW-052: the GBTI Network brand mark, at the start of the top row (sow-296 moved it there from the old rail).
-// Links home (newtab.html). The icon is the packaged extension logo, accessible by a page-relative path.
+// SOW-052: the GBTI brand mark, at the start of the top row (sow-296 moved it there from the old rail). The icon is the
+// packaged extension logo, accessible by a page-relative path. sow-411 (owner, 2026-09-26): it reads "GBTI" (no
+// "Network") and opens the public site in a new tab, like the quick launch; the pages besides the feed lead back to it
+// with a breadcrumb instead.
 function brandHtml() {
-  return `<a class="nt-brand" href="newtab.html" aria-label="GBTI Network home">
+  return `<a class="nt-brand" href="https://gbti.network/" target="_blank" rel="noopener" aria-label="GBTI Network website, opens in a new tab">
     <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
-    <span class="nt-brand-tx">GBTI <b>Network</b></span>
+    <span class="nt-brand-tx">GBTI</span>
   </a>`;
 }
 
