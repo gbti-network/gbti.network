@@ -21724,6 +21724,51 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-subscribe", GbtiSubscribe);
 
+  // client/src/link-kind.mjs
+  var AUDIO_HOSTS = Object.freeze([
+    // Music for artists: where musicians and DJs publish their own work.
+    "mixcloud.com",
+    "soundcloud.com",
+    "bandcamp.com",
+    "audiomack.com",
+    // Streaming catalogs (Spotify covers its podcast episodes too; spotify.link is its short link).
+    "spotify.com",
+    "spotify.link",
+    "music.apple.com",
+    "tidal.com",
+    "deezer.com",
+    // YouTube Music.
+    "music.youtube.com",
+    // Podcasts (pca.st is Pocket Casts' short link).
+    "podcasts.apple.com",
+    "pocketcasts.com",
+    "pca.st",
+    "overcast.fm"
+  ]);
+  function hostOf3(raw) {
+    let u;
+    try {
+      u = new URL(String(raw ?? "").trim());
+    } catch {
+      return null;
+    }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.hostname.toLowerCase().replace(/\.$/, "").replace(/^(?:www|m)\./, "");
+  }
+  function isAudioLink(url) {
+    const host = hostOf3(url);
+    if (!host) return false;
+    return AUDIO_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  }
+  function linkKind(url) {
+    if (isAudioLink(url)) return "audio";
+    if (embedUrl(url)) return "video";
+    return "read";
+  }
+  function shareLinkVerb(url) {
+    return { audio: "Listen to it", video: "Watch video", read: "Read article" }[linkKind(url)];
+  }
+
   // client-ui/src/cat-glyph.mjs
   var GLYPH_SVG = {
     spark: '<path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
@@ -22399,7 +22444,7 @@ ${BLOCKED_PILL_CSS}
       const badge = share.visibility === "members" ? `<span class="badge">Members</span>` : "";
       const title = share.title ? `<div class="title">${esc(share.title)}</div>` : "";
       const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
-      const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${embedUrl(share.url) ? "Watch video" : "Read article"} on ${esc(hostOf(share.url))}</a>` : "";
+      const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc(hostOf(share.url))}</a>` : "";
       const shareEmbed = share.url ? embedUrl(share.url) : null;
       const heroUrl = share.image ? resolveAsset(share.image) : "";
       const hero = shareEmbed ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
@@ -26117,7 +26162,7 @@ ${BLOCKED_PILL_CSS}
   var SUBSTACK_RESERVED = /* @__PURE__ */ new Set(["open", "www", "about", "help", "on", "support"]);
   var HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
   var DIGITS_RE = /^\d+$/;
-  var hostOf3 = (u) => u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
+  var hostOf4 = (u) => u.hostname.toLowerCase().replace(/^www\.|^m\./, "");
   function parse(raw) {
     let u;
     try {
@@ -26132,14 +26177,14 @@ ${BLOCKED_PILL_CSS}
     const u = parse(raw);
     if (!u || u.protocol !== "https:") return null;
     const hosts = PLATFORMS[platform]?.hosts || [];
-    const host = hostOf3(u);
+    const host = hostOf4(u);
     if (!hosts.some((h) => host === h || host.endsWith(`.${h}`))) return null;
     return u.toString();
   }
   function creatorFrom(rawUrl, stored = {}) {
     const u = parse(rawUrl);
     if (!u) return null;
-    const host = hostOf3(u);
+    const host = hostOf4(u);
     const seg = u.pathname.split("/").filter(Boolean);
     const stamped = typeof stored?.creatorName === "string" && stored.creatorName.trim() ? stored.creatorName.trim() : "";
     const made = (platform, url, handle = "") => url ? { url, name: stamped || handle || "", platform, label: PLATFORMS[platform].label, verb: PLATFORMS[platform].verb } : null;
@@ -26204,7 +26249,7 @@ ${BLOCKED_PILL_CSS}
   function sourceCardModel({ url, memberName, creatorUrl = "", creatorName = "" } = {}) {
     const u = parse(url);
     if (!u) return null;
-    const host = hostOf3(u);
+    const host = hostOf4(u);
     const who = String(memberName || "").trim();
     const creator = creatorFrom(url, { creatorUrl, creatorName });
     if (!creator) {
@@ -26644,7 +26689,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE22 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it.url)} on ${esc(hostOf(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE22 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
       const copyAll = it.type === "prompt" && this._rawBody ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";

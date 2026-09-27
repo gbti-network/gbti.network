@@ -12,6 +12,7 @@ import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbo
 // cards already did, so this surface disagreed with those for same-day items. One definition now.
 import { relTime } from '../time-core.mjs';
 import { parseBrowseHash } from '../browse-hash.mjs'; // SOW-092: the share deep link (#tab=share&read=<author>/<id>)
+import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: a video share plays inline
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
 import { resolveAsset } from '../assets.mjs'; // SOW-057: resolve the share featured image URL
@@ -238,8 +239,9 @@ class GbtiSharesFeed extends GbtiElement {
     const badge = share.visibility === 'members' ? `<span class="badge">Members</span>` : '';
     const title = share.title ? `<div class="title">${esc(share.title)}</div>` : '';
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
-    // SOW-057: "Read article on <domain>" + the featured image beneath it (single-column feed).
-    const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow">${embedUrl(share.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(share.url))}</a>` : '';
+    // SOW-057: "Read article on <domain>" + the featured image beneath it (single-column feed). sow-417: an audio link
+    // says "Listen to it on <domain>" and a video link "Watch video on <domain>" (client/src/link-kind.mjs).
+    const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc(hostOf(share.url))}</a>` : '';
     // SOW-092: a video link (YouTube/Vimeo/TikTok/Rumble embed) plays inline; the static image (usually
     // that video's thumbnail) shows only for non-video links.
     const shareEmbed = share.url ? embedUrl(share.url) : null;

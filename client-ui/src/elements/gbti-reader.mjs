@@ -26,6 +26,7 @@ import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbo
 import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the share source favicon (meta stack + side card)
 import { loadMembersDirectory } from '../members-index.mjs'; // SOW-143: the shared /members-index.json loader (one cache across elements)
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
+import { shareLinkVerb } from '../../../client/src/link-kind.mjs'; // sow-417: Listen / Watch video / Read article, one decision
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
 // SOW-041: the comment/favorite key for an item (a post/project/prompt's slug, a Share's "<author>/<shareId>").
 // sow-398: it moved to ../target-slug.mjs so the feed cards key their heart and Save the same way.
@@ -482,7 +483,7 @@ class GbtiReader extends GbtiElement {
     // sow-145: outbound share links carry UTM attribution (the embed relay keeps the RAW url).
     const shareOut = it.type === 'share' && it.url ? utmLink(it.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }) : '';
     const view = it.type === 'share'
-      ? (it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(it.url))}</a>` : '')
+      ? (it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it.url)} on ${esc(hostOf(it.url))}</a>` : '')
       : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     const meta = this._metaHtml(it, when);
