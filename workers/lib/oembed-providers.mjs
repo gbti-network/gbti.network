@@ -5,7 +5,12 @@
 // scrape kept as the fallback. Pure + node-free: URL matching and JSON mapping only; the caller fetches.
 //
 // SSRF posture: the returned endpoint is a CONSTANT provider host with the member URL only ever carried as
-// an encoded query value, so this adds no new fetch surface beyond youtube.com / vimeo.com.
+// an encoded query value, so this adds no new fetch surface beyond youtube.com / vimeo.com / app.mixcloud.com.
+//
+// sow-417: Mixcloud joins them. Its mix pages DO carry og:image, but they do not answer the Worker: on 2026-09-26 the
+// live preview returned `reason: 'unreachable'` for a mix whose page served og:image to a laptop and to the GitHub
+// Actions cover job, so the owner's share published with no picture until that job filled it in. Its oEmbed answers
+// with the cover, under the key `image` rather than the standard `thumbnail_url`, which previewFromOembed reads too.
 
 /** The oEmbed endpoint URL for a supported provider link, or null when the URL is not a match.
  *  YouTube: watch?v=, youtu.be/<id>, shorts/live/embed/<id>. Vimeo: vimeo.com/<digits>. */
@@ -30,7 +35,23 @@ export function oembedEndpointFor(rawUrl) {
     if (/^\/(video\/)?\d{6,}/.test(u.pathname)) return `https://vimeo.com/api/oembed.json?url=${enc}`;
     return null;
   }
+  // sow-417: a mix (/<user>/<mix>/) or a profile (/<user>/). www.mixcloud.com/oembed/ only redirects here.
+  if (host === 'mixcloud.com') {
+    if (/^\/[^/]+\/(?:[^/]+\/?)?$/.test(u.pathname)) return `https://app.mixcloud.com/oembed/?url=${enc}&format=json`;
+    return null;
+  }
   return null;
+}
+
+/** sow-417: Mixcloud's oEmbed names a 600x600 cover from its thumbnailer, which serves any size from one path.
+ *  1200x1200 clears the minimum-width floor some scrapers apply (the same reason YouTube is upsized below), and the
+ *  thumbnailer answers it for every cover, so no confirming request is needed. Anything else is returned as is. */
+export function largeMixcloudImage(imageUrl) {
+  let u;
+  try { u = new URL(String(imageUrl || '')); } catch { return imageUrl; }
+  if (u.protocol !== 'https:' || u.hostname !== 'thumbnailer.mixcloud.com') return imageUrl;
+  u.pathname = u.pathname.replace(/^\/unsafe\/\d+x\d+\//, '/unsafe/1200x1200/');
+  return u.toString();
 }
 
 /** Map an oEmbed JSON response onto the preview shape membership-og returns ({ image, title, description,
@@ -44,12 +65,19 @@ export function oembedEndpointFor(rawUrl) {
 export function previewFromOembed(json) {
   const j = json && typeof json === 'object' ? json : {};
   const title = typeof j.title === 'string' && j.title.trim() ? j.title.trim() : null;
-  const image = typeof j.thumbnail_url === 'string' && /^https:\/\//.test(j.thumbnail_url) ? j.thumbnail_url : null;
+  // sow-417: `thumbnail_url` is the standard key; Mixcloud uses `image` for the same thing.
+  const httpsStr = (v) => (typeof v === 'string' && /^https:\/\//.test(v) ? v : null);
+  const image = httpsStr(j.thumbnail_url) || largeMixcloudImage(httpsStr(j.image)) || null;
   if (!title && !image) return null;
   const author = typeof j.author_name === 'string' && j.author_name.trim() ? j.author_name.trim() : null;
   const provider = typeof j.provider_name === 'string' && j.provider_name.trim() ? j.provider_name.trim() : null;
-  const kind = typeof j.type === 'string' && j.type.trim() ? j.type.trim() : 'link';
-  const description = author ? `A ${kind} by ${author}${provider ? ` on ${provider}` : ''}` : null;
+  // The oEmbed type is a noun only for video and photo. Mixcloud answers "rich", and "A rich by Dms519" is not a
+  // sentence, so a mix is called a mix and any other rich or link answer drops the noun.
+  const type = typeof j.type === 'string' ? j.type.trim() : '';
+  const kind = type === 'video' || type === 'photo' ? type : (provider === 'Mixcloud' ? 'mix' : null);
+  const description = author
+    ? (kind ? `A ${kind} by ${author}${provider ? ` on ${provider}` : ''}` : `By ${author}${provider ? ` on ${provider}` : ''}`)
+    : null;
   const creatorUrl = typeof j.author_url === 'string' && /^https:\/\//.test(j.author_url.trim()) ? j.author_url.trim() : null;
   return { image, title, description, tags: [], creatorUrl, creatorName: author };
 }

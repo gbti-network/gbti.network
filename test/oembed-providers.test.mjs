@@ -3,12 +3,12 @@
 // the empty-signal suggester skip. No network: injected fetch fakes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { oembedEndpointFor, previewFromOembed, maxresThumbCandidate } from '../workers/lib/oembed-providers.mjs';
+import { oembedEndpointFor, previewFromOembed, maxresThumbCandidate, largeMixcloudImage } from '../workers/lib/oembed-providers.mjs';
 import { handleOgPreview } from '../workers/signup/membership-og.mjs';
 
 const OWNER_URL = 'https://www.youtube.com/watch?v=N_GfH09iP9c&list=RDN_GfH09iP9c&start_radio=1';
 
-test('oembedEndpointFor matches YouTube + Vimeo shapes and nothing else', () => {
+test('oembedEndpointFor matches YouTube, Vimeo and (sow-417) Mixcloud shapes and nothing else', () => {
   // The exact URL from the report (watch + list + start_radio params) matches.
   const owner = oembedEndpointFor(OWNER_URL);
   assert.ok(owner.startsWith('https://www.youtube.com/oembed?url='));
@@ -27,6 +27,34 @@ test('oembedEndpointFor matches YouTube + Vimeo shapes and nothing else', () => 
   assert.equal(oembedEndpointFor('https://vimeo.com/about'), null);
   assert.equal(oembedEndpointFor('not a url'), null);
   assert.equal(oembedEndpointFor('ftp://youtu.be/abcdef1'), null);
+  // sow-417: a Mixcloud mix and a profile go to the endpoint www.mixcloud.com/oembed/ redirects to.
+  const mix = 'https://www.mixcloud.com/baseline519/dms-age-of-enlightenment/';
+  assert.equal(oembedEndpointFor(mix), `https://app.mixcloud.com/oembed/?url=${encodeURIComponent(mix)}&format=json`);
+  assert.ok(oembedEndpointFor('https://mixcloud.com/baseline519/'));
+  assert.equal(oembedEndpointFor('https://www.mixcloud.com/'), null);
+  assert.equal(oembedEndpointFor('https://www.mixcloud.com/a/b/c/'), null);
+  assert.equal(oembedEndpointFor('https://mixcloud.com.example.net/a/b/'), null);
+});
+
+test('sow-417: a Mixcloud answer (cover under `image`, type "rich") previews with a 1200px cover and a real by-line', () => {
+  // The shape app.mixcloud.com returned for the owner's share on 2026-09-26, embed html left out.
+  const p = previewFromOembed({
+    version: '1.0', type: 'rich', title: 'Dms - Age Of Enlightenment',
+    image: 'https://thumbnailer.mixcloud.com/unsafe/600x600/extaudio/c/a/4/9/0408-dcc5-44ca-84c2-f1900e6649bf',
+    author_name: 'Dms519', author_url: 'https://www.mixcloud.com/baseline519/', provider_name: 'Mixcloud',
+  });
+  assert.equal(p.image, 'https://thumbnailer.mixcloud.com/unsafe/1200x1200/extaudio/c/a/4/9/0408-dcc5-44ca-84c2-f1900e6649bf');
+  assert.equal(p.title, 'Dms - Age Of Enlightenment');
+  assert.equal(p.description, 'A mix by Dms519 on Mixcloud');
+  assert.equal(p.creatorUrl, 'https://www.mixcloud.com/baseline519/');
+  // thumbnail_url still wins where a provider sends both, and an http `image` is refused like an http thumbnail.
+  assert.equal(previewFromOembed({ title: 'T', thumbnail_url: 'https://a.example/t.jpg', image: 'https://b.example/i.jpg' }).image, 'https://a.example/t.jpg');
+  assert.equal(previewFromOembed({ title: 'T', image: 'http://b.example/i.jpg' }).image, null);
+  // Another provider's "rich" answer drops the noun rather than saying "A rich by".
+  assert.equal(previewFromOembed({ title: 'T', type: 'rich', author_name: 'A', provider_name: 'Elsewhere' }).description, 'By A on Elsewhere');
+  // Only the Mixcloud thumbnailer is resized.
+  assert.equal(largeMixcloudImage('https://example.com/unsafe/600x600/x.jpg'), 'https://example.com/unsafe/600x600/x.jpg');
+  assert.equal(largeMixcloudImage(null), null);
 });
 
 test('previewFromOembed maps title + thumbnail + a by-line description; null without usable fields', () => {
