@@ -42,4 +42,4 @@ links:
   devto: https://dev.to/atwellpub
 ---
 
-With a long background in developing products developer relations, and website development; Hudson Atwell shares his experience by writing for the GBTI Network. Join his personal discord (link below) to follow his work more closely.
+Product development & developer relations; Hudson Atwell shares his experience by writing for the GBTI Network. Join his personal discord (link below) to follow his work more closely.
