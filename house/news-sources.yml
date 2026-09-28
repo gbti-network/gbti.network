@@ -635,3 +635,8 @@ sources:
     url: https://www.sciencealert.com/feed
     description: www.sciencealert.com
     enabled: true
+  - id: gamedeveloper
+    name: GameDeveloper
+    url: https://www.gamedeveloper.com/rss.xml
+    description: www.gamedeveloper.com
+    enabled: true
