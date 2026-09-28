@@ -635,3 +635,8 @@ sources:
     url: https://www.sciencealert.com/feed
     description: www.sciencealert.com
     enabled: true
+  - id: vgc
+    name: VGC
+    url: https://www.videogameschronicle.com/feed/
+    description: www.videogameschronicle.com
+    enabled: true
