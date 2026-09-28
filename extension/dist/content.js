@@ -16361,6 +16361,9 @@ ${BLOCKED_PILL_CSS}
     if (membership === "trialing") return "trial";
     return "composer";
   }
+  function composerHoldsWork({ editing = false, values = [] } = {}) {
+    return editing === true || values.some((v) => String(v ?? "").trim() !== "");
+  }
   function canSharePublicly({ membership, role = null, editingPublic = false } = {}) {
     if (SHARE_LOCKED_STATES.has(membership) || membership === "trialing") return false;
     if (editingPublic === true) return true;
@@ -16499,8 +16502,10 @@ ${BLOCKED_PILL_CSS}
   button.post { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:var(--sc-r); background:var(--brand); color:#fff; cursor:pointer; }
   button.post[disabled] { opacity:.6; cursor:default; }
   /* SOW-092: the progressing ring shown inside the Post button while postShare runs. */
-  .post .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sc-spin .7s linear infinite; }
+  .post .spin, .edit-loading .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sc-spin .7s linear infinite; }
   @keyframes sc-spin { to { transform:rotate(360deg); } }
+  .wizard { position:relative; } .wizard .edit-loading { display:none; } .wizard.loading > :not(.edit-loading) { visibility:hidden; }
+  .wizard.loading .edit-loading { display:flex; position:absolute; inset:0; align-items:center; justify-content:center; gap:10px; margin:0; color:var(--muted); }
   .msg { font-size:13px; }
   .msg.err { color:#c0392b; }
   .msg.ok { color:var(--brand); }
@@ -16599,7 +16604,21 @@ ${BLOCKED_PILL_CSS}
         this._tier = null;
         this._role = null;
       }
+      if (this._holdsWork() && shareComposerView({ hasClient: Boolean(this.client), membership: this._membership }) === "composer") {
+        this._applyPublicLock();
+        this._loadAuthorTargets();
+        return;
+      }
       this.render();
+    }
+    // sow-421: a re-render rebuilds the wizard empty, so an edit or a typed share declines the page-wide broadcast.
+    _holdsWork() {
+      if (!this.$(".card.wizard")) return false;
+      const values = ["input[type=url]", "input.title", "input.desc", "textarea", "input.tags"].map((q) => this.$(q)?.value);
+      return composerHoldsWork({ editing: Boolean(this._edit), values });
+    }
+    skipClientRender() {
+      return this._holdsWork();
     }
     render() {
       switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
@@ -16649,6 +16668,7 @@ ${BLOCKED_PILL_CSS}
       const rail = STEP_LABELS.map((l, i) => `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join("");
       this.set(this.css(CSS26) + `
       <div class="card wizard">
+        <p class="edit-loading" role="status"><span class="spin" aria-hidden="true"></span>Loading your share...</p>
         <div class="rail">${rail}</div>
 
         <section class="step" data-step="1">
@@ -16881,6 +16901,8 @@ ${BLOCKED_PILL_CSS}
       if (!this.$(".card.wizard")) this._renderComposer();
       if (!this.$(".card.wizard")) return false;
       this._edit = { ...item };
+      const card = this.$(".card.wizard");
+      card.classList.add("loading");
       let body = typeof item.body === "string" ? item.body : "";
       let decryptNote = "";
       if (!body && item.encryptedBody && typeof this.client?.decrypt === "function") {
@@ -16924,6 +16946,7 @@ ${BLOCKED_PILL_CSS}
       this._paintAuthorRow();
       this._setNoteTab("write");
       this._go(1);
+      card.classList.remove("loading");
       return true;
     }
     /** Leave edit mode and return to a clean composer. */
@@ -16954,6 +16977,8 @@ ${BLOCKED_PILL_CSS}
       }
       const post = this.$(".post");
       if (post) post.textContent = "Save changes";
+      const h = this.$('[data-step="1"] h3');
+      if (h) h.textContent = "Edit your share";
       const un = this.$("[data-unpublish]");
       if (un) {
         un.hidden = false;
@@ -16975,6 +17000,8 @@ ${BLOCKED_PILL_CSS}
       }
       const post = this.$(".post");
       if (post) post.textContent = "Post Share";
+      const h = this.$('[data-step="1"] h3');
+      if (h) h.textContent = "What are you sharing?";
       const un = this.$("[data-unpublish]");
       if (un) un.hidden = true;
       const an = this.$("[data-aud-note]");
@@ -20878,7 +20905,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       const items = this._items;
       const w = pageWindow(items?.length || 0, this._page, WORKSPACE_PAGE_SIZE);
-      const body = items === null ? `<p class="muted">Loading your shares...</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.slice(w.start, w.end).map((it, j) => this.rowHtml(it, w.start + j)).join("")}</ul>` + this.pagerHtml(w);
+      const body = items === null ? `<p class="muted">${this.getAttribute("edit-id") ? "Opening your share for editing..." : "Loading your shares..."}</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.slice(w.start, w.end).map((it, j) => this.rowHtml(it, w.start + j)).join("")}</ul>` + this.pagerHtml(w);
       this.set(this.css(`
       .row { align-items: flex-start; gap: 10px; }
       .sh-main { min-width: 0; flex: 1 1 auto; }
@@ -25381,7 +25408,7 @@ ${BLOCKED_PILL_CSS}
       const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const wsBase = inExt ? `${SITE20}/workbench/` : "/workbench/";
       const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
-      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : "";
+      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : it.type === "share" && it.id ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it.id)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit share"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE20}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};

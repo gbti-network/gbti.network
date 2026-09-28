@@ -143,8 +143,9 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
       if (!item || !dialog || !composer) return;
       await import('../../client-ui/src/elements/gbti-share-composer.mjs').catch(() => {});
       if (typeof composer.editShare !== 'function') return;
-      const ok = await composer.editShare(item);
-      if (ok && !dialog.open) dialog.showModal();
+      // sow-421: open first, so the member sees "Loading your share..." rather than nothing, then an empty form.
+      if (!dialog.open) dialog.showModal();
+      await composer.editShare(item);
     });
     document.querySelector<HTMLDialogElement>('[data-share-modal]')?.addEventListener('close', () => {
       // every close leaves a clean create form behind: an abandoned edit, and the fields of a finished one

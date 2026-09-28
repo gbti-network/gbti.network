@@ -64,8 +64,9 @@ class GbtiShareList extends GbtiElement {
     // rows in one scroll. `data-i` stays the index into the FULL list, so a row action on page two still
     // reaches its own item.
     const w = pageWindow(items?.length || 0, this._page, WORKSPACE_PAGE_SIZE);
+    // sow-421: arriving from a share page's Edit link, say what is coming rather than a generic list load.
     const body = items === null
-      ? `<p class="muted">Loading your shares...</p>`
+      ? `<p class="muted">${this.getAttribute('edit-id') ? 'Opening your share for editing...' : 'Loading your shares...'}</p>`
       : items.length === 0
         ? `<p class="muted">${this._error ? esc(this._error) : 'No shares yet. Use the share bar above to post your first one.'}</p>`
         : `<ul class="list">${items.slice(w.start, w.end).map((it, j) => this.rowHtml(it, w.start + j)).join('')}</ul>`

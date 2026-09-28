@@ -445,8 +445,11 @@ class GbtiReader extends GbtiElement {
     const inExt = typeof location !== 'undefined' && location.protocol === 'chrome-extension:';
     const wsBase = inExt ? `${SITE}/workbench/` : '/workbench/';
     const wsOut = inExt ? ' target="_blank" rel="noopener"' : '';
+    // sow-421: a share's author can edit it too, landing straight in the share editor (the public share page's link).
     if (a.isSelf) follow = ['post', 'project', 'prompt'].includes(it.type)
-      ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? 'Edit on gbti.network' : 'Edit in workspace'}</a>` : '';
+      ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? 'Edit on gbti.network' : 'Edit in workspace'}</a>`
+      : it.type === 'share' && it.id
+        ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it.id)}"${wsOut}>${inExt ? 'Edit on gbti.network' : 'Edit share'}</a>` : '';
     else if (a.canFollow) follow = `<button class="follow${a.following ? ' on' : ''}" data-follow type="button">${a.following ? 'Following' : 'Follow'}</button>`;
     else follow = `<a class="follow muted" href="${SITE}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
     // Social links (Discord shown as an inspectable handle chip).

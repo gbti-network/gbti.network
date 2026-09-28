@@ -107,6 +107,16 @@ export function shareComposerView({ hasClient = false, membership } = {}) {
 }
 
 /**
+ * sow-421: does the composer hold work that a re-render would destroy? A re-render rebuilds the wizard empty (and
+ * leaves edit mode), so while this is true the composer declines both late re-renders that reach it: a page-wide
+ * setClient broadcast, and its own membership check resolving after an edit opened. That is how a member clicking
+ * Edit saw a blank "new share" form. An UNTOUCHED composer still re-renders, which the client-ready race needs.
+ */
+export function composerHoldsWork({ editing = false, values = [] } = {}) {
+  return editing === true || values.some((v) => String(v ?? '').trim() !== '');
+}
+
+/**
  * sow-323 Phase 3: may this viewer choose PUBLIC for a share?
  *
  * Owner, 2026-09-15: "Only superadmins can make shares public though, so don't even give members the option on

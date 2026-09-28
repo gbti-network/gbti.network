@@ -11,7 +11,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import './gbti-category-picker.mjs'; // sow-227: the searchable, grouped topic picker (it loads the vocabulary itself)
-import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote, shareAuthorTarget, authorMoveRemovals } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
+import { optimisticShareItem, shareComposerView, composerHoldsWork, canSharePublicly, normalizeTagInput, editInputFor, encRemovalFor, audienceChangeNote, shareAuthorTarget, authorMoveRemovals } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
@@ -125,8 +125,10 @@ const CSS = `
   button.post { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:var(--sc-r); background:var(--brand); color:#fff; cursor:pointer; }
   button.post[disabled] { opacity:.6; cursor:default; }
   /* SOW-092: the progressing ring shown inside the Post button while postShare runs. */
-  .post .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sc-spin .7s linear infinite; }
+  .post .spin, .edit-loading .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sc-spin .7s linear infinite; }
   @keyframes sc-spin { to { transform:rotate(360deg); } }
+  .wizard { position:relative; } .wizard .edit-loading { display:none; } .wizard.loading > :not(.edit-loading) { visibility:hidden; }
+  .wizard.loading .edit-loading { display:flex; position:absolute; inset:0; align-items:center; justify-content:center; gap:10px; margin:0; color:var(--muted); }
   .msg { font-size:13px; }
   .msg.err { color:#c0392b; }
   .msg.ok { color:var(--brand); }
@@ -224,8 +226,20 @@ class GbtiShareComposer extends GbtiElement {
       this._tier = null;
       this._role = null;
     }
+    // sow-421: this can land after Edit filled the form; if the answer is still "the composer", keep what is there.
+    if (this._holdsWork() && shareComposerView({ hasClient: Boolean(this.client), membership: this._membership }) === 'composer') {
+      this._applyPublicLock(); this._loadAuthorTargets(); return;
+    }
     this.render();
   }
+
+  // sow-421: a re-render rebuilds the wizard empty, so an edit or a typed share declines the page-wide broadcast.
+  _holdsWork() {
+    if (!this.$('.card.wizard')) return false;
+    const values = ['input[type=url]', 'input.title', 'input.desc', 'textarea', 'input.tags'].map((q) => this.$(q)?.value);
+    return composerHoldsWork({ editing: Boolean(this._edit), values });
+  }
+  skipClientRender() { return this._holdsWork(); }
 
   render() {
     // sow-204: the branch CHOICE lives in shareComposerView (share-post-core.mjs) so it can be unit-tested.
@@ -282,6 +296,7 @@ class GbtiShareComposer extends GbtiElement {
       `<button class="dot" type="button" data-goto="${i + 1}"><span class="num">${i + 1}</span><span class="lbl">${l}</span></button>`).join('');
     this.set(this.css(CSS) + `
       <div class="card wizard">
+        <p class="edit-loading" role="status"><span class="spin" aria-hidden="true"></span>Loading your share...</p>
         <div class="rail">${rail}</div>
 
         <section class="step" data-step="1">
@@ -509,6 +524,7 @@ class GbtiShareComposer extends GbtiElement {
     if (!this.$('.card.wizard')) this._renderComposer();
     if (!this.$('.card.wizard')) return false; // locked / trial / no client: the view is not the composer
     this._edit = { ...item };
+    const card = this.$('.card.wizard'); card.classList.add('loading'); // sow-421: never an empty form while it fills
     let body = typeof item.body === 'string' ? item.body : '';
     let decryptNote = '';
     if (!body && item.encryptedBody && typeof this.client?.decrypt === 'function') {
@@ -547,6 +563,7 @@ class GbtiShareComposer extends GbtiElement {
     this._paintAuthorRow(); // sow-183 for shares: the picker starts on this share's own author
     this._setNoteTab('write');
     this._go(1);
+    card.classList.remove('loading');
     return true;
   }
 
@@ -574,6 +591,7 @@ class GbtiShareComposer extends GbtiElement {
       note.hidden = false;
     }
     const post = this.$('.post'); if (post) post.textContent = 'Save changes';
+    const h = this.$('[data-step="1"] h3'); if (h) h.textContent = 'Edit your share'; // sow-421: never reads as a new post
     const un = this.$('[data-unpublish]');
     if (un) { un.hidden = false; un.textContent = e.status === 'draft' ? 'Publish again' : 'Remove from the network'; }
   }
@@ -583,6 +601,7 @@ class GbtiShareComposer extends GbtiElement {
     const rm = this.$('[data-remove-link]'); if (rm) rm.hidden = true;
     const note = this.$('[data-edit-note]'); if (note) { note.hidden = true; note.textContent = ''; }
     const post = this.$('.post'); if (post) post.textContent = 'Post Share';
+    const h = this.$('[data-step="1"] h3'); if (h) h.textContent = 'What are you sharing?';
     const un = this.$('[data-unpublish]'); if (un) un.hidden = true;
     const an = this.$('[data-aud-note]'); if (an) { an.hidden = true; an.textContent = ''; }
   }
