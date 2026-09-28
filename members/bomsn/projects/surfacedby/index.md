@@ -35,7 +35,7 @@ links:
   - { type: homepage, url: "https://surfacedby.com/", label: "Check your AI visibility free", primary: true }
   - { type: homepage, url: "https://surfacedby.com/demo", label: "Try the live demo" }
   - { type: documentation, url: "https://docs.surfacedby.com" }
-publishedAt: 2026-09-28
+publishedAt: 2026-09-28T22:35:28.000Z
 ---
 
 ## SurfacedBy
