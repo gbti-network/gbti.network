@@ -640,3 +640,8 @@ sources:
     url: https://www.videogameschronicle.com/feed/
     description: www.videogameschronicle.com
     enabled: true
+  - id: time-extension
+    name: Time Extension
+    url: https://www.timeextension.com/feeds/news
+    description: www.timeextension.com
+    enabled: true
