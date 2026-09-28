@@ -14,6 +14,9 @@ export const TOKENS = `
 :host {
   --bg: #faf9f8; --panel: #ffffff;
   --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
+  /* Owner, 2026-09-28: text ON an --accent fill. White on brand green is 3.4:1, under AA, so a filled control uses
+     --accent with --on-accent: 6.2:1 here (white on the dark green), 9.6:1 in dark (ink on the mint). */
+  --on-accent: #ffffff;
   --text: #24222a; --fg: #24222a; --muted: #57545e;
   --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
   /* sow-227: three website tokens (src/styles/gbti-v3.css), pinned here like the rest. Until now a shared component
@@ -30,7 +33,7 @@ export const TOKENS = `
 }
 :host-context([data-theme="dark"]) {
   --bg: #1c1a21; --panel: #2d2a34;
-  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a;
+  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a; --on-accent: #17151c;
   --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
   --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
   /* sow-227: --fg-mute is the site's .50 lifted to .62, because .50 measures about 4.3:1 on the dark panel, under AA

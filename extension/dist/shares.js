@@ -62,6 +62,9 @@
 :host {
   --bg: #faf9f8; --panel: #ffffff;
   --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
+  /* Owner, 2026-09-28: text ON an --accent fill. White on brand green is 3.4:1, under AA, so a filled control uses
+     --accent with --on-accent: 6.2:1 here (white on the dark green), 9.6:1 in dark (ink on the mint). */
+  --on-accent: #ffffff;
   --text: #24222a; --fg: #24222a; --muted: #57545e;
   --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
   /* sow-227: three website tokens (src/styles/gbti-v3.css), pinned here like the rest. Until now a shared component
@@ -78,7 +81,7 @@
 }
 :host-context([data-theme="dark"]) {
   --bg: #1c1a21; --panel: #2d2a34;
-  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a;
+  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a; --on-accent: #17151c;
   --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
   --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
   /* sow-227: --fg-mute is the site's .50 lifted to .62, because .50 measures about 4.3:1 on the dark panel, under AA
@@ -15678,12 +15681,13 @@ ${listStyleProseCss(".doc-blocks")}
   .row { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; font-size:13.5px; }
   .row:hover { background:var(--hover, rgba(0,0,0,.04)); }
   .row .box { width:16px; height:16px; border:1.5px solid var(--line); border-radius:4px; display:inline-flex; align-items:center; justify-content:center; flex:none; color:#fff; }
-  .row.in .box { background:var(--brand); border-color:var(--brand); }
+  .row.in .box { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
   .row .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .empty { padding:8px; font-size:12.5px; color:var(--muted); }
   .new { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--line); padding-top:10px; }
   .new input { flex:1; min-width:0; font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
-  .new button { font:inherit; font-size:13px; font-weight:600; padding:6px 12px; border:0; border-radius:8px; background:var(--brand); color:#fff; cursor:pointer; }
+  .new button { font:inherit; font-size:13px; font-weight:600; padding:6px 12px; border:0; border-radius:8px; background:var(--accent); color:var(--on-accent); cursor:pointer; }
+  .new button:hover { background:var(--accent); filter:brightness(1.1); }
   .busy { opacity:.55; pointer-events:none; }
 `;
   var GbtiCollection = class extends GbtiElement {
@@ -20993,7 +20997,9 @@ ${BLOCKED_PILL_CSS}
   a.t:hover { color:var(--accent); }
   .badge { flex:none; font-size:11px; color:var(--muted); background:var(--hover); border-radius:999px; padding:2px 9px; }
   .lk { flex:none; background:none; border:0; font:inherit; font-size:13px; font-weight:600; color:var(--accent); cursor:pointer; padding:4px 6px; border-radius:6px; }
-  .lk:hover { background:var(--hover); }
+  /* Owner, 2026-09-28: an underline, not a fill: the grey hover fill took red Delete to 4.0:1 in dark mode. The
+     explicit background also outranks BASE_CSS's green button hover. */
+  .lk:hover { background:none; text-decoration:underline; text-underline-offset:3px; }
   .lk.danger { color:var(--danger); }
   .coll { border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:0 0 12px; }
   .coll-h { display:flex; align-items:center; gap:10px; margin:0 0 6px; }
@@ -21004,12 +21010,13 @@ ${BLOCKED_PILL_CSS}
   .muted { color:var(--muted); font-size:14px; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px; }
   .chip { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; }
-  .chip:hover { color:var(--fg); border-color:var(--accent); }
-  .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .chip:hover { color:var(--fg); border-color:var(--accent); background:var(--panel); }
+  .chip.on { color:var(--on-accent); background:var(--accent); border-color:var(--accent); }
   .chip .n { opacity:.7; font-variant-numeric:tabular-nums; }
   .newc { display:flex; gap:8px; margin-top:10px; }
   .newc input { flex:1; min-width:0; font:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
-  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:var(--on-accent); cursor:pointer; }
+  .btn:hover { background:var(--accent); filter:brightness(1.1); }
   .busy { opacity:.6; pointer-events:none; }
 `;
   var GbtiSaved = class extends GbtiElement {

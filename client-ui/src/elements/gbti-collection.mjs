@@ -30,12 +30,13 @@ const CSS = `
   .row { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; font-size:13.5px; }
   .row:hover { background:var(--hover, rgba(0,0,0,.04)); }
   .row .box { width:16px; height:16px; border:1.5px solid var(--line); border-radius:4px; display:inline-flex; align-items:center; justify-content:center; flex:none; color:#fff; }
-  .row.in .box { background:var(--brand); border-color:var(--brand); }
+  .row.in .box { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
   .row .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .empty { padding:8px; font-size:12.5px; color:var(--muted); }
   .new { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--line); padding-top:10px; }
   .new input { flex:1; min-width:0; font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
-  .new button { font:inherit; font-size:13px; font-weight:600; padding:6px 12px; border:0; border-radius:8px; background:var(--brand); color:#fff; cursor:pointer; }
+  .new button { font:inherit; font-size:13px; font-weight:600; padding:6px 12px; border:0; border-radius:8px; background:var(--accent); color:var(--on-accent); cursor:pointer; }
+  .new button:hover { background:var(--accent); filter:brightness(1.1); }
   .busy { opacity:.55; pointer-events:none; }
 `;
 

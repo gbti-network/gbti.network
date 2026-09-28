@@ -22,7 +22,9 @@ const CSS = `
   a.t:hover { color:var(--accent); }
   .badge { flex:none; font-size:11px; color:var(--muted); background:var(--hover); border-radius:999px; padding:2px 9px; }
   .lk { flex:none; background:none; border:0; font:inherit; font-size:13px; font-weight:600; color:var(--accent); cursor:pointer; padding:4px 6px; border-radius:6px; }
-  .lk:hover { background:var(--hover); }
+  /* Owner, 2026-09-28: an underline, not a fill: the grey hover fill took red Delete to 4.0:1 in dark mode. The
+     explicit background also outranks BASE_CSS's green button hover. */
+  .lk:hover { background:none; text-decoration:underline; text-underline-offset:3px; }
   .lk.danger { color:var(--danger); }
   .coll { border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:0 0 12px; }
   .coll-h { display:flex; align-items:center; gap:10px; margin:0 0 6px; }
@@ -33,12 +35,13 @@ const CSS = `
   .muted { color:var(--muted); font-size:14px; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px; }
   .chip { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; }
-  .chip:hover { color:var(--fg); border-color:var(--accent); }
-  .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .chip:hover { color:var(--fg); border-color:var(--accent); background:var(--panel); }
+  .chip.on { color:var(--on-accent); background:var(--accent); border-color:var(--accent); }
   .chip .n { opacity:.7; font-variant-numeric:tabular-nums; }
   .newc { display:flex; gap:8px; margin-top:10px; }
   .newc input { flex:1; min-width:0; font:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
-  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:var(--on-accent); cursor:pointer; }
+  .btn:hover { background:var(--accent); filter:brightness(1.1); }
   .busy { opacity:.6; pointer-events:none; }
 `;
 
