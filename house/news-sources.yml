@@ -655,3 +655,8 @@ sources:
     url: https://www.nintendolife.com/feeds/news
     description: www.nintendolife.com
     enabled: true
+  - id: moddb
+    name: ModDB
+    url: https://rss.moddb.com/news/feed/rss.xml
+    description: rss.moddb.com
+    enabled: true
