@@ -8,8 +8,12 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const TOOLS = ['gbti-channel-map-manager', 'gbti-syndication-tracker', 'gbti-social-queue', 'gbti-syndicate-now'];
+// sow-419 (owner, 2026-09-28: "I want to add social queue support back into the extension for superadmins. I miss
+// it."): the ONE exception. The Social Queue popup is back in the extension's avatar menu, mounted by the shell and
+// nowhere else. The other three tools stay on the website only.
+const ALLOWED = { 'gbti-social-queue': ['extension/src/shell.mjs'] };
 
-test('no extension page, script or reader mounts a syndication tool', () => {
+test('no extension page, script or reader mounts a syndication tool, except the Social Queue from the shell', () => {
   const files = [
     ...readdirSync(new URL('../extension/', import.meta.url)).filter((f) => f.endsWith('.html')).map((f) => `extension/${f}`),
     ...readdirSync(new URL('../extension/src/', import.meta.url)).filter((f) => f.endsWith('.mjs')).map((f) => `extension/src/${f}`),
@@ -19,10 +23,10 @@ test('no extension page, script or reader mounts a syndication tool', () => {
   for (const f of files) {
     const src = read(f).replace(/<!--[\s\S]*?-->/g, '').replace(/^\s*\/\/.*$/gm, '');
     for (const tool of TOOLS) {
+      if ((ALLOWED[tool] || []).includes(f)) continue;
       assert.ok(!src.includes(`<${tool}`) && !src.includes(`${tool}.mjs'`), `${f} still mounts or imports ${tool}`);
     }
   }
-  assert.ok(!/data-social-queue/.test(read('extension/src/shell.mjs')), 'the Social Queue menu item is still in the extension menu');
   assert.ok(!/data-tab="syndication"/.test(read('extension/admin.html')), 'the Syndication tab is still in the extension admin page');
 });
 
@@ -80,4 +84,17 @@ test('an element can carry its own client, and a later page-wide client does not
   el.client = null;
   assert.equal(el.client, later, 'clearing the own client falls back to the page client');
   setClient(null);
+});
+
+test('sow-419: the extension Social Queue is back, for superadmins only, and alone', () => {
+  const shell = read('extension/src/shell.mjs');
+  assert.match(shell, /import '\.\.\/\.\.\/client-ui\/src\/elements\/gbti-social-queue\.mjs';/, 'the shell loads the element');
+  assert.match(shell, /<button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue<\/button>/,
+    'the avatar menu item, hidden until the superadmin gate reveals it');
+  assert.match(shell, /root\.querySelectorAll\('\[data-super-only\]'\)\.forEach\(\(el\) => \{ el\.hidden = !showSuper; \}\)/, 'the gate that reveals it');
+  assert.match(shell, /const showSuper = \(RANK\[status\.role\] \?\? 0\) >= RANK\.superadmin;/);
+  assert.match(shell, /querySelector\('\[data-social-queue\]'\)\?\.addEventListener\('click', \(\) => \{ close\(\); openSocialQueueModal\(\); \}\)/);
+  assert.match(shell, /overlay\.innerHTML = `<gbti-social-queue><\/gbti-social-queue>`;/, 'the popup mounts the queue');
+  assert.match(shell, /addEventListener\('gbti-social-close', close\)/, 'its X closes it');
+  assert.match(read('extension/src/ext-dispatch.mjs'), /case '\/api\/social-queue':/, 'the relay it calls');
 });

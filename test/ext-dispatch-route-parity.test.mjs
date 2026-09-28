@@ -66,7 +66,7 @@ const WEBSITE_ONLY = {
     routes: [
       // sow-407: '/api/syndication' (the queue READ) is served by both hosts again, for the activity bell.
       '/api/syndication/approve', '/api/syndication/cancel',
-      '/api/syndicate-now', '/api/social-queue',
+      '/api/syndicate-now', // sow-419: '/api/social-queue' is served by both hosts again, for the avatar-menu Social Queue.
       '/api/moderation-flag-pool', '/api/syndication-template-pool', '/api/news-engagement', '/api/syndication-settings',
     ],
   },

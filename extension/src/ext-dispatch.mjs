@@ -11,7 +11,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, listAuthorTargets, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
-  listEditorialOp, decideEditorialOp, getSyndicationQueue } from '../../client/src/operations.mjs'; // sow-323; sow-407
+  listEditorialOp, decideEditorialOp, getSyndicationQueue, getSocialQueue, socialQueueAction } from '../../client/src/operations.mjs'; // sow-323; sow-407; sow-419
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
@@ -191,8 +191,12 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case '/api/open-pulls': // SOW-038 P2: the open content-PR queue (admin-gated)
         return ok(await getOpenPulls(ctx));
-      // sow-399 (owner, 2026-09-24): approve/cancel, Manually syndicate and the Social Queue relays are gone.
-      // Syndication moved to the website, which calls the Worker directly over its session.
+      // sow-399 (owner, 2026-09-24): approve/cancel and Manually syndicate relays are gone. Syndication moved to the
+      // website, which calls the Worker directly over its session.
+      // sow-419 (owner, 2026-09-28): the Social Queue came back to the extension's avatar menu, so its relay is back
+      // (GET the tasks, POST done/delete). The Worker is still the gate: superadmin only.
+      case '/api/social-queue':
+        return ok(method === 'POST' ? await socialQueueAction(ctx, body ?? {}) : await getSocialQueue(ctx));
       // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
       // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
       // Worker is still the gate (superadmin); approving or cancelling stays on the website.

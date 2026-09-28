@@ -450,6 +450,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!bare && rest.trim() === "") return null;
     return { style: normalizeListStyle(m[2], !!ordered), rest };
   }
+  var LINE_RE = /^(\s*)([-*+]|\d+[.)])(\s+)([\s\S]*)$/;
+  function stripListStyleSuffix(line) {
+    const m = LINE_RE.exec(String(line ?? ""));
+    if (!m) return String(line ?? "");
+    const split = splitListSuffix(m[4], /^\d/.test(m[2]));
+    if (!split) return String(line);
+    return `${m[1]}${m[2]}${m[3]}${split.rest}`;
+  }
 
   // client/src/list-items.mjs
   var LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
@@ -580,7 +588,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v) => `class="${v ? `${v} ` : ""}${cls}"`);
     return `${a ? `${a} ` : ""}class="${cls}"`;
   }
-  function listHtml(items, inline3 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
+  function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
     const norm2 = normalizeListItems(items, ordered);
     let html = "";
     const open = [];
@@ -600,11 +608,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (cur.ordered !== it.ordered) {
           closeList();
           openList(it);
-          html += `<li>${inline3(it.text)}`;
-        } else html += `</li><li>${inline3(it.text)}`;
+          html += `<li>${inline4(it.text)}`;
+        } else html += `</li><li>${inline4(it.text)}`;
       } else {
         openList(it);
-        html += `<li>${inline3(it.text)}`;
+        html += `<li>${inline4(it.text)}`;
       }
     }
     while (open.length) closeList();
@@ -804,8 +812,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
   var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
-  function serializeBlocks(blocks) {
-    return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join("\n\n");
+  function serializeBlocks(blocks2) {
+    return (Array.isArray(blocks2) ? blocks2 : []).map(serializeBlock).join("\n\n");
   }
   function serializeBlock(b) {
     if (!b || typeof b !== "object") return "";
@@ -857,7 +865,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function parseBlocks(md) {
     const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const blocks = [];
+    const blocks2 = [];
     const n = lines.length;
     let i = 0;
     while (i < n) {
@@ -867,7 +875,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isMarker(line)) {
-        blocks.push({ type: "members" });
+        blocks2.push({ type: "members" });
         i++;
         continue;
       }
@@ -885,14 +893,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           i++;
         }
         i++;
-        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
-        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim() });
-        else blocks.push({ type: "code", lang, code: code.join("\n") });
+        if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
+        else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim() });
+        else blocks2.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
       let m = line.match(/^(#{1,6})\s+(.*)$/);
       if (m) {
-        blocks.push({ type: "heading", level: m[1].length, text: m[2] });
+        blocks2.push({ type: "heading", level: m[1].length, text: m[2] });
         i++;
         continue;
       }
@@ -902,14 +910,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           q.push(lines[i].replace(/^>\s?/, ""));
           i++;
         }
-        blocks.push({ type: "quote", text: q.join("\n") });
+        blocks2.push({ type: "quote", text: q.join("\n") });
         continue;
       }
       if (isListItem(line)) {
         const run = takeListRun(lines, i);
         const ordered = !!run.items[0]?.ordered;
         const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
-        blocks.push({ type: "list", ordered, items });
+        blocks2.push({ type: "list", ordered, items });
         i = run.next;
         continue;
       }
@@ -926,17 +934,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           rows.push(row);
           i++;
         }
-        blocks.push({ type: "table", head, aligns, rows });
+        blocks2.push({ type: "table", head, aligns, rows });
         continue;
       }
       const im = parseImageLine(line);
       if (im) {
-        blocks.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
+        blocks2.push({ type: "image", alt: im.alt, url: im.url, ...im.caption ? { caption: im.caption } : {}, ...im.layout });
         i++;
         continue;
       }
       if (isBareUrl(line) && isVideoUrl(line)) {
-        blocks.push({ type: "embed", url: line.trim() });
+        blocks2.push({ type: "embed", url: line.trim() });
         i++;
         continue;
       }
@@ -947,10 +955,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         para.push(l);
         i++;
       }
-      if (para.length) blocks.push({ type: "paragraph", text: para.join("\n") });
+      if (para.length) blocks2.push({ type: "paragraph", text: para.join("\n") });
       else i++;
     }
-    return blocks;
+    return blocks2;
   }
   function emptyBlock(type) {
     switch (type) {
@@ -2274,12 +2282,12 @@ ${listStyleProseCss(".doc-blocks")}
     // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
     // instead of re-rendering so an author who is already typing keeps their caret.
     async _rehydrateStaged() {
-      const blocks = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
-      if (!blocks.length) return;
-      const found = await loadStagedImages(blocks.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
+      const blocks2 = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
+      if (!blocks2.length) return;
+      const found = await loadStagedImages(blocks2.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
-      for (const b of blocks) {
+      for (const b of blocks2) {
         const src = found[b.url];
         const img = src && this.$(`[data-imgfile="${b._id}"]`)?.closest(".imgframe")?.querySelector("img");
         if (img) img.src = src;
@@ -2387,10 +2395,10 @@ ${listStyleProseCss(".doc-blocks")}
       return CONVERT.slice();
     }
     _render() {
-      const blocks = this._blocks || [];
-      const hasMembers = blocks.some((b) => b.type === "members");
+      const blocks2 = this._blocks || [];
+      const hasMembers = blocks2.some((b) => b.type === "members");
       let inMem = false;
-      const parts = blocks.map((b) => {
+      const parts = blocks2.map((b) => {
         if (b.type === "members") {
           inMem = true;
           return this._memberDivider(b);
@@ -4278,9 +4286,9 @@ ${listStyleProseCss(".doc-blocks")}
           continue;
         }
       }
-      const esc6 = escapeKeepingLinks(line, linkKeep);
+      const esc7 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc6)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc7)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -4347,7 +4355,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc6, line)];
+      const para = [hardBreak(esc7, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -4408,7 +4416,7 @@ ${listStyleProseCss(".doc-blocks")}
   var isCard = (n) => n?.nodeType === ELEMENT && /(^|\s)md-embed(\s|$)/.test(attr(n, "class")) && !!attr(n, "data-embed-url");
   var isBlock = (n) => n?.nodeType === ELEMENT && (BLOCK_TAGS.has(tagOf(n)) || isCard(n));
   var hasBlockChild = (n) => kids(n).some(isBlock);
-  var flat = (blocks) => blocks.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
+  var flat = (blocks2) => blocks2.map((b) => b && typeof b === "object" && b.quote ? b.text : b).filter((b) => typeof b === "string" && b.trim());
   var inline2 = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).replace(/\s+$/, "").replace(/^\n+/, "");
   function codeText(el) {
     const html = String(el?.innerHTML ?? "");
@@ -4517,11 +4525,11 @@ ${listStyleProseCss(".doc-blocks")}
   function domToMarkdown(root) {
     const out = [];
     walk(root, out);
-    const blocks = [];
+    const blocks2 = [];
     let run = null;
     const closeRun = () => {
       if (!run) return;
-      if (run.length) blocks.push(run.join("\n>\n"));
+      if (run.length) blocks2.push(run.join("\n>\n"));
       run = null;
     };
     for (const b of out) {
@@ -4531,10 +4539,10 @@ ${listStyleProseCss(".doc-blocks")}
         continue;
       }
       closeRun();
-      if (typeof b === "string" && b.trim()) blocks.push(b);
+      if (typeof b === "string" && b.trim()) blocks2.push(b);
     }
     closeRun();
-    return blocks.join("\n\n");
+    return blocks2.join("\n\n");
   }
 
   // client-ui/src/elements/gbti-prose-editor.mjs
@@ -7813,8 +7821,8 @@ ${listStyleProseCss(".doc-blocks")}
         this._slugVal = v;
         const mirror = this.$('[data-key="slug"]');
         if (mirror) mirror.value = v;
-        const inline3 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline3) inline3.textContent = v;
+        const inline4 = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline4) inline4.textContent = v;
         const note = input.closest(".fld")?.querySelector(".urlprev");
         if (note && this.itemPath) {
           note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
@@ -24493,10 +24501,10 @@ ${BLOCKED_PILL_CSS}
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count2 = s.count != null ? `${s.count} items` : "";
-        const inline3 = [domain, count2].filter(Boolean).join(" · ");
+        const inline4 = [domain, count2].filter(Boolean).join(" · ");
         const showDesc = s.description && lc4(s.description) !== lc4(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc(count2)}</span>` : "") + `</div>`;
-        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline3 ? `<span class="d">${esc(inline3)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline4 ? `<span class="d">${esc(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
       host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
       this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
@@ -26093,6 +26101,672 @@ ${BLOCKED_PILL_CSS}
     return client;
   }
 
+  // client-ui/src/social-queue-core.mjs
+  var LISTS = ["pending", "done"];
+  function locate(data, id) {
+    for (const list of LISTS) {
+      const arr = Array.isArray(data?.[list]) ? data[list] : [];
+      const index = arr.findIndex((r) => r && r.id === id);
+      if (index !== -1) return { list, index, row: arr[index] };
+    }
+    return null;
+  }
+  function applyQueueAction(data, action, id, { now = null } = {}) {
+    if (!data || !id) return null;
+    if (action !== "done" && action !== "delete") return null;
+    const found = locate(data, id);
+    if (!found) return null;
+    const next = { ...data };
+    for (const list of LISTS) next[list] = Array.isArray(data[list]) ? [...data[list]] : [];
+    next[found.list].splice(found.index, 1);
+    const undo = { removed: { list: found.list, index: found.index, row: found.row }, added: null };
+    if (action === "done") {
+      if (found.list === "done") return null;
+      const stamped = { ...found.row, doneAt: found.row.doneAt ?? (now ?? Date.now()) };
+      next.done = [stamped, ...next.done];
+      undo.added = { list: "done", id };
+    }
+    return { next, undo };
+  }
+  function revertQueueAction(data, undo) {
+    if (!data || !undo?.removed) return data;
+    const next = { ...data };
+    for (const list2 of LISTS) next[list2] = Array.isArray(data[list2]) ? [...data[list2]] : [];
+    if (undo.added) {
+      const arr = next[undo.added.list];
+      const at = arr.findIndex((r) => r && r.id === undo.added.id);
+      if (at !== -1) arr.splice(at, 1);
+    }
+    const { list, index, row } = undo.removed;
+    const target = next[list];
+    target.splice(Math.min(index, target.length), 0, row);
+    return next;
+  }
+
+  // membership/syndication-channels.mjs
+  var CHANNEL_LIMITS = Object.freeze({
+    discord: 2e3,
+    "discord-category": 2e3,
+    // SOW-087: the category-channel Discord post
+    x: 280,
+    linkedin: 3e3,
+    mastodon: 500,
+    bluesky: 300,
+    reddit: 300,
+    // the Reddit post-title cap (SOW-088: the template renders the title)
+    devto: 128,
+    // the dev.to title cap (the article body is not template-limited)
+    hashnode: 250,
+    // SOW-134: the Hashnode title cap (the article body is not template-limited)
+    dailydev: 300
+    // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
+  });
+  var CHANNEL_SECRET_KEYS = Object.freeze({
+    discord: ["DISCORD_BOT_TOKEN"],
+    "discord-category": ["DISCORD_BOT_TOKEN"],
+    // SOW-087: the same bot posts the category-channel copy
+    x: ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
+    linkedin: ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_ORG_URN"],
+    mastodon: ["MASTODON_BASE_URL", "MASTODON_ACCESS_TOKEN"],
+    bluesky: ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
+    // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
+    // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
+    // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
+    // needs no credential at all, so listing dead keys here would only make a working channel report itself
+    // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
+    reddit: ["REDDIT_SUBREDDIT"],
+    // SOW-088, narrowed by sow-260
+    devto: ["DEVTO_API_KEY", "DEVTO_ORG_ID"],
+    // SOW-088: full-body crossposts to the GBTI dev.to organization
+    hashnode: ["HASHNODE_TOKEN", "HASHNODE_PUBLICATION_ID"]
+    // SOW-134: PAT + the gbti.hashnode.dev publication id
+  });
+  var CHANNEL_MARKDOWN = Object.freeze({
+    discord: true,
+    // a Discord message, and Discord renders markdown natively
+    "discord-category": true,
+    // the same bot, the same rendering
+    // EVERY OTHER CHANNEL IS FALSE, INCLUDING dev.to AND HASHNODE, and those two are the ones that look wrong.
+    // They are markdown platforms. But this map governs the text renderChannelText produces, and on dev.to and
+    // Hashnode that text is the post TITLE (see the channelOnly note in syndication-config-core.mjs), which is
+    // a plain-text field on both. Their article BODIES never pass through here: they are built by
+    // renderBodyTemplate and keep their markdown untouched. Flip either of these to true and you put
+    // asterisks in an article title.
+    devto: false,
+    hashnode: false,
+    reddit: false,
+    // the manual rail is the rich-text composer, not the markdown editor
+    x: false,
+    bluesky: false,
+    mastodon: false,
+    linkedin: false,
+    dailydev: false
+  });
+  function rendersMarkdown(name) {
+    return CHANNEL_MARKDOWN[name] === true;
+  }
+
+  // membership/markdown-plain.mjs
+  var MASK = "\0";
+  var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
+  var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
+  function esc4(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function safeHref(url) {
+    const u = String(url || "").replace(/\u200B/g, "").trim();
+    return /^(https?:\/\/|mailto:)/i.test(u) ? u : "";
+  }
+  function maskRuns(text2, store2) {
+    const push = (raw, kind2) => {
+      store2.push({ raw, kind: kind2 });
+      return `${MASK}${store2.length - 1}${MASK}`;
+    };
+    return String(text2).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
+  }
+  function inline3(text2, { bold, italic, strike, link }) {
+    return String(text2).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
+  }
+  function blocks(md) {
+    const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
+    const isQuote2 = (l) => /^\s*>/.test(l);
+    const isHeading2 = (l) => /^\s{0,3}#{1,6}\s/.test(l);
+    const isUl = (l) => /^\s*[-*+]\s+\S/.test(l);
+    const isOl = (l) => /^\s*\d+[.)]\s+\S/.test(l);
+    const isFence2 = (l) => /^\s*(```+|~~~+)/.test(l);
+    const isHr = (l) => /^\s*([-*_])(\s*\1){2,}\s*$/.test(l);
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const l = lines[i];
+      const fence = l.match(/^\s*(```+|~~~+)/);
+      if (fence) {
+        const close = fence[1][0] === "`" ? /^\s*```+\s*$/ : /^\s*~~~+\s*$/;
+        const body = [];
+        i++;
+        while (i < lines.length && !close.test(lines[i])) {
+          body.push(lines[i]);
+          i++;
+        }
+        i++;
+        out.push({ kind: "fence", lines: body });
+        continue;
+      }
+      if (/^\s*$/.test(l)) {
+        out.push({ kind: "blank" });
+        i++;
+        continue;
+      }
+      if (isHr(l)) {
+        out.push({ kind: "hr" });
+        i++;
+        continue;
+      }
+      const heading = l.match(/^\s{0,3}(#{1,6})\s+(.*)$/);
+      if (heading) {
+        out.push({ kind: "heading", level: heading[1].length, text: heading[2].trim() });
+        i++;
+        continue;
+      }
+      if (isQuote2(l)) {
+        const body = [];
+        while (i < lines.length && isQuote2(lines[i])) {
+          body.push(lines[i].replace(/^\s*>\s?/, ""));
+          i++;
+        }
+        out.push({ kind: "quote", lines: body });
+        continue;
+      }
+      if (isUl(l)) {
+        const items = [];
+        while (i < lines.length && isUl(lines[i])) {
+          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*[-*+]\s+/, ""));
+          i++;
+        }
+        out.push({ kind: "ul", items });
+        continue;
+      }
+      if (isOl(l)) {
+        const items = [];
+        while (i < lines.length && isOl(lines[i])) {
+          items.push(stripListStyleSuffix(lines[i]).replace(/^\s*\d+[.)]\s+/, ""));
+          i++;
+        }
+        out.push({ kind: "ol", items });
+        continue;
+      }
+      const para = [];
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !isQuote2(lines[i]) && !isHeading2(lines[i]) && !isUl(lines[i]) && !isOl(lines[i]) && !isFence2(lines[i]) && !isHr(lines[i])) {
+        para.push(lines[i]);
+        i++;
+      }
+      out.push({ kind: "p", lines: para });
+    }
+    return out;
+  }
+  function mdToPlain(md) {
+    const render2 = (text2) => {
+      const store2 = [];
+      const masked = maskRuns(text2, store2);
+      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
+      const done = inline3(masked, {
+        bold: (t) => t,
+        italic: (t) => t,
+        strike: (t) => t,
+        link: (label, url) => {
+          const dest = resolve(url);
+          const l = resolve(String(label || "")).trim();
+          return !l || l === dest ? dest : `${l} (${dest})`;
+        }
+      });
+      return resolve(done);
+    };
+    const parts = [];
+    for (const b of blocks(md)) {
+      if (b.kind === "blank" || b.kind === "hr") {
+        parts.push("");
+        continue;
+      }
+      if (b.kind === "quote") {
+        parts.push(mdToPlain(b.lines.join("\n")));
+        continue;
+      }
+      if (b.kind === "fence") {
+        parts.push(["```", ...b.lines, "```"].join("\n"));
+        continue;
+      }
+      if (b.kind === "heading") {
+        parts.push(render2(b.text));
+        continue;
+      }
+      if (b.kind === "ul") {
+        parts.push(b.items.map((it) => `- ${render2(it)}`).join("\n"));
+        continue;
+      }
+      if (b.kind === "ol") {
+        parts.push(b.items.map((it, n) => `${n + 1}. ${render2(it)}`).join("\n"));
+        continue;
+      }
+      parts.push(b.lines.map(render2).join("\n"));
+    }
+    return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function mdToHtml(md) {
+    const render2 = (text2) => {
+      const store2 = [];
+      const masked = maskRuns(text2, store2);
+      const safe = esc4(masked);
+      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
+      const done = inline3(safe, {
+        bold: (t) => `<strong>${t}</strong>`,
+        italic: (t) => `<em>${t}</em>`,
+        strike: (t) => `<del>${t}</del>`,
+        link: (label, url) => {
+          const href = safeHref(resolve(url));
+          const inner = String(label || "").trim() || esc4(resolve(url));
+          return href ? `<a href="${esc4(href)}">${inner}</a>` : inner;
+        }
+      });
+      return done.replace(MASK_RE, (_m, i) => {
+        const run = store2[Number(i)];
+        if (!run) return "";
+        return run.kind === "code" ? `<code>${esc4(run.raw)}</code>` : esc4(run.raw);
+      });
+    };
+    const out = [];
+    for (const b of blocks(md)) {
+      if (b.kind === "blank") continue;
+      if (b.kind === "hr") {
+        out.push("<hr>");
+        continue;
+      }
+      if (b.kind === "fence") {
+        out.push(`<pre><code>${esc4(b.lines.join("\n"))}</code></pre>`);
+        continue;
+      }
+      if (b.kind === "heading") {
+        out.push(`<h${b.level}>${render2(b.text)}</h${b.level}>`);
+        continue;
+      }
+      if (b.kind === "quote") {
+        out.push(`<blockquote>${mdToHtml(b.lines.join("\n"))}</blockquote>`);
+        continue;
+      }
+      if (b.kind === "ul" || b.kind === "ol") {
+        const tag = b.kind === "ul" ? "ul" : "ol";
+        out.push(`<${tag}>${b.items.map((it) => `<li>${render2(it)}</li>`).join("")}</${tag}>`);
+        continue;
+      }
+      out.push(`<p>${b.lines.map(render2).join(" ")}</p>`);
+    }
+    return out.join("");
+  }
+
+  // client-ui/src/elements/gbti-social-queue.mjs
+  var REDDIT_SUB = "GBTI_network";
+  var composeUrl = (task) => {
+    const channel = task?.channel;
+    const text2 = String(task?.text || "");
+    const t = encodeURIComponent(text2);
+    if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
+    if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
+    if (channel === "bluesky") return `https://bsky.app/intent/compose?text=${t}`;
+    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
+    if (channel === "hashnode") return "https://hashnode.com/draft";
+    if (channel === "reddit") {
+      const u = String(task?.url || "");
+      return `https://www.reddit.com/r/${REDDIT_SUB}/submit?title=${t}${u ? `&url=${encodeURIComponent(u)}` : ""}`;
+    }
+    return null;
+  };
+  var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky" };
+  var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", bluesky: "bluesky" };
+  var SRC_LABEL2 = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
+  var PAGE_SIZE = 12;
+  var fmtDate2 = (ms) => {
+    try {
+      return new Date(ms).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  };
+  var CSS46 = `
+  :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
+  .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
+  .hd h2 { margin:0; font-family:var(--font-display, inherit); font-weight:800; font-size:16px; letter-spacing:.02em; text-transform:uppercase; flex:1; }
+  .hd .x { background:none; border:1.5px solid var(--line); border-radius:7px; color:var(--fg-mute, var(--muted)); width:32px; height:32px; cursor:pointer; font-size:15px; line-height:1; }
+  .hd .x:hover { border-color:var(--fg-mute, var(--muted)); }
+  .body { padding:12px 18px 16px; overflow:auto; flex:1; }
+  .tabs { display:flex; gap:5px; margin:0 0 10px; }
+  .tab { font:inherit; font-size:12.5px; font-weight:700; color:var(--muted); background:none; border:1.5px solid var(--line); border-radius:7px; padding:5px 12px; cursor:pointer; }
+  .tab.on { color:var(--brand); border-color:var(--brand); background:var(--brand-tint, rgba(31,158,95,.1)); }
+  .tab .n { font-family:var(--font-mono, monospace); font-size:10.5px; opacity:.8; margin-left:5px; }
+  .hint { color:var(--muted); font-size:11.5px; margin:0 0 10px; line-height:1.5; }
+  .msg { font-size:12.5px; color:var(--accent); margin:0 0 10px; } .msg.err { color:var(--danger, #e06c6c); }
+  .empty { padding:26px 10px; text-align:center; color:var(--muted); font-family:var(--font-mono, monospace); font-size:12px; }
+  .busy { opacity:.55; pointer-events:none; }
+
+  .fbar { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; align-items:center; }
+  .fbar select, .fbar input { width:auto; font:inherit; font-size:12px; color:var(--fg); background:var(--bg); border:1.5px solid var(--line); border-radius:7px; padding:6px 9px; outline:none; }
+  .fbar select:focus, .fbar input:focus { border-color:var(--brand); }
+  .fbar input { flex:1; min-width:150px; }
+  .fbar .count { align-self:center; font-family:var(--font-mono, monospace); font-size:11px; color:var(--muted); margin-left:auto; }
+
+  /* compact rows */
+  .row { display:flex; align-items:center; gap:10px; padding:8px 11px; border:1.5px solid var(--line); border-radius:7px; margin:0 0 7px; }
+  .row .src { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); border:1px solid var(--line); border-radius:7px; padding:2px 7px; flex:none; }
+  .row .ti { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .ti a { color:var(--fg); text-decoration:none; } .row .ti a:hover { color:var(--accent); }
+  .row .when { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; flex:none; }
+  .chans { display:flex; gap:5px; flex:none; }
+  .chip { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); border:1px solid var(--line); border-radius:7px; padding:2px 6px; white-space:nowrap; }
+  .chip svg { width:12px; height:12px; flex:none; }
+  .chip.sent { color:var(--brand); border-color:var(--brand); } .chip.failed { color:var(--danger, #e06c6c); border-color:var(--danger, #e06c6c); }
+  .chip.big { font-size:11px; padding:3px 8px; } .chip.big svg { width:14px; height:14px; }
+
+  /* to-do task (needs the text + actions) */
+  .task { border:1.5px solid var(--line); border-radius:7px; padding:11px 12px; margin:0 0 9px; }
+  .task .top { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .task .ti { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .task .txt { font-size:12px; color:var(--fg-soft, var(--fg)); background:var(--hover); border-radius:7px; padding:8px 10px; margin:0 0 9px; white-space:pre-wrap; word-break:break-word; line-height:1.5; max-height:100px; overflow:auto; }
+  /* sow-260: Reddit tasks carry a second block, the description that goes under the link. It is marked off
+     from the title above it so the two are not mistaken for one pasteable blob. */
+  .task .txt.body { position:relative; padding-top:20px; max-height:160px; }
+  .task .txt.body .blabel { position:absolute; top:5px; left:10px; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-mute, var(--fg-soft)); }
+  .acts { display:flex; gap:7px; flex-wrap:wrap; }
+  .btn { font:inherit; font-size:12px; font-weight:700; border-radius:7px; padding:6px 11px; cursor:pointer; border:1.5px solid var(--line); background:none; color:var(--fg); display:inline-flex; align-items:center; gap:6px; }
+  .btn svg { width:13px; height:13px; }
+  .btn.assist { color:#fff; background:var(--brand); border-color:var(--brand); } .btn.assist:hover { filter:brightness(1.06); }
+  .btn.done { color:var(--brand); border-color:var(--brand); }
+  .btn.del { color:var(--danger, #e06c6c); } .btn.del:hover { border-color:var(--danger, #e06c6c); }
+  .btn:hover { border-color:var(--fg-mute, var(--muted)); }
+
+  .pager { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; }
+  .pager button { font:inherit; font-size:12px; font-weight:700; border:1.5px solid var(--line); border-radius:7px; background:none; color:var(--fg); padding:5px 12px; cursor:pointer; }
+  .pager button:disabled { opacity:.4; cursor:default; }
+  .pager .pg { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); }
+`;
+  var GbtiSocialQueue = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback();
+      this._tab = this._tab || "todo";
+      this._page = 0;
+      this._fType = "all";
+      this._fChannel = "all";
+      this._fQ = "";
+      this._data = null;
+      this._auto = null;
+      this._msg = "";
+      this._err = false;
+      this._rowBusy = null;
+      if (this.client) this.load();
+      else this.render();
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      this._loading = true;
+      try {
+        this._data = await this.client.socialQueue();
+        this._err = false;
+      } catch (e) {
+        this._err = true;
+        this._msg = e?.message || "Could not load the Social Queue.";
+      }
+      this._loading = false;
+      this.render();
+    }
+    async _loadAuto() {
+      if (this._auto || !this.client) return;
+      try {
+        const q = await this.client.syndicationQueue();
+        this._auto = Array.isArray(q?.sent) ? q.sent : [];
+      } catch {
+        this._auto = [];
+      }
+      this.render();
+    }
+    _rawList() {
+      if (this._tab === "todo") return this._data?.pending || [];
+      if (this._tab === "manual") return this._data?.done || [];
+      return this._auto || [];
+    }
+    _chansOf(row) {
+      return this._tab === "auto" ? Object.keys(row.perChannel || {}) : [row.channel];
+    }
+    _filtered() {
+      const q = this._fQ.trim().toLowerCase();
+      return this._rawList().filter((r) => (this._fType === "all" || (r.source || "") === this._fType) && (this._fChannel === "all" || this._chansOf(r).includes(this._fChannel)) && (!q || String(r.title || r.targetSlug || "").toLowerCase().includes(q)));
+    }
+    _channelOptions() {
+      const set = /* @__PURE__ */ new Set();
+      for (const r of this._rawList()) for (const c of this._chansOf(r)) if (c) set.add(c);
+      return [...set];
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS46) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
+        this._wire();
+        return;
+      }
+      if (this._err) {
+        this.set(this.css(CSS46) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this._wire();
+        this.$("[data-reload]")?.addEventListener("click", () => this.load());
+        return;
+      }
+      if (!this._data) {
+        if (!this._loading) this.load();
+        this.set(this.css(CSS46) + this._shell(`<p class="empty">Loading the Social Queue...</p>`));
+        this._wire();
+        return;
+      }
+      const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
+      const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
+      const hint = this._tab === "todo" ? "Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on the channels posted by hand (X, LinkedIn, Reddit, daily.dev and Bluesky), Assist opens the site's own composer (or Copy the text), post it there, then mark it Done." : this._tab === "manual" ? "Posts completed from this queue (Post now or by hand)." : "Posts the system sent automatically (the On-Automatic channels).";
+      const filtered = this._filtered();
+      const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      if (this._page >= pages) this._page = pages - 1;
+      const paged = filtered.slice(this._page * PAGE_SIZE, this._page * PAGE_SIZE + PAGE_SIZE);
+      const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
+      const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
+      const chOpts = this._channelOptions();
+      this.set(this.css(CSS46) + this._shell(`
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
+      <p class="hint">${esc(hint)}</p>
+      <div class="fbar">
+        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL2).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
+        <select data-f="channel" aria-label="Filter by channel">${opt("all", "All channels", this._fChannel)}${chOpts.map((c) => opt(c, CH_LABEL[c] || c, this._fChannel)).join("")}</select>
+        <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
+        <span class="count">${filtered.length} item${filtered.length === 1 ? "" : "s"}</span>
+      </div>
+      <div>${rows}</div>
+      ${pages > 1 ? `<div class="pager"><button data-pg="prev" type="button" ${this._page === 0 ? "disabled" : ""}>Prev</button><span class="pg">Page ${this._page + 1} of ${pages}</span><button data-pg="next" type="button" ${this._page >= pages - 1 ? "disabled" : ""}>Next</button></div>` : ""}
+    `));
+      this._wire();
+      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        this._tab = b.dataset.tab;
+        this._page = 0;
+        this._fChannel = "all";
+        if (this._tab === "auto") this._loadAuto();
+        this.render();
+      }));
+      this.$$("[data-f]").forEach((el) => el.addEventListener(el.dataset.f === "q" ? "input" : "change", () => {
+        if (el.dataset.f === "type") this._fType = el.value;
+        else if (el.dataset.f === "channel") this._fChannel = el.value;
+        else this._fQ = el.value;
+        this._page = 0;
+        const focusQ = el.dataset.f === "q";
+        this.render();
+        if (focusQ) {
+          const q = this.$('[data-f="q"]');
+          if (q) {
+            q.focus();
+            q.setSelectionRange(q.value.length, q.value.length);
+          }
+        }
+      }));
+      this.$$("[data-pg]").forEach((b) => b.addEventListener("click", () => {
+        this._page += b.dataset.pg === "next" ? 1 : -1;
+        this.render();
+      }));
+      this.$$("[data-assist]").forEach((b) => b.addEventListener("click", () => this._assist(b.dataset.assist)));
+      this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
+      this.$$("[data-copybody]").forEach((b) => b.addEventListener("click", () => {
+        const t = this._byId(b.dataset.copybody);
+        this._copy(b.dataset.copybody, this._extra(t)?.field || "bodyText");
+      }));
+      this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
+      this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
+      this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
+    }
+    _shell(inner) {
+      return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`;
+    }
+    _wire() {
+      this.$("[data-close]")?.addEventListener("click", () => this.dispatchEvent(new CustomEvent("gbti-social-close", { bubbles: true, composed: true })));
+    }
+    _byId(id) {
+      return (this._data?.pending || []).find((t) => t.id === id) || (this._data?.done || []).find((t) => t.id === id) || null;
+    }
+    _chip(channel, status, big) {
+      return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ""}</span>`;
+    }
+    // sow-260: a Reddit task carries a SECOND thing to paste. Since 2026-08-27 that is the author note as a
+    // first COMMENT (a manual Reddit submission is a link post, which earns the preview card but has no body).
+    // Tasks queued before that date carry a `bodyText` instead, so both are read and the label follows the
+    // field rather than being written twice, which is how a label and its copy button drift apart.
+    _extra(t) {
+      if (t?.commentText) return { field: "commentText", label: "First comment", copy: "Copy comment" };
+      if (t?.bodyText) return { field: "bodyText", label: "Body", copy: "Copy body" };
+      return null;
+    }
+    _todoRow(t) {
+      const label = CH_LABEL[t.channel] || t.channel;
+      const url = composeUrl(t);
+      const x = this._extra(t);
+      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
+      return `<div class="task${this._rowBusy === t.id ? " busy" : ""}">
+      <div class="top"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate2(t.createdAt)) : ""}</span></div>
+      <div class="txt">${esc(this._pasteText(t, "text"))}</div>
+      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(this._pasteText(t, x.field))}</div>` : ""}
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? " title" : ""}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+    </div>`;
+    }
+    _doneRow(t) {
+      return `<div class="row"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "sent")}<span class="ti">${esc(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc(fmtDate2(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
+    }
+    _autoRow(it) {
+      const chans = Object.entries(it.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || "sent")).join("");
+      const title = it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title || it.targetSlug || "(untitled)")}</a>` : esc(it.title || it.targetSlug || "(untitled)");
+      return `<div class="row"><span class="src">${esc(SRC_LABEL2[it.source] || it.source || "")}</span><span class="ti">${title}</span><span class="chans">${chans}</span><span class="when">${it.sentAt ? esc(fmtDate2(it.sentAt)) : ""}</span></div>`;
+    }
+    _assist(id) {
+      const t = this._byId(id);
+      if (!t) return;
+      const url = composeUrl(t);
+      if (url) {
+        try {
+          window.open(url, "_blank", "noopener");
+        } catch {
+        }
+      }
+      const x = this._extra(t);
+      this._msg = x?.field === "commentText" ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".' : x ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
+      this.render();
+    }
+    // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
+    // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here
+    // put raw asterisks and `> ` in front of the reader, which is the defect that started this.
+    _pasteText(t, field2) {
+      const raw = t?.[field2] || "";
+      return rendersMarkdown(t?.channel) ? raw : mdToPlain(raw);
+    }
+    // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
+    // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
+    //
+    // sow-300: TWO CLIPBOARD FLAVOURS, but only for the Reddit first comment.
+    //
+    // Reddit's rich-text composer reads `text/html` on paste and turns it into its own formatting nodes, which
+    // is how the author note arrives as a real quote block with real bold instead of literal `> ` and `**`.
+    // Every other target gets plain text only, and that is deliberate rather than lazy: LinkedIn's composer is
+    // also rich, and handing it HTML turns the item URL into an <a>, which is not the bare URL its link-preview
+    // detector scans for. Losing the article card to gain bold on a channel that has no author markdown left
+    // after the strip is a bad trade. A post TITLE should never carry <strong> either.
+    //
+    // NOTHING IS AWAITED BEFORE THE CLIPBOARD CALL. Transient user activation is what authorizes a write, and
+    // an await ahead of it spends the gesture; mdToHtml is synchronous for exactly this reason. The catch is
+    // not decoration: Firefox ships ClipboardItem with `write` behind a pref, so feature-detection alone would
+    // pass and then throw. Activation survives the rejection, so the plain fallback still lands.
+    async _copy(id, field2 = "text") {
+      const t = this._byId(id);
+      if (!t) return;
+      const what = field2 === "commentText" ? "first comment" : field2 === "bodyText" ? "body" : "post text";
+      const raw = t[field2] || "";
+      const plain = this._pasteText(t, field2);
+      const rich = field2 === "commentText" && t.channel === "reddit";
+      try {
+        if (rich && typeof ClipboardItem === "function" && navigator.clipboard?.write) {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([mdToHtml(raw)], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" })
+          })]);
+        } else {
+          await navigator.clipboard.writeText(plain);
+        }
+        this._msg = `Copied the ${what}.`;
+      } catch {
+        try {
+          await navigator.clipboard?.writeText?.(plain);
+          this._msg = `Copied the ${what}.`;
+        } catch {
+          this._msg = "Could not copy automatically; select the text to copy it.";
+        }
+      }
+      this.render();
+    }
+    async _action(action, id) {
+      if (!id) return;
+      if (action === "delete" && typeof confirm === "function" && !confirm("Delete this item from the Social Queue?")) return;
+      if (action === "post") {
+        const t = this._byId(id);
+        const label = t ? CH_LABEL[t.channel] || t.channel : "the channel";
+        if (typeof confirm === "function" && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
+      }
+      const opt = applyQueueAction(this._data, action, id);
+      if (opt) {
+        this._data = opt.next;
+        this._msg = action === "done" ? "Marked done." : "Deleted.";
+        this.render();
+        try {
+          await this.client.socialQueueAction({ action, id });
+        } catch (e) {
+          this._data = revertQueueAction(this._data, opt.undo);
+          this._msg = e?.message || "Action failed.";
+          this.render();
+        }
+        return;
+      }
+      this._rowBusy = id;
+      this.render();
+      try {
+        await this.client.socialQueueAction({ action, id });
+        this._msg = action === "post" ? "Posted." : "Done.";
+        await this.load();
+      } catch (e) {
+        this._msg = e?.message || "Action failed.";
+      } finally {
+        this._rowBusy = null;
+        this.render();
+      }
+    }
+  };
+  define("gbti-social-queue", GbtiSocialQueue);
+
   // client-ui/src/elements/gbti-debug-panel.mjs
   var fmtTime = (ms) => {
     try {
@@ -26110,7 +26784,7 @@ ${BLOCKED_PILL_CSS}
     }
   };
   var fmtLine = (e) => `${new Date(e.t).toISOString()} [${e.realm || "app"}:${e.area}] ${e.msg}${e.data !== void 0 ? " " + fmtData(e.data) : ""}`;
-  var CSS46 = `
+  var CSS47 = `
   :host { display:block; width:70vw; max-width:1100px; max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg); border:1.5px solid var(--line); border-radius:7px; box-shadow:var(--sh-lg, 0 24px 60px rgba(0,0,0,.4)); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1.5px solid var(--line); flex:none; }
@@ -26217,7 +26891,7 @@ ${BLOCKED_PILL_CSS}
             <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc(e.realm || "app")}</span></td>
             <td>${esc(e.area)}</td><td class="msg">${esc(e.msg)}</td>
             <td class="data">${esc(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
-      this.set(this.css(CSS46) + `
+      this.set(this.css(CSS47) + `
       <div class="hd">
         <h2>Debug</h2>
         <button class="x" data-close type="button" aria-label="Close">&times;</button>
@@ -26257,7 +26931,7 @@ ${BLOCKED_PILL_CSS}
   var SITE23 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var CSS47 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
@@ -26305,7 +26979,7 @@ ${BLOCKED_PILL_CSS}
            <p class="note">Waiting for GitHub&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc(who)}` : "Sign in with GitHub"}</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS47) + `<div class="splashwrap">
+      this.set(this.css(CSS48) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -26680,7 +27354,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // extension/src/quick-launch.mjs
-  var esc4 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc5 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var GLYPH = {
     gear: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
     x: '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -26697,7 +27371,7 @@ ${BLOCKED_PILL_CSS}
     if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
     const icon2 = icons[item.id];
     if (typeof icon2 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon2)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon2}" alt="" /></span>`;
-    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc4(letterFor(item.name))}</span>`;
+    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc5(letterFor(item.name))}</span>`;
   }
   var area = (name) => {
     try {
@@ -26757,7 +27431,7 @@ ${BLOCKED_PILL_CSS}
     }
   }
   function barHtml() {
-    const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc4(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc4(it.name)}" aria-label="${esc4(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
+    const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc5(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc5(it.name)}" aria-label="${esc5(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
     return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${links}`;
   }
   function renderBars() {
@@ -26812,14 +27486,14 @@ ${BLOCKED_PILL_CSS}
   function rowHtml(it, rank) {
     const inBar = it.on && rank < QL_CAP;
     const left = it.on && !inBar;
-    const tools = it.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc4(it.id)}" aria-label="Edit ${esc4(it.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc4(it.id)}" aria-label="Remove ${esc4(it.name)}" title="Remove">${glyph("trash")}</button>` : "";
-    const open = left ? `<a class="ql-tool" href="${esc4(it.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc4(it.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
-    return `<li class="ql-row" data-ql-row="${esc4(it.id)}" data-group="${esc4(it.group)}" draggable="true">
-    <button class="ql-grip" type="button" data-ql-grip="${esc4(it.id)}" aria-label="Move ${esc4(it.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
+    const tools = it.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc5(it.id)}" aria-label="Edit ${esc5(it.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc5(it.id)}" aria-label="Remove ${esc5(it.name)}" title="Remove">${glyph("trash")}</button>` : "";
+    const open = left ? `<a class="ql-tool" href="${esc5(it.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc5(it.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
+    return `<li class="ql-row" data-ql-row="${esc5(it.id)}" data-group="${esc5(it.group)}" draggable="true">
+    <button class="ql-grip" type="button" data-ql-grip="${esc5(it.id)}" aria-label="Move ${esc5(it.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
     ${markHtml(it, ICONS3)}
-    <span class="ql-txt"><b>${esc4(it.name)}</b><small>${esc4(displayHost(it.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
+    <span class="ql-txt"><b>${esc5(it.name)}</b><small>${esc5(displayHost(it.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
     ${open}${tools}
-    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc4(it.id)}" aria-checked="${it.on ? "true" : "false"}" aria-label="Show ${esc4(it.name)} in the bar"><span></span></button>
+    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc5(it.id)}" aria-checked="${it.on ? "true" : "false"}" aria-label="Show ${esc5(it.name)} in the bar"><span></span></button>
   </li>`;
   }
   function listsHtml() {
@@ -26827,21 +27501,21 @@ ${BLOCKED_PILL_CSS}
     return GROUPS.map((g) => {
       const rows = STATE.items.filter((it) => it.group === g.key);
       const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it) => rowHtml(it, onRank.get(it.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
-      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc4(g.label)}</h3>${body}</section>`;
+      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc5(g.label)}</h3>${body}</section>`;
     }).join("");
   }
   function previewHtml() {
     const items = barItems(STATE);
-    const icons = items.map((it) => `<span class="ql-pv" title="${esc4(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
+    const icons = items.map((it) => `<span class="ql-pv" title="${esc5(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
     return icons;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
-    return `<form class="ql-form" data-ql-form="${esc4(id)}" novalidate>
+    return `<form class="ql-form" data-ql-form="${esc5(id)}" novalidate>
     <b class="ql-form-h">${id ? "Edit destination" : "Add a destination"}</b>
-    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc4(url)}" required /></label>
+    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc5(url)}" required /></label>
     <div class="ql-form-row">
       <span class="ql-form-ic" data-ql-form-ic>${markHtml({ id: id || "new", name: name || displayHost(url) || "?", custom: true }, ICONS3)}</span>
-      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc4(name)}" placeholder="Found from the site" /></label>
+      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc5(name)}" placeholder="Found from the site" /></label>
     </div>
     <p class="ql-status" data-ql-status aria-live="polite"></p>
     <div class="ql-form-acts"><button class="ql-btn" type="button" data-ql-cancel>Cancel</button><button class="ql-btn ql-primary" type="submit">${id ? "Save" : "Add to your bar"}</button></div>
@@ -27088,7 +27762,7 @@ ${BLOCKED_PILL_CSS}
   // extension/src/shell.mjs
   var SITE24 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc5 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc6 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -27146,6 +27820,7 @@ ${BLOCKED_PILL_CSS}
         <a class="mi" role="menuitem" href="${SITE24}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
+        <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
         <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
@@ -27181,7 +27856,7 @@ ${BLOCKED_PILL_CSS}
         a.href = `${SITE24}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc5(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc6(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;
@@ -27320,6 +27995,10 @@ ${BLOCKED_PILL_CSS}
       }
       location.reload();
     });
+    root.querySelector("[data-social-queue]")?.addEventListener("click", () => {
+      close();
+      openSocialQueueModal();
+    });
     root.querySelector("[data-debug-panel]")?.addEventListener("click", () => {
       close();
       openDebugPanelModal();
@@ -27366,6 +28045,25 @@ ${BLOCKED_PILL_CSS}
         }
       }
     };
+    document.body.appendChild(overlay);
+  }
+  function openSocialQueueModal() {
+    if (document.querySelector(".social-modal")) return;
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal social-modal";
+    overlay.innerHTML = `<gbti-social-queue></gbti-social-queue>`;
+    const onEsc = (e) => {
+      if (e.key === "Escape") close();
+    };
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc);
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.addEventListener("gbti-social-close", close);
+    document.addEventListener("keydown", onEsc);
     document.body.appendChild(overlay);
   }
   function openComposeModal() {

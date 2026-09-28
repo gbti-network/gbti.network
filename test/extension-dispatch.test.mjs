@@ -106,9 +106,10 @@ const REMOVED_BY_SOW_204 = [
 // Queue or the reader's Manually syndicate button used is gone from the extension, and answers 404 rather than
 // quietly serving a surface the extension no longer has.
 // sow-407: GET /api/syndication came BACK (the activity bell reads it for "Needs your approval"); only the read.
+// sow-419: /api/social-queue came BACK too (owner, 2026-09-28), with the avatar-menu Social Queue; tested below.
 const REMOVED_BY_SOW_399 = [
   ['POST', '/api/syndication'], ['POST', '/api/syndication/approve'], ['POST', '/api/syndication/cancel'],
-  ['GET', '/api/syndicate-now'], ['POST', '/api/syndicate-now'], ['GET', '/api/social-queue'], ['POST', '/api/social-queue'],
+  ['GET', '/api/syndicate-now'], ['POST', '/api/syndicate-now'],
   ['GET', '/api/moderation-flag-pool'], ['GET', '/api/syndication-template-pool'], ['GET', '/api/news-engagement'], ['GET', '/api/syndication-settings'],
 ];
 test('sow-399: the syndication routes are GONE from the extension host, and the Categories channel read stays', async () => {
@@ -453,4 +454,27 @@ test('SOW-119 QA: /api/coupon-refresh reports a still-live grant (and keeps the 
   assert.equal(r.status, 200);
   assert.equal(r.json.couponUntil, until);
   assert.equal(data.couponUntil, until);
+});
+
+// sow-419 (owner, 2026-09-28: "I want to add social queue support back into the extension for superadmins. I miss
+// it."): the Social Queue popup is back in the avatar menu, so its relay is back. It forwards the member's token to the
+// Worker's /membership/social-queue, which is the superadmin gate; the extension decides nothing about the role.
+test('sow-419: the Social Queue relay reads and acts through the Worker', async () => {
+  const calls = [];
+  const fetch = async (url, init = {}) => {
+    calls.push({ url, method: init.method || 'GET', auth: init.headers?.Authorization, body: init.body ? JSON.parse(init.body) : null });
+    return { ok: true, status: 200, async json() { return init.method === 'POST' ? { ok: true } : { pending: [{ id: 't1' }], done: [] }; } };
+  };
+  const ctx = ctxFor({ fetch });
+  const read = await dispatch(ctx, { method: 'GET', pathname: '/api/social-queue', query: {} });
+  assert.equal(read.status, 200, JSON.stringify(read.json));
+  assert.deepEqual(read.json.pending, [{ id: 't1' }]);
+  const act = await dispatch(ctx, { method: 'POST', pathname: '/api/social-queue', body: { action: 'done', id: 't1' }, query: {} });
+  assert.equal(act.status, 200, JSON.stringify(act.json));
+  assert.equal(calls.length, 2);
+  for (const c of calls) {
+    assert.match(c.url, /\/membership\/social-queue$/);
+    assert.equal(c.auth, 'Bearer tok', 'the member token goes to the Worker, which is the superadmin gate');
+  }
+  assert.deepEqual(calls[1], { url: calls[1].url, method: 'POST', auth: 'Bearer tok', body: { action: 'done', id: 't1' } });
 });

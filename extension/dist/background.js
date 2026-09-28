@@ -19230,6 +19230,32 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndication queue request failed (${res.status})`);
   return data;
 }
+async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue request failed (${res.status})`);
+  return data;
+}
+async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + "/membership/social-queue", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ action, id })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue action failed (${res.status})`);
+  return data;
+}
 
 // client/src/operations-member.mjs
 function mapActivityError(err) {
@@ -19322,6 +19348,16 @@ async function getSyndicationQueue2(ctx) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   return getSyndicationQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function getSocialQueue2(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return getSocialQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function socialQueueAction2(ctx, { action, id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return socialQueueAction({ action, id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -21138,8 +21174,12 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
-      // sow-399 (owner, 2026-09-24): approve/cancel, Manually syndicate and the Social Queue relays are gone.
-      // Syndication moved to the website, which calls the Worker directly over its session.
+      // sow-399 (owner, 2026-09-24): approve/cancel and Manually syndicate relays are gone. Syndication moved to the
+      // website, which calls the Worker directly over its session.
+      // sow-419 (owner, 2026-09-28): the Social Queue came back to the extension's avatar menu, so its relay is back
+      // (GET the tasks, POST done/delete). The Worker is still the gate: superadmin only.
+      case "/api/social-queue":
+        return ok(method === "POST" ? await socialQueueAction2(ctx, body ?? {}) : await getSocialQueue2(ctx));
       // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
       // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
       // Worker is still the gate (superadmin); approving or cancelling stays on the website.

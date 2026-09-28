@@ -66,11 +66,12 @@ test('the Shares and Admin tools pages keep the "+", the new tab does not', () =
 
 // sow-416 (owner, 2026-09-26): Workbench comes back to the TOP of the menu as a link that opens the website's
 // WorkBench in a new tab. What sow-406 removed, an extension-hosted WorkBench, stays removed (the tests above).
+// sow-419: the staff tools are Admin tools, the Social Queue (back by owner ruling 2026-09-28) and Debug.
 test('the avatar menu: Workbench (the website), Favorites, Collections, Following, Earnings, Profile, Settings, then staff', () => {
   const shell = read('extension/src/shell.mjs');
   const menu = shell.slice(shell.indexOf('<div class="me-menu"'), shell.indexOf('data-me-signout'));
   const labels = [...menu.matchAll(/role="menuitem"[^>]*>([^<]+)<\/(?:a|button)>/g)].map((m) => m[1]);
-  assert.deepEqual(labels, ['Workbench', 'Favorites', 'Collections', 'Following', 'Earnings', 'Profile', 'Settings', 'Admin tools', 'Debug']);
+  assert.deepEqual(labels, ['Workbench', 'Favorites', 'Collections', 'Following', 'Earnings', 'Profile', 'Settings', 'Admin tools', 'Social Queue', 'Debug']);
   assert.match(menu, /href="\$\{SITE\}\/workbench\/" target="_blank" rel="noopener">Workbench</, 'it opens the website, never an extension page');
   assert.equal(/href="workbench\.html/.test(menu), false);
   assert.match(menu, /href="saved\.html#favorites"/);
