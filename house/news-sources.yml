@@ -650,3 +650,8 @@ sources:
     url: https://gameinformer.com/news.xml
     description: gameinformer.com
     enabled: true
+  - id: nintendo-life
+    name: Nintendo Life
+    url: https://www.nintendolife.com/feeds/news
+    description: www.nintendolife.com
+    enabled: true
