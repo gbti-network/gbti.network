@@ -380,6 +380,10 @@ covers:
     file: 20260927010634-dms519-age-of-enlightenment-drum-and-bass-mix-a826a5b4.webp
     sha256: a826a5b4dc618a23ede141ec61f92dae811c29a6921c25014aa0eb311b52ccf4
     copiedAt: '2026-09-27'
+  gbtilabs/20260928181431-the-eu-ai-act-s-transparency-rules-a-practical-g:
+    lookup: https://artificialintelligenceact.eu/transparency-rules-article-50/
+    failed: no-preview
+    triedAt: '2026-09-28'
   nareshdevineni/20260725174858-whatsapp-n8n-integration-the-ultimate-guide:
     source: https://storage.ghost.io/c/b7/35/b735bf0b-16d8-4253-97be-f94e199153c7/content/images/size/w1200/2026/07/Understanding-just-enough-HTTP-to-work-with-the-WhatsApp-Cloud-API--4--1.png
     file: 20260725174858-whatsapp-n8n-integration-the-ultimate-guide-8c3d2e0a.webp
