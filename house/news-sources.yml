@@ -640,3 +640,8 @@ sources:
     url: https://www.videogameschronicle.com/feed/
     description: www.videogameschronicle.com
     enabled: true
+  - id: gaming-on-linux
+    name: Gaming On Linux
+    url: https://www.gamingonlinux.com/article_rss.php?newsonly
+    description: www.gamingonlinux.com
+    enabled: true
