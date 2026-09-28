@@ -645,3 +645,8 @@ sources:
     url: https://www.gamingonlinux.com/article_rss.php?newsonly
     description: www.gamingonlinux.com
     enabled: true
+  - id: game-informer
+    name: Game Informer
+    url: https://gameinformer.com/news.xml
+    description: gameinformer.com
+    enabled: true
