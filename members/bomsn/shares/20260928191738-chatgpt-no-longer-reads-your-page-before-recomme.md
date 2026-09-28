@@ -12,8 +12,8 @@ tags:
   - oai-searchbot
   - gptbot
   - ai-crawler-traffic
-image: >-
-  https://blog.surfacedby.com/wp-content/uploads/2026/09/chatgpt-no-longer-reads-your-page-scaled.png
+image: https://gbti.network/media/shares/bomsn/20260928191738-chatgpt-no-longer-reads-your-page-before-recomme-60d9158d.webp
+imageSource: https://blog.surfacedby.com/wp-content/uploads/2026/09/chatgpt-no-longer-reads-your-page-scaled.png
 id: 20260928191738-chatgpt-no-longer-reads-your-page-before-recomme
 createdAt: '2026-09-28T19:17:38.209Z'
 type: share
