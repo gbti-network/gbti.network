@@ -3,7 +3,7 @@ type: project
 title: "SurfacedBy: Track and Improve Your AI Search Visibility"
 slug: surfacedby
 author: bomsn
-status: published
+status: draft
 visibility: public
 shortDescription: "See how up to 7 AI platforms mention, cite and recommend your brand, then close the gaps with drafted content, replies and outreach, and measure what changed."
 categories: ["business", "marketing"]
