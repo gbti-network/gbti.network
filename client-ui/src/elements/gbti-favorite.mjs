@@ -18,7 +18,10 @@ const CSS = `
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
     transition:color .15s ease, border-color .15s ease; }
-  .pill:hover, .pill.on { color:var(--brand); border-color:var(--brand); }
+  /* Owner-reported 2026-09-28: BASE_CSS gives every bare button a solid green hover, which outranks .pill, so a
+     hovered pill turned green text on green. The pill names its own background, and its text is --accent, the
+     readable green (brand green on white is 3.4:1, under AA for 12.5px text; --accent is 6.4:1). */
+  .pill:hover, .pill.on { color:var(--accent); border-color:var(--brand); background:var(--panel); }
   .pill svg { flex:none; }
   .pill .c { font-variant-numeric: tabular-nums; }
   /* sow-179: icon-only, count stacked below, for the Editorial/Journal sticky action rail. */

@@ -125,7 +125,23 @@ const desc = (p: any) => p.data.shortDescription ?? '';
       return li === 0 ? rows : (rows.length > 0 && <MembersOnlyCards items="[data-cat]" order="end">{rows}</MembersOnlyCards>);
     })}
   </div>
-  {pageSize && <nav class="ppage" data-ppage aria-label="Project directory pages" hidden></nav>}
+  {/* Owner, 2026-09-28: the directory lists projects in a random order on every visit. Inline, straight after the
+      list, so it runs while the page is parsing and the rows are shuffled before they are first painted; the module
+      script below then reads the shuffled order. Only the public rows move: the members-only <template> keeps its
+      place, and "Recently created" and the featured spotlight stay newest first. */}
+  <script is:inline>
+    (() => {
+      const list = document.currentScript.previousElementSibling;
+      const rows = Array.from(list.children).filter((el) => el.matches('[data-cat]'));
+      for (let i = rows.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rows[i], rows[j]] = [rows[j], rows[i]];
+      }
+      const rest = Array.from(list.children).find((el) => !el.matches('[data-cat]')) || null;
+      rows.forEach((row) => list.insertBefore(row, rest));
+    })();
+  </script>
+  {pageSize &&<nav class="ppage" data-ppage aria-label="Project directory pages" hidden></nav>}
 </div>
 
 <style>
