@@ -204,6 +204,11 @@ covers:
     file: 20260902164520-paul-mccartney-the-backyard-full-audio-tape-30th-165e5e31.webp
     sha256: 165e5e316a06924b91d8737a6e79f903e0ccb39cb62c5901194f9dd5434d00c2
     copiedAt: '2026-09-14'
+  bomsn/20260928191738-chatgpt-no-longer-reads-your-page-before-recomme:
+    source: https://blog.surfacedby.com/wp-content/uploads/2026/09/chatgpt-no-longer-reads-your-page-scaled.png
+    file: 20260928191738-chatgpt-no-longer-reads-your-page-before-recomme-60d9158d.webp
+    sha256: 60d9158d7470b071cfc3b386eee94612ebca273865c5ab9e4fed1bae9800ce5f
+    copiedAt: '2026-09-28'
   gbtilabs/20260718172929-introducing-the-voice-agent-builder:
     source: https://x.ai/images/news/grok-voice-agent-builder.webp
     file: 20260718172929-introducing-the-voice-agent-builder-a7502643.webp
