@@ -476,8 +476,8 @@ async function loadActivity() {
 }
 
 // sow-387: the new tab no longer shows setup steps. The owner ruled (2026-09-22) that the welcome belongs to the
-// website, and the background opens it once, after a member's first sign-in (extension/src/welcome-handoff.mjs). The
-// first-run overlay's flag is no longer read, so it is removed once rather than left on the device.
+// website. sow-418 (2026-09-27): the extension no longer opens it at all. The first-run overlay's flag is no longer
+// read, so it is removed once rather than left on the device.
 function forgetRetiredWelcomeFlag() {
   try { localStorage.removeItem('gbti-welcome-seen'); } catch { /* storage blocked */ }
 }

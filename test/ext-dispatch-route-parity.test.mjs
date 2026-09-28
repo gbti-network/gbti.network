@@ -79,7 +79,7 @@ const WEBSITE_ONLY = {
 // Routes the EXTENSION serves and the website/npm host deliberately does not.
 const EXTENSION_ONLY = {
   EXTENSION_DISCORD_LINK: {
-    reason: 'the extension\'s Discord-link reads. sow-387 took the welcome wizard out of the extension (it minted the link URL and polled the status); the status is still read by the background welcome handoff (loadProgress) and, before sow-399 moved it to the website, by gbti-syndicate-now (optional-chained, degrading to no @mention preview). /api/discord-link has no extension caller left and is kept, with /api/onboarding-status and /api/discord-unlink, as a recorded sow-387 follow-up. api.mjs does not import the ops.',
+    reason: 'the extension\'s Discord-link reads. sow-387 took the welcome wizard out of the extension (it minted the link URL and polled the status); the status was read by the background welcome handoff (loadProgress) until sow-418 removed that redirect, and, before sow-399 moved it to the website, by gbti-syndicate-now (optional-chained, degrading to no @mention preview). No extension code reads it now. /api/discord-link has no extension caller left and is kept, with /api/onboarding-status and /api/discord-unlink, as a recorded sow-387 follow-up. api.mjs does not import the ops.',
     routes: ['/api/discord-link', '/api/discord-link/status'],
   },
 };

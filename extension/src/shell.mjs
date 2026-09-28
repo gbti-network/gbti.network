@@ -221,8 +221,8 @@ async function shellWebLogin(login) {
 
 /** SOW-048: the forced-sign-in gate. With no token, hide the app (data-unauth) and overlay ONLY the sign-in screen
  *  (<gbti-signin-splash>, sow-387). Its Sign in button runs the website sign-in; on success we reload into the
- *  signed-in app (initShell re-runs, now signed in, no gate). Idempotent. The background worker opens the website
- *  welcome after a member's FIRST sign-in (extension/src/welcome-handoff.mjs), so nothing here does. */
+ *  signed-in app (initShell re-runs, now signed in, no gate). Idempotent. Nothing in the extension opens the website
+ *  welcome (sow-418 removed the redirect that followed a first sign-in). */
 function mountAuthGate(root, { expired = false } = {}) {
   if (!root || document.querySelector('.gbti-authwrap')) return;
   document.documentElement.setAttribute('data-unauth', '1');

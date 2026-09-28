@@ -101,7 +101,7 @@ test('the background claims with the page\'s verifier, stores the same record as
   inOrder(web, ['claimTokens({ code, verifier })', 'completeLogin(store, { accessToken: t.access_token, refreshToken: t.refresh_token, expiresIn: t.expires_in })'], 'handleWebLogin');
   const branch = BG.slice(BG.indexOf("} else if (msg?.type === 'login') {"), BG.indexOf("} else if (msg?.type === 'signout') {"));
   // sow-410: anything but the website sign-in is refused before it can start, so no page can begin a code sign-in.
-  inOrder(branch, ["if (msg.method !== 'web') { sendResponse({ ok: false, error: 'unsupported' }); return; }", 'await handleWebLogin(store, msg)', 'broadcastAuthChanged()', 'await focusTab(', 'sendResponse(res)', 'afterSignIn(store, sender?.tab)'], 'the login branch');
+  inOrder(branch, ["if (msg.method !== 'web') { sendResponse({ ok: false, error: 'unsupported' }); return; }", 'await handleWebLogin(store, msg)', 'broadcastAuthChanged()', 'await focusTab(', 'sendResponse(res)', 'afterSignIn(store)'], 'the login branch');
   // The website sign-in and the "Continue as" read are refused before either branch runs unless an extension page sent
   // them, so a compromised web page's content script cannot plant tokens or read the website account.
   const guard = BG.indexOf("} else if ((msg?.type === 'web-session-peek' || (msg?.type === 'login' && msg.method === 'web')) && !fromExtensionPage(sender, chrome.runtime.getURL(''))) {");

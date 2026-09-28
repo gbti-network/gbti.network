@@ -12,8 +12,6 @@ import { createRepoClient } from '../../client/src/github-repo.mjs';
 import { resolveMembership } from '../../client/src/membership.mjs';
 import { resolveOpenPage } from './open-page.mjs';
 import { needsRefresh, refreshPatch } from './token-refresh.mjs';
-import { claimHandoff, shouldOpenWelcome, createDispatchClient, withTimeout, seedOnUpdate } from './welcome-handoff.mjs'; // sow-387
-import { loadProgress, WELCOME_SITE_URL } from '../../client-ui/src/onboarding-card-core.mjs'; // sow-387: DOM-free
 import { claimTokens, knownLoginFrom, fromExtensionPage } from './web-signin.mjs'; // sow-393
 
 // SOW-011: the signup Worker that answers the membership-status oracle. In host_permissions so the worker can
@@ -69,8 +67,7 @@ async function completeLogin(store, { accessToken, refreshToken, expiresIn }) {
     // leave membership unset (treated as 'unknown')
   }
   // sow-158: the website session is minted from this fresh token too, but no longer here. sow-387 moved it into
-  // afterSignIn, which runs after the sign-in page has its answer, so a slow Worker can never hold the sign-in screen,
-  // and the welcome tab it may open waits for the cookie.
+  // afterSignIn, which runs after the sign-in page has its answer, so a slow Worker can never hold the sign-in screen.
   return { ok: true, login: u.login };
 }
 
@@ -91,7 +88,7 @@ async function refreshViaWorker(refreshToken) {
 // Bearer-authenticated -> their OWN session (no new capability). Best-effort: a failure is non-fatal (web sign-in
 // stays available). credentials:'include' so the browser stores the Set-Cookies in the shared cookie jar the
 // gbti.network page reads. The token is sent to the SAME Worker that already holds it. sow-387: resolves true only
-// when the Worker answered 2xx, and gives up after MINT_TIMEOUT_MS, so the welcome handoff can wait on it.
+// when the Worker answered 2xx, and gives up after MINT_TIMEOUT_MS.
 const MINT_TIMEOUT_MS = 8000;
 async function mintWebSession(token) {
   if (!token) return false;
@@ -165,40 +162,22 @@ chrome.action?.onClicked?.addListener(() => {
   chrome.tabs.create({ url: chrome.runtime.getURL('newtab.html') }).catch(() => {});
 });
 
-// sow-387: existing members are seeded when the extension updates, so the release that adds the welcome handoff
-// never counts their next re-sign-in as a first one. It never opens a tab, and nothing happens at install.
-chrome.runtime.onInstalled?.addListener(({ reason } = {}) => {
-  getStore()
-    .then((store) => seedOnUpdate(chrome.storage.local, { reason, githubId: store.get('identity')?.githubId }))
-    .catch(() => {});
-});
-
-// sow-387: after a sign-in, sign the member in on the website and, on the first sign-in for this account on this
-// browser, open the website welcome in front of the sign-in tab. Single-flight, so two sign-ins that finish together
-// run it once. It runs AFTER the sign-in page has its answer, so nothing here can hold the sign-in screen.
-const PROGRESS_TIMEOUT_MS = 10000;
+// After a sign-in, sign the member in on the website too (sow-158). Single-flight, so two sign-ins that finish together
+// mint once. It runs AFTER the sign-in page has its answer, so nothing here can hold the sign-in screen.
+// sow-418 (owner, 2026-09-27): this used to go on to open the website welcome after a member's FIRST sign-in on a
+// browser (sow-387). The owner removed that redirect: a new member now lands on the new tab, where the first-run tour
+// (sow-401) takes over. Nothing in the extension opens the welcome page any more; the website still has it.
 let _afterSignIn = null;
-function afterSignIn(store, tab) {
+function afterSignIn(store) {
   if (_afterSignIn) return _afterSignIn;
   _afterSignIn = (async () => {
     try {
-      // The website session first: the welcome tab needs the cookie. The stamp is set before the mint so an api call
-      // racing it does not mint twice, and removed on failure so the next api call's opportunistic mint retries.
+      // The stamp is set before the mint so an api call racing it does not mint twice, and removed on failure so the
+      // next api call's opportunistic mint retries.
       try { await chrome.storage?.session?.set?.({ webSessionMinted: true }); } catch { /* best-effort */ }
       const minted = await mintWebSession(store.get('githubToken'));
       if (!minted) { try { await chrome.storage?.session?.remove?.('webSessionMinted'); } catch { /* best-effort */ } }
-      // Claim before any read. Only the call that writes the record may open a tab.
-      const claimed = await claimHandoff(chrome.storage.local, store.get('identity')?.githubId);
-      if (!claimed) return;
-      // A read that fails or runs long leaves the progress unknown, and unknown progress still opens the welcome.
-      const client = createDispatchClient((req) => dispatch(buildExtContext(store), req));
-      const progress = await withTimeout(loadProgress(client), PROGRESS_TIMEOUT_MS, null);
-      if (!shouldOpenWelcome({ claimed, progress })) return;
-      const opts = { url: WELCOME_SITE_URL, active: true };
-      if (tab?.windowId != null) opts.windowId = tab.windowId;
-      if (tab?.id != null) opts.openerTabId = tab.id;
-      try { await chrome.tabs.create(opts); } catch { await chrome.tabs.create({ url: WELCOME_SITE_URL }).catch(() => {}); }
-    } catch { /* best-effort: the WorkBench card still links to the welcome */ }
+    } catch { /* best-effort: the website sign-in stays available on its own */ }
     finally { _afterSignIn = null; }
   })();
   return _afterSignIn;
@@ -254,9 +233,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // reloads into the feed.
         if (res?.ok) { broadcastAuthChanged(); await focusTab(sender?.tab?.id, sender?.tab?.windowId); }
         sendResponse(res);
-        // sow-387: only now, with the sign-in page answered, the website session and (on a first sign-in) the
-        // website welcome, opened last so it lands in front.
-        if (res?.ok) afterSignIn(store, sender?.tab);
+        // sow-387: only now, with the sign-in page answered, the website session. sow-418: and nothing else; the
+        // welcome redirect that followed it is gone.
+        if (res?.ok) afterSignIn(store);
       } else if (msg?.type === 'signout') {
         // sow-158: end the bridged website cookie session too. Capture the token BEFORE nulling it, so the bearer
         // reaches the clear route; fire-and-forget so a slow/failed clear never blocks local sign-out.
