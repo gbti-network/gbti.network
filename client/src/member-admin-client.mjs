@@ -287,3 +287,20 @@ export async function socialQueueAction({ action, id, token, signupBase, fetch =
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue action failed (${res.status})`);
   return data;
 }
+
+/**
+ * sow-420: remove one news story from the index, or put it back (SUPERADMIN only; the Worker enforces, and it takes a
+ * bearer token as well as the website's cookie). The extension's news reader calls this through /api/news-item.
+ */
+export async function newsItemDecide({ action, guid, token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/admin/news-item', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, guid }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `news story ${action} failed (${res.status})`);
+  return data;
+}

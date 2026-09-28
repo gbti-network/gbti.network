@@ -11,7 +11,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, listAuthorTargets, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
-  listEditorialOp, decideEditorialOp, getSyndicationQueue, getSocialQueue, socialQueueAction } from '../../client/src/operations.mjs'; // sow-323; sow-407; sow-419
+  listEditorialOp, decideEditorialOp, getSyndicationQueue, getSocialQueue, socialQueueAction, newsItemDecideOp } from '../../client/src/operations.mjs'; // sow-323; sow-407; sow-419; sow-420
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, newsEditorsFromText, canEditNews } from '../../client/src/roles.mjs';
@@ -197,6 +197,11 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       // (GET the tasks, POST done/delete). The Worker is still the gate: superadmin only.
       case '/api/social-queue':
         return ok(method === 'POST' ? await socialQueueAction(ctx, body ?? {}) : await getSocialQueue(ctx));
+      // sow-420 (owner, 2026-09-28): the news reader's superadmin card removes a story from the news index or puts it
+      // back. POST only; the Worker's /membership/admin/news-item is the superadmin gate.
+      case '/api/news-item':
+        if (method !== 'POST') return { status: 404, json: { error: 'not_found' } };
+        return ok(await newsItemDecideOp(ctx, body ?? {}));
       // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
       // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
       // Worker is still the gate (superadmin); approving or cancelling stays on the website.

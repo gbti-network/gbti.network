@@ -59,6 +59,7 @@ import './elements/gbti-notify-modal.mjs'; // SOW-186 C3: the reusable per-follo
 import './elements/gbti-notifications-settings.mjs'; // SOW-186 C3: the account "Notifications" settings surface
 import './elements/gbti-news.mjs';
 import './elements/gbti-news-reader.mjs'; // SOW-046 G: the in-extension expanded news view (opened from the feed)
+import './elements/gbti-news-admin.mjs'; // sow-420: the superadmin card on a news story (source weight + Remove this story)
 import './elements/gbti-discussion.mjs';
 import './elements/gbti-reader.mjs';
 import './elements/gbti-member-view.mjs'; // SOW-143: the in-extension member profile detail view

@@ -19256,6 +19256,21 @@ async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue action failed (${res.status})`);
   return data;
 }
+async function newsItemDecide({ action, guid: guid3, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/news-item", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ action, guid: guid3 })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `news story ${action} failed (${res.status})`);
+  return data;
+}
 
 // client/src/operations-member.mjs
 function mapActivityError(err) {
@@ -19358,6 +19373,18 @@ async function socialQueueAction2(ctx, { action, id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   return socialQueueAction({ action, id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function newsItemDecideOp(ctx, { action, guid: guid3 } = {}) {
+  requireIdentity(ctx);
+  if (action !== "remove" && action !== "restore") throw new OperationError("bad-request", "action must be remove or restore");
+  const g = String(guid3 ?? "").trim();
+  if (!g) throw new OperationError("bad-request", "a story guid is required");
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await newsItemDecide({ action, guid: g, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "the news store did not answer; please try again");
+  }
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -21180,6 +21207,11 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // (GET the tasks, POST done/delete). The Worker is still the gate: superadmin only.
       case "/api/social-queue":
         return ok(method === "POST" ? await socialQueueAction2(ctx, body ?? {}) : await getSocialQueue2(ctx));
+      // sow-420 (owner, 2026-09-28): the news reader's superadmin card removes a story from the news index or puts it
+      // back. POST only; the Worker's /membership/admin/news-item is the superadmin gate.
+      case "/api/news-item":
+        if (method !== "POST") return { status: 404, json: { error: "not_found" } };
+        return ok(await newsItemDecideOp(ctx, body ?? {}));
       // sow-407: the queue READ is back, GET only, because the activity bell reads it for "Needs your approval".
       // sow-399 removed it believing no extension caller was left, and the bell's group went quietly empty. The
       // Worker is still the gate (superadmin); approving or cancelling stays on the website.

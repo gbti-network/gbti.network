@@ -4,9 +4,12 @@
 // Follow/Following toggle (writes the SOW-046 E followChannel pref), the AI summary, an "Open source" UTM link, the
 // curator "Add to Discord" action (SOW-046 C), and the members-only discussion (SOW-046 D via <gbti-discussion>).
 // Mirrors <gbti-reader>.open(item) so the new-tab opens it the same way. Host-agnostic; inert without a client.
+// sow-420: a superadmin also gets the website's superadmin card (source weight + Remove this story) under the channel
+// card, and a removed story is replaced in place by the website's notice and an Undo.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { newsTargetSlug, utmLink } from '../news.mjs';
 import { faviconFor } from './gbti-card-list.mjs';
+import { NEWS_ADMIN_COPY } from './gbti-news-admin.mjs';
 import './gbti-discussion.mjs';
 
 const lc = (s) => String(s ?? '').toLowerCase();
@@ -48,6 +51,14 @@ const CSS = `
 
   .disc-wrap h4 { margin:0 0 12px; font-family:var(--font-display, var(--font-body)); font-size:15px; }
   .muted { color:var(--muted); }
+
+  /* sow-420: the removed-story notice, as the website draws it. BASE_CSS paints bare buttons green, so Undo sets its own. */
+  .news-removed { text-align:center; padding:48px 0; }
+  .news-removed p { margin:0; font-size:15px; color:var(--muted); }
+  button.nr-undo { font:inherit; font-size:13px; font-weight:700; margin-top:14px; padding:8px 16px; border-radius:999px; cursor:pointer;
+    background:none; border:1.5px solid var(--brand); color:var(--accent); }
+  button.nr-undo:hover:not([disabled]) { background:var(--brand); color:#fff; }
+  button.nr-undo[disabled] { opacity:.55; cursor:default; }
 `;
 
 class GbtiNewsReader extends GbtiElement {
@@ -75,6 +86,10 @@ class GbtiNewsReader extends GbtiElement {
     this._canCurate = false;
     this._publisher = null;
     this._followed = null;
+    this._admin = null;      // sow-420: the superadmin card, created once per story and re-inserted on every render
+    this._removed = false;   // sow-420: the story was just removed from the news index
+    this._restore = 'idle';  // idle | restoring | restored
+    this._restoreErr = null;
     this.render();
     if (!item || !this.client) return;
     // SOW-111: the detail-open engagement beacon (fire-and-forget; the Worker answers a clean no-op for an
@@ -89,6 +104,8 @@ class GbtiNewsReader extends GbtiElement {
         this.client.getPrefs?.().catch(() => null),
       ]);
       this._canCurate = Boolean(status?.canCurate);
+      // sow-420: presentation only. The Worker re-checks superadmin on every weight and removal call.
+      if (status?.role === 'superadmin' && item.guid && this._item === item) this._mountAdmin(item);
       const sid = lc(item.source);
       this._publisher = (srcs?.sources || []).find((s) => lc(s.id) === sid || lc(s.name) === sid) || null;
       this._followed = new Set((prefs?.followedChannels || []).map(lc));
@@ -105,6 +122,42 @@ class GbtiNewsReader extends GbtiElement {
       const prefs = await this.client.setPrefs({ followChannel: { id, on } });
       this._followed = new Set((prefs?.followedChannels || []).map(lc));
     } catch { /* leave the prior state; re-render reflects it */ }
+    this.render();
+  }
+
+  /** sow-420: the superadmin card for this story. One node per story, so its state survives the reader's re-renders. */
+  _mountAdmin(item) {
+    if (typeof document === 'undefined') return;
+    const card = document.createElement('gbti-news-admin');
+    card.story = { guid: item.guid, source: item.source, title: item.title };
+    card.addEventListener('gbti-news-removed', () => {
+      if (this._item !== item) return;
+      this._removed = true;
+      this._restore = 'idle';
+      this._restoreErr = null;
+      this.render();
+    });
+    this._admin = card;
+  }
+
+  /** sow-420: Undo on the removed-story notice puts the story back in the news index. */
+  async _undoRemove() {
+    const item = this._item;
+    if (!item?.guid || this._restore !== 'idle') return;
+    this._restore = 'restoring';
+    this._restoreErr = null;
+    this.render();
+    try {
+      await this.client.restoreNewsItem(String(item.guid));
+      if (this._item !== item) return;
+      this._restore = 'restored';
+      // The sidebar goes back too: a card still reading "Removed" beside a story that is back would contradict itself.
+      this._admin?.restored?.();
+    } catch (err) {
+      if (this._item !== item) return;
+      this._restore = 'idle';
+      this._restoreErr = err?.message || NEWS_ADMIN_COPY.failed;
+    }
     this.render();
   }
 
@@ -146,21 +199,33 @@ class GbtiNewsReader extends GbtiElement {
       + `<div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ''}</span>`
       + `<div class="cc-name">${esc(pub?.name || it.source || 'Publisher')}</div></div>`
       + `${chanDesc}${chanCount}${followBtn}</div>`;
+    // sow-420: a removed story is replaced in place by the website's notice and an Undo. The reader of this view is
+    // the superadmin who just removed it, so closing it would hide whether the removal worked.
+    const story = this._removed
+      ? `<div class="news-removed" data-news-removed><p>${esc(this._restore === 'restored' ? NEWS_ADMIN_COPY.restoredNotice
+        : (this._restoreErr || NEWS_ADMIN_COPY.removedNotice))}</p>`
+        + (this._restore === 'restored' ? '' : `<button type="button" class="nr-undo" data-nr-undo${this._restore === 'restoring' ? ' disabled' : ''}>`
+          + `${esc(this._restore === 'restoring' ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`)
+        + `</div>`
+      : hero
+        + `<h2>${esc(it.title || 'News')}</h2>`
+        // SOW-111 QA: reveal the classifier category (it decides the Discord channel the item routes to).
+        + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : '')
+        + `<p class="sum">${esc(it.excerpt || 'No summary available.')}</p>`
+        + `<div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ''}${disc}</div>${note}`;
     this.set(this.css(CSS)
       + `<div class="wrap"><div class="cols"><div class="main">`
-      + hero
-      + `<h2>${esc(it.title || 'News')}</h2>`
-      // SOW-111 QA: reveal the classifier category (it decides the Discord channel the item routes to).
-      + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : '')
-      + `<p class="sum">${esc(it.excerpt || 'No summary available.')}</p>`
-      + `<div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ''}${disc}</div>${note}`
-      + `</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      + story
+      + `</div><aside class="side">${chanCard}${this._admin ? '<div data-admin-slot></div>' : ''}${discussion}</aside></div></div>`);
+    // sow-420: the same card node every time, so a step held for its save or a removal in flight is not reset.
+    if (this._admin) this.$('[data-admin-slot]')?.replaceWith(this._admin);
     if (!this._wiredErr) { // a broken favicon drops to the empty disc, a broken hero removes itself (CSP-safe capture phase)
       this.root?.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && (t.classList?.contains('avimg') || t.classList?.contains('hero'))) t.remove(); }, true);
       this._wiredErr = true;
     }
     this.$('[data-follow]')?.addEventListener('click', (e) => this._toggleFollow(e.currentTarget));
     this.$('[data-disc]')?.addEventListener('click', (e) => this._publishToDiscord(e.currentTarget));
+    this.$('[data-nr-undo]')?.addEventListener('click', () => this._undoRemove());
   }
 }
 

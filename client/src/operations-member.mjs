@@ -12,7 +12,7 @@ import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from '.
 import { workerGetNews, workerGetNewsSources, workerGetFollowedNews, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction } from './member-admin-client.mjs';
+import { getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction, newsItemDecide as workerNewsItemDecide } from './member-admin-client.mjs';
 import { OperationError, requireIdentity } from './operations-core.mjs';
 
 // SOW-024: member activity (favorites + collections) in the deletable edge store, via the signup Worker.
@@ -159,6 +159,22 @@ export async function socialQueueAction(ctx, { action, id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   return workerSocialQueueAction({ action, id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+
+
+/**
+ * sow-420: a superadmin removes one news story from the index, or puts it back, from the extension's news reader
+ * (the website's news page does the same over its session). The shape is checked here so a bad call is a clear 400;
+ * the Worker is still the only gate on WHO may do it.
+ */
+export async function newsItemDecideOp(ctx, { action, guid } = {}) {
+  requireIdentity(ctx);
+  if (action !== 'remove' && action !== 'restore') throw new OperationError('bad-request', 'action must be remove or restore');
+  const g = String(guid ?? '').trim();
+  if (!g) throw new OperationError('bad-request', 'a story guid is required');
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerNewsItemDecide({ action, guid: g, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
+  catch (err) { throw new OperationError('admin-op-failed', err?.message || 'the news store did not answer; please try again'); }
 }
 
 

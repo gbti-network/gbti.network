@@ -70,6 +70,7 @@ export {
   approveSyndication,
   getSocialQueue,
   socialQueueAction,
+  newsItemDecideOp, // sow-420
   getSyndicateNowInfo,
   syndicateNow,
   getNews,
