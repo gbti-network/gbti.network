@@ -17,7 +17,7 @@
 import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
 
 /** The line under the weekly greeting. The welcome issue carries its own (mail-digest.mjs). */
-export const WEEKLY_HEADER_LINE = 'Thanks for being a subscriber to the GBTI Digest. Inside you will find the latest projects, shares and agent skills created by our network community. Wishing you a great week ahead! 🙏 🙌';
+export const WEEKLY_HEADER_LINE = 'Thanks for being a subscriber to the GBTI Digest. Inside you will find the latest projects, shares and agent skills created by our network community.';
 
 /** Where each closing link points, keyed by its click placement. */
 export const CLOSING_TARGETS = Object.freeze({
