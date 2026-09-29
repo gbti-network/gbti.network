@@ -17793,8 +17793,10 @@ ${BLOCKED_PILL_CSS}
       return `<span class="chip${k}">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
     // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
+    // sow-423 (owner, 2026-09-29): news gets the pill too. A news item carries its category as a readable name already
+    // ("AI/ML", "Hardware", "Other"), not a taxonomy path, so it is shown as it is, "Other" included (owner's call).
     _categoryChip(item) {
-      const leaf = categoryLeaf(item.categoryLabels);
+      const leaf = lc2(item.type) === "news" ? String(item.category ?? "").trim() : categoryLeaf(item.categoryLabels);
       return leaf ? `<span class="catchip">${esc(leaf)}</span>` : "";
     }
     // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
