@@ -24,4 +24,5 @@
 # into /news-sources.json, which the news worker fetches each hour. Edit by hand only in a pinch.
 weights:
   coindesk-bitcoin-ethereum-crypto-news-an: -1
+  the-block: -1
   wired: -1
