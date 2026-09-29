@@ -85,10 +85,14 @@ export function applyTaskAction(task, action, actor = {}, now = 0) {
   return { task, remove: false, ok: false };
 }
 
-/** Split a task list into { pending (newest created first), done (newest completed first) }. Pure. */
+/**
+ * Split a task list into { pending (OLDEST created first), done (newest completed first) }. Pure.
+ * Owner, 2026-09-29: the to-do list is worked from the top, so the task that has waited longest comes first.
+ * The history tabs stay newest first.
+ */
 export function splitTasks(tasks) {
   const arr = Array.isArray(tasks) ? tasks.filter(Boolean) : [];
-  const pending = arr.filter((t) => t.status === 'pending').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const pending = arr.filter((t) => t.status === 'pending').sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const done = arr.filter((t) => t.status === 'done').sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   return { pending, done };
 }

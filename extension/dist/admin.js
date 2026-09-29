@@ -26697,6 +26697,7 @@ ${BLOCKED_PILL_CSS}
   .tab .n { font-family:var(--font-mono, monospace); font-size:10.5px; opacity:.8; margin-left:5px; }
   .hint { color:var(--muted); font-size:11.5px; margin:0 0 10px; line-height:1.5; }
   .msg { font-size:12.5px; color:var(--accent); margin:0 0 10px; } .msg.err { color:var(--danger, #e06c6c); }
+  .msgbar { flex:none; margin:0; padding:9px 18px; border-bottom:1.5px solid var(--line); }
   .empty { padding:26px 10px; text-align:center; color:var(--muted); font-family:var(--font-mono, monospace); font-size:12px; }
   .busy { opacity:.55; pointer-events:none; }
 
@@ -26800,6 +26801,8 @@ ${BLOCKED_PILL_CSS}
       return [...set];
     }
     render() {
+      const keepScroll = this._resetScroll ? 0 : this.$(".body")?.scrollTop || 0;
+      this._resetScroll = false;
       if (!this.client) {
         this.set(this.css(CSS47) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`));
         this._wire();
@@ -26828,7 +26831,6 @@ ${BLOCKED_PILL_CSS}
       const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
       const chOpts = this._channelOptions();
       this.set(this.css(CSS47) + this._shell(`
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
       <p class="hint">${esc(hint)}</p>
       <div class="fbar">
@@ -26839,12 +26841,15 @@ ${BLOCKED_PILL_CSS}
       </div>
       <div>${rows}</div>
       ${pages > 1 ? `<div class="pager"><button data-pg="prev" type="button" ${this._page === 0 ? "disabled" : ""}>Prev</button><span class="pg">Page ${this._page + 1} of ${pages}</span><button data-pg="next" type="button" ${this._page >= pages - 1 ? "disabled" : ""}>Next</button></div>` : ""}
-    `));
+    `, this._msg));
+      const body = this.$(".body");
+      if (body && keepScroll) body.scrollTop = keepScroll;
       this._wire();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._page = 0;
         this._fChannel = "all";
+        this._resetScroll = true;
         if (this._tab === "auto") this._loadAuto();
         this.render();
       }));
@@ -26853,6 +26858,7 @@ ${BLOCKED_PILL_CSS}
         else if (el.dataset.f === "channel") this._fChannel = el.value;
         else this._fQ = el.value;
         this._page = 0;
+        this._resetScroll = true;
         const focusQ = el.dataset.f === "q";
         this.render();
         if (focusQ) {
@@ -26865,6 +26871,7 @@ ${BLOCKED_PILL_CSS}
       }));
       this.$$("[data-pg]").forEach((b) => b.addEventListener("click", () => {
         this._page += b.dataset.pg === "next" ? 1 : -1;
+        this._resetScroll = true;
         this.render();
       }));
       this.$$("[data-assist]").forEach((b) => b.addEventListener("click", () => this._assist(b.dataset.assist)));
@@ -26877,8 +26884,8 @@ ${BLOCKED_PILL_CSS}
       this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
       this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
     }
-    _shell(inner) {
-      return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`;
+    _shell(inner, msg = "") {
+      return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>${msg ? `<p class="msg msgbar" role="status">${esc(msg)}</p>` : ""}<div class="body">${inner}</div>`;
     }
     _wire() {
       this.$("[data-close]")?.addEventListener("click", () => this.dispatchEvent(new CustomEvent("gbti-social-close", { bubbles: true, composed: true })));

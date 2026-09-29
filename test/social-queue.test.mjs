@@ -64,9 +64,10 @@ test('applyTaskAction: done stamps, delete removes, unknown is a no-op', () => {
   assert.equal(applyTaskAction(null, 'done', {}, 1).ok, false);
 });
 
-test('splitTasks orders pending by createdAt and done by doneAt, newest first', () => {
+test('splitTasks orders pending oldest first (the longest wait is worked first) and done newest first', () => {
+  // Owner, 2026-09-29: "show the oldest items in the queue first". The history tab is unchanged.
   const mk = (id, status, c, d) => ({ id, status, createdAt: c, doneAt: d });
-  const { pending, done } = splitTasks([mk('a', 'pending', 1), mk('b', 'pending', 3), mk('c', 'done', 0, 5), mk('d', 'done', 0, 9)]);
-  assert.deepEqual(pending.map((t) => t.id), ['b', 'a']);
+  const { pending, done } = splitTasks([mk('a', 'pending', 1), mk('b', 'pending', 3), mk('e', 'pending', 2), mk('c', 'done', 0, 5), mk('d', 'done', 0, 9)]);
+  assert.deepEqual(pending.map((t) => t.id), ['a', 'e', 'b']);
   assert.deepEqual(done.map((t) => t.id), ['d', 'c']);
 });

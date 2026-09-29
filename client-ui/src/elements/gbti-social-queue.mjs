@@ -67,6 +67,7 @@ const CSS = `
   .tab .n { font-family:var(--font-mono, monospace); font-size:10.5px; opacity:.8; margin-left:5px; }
   .hint { color:var(--muted); font-size:11.5px; margin:0 0 10px; line-height:1.5; }
   .msg { font-size:12.5px; color:var(--accent); margin:0 0 10px; } .msg.err { color:var(--danger, #e06c6c); }
+  .msgbar { flex:none; margin:0; padding:9px 18px; border-bottom:1.5px solid var(--line); }
   .empty { padding:26px 10px; text-align:center; color:var(--muted); font-family:var(--font-mono, monospace); font-size:12px; }
   .busy { opacity:.55; pointer-events:none; }
 
@@ -157,6 +158,11 @@ class GbtiSocialQueue extends GbtiElement {
   }
 
   render() {
+    // Owner, 2026-09-29: a click must not throw the reader back to the top. Every action re-renders the whole
+    // panel, which replaces the scrolling body, so its position is read here and put back after the new markup
+    // lands. Switching tab, filter or page is a new list, and those set _resetScroll to start it at the top.
+    const keepScroll = this._resetScroll ? 0 : (this.$('.body')?.scrollTop || 0);
+    this._resetScroll = false;
     if (!this.client) { this.set(this.css(CSS) + this._shell(`<p class="empty">Open in the GBTI client (superadmin) to use the Social Queue.</p>`)); this._wire(); return; }
     if (this._err) { this.set(this.css(CSS) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`)); this._wire(); this.$('[data-reload]')?.addEventListener('click', () => this.load()); return; }
     if (!this._data) { if (!this._loading) this.load(); this.set(this.css(CSS) + this._shell(`<p class="empty">Loading the Social Queue...</p>`)); this._wire(); return; }
@@ -179,7 +185,6 @@ class GbtiSocialQueue extends GbtiElement {
     const chOpts = this._channelOptions();
 
     this.set(this.css(CSS) + this._shell(`
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <div class="tabs">${tabBtn('todo', 'To do', nPending)}${tabBtn('manual', 'Manual done', nDone)}${tabBtn('auto', 'Auto done', nAuto || '')}</div>
       <p class="hint">${esc(hint)}</p>
       <div class="fbar">
@@ -190,17 +195,19 @@ class GbtiSocialQueue extends GbtiElement {
       </div>
       <div>${rows}</div>
       ${pages > 1 ? `<div class="pager"><button data-pg="prev" type="button" ${this._page === 0 ? 'disabled' : ''}>Prev</button><span class="pg">Page ${this._page + 1} of ${pages}</span><button data-pg="next" type="button" ${this._page >= pages - 1 ? 'disabled' : ''}>Next</button></div>` : ''}
-    `));
+    `, this._msg));
+    const body = this.$('.body');
+    if (body && keepScroll) body.scrollTop = keepScroll;
     this._wire();
-    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._page = 0; this._fChannel = 'all'; if (this._tab === 'auto') this._loadAuto(); this.render(); }));
+    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._page = 0; this._fChannel = 'all'; this._resetScroll = true; if (this._tab === 'auto') this._loadAuto(); this.render(); }));
     this.$$('[data-f]').forEach((el) => el.addEventListener(el.dataset.f === 'q' ? 'input' : 'change', () => {
       if (el.dataset.f === 'type') this._fType = el.value; else if (el.dataset.f === 'channel') this._fChannel = el.value; else this._fQ = el.value;
-      this._page = 0;
+      this._page = 0; this._resetScroll = true;
       const focusQ = el.dataset.f === 'q';
       this.render();
       if (focusQ) { const q = this.$('[data-f="q"]'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
     }));
-    this.$$('[data-pg]').forEach((b) => b.addEventListener('click', () => { this._page += b.dataset.pg === 'next' ? 1 : -1; this.render(); }));
+    this.$$('[data-pg]').forEach((b) => b.addEventListener('click', () => { this._page += b.dataset.pg === 'next' ? 1 : -1; this._resetScroll = true; this.render(); }));
     this.$$('[data-assist]').forEach((b) => b.addEventListener('click', () => this._assist(b.dataset.assist)));
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copy)));
     this.$$('[data-copybody]').forEach((b) => b.addEventListener('click', () => { const t = this._byId(b.dataset.copybody); this._copy(b.dataset.copybody, this._extra(t)?.field || 'bodyText'); }));
@@ -209,7 +216,7 @@ class GbtiSocialQueue extends GbtiElement {
     this.$$('[data-post]').forEach((b) => b.addEventListener('click', () => this._action('post', b.dataset.post)));
   }
 
-  _shell(inner) { return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`; }
+  _shell(inner, msg = '') { return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>${msg ? `<p class="msg msgbar" role="status">${esc(msg)}</p>` : ''}<div class="body">${inner}</div>`; }
   _wire() { this.$('[data-close]')?.addEventListener('click', () => this.dispatchEvent(new CustomEvent('gbti-social-close', { bubbles: true, composed: true }))); }
   _byId(id) { return (this._data?.pending || []).find((t) => t.id === id) || (this._data?.done || []).find((t) => t.id === id) || null; }
   _chip(channel, status, big) { return `<span class="chip ${status === 'sent' ? 'sent' : status === 'failed' ? 'failed' : ''}${big ? ' big' : ''}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ''}</span>`; }
