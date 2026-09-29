@@ -1,12 +1,17 @@
 ---
-type: project
-title: "SurfacedBy: Track and Improve Your AI Search Visibility"
+title: 'SurfacedBy: Track and Improve Your AI Search Visibility'
 slug: surfacedby
-author: bomsn
+shortDescription: >-
+  See how up to 7 AI platforms mention, cite and recommend your brand, then close the gaps with
+  drafted content, replies and outreach, and measure what changed.
+categories:
+  - business
+  - marketing
 status: published
 visibility: public
-shortDescription: "See how up to 7 AI platforms mention, cite and recommend your brand, then close the gaps with drafted content, replies and outreach, and measure what changed."
-categories: ["business", "marketing"]
+publicStub: false
+pricing: freemium
+pricingUrl: https://surfacedby.com/pricing
 tags:
   - ai-search
   - ai-visibility
@@ -16,26 +21,41 @@ tags:
   - mcp
 platforms:
   - Web
-pricing: freemium
-pricingUrl: "https://surfacedby.com/pricing"
-icon: "./images/surfacedby-icon-128.webp"
-iconLarge: "./images/surfacedby-icon-256.webp"
-featuredImage: "./images/surfacedby-featured.webp"
+icon: ./images/surfacedby-icon-128.webp
+iconLarge: ./images/surfacedby-icon-256.webp
+featuredImage: ./images/surfacedby-featured.webp
 bannerPreset: ink
 gallery:
-  - src: "./images/surfacedby-overview.webp"
-    caption: "The overview: brand coverage, the 0 to 100 visibility score, the sources AI pulls from, and a score per AI platform."
-  - src: "./images/surfacedby-opportunities.webp"
-    caption: "Opportunities: the pages worth building, ranked by impact and effort, with the sources AI cites instead."
-  - src: "./images/surfacedby-actions.webp"
-    caption: "The engagement queue: Reddit, X and LinkedIn conversations worth a reply, each held for review."
-  - src: "./images/surfacedby-competitors.webp"
-    caption: "Competitors: the rivals AI names, found from real AI answers."
+  - src: ./images/surfacedby-overview.webp
+    caption: >-
+      The overview: brand coverage, the 0 to 100 visibility score, the sources AI pulls from, and a
+      score per AI platform.
+  - src: ./images/surfacedby-opportunities.webp
+    caption: >-
+      Opportunities: the pages worth building, ranked by impact and effort, with the sources AI
+      cites instead.
+  - src: ./images/surfacedby-actions.webp
+    caption: >-
+      The engagement queue: Reddit, X and LinkedIn conversations worth a reply, each held for
+      review.
+  - src: ./images/surfacedby-competitors.webp
+    caption: 'Competitors: the rivals AI names, found from real AI answers.'
+sidebarPosition: right
+video: https://www.youtube.com/watch?v=kGDpgonzeKc
 links:
-  - { type: homepage, url: "https://surfacedby.com/", label: "Check your AI visibility free", primary: true }
-  - { type: homepage, url: "https://surfacedby.com/demo", label: "Try the live demo" }
-  - { type: documentation, url: "https://docs.surfacedby.com" }
-publishedAt: 2026-09-28T22:35:28.000Z
+  - type: homepage
+    url: https://surfacedby.com/
+    label: Check your AI visibility free
+    primary: true
+  - type: homepage
+    url: https://surfacedby.com/demo
+    label: Try the live demo
+  - type: documentation
+    url: https://docs.surfacedby.com
+publishedAt: '2026-09-28T22:35:28.000Z'
+updatedAt: '2026-09-29T13:18:48.094Z'
+type: project
+author: bomsn
 ---
 
 ## SurfacedBy
