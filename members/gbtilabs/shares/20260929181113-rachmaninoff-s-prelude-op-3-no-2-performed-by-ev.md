@@ -12,7 +12,8 @@ tags:
   - sergei-rachmaninoff
   - classical-piano
   - piano-recital
-image: https://i.ytimg.com/vi/SCm9O2KNEX4/maxresdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260929181113-rachmaninoff-s-prelude-op-3-no-2-performed-by-ev-90d6be2f.webp
+imageSource: https://i.ytimg.com/vi/SCm9O2KNEX4/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@newjebenthan2
 creatorName: newjebenthan2
 id: 20260929181113-rachmaninoff-s-prelude-op-3-no-2-performed-by-ev
