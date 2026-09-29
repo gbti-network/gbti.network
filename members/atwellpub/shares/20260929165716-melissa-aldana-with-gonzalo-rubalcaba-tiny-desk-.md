@@ -9,7 +9,8 @@ tags:
   - tiny-desk-concert
   - npr-music
   - music
-image: https://i.ytimg.com/vi/3EWLwZh4HjU/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260929165716-melissa-aldana-with-gonzalo-rubalcaba-tiny-desk--9be3235c.webp
+imageSource: https://i.ytimg.com/vi/3EWLwZh4HjU/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@nprmusic
 creatorName: NPR Music
 id: 20260929165716-melissa-aldana-with-gonzalo-rubalcaba-tiny-desk-
