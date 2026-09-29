@@ -133,6 +133,7 @@ import { handleSponsorInquiry, listSponsorInquiries } from './sponsor-inquiry.mj
 import { compileWeeklyIssue, compileWelcomeIssue } from './mail-compile.mjs'; // SOW-166: weekly compile (freeze one issue + enqueue), sends nothing
 import { drainMail } from './mail-drain.mjs'; // SOW-166: smoothed send drain on the shared 5-minute tick, behind the fail-closed gate
 import { renderMailIssue } from '../../membership/mail-render-dispatch.mjs'; // SOW-166 digest + SOW-186 phase 4 follow template, routed by issue.kind (exported so this exact dispatcher is the line under test)
+import { readDigestAudience } from './mail-audience.mjs'; // which closing a digest recipient reads
 import { resolveDigestConfig, DIGEST_CONFIG_KV_KEY } from '../../membership/digest-config.mjs'; // sow-266: the owner's pitch copy + sponsor slot
 import { resolveSubscriberEmail } from '../../membership/mail-address.mjs'; // SOW-166: anon decrypt / member-from-Stripe address resolution
 import { createResendClient } from '../../clients/resend.mjs'; // SOW-166: transactional send (injected into the drain)
@@ -973,7 +974,9 @@ export async function mailDrainDeps(env) {
     digestConfig = resolveDigestConfig({ mirror: null });
   }
   // sow-383: webBase builds the "View this issue on the web" link; the web edition is served from this Worker.
-  const renderIssue = (issue, ctx = {}) => renderMailIssue(issue, { siteUrl, clickBase, webBase: clickBase, digestConfig, ...ctx });
+  // Owner, 2026-09-29: the closing message's audience, per recipient, from the members-edition entitlement list.
+  const audienceOf = await readDigestAudience(env);
+  const renderIssue = (issue, ctx = {}) => renderMailIssue(issue, { siteUrl, clickBase, webBase: clickBase, digestConfig, audience: audienceOf(ctx.subscriber), ...ctx });
   return { resolveAddress, renderIssue, sendEmail };
 }
 

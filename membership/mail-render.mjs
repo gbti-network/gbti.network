@@ -49,6 +49,7 @@ import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name,
 import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner's pitch copy and sponsor slot
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
+import { WEEKLY_HEADER_LINE, closingHtml, closingText } from './mail-closing.mjs'; // owner copy, 2026-09-29
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -469,7 +470,7 @@ function logoCellHtml(logoUrl, links) {
 
 function headerHtml(p, ctx, range, launchNote, logoUrl, links, webUrl = '') {
   const greeting = escapeHtml(str(ctx.greeting).trim() || 'This week on the network');
-  const headerLine = escapeHtml(str(ctx.headerLine).trim() || 'Everything new across the network since the last issue.');
+  const headerLine = escapeHtml(str(ctx.headerLine).trim() || WEEKLY_HEADER_LINE);
   const weekCell = range
     ? `<td align="right" style="font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:.1em;color:${p.meta};mso-line-height-rule:exactly;line-height:${LOGO_PX}px">${escapeHtml(range.mono)}</td>`
     : '';
@@ -559,7 +560,8 @@ function itemText(sectionKey, it, links) {
  * preheader, `launchNote` for the first-issue clause, and ctx.
  *
  * @param issue  the frozen composeIssue output ({ issueId, layout, counts, generatedAt, launchNote, ... })
- * @param ctx    { theme?, unsubscribeUrl?, siteUrl?, subject?, greeting?, headerLine?, postalAddress? }, per recipient
+ * @param ctx    { theme?, unsubscribeUrl?, siteUrl?, subject?, greeting?, headerLine?, postalAddress?, audience? }, per
+ *               recipient. audience 'member' picks the member closing; anything else, the invitation to join.
  */
 export function renderIssue(issue, ctx = {}) {
   const p = PALETTES[ctx.theme === 'dark' ? 'dark' : 'light'];
@@ -616,6 +618,10 @@ export function renderIssue(issue, ctx = {}) {
     // A sponsor block needs editorial above it for the same CAN-SPAM reason the pitch does, and needs
     // something left after sanitizing: markup that reduces to nothing renders no labelled empty box.
     + (filled.length > 0 && sponsorSafe ? sponsorHtml(p, sponsorSafe) : '')
+    // Owner, 2026-09-29: the closing message, the last words before the social row. ctx.audience is 'member'
+    // for a paying member (the Worker decides it per recipient) and the invitation to join for everybody else,
+    // the web edition included. Like the pitch, it needs editorial above it.
+    + (filled.length > 0 ? closingHtml(p, { audience: ctx.audience, track, esc: escapeHtml }) : '')
     // sow-383: the social row, after every solicitation and before the footer, in both editions.
     + socialRowHtml(p, { siteUrl, track, web, theme: ctx.theme === 'dark' ? 'dark' : 'light' });
 
@@ -657,7 +663,7 @@ export function renderIssue(issue, ctx = {}) {
   const postal = str(ctx.postalAddress).trim();
   const postalText = postal ? `\n${postal}` : '';
   const greetingText = str(ctx.greeting).trim() || 'This week on the network';
-  const headerLineText = str(ctx.headerLine).trim() || 'Everything new across the network since the last issue.';
+  const headerLineText = str(ctx.headerLine).trim() || WEEKLY_HEADER_LINE;
   const launchText = issue?.launchNote ? `${str(issue.launchNote)}\n` : '';
   const filledText = filled.map((s) => sectionText(s, links)).join('\n\n');
   const emptyText = empties.length ? `\n\n${emptyPhrase(empties, firstIssue)}` : '';
@@ -671,11 +677,12 @@ export function renderIssue(issue, ctx = {}) {
   // The text part is what a text-only client shows, so a sponsor paying for a placement gets their line there
   // too, built from the sanitized markup rather than the raw input.
   const sponsorLine = (filled.length > 0 && sponsorSafe) ? `\n\nSponsored: ${sponsorText(digest.sponsor.html)}` : '';
+  const closingLine = filled.length > 0 ? `\n\n${closingText({ audience: ctx.audience, track })}` : '';
 
   const webLine = webUrl ? `View this issue on the web: ${webUrl}\n` : '';
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n${webLine}`
     + `${greetingText}\n${headerLineText}\n${launchText}\n`
-    + `${filledText}${emptyText}${ctaText}${sponsorLine}\n\n${socialText(track)}\n\n`
+    + `${filledText}${emptyText}${ctaText}${sponsorLine}${closingLine}\n\n${socialText(track)}\n\n`
     + `----\n${trackUrl('/', links, 'footer-home')}\n${prefsText}${unsubText}${postalText}\n`;
 
   return { subject, html, text };

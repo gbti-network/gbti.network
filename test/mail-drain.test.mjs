@@ -9,6 +9,7 @@ import { sendKey, markClaimed, budgetDayKey, budgetMonthKey } from '../membershi
 import { suppressKey, subscriberKey, SUPPRESS_VALUE } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
 import { renderIssue as realRenderIssue } from '../membership/mail-render.mjs';
+import { WEEKLY_HEADER_LINE } from '../membership/mail-closing.mjs';
 
 const at = (t) => () => t;
 const issueOf = (id) => ({ issueId: id, sections: { article: [], project: [], prompt: [], share: [] }, topNews: [], counts: {}, isEmpty: false, generatedAt: 0 });
@@ -645,7 +646,11 @@ test('WELCOME: the welcome issue renders its own greeting, and a weekly does not
   assert.match(all, /publishing lately/, 'and its own header line');
   // The 90-day span rides on the issue's launchNote, which is composed in (see mail-compile.test.mjs), not
   // injected by the drain. Asserting it here would test the fixture rather than the drain.
-  assert.doesNotMatch(all, /Everything new across the network since the last issue\.[\s\S]{0,200}Welcome to the GBTI/, 'the welcome must not carry the weekly header line');
+  // Checked per message: the weekly carries the standing header line and the welcome does not.
+  const welcome = seen.find((m) => /Welcome to the GBTI Network/.test(m.html));
+  const weekly = seen.find((m) => m !== welcome);
+  assert.ok(!welcome.html.includes(WEEKLY_HEADER_LINE), 'the welcome must not carry the weekly header line');
+  assert.ok(weekly.html.includes(WEEKLY_HEADER_LINE), 'the weekly carries it');
   // The weekly keeps the default greeting, so the welcome copy is not leaking into every issue.
   assert.match(all, /This week on the network/, 'the weekly still uses the standing greeting');
 });

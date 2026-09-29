@@ -345,7 +345,13 @@ test('CAN-SPAM 1: editorial content precedes the membership solicitation', () =>
 });
 
 test('CAN-SPAM 2: exactly one CTA, it is the only membership link, and nothing editorial follows it', () => {
-  const { html } = renderIssue(issueFixture(), CTA_ON);
+  // OWNER, 2026-09-29: the closing message invites a NON-member to the memberships page, by the owner's own copy.
+  // A member's closing carries no such link, so the member render still proves the CTA is the only pitch the
+  // template adds on its own; the guest render proves the closing adds exactly one more and nothing else.
+  const { html } = renderIssue(issueFixture(), { ...CTA_ON, audience: 'member' });
+  const guest = renderIssue(issueFixture(), CTA_ON).html;
+  assert.equal((guest.match(/\/membership\//g) || []).length, 2, 'a guest reads the CTA link and the closing invitation, no more');
+  assert.ok(guest.indexOf(CTA_CLOSE) < guest.lastIndexOf('/membership/'), 'the closing invitation comes after the CTA');
   assert.equal(ctaCount(html), 1, 'exactly one membership CTA');
   assert.ok(html.lastIndexOf(ED) < html.indexOf(CTA_OPEN), 'no editorial section appears after the CTA');
   assert.equal((html.match(/\/membership\//g) || []).length, 1, 'exactly one membership link in the whole message');

@@ -106,7 +106,8 @@ test('absolute mirrors mail-render absUrl exactly, INCLUDING its concatenation o
 
 test('candidateTargets covers the fixed targets, every section feed, the items and the news', () => {
   const set = candidateTargets(frozenIssue(), SITE);
-  for (const p of Object.values(FIXED_TARGETS)) assert.ok(set.has(`${SITE}${p}`), `fixed ${p}`);
+  // A fixed target is a site path or, since the closing message links the Chrome Web Store listing, a full url.
+  for (const p of Object.values(FIXED_TARGETS)) assert.ok(set.has(/^https:/.test(p) ? p : `${SITE}${p}`), `fixed ${p}`);
   for (const p of Object.values(SECTION_FEED)) assert.ok(set.has(`${SITE}${p}`), `feed ${p}`);
   assert.ok(set.has(`${SITE}/articles/ours/`), 'the member item');
   assert.ok(set.has('https://www.theregister.com/a/?sponsored=1'), 'the news item, external and counted');

@@ -57,7 +57,10 @@ test('sow-266: the owner can switch the pitch off, which is distinct from having
   const off = { digestConfig: resolveDigestConfig({ mirror: { cta: { enabled: false } } }) };
   const r = render(off);
   assert.doesNotMatch(r.html, /membership-cta/, 'the block is gone, sentinel and all');
-  assert.doesNotMatch(r.text, /membership/i);
+  // A member's closing names no membership page, so with the pitch off the member mail mentions none at all.
+  assert.doesNotMatch(render({ ...off, audience: 'member' }).text, /membership/i);
+  // A guest still reads the closing's invitation (owner copy, 2026-09-29), but never the switched-off pitch.
+  assert.doesNotMatch(r.text, /membership-cta/);
   // And the per-issue suppression still works independently of the standing setting.
   assert.doesNotMatch(render({ membershipCta: false }).html, /membership-cta/);
 });
@@ -254,7 +257,7 @@ test('sow-266 WIRING: the composition root READS the setting, or none of this re
   // any test can see and the owner's copy would silently never ship.
   const src = fsReadRoot('workers/signup/index.mjs');
   assert.match(src, /env\.SIGNUP_KV\?\.get\(DIGEST_CONFIG_KV_KEY, 'json'\)/, 'it reads the mirror');
-  assert.match(src, /renderMailIssue\(issue, \{ siteUrl, clickBase, webBase: clickBase, digestConfig, \.\.\.ctx \}\)/, 'and hands it to every render');
+  assert.match(src, /renderMailIssue\(issue, \{ siteUrl, clickBase, webBase: clickBase, digestConfig, audience: audienceOf\(ctx\.subscriber\), \.\.\.ctx \}\)/, 'and hands it to every render');
 });
 
 test('sow-266 WIRING: a sponsor in KV reaches the rendered mail', async () => {

@@ -28,6 +28,7 @@
 // into surveillance and drags the whole store into a data-protection question it does not need to be in.
 
 import { DIGEST_SOCIAL } from './mail-social.mjs'; // sow-383: the social row's accounts
+import { CLOSING_TARGETS } from './mail-closing.mjs'; // the closing message's links (owner, 2026-09-29)
 
 /**
  * Where each section's "see all" link points. THIS IS THE ONE DEFINITION and mail-render imports it from
@@ -52,6 +53,9 @@ export const FIXED_TARGETS = Object.freeze({
   // here or the route cannot resolve its hash and silently bounces the reader to the site root.
   'footer-prefs': '/account/notifications/',
   'section-feed': '/feeds/',
+  // The closing message's links: the membership page, the WorkBench and the extension's store listing. Spread
+  // from the one definition in mail-closing.mjs, so the renderer and this candidate set cannot disagree.
+  ...CLOSING_TARGETS,
 });
 
 /**
