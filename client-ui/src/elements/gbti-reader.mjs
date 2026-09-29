@@ -469,10 +469,12 @@ class GbtiReader extends GbtiElement {
     }
     const socials = chips.length ? `<div class="socials">${chips.join('')}</div>` : '';
     // SOW-129: public roles (specialty badges) + skills (tags), carried on the members-index entry. No location.
+    // sow-422 (owner, 2026-09-29): not on a share. A share is a link a member passed along, so its card says who
+    // shared it and how to reach them, not what they specialise in (the website's share page never showed them).
     const tagPills = [];
     for (const r of (Array.isArray(e.roles) ? e.roles : [])) tagPills.push(`<span class="tag role">${esc(prettyRole(r))}</span>`);
     for (const s of (Array.isArray(e.skills) ? e.skills : [])) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
-    const tags = tagPills.length ? `<div class="tags">${tagPills.join('')}</div>` : '';
+    const tags = tagPills.length && it.type !== 'share' ? `<div class="tags">${tagPills.join('')}</div>` : '';
     return `<div class="author"><div class="a-top">`
       + `<span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`
       + `<div>${it.type === 'share' ? '<div class="a-shared">Shared by</div>' : ''}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>`

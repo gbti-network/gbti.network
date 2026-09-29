@@ -53,3 +53,22 @@ test('the reader gives a share\'s author an Edit link straight into the share ed
   assert.match(card(true, { type: 'post', author: 'ali' }), /href="\/workbench\/#tab=post"/, 'articles unchanged');
   assert.match(src('client-ui/src/elements/gbti-reader.mjs'), /\$\{inExt \? 'Edit on gbti\.network' : 'Edit share'\}/, 'in the extension it opens the website in a new tab');
 });
+
+// sow-422 (owner, 2026-09-29): the author's role and skill chips "do not need to be included on a member share in
+// the extension share page". The rest of the card stays; articles, projects and prompts keep their chips.
+test('sow-422: a share\'s author card leaves out the role and skill chips; other types keep them', () => {
+  const r = Object.create(GbtiReader.prototype);
+  r._author = { house: false, username: 'ali', canFollow: true, following: false, isSelf: false,
+    entry: { displayName: 'Ali', headline: 'Builds things', roles: ['systems-administration'], skills: ['PHP'], links: { github: 'ali' } } };
+  const share = r._authorCardHtml({ type: 'share', id: 's1', author: 'ali' });
+  assert.doesNotMatch(share, /class="tags"|class="tag (role|skill)"/);
+  assert.match(share, /Shared by/);
+  assert.match(share, /Builds things/, 'the headline stays');
+  assert.match(share, /class="socials"/, 'the social icons stay');
+  assert.match(share, /data-follow/, 'Follow stays');
+  for (const type of ['post', 'project', 'prompt']) {
+    const other = r._authorCardHtml({ type, author: 'ali' });
+    assert.match(other, /<span class="tag role">/, `${type} keeps the role chips`);
+    assert.match(other, /<span class="tag skill">PHP<\/span>/, `${type} keeps the skill chips`);
+  }
+});

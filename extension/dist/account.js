@@ -25447,7 +25447,7 @@ ${BLOCKED_PILL_CSS}
       const tagPills = [];
       for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole2(r))}</span>`);
       for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
-      const tags = tagPills.length ? `<div class="tags">${tagPills.join("")}</div>` : "";
+      const tags = tagPills.length && it.type !== "share" ? `<div class="tags">${tagPills.join("")}</div>` : "";
       return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div>${it.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
     }
     render() {
