@@ -195,7 +195,7 @@ test('the header and subject name the ISO week the issue went out in', () => {
     layout: [],
   };
   const { subject, html } = renderIssue(issue, {});
-  assert.match(subject, /^GBTI Digest · 17 items · Week 34$/);
+  assert.match(subject, /^GBTI Digest · 17 items · August 23rd · Week 34$/);
   assert.match(html, /WEEK 34, 2026/, 'the header date cell carries the week');
   // The superseded shapes must not come back. A 90-day issue labelled as a week of dates is the original
   // defect; a span is the intermediate fix the owner replaced.
@@ -212,7 +212,7 @@ test('the week is read from generatedAt alone, so a legacy issue with no window 
   const generatedAt = Date.UTC(2026, 7, 21); // Friday, ISO week 34
   const counts = { article: 2, project: 0, prompt: 0, share: 9, news: 4 };
   const bare = renderIssue({ generatedAt, counts, layout: [] }, {}).subject;
-  assert.match(bare, /^GBTI Digest · 15 items · Week 34$/);
+  assert.match(bare, /^GBTI Digest · 15 items · August 21st · Week 34$/);
   for (const since of [0, null, undefined, NaN, generatedAt, generatedAt + 1000, generatedAt - 90 * 86400000]) {
     const { subject } = renderIssue({ generatedAt, window: { since }, counts, layout: [] }, {});
     assert.equal(subject, bare, `since=${String(since)} must not move the week label`);

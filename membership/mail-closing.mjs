@@ -69,13 +69,16 @@ export function closingHtml(p, { audience, track, esc }) {
   const parts = COPY[closingAudience(audience)].map((part) => (typeof part === 'string'
     ? esc(part)
     : `<a href="${esc(track(CLOSING_TARGETS[part.placement], part.placement))}" style="color:${p.footerLink};text-decoration:underline">${esc(part.text)}</a>`)).join('');
-  const para = (html, pad, extra = '') => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;${extra}color:${p.inkSoft};mso-line-height-rule:exactly;line-height:19px;padding-top:${pad}px">${html}</div>`;
-  // Owner, 2026-09-29: the member paragraph is set in italics; the invitation stays upright.
-  const italic = closingAudience(audience) === 'member' ? 'font-style:italic;' : '';
+  const para = (html, pad, extra = '', color = p.inkSoft) => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;${extra}color:${color};mso-line-height-rule:exactly;line-height:19px;padding-top:${pad}px">${html}</div>`;
+  // Owner, 2026-09-29: the member paragraph is set in italics and a lighter grey (p.mute, still AA); the invitation
+  // stays upright in the standard text colour.
+  const member = closingAudience(audience) === 'member';
+  const italic = member ? 'font-style:italic;' : '';
+  const color = member ? (p.mute || p.inkSoft) : p.inkSoft;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + para(esc(LEAD), 0)
-    + para(parts, 8, italic)
+    + para(parts, 8, italic, color)
     + `</td></tr></table>`;
 }
 

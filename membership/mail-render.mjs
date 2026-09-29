@@ -50,6 +50,9 @@ import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
 import { WEEKLY_HEADER_LINE, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
+// The web edition's social image: the "Coffee Ring" design in its light mode, chosen by the owner on 2026-09-29.
+// Served from the site (public/brand/digest/og.png), 1200 x 630.
+export const DIGEST_OG_IMAGE = '/brand/digest/og.png';
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -150,11 +153,14 @@ const PALETTES = {
   light: {
     pageBg: '#efece7', cardBg: '#ffffff', cardBorder: '#e0dbd3', hairline: '#eae6df',
     ink: '#232029', inkSoft: '#4a4653', meta: '#7c7784', accent: '#187a4b', rule: '#187a4b',
+    // A lighter grey that still reads (5.4:1 on the card; meta is 4.3:1): the member closing (owner, 2026-09-29).
+    mute: '#6c6976',
     footerLink: '#4a4653', postalMeta: '#9b96a1', pillBg: '#eef6f0', pillBorder: '#cfe3d7',
   },
   dark: {
     pageBg: '#1b1922', cardBg: '#232029', cardBorder: '#35313d', hairline: '#302c37',
     ink: '#f3f2f0', inkSoft: '#bdbac4', meta: '#847f8d', accent: '#5fd49a', rule: '#1f9e5f',
+    mute: '#9a96a1', // 5.5:1 on the dark card
     footerLink: '#bdbac4', postalMeta: '#847f8d', pillBg: '#1e3329', pillBorder: '#2d5240',
   },
 };
@@ -206,7 +212,20 @@ function coverageWeek(generatedAt) {
   const jan4Index = (jan4.getUTCDay() + 6) % 7;
   const week1Thursday = new Date(Date.UTC(isoYear, 0, 4 - jan4Index + 3));
   const week = 1 + Math.round((thursday.getTime() - week1Thursday.getTime()) / (7 * DAY_MS));
-  return { short: `Week ${week}`, mono: `WEEK ${week}, ${isoYear}` };
+  return { short: `Week ${week}`, mono: `WEEK ${week}, ${isoYear}`, date: dayLabel(d) };
+}
+
+// "September 29th": the issue's own day, for the subject (owner, 2026-09-29). Read in UTC like the week above, so
+// the two can never name different days; the Tuesday compile runs mid-morning UTC, the same date in the Americas
+// and Europe.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export function ordinal(n) {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+  return `${n}${suffix}`;
+}
+function dayLabel(d) {
+  return `${MONTHS[d.getUTCMonth()]} ${ordinal(d.getUTCDate())}`;
 }
 
 function totalItems(counts) {
@@ -239,12 +258,13 @@ function emptySummary(firstIssue) {
   return firstIssue ? 'Your first roundup from the GBTI Network.' : 'Your weekly roundup from the GBTI Network.';
 }
 
-// The counts subject "GBTI Digest · 18 items · Aug 15-21", built only when the issue carries both counts and a
-// finite generatedAt. Absent either, the caller falls back to the plain default (so a bare fixture is unaffected).
+// The counts subject "GBTI Digest · 16 items · September 29th · Week 40" (the day added by the owner, 2026-09-29),
+// built only when the issue carries both counts and a finite generatedAt. Absent either, the caller falls back to
+// the plain default (so a bare fixture is unaffected).
 function computedSubject(counts, range) {
   if (!counts || !range) return '';
   const n = totalItems(counts);
-  return `GBTI Digest · ${n} ${n === 1 ? 'item' : 'items'} · ${range.short}`;
+  return `GBTI Digest · ${n} ${n === 1 ? 'item' : 'items'} · ${range.date} · ${range.short}`;
 }
 
 // The empty-section collapse: one compact line naming the empty sections, cadence-anchored so it stays true
@@ -641,7 +661,7 @@ export function renderIssue(issue, ctx = {}) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">`
     + `<meta name="viewport" content="width=device-width,initial-scale=1">`
     + `<title>${escapeHtml(subject)}</title>`
-    + (web ? webHeadHtml({ title: subject, description: summary, url: ctx.canonicalUrl, image: `${siteUrl}/og-image.png` }) : '')
+    + (web ? webHeadHtml({ title: subject, description: summary, url: ctx.canonicalUrl, image: `${siteUrl}${DIGEST_OG_IMAGE}` }) : '')
     + `</head>`
     + `<body style="margin:0;padding:0;background-color:${p.pageBg}">`
     + preheader

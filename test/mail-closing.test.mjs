@@ -159,3 +159,29 @@ test('the sign-off closes every issue: centred, italic, larger, under the subscr
   assert.ok(!WEEKLY_HEADER_LINE.includes('great week'), 'it left the header line');
   assert.ok(email.text.includes(`\n\n${SIGN_OFF}\n\n`), 'the text part carries it too');
 });
+
+test('the member paragraph is a lighter grey that still reads, in both themes', () => {
+  const colorOf = (html, marker) => /color:(#[0-9a-f]{6})/i.exec(html.slice(html.lastIndexOf('<div style="', html.indexOf(marker)), html.indexOf(marker)))?.[1];
+  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html, MEMBER), '#6c6976', 'light: 5.4:1 on the white card');
+  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme: 'dark' }).html, MEMBER), '#9a96a1', 'dark: 5.5:1 on the dark card');
+  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), '#4a4653', 'the invitation keeps the standard text colour');
+});
+
+test('the web edition\'s social image is the Coffee Ring design, 1200 x 630, served from the site', async () => {
+  const { DIGEST_OG_IMAGE } = await import('../membership/mail-render.mjs');
+  const html = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web' }).html;
+  assert.ok(html.includes(`<meta property="og:image" content="${SITE}${DIGEST_OG_IMAGE}">`));
+  const { readFileSync } = await import('node:fs');
+  const png = readFileSync(new URL(`../public${DIGEST_OG_IMAGE}`, import.meta.url));
+  assert.equal(png.toString('ascii', 1, 4), 'PNG');
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630], 'the size link previews expect');
+  assert.ok(png.length < 1024 * 1024, 'under the media cap');
+});
+
+test('the subject names the day and the week: "GBTI Digest · 16 items · September 29th · Week 40"', async () => {
+  const { ordinal } = await import('../membership/mail-render.mjs');
+  const issue = { generatedAt: 1790683225069, counts: { article: 0, project: 1, prompt: 0, share: 10, news: 5 }, layout: [] }; // 2026-09-29, the issue that went out
+  assert.equal(renderIssue(issue, {}).subject, 'GBTI Digest · 16 items · September 29th · Week 40');
+  const want = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 11: '11th', 12: '12th', 13: '13th', 21: '21st', 22: '22nd', 23: '23rd', 30: '30th', 31: '31st', 111: '111th', 112: '112th' };
+  for (const [n, s] of Object.entries(want)) assert.equal(ordinal(Number(n)), s);
+});
