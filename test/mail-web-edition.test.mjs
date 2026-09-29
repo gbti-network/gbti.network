@@ -133,8 +133,12 @@ test('the web edition adds a subscribe box and a page head, and drops everything
   assert.match(html, /<form action="\/mail\/subscribe" method="post"/);
   assert.match(html, /<input id="dg-email" name="email" type="email" required/);
   assert.ok(html.includes(`data-sitekey="${TURNSTILE_SITE_KEY}"`));
-  assert.ok(html.indexOf('<form') > html.indexOf('Everything new across the network') && html.indexOf('<form') < html.indexOf('Latest '),
-    'the box sits right under the intro, above the first section');
+  // Owner, 2026-09-29: the box moved from the top of the page to under the closing's invitation to join.
+  const invite = html.indexOf('please visit our');
+  assert.ok(invite > 0, 'the closing invitation is on the page');
+  assert.ok(html.indexOf('<form') > invite && html.indexOf('<form') < html.indexOf('<!--social-->'),
+    'the box sits under the invitation, above the social row');
+  assert.ok(html.indexOf('<form') > html.lastIndexOf('<!--editorial:'), 'and after every section');
   assert.ok(html.includes(`<link rel="canonical" href="${WORKER}/digest/weekly-2026-09-21">`));
   assert.match(html, /<meta property="og:title" content="GBTI Digest/);
   assert.ok(html.includes('This is the web edition of the GBTI Network weekly digest.'));
@@ -194,4 +198,20 @@ test('the route publishes nothing that was not sent, and no edition that is not 
     assert.equal((await get(bad, composedOnly)).status, 404, bad);
   }
   assert.equal((await get(`/digest/${ID}`, composedOnly, 'POST')).status, 405);
+});
+
+// Owner, 2026-09-29: ?secret=true previews the member closing on the web edition. Anybody can type it, so it may
+// change the closing sentence and nothing else: the same items, never the members edition.
+test('?secret=true previews the member closing, drops the subscribe box, and unlocks nothing', async () => {
+  const kv = kvWith({ [`mail:issue:${ID}`]: fixtureIssue(), [statsKey(ID)]: { sent: 12 } });
+  const pub = await (await get(`/digest/${ID}`, kv)).text();
+  const mem = await (await get(`/digest/${ID}?secret=true`, kv)).text();
+  assert.ok(pub.includes('please visit our') && pub.includes('<form') && !pub.includes('To contribute to it'), 'the public view');
+  assert.ok(mem.includes('To contribute to it') && !mem.includes('please visit our') && !mem.includes('<form'), 'the member view');
+  assert.ok(mem.includes('Farley') && pub.includes('Farley'), 'the same items either way');
+  for (const other of ['?secret=1', '?secret=TRUE', '?secret=', '?other=true']) {
+    assert.ok((await (await get(`/digest/${ID}${other}`, kv)).text()).includes('please visit our'), `${other} is the public view`);
+  }
+  const members = kvWith({ 'mail:issue:members-2026-09-21': fixtureIssue('members-2026-09-21'), [statsKey('members-2026-09-21')]: { sent: 3 } });
+  assert.equal((await get('/digest/members-2026-09-21?secret=true', members)).status, 404, 'never the members edition');
 });

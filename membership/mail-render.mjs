@@ -49,7 +49,7 @@ import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name,
 import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner's pitch copy and sponsor slot
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
-import { WEEKLY_HEADER_LINE, closingHtml, closingText } from './mail-closing.mjs'; // owner copy, 2026-09-29
+import { WEEKLY_HEADER_LINE, closingHtml, closingText, closingAudience } from './mail-closing.mjs'; // owner copy, 2026-09-29
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -611,8 +611,7 @@ export function renderIssue(issue, ctx = {}) {
   // Sanitized ONCE, and the same string feeds the block and the emptiness check below, so the two cannot
   // disagree about whether there is anything to show.
   const sponsorSafe = digest.sponsor.enabled ? sanitizeSponsorHtml(digest.sponsor.html) : '';
-  const body = (web ? subscribeBoxHtml(p, { action: ctx.subscribeAction || '/mail/subscribe' }) : '')
-    + filled.map((s) => sectionHtml(s, p, links)).join('')
+  const body = filled.map((s) => sectionHtml(s, p, links)).join('')
     + emptyLineHtml(empties, p, firstIssue, links)
     + (showCta ? membershipCtaHtml(p, links, digest.cta) : '')
     // A sponsor block needs editorial above it for the same CAN-SPAM reason the pitch does, and needs
@@ -622,6 +621,9 @@ export function renderIssue(issue, ctx = {}) {
     // for a paying member (the Worker decides it per recipient) and the invitation to join for everybody else,
     // the web edition included. Like the pitch, it needs editorial above it.
     + (filled.length > 0 ? closingHtml(p, { audience: ctx.audience, track, esc: escapeHtml }) : '')
+    // The web edition's subscribe box sits under the closing's invitation (owner, 2026-09-29; it used to open the
+    // page). A member's view (?secret=true on the web edition) has no invitation, so it has no box either.
+    + (web && closingAudience(ctx.audience) !== 'member' ? subscribeBoxHtml(p, { action: ctx.subscribeAction || '/mail/subscribe' }) : '')
     // sow-383: the social row, after every solicitation and before the footer, in both editions.
     + socialRowHtml(p, { siteUrl, track, web, theme: ctx.theme === 'dark' ? 'dark' : 'light' });
 

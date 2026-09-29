@@ -33,7 +33,7 @@ const COPY = Object.freeze({
   guest: [
     'If you are interested in joining and writing for the GBTI Network community, please visit our ',
     { text: 'memberships page', placement: 'closing-membership' },
-    '. Members can join our private Discord, share content, write articles, publish AI prompts and skills to our prompt directory, comment on all content items, and participate in our revenue share programs. Thanks for paying attention and we will see you next week on the GBTI Digest!',
+    '.',
   ],
   member: [
     'To contribute to it, visit your ',

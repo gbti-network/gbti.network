@@ -66,10 +66,17 @@ export async function handleDigestWeb(request, env, { kv = env?.SIGNUP_KV } = {}
   try { digestConfig = resolveDigestConfig({ mirror: (await kv.get(DIGEST_CONFIG_KV_KEY, 'json')) ?? null }); }
   catch { digestConfig = resolveDigestConfig({ mirror: null }); }
 
+  // Owner, 2026-09-29: ?secret=true previews the MEMBER closing, so the member copy can be checked on the web.
+  // It is a preview switch, not access control: anybody can type it, which is why it changes only the closing
+  // sentence. It never serves the members edition, whose members-only shares stay out of every public page.
+  let memberView = false;
+  try { memberView = new URL(request.url).searchParams.get('secret') === 'true'; } catch { memberView = false; }
+
   const { html } = renderIssue(issue, {
     edition: 'web',
     siteUrl,
     digestConfig,
+    ...(memberView ? { audience: 'member' } : {}),
     canonicalUrl: webEditionUrl(resolveClickBase(env), id),
     subscribeAction: '/mail/subscribe',
   });

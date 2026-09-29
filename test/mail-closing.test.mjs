@@ -43,6 +43,10 @@ test('everybody but a member reads the invitation, linking the memberships page'
     assert.match(text, /memberships page \(https:\/\/gbti\.network\/membership\//);
   }
   assert.equal(closingAudience('Member'), 'guest', 'only the exact value selects the member copy');
+  // Owner, 2026-09-29: the invitation ends at the link; the list of member perks after it was cut.
+  const { text } = renderIssue(ISSUE, { siteUrl: SITE });
+  assert.doesNotMatch(text, /Members can join our private Discord|see you next week on the GBTI Digest/);
+  assert.match(text, /please visit our memberships page \([^)]+\)\.\n/);
 });
 
 test('a member reads how to contribute, with the WorkBench and the extension linked', () => {
