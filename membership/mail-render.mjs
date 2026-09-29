@@ -49,7 +49,7 @@ import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name,
 import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner's pitch copy and sponsor slot
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
-import { WEEKLY_HEADER_LINE, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
+import { WEEKLY_HEADER_LINE, CLOSING_LEAD, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
 // The web edition's social image: the "Coffee Ring" design in its light mode, chosen by the owner on 2026-09-29.
 // Served from the site (public/brand/digest/og.png), 1200 x 630.
 export const DIGEST_OG_IMAGE = '/brand/digest/og.png';
@@ -153,15 +153,14 @@ const PALETTES = {
   light: {
     pageBg: '#efece7', cardBg: '#ffffff', cardBorder: '#e0dbd3', hairline: '#eae6df',
     ink: '#232029', inkSoft: '#4a4653', meta: '#7c7784', accent: '#187a4b', rule: '#187a4b',
-    // The lightest grey that still reads, for the member closing (owner, 2026-09-29, "even lighter"): 4.6:1 on
-    // the card, where meta is 4.3:1 and under the 4.5:1 floor for text this size.
-    mute: '#76737f',
+    // The member closing's panel (owner, 2026-09-29), the same warm tint as the web edition's subscribe box.
+    panelBg: '#f7f5f1',
     footerLink: '#4a4653', postalMeta: '#9b96a1', pillBg: '#eef6f0', pillBorder: '#cfe3d7',
   },
   dark: {
     pageBg: '#1b1922', cardBg: '#232029', cardBorder: '#35313d', hairline: '#302c37',
     ink: '#f3f2f0', inkSoft: '#bdbac4', meta: '#847f8d', accent: '#5fd49a', rule: '#1f9e5f',
-    mute: '#8c8893', // 4.6:1 on the dark card, the dimmest that still reads
+    panelBg: '#2a2731',
     footerLink: '#bdbac4', postalMeta: '#847f8d', pillBg: '#1e3329', pillBorder: '#2d5240',
   },
 };
@@ -641,12 +640,12 @@ export function renderIssue(issue, ctx = {}) {
     // Owner, 2026-09-29: the closing message, the last words before the social row. ctx.audience is 'member'
     // for a paying member (the Worker decides it per recipient) and the invitation to join for everybody else,
     // the web edition included. Like the pitch, it needs editorial above it.
-    + (filled.length > 0 ? closingHtml(p, { audience: ctx.audience, track, esc: escapeHtml }) : '')
+    + (filled.length > 0 ? closingHtml(p, { audience: ctx.audience, track, esc: escapeHtml, web }) : '')
     // The web edition's subscribe box sits under the closing's invitation (owner, 2026-09-29; it used to open the
     // page). A member's view (?secret=true on the web edition) has no invitation, so it has no box either.
     + (web && closingAudience(ctx.audience) !== 'member' ? subscribeBoxHtml(p, { action: ctx.subscribeAction || '/mail/subscribe' }) : '')
     // The sign-off, centred under the subscribe box (or under the closing in the email, which has no box).
-    + signOffHtml(p, { esc: escapeHtml })
+    + signOffHtml(p, { esc: escapeHtml, audience: ctx.audience })
     // sow-383: the social row, after every solicitation and before the footer, in both editions.
     + socialRowHtml(p, { siteUrl, track, web, theme: ctx.theme === 'dark' ? 'dark' : 'light' });
 
@@ -672,7 +671,8 @@ export function renderIssue(issue, ctx = {}) {
     + `<tr><td width="536" style="width:536px;padding:0">`
     + headerHtml(p, ctx, range, issue?.launchNote, logoUrl, links, webUrl)
     + body
-    + (web ? webFooterHtml(p, { track }) : footerHtml(p, ctx, links))
+    // Owner, 2026-09-29: on the public web edition the closing's lead line ends the footer's sentence instead.
+    + (web ? webFooterHtml(p, { track, after: closingAudience(ctx.audience) === 'member' ? '' : CLOSING_LEAD }) : footerHtml(p, ctx, links))
     + `</td></tr></table>`
     + `</td></tr></table>`
     + openPixel

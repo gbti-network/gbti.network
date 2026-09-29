@@ -133,38 +133,27 @@ test('WIRING: an unreadable or missing list sends everybody the invitation', asy
   }
 });
 
-test('the member paragraph is italic and the invitation is not (owner, 2026-09-29)', () => {
-  const para = (html, marker) => {
-    const at = html.indexOf(marker);
-    return html.slice(html.lastIndexOf('<div style="', at), at);
-  };
-  assert.match(para(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html, MEMBER), /font-style:italic/);
-  assert.doesNotMatch(para(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), /font-style:italic/);
-  assert.doesNotMatch(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).text, /To contribute to it,/);
-});
-
-test('the sign-off closes every issue: centred, italic, larger, under the subscribe box, above the social row', () => {
+test('the sign-off closes every issue: centred, italic, under the subscribe box, above the social row', () => {
   const email = renderIssue(ISSUE, { siteUrl: SITE });
   const web = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web' }).html;
   const member = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web', audience: 'member' }).html;
-  for (const [name, html] of [['email', email.html], ['web', web], ['web member view', member]]) {
+  const memberMail = renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html;
+  // Its face follows the closing: the member panel's sans, the non-member colophon's serif a size up.
+  for (const [name, html, face, marker] of [
+    ['email', email.html, /font-family:Georgia,'Times New Roman',serif;font-size:16px;font-style:italic/, GUEST],
+    ['web', web, /font-family:Georgia,'Times New Roman',serif;font-size:16px;font-style:italic/, GUEST],
+    ['email member', memberMail, /font-family:Arial,Helvetica,sans-serif;font-size:15px;font-style:italic/, MEMBER],
+    ['web member view', member, /font-family:Arial,Helvetica,sans-serif;font-size:15px;font-style:italic/, MEMBER],
+  ]) {
     const at = html.indexOf(SIGN_OFF);
-    assert.ok(at > html.indexOf(LEAD), `${name}: under the closing`);
+    assert.ok(at > html.indexOf(marker), `${name}: under the closing`);
     assert.ok(at < html.indexOf('<!--social-->'), `${name}: above the social row`);
-    const style = html.slice(html.lastIndexOf('<div style="', at), at);
-    assert.match(style, /font-size:15px;font-style:italic/, `${name}: larger and italic`);
+    assert.match(html.slice(html.lastIndexOf('<div style="', at), at), face, `${name}: its face`);
     assert.match(html.slice(html.lastIndexOf('<td ', at), at), /text-align:center/, `${name}: centred`);
   }
   assert.ok(web.indexOf(SIGN_OFF) > web.indexOf('</form>'), 'web: under the subscribe box');
   assert.ok(!WEEKLY_HEADER_LINE.includes('great week'), 'it left the header line');
   assert.ok(email.text.includes(`\n\n${SIGN_OFF}\n\n`), 'the text part carries it too');
-});
-
-test('the member paragraph is a lighter grey that still reads, in both themes', () => {
-  const colorOf = (html, marker) => /color:(#[0-9a-f]{6})/i.exec(html.slice(html.lastIndexOf('<div style="', html.indexOf(marker)), html.indexOf(marker)))?.[1];
-  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html, MEMBER), '#76737f', 'light: 4.6:1 on the white card, the lightest that reads');
-  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme: 'dark' }).html, MEMBER), '#8c8893', 'dark: 4.6:1 on the dark card');
-  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), '#4a4653', 'the invitation keeps the standard text colour');
 });
 
 test('the web edition\'s social image is the Coffee Ring design, 1200 x 630, served from the site', async () => {
@@ -186,19 +175,57 @@ test('the subject names the day and the week: "GBTI Digest · 16 items · Septem
   for (const [n, s] of Object.entries(want)) assert.equal(ordinal(Number(n)), s);
 });
 
-test('the member paragraph is a blockquote: a square brand-green rule on its left; the invitation has none', () => {
-  const cellOf = (html, marker) => html.slice(html.lastIndexOf('<td ', html.indexOf(marker)), html.indexOf(marker));
-  const member = renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html;
-  assert.match(cellOf(member, MEMBER), /border-left:3px solid #1f9e5f;border-radius:0;padding:2px 0 2px 14px/);
-  assert.match(cellOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme: 'dark' }).html, MEMBER), /border-left:3px solid #1f9e5f/);
-  assert.doesNotMatch(cellOf(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), /border-left/);
-  // The lead line stays outside the quote.
-  assert.doesNotMatch(cellOf(member, LEAD), /border-left/);
+// Owner, 2026-09-29, from the footer design canvas: "B · Panel" for members, "C · Colophon" for everybody else,
+// and no green rule down the member paragraph.
+const cellOf = (html, marker) => html.slice(html.lastIndexOf('<td ', html.indexOf(marker)), html.indexOf(marker));
+// The closing block alone: from its table to the sign-off under it.
+const closingOf = (html, from) => html.slice(html.lastIndexOf('<table', html.indexOf(from)), html.lastIndexOf('<table', html.indexOf(SIGN_OFF)));
+
+test('a member reads the closing in a warm panel under a "GBTI Digest" label, with no rule down its side', () => {
+  for (const [theme, bg, border, label] of [['light', '#f7f5f1', '#e0dbd3', '#187a4b'], ['dark', '#2a2731', '#35313d', '#5fd49a']]) {
+    const html = renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme }).html;
+    assert.ok(html.indexOf('GBTI Digest</div>') < html.indexOf(LEAD) && html.indexOf(LEAD) < html.indexOf(MEMBER), `${theme}: label, lead, paragraph`);
+    assert.ok(!html.slice(html.indexOf('GBTI Digest</div>'), html.indexOf(MEMBER)).includes('</td>'), `${theme}: all three in one panel cell`);
+    const box = html.slice(html.lastIndexOf('<table', html.indexOf('GBTI Digest</div>')), html.indexOf('GBTI Digest</div>'));
+    assert.match(box, new RegExp(`background-color:${bg};border:1px solid ${border};border-radius:8px`), `${theme}: the panel`);
+    assert.match(html.slice(html.lastIndexOf('<div style="', html.indexOf('GBTI Digest</div>')), html.indexOf('GBTI Digest</div>')), new RegExp(`text-transform:uppercase;color:${label}`), `${theme}: the label`);
+    assert.doesNotMatch(closingOf(html, 'GBTI Digest</div>'), /border-left|font-style:italic;color|#1f9e5f/, `${theme}: no green rule, the paragraph upright`);
+  }
 });
 
-test('every grey the member paragraph uses clears the 4.5:1 floor on its card', () => {
+test('everybody else reads a centred colophon: a short green rule, the first line in a serif', () => {
+  const email = renderIssue(ISSUE, { siteUrl: SITE }).html;
+  const colophon = closingOf(email, LEAD);
+  assert.match(colophon, /<td width="32" height="2" bgcolor="#1f9e5f"/, 'the rule');
+  assert.ok(colophon.indexOf('bgcolor="#1f9e5f"') < colophon.indexOf(LEAD), 'the rule sits above the lead');
+  assert.match(email.slice(email.lastIndexOf('<div style="', email.indexOf(LEAD)), email.indexOf(LEAD)), /font-family:Georgia,'Times New Roman',serif;font-size:17px/, 'a serif lead');
+  assert.match(email.slice(email.lastIndexOf('<td width="536"', email.indexOf(LEAD)), email.indexOf(LEAD)), /align="center" style="width:536px;padding:40px 48px 0;text-align:center"/, 'centred');
+  assert.doesNotMatch(colophon, /GBTI Digest<\/div>|border-left/, 'not the member panel');
+  // The web edition has no lead in the closing, so the invitation itself takes the serif line.
+  const web = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web' }).html;
+  assert.match(web.slice(web.lastIndexOf('<div style="', web.indexOf(GUEST)), web.indexOf(GUEST)), /font-family:Georgia,'Times New Roman',serif;font-size:17px/);
+});
+
+test('on the web edition a non-member reads the lead at the end of the footer line, and only there', () => {
+  const web = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web' }).html;
+  assert.equal(web.split(LEAD).length - 1, 1, 'once on the page');
+  assert.ok(web.includes(`A new issue goes out every Tuesday. ${LEAD}</div>`), 'it ends the footer sentence');
+  assert.ok(web.indexOf(LEAD) > web.indexOf('<!--/social-->'), 'in the footer, below the social row');
+  // A member's preview keeps it in the panel, and the footer line ends where it did.
+  const member = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web', audience: 'member' }).html;
+  assert.equal(member.split(LEAD).length - 1, 1);
+  assert.ok(member.includes('A new issue goes out every Tuesday.</div>'));
+  assert.ok(member.indexOf(LEAD) < member.indexOf('<!--social-->'));
+  // The email keeps it in the closing: it has no web footer to move it to.
+  const email = renderIssue(ISSUE, { siteUrl: SITE }).html;
+  assert.ok(email.indexOf(LEAD) < email.indexOf('<!--social-->'));
+});
+
+test('every closing text colour clears the 4.5:1 floor on what it sits on, in both themes', () => {
   const lum = (h) => { const c = h.match(/[0-9a-f]{2}/gi).map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-  assert.ok(ratio('#76737f', '#ffffff') >= 4.5, 'light');
-  assert.ok(ratio('#8c8893', '#232029') >= 4.5, 'dark');
+  // light: label, lead and paragraph on the panel; dark: the same on the dark panel
+  for (const [fg, bg] of [['#187a4b', '#f7f5f1'], ['#232029', '#f7f5f1'], ['#4a4653', '#f7f5f1'], ['#5fd49a', '#2a2731'], ['#f3f2f0', '#2a2731'], ['#bdbac4', '#2a2731']]) {
+    assert.ok(ratio(fg, bg) >= 4.5, `${fg} on ${bg}: ${ratio(fg, bg).toFixed(2)}`);
+  }
 });

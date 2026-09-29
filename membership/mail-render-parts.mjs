@@ -102,16 +102,17 @@ export function subscribeBoxHtml(p, { action = '/mail/subscribe', siteKey = TURN
 /**
  * The web edition's footer. It cannot say "you get this because you are on the list", and it carries no
  * Unsubscribe, because nothing was mailed to whoever is reading it. It says what the page is instead. The day is
- * held to the compile cron by test/digest-send-day.test.mjs.
+ * held to the compile cron by test/digest-send-day.test.mjs. `after` is a sentence that ends the line: for a
+ * non-member, the closing's lead (owner, 2026-09-29).
  */
-export function webFooterHtml(p, { track } = {}) {
+export function webFooterHtml(p, { track, after = '' } = {}) {
   const t = typeof track === 'function' ? track : (u) => u;
   const link = (href, label) => `<a href="${esc(href)}" style="color:${p.footerLink};text-decoration:underline">${esc(label)}</a>`;
   const line = (html, pad) => `<div style="font-family:${SANS};font-size:11.5px;color:${p.meta};line-height:18px;padding-top:${pad}px">${html}</div>`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:28px 28px 24px">`
     + `<div style="height:1px;background-color:${p.hairline};font-size:0;line-height:0">&nbsp;</div>`
-    + line('This is the web edition of the GBTI Network weekly digest. A new issue goes out every Tuesday.', 14)
+    + line(`This is the web edition of the GBTI Network weekly digest. A new issue goes out every Tuesday.${after ? ` ${esc(after)}` : ''}`, 14)
     + line(`${link(t('/feeds/', 'footer-feed'), 'Open the feed')} &middot; ${link(t('/', 'footer-home'), 'gbti.network')}`, 9)
     + `</td></tr></table>`;
 }
