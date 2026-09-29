@@ -9,7 +9,8 @@ shortDescription: >-
   Jonathan Bossenger tests Cross AI MCP Manager, Albert, and WP Vibe for setup, local WordPress
   integration, and how each handles data, with Cross AI the only plugin he gets working end to end.
 category: wordpress
-image: https://i.ytimg.com/vi/IC_0ZMlHFjI/maxresdefault.jpg
+image: https://gbti.network/media/shares/atwellpub/20260929154514-wordpress-ai-plugin-showdown-c4a344df.webp
+imageSource: https://i.ytimg.com/vi/IC_0ZMlHFjI/maxresdefault.jpg
 creatorUrl: https://www.youtube.com/@jon_bossenger
 creatorName: Jonathan Bossenger
 tags:
