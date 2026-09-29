@@ -10,6 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import yaml from 'js-yaml';
 
 import { clampWeight, fetchCap, rotationOrder, cleanSources, nextChunk, WEIGHT_MIN, WEIGHT_MAX } from '../workers/signup/news/src/sources.mjs';
 import { selectFresh } from '../workers/signup/news/src/ingest.mjs';
@@ -124,9 +125,15 @@ test('sow-338: the weight survives the pipeline normalization that drops everyth
   assert.equal(wild.weight, WEIGHT_MAX, 'and a wild value is clamped at the boundary of the system');
 });
 
-test('sow-338: the weights file ships in the repository, superadmin-owned, and starts empty', () => {
+test('sow-338: the weights file ships in the repository, superadmin-owned, and every weight in it is a real step', () => {
+  // It shipped empty, and it fills as superadmins vote from a news item page (the first votes landed 2026-09-29,
+  // #641), so this checks what is there rather than that nothing is: a vote is the feature working, not drift.
   const raw = fs.readFileSync(new URL('../house/news-source-weights.yml', import.meta.url), 'utf8');
-  assert.match(raw, /^weights: \{\}$/m, 'no source is weighted until somebody votes');
+  const doc = yaml.load(raw);
+  assert.ok(doc && typeof doc.weights === 'object' && !Array.isArray(doc.weights), 'a weights map, empty or not');
+  // Every entry survives the reader unchanged: a kebab-case source id and a non-zero step in range. The editor
+  // removes a line set back to neutral, so a 0 here would be a hand edit the pipeline silently ignores.
+  assert.deepEqual(readWeights(doc), doc.weights ?? {}, 'every line is a valid, non-neutral step');
   // The lockstep that makes it a superadmin file: the rank module, CODEOWNERS, and the Worker action table.
   // test/path-rank.test.mjs and test/classify-pr-path-rank-agreement.test.mjs fail if the three disagree.
   assert.ok(SUPERADMIN_HOUSE_FILES.has('house/news-source-weights.yml'));
