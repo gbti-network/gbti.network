@@ -153,14 +153,15 @@ const PALETTES = {
   light: {
     pageBg: '#efece7', cardBg: '#ffffff', cardBorder: '#e0dbd3', hairline: '#eae6df',
     ink: '#232029', inkSoft: '#4a4653', meta: '#7c7784', accent: '#187a4b', rule: '#187a4b',
-    // A lighter grey that still reads (5.4:1 on the card; meta is 4.3:1): the member closing (owner, 2026-09-29).
-    mute: '#6c6976',
+    // The lightest grey that still reads, for the member closing (owner, 2026-09-29, "even lighter"): 4.6:1 on
+    // the card, where meta is 4.3:1 and under the 4.5:1 floor for text this size.
+    mute: '#76737f',
     footerLink: '#4a4653', postalMeta: '#9b96a1', pillBg: '#eef6f0', pillBorder: '#cfe3d7',
   },
   dark: {
     pageBg: '#1b1922', cardBg: '#232029', cardBorder: '#35313d', hairline: '#302c37',
     ink: '#f3f2f0', inkSoft: '#bdbac4', meta: '#847f8d', accent: '#5fd49a', rule: '#1f9e5f',
-    mute: '#9a96a1', // 5.5:1 on the dark card
+    mute: '#8c8893', // 4.6:1 on the dark card, the dimmest that still reads
     footerLink: '#bdbac4', postalMeta: '#847f8d', pillBg: '#1e3329', pillBorder: '#2d5240',
   },
 };

@@ -40,6 +40,10 @@ export const CLOSING_TARGETS = Object.freeze({
   'closing-extension': WEB_STORE_URL,
 });
 
+// The brand green, for the member blockquote rule: 3.4:1 on the light card and 4.4:1 on the dark one, over the
+// 3:1 a non-text mark needs.
+const BRAND_GREEN = '#1f9e5f';
+
 const LEAD = 'Thanks everyone for paying attention! We share a digest like this one every week.';
 
 // Each audience's copy as parts: plain text, or a link { text, placement }.
@@ -75,10 +79,14 @@ export function closingHtml(p, { audience, track, esc }) {
   const member = closingAudience(audience) === 'member';
   const italic = member ? 'font-style:italic;' : '';
   const color = member ? (p.mute || p.inkSoft) : p.inkSoft;
+  // Owner, 2026-09-29: the member paragraph reads as a blockquote, a square brand-green rule down its left edge.
+  // A table cell carries the border because Outlook's renderer drops borders and padding on a plain div.
+  const quote = (html, pad) => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:${pad}px">`
+    + `<tr><td style="border-left:3px solid ${BRAND_GREEN};border-radius:0;padding:2px 0 2px 14px">${html}</td></tr></table>`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + para(esc(LEAD), 0)
-    + para(parts, 8, italic, color)
+    + (member ? quote(para(parts, 0, italic, color), 10) : para(parts, 8, italic, color))
     + `</td></tr></table>`;
 }
 

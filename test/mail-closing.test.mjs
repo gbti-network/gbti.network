@@ -162,8 +162,8 @@ test('the sign-off closes every issue: centred, italic, larger, under the subscr
 
 test('the member paragraph is a lighter grey that still reads, in both themes', () => {
   const colorOf = (html, marker) => /color:(#[0-9a-f]{6})/i.exec(html.slice(html.lastIndexOf('<div style="', html.indexOf(marker)), html.indexOf(marker)))?.[1];
-  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html, MEMBER), '#6c6976', 'light: 5.4:1 on the white card');
-  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme: 'dark' }).html, MEMBER), '#9a96a1', 'dark: 5.5:1 on the dark card');
+  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html, MEMBER), '#76737f', 'light: 4.6:1 on the white card, the lightest that reads');
+  assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme: 'dark' }).html, MEMBER), '#8c8893', 'dark: 4.6:1 on the dark card');
   assert.equal(colorOf(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), '#4a4653', 'the invitation keeps the standard text colour');
 });
 
@@ -184,4 +184,21 @@ test('the subject names the day and the week: "GBTI Digest · 16 items · Septem
   assert.equal(renderIssue(issue, {}).subject, 'GBTI Digest · 16 items · September 29th · Week 40');
   const want = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 11: '11th', 12: '12th', 13: '13th', 21: '21st', 22: '22nd', 23: '23rd', 30: '30th', 31: '31st', 111: '111th', 112: '112th' };
   for (const [n, s] of Object.entries(want)) assert.equal(ordinal(Number(n)), s);
+});
+
+test('the member paragraph is a blockquote: a square brand-green rule on its left; the invitation has none', () => {
+  const cellOf = (html, marker) => html.slice(html.lastIndexOf('<td ', html.indexOf(marker)), html.indexOf(marker));
+  const member = renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html;
+  assert.match(cellOf(member, MEMBER), /border-left:3px solid #1f9e5f;border-radius:0;padding:2px 0 2px 14px/);
+  assert.match(cellOf(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member', theme: 'dark' }).html, MEMBER), /border-left:3px solid #1f9e5f/);
+  assert.doesNotMatch(cellOf(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), /border-left/);
+  // The lead line stays outside the quote.
+  assert.doesNotMatch(cellOf(member, LEAD), /border-left/);
+});
+
+test('every grey the member paragraph uses clears the 4.5:1 floor on its card', () => {
+  const lum = (h) => { const c = h.match(/[0-9a-f]{2}/gi).map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  assert.ok(ratio('#76737f', '#ffffff') >= 4.5, 'light');
+  assert.ok(ratio('#8c8893', '#232029') >= 4.5, 'dark');
 });
