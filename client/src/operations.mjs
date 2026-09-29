@@ -76,6 +76,7 @@ export {
   getNews,
   getNewsSources,
   getFollowedNews, // sow-386
+  getBellSeen, markBellSeen, // owner 2026-09-29: the bells' read state, on the account
   getPrefs,
   setPrefs,
   publishNews,

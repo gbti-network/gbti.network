@@ -331,6 +331,8 @@ import { isGithubLogin } from '../lib/github-login.mjs'; // sow-369: the hint is
   async function upgradeBell(signal: any) {
     if (bellUpgraded || !signal || !signal.login || !readCookie('gbti_csrf')) return;
     bellUpgraded = true;
+    // Owner, 2026-09-29: the bell keeps its read state per account, so it is told whose it is before it upgrades.
+    document.querySelector('gbti-notification-bell')?.setAttribute('data-login', String(signal.login));
     const signupBase = document.documentElement.dataset.signupBase || '';
     const { createWorkbenchClient } = await import('../lib/workbench-client');
     const { setClient, getClient } = await import('../../client-ui/src/base.mjs');

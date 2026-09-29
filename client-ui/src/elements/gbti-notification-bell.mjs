@@ -2,23 +2,27 @@
 // (claude.ai/design 5dc9aeee, "Notifications handoff"). It is the WEBSITE bell (the extension keeps its own
 // <gbti-activity-bell>). Data is computed ON READ (ruling R1 + the design handoff): the member's follow list
 // (getFollows()) intersected with the public activity index, so it shows "members I follow published X". The
-// dormant server store is not read here. Unread is a localStorage watermark set on "Mark all read"; a
+// dormant server list is not read here. Unread is decided by the member's account read record (owner, 2026-09-29;
+// membership/bell-seen.mjs), set on "Mark all read" and shared with the extension bell; a
 // banned/no-session account fails closed and the bell hides itself. Three first-class states per the design:
 // loading (skeletons), empty ("You are all caught up" + a follow nudge), and populated. sow-386: rows now obey the
 // member's In app settings and include public shares and (members only) news from followed sources; the filtering
 // is selectBellEntries in notification-bell-core.mjs, shared with the extension bell.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildFollowingBell, unreadLabel } from '../notification-bell-core.mjs';
+import { buildFollowingBell, selectBellEntries, unreadLabel } from '../notification-bell-core.mjs';
+import { markGroup, seedFromWatermark, sameSeen } from '../../../membership/bell-seen.mjs';
+import { readLocalSeen, writeLocalSeen, readLegacy, fetchAccountSeen, pushAccountSeen, onLocalSeenChange, mergeSeen } from '../bell-seen-sync.mjs';
 import { relTime, absTime } from '../time-core.mjs';
 
 const INDEX_URL = '/activity-index.json'; // same-origin public build artifact (site root)
 const SHARES_URL = '/shares-index.json';  // sow-386: the public shares list, the same shape (same-origin build artifact)
-const SEEN_KEY = 'gbti-notif-seen';       // a single ms watermark (distinct from the extension bell's per-source object)
+// Owner, 2026-09-29: the read state is the ACCOUNT's (membership/bell-seen.mjs, synced through bell-seen-sync.mjs), so a
+// read here clears the extension bell and the reverse. This was a single "last read" time in this browser only; it
+// is read once to seed the account record and never written again.
+const LEGACY_SEEN_KEY = 'gbti-notif-seen';
 const SETTINGS_URL = '/account/notifications/'; // C3 destination (the digest footer link lands here too, sow-267)
 const FIND_URL = '/members/';             // "find more members to follow"
 
-function loadWatermark() { try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch { return 0; } }
-function saveWatermark(ms) { try { localStorage.setItem(SEEN_KEY, String(ms)); } catch { /* private mode */ } }
 
 // Inline icons (no Material Symbols font dependency; the shadow tree cannot see page fonts anyway).
 const I_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
@@ -90,17 +94,47 @@ class GbtiNotificationBell extends GbtiElement {
     this._loaded = false;
     this._loading = false;
     this._gated = false;
-    this._watermark = loadWatermark();
+    this._login = this.getAttribute('data-login') || '';
+    this._seen = readLocalSeen(this._login); // this browser's copy; the account's record is merged in on load
+    this._inputs = null; // the last fetched lists, so a read elsewhere can re-badge without refetching them
     this._bell = { rows: [], unread: 0, followCount: 0 };
     // Close the panel on an outside click (composedPath so nesting in another shadow root stays correct).
     this._onDoc = (e) => { if (this._open && !e.composedPath().includes(this)) this._close(); };
     if (typeof document !== 'undefined') document.addEventListener('click', this._onDoc);
+    // Another tab of the site marked read: take it at once. Coming back to this tab: pick up a read made anywhere
+    // else (the extension, another device) from the account.
+    this._offSeen = onLocalSeenChange(this._login, (next) => this._adoptSeen(next));
+    this._onVis = () => { if (!document.hidden && this._inputs) this._refreshSeen(); };
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVis);
     this.render();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._onDoc && typeof document !== 'undefined') document.removeEventListener('click', this._onDoc);
+    if (this._onVis && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVis);
+    this._offSeen?.();
+  }
+
+  // Rebuild the badge from the lists already fetched and the current read record.
+  _rebuild() {
+    if (!this._inputs) return;
+    this._bell = buildFollowingBell({ ...this._inputs, seen: this._seen?.groups?.following ?? null });
+  }
+
+  _adoptSeen(next) {
+    const merged = mergeSeen(this._seen, next);
+    if (sameSeen(merged, this._seen)) return;
+    this._seen = merged;
+    writeLocalSeen(this._login, merged);
+    this._rebuild();
+    this.render();
+  }
+
+  async _refreshSeen() {
+    const local = readLocalSeen(this._login);
+    const account = await fetchAccountSeen(this.client);
+    this._adoptSeen(mergeSeen(local, account));
   }
 
   // The element upgrades from inert static markup BEFORE the host calls setClient(); load once the client
@@ -127,20 +161,24 @@ class GbtiNotificationBell extends GbtiElement {
       // settings read leaves `global` undefined, which resolves to the system default (show everything), so a
       // blip never empties the bell. The news read is members only; the Worker refuses a free account and that
       // refusal simply means no news rows.
-      const [f, entries, shares, prefs, news] = await Promise.all([
+      const [f, entries, shares, prefs, news, account] = await Promise.all([
         this.client.getFollows(),                             // throws (banned / no session) -> gated
         this._fetchIndex(INDEX_URL),                          // fail-closed to []
         this._fetchIndex(SHARES_URL),                         // fail-closed to []
         Promise.resolve().then(() => this.client.getPrefs?.()).catch(() => null),
         Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null),
+        fetchAccountSeen(this.client),                        // fail-soft: this browser's copy alone
       ]);
       const follows = Array.isArray(f?.following) ? f.following : [];
-      this._bell = buildFollowingBell({
-        follows, entries, shares,
-        news: Array.isArray(news?.items) ? news.items : [],
-        global: prefs?.notify,
-        watermark: this._watermark,
-      });
+      this._inputs = { follows, entries, shares, news: Array.isArray(news?.items) ? news.items : [], global: prefs?.notify };
+      // The account's record, merged with this browser's copy. The first time the account has nothing for this
+      // group, this browser's old "last read" time seeds it, so the change of model brings back nothing already read.
+      let seen = mergeSeen(readLocalSeen(this._login), account);
+      const seeded = seedFromWatermark(seen, 'following', selectBellEntries(this._inputs), Number(readLegacy(LEGACY_SEEN_KEY)) || 0);
+      if (!sameSeen(seeded, seen)) { seen = seeded; pushAccountSeen(this.client, seen); }
+      this._seen = seen;
+      writeLocalSeen(this._login, seen);
+      this._rebuild();
       this._gated = false;
     } catch {
       this._gated = true; // a signed-in member with no web session or a banned account gets no bell
@@ -156,11 +194,15 @@ class GbtiNotificationBell extends GbtiElement {
   _toggle() { this._open = !this._open; this.render(); }
 
   _markAll() {
-    // A single watermark: everything currently shown becomes seen; a LATER publish re-badges.
-    this._watermark = Date.now();
-    saveWatermark(this._watermark);
-    this._bell = { ...this._bell, rows: this._bell.rows.map((r) => ({ ...r, unread: false })), unread: 0 };
+    // Everything this bell would badge is recorded as read (not only the rows on screen), so the extension's
+    // Following group clears too. The badge clears now; the account is told in the background, and its merged
+    // answer is adopted when it lands.
+    if (!this._inputs) return;
+    this._seen = markGroup(this._seen, 'following', selectBellEntries(this._inputs), Date.now());
+    writeLocalSeen(this._login, this._seen);
+    this._rebuild();
     this.render();
+    pushAccountSeen(this.client, this._seen).then((merged) => { if (merged) this._adoptSeen(merged); });
   }
 
   render() {

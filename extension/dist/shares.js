@@ -23411,6 +23411,83 @@ ${BLOCKED_PILL_CSS}
   };
   define("gbti-workspace", GbtiWorkspace);
 
+  // membership/bell-seen.mjs
+  var BELL_SEEN_GROUPS = Object.freeze(["following", "replies", "approvals"]);
+  var LATE_WINDOW_MS = 48 * 60 * 60 * 1e3;
+  var MAX_IDS_PER_GROUP = 400;
+  var MAX_ID_LENGTH = 300;
+  var MAX_FUTURE_MS = 24 * 60 * 60 * 1e3;
+  function normGroup(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const at = Number(raw.at);
+    if (!Number.isFinite(at) || at <= 0) return null;
+    const ids = [];
+    const have = /* @__PURE__ */ new Set();
+    for (const id of Array.isArray(raw.ids) ? raw.ids : []) {
+      if (typeof id !== "string" || !id || id.length > MAX_ID_LENGTH || have.has(id)) continue;
+      have.add(id);
+      ids.push(id);
+      if (ids.length >= MAX_IDS_PER_GROUP) break;
+    }
+    return { at, ids };
+  }
+  function normalizeSeen(raw) {
+    const out = { groups: {} };
+    const groups = raw && typeof raw === "object" ? raw.groups : null;
+    if (!groups || typeof groups !== "object") return out;
+    for (const key of BELL_SEEN_GROUPS) {
+      const g = normGroup(groups[key]);
+      if (g) out.groups[key] = g;
+    }
+    return out;
+  }
+  function mergeGroup(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    const [newer, older] = a.at >= b.at ? [a, b] : [b, a];
+    return normGroup({ at: newer.at, ids: [...newer.ids, ...older.ids] });
+  }
+  function mergeSeen(a, b, { now = null } = {}) {
+    const x = normalizeSeen(a);
+    const y = normalizeSeen(b);
+    const out = { groups: {} };
+    for (const key of BELL_SEEN_GROUPS) {
+      const g = mergeGroup(x.groups[key] || null, y.groups[key] || null);
+      if (!g) continue;
+      if (Number.isFinite(now) && g.at > now + MAX_FUTURE_MS) g.at = now + MAX_FUTURE_MS;
+      out.groups[key] = g;
+    }
+    return out;
+  }
+  function markGroup(seen, group, items, now = Date.now()) {
+    const s = normalizeSeen(seen);
+    if (!BELL_SEEN_GROUPS.includes(group)) return s;
+    const floor = now - LATE_WINDOW_MS;
+    const ids = (Array.isArray(items) ? items : []).filter((it) => it && typeof it.id === "string" && it.id && (Number(it.ts) || 0) > floor).map((it) => it.id);
+    const g = mergeGroup({ at: now, ids }, s.groups[group] || null);
+    if (g) s.groups[group] = g;
+    return s;
+  }
+  function unreadPredicate(groupSeen) {
+    const g = normGroup(groupSeen);
+    if (!g) return () => true;
+    const floor = g.at - LATE_WINDOW_MS;
+    const ids = new Set(g.ids);
+    return (item) => (Number(item?.ts) || 0) > floor && !ids.has(String(item?.id ?? ""));
+  }
+  function seedFromWatermark(seen, group, items, watermark) {
+    const s = normalizeSeen(seen);
+    const mark = Number(watermark) || 0;
+    if (!BELL_SEEN_GROUPS.includes(group) || s.groups[group] || mark <= 0) return s;
+    const ids = (Array.isArray(items) ? items : []).filter((it) => it && typeof it.id === "string" && it.id && (Number(it.ts) || 0) <= mark && (Number(it.ts) || 0) > mark - LATE_WINDOW_MS).map((it) => it.id);
+    const g = normGroup({ at: mark, ids });
+    if (g) s.groups[group] = g;
+    return s;
+  }
+  function sameSeen(a, b) {
+    return JSON.stringify(normalizeSeen(a)) === JSON.stringify(normalizeSeen(b));
+  }
+
   // client-ui/src/activity-bell.mjs
   var BELL_GROUPS = [
     // superadmin-only. sow-407 (owner, 2026-09-25): "To approve" listed every post waiting its hour before going to the
@@ -23423,8 +23500,20 @@ ${BLOCKED_PILL_CSS}
   ];
   function unreadItems(group, items, seen = {}) {
     const list = Array.isArray(items) ? items : [];
-    const since = Number(seen[group]) || 0;
+    if (seen && typeof seen === "object" && seen.groups && typeof seen.groups === "object") {
+      const isUnread = unreadPredicate(seen.groups[group] ?? null);
+      return list.filter((it) => isUnread({ id: it?.id, ts: toMs(it?.ts) }));
+    }
+    const since = Number(seen?.[group]) || 0;
     return list.filter((it) => toMs(it.ts) > since);
+  }
+  function markAllGroups(seen, sources = {}, now = Date.now()) {
+    let next = seen;
+    for (const g of BELL_GROUPS) {
+      const items = (Array.isArray(sources[g.key]) ? sources[g.key] : []).map((it) => ({ id: String(it?.id ?? ""), ts: toMs(it?.ts) }));
+      next = markGroup(next, g.key, items, now);
+    }
+    return next;
   }
   function buildBell(sources = {}, seen = {}) {
     const groups = BELL_GROUPS.map((g) => {
@@ -23432,11 +23521,6 @@ ${BLOCKED_PILL_CSS}
       return { key: g.key, label: g.label, items, unread: unreadItems(g.key, items, seen).length };
     });
     return { total: groups.reduce((s, g) => s + g.unread, 0), groups };
-  }
-  function markSeen(sources = {}, now = Date.now()) {
-    const seen = {};
-    for (const g of BELL_GROUPS) seen[g.key] = now;
-    return seen;
   }
   var SYNDICATION_OVERDUE_MS = 30 * 60 * 1e3;
   function approvalsNeeded(pending, now = Date.now()) {
@@ -23451,6 +23535,64 @@ ${BLOCKED_PILL_CSS}
       if (at && now - at > SYNDICATION_OVERDUE_MS) out.push({ item: it, why: "overdue" });
     }
     return out;
+  }
+
+  // client-ui/src/bell-seen-sync.mjs
+  var seenKey = (login) => `gbti-bell-seen:${String(login || "").toLowerCase()}`;
+  function readLocalSeen(login) {
+    if (!login) return null;
+    try {
+      const raw = localStorage.getItem(seenKey(login));
+      return raw ? normalizeSeen(JSON.parse(raw)) : null;
+    } catch {
+      return null;
+    }
+  }
+  function writeLocalSeen(login, seen) {
+    if (!login) return;
+    try {
+      localStorage.setItem(seenKey(login), JSON.stringify(normalizeSeen(seen)));
+    } catch {
+    }
+  }
+  function readLegacy(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  async function fetchAccountSeen(client2) {
+    try {
+      const r = await client2?.getBellSeen?.();
+      return r && r.bellSeen ? normalizeSeen(r.bellSeen) : null;
+    } catch {
+      return null;
+    }
+  }
+  async function pushAccountSeen(client2, seen) {
+    try {
+      const r = await client2?.markBellSeen?.(normalizeSeen(seen));
+      return r && r.bellSeen ? normalizeSeen(r.bellSeen) : null;
+    } catch {
+      return null;
+    }
+  }
+  function onLocalSeenChange(login, cb) {
+    if (typeof window === "undefined" || !login) return () => {
+    };
+    const handler = (e) => {
+      if (e.key !== seenKey(login)) return;
+      let next = null;
+      try {
+        next = e.newValue ? normalizeSeen(JSON.parse(e.newValue)) : null;
+      } catch {
+        next = null;
+      }
+      if (next) cb(next);
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
   }
 
   // client-ui/src/notification-bell-core.mjs
@@ -23513,13 +23655,14 @@ ${BLOCKED_PILL_CSS}
     }));
     return [...people, ...stories].sort((a, b) => b.ts - a.ts);
   }
-  function buildFollowingBell({ follows = [], entries = [], shares = [], news = [], global, watermark = 0, max = MAX_BELL_ROWS } = {}) {
+  function buildFollowingBell({ follows = [], entries = [], shares = [], news = [], global, watermark = 0, seen, max = MAX_BELL_ROWS } = {}) {
     const followCount = new Set(
       (Array.isArray(follows) ? follows : []).map((f) => String(f?.username || "").toLowerCase()).filter(Boolean)
     ).size;
     const mark = Number(watermark) || 0;
+    const isUnread = seen !== void 0 ? unreadPredicate(seen) : (r) => r.ts > mark;
     const cap = Number(max) > 0 ? Number(max) : MAX_BELL_ROWS;
-    const rows = selectBellEntries({ follows, entries, shares, news, global }).slice(0, cap).map((r) => ({ ...r, unread: r.ts > mark }));
+    const rows = selectBellEntries({ follows, entries, shares, news, global }).slice(0, cap).map((r) => ({ ...r, unread: isUnread(r) }));
     const unread = rows.reduce((n, r) => n + (r.unread ? 1 : 0), 0);
     return { rows, unread, followCount };
   }
@@ -23531,21 +23674,15 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-activity-bell.mjs
   var SITE16 = "https://gbti.network";
   var POLL_MS2 = 12e4;
-  var SEEN_KEY = "gbti-bell-seen";
+  var LEGACY_SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
   var BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   var CHECK4 = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
-  function loadSeen() {
+  function loadLegacySeen() {
     try {
-      return JSON.parse(localStorage.getItem(SEEN_KEY)) || {};
+      return JSON.parse(readLegacy(LEGACY_SEEN_KEY)) || {};
     } catch {
       return {};
-    }
-  }
-  function saveSeen(s) {
-    try {
-      localStorage.setItem(SEEN_KEY, JSON.stringify(s));
-    } catch {
     }
   }
   var CSS38 = `
@@ -23578,7 +23715,7 @@ ${BLOCKED_PILL_CSS}
   var GbtiActivityBell = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback();
-      this._seen = loadSeen();
+      this._seen = null;
       this._bell = null;
       this._sources = null;
       this._gated = true;
@@ -23608,6 +23745,32 @@ ${BLOCKED_PILL_CSS}
       clearTimeout(this._flashTimer);
       if (this._onDoc) document.removeEventListener("click", this._onDoc);
       if (this._onVis && typeof document !== "undefined") document.removeEventListener("visibilitychange", this._onVis);
+      this._offSeen?.();
+    }
+    // A read made in another tab of the extension lands here at once (the browser's storage event).
+    _listenForSeen(login) {
+      if (this._seenFor === login) return;
+      this._offSeen?.();
+      this._seenFor = login;
+      this._offSeen = onLocalSeenChange(login, (next) => this._adoptSeen(next));
+    }
+    _adoptSeen(next) {
+      const merged = mergeSeen(this._seen, next);
+      if (sameSeen(merged, this._seen)) return;
+      this._seen = merged;
+      writeLocalSeen(this._login, merged);
+      if (this._sources) this._bell = buildBell(this._sources, this._seen);
+      this.render();
+    }
+    // Record everything shown as read: the badge clears now, the account is told in the background.
+    _commitRead() {
+      if (!this._sources || !this._login) return;
+      this._seen = markAllGroups(this._seen, this._sources, Date.now());
+      writeLocalSeen(this._login, this._seen);
+      this._bell = buildBell(this._sources, this._seen);
+      pushAccountSeen(this.client, this._seen).then((merged) => {
+        if (merged) this._adoptSeen(merged);
+      });
     }
     _safe(fn) {
       return Promise.resolve().then(fn).catch(() => []);
@@ -23634,8 +23797,22 @@ ${BLOCKED_PILL_CSS}
           return;
         }
         this._gated = false;
-        const sources = await this._fetchSources(this._login);
+        this._listenForSeen(this._login);
+        const [sources, account] = await Promise.all([this._fetchSources(this._login), fetchAccountSeen(this.client)]);
         this._sources = sources;
+        let seen = mergeSeen(mergeSeen(this._seen, readLocalSeen(this._login)), account);
+        const legacy = loadLegacySeen();
+        let seeded = seen;
+        for (const key of ["approvals", "replies", "following"]) {
+          const items = (sources[key] || []).map((it) => ({ id: String(it?.id ?? ""), ts: toMs(it?.ts) }));
+          seeded = seedFromWatermark(seeded, key, items, Number(legacy?.[key]) || 0);
+        }
+        if (!sameSeen(seeded, seen)) {
+          seen = seeded;
+          pushAccountSeen(this.client, seen);
+        }
+        this._seen = seen;
+        writeLocalSeen(this._login, seen);
         this._bell = buildBell(sources, this._seen);
         this.render();
       } finally {
@@ -23699,7 +23876,8 @@ ${BLOCKED_PILL_CSS}
         global: prefs?.notify
       });
       return rows.map((r) => ({
-        id: `f:${r.id}`,
+        id: r.id,
+        // the website bell's id for the same row, so a read on either surface clears the other
         ts: r.ts,
         title: r.target || "New activity",
         sub: r.kind === "news" ? r.actor : `@${r.actor}`,
@@ -23735,22 +23913,16 @@ ${BLOCKED_PILL_CSS}
     _toggle() {
       this._open = !this._open;
       if (this._open && this._sources) {
-        this._seen = markSeen(this._sources);
-        saveSeen(this._seen);
-        this._bell = buildBell(this._sources, this._seen);
+        this._commitRead();
       }
       this.render();
     }
     _markAllSeen() {
-      if (this._sources) {
-        this._seen = markSeen(this._sources);
-        saveSeen(this._seen);
-        this._bell = buildBell(this._sources, this._seen);
-      }
+      this._commitRead();
       this.render();
     }
     // SOW-095: the "Mark all read" click gets a brief processing indicator, then a confirmation, so the action reads
-    // as acknowledged even though the write is a fast LOCAL watermark. Cosmetic pacing (not a fake delay); the
+    // as acknowledged even though the badge clears locally first. Cosmetic pacing (not a fake delay); the
     // confirmation auto-dismisses back to the settled all-read state.
     _doMarkAll() {
       if (this._clearFlash) return;
@@ -23793,12 +23965,11 @@ ${BLOCKED_PILL_CSS}
       });
     }
     _panelHtml() {
-      const seen = this._seen || {};
+      const seen = this._seen || { groups: {} };
       const groups = (this._bell?.groups || []).filter((g) => g.items.length);
       const unreadSet = /* @__PURE__ */ new Map();
       for (const g of this._bell?.groups || []) {
-        const since = Number(seen[g.key]) || 0;
-        unreadSet.set(g.key, new Set(g.items.filter((it) => toMs(it.ts) > since).map((it) => it.id)));
+        unreadSet.set(g.key, new Set(unreadItems(g.key, g.items, seen).map((it) => it.id)));
       }
       const body = groups.length ? groups.map((g) => {
         const un = unreadSet.get(g.key) || /* @__PURE__ */ new Set();
@@ -23821,22 +23992,9 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-notification-bell.mjs
   var INDEX_URL = "/activity-index.json";
   var SHARES_URL = "/shares-index.json";
-  var SEEN_KEY2 = "gbti-notif-seen";
+  var LEGACY_SEEN_KEY2 = "gbti-notif-seen";
   var SETTINGS_URL = "/account/notifications/";
   var FIND_URL = "/members/";
-  function loadWatermark() {
-    try {
-      return Number(localStorage.getItem(SEEN_KEY2)) || 0;
-    } catch {
-      return 0;
-    }
-  }
-  function saveWatermark(ms) {
-    try {
-      localStorage.setItem(SEEN_KEY2, String(ms));
-    } catch {
-    }
-  }
   var I_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   var I_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.4 2.4 4.6-5"/></svg>';
   var I_PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.6-5.5 5.5-5.5 1.2 0 2.3.4 3.2 1"/><path d="M17 9v6M20 12h-6"/></svg>';
@@ -23904,17 +24062,44 @@ ${BLOCKED_PILL_CSS}
       this._loaded = false;
       this._loading = false;
       this._gated = false;
-      this._watermark = loadWatermark();
+      this._login = this.getAttribute("data-login") || "";
+      this._seen = readLocalSeen(this._login);
+      this._inputs = null;
       this._bell = { rows: [], unread: 0, followCount: 0 };
       this._onDoc = (e) => {
         if (this._open && !e.composedPath().includes(this)) this._close();
       };
       if (typeof document !== "undefined") document.addEventListener("click", this._onDoc);
+      this._offSeen = onLocalSeenChange(this._login, (next) => this._adoptSeen(next));
+      this._onVis = () => {
+        if (!document.hidden && this._inputs) this._refreshSeen();
+      };
+      if (typeof document !== "undefined") document.addEventListener("visibilitychange", this._onVis);
       this.render();
     }
     disconnectedCallback() {
       super.disconnectedCallback();
       if (this._onDoc && typeof document !== "undefined") document.removeEventListener("click", this._onDoc);
+      if (this._onVis && typeof document !== "undefined") document.removeEventListener("visibilitychange", this._onVis);
+      this._offSeen?.();
+    }
+    // Rebuild the badge from the lists already fetched and the current read record.
+    _rebuild() {
+      if (!this._inputs) return;
+      this._bell = buildFollowingBell({ ...this._inputs, seen: this._seen?.groups?.following ?? null });
+    }
+    _adoptSeen(next) {
+      const merged = mergeSeen(this._seen, next);
+      if (sameSeen(merged, this._seen)) return;
+      this._seen = merged;
+      writeLocalSeen(this._login, merged);
+      this._rebuild();
+      this.render();
+    }
+    async _refreshSeen() {
+      const local = readLocalSeen(this._login);
+      const account = await fetchAccountSeen(this.client);
+      this._adoptSeen(mergeSeen(local, account));
     }
     // The element upgrades from inert static markup BEFORE the host calls setClient(); load once the client
     // arrives (setClient re-renders every subscriber, which lands us back here). Idempotent.
@@ -23936,7 +24121,7 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       try {
-        const [f, entries, shares, prefs, news] = await Promise.all([
+        const [f, entries, shares, prefs, news, account] = await Promise.all([
           this.client.getFollows(),
           // throws (banned / no session) -> gated
           this._fetchIndex(INDEX_URL),
@@ -23944,17 +24129,21 @@ ${BLOCKED_PILL_CSS}
           this._fetchIndex(SHARES_URL),
           // fail-closed to []
           Promise.resolve().then(() => this.client.getPrefs?.()).catch(() => null),
-          Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null)
+          Promise.resolve().then(() => this.client.getFollowedNews?.()).catch(() => null),
+          fetchAccountSeen(this.client)
+          // fail-soft: this browser's copy alone
         ]);
         const follows = Array.isArray(f?.following) ? f.following : [];
-        this._bell = buildFollowingBell({
-          follows,
-          entries,
-          shares,
-          news: Array.isArray(news?.items) ? news.items : [],
-          global: prefs?.notify,
-          watermark: this._watermark
-        });
+        this._inputs = { follows, entries, shares, news: Array.isArray(news?.items) ? news.items : [], global: prefs?.notify };
+        let seen = mergeSeen(readLocalSeen(this._login), account);
+        const seeded = seedFromWatermark(seen, "following", selectBellEntries(this._inputs), Number(readLegacy(LEGACY_SEEN_KEY2)) || 0);
+        if (!sameSeen(seeded, seen)) {
+          seen = seeded;
+          pushAccountSeen(this.client, seen);
+        }
+        this._seen = seen;
+        writeLocalSeen(this._login, seen);
+        this._rebuild();
         this._gated = false;
       } catch {
         this._gated = true;
@@ -23973,10 +24162,14 @@ ${BLOCKED_PILL_CSS}
       this.render();
     }
     _markAll() {
-      this._watermark = Date.now();
-      saveWatermark(this._watermark);
-      this._bell = { ...this._bell, rows: this._bell.rows.map((r) => ({ ...r, unread: false })), unread: 0 };
+      if (!this._inputs) return;
+      this._seen = markGroup(this._seen, "following", selectBellEntries(this._inputs), Date.now());
+      writeLocalSeen(this._login, this._seen);
+      this._rebuild();
       this.render();
+      pushAccountSeen(this.client, this._seen).then((merged) => {
+        if (merged) this._adoptSeen(merged);
+      });
     }
     render() {
       if (!this.root) return;
@@ -26133,6 +26326,11 @@ ${BLOCKED_PILL_CSS}
       // SOW-046: followable news channels -> { sources }
       getFollowedNews: () => request("GET", "/api/news-following"),
       // sow-386: members-only stories from followed sources -> { items }
+      // Owner, 2026-09-29: what the member has read in the bells, on their account (membership/bell-seen.mjs).
+      getBellSeen: () => request("GET", "/api/bell-seen"),
+      // -> { bellSeen }
+      markBellSeen: (bellSeen) => request("POST", "/api/bell-seen", { bellSeen }),
+      // -> the merged { bellSeen }
       getPrefs: () => request("GET", "/api/prefs"),
       // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
       setPrefs: (patch) => request("POST", "/api/prefs", patch),

@@ -8,7 +8,7 @@
 
 import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft, readDraft, publishShare, listShares, listShareComments, readContent,
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
-  ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getPrefs, setPrefs,
+  ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getFollowedNews, getBellSeen, markBellSeen, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, deleteComment, listDiscordChannels, listAuthorTargets, getOnboardingStatus, getOverridesRoster,
   getOpenPulls, triggerAdminOp, governanceAdminOp, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp,
   listEditorialOp, decideEditorialOp, getSyndicationQueue, getSocialQueue, socialQueueAction, newsItemDecideOp } from '../../client/src/operations.mjs'; // sow-323; sow-407; sow-419; sow-420
@@ -172,6 +172,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await getNewsSources(ctx));
       case '/api/news-following': // sow-386: the bells' members-only news rows
         return ok(await getFollowedNews(ctx));
+      case '/api/bell-seen': // owner 2026-09-29: what the member has read in the bells, on their account
+        return ok(method === 'POST' ? await markBellSeen(ctx, body ?? {}) : await getBellSeen(ctx));
       case '/api/prefs': // SOW-046: member prefs (categories + followed news channels)
         return ok(method === 'POST' ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case '/api/news-publish': // SOW-046 C: curator-only "Add to Discord" (the Worker holds the bot token + re-checks)

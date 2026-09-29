@@ -81,6 +81,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getNews: ({ category, since, limit } = {}) => request('GET', `/api/news${qs({ category, since, limit })}`), // SOW-043: members-only news -> { items, updatedAt }
     getNewsSources: () => request('GET', '/api/news-sources'), // SOW-046: followable news channels -> { sources }
     getFollowedNews: () => request('GET', '/api/news-following'), // sow-386: members-only stories from followed sources -> { items }
+    // Owner, 2026-09-29: what the member has read in the bells, on their account (membership/bell-seen.mjs).
+    getBellSeen: () => request('GET', '/api/bell-seen'), // -> { bellSeen }
+    markBellSeen: (bellSeen) => request('POST', '/api/bell-seen', { bellSeen }), // -> the merged { bellSeen }
     getPrefs: () => request('GET', '/api/prefs'), // SOW-046: member prefs -> { categories, followedChannels, followedTags, publicFavorites, notify? }
     setPrefs: (patch) => request('POST', '/api/prefs', patch), // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
     publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }

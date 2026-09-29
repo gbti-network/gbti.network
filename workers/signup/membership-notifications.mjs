@@ -2,6 +2,8 @@
 //   GET  /membership/notifications        -> { ok, notifications, unseen }   (the caller's OWN list)
 //   POST /membership/notifications/seen   -> { ok, notifications, unseen }   (mark the caller's own seen)
 //     body { ids?: [id] }  -- an absent/empty ids list marks ALL of the caller's notifications seen
+//     body { bellSeen }    -- owner, 2026-09-29: merge what the member has read in the two bells (membership/bell-seen.mjs)
+//                             and touch nothing else; answers { ok, bellSeen }. GET returns bellSeen too.
 //
 // SOW-060: reading your own notifications is a FREE-tier perk. Auth = SIGNED-IN, non-banned (authorizeMember:
 // ban > staff > grandfather > Stripe, fail-closed from the KV overrides mirror), NOT effective-paid. Data is
@@ -20,6 +22,7 @@ import { authorizeMember } from './membership-content.mjs';
 import {
   normalizeNotifications, appendNotification, markSeen, unseenCount,
 } from '../../membership/member-notifications.mjs';
+import { normalizeSeen, mergeSeen } from '../../membership/bell-seen.mjs';
 
 export const NOTIFICATIONS_KEY = (githubId) => `notifications:${githubId}`;
 
@@ -37,7 +40,7 @@ export async function handleNotifications(request, env, { kv = env?.SIGNUP_KV, n
 
   if (method === 'GET') {
     const stored = normalizeNotifications(await kv.get(key, 'json'));
-    return { status: 200, body: { ok: true, notifications: stored.items, unseen: unseenCount(stored) } };
+    return { status: 200, body: { ok: true, notifications: stored.items, unseen: unseenCount(stored), bellSeen: normalizeSeen(stored.bellSeen) } };
   }
   if (method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
 
@@ -48,6 +51,14 @@ export async function handleNotifications(request, env, { kv = env?.SIGNUP_KV, n
   try { payload = await request.json(); } catch { payload = {}; }
 
   const stored = normalizeNotifications(await kv.get(key, 'json'));
+  // A bell read is its own action: it merges into the stored read record (monotonic, so a stale tab or device can
+  // never undo a newer read) and leaves the stored notifications exactly as they were. It must not fall through to
+  // the mark-all below, which an empty ids list would trigger.
+  if (payload && typeof payload === 'object' && payload.bellSeen && typeof payload.bellSeen === 'object') {
+    const bellSeen = mergeSeen(stored.bellSeen, payload.bellSeen, { now: now() });
+    await kv.put(key, JSON.stringify({ ...stored, bellSeen }));
+    return { status: 200, body: { ok: true, bellSeen } };
+  }
   const next = markSeen(stored, { ids: Array.isArray(payload?.ids) ? payload.ids : undefined, now });
   await kv.put(key, JSON.stringify(next));
   return { status: 200, body: { ok: true, notifications: next.items, unseen: unseenCount(next) } };

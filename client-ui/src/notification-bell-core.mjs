@@ -13,6 +13,7 @@
 
 import { toMs } from './all-merge.mjs';
 import { resolveNotify, normalizeNotify } from '../../membership/notify-resolve.mjs';
+import { unreadPredicate } from '../../membership/bell-seen.mjs';
 
 // The verb shown between the actor and the item title, by content type, to match the design row
 // ("<b>actor</b> action <target>"). Anything unmapped reads as a plain "published". A news row's actor is the
@@ -107,18 +108,20 @@ export function selectBellEntries({ follows = [], entries = [], shares = [], new
   return [...people, ...stories].sort((a, b) => b.ts - a.ts);
 }
 
-/** Build the website bell view-model: selectBellEntries capped at `max`, with unread measured against
- *  `watermark` (the ms timestamp of the last "mark all read"; 0 = never, so everything is unread).
+/** Build the website bell view-model: selectBellEntries capped at `max`, with unread decided by `seen`, the
+ *  account's read record for the `following` group (membership/bell-seen.mjs; null = never read, so everything is
+ *  unread). Without `seen` it falls back to the old `watermark` (the ms time of the last "mark all read").
  *  Returns { rows, unread, followCount }. */
-export function buildFollowingBell({ follows = [], entries = [], shares = [], news = [], global, watermark = 0, max = MAX_BELL_ROWS } = {}) {
+export function buildFollowingBell({ follows = [], entries = [], shares = [], news = [], global, watermark = 0, seen, max = MAX_BELL_ROWS } = {}) {
   const followCount = new Set(
     (Array.isArray(follows) ? follows : []).map((f) => String(f?.username || '').toLowerCase()).filter(Boolean),
   ).size;
   const mark = Number(watermark) || 0;
+  const isUnread = seen !== undefined ? unreadPredicate(seen) : (r) => r.ts > mark;
   const cap = Number(max) > 0 ? Number(max) : MAX_BELL_ROWS;
   const rows = selectBellEntries({ follows, entries, shares, news, global })
     .slice(0, cap)
-    .map((r) => ({ ...r, unread: r.ts > mark }));
+    .map((r) => ({ ...r, unread: isUnread(r) }));
   const unread = rows.reduce((n, r) => n + (r.unread ? 1 : 0), 0);
   return { rows, unread, followCount };
 }

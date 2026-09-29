@@ -11,6 +11,7 @@ import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
 import { workerGetNews, workerGetNewsSources, workerGetFollowedNews, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
+import { getBellSeen as workerGetBellSeen, markBellSeen as workerMarkBellSeen } from './member-bell-seen-client.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
 import { getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction, newsItemDecide as workerNewsItemDecide } from './member-admin-client.mjs';
 import { OperationError, requireIdentity } from './operations-core.mjs';
@@ -220,6 +221,22 @@ export function mapNewsErr(err, what) {
   if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', `Sign in to ${what}.`);
   if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', `${what} is a members-only perk. Upgrade at https://gbti.network.`);
   throw new OperationError('news-failed', err?.message || `the ${what} request failed`);
+}
+
+// Owner, 2026-09-29: what the member has read in the notification bells, on their account, so a read anywhere clears
+// it everywhere (membership/bell-seen.mjs). GET -> { bellSeen }; POST { bellSeen } merges and answers the merged one.
+export async function getBellSeen(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerGetBellSeen({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
+  catch (err) { throw new OperationError(`Could not read your notification state: ${err?.message || err}`); }
+}
+
+export async function markBellSeen(ctx, body) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerMarkBellSeen(body?.bellSeen ?? {}, { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
+  catch (err) { throw new OperationError(`Could not save your notification state: ${err?.message || err}`); }
 }
 
 // sow-386: the bells' members-only news rows (stories from the sources the member follows) -> { items }.

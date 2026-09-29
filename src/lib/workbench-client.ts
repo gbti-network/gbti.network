@@ -1012,6 +1012,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
 
     // ----- SOW-023/046: the follow graph + prefs (Following), cookie-ready KV -----
     getFollows() { return workerGet('/membership/follows'); }, // { following }
+    // Owner, 2026-09-29: what the member has read in the bells, on their account, so a read here clears the extension too.
+    getBellSeen() { return workerGet('/membership/notifications').then((r: any) => ({ bellSeen: r?.bellSeen ?? { groups: {} } })); },
+    markBellSeen(bellSeen: unknown) { return workerPost('/membership/notifications/seen', { bellSeen }).then((r: any) => ({ bellSeen: r?.bellSeen ?? { groups: {} } })); },
     setFollow({ username, on = true, notify }: any) { return workerPost('/membership/follows', { username, on, notify }); }, // SOW-186 C3: optional per-follow notify matrix
     // UNWRAP the envelope. `/membership/prefs` answers `{ ok, prefs: { categories, followedChannels } }`,
     // but every consumer of client.getPrefs/setPrefs reads `.categories` off the TOP level: the comment on

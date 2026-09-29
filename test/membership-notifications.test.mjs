@@ -29,7 +29,7 @@ const share = (slug) => ({ type: 'share', slug, url: `/shares/${slug}/`, title: 
 test('GET: an empty store returns no notifications and zero unseen', async () => {
   const r = await handleNotifications(req('GET'), {}, { kv: fakeKv(), authorize: member, now });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, notifications: [], unseen: 0 });
+  assert.deepEqual(r.body, { ok: true, notifications: [], unseen: 0, bellSeen: { groups: {} } }); // owner 2026-09-29: the bells' read record rides along
 });
 
 test('deliverNotification writes under notifications:<recipient> and GET reads it back', async () => {

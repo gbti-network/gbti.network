@@ -1,9 +1,10 @@
 // SOW-042 P3: the pure activity-bell aggregation (client-ui/src/activity-bell.mjs). Covers the SOW P5 contract:
-// an errored/missing source contributes ZERO (never a phantom unread), the per-source ms watermark, and markSeen
-// advancing the watermark on panel open. sow-404 removed the "Your PRs" group and its seen-SET of PR numbers.
+// an errored/missing source contributes ZERO (never a phantom unread), the old per-source ms watermark (still read),
+// and markAllGroups recording a read on the account's record (owner, 2026-09-29). sow-404 removed the "Your PRs"
+// group and its seen-SET of PR numbers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBell, unreadItems, markSeen, BELL_GROUPS } from '../client-ui/src/activity-bell.mjs';
+import { buildBell, unreadItems, markAllGroups, BELL_GROUPS } from '../client-ui/src/activity-bell.mjs';
 import * as bellModule from '../client-ui/src/activity-bell.mjs';
 
 const T0 = Date.parse('2026-06-10T00:00:00Z');
@@ -69,16 +70,13 @@ test('an empty watermark makes every timestamped item unread', () => {
   assert.equal(unreadItems('replies', [reply('a', T0), reply('b', T1)], {}).length, 2);
 });
 
-test('markSeen advances every group to now and writes no pull request set', () => {
-  const sources = { replies: [reply('a', T0)], following: [], prs: [{ id: 7, ts: 7 }, { id: 8, ts: 8 }] };
-  const seen = markSeen(sources, T1);
-  assert.equal(seen.replies, T1);
-  assert.equal(seen.following, T1);
-  assert.equal(seen.approvals, T1);
-  assert.equal('review' in seen, false);
-  assert.equal('prsSeen' in seen, false, 'sow-404: the pull request seen-set is gone');
-  assert.equal('prs' in seen, false);
-  // After marking seen, nothing is unread.
+test('markAllGroups records a read for every group and nothing for a retired one', () => {
+  const sources = { replies: [reply('a', T1 - 1000)], following: [], prs: [{ id: 7, ts: 7 }, { id: 8, ts: 8 }] };
+  const seen = markAllGroups(null, sources, T1);
+  for (const key of ['replies', 'following', 'approvals']) assert.equal(seen.groups[key].at, T1, key);
+  assert.deepEqual(seen.groups.replies.ids, ['a']);
+  assert.deepEqual(Object.keys(seen.groups).sort(), ['approvals', 'following', 'replies'], 'sow-404: no prs, no review');
+  // After marking read, nothing is unread.
   assert.equal(buildBell(sources, seen).total, 0);
 });
 
@@ -95,14 +93,24 @@ test('buildBell counts holding approvals as unread past the watermark', () => {
 // Owner report 2026-09-24: "Mark all read" left 2 notices every time. markSeen wrote watermarks for replies and
 // following only, so the approvals group (added later) was never marked. The test above missed it because its
 // fixture had no approvals. This one puts an item in EVERY group, so a group added later is covered automatically.
-test('markSeen clears every bell group, including approvals and any group added later', () => {
+test('markAllGroups clears every bell group, including approvals and any group added later', () => {
   const sources = {};
-  for (const g of BELL_GROUPS) sources[g.key] = [{ id: `${g.key}:1`, ts: T0, title: 'x', sub: 'y' }];
-  assert.ok(buildBell(sources, {}).total >= BELL_GROUPS.length, 'control: every group starts unread');
-  const out = buildBell(sources, markSeen(sources, T1));
+  for (const g of BELL_GROUPS) sources[g.key] = [{ id: `${g.key}:1`, ts: T1 - 1000, title: 'x', sub: 'y' }];
+  assert.ok(buildBell(sources, { groups: {} }).total >= BELL_GROUPS.length, 'control: every group starts unread');
+  const out = buildBell(sources, markAllGroups(null, sources, T1));
   for (const g of out.groups) assert.equal(g.unread, 0, `${g.key} still unread after Mark all read`);
   assert.equal(out.total, 0);
   // A holding item enqueued AFTER the mark badges again.
+  const marked = markAllGroups(null, { ...sources, approvals: [] }, T1);
   sources.approvals.push({ id: 'syn:new', ts: T1 + 1000, title: 'New', sub: 'z' });
-  assert.equal(buildBell(sources, markSeen({ ...sources, approvals: [] }, T1)).total, 1);
+  assert.equal(buildBell(sources, marked).total, 2, 'the new one, and the old one that was not shown when marking');
+});
+
+// Owner, 2026-09-29: an approval turns "needs approval" half an hour or more after it was queued, so it arrives
+// carrying an OLD time. With a "last read" time it was silently read; now it badges until it is itself marked.
+test('an approval that arrives after the last read, dated before it, still badges', () => {
+  const marked = markAllGroups(null, { approvals: [] }, T1);
+  const late = { approvals: [{ id: 'syn:late', ts: T1 - 40 * 60 * 1000, title: 'Overdue', sub: 'x' }] };
+  assert.equal(buildBell(late, marked).total, 1);
+  assert.equal(buildBell(late, markAllGroups(marked, late, T1 + 1000)).total, 0, 'and clears once marked');
 });

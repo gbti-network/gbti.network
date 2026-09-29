@@ -18983,6 +18983,34 @@ async function workerNewsOpened({ token, signupBase, fetch: fetch2 = globalThis.
   return res.json();
 }
 
+// client/src/member-bell-seen-client.mjs
+var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var BellSeenClientError = class extends Error {
+};
+async function call5(path, method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new BellSeenClientError("not signed in");
+  const res = await fetch2(trimBase8(signupBase) + path, {
+    method,
+    headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
+    ...body ? { body: JSON.stringify(body) } : {}
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new BellSeenClientError(data?.message || data?.error || `read state request failed (${res.status})`);
+  return data;
+}
+async function getBellSeen(opts) {
+  const data = await call5("/membership/notifications", "GET", null, opts);
+  return { bellSeen: data?.bellSeen && typeof data.bellSeen === "object" ? data.bellSeen : { groups: {} } };
+}
+async function markBellSeen(bellSeen, opts) {
+  const data = await call5("/membership/notifications/seen", "POST", { bellSeen }, opts);
+  return { bellSeen: data?.bellSeen && typeof data.bellSeen === "object" ? data.bellSeen : { groups: {} } };
+}
+
 // membership/content-types.mjs
 var LEGACY_TYPE_ALIASES = Object.freeze({
   product: "project"
@@ -19057,12 +19085,12 @@ function filterActivity(activity, types2) {
 }
 
 // client/src/member-admin-client.mjs
-var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase9 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
 async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19076,7 +19104,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
 }
 async function getOverridesMaps({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/overrides", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/overrides", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19090,7 +19118,7 @@ async function getOverridesMaps({ token, signupBase, fetch: fetch2 = globalThis.
 }
 async function getAuthorTargets({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/author/targets", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/author/targets", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19104,7 +19132,7 @@ async function getAuthorTargets({ token, signupBase, fetch: fetch2 = globalThis.
 }
 async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/discord-channels", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/discord-channels", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19118,7 +19146,7 @@ async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThi
 }
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -19134,7 +19162,7 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function postAdminGovernance({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, payload = {} }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/author", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/author", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ ...payload, action })
@@ -19149,7 +19177,7 @@ async function postAdminGovernance({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/coupon-usage", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/coupon-usage", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19163,7 +19191,7 @@ async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function getCouponPool({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/coupon-pool", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/coupon-pool", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19177,7 +19205,7 @@ async function getCouponPool({ token, signupBase, fetch: fetch2 = globalThis.fet
 }
 async function getSponsorInquiries({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/sponsor-inquiries", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/sponsor-inquiries", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -19191,7 +19219,7 @@ async function getSponsorInquiries({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function inviteAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/invites", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/invites", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19206,7 +19234,7 @@ async function inviteAdminRequest({ token, signupBase, method = "GET", body = nu
 }
 async function editorialAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/editorial", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/editorial", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19221,7 +19249,7 @@ async function editorialAdminRequest({ token, signupBase, method = "GET", body =
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase9(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -19232,7 +19260,7 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase9(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -19243,7 +19271,7 @@ async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/social-queue", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/social-queue", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ action, id })
@@ -19258,7 +19286,7 @@ async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 
 }
 async function newsItemDecide({ action, guid: guid3, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/news-item", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/news-item", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ action, guid: guid3 })
@@ -19401,6 +19429,24 @@ function mapNewsErr(err, what) {
   if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", `Sign in to ${what}.`);
   if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError("membership-required", `${what} is a members-only perk. Upgrade at https://gbti.network.`);
   throw new OperationError("news-failed", err?.message || `the ${what} request failed`);
+}
+async function getBellSeen2(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await getBellSeen({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError(`Could not read your notification state: ${err?.message || err}`);
+  }
+}
+async function markBellSeen2(ctx, body) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await markBellSeen(body?.bellSeen ?? {}, { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError(`Could not save your notification state: ${err?.message || err}`);
+  }
 }
 async function getFollowedNews(ctx) {
   requireIdentity(ctx);
@@ -21182,6 +21228,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getNewsSources(ctx));
       case "/api/news-following":
         return ok(await getFollowedNews(ctx));
+      case "/api/bell-seen":
+        return ok(method === "POST" ? await markBellSeen2(ctx, body ?? {}) : await getBellSeen2(ctx));
       case "/api/prefs":
         return ok(method === "POST" ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case "/api/news-publish":

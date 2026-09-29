@@ -4,12 +4,15 @@
 //   - To approve  -> the syndication queue (superadmin only) -> the website's Publishing Activity
 //   - Replies     -> replies on the caller's OWN Shares -> the Shares filter on the unified feed (newtab.html#tab=share)
 //   - Following   -> getFollows() ∩ the activity-index -> the in-extension reader (newtab feed deep-link)
-// Unread = items past a localStorage watermark (gbti-bell-seen), set when the panel opens. A Locked/unknown account
-// hides the bell entirely (no count). Content-item replies + a cross-device server marker defer to P4. Throttle: a
+// Unread = items not yet marked read on the member's ACCOUNT (owner, 2026-09-29; membership/bell-seen.mjs), marked
+// when the panel opens, shared with the website bell and every device. A Locked/unknown account hides the bell
+// entirely (no count). Content-item replies defer to P4. Throttle: a
 // light poll + on-open; the replies fan-out over the caller's own Shares is hard-bounded.
 // sow-404 (owner, 2026-09-25): the "Your PRs" group and its client.listPRs() read are gone, for every account.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildBell, markSeen, approvalsNeeded } from '../activity-bell.mjs';
+import { buildBell, markAllGroups, unreadItems, approvalsNeeded } from '../activity-bell.mjs';
+import { seedFromWatermark, sameSeen } from '../../../membership/bell-seen.mjs';
+import { readLocalSeen, writeLocalSeen, readLegacy, fetchAccountSeen, pushAccountSeen, onLocalSeenChange, mergeSeen } from '../bell-seen-sync.mjs';
 import { canSeeShares, toMs } from '../all-merge.mjs';
 import { selectBellEntries } from '../notification-bell-core.mjs'; // sow-386: the In app settings, shared with the website bell
 import { buildReadHash } from '../browse-hash.mjs';
@@ -17,15 +20,18 @@ import { relTime, absTime } from '../time-core.mjs'; // sow-221 follow-up: the s
 
 const SITE = 'https://gbti.network';
 const POLL_MS = 120000; // a light poll (the panel-open refresh is the responsive path)
-const SEEN_KEY = 'gbti-bell-seen';
+// Owner, 2026-09-29: the read state is the ACCOUNT's (membership/bell-seen.mjs, synced through bell-seen-sync.mjs), so a
+// read here clears the website bell's matching items and the reverse. This was a per-group "last read" object in
+// this browser only, loaded once per tab (so another open tab's refresh brought cleared items back); it is read once
+// to seed the account record and never written again.
+const LEGACY_SEEN_KEY = 'gbti-bell-seen';
 const MAX_OWN_SHARES = 20; // bound the replies-on-Shares fan-out (one listShareComments per own Share)
 
 const BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 // SOW-095: the "All marked read" confirmation check.
 const CHECK = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
 
-function loadSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {}; } catch { return {}; } }
-function saveSeen(s) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch { /* private mode */ } }
+function loadLegacySeen() { try { return JSON.parse(readLegacy(LEGACY_SEEN_KEY)) || {}; } catch { return {}; } }
 
 const CSS = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
@@ -58,9 +64,9 @@ const CSS = `
 class GbtiActivityBell extends GbtiElement {
   connectedCallback() {
     super.connectedCallback();
-    this._seen = loadSeen();
+    this._seen = null;   // the account's read record (merged with this browser's copy on every load)
     this._bell = null;   // the view-model, or null while the first load is pending
-    this._sources = null; // the last fetched raw sources (for markSeen on open)
+    this._sources = null; // the last fetched raw sources (to mark read on open)
     this._gated = true;  // hidden until membership resolves to paid/trialing
     this._open = false;
     this._login = null;
@@ -86,6 +92,33 @@ class GbtiActivityBell extends GbtiElement {
     clearTimeout(this._flashTimer);
     if (this._onDoc) document.removeEventListener('click', this._onDoc);
     if (this._onVis && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVis);
+    this._offSeen?.();
+  }
+
+  // A read made in another tab of the extension lands here at once (the browser's storage event).
+  _listenForSeen(login) {
+    if (this._seenFor === login) return;
+    this._offSeen?.();
+    this._seenFor = login;
+    this._offSeen = onLocalSeenChange(login, (next) => this._adoptSeen(next));
+  }
+
+  _adoptSeen(next) {
+    const merged = mergeSeen(this._seen, next);
+    if (sameSeen(merged, this._seen)) return;
+    this._seen = merged;
+    writeLocalSeen(this._login, merged);
+    if (this._sources) this._bell = buildBell(this._sources, this._seen);
+    this.render();
+  }
+
+  // Record everything shown as read: the badge clears now, the account is told in the background.
+  _commitRead() {
+    if (!this._sources || !this._login) return;
+    this._seen = markAllGroups(this._seen, this._sources, Date.now());
+    writeLocalSeen(this._login, this._seen);
+    this._bell = buildBell(this._sources, this._seen);
+    pushAccountSeen(this.client, this._seen).then((merged) => { if (merged) this._adoptSeen(merged); });
   }
 
   _safe(fn) { return Promise.resolve().then(fn).catch(() => []); }
@@ -100,8 +133,22 @@ class GbtiActivityBell extends GbtiElement {
       // The bell is for active members only; a Locked/unknown/signed-out account hides it (no count).
       if (!canSeeShares(membership) || !this._login) { this._gated = true; this._bell = { total: 0, groups: [] }; this.render(); return; }
       this._gated = false;
-      const sources = await this._fetchSources(this._login);
+      this._listenForSeen(this._login);
+      const [sources, account] = await Promise.all([this._fetchSources(this._login), fetchAccountSeen(this.client)]);
       this._sources = sources;
+      // Re-read this browser's copy EVERY load (another tab may have marked read since this one opened) and merge
+      // the account's record in. The first time the account has nothing for a group, this browser's old "last read"
+      // time seeds it, so the change of model brings back nothing already read.
+      let seen = mergeSeen(mergeSeen(this._seen, readLocalSeen(this._login)), account);
+      const legacy = loadLegacySeen();
+      let seeded = seen;
+      for (const key of ['approvals', 'replies', 'following']) {
+        const items = (sources[key] || []).map((it) => ({ id: String(it?.id ?? ''), ts: toMs(it?.ts) }));
+        seeded = seedFromWatermark(seeded, key, items, Number(legacy?.[key]) || 0);
+      }
+      if (!sameSeen(seeded, seen)) { seen = seeded; pushAccountSeen(this.client, seen); }
+      this._seen = seen;
+      writeLocalSeen(this._login, seen);
       this._bell = buildBell(sources, this._seen);
       this.render();
     } finally { this._busy = false; }
@@ -164,7 +211,7 @@ class GbtiActivityBell extends GbtiElement {
       global: prefs?.notify,
     });
     return rows.map((r) => ({
-      id: `f:${r.id}`,
+      id: r.id, // the website bell's id for the same row, so a read on either surface clears the other
       ts: r.ts,
       title: r.target || 'New activity',
       sub: r.kind === 'news' ? r.actor : `@${r.actor}`,
@@ -201,21 +248,19 @@ class GbtiActivityBell extends GbtiElement {
   _toggle() {
     this._open = !this._open;
     if (this._open && this._sources) {
-      // Mark everything currently shown as seen (the badge clears); later items re-badge against this watermark.
-      this._seen = markSeen(this._sources);
-      saveSeen(this._seen);
-      this._bell = buildBell(this._sources, this._seen); // recompute -> unread now 0, items still listed
+      // Opening the panel marks everything shown as read (the badge clears); later items still badge.
+      this._commitRead();
     }
     this.render();
   }
 
   _markAllSeen() {
-    if (this._sources) { this._seen = markSeen(this._sources); saveSeen(this._seen); this._bell = buildBell(this._sources, this._seen); }
+    this._commitRead();
     this.render();
   }
 
   // SOW-095: the "Mark all read" click gets a brief processing indicator, then a confirmation, so the action reads
-  // as acknowledged even though the write is a fast LOCAL watermark. Cosmetic pacing (not a fake delay); the
+  // as acknowledged even though the badge clears locally first. Cosmetic pacing (not a fake delay); the
   // confirmation auto-dismisses back to the settled all-read state.
   _doMarkAll() {
     if (this._clearFlash) return; // already running
@@ -224,7 +269,7 @@ class GbtiActivityBell extends GbtiElement {
     clearTimeout(this._flashTimer);
     this._flashTimer = setTimeout(() => {
       this._clearFlash = 'done';
-      this._markAllSeen(); // the watermark write + a render that shows the "All marked read" confirmation
+      this._markAllSeen(); // the read record write + a render that shows the "All marked read" confirmation
       this._flashTimer = setTimeout(() => { this._clearFlash = null; this.render(); }, 1500);
     }, 350);
   }
@@ -249,12 +294,11 @@ class GbtiActivityBell extends GbtiElement {
   }
 
   _panelHtml() {
-    const seen = this._seen || {};
+    const seen = this._seen || { groups: {} };
     const groups = (this._bell?.groups || []).filter((g) => g.items.length);
-    const unreadSet = new Map(); // per-group: the set of unread item ids (for the dot)
+    const unreadSet = new Map(); // per-group: the set of unread item ids (for the dot), decided as the badge is
     for (const g of (this._bell?.groups || [])) {
-      const since = Number(seen[g.key]) || 0;
-      unreadSet.set(g.key, new Set(g.items.filter((it) => toMs(it.ts) > since).map((it) => it.id)));
+      unreadSet.set(g.key, new Set(unreadItems(g.key, g.items, seen).map((it) => it.id)));
     }
     const body = groups.length
       ? groups.map((g) => {
