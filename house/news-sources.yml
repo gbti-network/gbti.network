@@ -660,3 +660,8 @@ sources:
     url: https://www.pushsquare.com/feeds/news
     description: www.pushsquare.com
     enabled: true
+  - id: new-atlas
+    name: New Atlas
+    url: https://newatlas.com/index.rss
+    description: newatlas.com
+    enabled: true
