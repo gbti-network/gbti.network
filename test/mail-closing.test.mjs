@@ -156,7 +156,7 @@ test('the sign-off closes every issue: centred, italic, under the subscribe box,
   assert.ok(email.text.includes(`\n\n${SIGN_OFF}\n\n`), 'the text part carries it too');
 });
 
-test('the web edition\'s social image is the Coffee Ring design, 1200 x 630, served from the site', async () => {
+test('the web edition\'s social image is the engraved coffee design, 1200 x 630, served from the site', async () => {
   const { DIGEST_OG_IMAGE } = await import('../membership/mail-render.mjs');
   const html = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web' }).html;
   assert.ok(html.includes(`<meta property="og:image" content="${SITE}${DIGEST_OG_IMAGE}">`));

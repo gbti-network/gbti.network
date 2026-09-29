@@ -50,9 +50,11 @@ import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
 import { WEEKLY_HEADER_LINE, CLOSING_LEAD, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
-// The web edition's social image: the "Coffee Ring" design in its light mode, chosen by the owner on 2026-09-29.
-// Served from the site (public/brand/digest/og.png), 1200 x 630.
-export const DIGEST_OG_IMAGE = '/brand/digest/og.png';
+// The web edition's social image: the engraved coffee cup in line and flat tone, chosen by the owner on 2026-09-29
+// (it replaced the first pick, og.png, the same day). Served from the site, 1200 x 630. A new design gets a NEW
+// file name: link previews cache the image by its address, so overwriting the old file would leave every preview
+// already fetched showing the old picture.
+export const DIGEST_OG_IMAGE = '/brand/digest/og-engraved.png';
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
