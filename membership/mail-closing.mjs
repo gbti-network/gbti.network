@@ -19,6 +19,20 @@ import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
 /** The line under the weekly greeting. The welcome issue carries its own (mail-digest.mjs). */
 export const WEEKLY_HEADER_LINE = 'Thanks for being a subscriber to the GBTI Digest. Inside you will find the latest projects, shares and agent skills created by our network community.';
 
+/**
+ * The sign-off: the last line before the social row, centred, italic and a little larger than the closing
+ * (owner, 2026-09-29). It sits under the web edition's subscribe box, and in the email, which has no box, directly
+ * under the closing.
+ */
+export const SIGN_OFF = 'Wishing you a great week ahead! 🙏 🙌';
+
+export function signOffHtml(p, { esc }) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
+    + `<tr><td width="536" align="center" style="width:536px;padding:26px 28px 0;text-align:center">`
+    + `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;font-style:italic;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:22px">${esc(SIGN_OFF)}</div>`
+    + `</td></tr></table>`;
+}
+
 /** Where each closing link points, keyed by its click placement. */
 export const CLOSING_TARGETS = Object.freeze({
   'closing-membership': '/membership/',
@@ -36,7 +50,7 @@ const COPY = Object.freeze({
     '.',
   ],
   member: [
-    'To contribute to it, visit your ',
+    'To contribute to future digests, visit your ',
     { text: 'WorkBench', placement: 'closing-workbench' },
     ' inside your user account area. Also do not forget that we provide a ',
     { text: 'Chrome extension', placement: 'closing-extension' },
@@ -55,11 +69,13 @@ export function closingHtml(p, { audience, track, esc }) {
   const parts = COPY[closingAudience(audience)].map((part) => (typeof part === 'string'
     ? esc(part)
     : `<a href="${esc(track(CLOSING_TARGETS[part.placement], part.placement))}" style="color:${p.footerLink};text-decoration:underline">${esc(part.text)}</a>`)).join('');
-  const para = (html, pad) => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:${p.inkSoft};mso-line-height-rule:exactly;line-height:19px;padding-top:${pad}px">${html}</div>`;
+  const para = (html, pad, extra = '') => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;${extra}color:${p.inkSoft};mso-line-height-rule:exactly;line-height:19px;padding-top:${pad}px">${html}</div>`;
+  // Owner, 2026-09-29: the member paragraph is set in italics; the invitation stays upright.
+  const italic = closingAudience(audience) === 'member' ? 'font-style:italic;' : '';
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="536" style="width:536px">`
     + `<tr><td width="536" style="width:536px;padding:30px 28px 0">`
     + para(esc(LEAD), 0)
-    + para(parts, 8)
+    + para(parts, 8, italic)
     + `</td></tr></table>`;
 }
 

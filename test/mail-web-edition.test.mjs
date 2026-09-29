@@ -206,8 +206,8 @@ test('?secret=true previews the member closing, drops the subscribe box, and unl
   const kv = kvWith({ [`mail:issue:${ID}`]: fixtureIssue(), [statsKey(ID)]: { sent: 12 } });
   const pub = await (await get(`/digest/${ID}`, kv)).text();
   const mem = await (await get(`/digest/${ID}?secret=true`, kv)).text();
-  assert.ok(pub.includes('please visit our') && pub.includes('<form') && !pub.includes('To contribute to it'), 'the public view');
-  assert.ok(mem.includes('To contribute to it') && !mem.includes('please visit our') && !mem.includes('<form'), 'the member view');
+  assert.ok(pub.includes('please visit our') && pub.includes('<form') && !pub.includes('To contribute to future digests'), 'the public view');
+  assert.ok(mem.includes('To contribute to future digests') && !mem.includes('please visit our') && !mem.includes('<form'), 'the member view');
   assert.ok(mem.includes('Farley') && pub.includes('Farley'), 'the same items either way');
   for (const other of ['?secret=1', '?secret=TRUE', '?secret=', '?other=true']) {
     assert.ok((await (await get(`/digest/${ID}${other}`, kv)).text()).includes('please visit our'), `${other} is the public view`);

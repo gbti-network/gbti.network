@@ -49,7 +49,7 @@ import { TIER, tierLabel } from './tiers.mjs'; // sow-316: the public tier name,
 import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner's pitch copy and sponsor slot
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
-import { WEEKLY_HEADER_LINE, closingHtml, closingText, closingAudience } from './mail-closing.mjs'; // owner copy, 2026-09-29
+import { WEEKLY_HEADER_LINE, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -624,6 +624,8 @@ export function renderIssue(issue, ctx = {}) {
     // The web edition's subscribe box sits under the closing's invitation (owner, 2026-09-29; it used to open the
     // page). A member's view (?secret=true on the web edition) has no invitation, so it has no box either.
     + (web && closingAudience(ctx.audience) !== 'member' ? subscribeBoxHtml(p, { action: ctx.subscribeAction || '/mail/subscribe' }) : '')
+    // The sign-off, centred under the subscribe box (or under the closing in the email, which has no box).
+    + signOffHtml(p, { esc: escapeHtml })
     // sow-383: the social row, after every solicitation and before the footer, in both editions.
     + socialRowHtml(p, { siteUrl, track, web, theme: ctx.theme === 'dark' ? 'dark' : 'light' });
 
@@ -684,7 +686,7 @@ export function renderIssue(issue, ctx = {}) {
   const webLine = webUrl ? `View this issue on the web: ${webUrl}\n` : '';
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n${webLine}`
     + `${greetingText}\n${headerLineText}\n${launchText}\n`
-    + `${filledText}${emptyText}${ctaText}${sponsorLine}${closingLine}\n\n${socialText(track)}\n\n`
+    + `${filledText}${emptyText}${ctaText}${sponsorLine}${closingLine}\n\n${SIGN_OFF}\n\n${socialText(track)}\n\n`
     + `----\n${trackUrl('/', links, 'footer-home')}\n${prefsText}${unsubText}${postalText}\n`;
 
   return { subject, html, text };

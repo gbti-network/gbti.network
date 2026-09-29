@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { renderIssue } from '../membership/mail-render.mjs';
-import { WEEKLY_HEADER_LINE, CLOSING_TARGETS, closingAudience } from '../membership/mail-closing.mjs';
+import { WEEKLY_HEADER_LINE, CLOSING_TARGETS, closingAudience, SIGN_OFF } from '../membership/mail-closing.mjs';
 import { FIXED_TARGETS, resolveClick } from '../membership/mail-click.mjs';
 import { DIGEST_ENTITLED_KV_KEY } from '../membership/digest-entitlement.mjs';
 import { WEB_STORE_URL } from '../src/lib/extension-store.mjs';
@@ -21,7 +21,7 @@ const ISSUE = {
 };
 const LEAD = 'Thanks everyone for paying attention! We share a digest like this one every week.';
 const GUEST = 'If you are interested in joining and writing for the GBTI Network community';
-const MEMBER = 'To contribute to it, visit your';
+const MEMBER = 'To contribute to future digests, visit your';
 const decode = (s) => s.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
 
 test('the weekly header line is the owner copy, in both halves', () => {
@@ -131,4 +131,31 @@ test('WIRING: an unreadable or missing list sends everybody the invitation', asy
     const { renderIssue: render } = await mailDrainDeps({ ...ENV, SIGNUP_KV: kv });
     assert.ok(render(ISSUE, { subscriber: { source: 'member', githubId: '42' } }).html.includes(GUEST));
   }
+});
+
+test('the member paragraph is italic and the invitation is not (owner, 2026-09-29)', () => {
+  const para = (html, marker) => {
+    const at = html.indexOf(marker);
+    return html.slice(html.lastIndexOf('<div style="', at), at);
+  };
+  assert.match(para(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).html, MEMBER), /font-style:italic/);
+  assert.doesNotMatch(para(renderIssue(ISSUE, { siteUrl: SITE }).html, GUEST), /font-style:italic/);
+  assert.doesNotMatch(renderIssue(ISSUE, { siteUrl: SITE, audience: 'member' }).text, /To contribute to it,/);
+});
+
+test('the sign-off closes every issue: centred, italic, larger, under the subscribe box, above the social row', () => {
+  const email = renderIssue(ISSUE, { siteUrl: SITE });
+  const web = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web' }).html;
+  const member = renderIssue(ISSUE, { siteUrl: SITE, edition: 'web', audience: 'member' }).html;
+  for (const [name, html] of [['email', email.html], ['web', web], ['web member view', member]]) {
+    const at = html.indexOf(SIGN_OFF);
+    assert.ok(at > html.indexOf(LEAD), `${name}: under the closing`);
+    assert.ok(at < html.indexOf('<!--social-->'), `${name}: above the social row`);
+    const style = html.slice(html.lastIndexOf('<div style="', at), at);
+    assert.match(style, /font-size:15px;font-style:italic/, `${name}: larger and italic`);
+    assert.match(html.slice(html.lastIndexOf('<td ', at), at), /text-align:center/, `${name}: centred`);
+  }
+  assert.ok(web.indexOf(SIGN_OFF) > web.indexOf('</form>'), 'web: under the subscribe box');
+  assert.ok(!WEEKLY_HEADER_LINE.includes('great week'), 'it left the header line');
+  assert.ok(email.text.includes(`\n\n${SIGN_OFF}\n\n`), 'the text part carries it too');
 });
