@@ -59,9 +59,10 @@ test('the page a browser gets for a spent token follows the writing conventions 
 });
 
 // ---- The Worker side: the reason in the log, a page for a browser ------------------------------------------------
-// Local fixtures rather than the ones inside test/worker.test.mjs (1,700 lines and not exporting them): a fetch stub
-// shaped like the Worker's callers use it (.ok, .status, .text()), a minimal env for the rejection path (the token
-// check runs before the rate limit, the coupon lookup and OAuth, so nothing else is touched), and a request builder.
+// Local fixtures, kept apart from the shared ones in test/lib/worker-fixtures.mjs on purpose: a fetch stub shaped
+// like the Worker's callers use it (.ok, .status, .text()), a minimal env for the rejection path (the token check
+// runs before the rate limit, the coupon lookup and OAuth, so nothing else is touched; the shared fakeEnv provisions
+// KV, Stripe and OAuth, and would stop this env from proving that), and a request builder.
 function recorder(responses) {
   const calls = [];
   let i = 0;
