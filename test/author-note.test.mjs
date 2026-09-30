@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AUTHOR_NOTE_BLOCK, introPathFor, buildAuthorNoteHtml, NOTE_PLACEHOLDER, noteEditSource, noteAfterCommit } from '../src/lib/author-note.mjs';
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const COMMENTS = fs.readFileSync(fileURLToPath(new URL('../src/components/blog/Comments.astro', import.meta.url)), 'utf8');
 // The pinned block is the `{intro && (...)}` branch; scope the assertions to it so an unrelated class
@@ -93,8 +94,12 @@ test('the placeholder is only ever a stand-in: a real note and the read view are
 // reaches for these helpers rather than carrying its own copy of the placeholder, which is how the two would
 // drift back apart.
 test('DRIFT: the preview edits the note through the shared helpers', () => {
-  const page = fs.readFileSync(fileURLToPath(new URL('../src/pages/workbench/preview.astro', import.meta.url)), 'utf8');
-  assert.match(page, /noteEditSource, noteAfterCommit \} = await import\('\.\.\/\.\.\/lib\/author-note\.mjs'\)/);
+  // The page script moved into src/lib at the 900-line limit (2026-09-30), so the import is now module-relative.
+  // Both halves import the helpers statically: the edit half for the note editing loop, the render half because
+  // noteDoc and srcOf live there.
+  const page = previewSource();
+  assert.match(page, /^import \{ buildAuthorNoteHtml, noteEditSource, noteAfterCommit \} from '\.\/author-note\.mjs';$/m);
+  assert.match(page, /^import \{ noteEditSource, noteAfterCommit, introPathFor \} from '\.\/author-note\.mjs';$/m);
   assert.match(page, /const srcOf = \(doc: PvDoc\) => \(doc === noteDoc \? noteEditSource\(doc\.get\(\), editing\) : doc\.get\(\)\);/);
   assert.match(page, /set: \(v\) => \{ draft\.authorNote = noteAfterCommit\(v\); \}/);
   assert.match(page, /mdBlocks\(noteEditSource\(src, true\)\)/);

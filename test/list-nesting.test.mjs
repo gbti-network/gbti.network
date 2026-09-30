@@ -18,6 +18,7 @@ import {
 import { renderMarkdown, renderMarkdownWithBlocks } from '../client/src/markdown.mjs';
 import { parseBlocks, serializeBlocks } from '../client-ui/src/markdown-blocks.mjs';
 import { readBlockDom, applyBlockEdit, planListIndent, readListDom } from '../client-ui/src/block-commit.mjs';
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const toHtml = (n) => toHtmlRaw(n, { characterReferences: { useNamedReferences: true } });
@@ -158,7 +159,7 @@ test('the editor and the Preview wire Tab and Shift+Tab, and both read lists bac
   assert.ok(de.includes("else if (f === 'list') { const items = readListDom(el, (h) => inlineHtmlToMd(h));"), 'the editor reads lists through the shared walk');
   assert.ok(de.includes('return listHtml(items, inlineMdToHtml, { ordered: !!b.ordered, rootAttrs:'), 'and renders them nested');
   assert.ok(!de.includes("Array.from(el.querySelectorAll('li')).map((li) => inlineHtmlToMd(li.innerHTML))"), 'the flat read is gone');
-  const pv = read('src/pages/workbench/preview.astro');
+  const pv = previewSource();
   assert.ok(pv.includes("if (ev.key === 'Tab' && editing && (el.tagName === 'UL' || el.tagName === 'OL')) {"), 'the Preview handles Tab in a list');
   assert.ok(pv.includes("return planListIndent((edited || before).join('\\n'), index, delta);"), 'through the splice path, text edits folded in first');
   const md = read('client/src/markdown.mjs');

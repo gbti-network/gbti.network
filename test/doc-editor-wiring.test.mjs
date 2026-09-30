@@ -12,12 +12,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { previewSource, PREVIEW_FILES } from './lib/preview-source.mjs';
 
 // sow-327: the block editor's stylesheet moved to client-ui/src/doc-editor-css.mjs when the element crossed
 // the 900-line cap. These assertions are about the COMPONENT, which is now two files, so they read both.
 const editor = fs.readFileSync(new URL('../client-ui/src/elements/gbti-doc-editor.mjs', import.meta.url), 'utf8')
   + fs.readFileSync(new URL('../client-ui/src/doc-editor-css.mjs', import.meta.url), 'utf8');
-const preview = fs.readFileSync(new URL('../src/pages/workbench/preview.astro', import.meta.url), 'utf8');
+// The Preview's page script moved into src/lib/preview-page.ts and preview-edit.ts at the 900-line limit
+// (2026-09-30); previewSource() reads the page and both modules, in order.
+const preview = previewSource();
 
 /** The body of a top-level 2-space-indented method, from its signature to the closing `  }`. */
 function methodBody(src, signature) {
@@ -113,6 +116,14 @@ test('Preview handles Backspace in an empty block, and routes it through the pur
   assert.match(code, /isCollapsed/, 'the Backspace branch does not require a collapsed caret');
   assert.match(code, /planBlockDelete\(/,
     'the delete does not use the tested planner, so its line arithmetic is untested browser-only code');
+});
+
+test('the Preview page and its two script modules each stay under the 900-line cap', () => {
+  // The cap is PER FILE, so it is measured per file, never on the joined text the guards above read.
+  for (const f of PREVIEW_FILES) {
+    const lines = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').split('\n').length;
+    assert.ok(lines <= 900, `${f} is ${lines} lines; the cap is 900`);
+  }
 });
 
 // --- 2026-08-29: the block toolbar sat on top of the text it was meant to sit beside -----------------------

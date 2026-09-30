@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { buildArticleToc, coverDimensions, TOC_MIN_ENTRIES, ART_OVERVIEW_ID, ARTICLE_SHELL, articleShell, buildArticleLeadHtml } from '../src/lib/article-page.mjs';
 import fs from 'node:fs';
 import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const h = (text, slug, depth = 2) => ({ depth, slug, text });
 
@@ -251,7 +252,7 @@ test('DRIFT: the preview reads the layout from the contract rather than hard-cod
   for (const token of ['articleShell', 'buildArticleLeadHtml', 'shell.spacer', 'shell.railLast', 'shell.leadIn', 'shell.rail']) {
     assert.ok(src.includes(token), `preview-shells.mjs stopped reading ${token}, so a layout can drift again`);
   }
-  const preview = fs.readFileSync(new URL('../src/pages/workbench/preview.astro', import.meta.url), 'utf8');
+  const preview = previewSource(); // the page plus src/lib/preview-page.ts, where the call now lives
   assert.match(preview, /^\s*applyPreviewShell\(document,/m, 'preview.astro no longer runs the reshape at all');
 });
 

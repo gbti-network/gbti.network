@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PROMPT_SHELL, buildPromptHeadHtml, buildPromptResultHtml, buildPromptBlockHtml } from '../src/lib/prompt-page.mjs';
 import { shellHasToc } from '../src/lib/preview-shells.mjs';
+import { previewSource } from './lib/preview-source.mjs';
 
 const pageSrc = readFileSync(new URL('../src/pages/prompts/[slug].astro', import.meta.url), 'utf8');
 const shellSrc = readFileSync(new URL('../src/lib/preview-shells.mjs', import.meta.url), 'utf8');
-const previewSrc = readFileSync(new URL('../src/pages/workbench/preview.astro', import.meta.url), 'utf8');
+const previewSrc = previewSource(); // the page plus src/lib/preview-page.ts and preview-edit.ts, where its script now lives
 
 test('every shell class still appears on the published prompt page', () => {
   // The contract's whole value is that it describes the real page. The preview renders from it and will

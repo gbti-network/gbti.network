@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import yaml from 'js-yaml';
 
 import { licenseEntries, licenseIds, licenseUrlFor, licenseProblems, licenseRow, PROPRIETARY, CUSTOM } from '../membership/licenses.mjs';
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const ROOT = new URL('../', import.meta.url);
 const DOC = yaml.load(fs.readFileSync(new URL('house/licenses.yml', ROOT), 'utf8'));
@@ -136,7 +137,7 @@ test('sow-305: the schema, its mirror and the editor all carry the field, or a s
 test('sow-305: the project page and the draft preview both render a License row', () => {
   // The preview is a documented no-drift surface: it draws the same spec rows and had no License one.
   const page = fs.readFileSync(new URL('src/pages/projects/[slug].astro', ROOT), 'utf8');
-  const preview = fs.readFileSync(new URL('src/pages/workbench/preview.astro', ROOT), 'utf8');
+  const preview = previewSource(); // the page plus src/lib/preview-page.ts, where its spec rows now live
   assert.match(page, /<dt>License<\/dt>/);
   assert.match(page, /licenseRow\(/, 'the page resolves the row through the shared helper');
   assert.match(preview, /'License', fm\.license\.trim\(\)/);

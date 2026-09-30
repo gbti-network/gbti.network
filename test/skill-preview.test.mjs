@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fillSkillPreview } from '../src/lib/preview-shells.mjs';
 import { _resetSkillSteps } from '../client-ui/src/skill-reader.mjs';
+import { previewSource } from './lib/preview-source.mjs';
 
 const FILE = '---\nname: qa\ndescription: Ask first.\n---\n# /qa <b>\n';
 const TOOLS = { tools: [
@@ -67,6 +68,6 @@ test('the preview wires it: a skill is not wrapped in the prompt block, and the 
   assert.match(shells, /if \(isSkill && povw\?\.parentElement\) \{[\s\S]*?void fillSkillPreview\(document, \{ fm, skillFile, readSkillFile \}\);\n    \} else if \(povw\?\.parentElement\) \{\n      povw\.insertAdjacentHTML\('beforebegin', buildPromptBlockHtml/);
   assert.match(shells, /const kindBadge = isSkill \?/);
   assert.match(shells, /!fm\.encryptedSkill \?/, 'a members-only skill\'s file is never fetched in the clear');
-  assert.match(readFileSync(new URL('../src/pages/workbench/preview.astro', import.meta.url), 'utf8'),
+  assert.match(previewSource(), // the page plus src/lib/preview-page.ts, where the call now lives
     /applyPreviewShell\(document, \{ type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath, skillFile: draft\.skillFile, signupBase: base, ref: contentSha \|\| '' \}\);/);
 });

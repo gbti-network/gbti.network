@@ -27,6 +27,7 @@ import {
 import { remarkContentBlocks, applyImageLayouts } from '../src/lib/remark-content-blocks.mjs';
 import { sanitizeSchema, rehypeStyleAllowlist } from '../src/lib/markdown-sanitize.mjs';
 import { bioExcerpt } from '../src/lib/members-directory.mjs';
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const CLASSES = ['img-full', 'img-left', 'img-center', 'img-right', 'img-wrap'];
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -249,10 +250,12 @@ test('the five classes are styled in the published prose, the extension reader a
 });
 
 test('the Preview: the paste is intercepted, images carry their source ref, and image blocks get the bar', () => {
-  const src = read('src/pages/workbench/preview.astro');
+  // The script moved into src/lib at the 900-line limit (2026-09-30) and lost four spaces of indentation with the
+  // IIFE that wrapped it, so the multi-line strings below carry the module's indentation.
+  const src = previewSource();
   assert.ok(src.includes("document.addEventListener('paste', (ev: ClipboardEvent) => {"), 'a paste listener');
   assert.ok(src.includes('imagePastePlan(ev.clipboardData)'), 'that asks the planner what was pasted');
-  assert.ok(src.includes('ev.preventDefault();\n        void pasteImage('), 'and takes the paste over only for an image');
+  assert.ok(src.includes('ev.preventDefault();\n    void pasteImage('), 'and takes the paste over only for an image');
   assert.ok(src.includes('client.stageImage({ filename, dataBase64: dataUrl.split(\',\')[1] || \'\', itemPath, item: `${type}:${slug}` })'),
     'a file is staged under the same item key the editor uses');
   assert.ok(src.includes('stagedSrc[ref] = dataUrl'), 'the staged bytes feed the re-render');
@@ -271,8 +274,8 @@ test('the site lightbox stands aside for a click the Preview already handled', (
   const lb = read('src/components/Lightbox.astro');
   const delegate = lb.slice(lb.indexOf("const el = e.target.closest('[data-lightbox], .prose-gbti img');") - 400, lb.indexOf("const el = e.target.closest('[data-lightbox], .prose-gbti img');"));
   assert.ok(delegate.includes('if (e.defaultPrevented) return;'), 'the prose-image delegate checks defaultPrevented first');
-  const pv = read('src/pages/workbench/preview.astro');
-  assert.ok(pv.includes("ev.preventDefault();\n          ensureToolbar();\n          seltb?.showImageTools(el);"), 'and the Preview marks its image click');
+  const pv = previewSource();
+  assert.ok(pv.includes("ev.preventDefault();\n      ensureToolbar();\n      seltb?.showImageTools(el);"), 'and the Preview marks its image click');
 });
 
 test('the selection toolbar offers the image bar, and the inert stub carries the same method', () => {
@@ -328,12 +331,12 @@ test('fitImageFile: a file under the cap passes through untouched; one over it w
 });
 
 test('the Preview fits a pasted image before staging it and lands a dropped file the same way', () => {
-  const src = read('src/pages/workbench/preview.astro');
+  const src = previewSource();
   assert.ok(src.includes('const fit = await fitImageFile(plan.file);'), 'fit before staging');
   assert.ok(src.includes('const dataUrl = await fileToDataUrl(fit.blob);'), 'the fitted bytes are what is staged');
   assert.ok(src.includes("pastedImageName({ name: fit.name, type: fit.blob?.type || plan.file?.type }, taken)"), 'and named after the fit (a re-encode is .webp)');
   assert.ok(src.includes("document.addEventListener('dragover', (ev: DragEvent) => {"), 'dragover is cancelled so the drop is offered');
   assert.ok(src.includes("document.addEventListener('drop', (ev: DragEvent) => {"), 'a drop listener');
   assert.ok(src.includes('const plan = imagePastePlan(ev.dataTransfer);'), 'that asks the same planner');
-  assert.ok(src.includes('void pasteImage(docOfEl(el), el, plan);\n      }, true);\n      // A dropped image file'), 'and lands through the same insert path');
+  assert.ok(src.includes('void pasteImage(docOfEl(el), el, plan);\n  }, true);\n  // A dropped image file'), 'and lands through the same insert path');
 });

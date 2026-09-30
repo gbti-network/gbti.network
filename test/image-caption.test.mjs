@@ -20,6 +20,7 @@ import { resolveMarkdownAssets } from '../client-ui/src/assets.mjs';
 import { imageLayoutProseCss } from '../client-ui/src/image-layout-ui.mjs';
 import { remarkContentBlocks, figureForCaptionedImage } from '../src/lib/remark-content-blocks.mjs';
 import { sanitizeSchema, rehypeStyleAllowlist } from '../src/lib/markdown-sanitize.mjs';
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -104,7 +105,7 @@ test('the asset resolver and the content validator see through a title', () => {
 test('the Preview: a figure is an image block, the bar has a Caption control, the editor card has a caption field', () => {
   const bc = read('client-ui/src/block-commit.mjs');
   assert.ok(bc.includes("if (t === 'FIGURE')"), 'isImageBlockEl accepts a figure');
-  const pv = read('src/pages/workbench/preview.astro');
+  const pv = previewSource();
   const a = pv.indexOf('if (isImageBlockEl(el)) { wireImageBlock(el); return; }');
   const b = pv.indexOf('if (!isEditableBlockTag(el.tagName)) return;');
   assert.ok(a > 0 && b > a, 'the image check runs before the editable-tag check, or a figure never gets the bar');

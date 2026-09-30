@@ -11,6 +11,7 @@ import { LIST_STYLE_GROUPS, listStyleButtonsHtml, listStylePressed, listStylePro
 import { listBarTools } from '../client-ui/src/list-editing.mjs';
 import { listHtml } from '../client/src/list-items.mjs';
 import { createSelectionToolbar } from '../client-ui/src/selection-toolbar.mjs';
+import { previewSource } from './lib/preview-source.mjs'; // the Preview page plus its script modules, in order
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -159,15 +160,17 @@ test('the editor passes the list bar hooks and stays under the cap; the Preview 
     const lines = read(f).split('\n').length;
     assert.ok(lines <= 900, `${f} is ${lines} lines; the cap is 900`);
   }
-  const pv = read('src/pages/workbench/preview.astro');
+  // The Preview's script moved into src/lib at the 900-line limit (2026-09-30): four spaces less indentation, and
+  // import paths relative to src/lib, which is what the literal strings below now carry.
+  const pv = previewSource();
   assert.ok(pv.includes('listTools: {'), 'the Preview opts in');
   assert.ok(pv.includes("return el && (el.tagName === 'UL' || el.tagName === 'OL') ? el : null;"), 'listOf is the contenteditable list block under the caret');
   assert.ok(pv.includes('return b ? listRunState(b.items, !!b.ordered, index) : '), 'stateOf reads the SOURCE through the shared run state');
   assert.ok(pv.includes("return action === 'unwrap' ? planListUnwrap(src) : planListAttrs(src, index, action);"), 'a click rewrites the block through spliceBlock, text edits folded in first');
-  assert.ok(pv.includes("const edited = applyBlockEdit(before.join('\\n'), readBlockDom(el));\n                const src = (edited || before).join('\\n');"), 'the fold-in precedes the planner');
+  assert.ok(pv.includes("const edited = applyBlockEdit(before.join('\\n'), readBlockDom(el));\n            const src = (edited || before).join('\\n');"), 'the fold-in precedes the planner');
   const hook = pv.slice(pv.indexOf('listTools: {'), pv.indexOf('return action === \'unwrap\''));
   assert.ok(hook.includes('delete el.dataset.pvSnap;'), 'the replaced node must not commit a stale read on blur (the Tab handler\'s rule)');
   assert.ok(pv.includes("if (again) { again.focus(); if (li) caretAtEndOfItem(li, document.getSelection()); }"), 'the caret goes back to the same item, which re-shows the bar');
-  assert.ok(pv.includes("const { listRunState } = await import('../../../client/src/list-items.mjs');"));
-  assert.ok(pv.includes('listBlockOf, planListAttrs, planListUnwrap } = await import(\'../../../client-ui/src/block-commit.mjs\');'));
+  assert.ok(pv.includes("const { listRunState } = await import('../../client/src/list-items.mjs');"));
+  assert.ok(pv.includes('listBlockOf, planListAttrs, planListUnwrap } = await import(\'../../client-ui/src/block-commit.mjs\');'));
 });
