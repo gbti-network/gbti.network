@@ -170,7 +170,6 @@ for (const it of narrowed) {
 
 <script>
   import { catKey, rowMatchesCat } from '../../lib/feed-filter.mjs';
-  import { newsFeatureImage, GENERIC_FEATURE_IMAGE } from '../../../client-ui/src/news-feature-image.mjs'; // sow-149: one branded banner per news category
   import { newsSummary } from '../../lib/news-summary.mjs'; // sow-367: the publisher's blurb, or ours when theirs is cut off
   import { newsSourceName, sourceNameMap } from '../../../membership/news-source-name.mjs'; // sow-371: the publication's name, never its id
   // Per-view chrome: visibility chips, the ?tag= and ?cat= drilldowns, and the persisted density toggle. While a
@@ -277,13 +276,15 @@ for (const it of narrowed) {
         fetch('/news-sources.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ])
         .then(([data, sources]) => {
-          const items = Array.isArray(data?.items) ? data.items : [];
+          // Owner, 2026-09-30: only stories with their own picture. The news server already holds the rest back
+          // (requireImage); this is the belt to its braces for a response cached from before.
+          const items = (Array.isArray(data?.items) ? data.items : []).filter((it: any) => it && it.image);
           newsBox.replaceChildren();
           if (!items.length) { newsBox.append(el('p', 'feed-empty', 'No news right now.')); return; }
           const srcNames = sourceNameMap(sources);
           const chunk = el('div', 'feed-chunk');
           for (const it of items) {
-            const art = el('article', 'feed-item news-row' + (it.image ? '' : ' nocover'));
+            const art = el('article', 'feed-item news-row');
             art.setAttribute('data-fi', '');
             const main = el('div', 'feed-main');
             const meta = el('div', 'feed-meta');
@@ -305,29 +306,19 @@ for (const it of narrowed) {
             foot.append(el('span', 'fsp'));
             main.append(foot);
             art.append(main);
-            const cover = el('a', 'feed-cover' + (it.image ? '' : ' feed-cover-fb'));
+            const cover = el('a', 'feed-cover');
             cover.setAttribute('href', detailHref);
             cover.setAttribute('aria-hidden', 'true');
             cover.setAttribute('tabindex', '-1');
             const img = document.createElement('img');
-            // Some feed images arrive entity-encoded (&#038;) which breaks their query strings; and a
-            // dead external image degrades to the branded banner instead of a broken tile.
-            const imgUrl = it.image ? String(it.image).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&') : '';
-            img.src = imgUrl || newsFeatureImage(it.category); // sow-149: the category's own banner, centered so the card crop keeps it
+            // Some feed images arrive entity-encoded (&#038;), which breaks their query strings.
+            img.src = String(it.image).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&');
             img.alt = '';
             img.loading = 'lazy';
             img.decoding = 'async';
-            // sow-149: a dead external image falls to the category banner, and a category banner that is itself
-            // missing (a category added to the worker before the generator ran) falls to the generic one; the
-            // generic banner is the floor, so the handler stops there rather than looping.
-            const onError = () => {
-              const cat = newsFeatureImage(it.category);
-              const cur = img.getAttribute('src');
-              if (cur === GENERIC_FEATURE_IMAGE) { img.removeEventListener('error', onError); return; }
-              img.src = cur === cat ? GENERIC_FEATURE_IMAGE : cat;
-              cover.classList.add('feed-cover-fb');
-            };
-            img.addEventListener('error', onError);
+            // Owner, 2026-09-30: a story whose own picture fails to load leaves the feed. There is no stand-in image of
+            // ours (the sow-149 category banners were retired from the feed the same day).
+            img.addEventListener('error', () => art.remove(), { once: true });
             cover.append(img);
             art.append(cover);
             chunk.append(art);

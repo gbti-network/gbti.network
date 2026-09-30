@@ -18732,7 +18732,13 @@ ${BLOCKED_PILL_CSS}
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
-          if (t?.tagName === "IMG" && (t.classList?.contains("cimg") || t.classList?.contains("avimg"))) t.remove();
+          if (t?.tagName !== "IMG" || !(t.classList?.contains("cimg") || t.classList?.contains("avimg"))) return;
+          const card = t.classList.contains("cimg") ? t.closest('[data-card][data-type="news"]') : null;
+          if (card) {
+            (card.closest(".it") || card).remove();
+            return;
+          }
+          t.remove();
         }, true);
         this._wiredErr = true;
       }

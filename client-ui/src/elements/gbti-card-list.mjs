@@ -239,9 +239,9 @@ class GbtiCardList extends GbtiElement {
     if (this.mode === 'detailed' && !thumb) return '';
     const g = glyphFor(item.category, item.type);
     const glyph = this.mode === 'detailed' ? '' : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
-    // Owner, 2026-09-30: a news card with no image of its own keeps the category glyph. A branded stand-in banner was
-    // tried here the same day and taken out ("Lets not add our own default OG images"); the card shows the story's
-    // own picture or nothing of ours.
+    // Owner, 2026-09-30: a news story reaches the feed only with its own picture (the news store's requireImage), and
+    // one whose picture fails to load is removed (the error handler in render). No stand-in image of ours is ever used
+    // ("Lets not add our own default OG images"); the glyph sits behind the picture while it loads.
     const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : '';
     return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
   }
@@ -325,7 +325,15 @@ class GbtiCardList extends GbtiElement {
     // A content image (.cimg) or a meta avatar/favicon (.avimg) that 404s drops out so the glyph / initial disc
     // shows through (CSP-safe capture-phase; img error does not bubble).
     if (!this._wiredErr) {
-      this.root?.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && (t.classList?.contains('cimg') || t.classList?.contains('avimg'))) t.remove(); }, true);
+      this.root?.addEventListener('error', (e) => {
+        const t = e.target;
+        if (t?.tagName !== 'IMG' || !(t.classList?.contains('cimg') || t.classList?.contains('avimg'))) return;
+        // Owner, 2026-09-30: a news story is shown only with its own picture, so a news card whose picture fails to
+        // load leaves the feed entirely rather than falling back to the glyph. Every other card keeps the glyph.
+        const card = t.classList.contains('cimg') ? t.closest('[data-card][data-type="news"]') : null;
+        if (card) { (card.closest('.it') || card).remove(); return; }
+        t.remove();
+      }, true);
       this._wiredErr = true;
     }
     // A card without an openHref opens IN PLACE: emit card-open for the host to handle.

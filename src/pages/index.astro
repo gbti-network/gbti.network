@@ -582,7 +582,7 @@ const SHOPTALK = {
     // the request resolves; empty until then, and an empty map falls back to the id, which is what shipped before.
     let srcNames = new Map<string, string>();
     const newsRow = (it: any) => {
-      const art = el('article', 'feed-item news-row' + (it.image ? '' : ' nocover'));
+      const art = el('article', 'feed-item news-row');
       art.setAttribute('data-fi', '');
       art.setAttribute('data-kind', 'news'); // sow-192: so a content tab filter hides peppered news rows
       const main2 = el('div', 'feed-main');
@@ -609,20 +609,17 @@ const SHOPTALK = {
       foot.append(el('span', 'fsp'));
       main2.append(foot);
       art.append(main2);
-      const cover = el('a', 'feed-cover' + (it.image ? '' : ' feed-cover-fb'));
+      const cover = el('a', 'feed-cover');
       cover.setAttribute('href', detailHref);
       cover.setAttribute('aria-hidden', 'true');
       cover.setAttribute('tabindex', '-1');
       const img = document.createElement('img');
-      const imgUrl = it.image ? String(it.image).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&') : '';
-      img.src = imgUrl || '/brand/feature/feature-category.png';
+      img.src = String(it.image).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&');
       img.alt = '';
       img.loading = 'lazy';
       img.decoding = 'async';
-      img.addEventListener('error', () => {
-        img.src = '/brand/feature/feature-category.png';
-        cover.classList.add('feed-cover-fb');
-      }, { once: true });
+      // Owner, 2026-09-30: a story whose own picture fails to load leaves the page; there is no stand-in image of ours.
+      img.addEventListener('error', () => art.remove(), { once: true });
       cover.append(img);
       art.append(cover);
       return art;
@@ -637,7 +634,8 @@ const SHOPTALK = {
       fetch('/news-sources.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ])
       .then(([data, sources]) => {
-        const items = Array.isArray(data?.items) ? data.items : [];
+        // Owner, 2026-09-30: only stories with their own picture (the news server holds the rest back; this is the belt).
+        const items = (Array.isArray(data?.items) ? data.items : []).filter((it: any) => it && it.image);
         if (!items.length) { dropLatestNews(); return; }
         srcNames = sourceNameMap(sources);
         // Fill the Latest news section with the freshest items (each newsRow() is a fresh node).

@@ -239,7 +239,11 @@ export async function queryItems(env, filter = {}) {
   for (const d of days) {
     if (oldestDay && d < oldestDay) break;
     const shard = await loadDay(env, d);
-    for (const it of shard) if (!removed[it.guid] && !blockedBy(it, banned) && matchesFilter(it, filter)) out.push(it);
+    // Owner, 2026-09-30: "We need to not let imageless items reach our news feed." Every reader that LISTS stories
+    // (the feeds, the bell, the digest) passes requireImage; a lookup of one known story by guid does not. It is
+    // applied here, before the limit, so a page of 60 is still 60 stories with pictures. A held story is not deleted:
+    // one waiting on the half-hourly page check (backfill.mjs) appears once its own picture is found.
+    for (const it of shard) if (!removed[it.guid] && !blockedBy(it, banned) && matchesFilter(it, filter) && (!filter.requireImage || it.image)) out.push(it);
     if (out.length >= limit) break; // enough recent matches; deeper shards not needed
   }
   out.sort((a, b) => ts(b) - ts(a));

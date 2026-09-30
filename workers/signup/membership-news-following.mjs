@@ -70,7 +70,7 @@ export async function membershipNewsFollowing(request, env, {
   if (!followed.length) return { status: 200, body: { ok: true, items: [] } };
 
   const sinceSec = Math.floor(now() / 1000) - FOLLOWED_NEWS_WINDOW_DAYS * 86400;
-  const { items } = await queryItems(env, { since: String(sinceSec), limit: SCAN_LIMIT });
+  const { items } = await queryItems(env, { since: String(sinceSec), limit: SCAN_LIMIT, requireImage: true }); // owner 2026-09-30: a story the feed will not show is not rung either
 
   // Publication names the way the digest resolves them. A list that cannot load falls back to the source id, so
   // a name outage never empties the bell.

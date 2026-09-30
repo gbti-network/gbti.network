@@ -4,6 +4,10 @@
 # worker fetches that artifact each cron (NEWS_SOURCES_URL) and rotates through the enabled set via a KV cursor.
 # Each entry: { id (stable, unique), name, url (RSS/Atom feed), description (shown in the reader), enabled }.
 # Disable a noisy source with enabled: false (kept for history) instead of deleting it.
+# Owner, 2026-09-30: the news feed shows only stories with their own picture, so six sources that never publish one
+# are off (enabled: false): flink, gitlab, lobsters-4 (Alpine Linux), lwn-net, tokio, schneier-on-security. A sweep of
+# every source's newest stories, checked by hand as well, found no image in their feeds or on their article pages.
+# Turn one back on (enabled: true) if it starts publishing images.
 sources:
   - id: the-next-web
     name: The Next Web
@@ -99,7 +103,7 @@ sources:
     name: Schneier on Security
     url: https://www.schneier.com/feed/
     description: www.schneier.com
-    enabled: true
+    enabled: false
   - id: reid-burke
     name: Reid Burke
     url: https://security.apple.com/blog/feed.rss
@@ -229,12 +233,12 @@ sources:
     name: LWN.net
     url: https://lwn.net/headlines/rss
     description: lwn.net
-    enabled: true
+    enabled: false
   - id: tokio
     name: Tokio
     url: https://tokio.rs/blog/index.xml
     description: tokio.rs
-    enabled: true
+    enabled: false
   - id: drew-devault
     name: Drew DeVault
     url: https://drewdevault.com/blog/index.xml
@@ -499,7 +503,7 @@ sources:
     name: GitLab
     url: https://about.gitlab.com/releases.xml
     description: about.gitlab.com
-    enabled: true
+    enabled: false
   - id: devclass
     name: DEVCLASS
     url: https://www.devclass.com/feed/
@@ -554,7 +558,7 @@ sources:
     name: Flink
     url: https://flink.apache.org/index.xml
     description: flink.apache.org
-    enabled: true
+    enabled: false
   - id: python-software-foundation
     name: Python Software Foundation
     url: https://pyfound.blogspot.com/feeds/posts/default
@@ -604,7 +608,7 @@ sources:
     name: Alpine Linux
     url: https://alpinelinux.org/atom.xml
     description: alpinelinux.org
-    enabled: true
+    enabled: false
   - id: lead-dev
     name: Lead Dev
     url: https://leaddev.com/feed

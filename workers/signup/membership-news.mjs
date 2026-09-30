@@ -44,7 +44,7 @@ function feedFilter(url, def, max) {
 
 /** Read the feed from NEWS_KV, newest-first, and shape it exactly as the old proxy returned it. */
 async function readFeed(request, env, queryItems, def, max) {
-  const { items, updatedAt } = await queryItems(env, feedFilter(new URL(request.url), def, max));
+  const { items, updatedAt } = await queryItems(env, { ...feedFilter(new URL(request.url), def, max), requireImage: true }); // owner 2026-09-30: no story without its own picture
   const shaped = (Array.isArray(items) ? items : []).map(publicItem);
   return { status: 200, body: { ok: true, updatedAt: updatedAt ?? null, count: shaped.length, items: shaped } };
 }

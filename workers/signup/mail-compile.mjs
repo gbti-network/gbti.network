@@ -364,7 +364,7 @@ export async function gatherNewsEntries(env, {
   const since = Math.floor(Number(nowMs) / 1000) - windowDays * 86400;
   let items = [];
   try {
-    const res = await queryItems(env, { limit, since });
+    const res = await queryItems(env, { limit, since, requireImage: true }); // owner 2026-09-30: the digest lists only stories the feed shows
     items = Array.isArray(res?.items) ? res.items : [];
   } catch {
     return [];
