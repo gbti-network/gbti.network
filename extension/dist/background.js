@@ -18300,6 +18300,19 @@ function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unkno
   return { comments, reap, pending };
 }
 
+// client/src/skill-file.mjs
+var skillPathFor = (indexPath) => String(indexPath || "").replace(/index\.md$/, "SKILL.md");
+async function skillFileBeside(indexPath, frontmatter, readFile) {
+  if (frontmatter?.kind !== "skill" || !/\/prompts\/[^/]+\/index\.md$/.test(String(indexPath || ""))) return {};
+  let text = null;
+  try {
+    text = await readFile(skillPathFor(indexPath)) ?? null;
+  } catch {
+    text = null;
+  }
+  return text == null ? {} : { skillFile: text };
+}
+
 // client/src/operations-read.mjs
 async function listContent(ctx, { type, scope = "member" } = {}) {
   const id = requireIdentity(ctx);
@@ -18385,7 +18398,29 @@ async function readContent(ctx, { path } = {}) {
   if (!item) throw new OperationError("not-found", "no such readable content");
   return item;
 }
-async function getContentItem(ctx, { path } = {}) {
+function skillFileBesideItem(ctx, indexPath, frontmatter) {
+  return skillFileBeside(indexPath, frontmatter, async (p) => {
+    let text = null;
+    try {
+      text = await ctx.reader?.readFile?.(p) ?? null;
+    } catch {
+      text = null;
+    }
+    if (text == null) {
+      try {
+        text = await ctx.getRepoClient?.()?.getFileContent?.(p) ?? null;
+      } catch {
+        text = null;
+      }
+    }
+    return text;
+  });
+}
+async function getContentItem(ctx, args = {}) {
+  const item = await getContentItemFile(ctx, args);
+  return { ...item, ...await skillFileBesideItem(ctx, item.path, item.frontmatter) };
+}
+async function getContentItemFile(ctx, { path } = {}) {
   const id = requireIdentity(ctx);
   if (!path) throw new OperationError("bad-request", "path is required");
   if (isNetworkContentPath(path) && id.username !== NETWORK_CONTENT_OWNER) {
@@ -18522,7 +18557,7 @@ async function planMemberFiles({ built, body, encrypt }) {
 }
 
 // client/src/operations-drafts.mjs
-async function saveDraft(ctx, { type, input, body, path } = {}) {
+async function saveDraft(ctx, { type, input, body, path, skillFile } = {}) {
   const id = requireIdentity(ctx);
   const membership = await membershipOf(ctx);
   if (membership !== "unknown" && !canStageDrafts(membership)) {
@@ -18551,7 +18586,9 @@ async function saveDraft(ctx, { type, input, body, path } = {}) {
       pendingSlug: staging ? built.slug : null,
       path: staging ? staging.oldPath : built.path,
       frontmatter: fm,
-      body
+      body,
+      ...typeof skillFile === "string" ? { skillFile } : {}
+      // sow-109: a skill's SKILL.md text
     },
     token: ctx.store?.get?.("githubToken"),
     signupBase: SIGNUP_BASE,
@@ -18580,14 +18617,15 @@ async function readDraft(ctx, { type, slug, store, path: repoPath } = {}) {
     }
     if (text == null) throw new OperationError("not-found", `could not read the repo draft: ${rel}`);
     const { frontmatter, body } = parseContentFile(text);
+    const skill = await skillFileBesideItem(ctx, rel, frontmatter);
     if (frontmatter?.encryptedBody) {
       try {
         const { text: plain } = await decryptMemberAsset(ctx, { encPath: frontmatter.encryptedBody });
-        return { path: rel, branch: null, store: "repo", frontmatter, body: plain };
+        return { path: rel, branch: null, store: "repo", frontmatter, body: plain, ...skill };
       } catch {
       }
     }
-    return { path: rel, branch: null, store: "repo", frontmatter, body };
+    return { path: rel, branch: null, store: "repo", frontmatter, body, ...skill };
   }
   const opts = { token: ctx.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
   const { drafts: recs } = await workerListDrafts(opts);
@@ -18601,7 +18639,7 @@ async function readDraft(ctx, { type, slug, store, path: repoPath } = {}) {
       recPath = null;
     }
   }
-  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "" };
+  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "", ...typeof rec.skillFile === "string" ? { skillFile: rec.skillFile } : {} };
 }
 var ENC_PATH_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/_enc\/[a-z0-9][a-z0-9._-]*\.enc$/;
 async function decryptMemberAsset(ctx, { encPath } = {}) {

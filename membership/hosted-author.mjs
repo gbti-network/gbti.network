@@ -323,34 +323,56 @@ function redirectFromUrls(content) {
 export function pathsNeedingApproval(files, folder) {
   if (!Array.isArray(files) || files.length === 0) return [];
   if (typeof folder !== 'string' || !folder) return [];
+  const itemRe = new RegExp(`^members/${folder}/(posts|projects|products|prompts|shares)/(.+)$`);
+  const skillRe = new RegExp(`^(members/${folder}/prompts/[a-z0-9][a-z0-9-]*/)SKILL\\.md$`);
+  const isDelete = (f) => typeof f === 'object' && f !== null && f.content === null && f.contentBase64 == null;
   const out = [];
+  const skillItems = [];
   for (const f of files) {
     const path = typeof f === 'string' ? f : f?.path;
     if (typeof path !== 'string' || path.includes('..')) continue;
-    const m = new RegExp(`^members/${folder}/(posts|projects|products|prompts|shares)/(.+)$`).exec(path);
+    const m = itemRe.exec(path);
     if (!m) continue;                                   // comments, profile.md, images, _enc: not reviewable
     if (!/\.(md|mdx)$/.test(path)) continue;             // only the frontmatter-bearing file states an audience
     // sow-323 Phase 3: a DELETE publishes nothing, so it never needs approval. It used to read as unreadable and be
     // refused, which refused every rename or author move of a members-only item (the old path is deleted).
-    if (typeof f === 'object' && f !== null && f.content === null && f.contentBase64 == null) continue;
+    if (isDelete(f)) continue;
+    // sow-109: a skill's SKILL.md states no audience of its own. It is always public text, so it is judged by its
+    // item: the sibling index.md. Its own frontmatter is never read here, so a `visibility: members` line in it
+    // cannot wave a public file through, and a rename of an approved skill is judged by the approved item.
+    const sk = skillRe.exec(path);
+    if (sk) { skillItems.push(`${sk[1]}index.md`); continue; }
     const type = REVIEWABLE_DIRS[m[1]];
     const content = typeof f === 'string' ? null : f?.content;
     if (statedVisibility(content) === 'members') continue;
-    // A rename of an item that was already public carries the old URL in redirectFrom, and only a public item
-    // ever had a public URL. Recover the old repository path from it so the Worker can check that one instead:
-    // without this an author renaming their own approved article is refused, which looks like a bug to them.
-    const tail = m[2];
-    const priorPaths = redirectFromUrls(content).map((url) => {
-      const seg = String(url).split('/').filter(Boolean);
-      const dir = RENAME_URL_DIR[type];
-      if (seg.length < 2 || seg[0] !== dir) return null;
-      const oldSlug = seg[seg.length - 1];
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(oldSlug)) return null;
-      return type === 'share'
-        ? `members/${folder}/shares/${oldSlug}.md`
-        : `members/${folder}/${m[1]}/${oldSlug}/${tail.replace(/^[^/]+\//, '')}`;
-    }).filter(Boolean);
-    out.push({ path, type, priorPaths });
+    out.push({ path, type, priorPaths: priorPathsOf(content, type, m[1], m[2], folder) });
+  }
+  // Each SKILL.md adds its item, with the prior paths the item's own index.md in this request records (a rename),
+  // unless that item is already on the list. A members-only index.md in the request does not waive it: the file is
+  // public either way, so the item must be approved on main.
+  for (const indexPath of new Set(skillItems)) {
+    if (out.some((o) => o.path === indexPath)) continue;
+    const sibling = files.find((f) => f && typeof f === 'object' && f.path === indexPath && typeof f.content === 'string');
+    const m = itemRe.exec(indexPath);
+    out.push({ path: indexPath, type: 'prompt', priorPaths: sibling ? priorPathsOf(sibling.content, 'prompt', m[1], m[2], folder) : [] });
   }
   return out;
+}
+
+/**
+ * The repository paths an item had before a rename, recovered from the `redirectFrom` URLs its frontmatter lists. A
+ * rename of an item that was already public carries the old URL there, and only a public item ever had a public URL,
+ * so the Worker can check the old path instead: without this an author renaming their own approved article is
+ * refused, which looks like a bug to them.
+ */
+function priorPathsOf(content, type, dir, tail, folder) {
+  return redirectFromUrls(content).map((url) => {
+    const seg = String(url).split('/').filter(Boolean);
+    if (seg.length < 2 || seg[0] !== RENAME_URL_DIR[type]) return null;
+    const oldSlug = seg[seg.length - 1];
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(oldSlug)) return null;
+    return type === 'share'
+      ? `members/${folder}/shares/${oldSlug}.md`
+      : `members/${folder}/${dir}/${oldSlug}/${tail.replace(/^[^/]+\//, '')}`;
+  }).filter(Boolean);
 }

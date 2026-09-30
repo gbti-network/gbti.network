@@ -777,5 +777,5 @@ test('draftRecordForEditor: repairs the caller\'s own pre-move flat image path, 
   assert.equal(draftRecordForEditor({ frontmatter: { image: 'members/someone/images/x.webp' } }, 'atwellpub').frontmatter.image, 'members/someone/images/x.webp');
   assert.equal(draftRecordForEditor({ frontmatter: { image: 'https://example.com/x.webp' } }, 'atwellpub').frontmatter.image, 'https://example.com/x.webp');
   // A record with no fields still opens.
-  assert.deepEqual(draftRecordForEditor({}, 'atwellpub'), { frontmatter: {}, body: '', path: '', authorNote: null, authorTarget: null });
+  assert.deepEqual(draftRecordForEditor({}, 'atwellpub'), { frontmatter: {}, body: '', path: '', authorNote: null, authorTarget: null, skillFile: null }); // sow-109: a skill's file
 });

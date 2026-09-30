@@ -159,6 +159,7 @@ export function draftRecordForEditor(rec, login) {
     path: rec?.path || '',
     authorNote: typeof rec?.authorNote === 'string' ? rec.authorNote : null,
     authorTarget: rec?.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
+    skillFile: typeof rec?.skillFile === 'string' ? rec.skillFile : null, // sow-109: a skill's SKILL.md text
   };
 }
 

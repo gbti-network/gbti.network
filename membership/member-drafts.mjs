@@ -63,7 +63,7 @@ function utf8Bytes(s) {
 
 /**
  * Upsert one draft record. The record is the editor's restore state: { type, slug, pendingSlug?, path,
- * frontmatter, body, authorTarget?, updatedAt }. Caps: per-draft bytes, item count, total bytes. Throws
+ * frontmatter, body, authorNote?, authorTarget?, skillFile?, updatedAt }. Caps: per-draft bytes, item count, total bytes. Throws
  * DraftError on any violation (the handler maps it to a 400).
  */
 export function applyDraftPut(state, draft, { now = () => new Date().toISOString() } = {}) {
@@ -94,6 +94,11 @@ export function applyDraftPut(state, draft, { now = () => new Date().toISOString
   const authorTarget = d.authorTarget !== undefined
     ? normalizeAuthorTarget(d.authorTarget)
     : (prev?.authorTarget ?? null);
+  // sow-109: a skill's own file (its SKILL.md text) travels with the draft on the authorNote terms: absent keeps what
+  // is stored, an empty string clears it. Only a prompt can be a skill, so no other type stores one.
+  const skillFile = type !== 'prompt' ? null
+    : typeof d.skillFile === 'string' ? d.skillFile
+    : (typeof prev?.skillFile === 'string' ? prev.skillFile : null);
   const record = {
     type, slug, pendingSlug,
     path: typeof d.path === 'string' ? d.path : null,
@@ -101,6 +106,7 @@ export function applyDraftPut(state, draft, { now = () => new Date().toISOString
     body: typeof d.body === 'string' ? d.body : '',
     ...(authorNote != null ? { authorNote } : {}),
     ...(authorTarget != null ? { authorTarget } : {}),
+    ...(skillFile ? { skillFile } : {}),
     updatedAt: now(),
   };
   if (utf8Bytes(JSON.stringify(record)) > DRAFT_MAX_BYTES) throw new DraftError(`a draft may not exceed ${DRAFT_MAX_BYTES} bytes`);

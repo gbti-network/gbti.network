@@ -30,6 +30,11 @@ export function skillInstallTools() {
   return skillInstallEntries(doc).map((e: { key: string; folder: string; run: string; local: string }) => ({ ...e, label: labels.get(e.key) ?? e.key }));
 }
 
+/** Every tool in house/ai-tools.yml as { key, label }, for the editor's "Made for" tick list (sow-109 Phase 5). */
+export function aiToolsAll() {
+  return aiToolEntries(load().aiToolsDoc);
+}
+
 /**
  * A skill's own file, SKILL.md beside its index.md, with the name it declares. Null when there is none, which is
  * the case for every prompt and for a members-only skill (its file never sits in the repository as plain text).

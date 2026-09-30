@@ -18537,6 +18537,73 @@ function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unkno
   return { comments, reap, pending };
 }
 
+// membership/skill-install.mjs
+var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+function skillNameFrom(skillMd) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
+  if (!m) return "";
+  const line = m[1].split(/\r?\n/).find((l) => /^name:\s*/.test(l));
+  const name = line ? line.replace(/^name:\s*/, "").replace(/^['"]|['"]$/g, "").trim() : "";
+  return SKILL_NAME_RE.test(name) ? name : "";
+}
+
+// client/src/skill-file.mjs
+var skillPathFor = (indexPath) => String(indexPath || "").replace(/index\.md$/, "SKILL.md");
+var needsOldSkillFile = ({ priorKind, kind, moved, visibility }) => priorKind === "skill" && (Boolean(moved) || kind !== "skill" || visibility === "members");
+var MEMBERS_REFUSAL = "A members-only skill cannot carry a skill file yet, because the file would be readable by anyone. For now, leave the skill file empty and include it in the page text, or ask a superadmin to make the skill public.";
+function planSkillFile({ kind, visibility, skillFile, newIndexPath, oldIndexPath = null, priorKind, oldSkillText = null }) {
+  const files = [];
+  const newPath = skillPathFor(newIndexPath);
+  const oldPath = oldIndexPath ? skillPathFor(oldIndexPath) : null;
+  const moved = Boolean(oldPath) && oldPath !== newPath;
+  const sent = typeof skillFile === "string" && skillFile.trim() ? skillFile : null;
+  if (kind !== "skill") {
+    if (oldSkillText != null) files.push({ path: oldPath ?? newPath, content: null });
+    return { files, refusal: null };
+  }
+  const text = sent ?? (moved ? oldSkillText : null);
+  const keepsExisting = !sent && !moved && priorKind === "skill";
+  if (visibility === "members") {
+    if (sent || oldSkillText != null) return { files: [], refusal: MEMBERS_REFUSAL };
+    return { files, refusal: null };
+  }
+  if (text == null && !keepsExisting) {
+    return { files: [], refusal: 'A skill needs its skill file. Paste the whole SKILL.md into "The skill file".' };
+  }
+  if (text != null) {
+    if (!skillNameFrom(text)) {
+      return { files: [], refusal: "The skill file needs a name: line in its frontmatter (lowercase letters, digits and dashes, for example name: farley). The install steps use it for the folder and the command." };
+    }
+    files.push({ path: newPath, content: text });
+  }
+  if (moved && oldSkillText != null) files.push({ path: oldPath, content: null });
+  return { files, refusal: null };
+}
+async function skillFilesForPublish({ type, built, oldIndexPath = null, priorKind, moved = false, skillFile, readFile }) {
+  if (type !== "prompt") return { files: [], refusal: null };
+  const kind = built?.frontmatter?.kind;
+  const visibility = built?.frontmatter?.visibility;
+  let oldSkillText = null;
+  if (oldIndexPath && needsOldSkillFile({ priorKind, kind, moved, visibility })) {
+    try {
+      oldSkillText = await readFile(skillPathFor(oldIndexPath)) ?? null;
+    } catch {
+      oldSkillText = null;
+    }
+  }
+  return planSkillFile({ kind, visibility, skillFile, newIndexPath: built.path, oldIndexPath, priorKind, oldSkillText });
+}
+async function skillFileBeside(indexPath, frontmatter, readFile) {
+  if (frontmatter?.kind !== "skill" || !/\/prompts\/[^/]+\/index\.md$/.test(String(indexPath || ""))) return {};
+  let text = null;
+  try {
+    text = await readFile(skillPathFor(indexPath)) ?? null;
+  } catch {
+    text = null;
+  }
+  return text == null ? {} : { skillFile: text };
+}
+
 // client/src/operations-read.mjs
 async function listContent(ctx2, { type, scope = "member" } = {}) {
   const id = requireIdentity(ctx2);
@@ -18599,7 +18666,29 @@ async function listComments(ctx2, { targetType, targetSlug, limit, aliases } = {
   const gated = gateMemberComments(items, await membershipOf(ctx2));
   return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
 }
-async function getContentItem(ctx2, { path: path4 } = {}) {
+function skillFileBesideItem(ctx2, indexPath, frontmatter) {
+  return skillFileBeside(indexPath, frontmatter, async (p) => {
+    let text = null;
+    try {
+      text = await ctx2.reader?.readFile?.(p) ?? null;
+    } catch {
+      text = null;
+    }
+    if (text == null) {
+      try {
+        text = await ctx2.getRepoClient?.()?.getFileContent?.(p) ?? null;
+      } catch {
+        text = null;
+      }
+    }
+    return text;
+  });
+}
+async function getContentItem(ctx2, args = {}) {
+  const item = await getContentItemFile(ctx2, args);
+  return { ...item, ...await skillFileBesideItem(ctx2, item.path, item.frontmatter) };
+}
+async function getContentItemFile(ctx2, { path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   if (!path4) throw new OperationError("bad-request", "path is required");
   if (isNetworkContentPath(path4) && id.username !== NETWORK_CONTENT_OWNER) {
@@ -18817,7 +18906,7 @@ async function setOwnContentStatus(ctx2, { path: rel, status } = {}) {
   const pr = await hostedPublishFiles(ctx2, { branch, files: [{ path: rel, content: flip.content }], title: `${verb}: ${slug}` });
   return { ...pr, ok: true, status };
 }
-async function publish(ctx2, { type, input, body, title, authorNote, path: path4, scope } = {}) {
+async function publish(ctx2, { type, input, body, title, authorNote, path: path4, scope, skillFile } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   const houseTarget = scope === "house" || isNetworkContentPath(path4);
@@ -18846,9 +18935,9 @@ async function publish(ctx2, { type, input, body, title, authorNote, path: path4
     if (merged.length) effInput.redirectFrom = merged;
     if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
   }
+  let priorFm = oldFm;
   if (["post", "project", "prompt"].includes(type)) {
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
       const canonical = contentPath(type, id.username, effInput.slug, targetScope);
       let text = null;
@@ -18894,6 +18983,16 @@ async function publish(ctx2, { type, input, body, title, authorNote, path: path4
     const collision = await repo.getFileContent(built.path).catch(() => null);
     if (collision != null) throw new OperationError("bad-request", `the permalink "${built.slug}" is already taken`);
   }
+  const skillPlan = await skillFilesForPublish({
+    type,
+    built,
+    oldIndexPath: renaming ? origin.oldPath : priorFm ? built.path : null,
+    priorKind: priorFm?.kind,
+    moved: renaming,
+    skillFile,
+    readFile: (p) => readCanonical(ctx2, repo, p)
+  });
+  if (skillPlan.refusal) throw new OperationError("invalid-content", skillPlan.refusal);
   const token = ctx2.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   let plan;
@@ -18921,7 +19020,7 @@ async function publish(ctx2, { type, input, body, title, authorNote, path: path4
       if (await ctx2.reader?.readFile?.(oldIntro) != null) renameFiles.push({ path: oldIntro, content: null });
     }
   }
-  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(skillPlan.files).concat(renameFiles);
   const r = await hostedAuthor({
     token: ctx2.store?.get?.("githubToken"),
     itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
@@ -18943,6 +19042,22 @@ async function publish(ctx2, { type, input, body, title, authorNote, path: path4
     }
   }
   return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
+}
+async function readCanonical(ctx2, repo, rel) {
+  let text = null;
+  try {
+    text = await ctx2.reader?.readFile?.(rel) ?? null;
+  } catch {
+    text = null;
+  }
+  if (text == null) {
+    try {
+      text = await repo.getFileContent(rel) ?? null;
+    } catch {
+      text = null;
+    }
+  }
+  return text;
 }
 function describeContentPublish(built, { hasIntro } = {}) {
   const LABEL = { post: "article", project: "project", prompt: "prompt", profile: "profile" };
@@ -19022,14 +19137,14 @@ async function planMemberFiles({ built, body, encrypt }) {
 }
 
 // client/src/operations-drafts.mjs
-async function authorContent(ctx2, { type, input, body, status, title, authorNote, path: path4, scope } = {}) {
+async function authorContent(ctx2, { type, input, body, status, title, authorNote, path: path4, scope, skillFile } = {}) {
   if (status !== "draft" && status !== "published") {
     throw new OperationError("status-required", 'Specify status: "published" to publish (merge and go live on the network) or "draft" to save it privately for review before publishing.');
   }
-  if (status === "draft") return saveDraft(ctx2, { type, input, body, path: path4 });
-  return publish(ctx2, { type, input, body, title, authorNote, path: path4, scope });
+  if (status === "draft") return saveDraft(ctx2, { type, input, body, path: path4, skillFile });
+  return publish(ctx2, { type, input, body, title, authorNote, path: path4, scope, skillFile });
 }
-async function saveDraft(ctx2, { type, input, body, path: path4 } = {}) {
+async function saveDraft(ctx2, { type, input, body, path: path4, skillFile } = {}) {
   const id = requireIdentity(ctx2);
   const membership = await membershipOf(ctx2);
   if (membership !== "unknown" && !canStageDrafts(membership)) {
@@ -19058,7 +19173,9 @@ async function saveDraft(ctx2, { type, input, body, path: path4 } = {}) {
       pendingSlug: staging ? built.slug : null,
       path: staging ? staging.oldPath : built.path,
       frontmatter: fm,
-      body
+      body,
+      ...typeof skillFile === "string" ? { skillFile } : {}
+      // sow-109: a skill's SKILL.md text
     },
     token: ctx2.store?.get?.("githubToken"),
     signupBase: SIGNUP_BASE,
@@ -19141,14 +19258,15 @@ async function readDraft(ctx2, { type, slug, store, path: repoPath } = {}) {
     }
     if (text == null) throw new OperationError("not-found", `could not read the repo draft: ${rel}`);
     const { frontmatter, body } = parseContentFile(text);
+    const skill = await skillFileBesideItem(ctx2, rel, frontmatter);
     if (frontmatter?.encryptedBody) {
       try {
         const { text: plain } = await decryptMemberAsset(ctx2, { encPath: frontmatter.encryptedBody });
-        return { path: rel, branch: null, store: "repo", frontmatter, body: plain };
+        return { path: rel, branch: null, store: "repo", frontmatter, body: plain, ...skill };
       } catch {
       }
     }
-    return { path: rel, branch: null, store: "repo", frontmatter, body };
+    return { path: rel, branch: null, store: "repo", frontmatter, body, ...skill };
   }
   const opts = { token: ctx2.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
   const { drafts: recs } = await workerListDrafts(opts);
@@ -19162,7 +19280,7 @@ async function readDraft(ctx2, { type, slug, store, path: repoPath } = {}) {
       recPath = null;
     }
   }
-  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "" };
+  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? "", ...typeof rec.skillFile === "string" ? { skillFile: rec.skillFile } : {} };
 }
 async function discardDraft(ctx2, { type, slug, store } = {}) {
   requireIdentity(ctx2);
@@ -19198,6 +19316,8 @@ async function publishDraft(ctx2, { type, slug, title, store, path: path4 } = {}
     input: { ...rec.frontmatter ?? {}, status: "published" },
     body: rec.body ?? "",
     title,
+    ...typeof rec.skillFile === "string" ? { skillFile: rec.skillFile } : {},
+    // sow-109: a skill's file publishes with it
     ...rec.pendingSlug && rec.path ? { path: rec.path } : {}
     // a pending rename applies at the publish event (SOW-112)
   });
@@ -19579,6 +19699,7 @@ var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: '
 var COMMENT_TARGET = { type: "string", enum: ["post", "project", "prompt", "share", "news"] };
 var PATH_PARAM = { type: "string", description: "The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate." };
 var SCOPE_PARAM = { type: "string", enum: ["member", "house"], description: 'Target folder. "member" (default) is your own folder; "house" is the non-member house/ content and is superadmin-only, re-checked server-side.' };
+var SKILL_FILE_PARAM = { type: "string", description: "A skill's whole SKILL.md (frontmatter with a name: line, then the instructions). Published beside the item's index.md; omit it on a re-publish to keep the file the skill already has. A prompt ignores it." };
 async function resolveDraftRow(ctx2, { type, slug }) {
   try {
     const { drafts } = await listDrafts(ctx2, { type });
@@ -19629,7 +19750,7 @@ var TOOLS = [
   },
   {
     name: "get_content",
-    description: "Read one of the member's own content files (frontmatter + body) by repo `path`.",
+    description: "Read one of the member's own content files (frontmatter + body) by repo `path`. A skill also returns `skillFile`, its SKILL.md.",
     inputSchema: obj({ path: { type: "string" } }, ["path"]),
     handler: (ctx2, args) => getContentItem(ctx2, { path: args?.path })
   },
@@ -19641,9 +19762,9 @@ var TOOLS = [
   },
   {
     name: "publish_content",
-    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" saves it privately for review (no PR, nothing public). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" saves it privately for review (no PR, nothing public). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR. A prompt item is a prompt or a skill (input.kind); a skill passes its whole SKILL.md as `skillFile` (see add_prompt).',
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM },
+      { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM, skillFile: SKILL_FILE_PARAM },
       ["type", "input", "status"]
     ),
     // sow-271: this one forwards `args` WHOLE, so the type has to be canonicalized here rather than relying
@@ -19655,8 +19776,8 @@ var TOOLS = [
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: "add_prompt",
-    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
-    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
+    description: 'Author a PROMPT or a SKILL. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: kind ("prompt", the default, or "skill"), targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. For a prompt the markdown `body` is the prompt text. For a skill: pass the whole SKILL.md as `skillFile` (its frontmatter needs a name: line, lowercase letters, digits and dashes), targets[] names the tools it is made for (required), and `body` is the page text shown under the install box (the commands it adds and what each does). A re-publish that sends no kind keeps the item\'s own, and one that sends no skillFile keeps the file it has. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, title: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM, skillFile: SKILL_FILE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "prompt" })
   },
   {

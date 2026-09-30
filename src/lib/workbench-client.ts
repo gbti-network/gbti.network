@@ -25,6 +25,7 @@
 
 import { mergeCommentEchoes } from '../../membership/comment-echo.mjs'; // SOW-076 echoes, wired for the website 2026-09-11
 import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: an edit keeps a skill a skill
+import { skillFilesForPublish, skillFileBeside } from '../../client/src/skill-file.mjs'; // sow-109: a skill's SKILL.md travels with it
 import { buildContentFile, buildCommentFile, buildShareFile, shareId as makeShareId, flipContentStatus, parseContentFile, commentId } from '../../client/src/content-ops.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -123,6 +124,7 @@ function mapDraftRecord(rec: any) {
     // sow-183 follow-up: the PENDING author reassignment, so reopening a draft restores the superadmin's
     // choice instead of silently showing the owner they were moving the item away from.
     authorTarget: rec?.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
+    skillFile: typeof rec?.skillFile === 'string' ? rec.skillFile : null, // sow-109
     pull: null,
     store: 'kv', // sow-194: the store discriminator, so a KV draft never collides with a repo draft on merge
     publishedAt: fm.publishedAt ? Number(fm.publishedAt) : null,
@@ -243,7 +245,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
   // author -- the shared editor's Author field only ever sends this for a superadmin and only when it differs
   // from the loaded item's current home (gbti-content-editor.mjs). It generalizes the rename machinery above: a
   // MOVE is now "the resolved path changed", for a slug reason, an author reason, or both, in one hosted PR.
-  async function publish({ type, input = {}, body = '', authorNote, path, scope, authorTarget }: any) {
+  async function publish({ type, input = {}, body = '', authorNote, path, scope, authorTarget, skillFile }: any) {
     // Both triggers below (a house path, or an explicit authorTarget) are only reachable through UI already
     // gated to role==='superadmin' (gbti-workspace.mjs _canScope, the editor's Author field) -- the Worker
     // independently re-verifies the caller is superadmin (authorizeSuperadmin) before accepting the write, so
@@ -322,6 +324,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       const collision = await readOwnFile(built.path);
       if (collision != null) throw err('bad-request', `"${built.slug}" already exists at the target location`);
     }
+    // sow-109: a skill's SKILL.md is written, kept, moved or removed with it (the rule is shared with the agent publisher).
+    const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, moved, skillFile, readFile: readOwnFile });
+    if (skillPlan.refusal) throw new WorkbenchClientError('invalid-content', skillPlan.refusal);
     // SOW-016 / Phase 3c: a whole-item members body OR a `<!-- members-only -->` section is encrypted to a sibling
     // .enc (via the cookie /membership/encrypt), and index.md keeps only the public teaser + the encryptedBody
     // pointer. planMemberFiles overrides any stale encryptedBody with the deterministic path, so a re-publish
@@ -330,6 +335,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     const files: Array<{ path: string; content?: string | null; contentBase64?: string }> = plan ? plan.files : [{ path: built.path, content: built.markdown }];
     const intro = buildIntroFile(target, user, built, authorNote);
     if (intro) files.push(intro);
+    files.push(...skillPlan.files);
     // sow-158 image upload: flush the images this item references into the SAME PR as the .md (binary base64
     // entries the Worker commits raw), so the path resolves the moment the PR merges. Newly staged uploads always
     // live under the ACTING caller's own folder (stageImage), regardless of the target folder. planPublishImage
@@ -501,13 +507,15 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     const text = await readOwnFile(path);
     if (text == null) throw err('not-found', 'could not load that item');
     const { frontmatter, body } = parseContentFile(text);
+    const skill = await skillFileBeside(path, frontmatter, readOwnFile); // sow-109: the editor opens the file it publishes back
     const enc = (frontmatter as any)?.encryptedBody;
-    if (!enc) return { path, frontmatter, body };
+    if (!enc) return { path, frontmatter, body, ...skill };
     let memberText: string;
     try { memberText = await decryptEnc(enc); }
     catch { throw err('locked', 'could not load the members-only section of this item; refresh and try again'); }
-    return { path, frontmatter, body: reassembleMemberBody(frontmatter, body, memberText) };
+    return { path, frontmatter, body: reassembleMemberBody(frontmatter, body, memberText), ...skill };
   }
+
 
   // sow-158 Phase 3b: the cookie twin of member-content.mjs encryptViaWorker. POSTs plaintext to the now-cookie-
   // enabled /membership/encrypt (credentials + CSRF); the AES key never comes back. A 401/403 (not effective-paid)
@@ -734,7 +742,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       const r = await workerGet('/membership/author/targets');
       return { members: Array.isArray(r?.members) ? r.members : [] };
     },
-    async saveDraft({ type, input = {}, body = '', path, authorNote, authorTarget }: any) {
+    async saveDraft({ type, input = {}, body = '', path, authorNote, authorTarget, skillFile }: any) {
       // A members-only draft is allowed: its plain body stays in the private, erasable KV draft store (SOW-157),
       // never git; publishDraft() encrypts it at publish time. So no members refusal here.
       const slug = String((input && input.slug) || '');
@@ -749,6 +757,8 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
           // away a reassignment the superadmin had already chosen. `null` is passed explicitly to CLEAR, which
           // is what the editor does once a publish has consumed the move.
           ...(authorTarget !== undefined ? { authorTarget } : {}),
+          // sow-109: a skill's own file, on the authorNote terms (absent keeps the stored one).
+          ...(typeof skillFile === 'string' ? { skillFile } : {}),
         },
       });
       return { state: 'staged' };
@@ -804,6 +814,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
         // back to the original owner and report success. That silent no-op is the behaviour this change
         // exists to remove, so it must be forwarded on EVERY publish path, not only the editor's.
         ...(rec.authorTarget && typeof rec.authorTarget === 'object' ? { authorTarget: rec.authorTarget } : {}),
+        ...(typeof rec.skillFile === 'string' ? { skillFile: rec.skillFile } : {}), // sow-109: the skill file publishes with it
       });
       await discardDraft({ type, slug }).catch(() => {}); // best-effort: the draft is now a submitted PR
       return { prNumber: res.prNumber, prUrl: res.prUrl };

@@ -631,7 +631,7 @@ class GbtiWorkspace extends GbtiElement {
       // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta.
       // SOW-145: an EDIT carries a house/ path the editor infers scope from; a NEW item has no path, so the
       // current workspace scope decides (a superadmin in House scope creates house content).
-      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null }); // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
+      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null }); // sow-326: the saved author note travels too, or the editor prefills from the wrong source // sow-194: store lets Preview render a repo draft from canonical, no KV shadow
       // SOW-112 QA fix: after a rename PR opens, drop the stale caches and repoint the deep-link hash at the
       // NEW path — but do NOT refetch it yet (the auto-merge takes ~2-3 minutes; an immediate read 404s and
       // looked like the rename did nothing). The editor already updated its own view optimistically.
@@ -1034,7 +1034,7 @@ class GbtiWorkspace extends GbtiElement {
       const staged = (this._drafts || []).find((d) => d.path === path);
       if (staged) { this._openDraft(staged); return; }
       const full = await this.client.getContentItem({ path });
-      this._editing = { type, frontmatter: full.frontmatter, body: full.body, path };
+      this._editing = { type, frontmatter: full.frontmatter, body: full.body, path, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null }; // sow-109
       this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(path)}`);
       this.render();
     } catch { /* could not load: stay on the list */ }
@@ -1060,7 +1060,7 @@ class GbtiWorkspace extends GbtiElement {
       // choice reads as having been silently discarded.
       // sow-326: authorNote is carried onto the editing state. readDraft returns it; this object used to drop
       // it, which is where a saved from-the-author note disappeared between the store and the editor.
-      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || '', staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === 'string' ? full.authorNote : null };
+      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || '', staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === 'string' ? full.authorNote : null, skillFile: typeof full.skillFile === 'string' ? full.skillFile : null };
       this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
       // SOW-106 Phase C: re-validate against the CURRENT schema on open, so drift surfaces here (a clear prompt)
       // instead of as a publish-time failure. Best-effort: a validate error never blocks opening the draft.

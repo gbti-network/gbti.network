@@ -10,6 +10,7 @@
 
 import { buildContentFile, flipContentStatus, buildCommentFile, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
 import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: an edit keeps a skill a skill
+import { skillFilesForPublish, skillPathFor } from './skill-file.mjs'; // sow-109: a skill's SKILL.md travels with it
 import { SLUG_MAX, SLUG_PATTERN } from '../../membership/item-id.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
@@ -104,6 +105,11 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
     files.push({ path: newEnc, content: encText }, { path: oldEnc, content: null });
   }
   files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
+  // sow-109: a skill's SKILL.md moves with it, byte for byte.
+  if (type === 'prompt' && fm.kind === 'skill') {
+    const skillText = await readCanonical(ctx, repo, skillPathFor(rel));
+    if (skillText != null) files.push({ path: skillPathFor(newPath), content: skillText }, { path: skillPathFor(rel), content: null });
+  }
   // The from-the-author intro comment (project/prompt) moves + retargets in the same PR.
   files.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug, newSlug: slug }));
 
@@ -163,7 +169,7 @@ export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
 }
 
 
-export async function publish(ctx, { type, input, body, title, authorNote, path, scope } = {}) {
+export async function publish(ctx, { type, input, body, title, authorNote, path, scope, skillFile } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   // SOW-145: a house publish targets the non-member house/ folder (author stays 'gbti'). The scope is declared
@@ -221,9 +227,11 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
   // whole block so updatedAt never bumped (SOW-258, hit live 2026-08-18 on the /qa prompt; DeployStatusNotice
   // and the "Recently updated" sort both read updatedAt and went stale). The two publishedAt WRITES stay guarded
   // by `!effInput.publishedAt`, so a supplied publishedAt is preserved; only the updatedAt stamp is newly reached.
+  // The item's committed frontmatter before this publish (null for a new item). Read below for the date rules, and by
+  // the skill file plan, which needs the kind the item had.
+  let priorFm = oldFm;
   if (['post', 'project', 'prompt'].includes(type)) {
     const nowIso = new Date().toISOString();
-    let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === 'string' && effInput.slug) {
       const canonical = contentPath(type, id.username, effInput.slug, targetScope); // SOW-145: house -> house/<sub>/…
       let text = null;
@@ -260,6 +268,13 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
     const collision = await repo.getFileContent(built.path).catch(() => null);
     if (collision != null) throw new OperationError('bad-request', `the permalink "${built.slug}" is already taken`);
   }
+  // sow-109: a skill's SKILL.md is written, kept, moved or removed with it (client/src/skill-file.mjs holds the rule).
+  // Decided before anything is encrypted, so a refusal costs nothing.
+  const skillPlan = await skillFilesForPublish({
+    type, built, oldIndexPath: renaming ? origin.oldPath : (priorFm ? built.path : null), priorKind: priorFm?.kind,
+    moved: renaming, skillFile, readFile: (p) => readCanonical(ctx, repo, p),
+  });
+  if (skillPlan.refusal) throw new OperationError('invalid-content', skillPlan.refusal);
 
   // SOW-016: if the content is whole-item members-only or has a `<!-- members-only -->` section, encrypt the
   // gated markdown SERVER-SIDE (the Worker holds the key; it never reaches us) and commit the ciphertext plus
@@ -310,7 +325,7 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
       if ((await ctx.reader?.readFile?.(oldIntro)) != null) renameFiles.push({ path: oldIntro, content: null });
     }
   }
-  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+  const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(skillPlan.files).concat(renameFiles);
   const r = await hostedAuthor({
     token: ctx.store?.get?.('githubToken'), itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
     files, title: ttl, signupBase: SIGNUP_BASE, fetchImpl: ctx.fetch ?? globalThis.fetch,
@@ -329,6 +344,16 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
     } catch { /* see above */ }
   }
   return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
+}
+
+
+/** The canonical text of a repository file, or null: the host's reader first, then the repository client (the MCP host
+ *  without a local checkout has no working reader). Never throws. */
+async function readCanonical(ctx, repo, rel) {
+  let text = null;
+  try { text = (await ctx.reader?.readFile?.(rel)) ?? null; } catch { text = null; }
+  if (text == null) { try { text = (await repo.getFileContent(rel)) ?? null; } catch { text = null; } }
+  return text;
 }
 
 

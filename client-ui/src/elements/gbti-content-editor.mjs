@@ -19,6 +19,7 @@ import './gbti-cta-assignment.mjs'; // sow-281: the read-only "which CTA does th
 import './gbti-category-picker.mjs'; // sow-227: the Category field is picked from the tree, not typed
 import { categoryFieldHtml } from '../category-picker-core.mjs'; // sow-227: that field's markup + the hidden input gather() reads
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
+import { kindSectionHtml, skillSectionsHtml, mainHeadingHtml, skillFileFrom, wireSkillEditor, SKILL_EDITOR_CSS, normalizeKind } from '../editor-skill.mjs'; // sow-109: prompt or skill
 import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174: the curated banner-color swatches
 import { detectLinkSource } from '../../../src/lib/project-page.mjs'; // sow-175: wordpress.org/github.com URL detection
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
@@ -56,7 +57,7 @@ const CHECK = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-
 const SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
 // SOW-062 P6: keys rendered in a DOCUMENT-CANVAS section (not the rail) for a given type, so they are excluded from
 // the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the project Video section.
-const DOC_SECTION_KEYS = { project: new Set(['video']) };
+const DOC_SECTION_KEYS = { project: new Set(['video']), prompt: new Set(['kind']) }; // sow-109: kind is the cards above the body
 // SOW-062 P6 rail-2: the stat tiles (hi-fi rail footer). Discussions is live now (client.listComments count); the
 // rest are wired to an optional client.itemStats() that a later backend phase provides -- until then they show a
 // pending dash. Order matches the mockup.
@@ -205,14 +206,14 @@ class GbtiContentEditor extends GbtiElement {
   // real author input, so a late client still re-renders an editor nobody has touched.
   skipClientRender() { return this._dirty === true; }
 
-  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null } = {}) {
+  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null, authorNote = null, skillFile = null } = {}) {
     this.type = type || this.type;
     // sow-326: `authorNote` travels with the draft now. readDraft has always returned it and BOTH hops between
     // there and here dropped the field, so this.preset.authorNote was permanently undefined, the prefill below
     // always fell through to its fallback, and the owner watched a saved note vanish on every refresh. It is
     // folded into preset rather than held in its own property so one assignment per load stays the whole
     // contract, exactly as `input` and `body` are.
-    this.preset = { input: input || {}, body: body || '', authorNote: typeof authorNote === 'string' ? authorNote : null };
+    this.preset = { input: input || {}, body: body || '', authorNote: typeof authorNote === 'string' ? authorNote : null, skillFile: typeof skillFile === 'string' ? skillFile : null };
     this.itemPath = path || null; // SOW-062 P6: the item's index.md path, to resolve a repo-relative cover for preview
     // SOW-145: the content scope. Explicit for a NEW house item (no path yet); inferred from a house/ path when
     // editing an existing house item. House content publishes DIRECTLY (no fork-staged house drafts in v1).
@@ -370,6 +371,8 @@ class GbtiContentEditor extends GbtiElement {
     const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join('');
     const typePath = ({ post: 'articles', project: 'projects', product: 'projects', prompt: 'prompts' })[this.type] || this.type;
     const isPub = String(p.status || '').toLowerCase() === 'published';
+    const isPrompt = this.type === 'prompt'; // sow-109: a prompt item is a prompt or a skill (the cards above the body)
+    const kind = normalizeKind(p.kind);
     const statusLabel = isPub ? (p.publishedAt ? String(p.publishedAt).slice(0, 10) : 'published') : 'draft';
     // sow-184 (design 3a): the Status-card descriptor (pill label + tone + published date). `staged` wins over the
     // status field, since a staged draft carries status: published by design.
@@ -452,7 +455,7 @@ class GbtiContentEditor extends GbtiElement {
                </div>
              </section>` : '';
     this.set(
-      this.css(EDITOR_SURFACE + `
+      this.css(EDITOR_SURFACE + (this.type === 'prompt' ? SKILL_EDITOR_CSS : '') + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         /* sow-184 (design 3a): pin the action toolbar so Publish / Save draft / Preview never scroll off. It pins
            to the editor's scroll container; a solid --s-app background + a hairline let the document scroll under it.
@@ -574,6 +577,7 @@ class GbtiContentEditor extends GbtiElement {
         .strow .sv.mono { font-family:var(--font-mono,monospace); font-weight:500; text-transform:none; }
         .rbody { padding:4px 16px 16px; display:flex; flex-direction:column; gap:15px; }
         .fld { display:flex; flex-direction:column; gap:6px; }
+        .fld[hidden] { display:none; } /* sow-109: the attribute must beat display:flex (a skill hides the rail's Works with) */
         .fld > label { font-size:12.5px; font-weight:600; color:var(--s-fg-soft); display:flex; align-items:center; gap:6px; }
         .fld .req { color:var(--s-green-fg); } .fld .hint { font-size:11.5px; color:var(--s-fg-mute); font-weight:400; }
         .inp, .ta, .selbox { width:100%; font:inherit; font-size:13.5px; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; padding:9px 11px; outline:none; box-sizing:border-box; }
@@ -782,7 +786,7 @@ class GbtiContentEditor extends GbtiElement {
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ''}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ''}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ''}
-           <button class="ebtn${blocked ? '' : ' ebtn-primary'}" id="publish" type="button"${isPub && !this.staged ? ' hidden' : ''}${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required' : `${MERGE} Publish`}</button>
+           <button class="ebtn${blocked ? '' : ' ebtn-primary'}" id="publish" type="button"${isPub && !this.staged ? ' hidden' : ''}${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required' : `${MERGE} Publish${isPrompt ? ` <span data-publish-kind>${kind}</span>` : ''}`}</button>
          </div>
          <div class="edgrid">
            <article class="doc">
@@ -797,6 +801,7 @@ class GbtiContentEditor extends GbtiElement {
                const metaCls = this.staged ? ' staged' : (isPub ? ' pub' : '');
                return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>`;
              })()}
+             ${isPrompt ? kindSectionHtml(kind) + skillSectionsHtml({ kind, skillFile: this.preset?.skillFile || '' }) : ''}
              <div class="doc-view-row">
                <div class="doc-view" id="docview">
                  <button type="button" class="on" data-view="visual">${DOC} Visual</button>
@@ -805,7 +810,7 @@ class GbtiContentEditor extends GbtiElement {
                <button class="ebtn dv-cheat" id="mdref" type="button" title="Markdown cheatsheet" hidden>${BOOK} <span class="lbl">Cheatsheet</span></button>
              </div>
              <section class="docsec" id="secMain">
-               <div class="docsec-h">${DOC} Main content</div>
+               <div class="docsec-h">${DOC} ${isPrompt ? mainHeadingHtml(kind) : 'Main content'}</div>
                <gbti-doc-editor id="body"></gbti-doc-editor>
              </section>${docSections}
              <div class="docmd-wrap" id="docmdwrap" hidden>
@@ -890,6 +895,7 @@ class GbtiContentEditor extends GbtiElement {
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
     this._wireLinks(); // SOW-062 P6: the project links[] row editor (serializes into the hidden json input)
     this._wireGallery(); // sow-268: the project gallery[] row editor (serializes into the hidden json input)
+    if (this.type === 'prompt') wireSkillEditor(this); // sow-109: the Prompt or Skill cards and the Made for list
     // SOW-062 P6: prefill the from-the-author note from the existing intro-<slug> comment (existing item).
     const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : '';
     if (introSlug) {
@@ -1699,7 +1705,8 @@ class GbtiContentEditor extends GbtiElement {
       return el ? (el.type === 'checkbox' ? el.checked : el.value) : '';
     };
     const visible = this.fields.filter((f) => this.fieldVisible(f, getVal));
-    return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$('#body')?.value ?? '' };
+    const skillFile = this.type === 'prompt' ? skillFileFrom(this.root) : undefined; // sow-109: a skill's SKILL.md
+    return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$('#body')?.value ?? '', ...(skillFile !== undefined ? { skillFile } : {}) };
   }
 
   out(html, cls = 'muted') {
@@ -1927,7 +1934,7 @@ class GbtiContentEditor extends GbtiElement {
     this._setChip('Publishing…', 'busy');
     this.out('Publishing…');
     try {
-      const { type, input, body } = this.gather();
+      const { type, input, body, skillFile } = this.gather();
       // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (project/prompt).
       const authorNote = this.$('#authornote')?.value?.trim() || undefined;
       if (this.fields.some((f) => f.key === 'status')) input.status = 'published'; // status is action-driven (no rail dropdown)
@@ -1949,7 +1956,7 @@ class GbtiContentEditor extends GbtiElement {
       // rendered value is right, and when it was not (see authorSelectValue) an untouched control moved a live
       // item into members/gbtilabs on publish. An untouched control now moves nothing, whatever it displays.
       const authorTarget = authorTargetFor(this.$('#ownerSelect')?.value, this._ownerSelInitial);
-      const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined, authorTarget });
+      const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined, authorTarget, ...(skillFile !== undefined ? { skillFile } : {}) });
       this._setChip(`${CHECK} Published`, 'ok');
       this._dirty = false; this.$('#publish')?.setAttribute('hidden', ''); // now live + matches -> nothing to publish
       // sow-326: this content is no longer a staged draft, and the flag has to say so IN THIS SESSION as well
@@ -2076,7 +2083,7 @@ class GbtiContentEditor extends GbtiElement {
     this._setChip('Saving…', 'busy');
     this.out('Saving draft…');
     try {
-      const { type, input, body } = this.gather();
+      const { type, input, body, skillFile } = this.gather();
       if (this.fields.some((f) => f.key === 'status')) input.status = 'draft'; // SOW-062 P6: status is action-driven (no rail dropdown)
       if (['post', 'project', 'prompt'].includes(type)) input.updatedAt = new Date().toISOString(); // SOW-062 P6: last-updated-locally
       const authorNote = this.$('#authornote')?.value ?? undefined;
@@ -2099,6 +2106,7 @@ class GbtiContentEditor extends GbtiElement {
         type, input, body, path: this.itemPath || undefined, // SOW-112 v2: a changed permalink stages on the item's own branch
         ...(typeof authorNote === 'string' ? { authorNote } : {}),
         ...(authorTarget !== undefined ? { authorTarget } : {}),
+        ...(skillFile !== undefined ? { skillFile } : {}), // sow-109: a skill's SKILL.md is kept with the draft
       });
       this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
       this._setChip(`${CHECK} Draft saved`, 'ok');

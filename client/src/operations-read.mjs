@@ -10,6 +10,7 @@ import { getCommentEchoes as workerGetCommentEchoes, reapCommentEchoes as worker
 import { mergeCommentEchoes } from '../../membership/comment-echo.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { NETWORK_CONTENT_PATH_RE, OperationError, isNetworkContentPath, membershipOf, requireIdentity, requireSuperadminForHouse } from './operations-core.mjs';
+import { skillFileBeside } from './skill-file.mjs'; // sow-109: a skill's SKILL.md opens with it
 
 // SOW-145: `scope` selects which folder the WorkBench lists. 'member' (default) lists the caller's own
 // members/<username>/; 'house' lists the NETWORK's own folder, members/gbtilabs/ since sow-195 (a superadmin
@@ -185,7 +186,25 @@ export async function readContent(ctx, { path } = {}) {
 }
 
 
-export async function getContentItem(ctx, { path } = {}) {
+/** sow-109: `{ skillFile }` from beside a skill's index.md: the host's reader first, then the repository client. */
+export function skillFileBesideItem(ctx, indexPath, frontmatter) {
+  return skillFileBeside(indexPath, frontmatter, async (p) => {
+    let text = null;
+    try { text = (await ctx.reader?.readFile?.(p)) ?? null; } catch { text = null; }
+    if (text == null) { try { text = (await ctx.getRepoClient?.()?.getFileContent?.(p)) ?? null; } catch { text = null; } }
+    return text;
+  });
+}
+
+
+/** Open one of the caller's own items for editing: { path, frontmatter, body }, plus `skillFile` for a skill (sow-109). */
+export async function getContentItem(ctx, args = {}) {
+  const item = await getContentItemFile(ctx, args);
+  return { ...item, ...await skillFileBesideItem(ctx, item.path, item.frontmatter) };
+}
+
+
+async function getContentItemFile(ctx, { path } = {}) {
   const id = requireIdentity(ctx);
   if (!path) throw new OperationError('bad-request', 'path is required');
   // SOW-145, retargeted by sow-195: a NETWORK content item opens for a superadmin (re-checked) via the

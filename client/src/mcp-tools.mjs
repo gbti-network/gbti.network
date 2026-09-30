@@ -51,6 +51,7 @@ const COMMENT_TARGET = { type: 'string', enum: ['post', 'project', 'prompt', 'sh
 // re-checked server-side); omit it for your own folder.
 const PATH_PARAM = { type: 'string', description: 'The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate.' };
 const SCOPE_PARAM = { type: 'string', enum: ['member', 'house'], description: 'Target folder. "member" (default) is your own folder; "house" is the non-member house/ content and is superadmin-only, re-checked server-side.' };
+const SKILL_FILE_PARAM = { type: 'string', description: 'A skill\'s whole SKILL.md (frontmatter with a name: line, then the instructions). Published beside the item\'s index.md; omit it on a re-publish to keep the file the skill already has. A prompt ignores it.' };
 
 // sow-194 + sow-193: RESOLVE a draft's store server-side before acting on it.
 //
@@ -122,7 +123,7 @@ export const TOOLS = [
   },
   {
     name: 'get_content',
-    description: "Read one of the member's own content files (frontmatter + body) by repo `path`.",
+    description: "Read one of the member's own content files (frontmatter + body) by repo `path`. A skill also returns `skillFile`, its SKILL.md.",
     inputSchema: obj({ path: { type: 'string' } }, ['path']),
     handler: (ctx, args) => getContentItem(ctx, { path: args?.path }),
   },
@@ -134,9 +135,9 @@ export const TOOLS = [
   },
   {
     name: 'publish_content',
-    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" saves it privately for review (no PR, nothing public). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" saves it privately for review (no PR, nothing public). Forces author/owner fields; goes through the gate. For a new project/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR. A prompt item is a prompt or a skill (input.kind); a skill passes its whole SKILL.md as `skillFile` (see add_prompt).',
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM },
+      { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM, skillFile: SKILL_FILE_PARAM },
       ['type', 'input', 'status'],
     ),
     // sow-271: this one forwards `args` WHOLE, so the type has to be canonicalized here rather than relying
@@ -148,8 +149,8 @@ export const TOOLS = [
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: 'add_prompt',
-    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
-    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
+    description: 'Author a PROMPT or a SKILL. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" saves it privately for review. input requires: title, slug (kebab-case), shortDescription; optional: kind ("prompt", the default, or "skill"), targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. For a prompt the markdown `body` is the prompt text. For a skill: pass the whole SKILL.md as `skillFile` (its frontmatter needs a name: line, lowercase letters, digits and dashes), targets[] names the tools it is made for (required), and `body` is the page text shown under the install box (the commands it adds and what each does). A re-publish that sends no kind keeps the item\'s own, and one that sends no skillFile keeps the file it has. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, title: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM, skillFile: SKILL_FILE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'prompt' }),
   },
   {

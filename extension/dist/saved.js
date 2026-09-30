@@ -6105,6 +6105,326 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-category-picker", GbtiCategoryPicker);
 
+  // client-ui/src/public-url.mjs
+  var SITE_ORIGIN = "https://gbti.network";
+  var TYPE_BASE = { post: "articles", project: "projects", product: "projects", prompt: "prompts" };
+  function slugFromPath(path) {
+    const parts = String(path || "").split("/").filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last !== "index.md" && last !== "index.mdx") return "";
+    return parts[parts.length - 2] || "";
+  }
+  function publicUrlFor({ type, slug, path } = {}) {
+    const base = TYPE_BASE[type];
+    if (!base) return "";
+    const s = String(slug ?? "").trim() || slugFromPath(path);
+    if (!s) return "";
+    return `${SITE_ORIGIN}/${base}/${encodeURIComponent(s)}/`;
+  }
+
+  // src/lib/skill-box-css.mjs
+  var SKILL_TOKENS = Object.freeze({
+    light: Object.freeze({
+      "kind-prompt-fg": "#6b4fb0",
+      "kind-prompt-bg": "#f2eefb",
+      "kind-prompt-line": "#d6c9ee",
+      "kind-skill-fg": "#ffffff",
+      "kind-skill-bg": "#6b4fb0",
+      "skill-box-bg": "#f8f5fe",
+      "skill-box-line": "#d6c9ee",
+      "skill-box-well": "#ffffff",
+      "skill-box-well-line": "#e2daf3",
+      "skill-box-mute": "#5d5275",
+      "skill-box-accent": "#6b4fb0",
+      "skill-box-on-accent": "#ffffff"
+    }),
+    dark: Object.freeze({
+      "kind-prompt-fg": "#cdbcff",
+      "kind-prompt-bg": "#332b48",
+      "kind-prompt-line": "#4b3f6e",
+      "kind-skill-fg": "#1d1433",
+      "kind-skill-bg": "#c4b0ff",
+      "skill-box-bg": "#262234",
+      "skill-box-line": "#5d4d8f",
+      "skill-box-well": "#19171f",
+      "skill-box-well-line": "#3d3754",
+      "skill-box-mute": "#b9b0d6",
+      "skill-box-accent": "#c4b0ff",
+      "skill-box-on-accent": "#1d1433"
+    })
+  });
+  var skillTokenDecls = (theme) => Object.entries(SKILL_TOKENS[theme]).map(([k, v]) => `--${k}: ${v};`).join(" ");
+  var SKILL_BOX_CSS = `/* ---------- the label ---------- */
+.kind-badge {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px;
+  border-radius: 6px; border: 1px solid transparent; font-family: var(--f-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; line-height: 1; text-decoration: none;
+}
+.kind-badge svg { flex: none; }
+.kind-prompt { color: var(--kind-prompt-fg); background: var(--kind-prompt-bg); border-color: var(--kind-prompt-line); }
+.kind-skill { color: var(--kind-skill-fg); background: var(--kind-skill-bg); }
+
+/* ---------- a skill page: the install box ---------- */
+.skill-install {
+  display: flex; flex-direction: column; gap: 20px; padding: 26px 28px; margin-bottom: 30px;
+  border: 1.5px solid var(--skill-box-line); border-radius: var(--r-lg); background: var(--skill-box-bg); color: var(--fg);
+}
+.skill-install-head { display: flex; align-items: center; gap: 14px; }
+.skill-install-head h2 {
+  margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 24px; line-height: 1.2; color: var(--fg);
+  text-transform: none; letter-spacing: normal; /* the extension's base styles uppercase every h2 */
+}
+.skill-install-ico {
+  width: 40px; height: 40px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: var(--skill-box-accent); color: var(--skill-box-on-accent);
+}
+.skill-install code { font-family: var(--f-mono); font-size: .9em; }
+.skill-tools-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.skill-tools-label { margin: 0; font-size: 14px; font-weight: 600; color: var(--skill-box-mute); }
+.skill-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--skill-box-well-line); border-radius: 10px; background: var(--skill-box-well); }
+.skill-tools button {
+  height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-soft);
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; width: auto;
+}
+.skill-tools button:hover { background: var(--skill-box-bg); color: var(--fg); }
+.skill-tools button[aria-selected="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
+.skill-panel[hidden] { display: none; }
+.skill-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
+.skill-steps > li { display: flex; gap: 14px; }
+.skill-step-n {
+  width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1.5px solid var(--skill-box-accent); color: var(--skill-box-accent);
+  font-family: var(--f-mono); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.skill-step { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.skill-step-t { margin: 0; font-size: 16px; line-height: 28px; font-weight: 600; }
+.skill-step-t code {
+  padding: 2px 7px; border-radius: 5px; border: 1px solid var(--skill-box-well-line); background: var(--skill-box-well); color: var(--fg);
+}
+.skill-cmd {
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; min-width: 0;
+  border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: var(--skill-box-well);
+}
+.skill-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--fg); }
+.skill-note, .skill-local { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
+.skill-local { padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--skill-box-well-line); }
+.skill-local code { color: var(--fg); }
+.skill-file-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* The buttons carry their own hover background: the site's bare-button rules would otherwise paint them green. */
+.skill-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; width: auto; box-sizing: border-box;
+  border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: transparent; color: var(--fg);
+  font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.skill-btn:hover { background: var(--skill-box-well); color: var(--fg); border-color: var(--skill-box-accent); }
+.skill-btn-sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 6px; flex: none; }
+.skill-btn-primary { border-color: transparent; background: var(--green); color: #fff; font-weight: 700; }
+.skill-btn-primary:hover { background: var(--green-600); color: #fff; border-color: transparent; }
+
+@media (max-width: 600px) {
+  .skill-install { padding: 20px 16px; }
+  .skill-steps > li { gap: 10px; }
+  .skill-cmd { flex-wrap: wrap; }
+}
+`;
+
+  // client-ui/src/editor-skill.mjs
+  var normalizeKind = (v) => v === "skill" ? "skill" : "prompt";
+  var svg4 = (d, size, width = 2.4) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  var ICON = {
+    prompt: '<path d="M4 6h16M4 12h11M4 18h7"/>',
+    skill: '<path d="M4 17l6-5-6-5"/><path d="M12 19h8"/>',
+    check: '<path d="M5 12l5 5 9-10"/>',
+    install: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'
+  };
+  var CARDS = [
+    { kind: "prompt", name: "Prompt", desc: "Text a reader copies into ChatGPT, Claude, Gemini or another AI tool." },
+    { kind: "skill", name: "Skill", desc: "A SKILL.md file a reader installs once, so their agent gains a new slash command." }
+  ];
+  function mainHeading(kind2) {
+    return normalizeKind(kind2) === "skill" ? { title: "Commands and usage", optional: true, sub: "The commands your skill adds and what each one does. Shown under the install box." } : { title: "The prompt", optional: false, sub: "The text a reader copies into their AI tool." };
+  }
+  var mainHeadingHtml = (kind2) => {
+    const h = mainHeading(kind2);
+    return `<span data-main-title>${esc(h.title)}</span> <span class="dsub-opt" data-main-opt${h.optional ? "" : " hidden"}>Optional</span> <span class="dsub" data-main-sub>${esc(h.sub)}</span>`;
+  };
+  function kindSectionHtml(kind2) {
+    const cur = normalizeKind(kind2);
+    const cards = CARDS.map((c) => `<button type="button" class="kind-card${c.kind === cur ? " on" : ""}" role="radio" aria-checked="${c.kind === cur}" data-kind-pick="${c.kind}">
+      <span class="kc-top"><span class="kc-ico kc-${c.kind}">${svg4(ICON[c.kind], 18)}</span><span class="kc-name">${esc(c.name)}</span><span class="kc-check">${svg4(ICON.check, 13, 3.2)}</span></span>
+      <span class="kc-desc">${esc(c.desc)}</span></button>`).join("");
+    return `<section class="kind-sec" aria-labelledby="kindh"><h2 id="kindh" class="kind-h">What are you sharing?</h2>
+    <div class="kind-cards" role="radiogroup" aria-labelledby="kindh">${cards}</div>
+    <input data-key="kind" data-kind="enum" type="hidden" value="${cur}" /></section>`;
+  }
+  function madeForRows({ allTools = [], stepKeys = [], targets = [] } = {}) {
+    const withSteps = new Set(stepKeys);
+    const on = new Set(targets);
+    const known = allTools.filter((t) => t && t.label);
+    const rows = [...known.filter((t) => withSteps.has(t.key)), ...known.filter((t) => !withSteps.has(t.key))].map((t) => ({ label: t.label, note: withSteps.has(t.key) ? "Standard steps" : "No standard steps yet", on: on.has(t.label) }));
+    const labels = new Set(rows.map((r) => r.label));
+    for (const t of targets) if (!labels.has(t)) rows.push({ label: t, note: "Not in the tool list", on: true });
+    return rows;
+  }
+  function toggleTarget(targets, label) {
+    const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
+    return list.includes(label) ? list.filter((t) => t !== label) : [...list, label];
+  }
+  var madeForButtonsHtml = (rows) => rows.map((r) => `<button type="button" class="mf-tool${r.on ? " on" : ""}" aria-pressed="${r.on}" data-mf-tool="${esc(r.label)}">
+    <span class="mf-box">${svg4(ICON.check, 12, 3.4)}</span><span class="mf-txt"><span class="mf-name">${esc(r.label)}</span><span class="mf-note">${esc(r.note)}</span></span></button>`).join("");
+  function skillSectionsHtml({ kind: kind2, skillFile = "" } = {}) {
+    const hide = normalizeKind(kind2) === "skill" ? "" : " hidden";
+    return `<div class="skill-note" data-skill-only${hide}><span class="sn-ico">${svg4(ICON.install, 17)}</span><div><b>No install steps needed</b>
+      <span class="sn-text">Your skill page shows the standard install steps for every tool you tick below, and readers pick theirs. Write about what your skill does, not how to install it.</span></div></div>
+    <section class="mf-sec" aria-labelledby="mfh" data-skill-only${hide}><h2 id="mfh" class="kind-h">Made for</h2>
+      <p class="mf-sub">Tick every tool your skill works in. Readers get the install steps for the one they use.</p>
+      <div class="mf-tools" role="group" aria-labelledby="mfh" data-mf-tools><span class="mf-wait">Loading the tool list…</span></div>
+      <p class="mf-foot">Not listed? Explain installation for it in Commands and usage, and ask an admin to add its standard steps.</p></section>
+    <section class="sf-sec" data-skill-only${hide}><label for="skillfile" class="kind-h">The skill file (SKILL.md)</label>
+      <p class="mf-sub">Paste the whole file. Readers copy or download exactly this.</p>
+      <textarea id="skillfile" class="sf-text" rows="12" spellcheck="false" placeholder="---&#10;name: my-skill&#10;description: What it does and when to use it.&#10;---">${esc(skillFile)}</textarea></section>`;
+  }
+  function skillFileFrom(root) {
+    const kind2 = root.querySelector('input[data-key="kind"]')?.value;
+    if (normalizeKind(kind2) !== "skill") return void 0;
+    const ta = root.querySelector("#skillfile");
+    return ta ? ta.value : void 0;
+  }
+  function siteFor(loc = globalThis.location) {
+    return loc && /^https?:$/.test(loc.protocol || "") && /(^|\.)gbti\.network$/.test(loc.hostname || "") ? loc.origin : SITE_ORIGIN;
+  }
+  var toolsCache = null;
+  async function loadTools(fetchImpl, site) {
+    if (!toolsCache) {
+      toolsCache = (async () => {
+        const res = await fetchImpl(`${site}/skill-install.json`, { cache: "no-cache" });
+        if (!res.ok) throw new Error(String(res.status));
+        const j = await res.json();
+        return { allTools: Array.isArray(j?.allTools) ? j.allTools : [], stepKeys: (Array.isArray(j?.tools) ? j.tools : []).map((t) => t.key) };
+      })().catch((e) => {
+        toolsCache = null;
+        throw e;
+      });
+    }
+    return toolsCache;
+  }
+  function wireSkillEditor(ed, { fetchImpl = globalThis.fetch, site = siteFor() } = {}) {
+    const root = ed.root;
+    const q = (s) => root.querySelector(s);
+    const targetsInput = () => q('input[data-key="targets"]');
+    const targetsNow = () => String(targetsInput()?.value || "").split(",").map((s) => s.trim()).filter(Boolean);
+    let toolsLoaded = false;
+    const railTargets = () => q('.fld[data-fkey="targets"]');
+    const syncChips = (list) => {
+      const box = q('[data-chips="targets"]');
+      if (!box) return;
+      box.querySelectorAll(".chip2").forEach((c) => c.remove());
+      const inp = box.querySelector("input");
+      for (const label of list) {
+        const chip = root.ownerDocument.createElement("span");
+        chip.className = "chip2";
+        chip.innerHTML = `${esc(label)}<span class="x" data-rm><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>`;
+        box.insertBefore(chip, inp);
+      }
+    };
+    const fillTools = async () => {
+      const box = q("[data-mf-tools]");
+      if (!box) return;
+      try {
+        const { allTools, stepKeys } = await loadTools(fetchImpl, site);
+        box.innerHTML = madeForButtonsHtml(madeForRows({ allTools, stepKeys, targets: targetsNow() }));
+        toolsLoaded = true;
+      } catch {
+        box.innerHTML = '<span class="mf-wait">The tool list could not load. Add the tools under Works with in the Details panel.</span>';
+        toolsLoaded = false;
+      }
+      apply2(normalizeKind(q('input[data-key="kind"]')?.value));
+    };
+    const apply2 = (kind2) => {
+      const skill = kind2 === "skill";
+      root.querySelectorAll("[data-skill-only]").forEach((el2) => {
+        el2.hidden = !skill;
+      });
+      root.querySelectorAll("[data-kind-pick]").forEach((b) => {
+        const on = b.dataset.kindPick === kind2;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-checked", String(on));
+      });
+      const h = mainHeading(kind2);
+      const t = q("[data-main-title]");
+      if (t) t.textContent = h.title;
+      const s = q("[data-main-sub]");
+      if (s) s.textContent = h.sub;
+      const o = q("[data-main-opt]");
+      if (o) o.hidden = !h.optional;
+      const pw = q("[data-publish-kind]");
+      if (pw) pw.textContent = kind2;
+      const rail = railTargets();
+      if (rail) rail.hidden = skill && toolsLoaded;
+    };
+    root.querySelectorAll("[data-kind-pick]").forEach((b) => b.addEventListener("click", () => {
+      const kind2 = normalizeKind(b.dataset.kindPick);
+      const input = q('input[data-key="kind"]');
+      if (input && input.value !== kind2) {
+        input.value = kind2;
+        ed._markDirty?.();
+      }
+      apply2(kind2);
+    }));
+    q("[data-mf-tools]")?.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-mf-tool]");
+      if (!btn) return;
+      const next = toggleTarget(targetsNow(), btn.dataset.mfTool);
+      const inp = targetsInput();
+      if (inp) inp.value = next.join(", ");
+      const on = next.includes(btn.dataset.mfTool);
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-pressed", String(on));
+      syncChips(next);
+      ed._markDirty?.();
+    });
+    apply2(normalizeKind(q('input[data-key="kind"]')?.value));
+    return fillTools();
+  }
+  var SKILL_EDITOR_CSS = `
+  :host { ${skillTokenDecls("light")} }
+  :host-context([data-theme="dark"]) { ${skillTokenDecls("dark")} }
+  .kind-sec, .mf-sec, .sf-sec { margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+  .kind-h { margin:0; font-size:15px; font-weight:700; color:var(--s-fg); letter-spacing:normal; text-transform:none; font-family:inherit; }
+  .kind-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  @media (max-width:560px) { .kind-cards { grid-template-columns:1fr; } }
+  button.kind-card { display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:14px 16px; border:2px solid var(--s-line-2); border-radius:12px; background:var(--s-surface); color:var(--s-fg); font:inherit; text-align:left; cursor:pointer; width:auto; }
+  button.kind-card:hover { border-color:var(--skill-box-line); background:var(--s-surface); }
+  button.kind-card.on { border-color:var(--skill-box-accent); background:var(--skill-box-bg); }
+  .kc-top { display:flex; align-items:center; gap:10px; }
+  .kc-ico { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .kc-prompt { background:var(--kind-prompt-bg); color:var(--kind-prompt-fg); }
+  .kc-skill { background:var(--kind-skill-bg); color:var(--kind-skill-fg); }
+  .kc-name { flex:1; font-weight:700; font-size:17px; }
+  .kc-check { width:22px; height:22px; border-radius:50%; background:var(--skill-box-accent); color:var(--skill-box-on-accent); display:flex; align-items:center; justify-content:center; visibility:hidden; }
+  .kind-card.on .kc-check { visibility:visible; }
+  .kc-desc { font-size:13.5px; line-height:1.5; color:var(--s-fg-soft); }
+  .skill-note { margin-top:16px; display:flex; gap:12px; align-items:flex-start; padding:14px 16px; border:1px solid var(--skill-box-line); border-radius:12px; background:var(--skill-box-bg); }
+  .skill-note b { display:block; font-size:14.5px; margin-bottom:2px; color:var(--s-fg); }
+  .sn-text { font-size:13.5px; line-height:1.55; color:var(--skill-box-mute); }
+  .sn-ico { width:30px; height:30px; flex-shrink:0; border-radius:8px; background:var(--skill-box-accent); color:var(--skill-box-on-accent); display:flex; align-items:center; justify-content:center; }
+  .mf-sub, .mf-foot { margin:0; font-size:13.5px; line-height:1.5; color:var(--s-fg-mute); }
+  .mf-tools { display:flex; gap:8px; flex-wrap:wrap; }
+  .mf-wait { font-size:13.5px; color:var(--s-fg-mute); }
+  button.mf-tool { display:flex; align-items:center; gap:10px; padding:8px 12px; border:1.5px solid var(--s-line-2); border-radius:10px; background:var(--s-surface); color:var(--s-fg); font:inherit; cursor:pointer; width:auto; }
+  button.mf-tool:hover { border-color:var(--skill-box-line); background:var(--s-surface); }
+  button.mf-tool.on { border-color:var(--skill-box-accent); background:var(--skill-box-bg); }
+  .mf-box { width:18px; height:18px; flex-shrink:0; box-sizing:border-box; border-radius:5px; border:1.5px solid var(--s-fg-mute); color:transparent; display:flex; align-items:center; justify-content:center; }
+  .mf-tool.on .mf-box { background:var(--skill-box-accent); border-color:var(--skill-box-accent); color:var(--skill-box-on-accent); }
+  .mf-txt { display:flex; flex-direction:column; text-align:left; }
+  .mf-name { font-size:14px; font-weight:700; }
+  .mf-note { font-size:12px; color:var(--s-fg-mute); }
+  .sf-text { box-sizing:border-box; width:100%; min-height:220px; padding:12px 14px; border:1px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); color:var(--s-fg); font-family:var(--font-mono,ui-monospace,monospace); font-size:13px; line-height:1.6; resize:vertical; }
+  .sf-text:focus { outline:none; border-color:var(--skill-box-accent); }
+  .dsub-opt { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:none; color:var(--s-fg-mute); border:1px solid var(--s-line-2); border-radius:999px; padding:1px 8px; }
+  [data-skill-only][hidden], [data-main-opt][hidden] { display:none !important; }
+`;
+
   // src/lib/banner-presets.mjs
   var BANNER_PRESETS = [
     { key: "green", label: "Green", from: "#1f9e5f", to: "#25232b" },
@@ -6132,23 +6452,6 @@ ${listStyleProseCss(".doc-blocks")}
     if (host === "wordpress.org") return "wordpress";
     if (host === "github.com") return "github";
     return null;
-  }
-
-  // client-ui/src/public-url.mjs
-  var SITE_ORIGIN = "https://gbti.network";
-  var TYPE_BASE = { post: "articles", project: "projects", product: "projects", prompt: "prompts" };
-  function slugFromPath(path) {
-    const parts = String(path || "").split("/").filter(Boolean);
-    const last = parts[parts.length - 1];
-    if (last !== "index.md" && last !== "index.mdx") return "";
-    return parts[parts.length - 2] || "";
-  }
-  function publicUrlFor({ type, slug, path } = {}) {
-    const base = TYPE_BASE[type];
-    if (!base) return "";
-    const s = String(slug ?? "").trim() || slugFromPath(path);
-    if (!s) return "";
-    return `${SITE_ORIGIN}/${base}/${encodeURIComponent(s)}/`;
   }
 
   // client-ui/src/gallery.mjs
@@ -6238,7 +6541,7 @@ ${listStyleProseCss(".doc-blocks")}
   var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`);
   var CHECK2 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
-  var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]) };
+  var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]), prompt: /* @__PURE__ */ new Set(["kind"]) };
   var STAT_DEFS = [
     { key: "discussions", label: "Discussions" },
     { key: "revisions", label: "Live revisions", title: "Commits on the main branch that touched this item" },
@@ -6403,9 +6706,9 @@ ${listStyleProseCss(".doc-blocks")}
     skipClientRender() {
       return this._dirty === true;
     }
-    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null } = {}) {
+    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null, authorNote = null, skillFile = null } = {}) {
       this.type = type || this.type;
-      this.preset = { input: input || {}, body: body || "", authorNote: typeof authorNote === "string" ? authorNote : null };
+      this.preset = { input: input || {}, body: body || "", authorNote: typeof authorNote === "string" ? authorNote : null, skillFile: typeof skillFile === "string" ? skillFile : null };
       this.itemPath = path || null;
       this.itemScope = scope || (path && String(path).startsWith("house/") ? "house" : "member");
       this.itemStore = store2;
@@ -6519,6 +6822,8 @@ ${listStyleProseCss(".doc-blocks")}
       const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
       const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
       const isPub = String(p.status || "").toLowerCase() === "published";
+      const isPrompt = this.type === "prompt";
+      const kind2 = normalizeKind(p.kind);
       const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
       const status = editorStatus({ staged: this.staged, status: p.status, publishedAt: p.publishedAt });
       const fmtD = (d) => {
@@ -6578,7 +6883,7 @@ ${listStyleProseCss(".doc-blocks")}
                </div>
              </section>` : "";
       this.set(
-        this.css(EDITOR_SURFACE + `
+        this.css(EDITOR_SURFACE + (this.type === "prompt" ? SKILL_EDITOR_CSS : "") + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         /* sow-184 (design 3a): pin the action toolbar so Publish / Save draft / Preview never scroll off. It pins
            to the editor's scroll container; a solid --s-app background + a hairline let the document scroll under it.
@@ -6700,6 +7005,7 @@ ${listStyleProseCss(".doc-blocks")}
         .strow .sv.mono { font-family:var(--font-mono,monospace); font-weight:500; text-transform:none; }
         .rbody { padding:4px 16px 16px; display:flex; flex-direction:column; gap:15px; }
         .fld { display:flex; flex-direction:column; gap:6px; }
+        .fld[hidden] { display:none; } /* sow-109: the attribute must beat display:flex (a skill hides the rail's Works with) */
         .fld > label { font-size:12.5px; font-weight:600; color:var(--s-fg-soft); display:flex; align-items:center; gap:6px; }
         .fld .req { color:var(--s-green-fg); } .fld .hint { font-size:11.5px; color:var(--s-fg-mute); font-weight:400; }
         .inp, .ta, .selbox { width:100%; font:inherit; font-size:13.5px; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; padding:9px 11px; outline:none; box-sizing:border-box; }
@@ -6905,7 +7211,7 @@ ${listStyleProseCss(".doc-blocks")}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ""}
-           <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${isPub && !this.staged ? " hidden" : ""}${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish`}</button>
+           <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${isPub && !this.staged ? " hidden" : ""}${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish${isPrompt ? ` <span data-publish-kind>${kind2}</span>` : ""}`}</button>
          </div>
          <div class="edgrid">
            <article class="doc">
@@ -6916,6 +7222,7 @@ ${listStyleProseCss(".doc-blocks")}
           const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
           return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>`;
         })()}
+             ${isPrompt ? kindSectionHtml(kind2) + skillSectionsHtml({ kind: kind2, skillFile: this.preset?.skillFile || "" }) : ""}
              <div class="doc-view-row">
                <div class="doc-view" id="docview">
                  <button type="button" class="on" data-view="visual">${DOC} Visual</button>
@@ -6924,7 +7231,7 @@ ${listStyleProseCss(".doc-blocks")}
                <button class="ebtn dv-cheat" id="mdref" type="button" title="Markdown cheatsheet" hidden>${BOOK} <span class="lbl">Cheatsheet</span></button>
              </div>
              <section class="docsec" id="secMain">
-               <div class="docsec-h">${DOC} Main content</div>
+               <div class="docsec-h">${DOC} ${isPrompt ? mainHeadingHtml(kind2) : "Main content"}</div>
                <gbti-doc-editor id="body"></gbti-doc-editor>
              </section>${docSections}
              <div class="docmd-wrap" id="docmdwrap" hidden>
@@ -7004,6 +7311,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._wireRail();
       this._wireLinks();
       this._wireGallery();
+      if (this.type === "prompt") wireSkillEditor(this);
       const introSlug = AUTHOR_NOTE_TYPES.has(this.type) ? this.presetStr(this.preset?.input?.slug) : "";
       if (introSlug) {
         const staged = typeof this.preset?.authorNote === "string" ? this.preset.authorNote : null;
@@ -7786,7 +8094,8 @@ ${listStyleProseCss(".doc-blocks")}
         return el2 ? el2.type === "checkbox" ? el2.checked : el2.value : "";
       };
       const visible = this.fields.filter((f) => this.fieldVisible(f, getVal));
-      return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$("#body")?.value ?? "" };
+      const skillFile = this.type === "prompt" ? skillFileFrom(this.root) : void 0;
+      return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$("#body")?.value ?? "", ...skillFile !== void 0 ? { skillFile } : {} };
     }
     out(html, cls = "muted") {
       const o = this.$("#out");
@@ -8010,14 +8319,14 @@ ${listStyleProseCss(".doc-blocks")}
       this._setChip("Publishing…", "busy");
       this.out("Publishing…");
       try {
-        const { type, input, body } = this.gather();
+        const { type, input, body, skillFile } = this.gather();
         const authorNote = this.$("#authornote")?.value?.trim() || void 0;
         if (this.fields.some((f) => f.key === "status")) input.status = "published";
         if (["post", "project", "prompt"].includes(type)) {
           input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         }
         const authorTarget = authorTargetFor(this.$("#ownerSelect")?.value, this._ownerSelInitial);
-        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0, authorTarget });
+        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0, authorTarget, ...skillFile !== void 0 ? { skillFile } : {} });
         this._setChip(`${CHECK2} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
@@ -8130,7 +8439,7 @@ ${listStyleProseCss(".doc-blocks")}
       this._setChip("Saving…", "busy");
       this.out("Saving draft…");
       try {
-        const { type, input, body } = this.gather();
+        const { type, input, body, skillFile } = this.gather();
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
         if (["post", "project", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         const authorNote = this.$("#authornote")?.value ?? void 0;
@@ -8144,7 +8453,9 @@ ${listStyleProseCss(".doc-blocks")}
           path: this.itemPath || void 0,
           // SOW-112 v2: a changed permalink stages on the item's own branch
           ...typeof authorNote === "string" ? { authorNote } : {},
-          ...authorTarget !== void 0 ? { authorTarget } : {}
+          ...authorTarget !== void 0 ? { authorTarget } : {},
+          ...skillFile !== void 0 ? { skillFile } : {}
+          // sow-109: a skill's SKILL.md is kept with the draft
         });
         this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
         this._setChip(`${CHECK2} Draft saved`, "ok");
@@ -23006,7 +23317,7 @@ ${BLOCKED_PILL_CSS}
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null });
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null, authorNote: e.authorNote ?? null, skillFile: e.skillFile ?? null });
         ed?.addEventListener?.("gbti-renamed", (ev) => {
           const r = ev?.detail || {};
           if (!r.path) return;
@@ -23335,7 +23646,7 @@ ${BLOCKED_PILL_CSS}
           return;
         }
         const full = await this.client.getContentItem({ path });
-        this._editing = { type, frontmatter: full.frontmatter, body: full.body, path };
+        this._editing = { type, frontmatter: full.frontmatter, body: full.body, path, skillFile: typeof full.skillFile === "string" ? full.skillFile : null };
         this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(path)}`);
         this.render();
       } catch {
@@ -23355,7 +23666,7 @@ ${BLOCKED_PILL_CSS}
       this._draftMsg = null;
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path });
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null };
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null, skillFile: typeof full.skillFile === "string" ? full.skillFile : null };
         this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
@@ -25474,112 +25785,6 @@ ${BLOCKED_PILL_CSS}
       toggle.textContent = open ? "Show less" : "Show the whole file";
     });
   }
-
-  // src/lib/skill-box-css.mjs
-  var SKILL_TOKENS = Object.freeze({
-    light: Object.freeze({
-      "kind-prompt-fg": "#6b4fb0",
-      "kind-prompt-bg": "#f2eefb",
-      "kind-prompt-line": "#d6c9ee",
-      "kind-skill-fg": "#ffffff",
-      "kind-skill-bg": "#6b4fb0",
-      "skill-box-bg": "#f8f5fe",
-      "skill-box-line": "#d6c9ee",
-      "skill-box-well": "#ffffff",
-      "skill-box-well-line": "#e2daf3",
-      "skill-box-mute": "#5d5275",
-      "skill-box-accent": "#6b4fb0",
-      "skill-box-on-accent": "#ffffff"
-    }),
-    dark: Object.freeze({
-      "kind-prompt-fg": "#cdbcff",
-      "kind-prompt-bg": "#332b48",
-      "kind-prompt-line": "#4b3f6e",
-      "kind-skill-fg": "#1d1433",
-      "kind-skill-bg": "#c4b0ff",
-      "skill-box-bg": "#262234",
-      "skill-box-line": "#5d4d8f",
-      "skill-box-well": "#19171f",
-      "skill-box-well-line": "#3d3754",
-      "skill-box-mute": "#b9b0d6",
-      "skill-box-accent": "#c4b0ff",
-      "skill-box-on-accent": "#1d1433"
-    })
-  });
-  var skillTokenDecls = (theme) => Object.entries(SKILL_TOKENS[theme]).map(([k, v]) => `--${k}: ${v};`).join(" ");
-  var SKILL_BOX_CSS = `/* ---------- the label ---------- */
-.kind-badge {
-  display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px;
-  border-radius: 6px; border: 1px solid transparent; font-family: var(--f-mono); font-size: 11px; font-weight: 700;
-  letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; line-height: 1; text-decoration: none;
-}
-.kind-badge svg { flex: none; }
-.kind-prompt { color: var(--kind-prompt-fg); background: var(--kind-prompt-bg); border-color: var(--kind-prompt-line); }
-.kind-skill { color: var(--kind-skill-fg); background: var(--kind-skill-bg); }
-
-/* ---------- a skill page: the install box ---------- */
-.skill-install {
-  display: flex; flex-direction: column; gap: 20px; padding: 26px 28px; margin-bottom: 30px;
-  border: 1.5px solid var(--skill-box-line); border-radius: var(--r-lg); background: var(--skill-box-bg); color: var(--fg);
-}
-.skill-install-head { display: flex; align-items: center; gap: 14px; }
-.skill-install-head h2 {
-  margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 24px; line-height: 1.2; color: var(--fg);
-  text-transform: none; letter-spacing: normal; /* the extension's base styles uppercase every h2 */
-}
-.skill-install-ico {
-  width: 40px; height: 40px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-  background: var(--skill-box-accent); color: var(--skill-box-on-accent);
-}
-.skill-install code { font-family: var(--f-mono); font-size: .9em; }
-.skill-tools-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.skill-tools-label { margin: 0; font-size: 14px; font-weight: 600; color: var(--skill-box-mute); }
-.skill-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--skill-box-well-line); border-radius: 10px; background: var(--skill-box-well); }
-.skill-tools button {
-  height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-soft);
-  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; width: auto;
-}
-.skill-tools button:hover { background: var(--skill-box-bg); color: var(--fg); }
-.skill-tools button[aria-selected="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
-.skill-panel[hidden] { display: none; }
-.skill-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
-.skill-steps > li { display: flex; gap: 14px; }
-.skill-step-n {
-  width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1.5px solid var(--skill-box-accent); color: var(--skill-box-accent);
-  font-family: var(--f-mono); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;
-}
-.skill-step { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.skill-step-t { margin: 0; font-size: 16px; line-height: 28px; font-weight: 600; }
-.skill-step-t code {
-  padding: 2px 7px; border-radius: 5px; border: 1px solid var(--skill-box-well-line); background: var(--skill-box-well); color: var(--fg);
-}
-.skill-cmd {
-  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; min-width: 0;
-  border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: var(--skill-box-well);
-}
-.skill-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--fg); }
-.skill-note, .skill-local { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
-.skill-local { padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--skill-box-well-line); }
-.skill-local code { color: var(--fg); }
-.skill-file-btns { display: flex; flex-wrap: wrap; gap: 10px; }
-
-/* The buttons carry their own hover background: the site's bare-button rules would otherwise paint them green. */
-.skill-btn {
-  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; width: auto; box-sizing: border-box;
-  border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: transparent; color: var(--fg);
-  font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
-}
-.skill-btn:hover { background: var(--skill-box-well); color: var(--fg); border-color: var(--skill-box-accent); }
-.skill-btn-sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 6px; flex: none; }
-.skill-btn-primary { border-color: transparent; background: var(--green); color: #fff; font-weight: 700; }
-.skill-btn-primary:hover { background: var(--green-600); color: #fff; border-color: transparent; }
-
-@media (max-width: 600px) {
-  .skill-install { padding: 20px 16px; }
-  .skill-steps > li { gap: 10px; }
-  .skill-cmd { flex-wrap: wrap; }
-}
-`;
 
   // client-ui/src/skill-reader.mjs
   var READER_TOKEN_ALIASES = "--f-mono: var(--font-mono, ui-monospace, monospace); --f-display: var(--font-display); --r-lg: 12px; --fg-soft: var(--muted); --green: var(--brand); --green-600: var(--brand-dark);";

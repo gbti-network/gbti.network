@@ -74,6 +74,8 @@ export const FIELDS = Object.freeze({
     f('publishedAt', 'Published at', 'date'),
   ],
   prompt: [
+    // sow-109: prompt or skill. The WorkBench draws it as the two "What are you sharing?" cards above the body.
+    f('kind', 'What are you sharing?', 'enum', { options: ['prompt', 'skill'] }),
     f('title', 'Title', 'text', { required: true }),
     f('slug', 'Slug', 'text', { required: true, placeholder: 'kebab-case' }),
     f('shortDescription', 'Short description', 'textarea', { required: true }), // SOW-025: required by the schema (one-liner on cards + the feed)
@@ -84,7 +86,7 @@ export const FIELDS = Object.freeze({
     // sow-368: the value must be one of the labels in house/ai-tools.yml, checked at build. The list is not
     // repeated here because this module is bundled into the browser and cannot read the file; the build
     // message names the correct spelling when an author gets one wrong, which teaches it better than a hint.
-    f('targets', 'Targets (models/tools)', 'array', {
+    f('targets', 'Works with', 'array', {
       placeholder: 'Claude Code, Nano Banana',
       hint: 'Which AI tools this runs on. Use the exact names from our tool list; the build tells you the right spelling if one is off.',
     }),

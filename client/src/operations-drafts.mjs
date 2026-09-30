@@ -18,6 +18,7 @@ import { workerListRepoDrafts } from './repo-drafts-client.mjs';
 import { mergeRepoDrafts } from './repo-drafts-core.mjs';
 import { OperationError, membershipOf, requireIdentity } from './operations-core.mjs';
 import { publish, renameOriginOf, setOwnContentStatus } from './operations-publish.mjs';
+import { skillFileBesideItem } from './operations-read.mjs';
 
 /**
  * SOW-106: the MCP author entry. The caller MUST declare intent via `status`: "published" publishes (merge into
@@ -35,19 +36,19 @@ import { publish, renameOriginOf, setOwnContentStatus } from './operations-publi
  * saveDraft takes `path` too (it stages a pending rename on the item's own branch) but has no house scope by
  * design (sow-145: house content publishes directly), so `scope` is only meaningful on the publish arm.
  */
-export async function authorContent(ctx, { type, input, body, status, title, authorNote, path, scope } = {}) {
+export async function authorContent(ctx, { type, input, body, status, title, authorNote, path, scope, skillFile } = {}) {
   if (status !== 'draft' && status !== 'published') {
     throw new OperationError('status-required', 'Specify status: "published" to publish (merge and go live on the network) or "draft" to save it privately for review before publishing.');
   }
-  if (status === 'draft') return saveDraft(ctx, { type, input, body, path });
-  return publish(ctx, { type, input, body, title, authorNote, path, scope });
+  if (status === 'draft') return saveDraft(ctx, { type, input, body, path, skillFile });
+  return publish(ctx, { type, input, body, title, authorNote, path, scope, skillFile });
 }
 
 
 /** Save (stage) a content draft in the member's private store on the network, WITHOUT opening a PR. Trial + paid
  *  may stage (canStageDrafts); 'unknown' fails open (the store is the member's own and private). The body is
  *  stored plain: encryption of a members-only body happens at PUBLISH time through the normal plan. */
-export async function saveDraft(ctx, { type, input, body, path } = {}) {
+export async function saveDraft(ctx, { type, input, body, path, skillFile } = {}) {
   const id = requireIdentity(ctx);
   const membership = await membershipOf(ctx);
   if (membership !== 'unknown' && !canStageDrafts(membership)) {
@@ -76,6 +77,7 @@ export async function saveDraft(ctx, { type, input, body, path } = {}) {
       type: built.type, slug: staging ? staging.oldSlug : built.slug,
       pendingSlug: staging ? built.slug : null,
       path: staging ? staging.oldPath : built.path, frontmatter: fm, body,
+      ...(typeof skillFile === 'string' ? { skillFile } : {}), // sow-109: a skill's SKILL.md text
     },
     token: ctx.store?.get?.('githubToken'), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
   });
@@ -157,13 +159,14 @@ export async function readDraft(ctx, { type, slug, store, path: repoPath } = {})
     try { text = await ctx.reader?.readFile?.(rel); } catch { text = null; }
     if (text == null) throw new OperationError('not-found', `could not read the repo draft: ${rel}`);
     const { frontmatter, body } = parseContentFile(text);
+    const skill = await skillFileBesideItem(ctx, rel, frontmatter); // sow-109
     if (frontmatter?.encryptedBody) {
       try {
         const { text: plain } = await decryptMemberAsset(ctx, { encPath: frontmatter.encryptedBody });
-        return { path: rel, branch: null, store: 'repo', frontmatter, body: plain };
+        return { path: rel, branch: null, store: 'repo', frontmatter, body: plain, ...skill };
       } catch { /* the decrypt is unavailable (not paid): fall through to the public part */ }
     }
-    return { path: rel, branch: null, store: 'repo', frontmatter, body };
+    return { path: rel, branch: null, store: 'repo', frontmatter, body, ...skill };
   }
   // SOW-157: a staged draft's restore state (frontmatter + plain body) comes straight from the store record.
   const opts = { token: ctx.store?.get?.('githubToken'), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
@@ -172,7 +175,7 @@ export async function readDraft(ctx, { type, slug, store, path: repoPath } = {})
   if (!rec) throw new OperationError('not-found', 'no such draft');
   let recPath = rec.path;
   if (!recPath) { try { recPath = contentPath(type, id.username, slug); } catch { recPath = null; } }
-  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? '' };
+  return { path: recPath, branch: branchName(type, slug), frontmatter: rec.frontmatter ?? {}, body: rec.body ?? '', ...(typeof rec.skillFile === 'string' ? { skillFile: rec.skillFile } : {}) };
 }
 
 
@@ -214,6 +217,7 @@ export async function publishDraft(ctx, { type, slug, title, store, path } = {})
   // fork arm did the same for the rename case (the PR #67 fix); the network arm had lost it.
   const r = await publish(ctx, {
     type, input: { ...(rec.frontmatter ?? {}), status: 'published' }, body: rec.body ?? '', title,
+    ...(typeof rec.skillFile === 'string' ? { skillFile: rec.skillFile } : {}), // sow-109: a skill's file publishes with it
     ...(rec.pendingSlug && rec.path ? { path: rec.path } : {}), // a pending rename applies at the publish event (SOW-112)
   });
   try { await workerDeleteDraft({ type, slug, ...opts }); } catch { /* best-effort; a stale staged copy is harmless */ }
