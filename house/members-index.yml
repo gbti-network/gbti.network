@@ -57,4 +57,5 @@ members:
   # SOW-157: hosted-member enrollment appended by reconcile (2026-09-28).
   "10108761": cagdasdag
   # SOW-157: hosted-member enrollment appended by reconcile (2026-09-30).
-  "113307118": loraxian666
+  # sow-428: given a GBTI name by hand (2026-09-30), before the folder held any content.
+  "113307118": mike-conley
