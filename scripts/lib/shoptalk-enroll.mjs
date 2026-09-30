@@ -25,9 +25,10 @@
 //    member gets a fresh invitation email within the hour, which reads as the site ignoring them.
 //
 // 3. UNREACHABLE IS A RESULT, NOT A SKIP. Override-only members (a grandfather grant with no Stripe Customer)
-//    carry `email: null` at scripts/reconcile.mjs:488. There is no address for them in any store, so no
-//    amount of retrying enrolls them. A silent skip is indistinguishable from success in every count the
-//    owner reads, so they are returned BY NAME for the owner to handle person by person.
+//    carry `email: null` from gatherOverrideOnlyMembers (scripts/lib/reconcile-members.mjs). There is no
+//    address for them in any store, so no amount of retrying enrolls them. A silent skip is indistinguishable
+//    from success in every count the owner reads, so they are returned BY NAME for the owner to handle person
+//    by person.
 //
 // 4. ABSENCE FROM THE ROSTER IS NOT A LAPSE. Learned on 2026-09-09: a targeted reconcile (the one-member run
 //    a payment fires) handed this planner a roster of ONE, and the first version of the removal pass read

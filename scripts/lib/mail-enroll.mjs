@@ -16,10 +16,10 @@
 // precisely so this check has something to read (membership/mail-suppress.mjs).
 //
 // WHY UNREACHABLE IS A FIRST-CLASS RESULT AND NOT A SKIP. Override-only members (grandfathered, no Stripe
-// Customer) carry `email: null` at scripts/reconcile.mjs:488. There is no address for them ANYWHERE in the
-// system, so they cannot be enrolled by any means, and no amount of retrying changes that. A silent skip
-// would be indistinguishable from success in every count the owner reads. They are returned BY NAME so the
-// owner can decide per person.
+// Customer) carry `email: null` from gatherOverrideOnlyMembers (scripts/lib/reconcile-members.mjs). There is
+// no address for them ANYWHERE in the system, so they cannot be enrolled by any means, and no amount of
+// retrying changes that. A silent skip would be indistinguishable from success in every count the owner
+// reads. They are returned BY NAME so the owner can decide per person.
 
 import { normalizeFollows, applyFollow, followingUsernames, normalizeUsername } from '../../membership/member-follows.mjs';
 

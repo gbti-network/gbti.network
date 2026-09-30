@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 import { createStripeClient } from '../clients/stripe.mjs';
 import { loadOverrides } from '../membership/overrides.mjs';
 import { applyOverridesSource } from './lib/overrides-source.mjs'; // sow-213 R12: overlay the KV mirror onto bans/grandfathers (bans leaving the public repo)
-import { gatherMembers, gatherOverrideOnlyMembers } from './reconcile.mjs';
+import { gatherMembers, gatherOverrideOnlyMembers } from './lib/reconcile-members.mjs';
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
@@ -191,8 +191,8 @@ export function renderReport({ mailPlan, followPlan, counts, apply, haveKey, uns
       out.push('  TREAT THIS AS SUSPECT. The override-only gather returned NOBODY, so this list is empty');
       out.push('  because nothing was examined, not because everybody is reachable. Members carrying a');
       out.push('  grandfather grant and no Stripe Customer have email:null by construction');
-      out.push('  (scripts/reconcile.mjs:488), so they cannot all have been reachable. Check that the');
-      out.push('  grandfather list loaded before believing this line.');
+      out.push('  (gatherOverrideOnlyMembers in scripts/lib/reconcile-members.mjs), so they cannot all have');
+      out.push('  been reachable. Check that the grandfather list loaded before believing this line.');
     } else {
       out.push('  UNVERIFIED: this run did not measure the override-only gather, so it cannot tell an empty');
       out.push('  list apart from a gather that never ran.');

@@ -5,7 +5,7 @@
 // single flippable file (a draft, a non-content file, or a cross-file/global error). Pure + side-effect-free; the IO
 // (run validate-content --json, read each item's status, flip via the bot PR, notify) wraps it.
 
-import { flipStatus } from '../reconcile.mjs'; // SOW-076 Phase 3: reuse the SOW-005 status flip (status: published -> draft)
+import { flipStatus } from './reconcile-enact.mjs'; // SOW-076 Phase 3: reuse the SOW-005 status flip (status: published -> draft)
 
 // A content item that CAN be flipped to draft: members/<user>/{posts,projects,prompts}/<slug>/index.md or house/...
 const CONTENT_FILE = /^(members\/[^/]+|house)\/(posts|projects|products|prompts)\/[^/]+\/index\.md$/;

@@ -2,7 +2,7 @@
 // price ids into .github/workflows/reconcile.yml. This guard exists because of the specific way that wiring
 // fails, which is neither loud nor obvious.
 //
-// `shouldSyncCreatorRole` (scripts/reconcile.mjs:416) gates the badge on a POPULATED price map, and
+// `shouldSyncCreatorRole` (scripts/lib/reconcile-members.mjs) gates the badge on a POPULATED price map, and
 // `buildEnvPriceTierMap` (membership/tier-gate.mjs:25) builds that map from FIVE env vars: the four PRICE_ENV
 // names plus the legacy STRIPE_PRICE_ID, which it seeds as CREATOR rather than as a duplicate of the four.
 // That legacy id is the live $150/yr price every pre-tier paying member is on.

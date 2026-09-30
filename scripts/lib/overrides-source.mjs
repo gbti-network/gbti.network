@@ -150,9 +150,10 @@ export async function applyOverridesSource({ overrides, repoRoot, env = process.
   // it shipped a repository-wide outage on a daily timer. Both halves are worth stating, because the
   // correction is not "relax the check", it is "the check was measuring the wrong thing".
   //
-  // WHY IT WAS AN OUTAGE. `scripts/reconcile.mjs` writes the KV mirror (line ~697) and THEN merges the coupon
-  // fold PR into house/grandfathered.yml (line ~752). Its own comment records that the run cannot see its own
-  // merge, so the mirror is written from the pre-merge checkout BY DESIGN. The moment that PR lands, git
+  // WHY IT WAS AN OUTAGE. `scripts/reconcile.mjs` main() writes the KV mirror (mirrorOverridesToKv) and THEN
+  // merges the coupon fold PR into house/grandfathered.yml (syncCouponGrants, further down main()). Its own
+  // comment records that the run cannot see its own merge, so the mirror is written from the pre-merge
+  // checkout BY DESIGN. The moment that PR lands, git
   // carries a grant KV does not, every gate run throws, and `pr-gate.mjs` publishes `membership-gate` as a
   // FAILING required check for EVERY open PR until the next 6-hourly sync. Measured on 2026-08-18: reconcile
   // ran 07:55Z, the next sync ran 13:10Z. A five-hour blackout, repeating daily, triggered by a coupon
