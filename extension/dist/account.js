@@ -3554,8 +3554,8 @@ ${listStyleProseCss(".doc-blocks")}
     return s ? truncate(s, max) : empty;
   }
   function truncate(s, max = 120) {
-    const str5 = String(s ?? "");
-    return str5.length > max ? `${str5.slice(0, max - 1).trimEnd()}…` : str5;
+    const str6 = String(s ?? "");
+    return str6.length > max ? `${str6.slice(0, max - 1).trimEnd()}…` : str6;
   }
   function snippet(md, max = 120) {
     const first = String(md ?? "").split("\n").map((l) => l.trim()).find((l) => l !== "") || "";
@@ -4289,9 +4289,9 @@ ${listStyleProseCss(".doc-blocks")}
           continue;
         }
       }
-      const esc7 = escapeKeepingLinks(line, linkKeep);
+      const esc8 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc7)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc8)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -4358,7 +4358,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc7, line)];
+      const para = [hardBreak(esc8, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -7107,10 +7107,10 @@ ${listStyleProseCss(".doc-blocks")}
         const stubField = this.fields.find((x) => x.key === "publicStub");
         const stubOn = this._presetBool("publicStub");
         if (aud.mode !== "switch") {
-          const icon2 = isMembers ? LOCK : GLOBE;
+          const icon3 = isMembers ? LOCK : GLOBE;
           const word = isMembers ? "Members only" : "Public";
           return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Audience</label>
-          <div class="vislocked" data-vislocked>${icon2} <b>${word}</b></div>
+          <div class="vislocked" data-vislocked>${icon3} <b>${word}</b></div>
           <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
           ${stubField && aud.publicStub === true ? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden />' : ""}
           <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
@@ -12468,17 +12468,17 @@ ${listStyleProseCss(".doc-blocks")}
     });
     return problems;
   }
-  function iconProblems(icon2, where = "icon") {
-    if (!isMap(icon2)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
+  function iconProblems(icon3, where = "icon") {
+    if (!isMap(icon3)) return [`${where}: must be a map of { name, set, viewBox, shapes }`];
     const problems = [];
-    for (const k of Object.keys(icon2)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
-    if (typeof icon2.name !== "string" || !NAME_RE.test(icon2.name) || icon2.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
-    if (typeof icon2.set !== "string" || !SET_RE.test(icon2.set) || icon2.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
-    if (typeof icon2.viewBox !== "string" || !VIEWBOX.test(icon2.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
+    for (const k of Object.keys(icon3)) if (!["name", "set", "viewBox", "attrs", "shapes"].includes(k)) problems.push(`${where}: key "${k}" is not allowed`);
+    if (typeof icon3.name !== "string" || !NAME_RE.test(icon3.name) || icon3.name.length > ICON_LIMITS.name) problems.push(`${where}: name must be a React Icons name like FaAmazon`);
+    if (typeof icon3.set !== "string" || !SET_RE.test(icon3.set) || icon3.set.length > ICON_LIMITS.set) problems.push(`${where}: set must be the icon set's name`);
+    if (typeof icon3.viewBox !== "string" || !VIEWBOX.test(icon3.viewBox)) problems.push(`${where}: viewBox must be four numbers`);
     const budget = { nodes: 0, total: 0 };
-    problems.push(...attrProblems(icon2.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
-    if (!Array.isArray(icon2.shapes) || icon2.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
-    else problems.push(...shapeProblems(icon2.shapes, `${where}.shapes`, 1, budget));
+    problems.push(...attrProblems(icon3.attrs, ROOT_ATTRS, `${where}.attrs`, budget));
+    if (!Array.isArray(icon3.shapes) || icon3.shapes.length === 0) problems.push(`${where}: shapes must be a non-empty list`);
+    else problems.push(...shapeProblems(icon3.shapes, `${where}.shapes`, 1, budget));
     if (budget.nodes > ICON_LIMITS.nodes) problems.push(`${where}: too many shapes (max ${ICON_LIMITS.nodes})`);
     if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
     return problems;
@@ -12492,10 +12492,10 @@ ${listStyleProseCss(".doc-blocks")}
       return `<${s.tag}${attrString(s.attrs)}>${inner}</${s.tag}>`;
     }).join("");
   }
-  function iconSvg(icon2, className = "") {
-    if (iconProblems(icon2).length) return "";
+  function iconSvg(icon3, className = "") {
+    if (iconProblems(icon3).length) return "";
     const cls = className ? ` class="${escAttr4(className)}"` : "";
-    return `<svg${cls} viewBox="${escAttr4(icon2.viewBox)}"${attrString(icon2.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon2.shapes)}</svg>`;
+    return `<svg${cls} viewBox="${escAttr4(icon3.viewBox)}"${attrString(icon3.attrs)} aria-hidden="true" focusable="false">${shapesSvg(icon3.shapes)}</svg>`;
   }
 
   // membership/cta-card-render.mjs
@@ -13985,9 +13985,9 @@ ${listStyleProseCss(".doc-blocks")}
           this._searchIcons();
           return;
         case "icon": {
-          const icon2 = st.icons.results[Number(b.dataset.i)];
-          if (!icon2) return;
-          st.d.icon = icon2;
+          const icon3 = st.icons.results[Number(b.dataset.i)];
+          if (!icon3) return;
+          st.d.icon = icon3;
           st.pickerOpen = false;
           break;
         }
@@ -17712,6 +17712,11 @@ ${BLOCKED_PILL_CSS}
   .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 14%, transparent); }
   .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 7%, var(--panel)); }
   [data-type]:not([data-type="news"]) .chip { color:var(--cbar); background:color-mix(in srgb, var(--cbar) 13%, transparent); border-color:color-mix(in srgb, var(--cbar) 26%, transparent); }
+  /* sow-109: a skill's chip is the website's solid-violet SKILL label (src/lib/skill-box-css.mjs SKILL_TOKENS; the parity
+     test holds the colours equal). It comes after the accent rule above with one more selector, so the accent does not
+     repaint it. A prompt keeps the prompt accent. */
+  [data-type] .chip.k-skill { color:#ffffff; background:#6b4fb0; border-color:transparent; }
+  :host-context([data-theme="dark"]) [data-type] .chip.k-skill { color:#1d1433; background:#c4b0ff; }
 
   /* SOW-070: GLASS — the accent bars + gradient glyphs + colored chips above already carry over; glass just FROSTS
      the list (ONE backdrop blur per CONTAINER, never per row, for the long-feed perf budget) and bumps the per-type
@@ -17789,6 +17794,7 @@ ${BLOCKED_PILL_CSS}
     }
     _chip(item) {
       const t = lc2(item.type);
+      if (t === "prompt" && item.kind === "skill") return '<span class="chip k-skill">Skill</span>';
       const k = ["post", "project", "prompt", "share", "news"].includes(t) ? ` k-${t}` : "";
       return `<span class="chip${k}">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
@@ -20230,8 +20236,8 @@ ${BLOCKED_PILL_CSS}
     function generateNextLine(state, level) {
       return "\n" + common.repeat(" ", state.indent * level);
     }
-    function testImplicitResolving(state, str5) {
-      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str5)) return true;
+    function testImplicitResolving(state, str6) {
+      for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str6)) return true;
       return false;
     }
     function isWhitespace(c) {
@@ -21584,14 +21590,14 @@ ${BLOCKED_PILL_CSS}
       follow: (nFollows ?? 0) > 0,
       topics: (nTopics ?? 0) > 0
     };
-    const steps = offered.map((s) => ({
+    const steps2 = offered.map((s) => ({
       key: s.key,
       label: s.label,
       title: s.title,
       state: done[s.key] ? "done" : r.skipped.includes(s.key) ? "skipped" : "todo"
     }));
-    const outstanding = steps.filter((s) => s.state !== "done").length;
-    return { steps, complete: outstanding === 0, known, outstanding };
+    const outstanding = steps2.filter((s) => s.state !== "done").length;
+    return { steps: steps2, complete: outstanding === 0, known, outstanding };
   }
 
   // client-ui/src/social-icons.mjs
@@ -22070,19 +22076,19 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _modelFromFm(fm, body) {
-      const str5 = (v) => v == null ? "" : String(v);
+      const str6 = (v) => v == null ? "" : String(v);
       const links = {};
-      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str5(v);
+      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str6(v);
       return {
-        displayName: str5(fm.displayName),
-        headline: str5(fm.headline),
-        avatar: str5(fm.avatar),
-        location: str5(fm.location),
+        displayName: str6(fm.displayName),
+        headline: str6(fm.headline),
+        avatar: str6(fm.avatar),
+        location: str6(fm.location),
         // preserved, never surfaced (owner decision)
         forHire: fm.forHire === true,
         directory: fm.directory === true,
-        skills: Array.isArray(fm.skills) ? fm.skills.map(str5) : [],
-        roles: Array.isArray(fm.roles) ? fm.roles.map(str5) : [],
+        skills: Array.isArray(fm.skills) ? fm.skills.map(str6) : [],
+        roles: Array.isArray(fm.roles) ? fm.roles.map(str6) : [],
         links,
         visibility: fm.visibility || "public",
         body: body || ""
@@ -25250,8 +25256,376 @@ ${BLOCKED_PILL_CSS}
     return _directory;
   }
 
+  // membership/skill-install.mjs
+  var str5 = (v) => typeof v === "string" ? v.trim() : "";
+  var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  function skillNameFrom(skillMd) {
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
+    if (!m) return "";
+    const line = m[1].split(/\r?\n/).find((l) => /^name:\s*/.test(l));
+    const name = line ? line.replace(/^name:\s*/, "").replace(/^['"]|['"]$/g, "").trim() : "";
+    return SKILL_NAME_RE.test(name) ? name : "";
+  }
+  var fillName = (text2, name) => String(text2 ?? "").split("{name}").join(name);
+  function codeRuns(text2) {
+    const out = [];
+    const parts = String(text2 ?? "").split("`");
+    parts.forEach((p, i) => {
+      if (p) out.push({ code: i % 2 === 1, text: p });
+    });
+    return out;
+  }
+  function installTabsFromTools({ tools, targets, name }) {
+    const byLabel = new Map((Array.isArray(tools) ? tools : []).filter((t) => t && str5(t.key) && str5(t.label) && str5(t.folder) && str5(t.run)).map((t) => [str5(t.label), t]));
+    const tabs = [];
+    const without = [];
+    const okName = SKILL_NAME_RE.test(String(name ?? "")) ? name : "";
+    for (const label of Array.isArray(targets) ? targets : []) {
+      const e = byLabel.get(label);
+      if (!e || !okName) {
+        without.push(label);
+        continue;
+      }
+      const folder2 = fillName(str5(e.folder), okName);
+      tabs.push({
+        key: str5(e.key),
+        label,
+        folder: folder2,
+        mkdir: `mkdir -p ${folder2}`,
+        run: codeRuns(fillName(str5(e.run), okName)),
+        local: codeRuns(fillName(str5(e.local), okName))
+      });
+    }
+    return { tabs, without };
+  }
+
+  // client/src/image-models.mjs
+  var IMAGE_GEN_MODELS = Object.freeze([
+    "Nano Banana",
+    "MidJourney",
+    "DALL-E",
+    "Stable Diffusion",
+    "Flux",
+    "Imagen",
+    "Ideogram",
+    "Leonardo",
+    "Firefly",
+    "Recraft",
+    "Qwen Image",
+    "Seedream"
+  ]);
+  var MODEL_TOKENS = Object.freeze([
+    "nanobanana",
+    "midjourney",
+    "dalle",
+    "stablediffusion",
+    "flux",
+    "imagen",
+    "ideogram",
+    "leonardo",
+    "firefly",
+    "recraft",
+    "qwenimage",
+    "seedream"
+  ]);
+
+  // src/lib/prompt-page.mjs
+  var PROMPT_SHELL = Object.freeze({
+    section: "band tint",
+    wrap: "wrap",
+    head: "detail-head",
+    headTop: "detail-head-top",
+    crumbs: "eyebrow detail-crumbs",
+    title: "h1 mt12",
+    meta: "mt16 flex items-center g12 wrap-w",
+    lead: "lead mt20",
+    grid: "detail-grid mt32",
+    main: "detail-main",
+    aside: "detail-aside flex col g20",
+    result: "prompt-result",
+    block: "prompt-block",
+    blockBar: "prompt-block-bar",
+    blockLabel: "prompt-block-label",
+    blockActions: "prompt-actions",
+    modes: "prompt-modes",
+    body: "prompt-body",
+    view: "prompt-view",
+    raw: "prompt-view prompt-raw"
+  });
+
+  // src/lib/skill-page.mjs
+  function esc4(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+  var SKILL_SHELL = Object.freeze({
+    install: "skill-install",
+    installHead: "skill-install-head",
+    toolsRow: "skill-tools-row",
+    tools: "skill-tools",
+    panel: "skill-panel",
+    steps: "skill-steps",
+    cmd: "skill-cmd",
+    note: "skill-note",
+    local: "skill-local",
+    notes: "skill-notes",
+    file: "skill-file",
+    fileBody: "skill-file-body"
+  });
+  var SKILL_TOOL_KEY = "gbti-skill-tool";
+  var ICON_PATHS = {
+    "ico-kind-skill": '<path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    "ico-copy": '<rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
+  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc4(r.text)}</code>` : esc4(r.text)).join("");
+  var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+  function sharedFolderNote(tab, tabs) {
+    const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
+    if (!others.length) return "";
+    if (others.length === 1) return `${others[0]} reads this folder too, so one copy serves both.`;
+    return `${andList(others)} read this folder too, so one copy serves them all.`;
+  }
+  function withoutNote(without) {
+    const xs = (without || []).filter(Boolean);
+    if (!xs.length) return "";
+    return `Also made for ${andList(xs)}. ${xs.length === 1 ? "Its" : "Their"} install steps are not listed here yet, so follow the author's notes below.`;
+  }
+  function buildSkillInstallHtml({ tabs = [], without = [], fileHref = "" } = {}) {
+    if (!tabs.length) return "";
+    const s = SKILL_SHELL;
+    const many = tabs.length > 1;
+    const tabId = (t) => `skill-tab-${t.key}`;
+    const panelId = (t) => `skill-panel-${t.key}`;
+    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc4(t.key)}">${esc4(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc4(tabs[0].label)}</p>`;
+    const download = fileHref ? `<a class="skill-btn" href="${esc4(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const panels = tabs.map((t, i) => {
+      const shared = sharedFolderNote(t, tabs);
+      const local = runsHtml(t.local);
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc4(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc4(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc4(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc4(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
+    }).join("");
+    const also = withoutNote(without);
+    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc4(also)}</p>` : "") + `</section>`;
+  }
+  function wireSkillPage(root = document, storage = globalThis.localStorage) {
+    const box = root.querySelector("[data-skill-install]");
+    if (box) {
+      const tabs = Array.from(box.querySelectorAll("[data-skill-tool]"));
+      const panels = Array.from(box.querySelectorAll("[data-skill-panel]"));
+      const pick = (key, remember) => {
+        if (!panels.some((p) => p.dataset.skillPanel === key)) return false;
+        tabs.forEach((t) => {
+          const on = t.dataset.skillTool === key;
+          t.setAttribute("aria-selected", on ? "true" : "false");
+          t.tabIndex = on ? 0 : -1;
+        });
+        panels.forEach((p) => {
+          p.hidden = p.dataset.skillPanel !== key;
+        });
+        if (remember) {
+          try {
+            storage?.setItem(SKILL_TOOL_KEY, key);
+          } catch {
+          }
+        }
+        return true;
+      };
+      tabs.forEach((t, i) => {
+        t.addEventListener("click", () => pick(t.dataset.skillTool, true));
+        t.addEventListener("keydown", (e) => {
+          const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+          if (!step) return;
+          e.preventDefault();
+          const next = tabs[(i + step + tabs.length) % tabs.length];
+          pick(next.dataset.skillTool, true);
+          next.focus();
+        });
+      });
+      let saved = null;
+      try {
+        saved = storage?.getItem(SKILL_TOOL_KEY) ?? null;
+      } catch {
+        saved = null;
+      }
+      if (saved) pick(saved, false);
+    }
+    const copy = async (btn, text2) => {
+      const label = btn.querySelector("[data-label]") || btn;
+      const was = label.textContent;
+      try {
+        await navigator.clipboard.writeText(text2);
+        label.textContent = "Copied";
+      } catch {
+        label.textContent = "Copy failed";
+      }
+      setTimeout(() => {
+        label.textContent = was;
+      }, 1500);
+    };
+    const raw = root.querySelector("[data-skill-raw]");
+    root.querySelectorAll("[data-skill-copy-text]").forEach((b) => b.addEventListener("click", () => copy(b, b.getAttribute("data-skill-copy-text") || "")));
+    root.querySelectorAll("[data-skill-copy-file]").forEach((b) => b.addEventListener("click", () => copy(b, raw?.textContent ?? "")));
+    const file = root.querySelector("[data-skill-file]");
+    const toggle = file?.querySelector("[data-skill-file-toggle]");
+    toggle?.addEventListener("click", () => {
+      const open = file.dataset.open !== "true";
+      file.dataset.open = String(open);
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Show less" : "Show the whole file";
+    });
+  }
+
+  // src/lib/skill-box-css.mjs
+  var SKILL_TOKENS = Object.freeze({
+    light: Object.freeze({
+      "kind-prompt-fg": "#6b4fb0",
+      "kind-prompt-bg": "#f2eefb",
+      "kind-prompt-line": "#d6c9ee",
+      "kind-skill-fg": "#ffffff",
+      "kind-skill-bg": "#6b4fb0",
+      "skill-box-bg": "#f8f5fe",
+      "skill-box-line": "#d6c9ee",
+      "skill-box-well": "#ffffff",
+      "skill-box-well-line": "#e2daf3",
+      "skill-box-mute": "#5d5275",
+      "skill-box-accent": "#6b4fb0",
+      "skill-box-on-accent": "#ffffff"
+    }),
+    dark: Object.freeze({
+      "kind-prompt-fg": "#cdbcff",
+      "kind-prompt-bg": "#332b48",
+      "kind-prompt-line": "#4b3f6e",
+      "kind-skill-fg": "#1d1433",
+      "kind-skill-bg": "#c4b0ff",
+      "skill-box-bg": "#262234",
+      "skill-box-line": "#5d4d8f",
+      "skill-box-well": "#19171f",
+      "skill-box-well-line": "#3d3754",
+      "skill-box-mute": "#b9b0d6",
+      "skill-box-accent": "#c4b0ff",
+      "skill-box-on-accent": "#1d1433"
+    })
+  });
+  var skillTokenDecls = (theme) => Object.entries(SKILL_TOKENS[theme]).map(([k, v]) => `--${k}: ${v};`).join(" ");
+  var SKILL_BOX_CSS = `/* ---------- the label ---------- */
+.kind-badge {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px;
+  border-radius: 6px; border: 1px solid transparent; font-family: var(--f-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; line-height: 1; text-decoration: none;
+}
+.kind-badge svg { flex: none; }
+.kind-prompt { color: var(--kind-prompt-fg); background: var(--kind-prompt-bg); border-color: var(--kind-prompt-line); }
+.kind-skill { color: var(--kind-skill-fg); background: var(--kind-skill-bg); }
+
+/* ---------- a skill page: the install box ---------- */
+.skill-install {
+  display: flex; flex-direction: column; gap: 20px; padding: 26px 28px; margin-bottom: 30px;
+  border: 1.5px solid var(--skill-box-line); border-radius: var(--r-lg); background: var(--skill-box-bg); color: var(--fg);
+}
+.skill-install-head { display: flex; align-items: center; gap: 14px; }
+.skill-install-head h2 {
+  margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 24px; line-height: 1.2; color: var(--fg);
+  text-transform: none; letter-spacing: normal; /* the extension's base styles uppercase every h2 */
+}
+.skill-install-ico {
+  width: 40px; height: 40px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: var(--skill-box-accent); color: var(--skill-box-on-accent);
+}
+.skill-install code { font-family: var(--f-mono); font-size: .9em; }
+.skill-tools-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.skill-tools-label { margin: 0; font-size: 14px; font-weight: 600; color: var(--skill-box-mute); }
+.skill-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--skill-box-well-line); border-radius: 10px; background: var(--skill-box-well); }
+.skill-tools button {
+  height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-soft);
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; width: auto;
+}
+.skill-tools button:hover { background: var(--skill-box-bg); color: var(--fg); }
+.skill-tools button[aria-selected="true"] { background: var(--skill-box-accent); color: var(--skill-box-on-accent); font-weight: 700; }
+.skill-panel[hidden] { display: none; }
+.skill-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
+.skill-steps > li { display: flex; gap: 14px; }
+.skill-step-n {
+  width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1.5px solid var(--skill-box-accent); color: var(--skill-box-accent);
+  font-family: var(--f-mono); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.skill-step { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.skill-step-t { margin: 0; font-size: 16px; line-height: 28px; font-weight: 600; }
+.skill-step-t code {
+  padding: 2px 7px; border-radius: 5px; border: 1px solid var(--skill-box-well-line); background: var(--skill-box-well); color: var(--fg);
+}
+.skill-cmd {
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; min-width: 0;
+  border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: var(--skill-box-well);
+}
+.skill-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--fg); }
+.skill-note, .skill-local { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--skill-box-mute); }
+.skill-local { padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--skill-box-well-line); }
+.skill-local code { color: var(--fg); }
+.skill-file-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* The buttons carry their own hover background: the site's bare-button rules would otherwise paint them green. */
+.skill-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; width: auto; box-sizing: border-box;
+  border: 1px solid var(--skill-box-well-line); border-radius: 8px; background: transparent; color: var(--fg);
+  font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.skill-btn:hover { background: var(--skill-box-well); color: var(--fg); border-color: var(--skill-box-accent); }
+.skill-btn-sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 6px; flex: none; }
+.skill-btn-primary { border-color: transparent; background: var(--green); color: #fff; font-weight: 700; }
+.skill-btn-primary:hover { background: var(--green-600); color: #fff; border-color: transparent; }
+
+@media (max-width: 600px) {
+  .skill-install { padding: 20px 16px; }
+  .skill-steps > li { gap: 10px; }
+  .skill-cmd { flex-wrap: wrap; }
+}
+`;
+
+  // client-ui/src/skill-reader.mjs
+  var READER_TOKEN_ALIASES = "--f-mono: var(--font-mono, ui-monospace, monospace); --f-display: var(--font-display); --r-lg: 12px; --fg-soft: var(--muted); --green: var(--brand); --green-600: var(--brand-dark);";
+  var SKILL_READER_CSS = `:host { ${READER_TOKEN_ALIASES} ${skillTokenDecls("light")} }
+:host-context([data-theme="dark"]) { ${skillTokenDecls("dark")} }
+${SKILL_BOX_CSS}`;
+  function promptSlugOf(url) {
+    const m = /^\/prompts\/([a-z0-9][a-z0-9-]*)\/?$/.exec(String(url || ""));
+    return m ? m[1] : "";
+  }
+  var steps = null;
+  async function loadSteps(site, fetchImpl) {
+    if (steps) return steps;
+    const res = await fetchImpl(`${site}/skill-install.json`, { cache: "no-cache" });
+    if (!res.ok) throw new Error(String(res.status));
+    const json = await res.json();
+    steps = Array.isArray(json?.tools) ? json.tools : [];
+    return steps;
+  }
+  async function loadSkillBox({ site, slug, targets, fileHref, fetchImpl = globalThis.fetch }) {
+    if (!slug) return null;
+    try {
+      const [tools, fileRes] = await Promise.all([
+        loadSteps(site, fetchImpl),
+        fetchImpl(`${site}/prompts/${slug}/SKILL.md`, { cache: "no-cache" })
+      ]);
+      if (!fileRes.ok) return null;
+      const text2 = await fileRes.text();
+      const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text2) });
+      return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text2) : "" }), text: text2 };
+    } catch {
+      return null;
+    }
+  }
+
+  // membership/prompt-kind.mjs
+  var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
+  var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+
   // client-ui/src/elements/gbti-reader.mjs
   var SITE20 = "https://gbti.network";
+  var KIND_ICON = {
+    prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+  var READER_CSS = () => CSS44 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -25470,6 +25844,7 @@ ${BLOCKED_PILL_CSS}
       this._doDone = false;
       this._rawBody = null;
       this._fm = null;
+      this._skill = null;
       this.render();
       this._resolve();
     }
@@ -25485,8 +25860,41 @@ ${BLOCKED_PILL_CSS}
         this._html = html;
         this._author = author;
       }
+      this._skill = await this._resolveSkill(this._item || it);
       this.render();
       this._applyDo(this._item || it);
+    }
+    // sow-109: prompt or skill. The feed item carries it (the indexes do); a deep link has only the frontmatter.
+    _kind(it) {
+      if (it?.type !== "prompt") return null;
+      return (it.kind || this._fm?.kind) === "skill" ? "skill" : "prompt";
+    }
+    // sow-109: a PUBLIC skill gets the website's install box, from its public steps and file. Download saves a local
+    // copy of the fetched file, because a page ignores `download` on a link to another origin (this is an extension page).
+    async _resolveSkill(it) {
+      if (this._skillUrl) {
+        try {
+          URL.revokeObjectURL(this._skillUrl);
+        } catch {
+        }
+        this._skillUrl = null;
+      }
+      const fm = this._fm || {};
+      if (this._kind(it) !== "skill" || String(it.visibility || fm.visibility || "public") !== "public") return null;
+      const targets = Array.isArray(it.targets) ? it.targets : Array.isArray(fm.targets) ? fm.targets : [];
+      return loadSkillBox({
+        site: SITE20,
+        slug: fm.slug || promptSlugOf(it.url),
+        targets,
+        fileHref: (text2) => {
+          try {
+            this._skillUrl = URL.createObjectURL(new Blob([text2], { type: "text/markdown" }));
+          } catch {
+            this._skillUrl = null;
+          }
+          return this._skillUrl || "";
+        }
+      });
     }
     // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
     _backfillFromFrontmatter(it) {
@@ -25608,7 +26016,9 @@ ${BLOCKED_PILL_CSS}
       const HEART = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20.3S3.6 15.2 3.6 9.5A4 4 0 0 1 12 7.3a4 4 0 0 1 8.4 2.2c0 5.7-8.4 10.8-8.4 10.8z"/></svg>';
       const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
       const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || "")}" data-gbti-slug="${esc(slug)}"${it.type === "share" ? ` data-gbti-id="${esc(it.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
-      return `<div class="meta"><span class="badge">${esc(t)}</span><span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
+      const kind2 = this._kind(it);
+      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON[kind2]}${esc(KIND_LABEL[kind2])}</span>` : `<span class="badge">${esc(t)}</span>`;
+      return `<div class="meta">${badge}<span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
     }
     _authorCardHtml(it) {
       const a = this._author;
@@ -25648,14 +26058,14 @@ ${BLOCKED_PILL_CSS}
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS44));
+        this.set(this.css(READER_CSS()));
         return;
       }
       const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it.url)} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE20 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
-      const copyAll = it.type === "prompt" && this._rawBody ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
+      const copyAll = it.type === "prompt" && this._rawBody && this._kind(it) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
       const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE20}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
@@ -25676,12 +26086,14 @@ ${BLOCKED_PILL_CSS}
       const srcCard = it.type === "share" && it.url ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName4(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName }) : null;
       const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
-      this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
+      const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc(this._skill.text)}</pre>` : "";
+      this.set(this.css(READER_CSS()) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${skillBox}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
         this._wireCopyAll();
         this._wireFootnotes();
+        if (this._skill) wireSkillPage(this.root);
       }
     }
     // GFM footnote anchors live inside this shadow root, where the browser's own fragment navigation cannot
@@ -26661,7 +27073,7 @@ ${BLOCKED_PILL_CSS}
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function esc4(s) {
+  function esc5(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function safeHref(url) {
@@ -26806,7 +27218,7 @@ ${BLOCKED_PILL_CSS}
     const render2 = (text2) => {
       const store2 = [];
       const masked = maskRuns(text2, store2);
-      const safe = esc4(masked);
+      const safe = esc5(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline3(safe, {
         bold: (t) => `<strong>${t}</strong>`,
@@ -26814,14 +27226,14 @@ ${BLOCKED_PILL_CSS}
         strike: (t) => `<del>${t}</del>`,
         link: (label, url) => {
           const href = safeHref(resolve(url));
-          const inner = String(label || "").trim() || esc4(resolve(url));
-          return href ? `<a href="${esc4(href)}">${inner}</a>` : inner;
+          const inner = String(label || "").trim() || esc5(resolve(url));
+          return href ? `<a href="${esc5(href)}">${inner}</a>` : inner;
         }
       });
       return done.replace(MASK_RE, (_m, i) => {
         const run = store2[Number(i)];
         if (!run) return "";
-        return run.kind === "code" ? `<code>${esc4(run.raw)}</code>` : esc4(run.raw);
+        return run.kind === "code" ? `<code>${esc5(run.raw)}</code>` : esc5(run.raw);
       });
     };
     const out = [];
@@ -26832,7 +27244,7 @@ ${BLOCKED_PILL_CSS}
         continue;
       }
       if (b.kind === "fence") {
-        out.push(`<pre><code>${esc4(b.lines.join("\n"))}</code></pre>`);
+        out.push(`<pre><code>${esc5(b.lines.join("\n"))}</code></pre>`);
         continue;
       }
       if (b.kind === "heading") {
@@ -27533,8 +27945,8 @@ ${BLOCKED_PILL_CSS}
   var MAX_STRING = 200;
   var MAX_DEPTH = 3;
   function clip(s) {
-    const str5 = String(s);
-    return str5.length > MAX_STRING ? `${str5.slice(0, MAX_STRING)}…(${str5.length})` : str5;
+    const str6 = String(s);
+    return str6.length > MAX_STRING ? `${str6.slice(0, MAX_STRING)}…(${str6.length})` : str6;
   }
   function redactDeep(value, depth = 0) {
     if (value == null) return value;
@@ -27812,7 +28224,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // extension/src/quick-launch.mjs
-  var esc5 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc6 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var GLYPH = {
     gear: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
     x: '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -27827,9 +28239,9 @@ ${BLOCKED_PILL_CSS}
   function markHtml(item, icons = {}) {
     const m = !item.custom && BRAND_MARKS[item.id];
     if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
-    const icon2 = icons[item.id];
-    if (typeof icon2 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon2)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon2}" alt="" /></span>`;
-    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc5(letterFor(item.name))}</span>`;
+    const icon3 = icons[item.id];
+    if (typeof icon3 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon3)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon3}" alt="" /></span>`;
+    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc6(letterFor(item.name))}</span>`;
   }
   var area = (name) => {
     try {
@@ -27889,7 +28301,7 @@ ${BLOCKED_PILL_CSS}
     }
   }
   function barHtml() {
-    const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc5(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc5(it.name)}" aria-label="${esc5(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
+    const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc6(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc6(it.name)}" aria-label="${esc6(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
     return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${links}`;
   }
   function renderBars() {
@@ -27944,14 +28356,14 @@ ${BLOCKED_PILL_CSS}
   function rowHtml(it, rank) {
     const inBar = it.on && rank < QL_CAP;
     const left = it.on && !inBar;
-    const tools = it.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc5(it.id)}" aria-label="Edit ${esc5(it.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc5(it.id)}" aria-label="Remove ${esc5(it.name)}" title="Remove">${glyph("trash")}</button>` : "";
-    const open = left ? `<a class="ql-tool" href="${esc5(it.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc5(it.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
-    return `<li class="ql-row" data-ql-row="${esc5(it.id)}" data-group="${esc5(it.group)}" draggable="true">
-    <button class="ql-grip" type="button" data-ql-grip="${esc5(it.id)}" aria-label="Move ${esc5(it.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
+    const tools = it.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc6(it.id)}" aria-label="Edit ${esc6(it.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc6(it.id)}" aria-label="Remove ${esc6(it.name)}" title="Remove">${glyph("trash")}</button>` : "";
+    const open = left ? `<a class="ql-tool" href="${esc6(it.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc6(it.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
+    return `<li class="ql-row" data-ql-row="${esc6(it.id)}" data-group="${esc6(it.group)}" draggable="true">
+    <button class="ql-grip" type="button" data-ql-grip="${esc6(it.id)}" aria-label="Move ${esc6(it.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
     ${markHtml(it, ICONS3)}
-    <span class="ql-txt"><b>${esc5(it.name)}</b><small>${esc5(displayHost(it.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
+    <span class="ql-txt"><b>${esc6(it.name)}</b><small>${esc6(displayHost(it.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
     ${open}${tools}
-    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc5(it.id)}" aria-checked="${it.on ? "true" : "false"}" aria-label="Show ${esc5(it.name)} in the bar"><span></span></button>
+    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc6(it.id)}" aria-checked="${it.on ? "true" : "false"}" aria-label="Show ${esc6(it.name)} in the bar"><span></span></button>
   </li>`;
   }
   function listsHtml() {
@@ -27959,21 +28371,21 @@ ${BLOCKED_PILL_CSS}
     return GROUPS.map((g) => {
       const rows = STATE.items.filter((it) => it.group === g.key);
       const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it) => rowHtml(it, onRank.get(it.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
-      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc5(g.label)}</h3>${body}</section>`;
+      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc6(g.label)}</h3>${body}</section>`;
     }).join("");
   }
   function previewHtml() {
     const items = barItems(STATE);
-    const icons = items.map((it) => `<span class="ql-pv" title="${esc5(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
+    const icons = items.map((it) => `<span class="ql-pv" title="${esc6(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
     return icons;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
-    return `<form class="ql-form" data-ql-form="${esc5(id)}" novalidate>
+    return `<form class="ql-form" data-ql-form="${esc6(id)}" novalidate>
     <b class="ql-form-h">${id ? "Edit destination" : "Add a destination"}</b>
-    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc5(url)}" required /></label>
+    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc6(url)}" required /></label>
     <div class="ql-form-row">
       <span class="ql-form-ic" data-ql-form-ic>${markHtml({ id: id || "new", name: name || displayHost(url) || "?", custom: true }, ICONS3)}</span>
-      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc5(name)}" placeholder="Found from the site" /></label>
+      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc6(name)}" placeholder="Found from the site" /></label>
     </div>
     <p class="ql-status" data-ql-status aria-live="polite"></p>
     <div class="ql-form-acts"><button class="ql-btn" type="button" data-ql-cancel>Cancel</button><button class="ql-btn ql-primary" type="submit">${id ? "Save" : "Add to your bar"}</button></div>
@@ -28220,7 +28632,7 @@ ${BLOCKED_PILL_CSS}
   // extension/src/shell.mjs
   var SITE24 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc6 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc7 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -28314,7 +28726,7 @@ ${BLOCKED_PILL_CSS}
         a.href = `${SITE24}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc6(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc7(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;

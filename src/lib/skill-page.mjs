@@ -35,7 +35,14 @@ export const SKILL_SHELL = Object.freeze({
 /** Where the reader's chosen tool is remembered, so every skill page opens on the tool they use. */
 export const SKILL_TOOL_KEY = 'gbti-skill-tool';
 
-const icon = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><use href="#${id}"/></svg>`;
+// Drawn inline rather than from the site's icon sprite, because the extension reader renders this box inside a shadow
+// root that cannot see the page's sprite. The skill mark is the same shape as IconSprite's ico-kind-skill.
+const ICON_PATHS = {
+  'ico-kind-skill': '<path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  'ico-copy': '<rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  'ico-download': '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+};
+const icon = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
 const runsHtml = (runs) => (runs || []).map((r) => (r.code ? `<code>${esc(r.text)}</code>` : esc(r.text))).join('');
 const andList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 

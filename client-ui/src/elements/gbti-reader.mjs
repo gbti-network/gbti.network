@@ -31,8 +31,20 @@ import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs';
 // SOW-041: the comment/favorite key for an item (a post/project/prompt's slug, a Share's "<author>/<shareId>").
 // sow-398: it moved to ../target-slug.mjs so the feed cards key their heart and Save the same way.
 import { targetSlugFor } from '../target-slug.mjs';
+// sow-109: a public skill shows the website's install box; every prompt item says prompt or skill.
+import { SKILL_READER_CSS, loadSkillBox, promptSlugOf } from '../skill-reader.mjs';
+import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
+import { KIND_LABEL } from '../../../membership/prompt-kind.mjs';
 
 const SITE = 'https://gbti.network';
+// The kind marks, drawn inline because a shadow root cannot see the site's icon sprite (IconSprite's ico-kind-*).
+const KIND_ICON = {
+  prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+// The styles the reader draws with: its own, then the shared label and box rules. The hidden copy of the skill file
+// that Copy SKILL.md reads must stay hidden even if a rule gives <pre> a display.
+const READER_CSS = () => CSS + SKILL_READER_CSS + '\n[data-skill-raw][hidden] { display:none !important; }';
 const lc = (s) => String(s || '').toLowerCase();
 const isHouse = (a) => { const x = lc(a); return !x || x === 'gbti' || x === 'house'; };
 const authorName = (a) => (isHouse(a) ? 'GBTI Network' : a);
@@ -249,7 +261,7 @@ class GbtiReader extends GbtiElement {
    *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
    *  post/product/prompt they come from readItem(path). */
   open(item) {
-    this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this.render(); this._resolve();
+    this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this._skill = null; this.render(); this._resolve();
   }
 
   async _resolve() {
@@ -269,8 +281,33 @@ class GbtiReader extends GbtiElement {
       this._html = html;
       this._author = author;
     }
+    this._skill = await this._resolveSkill(this._item || it);
     this.render();
     this._applyDo(this._item || it);
+  }
+
+  // sow-109: prompt or skill. The feed item carries it (the indexes do); a deep link has only the frontmatter.
+  _kind(it) {
+    if (it?.type !== 'prompt') return null;
+    return (it.kind || this._fm?.kind) === 'skill' ? 'skill' : 'prompt';
+  }
+
+  // sow-109: a PUBLIC skill gets the website's install box, from its public steps and file. Download saves a local
+  // copy of the fetched file, because a page ignores `download` on a link to another origin (this is an extension page).
+  async _resolveSkill(it) {
+    if (this._skillUrl) { try { URL.revokeObjectURL(this._skillUrl); } catch { /* already gone */ } this._skillUrl = null; }
+    const fm = this._fm || {};
+    if (this._kind(it) !== 'skill' || String(it.visibility || fm.visibility || 'public') !== 'public') return null;
+    const targets = Array.isArray(it.targets) ? it.targets : (Array.isArray(fm.targets) ? fm.targets : []);
+    return loadSkillBox({
+      site: SITE,
+      slug: fm.slug || promptSlugOf(it.url),
+      targets,
+      fileHref: (text) => {
+        try { this._skillUrl = URL.createObjectURL(new Blob([text], { type: 'text/markdown' })); } catch { this._skillUrl = null; }
+        return this._skillUrl || '';
+      },
+    });
   }
 
   // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
@@ -417,7 +454,12 @@ class GbtiReader extends GbtiElement {
       // from its id (modPathFor, as gbti-shares-feed passes it), so a share carries data-gbti-id as well.
       + `<gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || '')}" data-gbti-slug="${esc(slug)}"${it.type === 'share' ? ` data-gbti-id="${esc(it.id || '')}"` : ''}></gbti-mod-actions>`
       + `</span>` : '';
-    return `<div class="meta"><span class="badge">${esc(t)}</span>`
+    // sow-109: a prompt item's badge says prompt or skill, in the website's label colours.
+    const kind = this._kind(it);
+    const badge = kind
+      ? `<span class="badge kind-badge kind-${kind}">${KIND_ICON[kind]}${esc(KIND_LABEL[kind])}</span>`
+      : `<span class="badge">${esc(t)}</span>`;
+    return `<div class="meta">${badge}`
       + `<span class="who">${av}<b>${esc(name)}</b></span>`
       + `${when ? `<span>· ${esc(dateStr(when))}</span>` : ''}${cats}${acts}</div>`;
   }
@@ -483,7 +525,7 @@ class GbtiReader extends GbtiElement {
 
   render() {
     const it = this._item;
-    if (!it) { this.set(this.css(CSS)); return; }
+    if (!it) { this.set(this.css(READER_CSS())); return; }
     // A Share's `url` is the external link it points at; every other type's `url` is a gbti.network path.
     // sow-145: outbound share links carry UTM attribution (the embed relay keeps the RAW url).
     const shareOut = it.type === 'share' && it.url ? utmLink(it.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }) : '';
@@ -494,7 +536,8 @@ class GbtiReader extends GbtiElement {
     const meta = this._metaHtml(it, when);
     // SOW-090: a whole-prompt Copy for PROMPT items (a prompt is a copyable artifact; the public site has
     // this and the extension reader did not). Copies the raw markdown body.
-    const copyAll = (it.type === 'prompt' && this._rawBody)
+    // sow-109: not on a skill, whose page text is not the thing to paste; its install box copies the skill file.
+    const copyAll = (it.type === 'prompt' && this._rawBody && this._kind(it) !== 'skill')
       ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : '';
     // SOW-050: the hero uses the full-res thumbWide derivative (falls back to the card/list thumb if absent).
     // SOW-092: a share whose link is a recognized video (YouTube/Vimeo/TikTok/Rumble embed) plays INLINE —
@@ -551,8 +594,10 @@ class GbtiReader extends GbtiElement {
     const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
 
 
-    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${copyAll}</article>${side}</div></div>`);
-    if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); }
+    // sow-109: a public skill's install box sits above the author's text, as on the website's skill page.
+    const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc(this._skill.text)}</pre>` : '';
+    this.set(this.css(READER_CSS()) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${skillBox}${body}${view}${copyAll}</article>${side}</div></div>`);
+    if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); if (this._skill) wireSkillPage(this.root); }
   }
 
   // GFM footnote anchors live inside this shadow root, where the browser's own fragment navigation cannot

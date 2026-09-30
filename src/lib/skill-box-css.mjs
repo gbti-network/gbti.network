@@ -1,42 +1,48 @@
-/* sow-109: prompts and skills told apart. The PROMPT and SKILL labels on cards and pages, and a skill page's install
-   box, from the approved design (canvas "Prompts and Skills", 2026-09-29). A prompt's label is a violet tint, a
-   skill's is solid violet, so the two read as the same family and as different things.
+// sow-109: the prompt-or-skill label and a skill's install box, styled ONCE for both places they appear: the website
+// (src/styles/prompt-kind.css carries this text verbatim) and the extension reader (a shadow root, which cannot read the
+// site's stylesheet). test/skill-reader.test.mjs fails if the two copies differ, the same guard idea as the card
+// colours in test/card-list-site-parity.test.mjs.
+//
+// The rules use the website's token names (--fg, --fg-soft, --green, --f-mono and so on). The reader maps those onto
+// its own tokens (READER_TOKEN_ALIASES in client-ui/src/skill-reader.mjs), so the rule text stays identical.
 
-   Its own file because gbti-v3.css is past the 900-line rule. Loaded globally from global.css, so every card, the
-   prompt page and the workbench preview get it. Every colour is a token below, set for both themes. */
+/** The label and box colours, per theme. The website sets them on :root and [data-theme="dark"]. */
+export const SKILL_TOKENS = Object.freeze({
+  light: Object.freeze({
+    'kind-prompt-fg': '#6b4fb0',
+    'kind-prompt-bg': '#f2eefb',
+    'kind-prompt-line': '#d6c9ee',
+    'kind-skill-fg': '#ffffff',
+    'kind-skill-bg': '#6b4fb0',
+    'skill-box-bg': '#f8f5fe',
+    'skill-box-line': '#d6c9ee',
+    'skill-box-well': '#ffffff',
+    'skill-box-well-line': '#e2daf3',
+    'skill-box-mute': '#5d5275',
+    'skill-box-accent': '#6b4fb0',
+    'skill-box-on-accent': '#ffffff',
+  }),
+  dark: Object.freeze({
+    'kind-prompt-fg': '#cdbcff',
+    'kind-prompt-bg': '#332b48',
+    'kind-prompt-line': '#4b3f6e',
+    'kind-skill-fg': '#1d1433',
+    'kind-skill-bg': '#c4b0ff',
+    'skill-box-bg': '#262234',
+    'skill-box-line': '#5d4d8f',
+    'skill-box-well': '#19171f',
+    'skill-box-well-line': '#3d3754',
+    'skill-box-mute': '#b9b0d6',
+    'skill-box-accent': '#c4b0ff',
+    'skill-box-on-accent': '#1d1433',
+  }),
+});
 
-:root {
-  --kind-prompt-fg: #6b4fb0;
-  --kind-prompt-bg: #f2eefb;
-  --kind-prompt-line: #d6c9ee;
-  --kind-skill-fg: #ffffff;
-  --kind-skill-bg: #6b4fb0;
-  --skill-box-bg: #f8f5fe;
-  --skill-box-line: #d6c9ee;
-  --skill-box-well: #ffffff;
-  --skill-box-well-line: #e2daf3;
-  --skill-box-mute: #5d5275;
-  --skill-box-accent: #6b4fb0;
-  --skill-box-on-accent: #ffffff;
-}
-[data-theme="dark"] {
-  --kind-prompt-fg: #cdbcff;
-  --kind-prompt-bg: #332b48;
-  --kind-prompt-line: #4b3f6e;
-  --kind-skill-fg: #1d1433;
-  --kind-skill-bg: #c4b0ff;
-  --skill-box-bg: #262234;
-  --skill-box-line: #5d4d8f;
-  --skill-box-well: #19171f;
-  --skill-box-well-line: #3d3754;
-  --skill-box-mute: #b9b0d6;
-  --skill-box-accent: #c4b0ff;
-  --skill-box-on-accent: #1d1433;
-}
+/** The token declarations for one theme, as CSS: `--kind-prompt-fg: #6b4fb0; ...`. */
+export const skillTokenDecls = (theme) => Object.entries(SKILL_TOKENS[theme]).map(([k, v]) => `--${k}: ${v};`).join(' ');
 
-/* ---------- shared with the extension reader: src/lib/skill-box-css.mjs SKILL_BOX_CSS, verbatim ----------
-   Edit both together; test/skill-reader.test.mjs fails if they differ. */
-/* ---------- the label ---------- */
+/** The shared rules: the PROMPT / SKILL label and the install box. */
+export const SKILL_BOX_CSS = `/* ---------- the label ---------- */
 .kind-badge {
   display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px;
   border-radius: 6px; border: 1px solid transparent; font-family: var(--f-mono); font-size: 11px; font-weight: 700;
@@ -108,26 +114,4 @@
   .skill-steps > li { gap: 10px; }
   .skill-cmd { flex-wrap: wrap; }
 }
-/* ---------- end of the shared rules ---------- */
-
-/* ---------- a skill page: the author's text, then the file ---------- */
-.skill-notes { margin-bottom: 30px; }
-.skill-file { margin-bottom: 8px; }
-.skill-file-h { margin: 0 0 12px; font-family: var(--f-display); font-weight: 700; font-size: 22px; }
-.skill-file-body { padding: 18px 20px; position: relative; }
-.skill-file[data-open="false"] .skill-file-body { max-height: 240px; overflow: hidden; }
-.skill-file[data-open="false"] .skill-file-body::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 64px; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--paper-2));
-}
-.skill-file-toggle {
-  height: 32px; padding: 0 12px; width: auto; border: 1.5px solid var(--line-2); border-radius: var(--r); background: var(--paper);
-  color: var(--fg-soft); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-}
-.skill-file-toggle:hover { background: var(--tint); color: var(--fg); border-color: var(--line-2); }
-
-/* The feed cards' small lowercase type tag (.kind-tag in gbti-v3.css): a skill gets the skill colours. Two classes, so it
-   also beats gbti-v3.css's dark-theme .kt-* rules; the tokens above already flip with the theme. */
-.kind-tag.kt-skill { color: var(--kind-skill-fg); background: var(--kind-skill-bg); }
-/* A file name keeps its case: the prompt bar's label is uppercased, and "SKILL.MD" is not the file a reader saves. */
-.skill-file .prompt-block-label { text-transform: none; }
+`;

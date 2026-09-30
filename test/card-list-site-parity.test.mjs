@@ -34,6 +34,19 @@ test('every type tag uses the website colours, light and dark', () => {
   }
 });
 
+test('sow-109: a skill chip uses the website SKILL label colours, light and dark', async () => {
+  // The site's label colours are tokens (src/lib/skill-box-css.mjs SKILL_TOKENS, which prompt-kind.css sets), not a
+  // .kt-* rule, so the pair is checked against the tokens rather than through PAIRS.
+  const { SKILL_TOKENS } = await import('../src/lib/skill-box-css.mjs');
+  for (const [theme, dark] of [['light', false], ['dark', true]]) {
+    const want = [SKILL_TOKENS[theme]['kind-skill-fg'], SKILL_TOKENS[theme]['kind-skill-bg']].map((c) => c.toLowerCase());
+    assert.deepEqual(colors(decl(card, '[data-type] .chip.k-skill', dark)).slice(0, 2), want, `skill chip, ${theme}`);
+  }
+  // and it must come AFTER the type-accent rule it overrides, which has the same specificity in light mode.
+  assert.ok(card.indexOf('[data-type] .chip.k-skill {') > card.indexOf('[data-type]:not([data-type="news"]) .chip {'));
+  assert.match(card, /if \(t === 'prompt' && item\.kind === 'skill'\) return '<span class="chip k-skill">Skill<\/span>';/);
+});
+
 test('the detailed row reads like the website card: meta, then title, then excerpt, with the cover to the right', () => {
   const detailed = card.slice(card.indexOf('_detailed(items)'), card.indexOf('_card(items)'));
   const order = ['_meta(it)', '_chip(it)', 'class="title"', 'class="ex"'];

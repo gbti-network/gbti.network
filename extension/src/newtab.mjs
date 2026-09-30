@@ -17,6 +17,7 @@ import { parseBrowseHash, stripDoParam, parseMemberHash } from '../../client-ui/
 import { initShell } from './shell.mjs';
 import { TYPE_FILTERS, typeForHash, feedSources, feedTabs, tabKeyForType } from '../../client-ui/src/feed-route.mjs';
 import { viewKey, viewModeFor, landingType, LAST_SECTION_KEY, LEGACY_MODE_KEY } from '../../client-ui/src/newtab-prefs.mjs'; // SOW-105: last-section + per-section view-mode memory
+import { PROMPT_KIND_KEY, normalizePromptKind, promptKindCounts, filterPromptKind, promptKindSwitchHtml } from '../../client-ui/src/prompt-kind-filter.mjs'; // sow-109: the Prompts & Skills tab's All / Prompts / Skills switch
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
 const SITE = 'https://gbti.network';
@@ -97,6 +98,8 @@ const storedView = (t) => { try { return localStorage.getItem(viewKey(t)); } cat
 const storedLastSection = () => { try { return localStorage.getItem(LAST_SECTION_KEY); } catch (e) { return null; } };
 const resolveMode = () => { MODE = viewModeFor(TYPE, storedView(TYPE)); };
 let MEMBERSHIP = 'unknown';
+// sow-109: the Prompts & Skills tab shows prompts, skills or both, remembered per browser (a blocked store = 'all').
+let PROMPT_KIND = (() => { try { return normalizePromptKind(localStorage.getItem(PROMPT_KIND_KEY)); } catch (e) { return 'all'; } })();
 let SHARES = null;
 let SHARES_LOADED = false;
 let SHARES_LOADED_AT = null; // the MEMBERSHIP the loaded SHARES were fetched under, so an upgrade re-fetches
@@ -127,9 +130,18 @@ const toCardItem = (e) => ({
   // openHref (its outbound UTM link, set by newsToItem), so the feed is the one browser — no Browse-page bounce.
 });
 
+/** sow-109: show the All / Prompts / Skills switch with its counts, or hide it (`counts` null) off the prompts tab. */
+function renderKindSwitch(counts) {
+  const el = $('[data-kinds]');
+  if (!el) return;
+  el.hidden = !counts;
+  if (counts) el.innerHTML = promptKindSwitchHtml(PROMPT_KIND, counts);
+}
+
 function renderFeed(filter = '') {
   const feed = $('[data-feed]');
   if (!feed) return;
+  if (TYPE !== 'prompt') renderKindSwitch(null); // the Following empty states below return before the switch renders
   const q = filter.trim().toLowerCase();
 
   if (VIEW === 'following') {
@@ -169,6 +181,9 @@ function renderFeed(filter = '') {
       ? (FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()))
       : (FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()))));
   }
+  // sow-109: on the Prompts & Skills tab, the switch counts what is here and narrows to the chosen kind.
+  renderKindSwitch(TYPE === 'prompt' ? promptKindCounts(rows) : null);
+  if (TYPE === 'prompt') rows = filterPromptKind(rows, PROMPT_KIND);
   rows = newestFirst(rows); // newest-first across all three sources, none favoured
   if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
   // Pagination window: reset on a view/type/search change, widen via the Show more button below the list.
@@ -580,6 +595,15 @@ function init() {
     syncModeButtons();
     renderFeed($('[data-filter]')?.value || '');
   }));
+
+  // sow-109: the Prompts & Skills switch. The choice is remembered per browser and applies on the next visit too.
+  $('[data-kinds]')?.addEventListener('click', (e) => {
+    const b = e.target.closest?.('[data-kind-val]');
+    if (!b) return;
+    PROMPT_KIND = normalizePromptKind(b.dataset.kindVal);
+    try { localStorage.setItem(PROMPT_KIND_KEY, PROMPT_KIND); } catch (err) { /* storage unavailable: this visit only */ }
+    renderFeed($('[data-filter]')?.value || '');
+  });
 
   // sow-296: the feed tab row (All / News / Network / Articles / Projects / Prompts & Skills / Shares), rendered
   // from the shared list. Each tab is a real newtab.html#type= link, so a middle click opens it in a tab; a plain

@@ -81,21 +81,32 @@ export function codeRuns(text) {
  * steps filled in. Targets with no steps come back in `without`, so the page can say so rather than drop them.
  */
 export function installTabsFor({ targets, name, doc, aiToolsDoc }) {
-  const byLabel = new Map(aiToolEntries(aiToolsDoc).map((t) => [t.label, t.key]));
-  const steps = new Map(skillInstallEntries(doc).map((e) => [e.key, e]));
+  const labels = new Map(aiToolEntries(aiToolsDoc).map((t) => [t.key, t.label]));
+  const tools = skillInstallEntries(doc).map((e) => ({ ...e, label: labels.get(e.key) ?? '' })).filter((t) => t.label);
+  return installTabsFromTools({ tools, targets, name });
+}
+
+/**
+ * The same, from a list of tools that already carry their labels: what /skill-install.json serves, so the extension
+ * reader gets exactly the tabs the website shows. A tool is matched to a target by its label.
+ */
+export function installTabsFromTools({ tools, targets, name }) {
+  const byLabel = new Map((Array.isArray(tools) ? tools : [])
+    .filter((t) => t && str(t.key) && str(t.label) && str(t.folder) && str(t.run))
+    .map((t) => [str(t.label), t]));
   const tabs = [];
   const without = [];
+  const okName = SKILL_NAME_RE.test(String(name ?? '')) ? name : '';
   for (const label of Array.isArray(targets) ? targets : []) {
-    const key = byLabel.get(label);
-    const e = key ? steps.get(key) : null;
-    if (!e || !name) { without.push(label); continue; }
-    const folder = fillName(e.folder, name);
+    const e = byLabel.get(label);
+    if (!e || !okName) { without.push(label); continue; }
+    const folder = fillName(str(e.folder), okName);
     tabs.push({
-      key, label,
+      key: str(e.key), label,
       folder,
       mkdir: `mkdir -p ${folder}`,
-      run: codeRuns(fillName(e.run, name)),
-      local: codeRuns(fillName(e.local, name)),
+      run: codeRuns(fillName(str(e.run), okName)),
+      local: codeRuns(fillName(str(e.local), okName)),
     });
   }
   return { tabs, without };

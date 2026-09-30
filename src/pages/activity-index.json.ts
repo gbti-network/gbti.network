@@ -6,7 +6,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isListed } from '../lib/content';
 import { buildActivityIndex } from '../lib/activity.mjs';
-import { contentItemPath } from '../lib/content-index.mjs';
+import { contentItemPath, promptFields } from '../lib/content-index.mjs';
 import { resolveThumb } from '../lib/index-thumb';
 import { breadcrumb } from '../lib/taxonomy';
 
@@ -25,7 +25,7 @@ import { breadcrumb } from '../lib/taxonomy';
 // NEVER derive this from a body. post.excerpt is optional, and the obvious repair for a missing one is a body
 // excerpt, which for a Mode B stub would put member-only text into a public JSON and into an email. Absent
 // means absent: null here, and the digest renders a bare row (membership/mail-digest.mjs publicItem).
-type ActivityEntry = { type: 'post' | 'project' | 'prompt'; slug: string; title: string; author: string; url: string; path: string | null; thumb: string | null; thumbCard: string | null; thumbWide: string | null; categoryLabels: string[]; description: string | null; publishedAt: number | null; visibility: 'public' | 'members' };
+type ActivityEntry = { type: 'post' | 'project' | 'prompt'; slug: string; title: string; author: string; url: string; path: string | null; thumb: string | null; thumbCard: string | null; thumbWide: string | null; categoryLabels: string[]; description: string | null; publishedAt: number | null; visibility: 'public' | 'members'; kind?: 'prompt' | 'skill'; targets?: string[] };
 
 export const prerender = true;
 
@@ -40,6 +40,7 @@ export const GET: APIRoute = async () => {
   })));
   const prompts = await Promise.all((await getCollection('prompt')).filter(isListed).map(async (p): Promise<ActivityEntry> => ({
     type: 'prompt', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/prompts/${p.data.slug}/`, path: contentItemPath('prompt', p.data.author, p.data.slug), ...(await resolveThumb(p.data, 'prompt')), categoryLabels: breadcrumb(p.data.categories), description: p.data.shortDescription ?? null, publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
+    ...promptFields(p.data), // sow-109: prompt or skill, and the tools it is made for
   })));
   // SOW-018: Shares are deliberately EXCLUDED here. Shares are an extension-only experience (no public website
   // surface), so they never appear in this public activity index; the extension reads them directly (authenticated).

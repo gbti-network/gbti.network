@@ -83,6 +83,17 @@ export function toIndexItem(entry, type) {
     visibility: d.visibility || 'public',
     aliases: aliasSlugsOf(d), // SOW-112: old slugs after a rename (saved rows + reader discussions resolve via these)
     tags: Array.isArray(d.tags) ? d.tags.filter((t) => typeof t === 'string') : [], // SOW-100: the admin tag explorer
+    // sow-109: a prompt item says whether it is a prompt or a skill, and which tools it is made for, so the extension
+    // can label it, filter the tab by kind, and show a skill's install steps. Public frontmatter, like the rest.
+    ...(type === 'prompt' ? promptFields(d) : {}),
+  };
+}
+
+/** sow-109: the prompt-only index fields. Anything but 'skill' reads as a prompt, the kind every item had before. */
+export function promptFields(d) {
+  return {
+    kind: d?.kind === 'skill' ? 'skill' : 'prompt',
+    targets: Array.isArray(d?.targets) ? d.targets.filter((t) => typeof t === 'string') : [],
   };
 }
 

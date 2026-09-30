@@ -166,6 +166,11 @@ const CSS = `
   .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 14%, transparent); }
   .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 7%, var(--panel)); }
   [data-type]:not([data-type="news"]) .chip { color:var(--cbar); background:color-mix(in srgb, var(--cbar) 13%, transparent); border-color:color-mix(in srgb, var(--cbar) 26%, transparent); }
+  /* sow-109: a skill's chip is the website's solid-violet SKILL label (src/lib/skill-box-css.mjs SKILL_TOKENS; the parity
+     test holds the colours equal). It comes after the accent rule above with one more selector, so the accent does not
+     repaint it. A prompt keeps the prompt accent. */
+  [data-type] .chip.k-skill { color:#ffffff; background:#6b4fb0; border-color:transparent; }
+  :host-context([data-theme="dark"]) [data-type] .chip.k-skill { color:#1d1433; background:#c4b0ff; }
 
   /* SOW-070: GLASS — the accent bars + gradient glyphs + colored chips above already carry over; glass just FROSTS
      the list (ONE backdrop blur per CONTAINER, never per row, for the long-feed perf budget) and bumps the per-type
@@ -239,6 +244,7 @@ class GbtiCardList extends GbtiElement {
   }
   _chip(item) {
     const t = lc(item.type);
+    if (t === 'prompt' && item.kind === 'skill') return '<span class="chip k-skill">Skill</span>'; // sow-109
     const k = ['post', 'project', 'prompt', 'share', 'news'].includes(t) ? ` k-${t}` : '';
     return `<span class="chip${k}">${esc(TYPE_LABEL[item.type] || item.type)}</span>`;
   }

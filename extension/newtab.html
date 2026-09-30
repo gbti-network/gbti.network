@@ -69,6 +69,14 @@
       .nt-feedctl .nt-tab { padding: 6px 10px; }
     }
 
+    /* sow-109: the All / Prompts / Skills switch, styled like the website's prompt directory. [hidden] is restated,
+       because the display rule below would otherwise override it. */
+    .kind-switch { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); }
+    .kind-switch[hidden] { display: none; }
+    .ks-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-soft); font-family: var(--f-sans); font-size: 13px; font-weight: 600; cursor: pointer; }
+    .ks-btn:hover { background: var(--paper-3); color: var(--fg); }
+    .ks-btn.on { background: var(--green); color: #fff; }
+    .ks-btn .ks-n { font-family: var(--f-mono); font-size: 11.5px; opacity: .75; }
     .nt-feed { margin-top: 16px; }
     .muted { color: var(--fg-mute); font-size: 14px; }
 
@@ -154,6 +162,9 @@
           </div>
         </div>
       </div>
+
+      <!-- sow-109: on the Prompts & Skills tab only, the same All / Prompts / Skills choice as the website's directory. -->
+      <div class="kind-switch" data-kinds role="group" aria-label="Show prompts, skills or both" hidden></div>
 
       <div class="nt-feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>
 
