@@ -12,7 +12,8 @@ tags:
   - techno
   - metronome
   - '1991'
-image: https://i.ytimg.com/vi/UbiM826QOZU/hqdefault.jpg
+image: https://gbti.network/media/shares/gbtilabs/20260930203725-metronome-voyage-to-the-bottom-of-the-bass-1991-05468de5.webp
+imageSource: https://i.ytimg.com/vi/UbiM826QOZU/hqdefault.jpg
 creatorUrl: https://www.youtube.com/@galaxygroove1261
 creatorName: Galaxy Groove
 id: 20260930203725-metronome-voyage-to-the-bottom-of-the-bass-1991
