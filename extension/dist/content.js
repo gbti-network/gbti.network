@@ -9766,7 +9766,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/saved-core.mjs
   var TYPE_INDEX = { post: "blog-index.json", project: "projects-index.json", prompt: "prompts-index.json" };
-  var TYPE_LABEL2 = { post: "Articles", project: "Projects", prompt: "Prompts", share: "Shares" };
+  var TYPE_LABEL2 = { post: "Articles", project: "Projects", prompt: "Prompts & Skills", share: "Shares" };
   var ORDER = ["post", "project", "prompt", "share"];
   function indexFileFor(type) {
     return TYPE_INDEX[type] || null;
@@ -9774,13 +9774,17 @@ ${listStyleProseCss(".doc-blocks")}
   function typeLabel(type) {
     return TYPE_LABEL2[type] || String(type || "");
   }
+  function rowLabel(item) {
+    if (item?.type === "prompt") return item.kind === "skill" ? "Skills" : "Prompts";
+    return typeLabel(item?.type);
+  }
   var SAVED_TYPES = ORDER.slice();
   function buildItemIndex(perType = {}) {
     const map = /* @__PURE__ */ new Map();
     for (const [type, items] of Object.entries(perType || {})) {
       for (const it2 of items || []) {
         if (!it2 || !it2.slug) continue;
-        const row = { type, slug: it2.slug, title: it2.title || it2.slug, url: it2.url || null, path: it2.path || null, thumb: it2.thumb || null };
+        const row = { type, slug: it2.slug, title: it2.title || it2.slug, url: it2.url || null, path: it2.path || null, thumb: it2.thumb || null, kind: it2.kind || null };
         map.set(`${type}:${it2.slug}`, row);
         for (const a of Array.isArray(it2.aliases) ? it2.aliases : []) {
           const k = `${type}:${a}`;
@@ -22259,7 +22263,7 @@ ${BLOCKED_PILL_CSS}
       const title = esc2(item.title);
       const t = item.url ? `<a class="t" href="${SITE12}${esc2(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc2(cid)}" data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>`;
-      return `<li class="row"><span class="badge">${esc2(typeLabel(item.type))}</span>${t}${rm}</li>`;
+      return `<li class="row"><span class="badge">${esc2(rowLabel(item))}</span>${t}${rm}</li>`;
     }
     _wire() {
       this.$$("[data-chip]").forEach((b) => b.addEventListener("click", () => {

@@ -251,7 +251,10 @@ export async function membershipDecrypt(request, env, deps = {}) {
       : trialReadable
         ? 'an active membership is required to read this'
         : 'an active paid membership is required';
-    return { status: 403, body: { error: 'forbidden', message: msg } };
+    // sow-425: "not a member" gets its own code, so a page can say "this is for members" rather than "could not be
+    // unlocked right now". A ban and every outage (the deny() cases in resolveEffective) keep `forbidden`, and the
+    // status stays 403 either way: nothing here opens anything up.
+    return { status: 403, body: { error: r.status === 'banned' ? 'forbidden' : 'membership_required', message: msg } };
   }
   const key = resolveEpochKey(env, String(envelope.kid ?? env.MEMBER_CONTENT_KID ?? '1'));
   if (!key) return { status: 500, body: { error: 'misconfigured', message: 'no member-content key for this epoch' } };

@@ -6,11 +6,17 @@
 // SOW-050 P3: 'share' is a first-class saved type. Shares have no public page/index, so there is no index file
 // (indexFileFor('share') -> null and resolveItem falls back to the slug); they still get a label + sort slot.
 const TYPE_INDEX = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
-const TYPE_LABEL = { post: 'Articles', project: 'Projects', prompt: 'Prompts', share: 'Shares' };
+// sow-425: a prompt item is a prompt or a skill (sow-109), so its group carries the tab's own name.
+const TYPE_LABEL = { post: 'Articles', project: 'Projects', prompt: 'Prompts & Skills', share: 'Shares' };
 const ORDER = ['post', 'project', 'prompt', 'share'];
 
 export function indexFileFor(type) { return TYPE_INDEX[type] || null; }
 export function typeLabel(type) { return TYPE_LABEL[type] || String(type || ''); }
+/** sow-425: a row's own label. A prompt item says which it is (the index carries `kind`); everything else is its type. */
+export function rowLabel(item) {
+  if (item?.type === 'prompt') return item.kind === 'skill' ? 'Skills' : 'Prompts';
+  return typeLabel(item?.type);
+}
 export const SAVED_TYPES = ORDER.slice();
 
 /**
@@ -22,7 +28,7 @@ export function buildItemIndex(perType = {}) {
   for (const [type, items] of Object.entries(perType || {})) {
     for (const it of items || []) {
       if (!it || !it.slug) continue;
-      const row = { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null };
+      const row = { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null, kind: it.kind || null };
       map.set(`${type}:${it.slug}`, row);
       // SOW-112: a saved row created before a rename still carries the OLD slug; the index item ships the old
       // slugs as aliases, so the row resolves to the renamed item (never overwriting a real current-slug entry).

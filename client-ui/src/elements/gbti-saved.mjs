@@ -5,7 +5,7 @@
 // addToCollection (remove item), createCollection / renameCollection / deleteCollection. Host-agnostic + inert in
 // public (no client -> a sign-in nudge). The GitHub token never reaches the page (the host holds it).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildItemIndex, resolveItem, groupFavoritesByType, indexFileFor, typeLabel, SAVED_TYPES, savedTypeChips, filterSavedByType, savedSectionFromHash } from '../saved-core.mjs';
+import { buildItemIndex, resolveItem, groupFavoritesByType, indexFileFor, typeLabel, rowLabel, SAVED_TYPES, savedTypeChips, filterSavedByType, savedSectionFromHash } from '../saved-core.mjs';
 
 const SITE = 'https://gbti.network';
 
@@ -142,7 +142,7 @@ class GbtiSaved extends GbtiElement {
     const rm = fav
       ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`
       : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
-    return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
+    return `<li class="row"><span class="badge">${esc(rowLabel(item))}</span>${t}${rm}</li>`;
   }
 
   _wire() {

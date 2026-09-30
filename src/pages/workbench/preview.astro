@@ -370,7 +370,7 @@ const labelOf = CATEGORY_LABELS;
       // Reshape the project Doc Shell into the page this type actually publishes as. Articles and prompts
       // each have their own document on the site, and rendering both through the project shell made the
       // preview lie about the page. See src/lib/preview-shells.mjs for what each branch does and why.
-      applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath });
+      applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath, skillFile: draft.skillFile, signupBase: base, ref: contentSha || '' }); // sow-425: a skill previews as a skill
       setImg('[data-pv-mark]', fm.iconLarge || fm.icon);
       setImg('[data-pv-barmark]', fm.icon);
 

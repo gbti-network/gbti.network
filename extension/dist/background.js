@@ -19941,6 +19941,10 @@ async function governanceAdminOp(ctx, body = {}) {
     changed: true,
     prNumber: r?.number ?? null,
     prUrl: r?.html_url ?? null,
+    // sow-425: whether the pull request merges on its own (a superadmin's edit does, sow-108). The Worker reports it;
+    // dropping it here made every extension admin save read "awaiting review". Absent stays absent, so an older
+    // Worker keeps the review wording (houseEditAck says "merges automatically" only on an explicit true).
+    ...typeof r?.autoMerge === "boolean" ? { autoMerge: r.autoMerge } : {},
     ...r?.kvWritten === void 0 ? {} : { kvWritten: r.kvWritten, kvReason: r.kvReason ?? null }
   };
 }

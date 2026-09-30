@@ -502,7 +502,14 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
     if (text == null) throw err('not-found', 'could not read that asset');
     let envelope: any;
     try { envelope = JSON.parse(text); } catch { throw err('undecryptable', 'the asset envelope is invalid'); }
-    const r = await workerPost('/membership/decrypt', envelope);
+    // sow-425: the Worker says `membership_required` to a reader who is not paid. Every decrypting component (the
+    // locked box, the discussion, the shares feed, the reader) shows its members message for `membership-required`,
+    // the code the extension host already uses, so translate it here once.
+    let r: any;
+    try { r = await workerPost('/membership/decrypt', envelope); } catch (e: any) {
+      if (e?.code === 'membership_required') throw err('membership-required', e.message || 'This is for members.');
+      throw e;
+    }
     return r.text;
   }
 

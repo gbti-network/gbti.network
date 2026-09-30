@@ -75,5 +75,10 @@ export async function loadMembersSkillBox({ site, targets, decrypt, fileHref, fe
   return boxFor({ tools, text, targets, fileHref });
 }
 
+/** sow-425: the same box from a skill file the caller already holds (the WorkBench Preview has the draft's file). */
+export async function loadSkillBoxFromText({ site, targets, text, fileHref, fetchImpl = globalThis.fetch }) {
+  return loadMembersSkillBox({ site, targets, decrypt: async () => text, fileHref, fetchImpl });
+}
+
 /** Test seam: forget the cached steps. */
 export function _resetSkillSteps() { steps = null; }

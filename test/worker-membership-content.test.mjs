@@ -38,6 +38,7 @@ test('decrypt: requires a bearer token', async () => {
 test('decrypt: 403 for a non-paid member (fail closed)', async () => {
   const r = await membershipDecrypt(POST('decrypt', 'Bearer g', { v: 1, kid: '1', iv: 'a', aad: 'a', ct: 'x' }), ENV(), deps('9', () => null));
   assert.equal(r.status, 403);
+  assert.equal(r.body.error, 'membership_required', 'sow-425: "not a member" has its own code, so the page can say so');
 });
 
 test('decrypt: 403 for a banned member even with a paid Stripe sub', async () => {
@@ -45,6 +46,7 @@ test('decrypt: 403 for a banned member even with a paid Stripe sub', async () =>
   const r = await membershipDecrypt(POST('decrypt', 'Bearer g', { v: 1, kid: '1', iv: 'a', aad: 'a', ct: 'x' }), ENV({}, mirror), deps('1', () => paid));
   assert.equal(r.status, 403);
   assert.match(r.body.message, /not permitted/);
+  assert.equal(r.body.error, 'forbidden', 'sow-425: a ban is not told to become a member');
 });
 
 test('decrypt: 403 (fail closed) when the overrides mirror is missing or stale', async () => {
@@ -52,6 +54,9 @@ test('decrypt: 403 (fail closed) when the overrides mirror is missing or stale',
   assert.equal((await membershipDecrypt(POST('decrypt', 'Bearer g', { v: 1, kid: '1', iv: 'a', aad: 'a', ct: 'x' }), env1, deps('1', () => paid))).status, 403);
   const stale = freshMirror(); stale.generatedAt = new Date(Date.now() - MAX_OVERRIDES_AGE_MS - 1000).toISOString();
   assert.equal((await membershipDecrypt(POST('decrypt', 'Bearer g', { v: 1, kid: '1', iv: 'a', aad: 'a', ct: 'x' }), ENV({}, stale), deps('1', () => paid))).status, 403);
+  // sow-425: an outage is not "you are not a member": it keeps `forbidden`, which pages read as "try again later".
+  assert.equal((await membershipDecrypt(POST('decrypt', 'Bearer g', { v: 1, kid: '1', iv: 'a', aad: 'a', ct: 'x' }), ENV({}, stale), deps('1', () => paid))).body.error, 'forbidden');
+  assert.equal((await membershipDecrypt(POST('decrypt', 'Bearer g', { v: 1, kid: '1', iv: 'a', aad: 'a', ct: 'x' }), env1, deps('1', () => paid))).body.error, 'forbidden');
 });
 
 test('decrypt: 400 on a malformed (non-envelope) body for a paid member', async () => {

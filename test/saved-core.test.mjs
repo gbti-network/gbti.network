@@ -9,7 +9,7 @@ test('indexFileFor / typeLabel map content types to their index + label', () => 
   assert.equal(indexFileFor('prompt'), 'prompts-index.json');
   assert.equal(indexFileFor('bogus'), null);
   assert.equal(typeLabel('post'), 'Articles');
-  assert.equal(typeLabel('prompt'), 'Prompts');
+  assert.equal(typeLabel('prompt'), 'Prompts & Skills'); // sow-425: the tab's own name
   // SOW-050 P3: Shares are a labelled type with no build-time index (resolveItem falls back to the slug).
   assert.equal(typeLabel('share'), 'Shares');
   assert.equal(indexFileFor('share'), null);
@@ -89,4 +89,15 @@ test('savedCount counts favorites + items across collections', () => {
   const c = savedCount({ favorites: [{ type: 'post', slug: 'a' }, { type: 'prompt', slug: 'b' }], collections: [{ items: [{ type: 'post', slug: 'a' }] }, { items: [] }, {}] });
   assert.deepEqual(c, { favorites: 2, inCollections: 1 });
   assert.deepEqual(savedCount({}), { favorites: 0, inCollections: 0 });
+});
+
+// sow-425: the Saved page labelled a skill "Prompts". The index carries each prompt item's kind, and a row says which.
+test('a saved skill is labelled a skill, a saved prompt a prompt', async () => {
+  const { buildItemIndex, resolveItem, rowLabel } = await import('../client-ui/src/saved-core.mjs');
+  const index = buildItemIndex({ prompt: [{ slug: 'grok', title: '/GROK', kind: 'skill' }, { slug: 'headshots', title: 'Headshots', kind: 'prompt' }, { slug: 'old', title: 'Old' }], project: [{ slug: 'radle', title: 'Radle' }] });
+  assert.equal(rowLabel(resolveItem(index, 'prompt', 'grok')), 'Skills');
+  assert.equal(rowLabel(resolveItem(index, 'prompt', 'headshots')), 'Prompts');
+  assert.equal(rowLabel(resolveItem(index, 'prompt', 'old')), 'Prompts', 'no kind reads as a prompt, as the site does');
+  assert.equal(rowLabel(resolveItem(index, 'prompt', 'gone')), 'Prompts', 'an item missing from the index');
+  assert.equal(rowLabel(resolveItem(index, 'project', 'radle')), 'Projects');
 });

@@ -23,6 +23,30 @@ import { ARTICLE_LAYOUTS, articleShell, buildArticleLeadHtml } from './article-p
 import {
   PROMPT_SHELL, buildPromptHeadHtml, buildPromptResultHtml, buildPromptBlockHtml, promptImageFraming,
 } from './prompt-page.mjs';
+import { SKILL_SHELL, buildSkillFileHtml, wireSkillPage } from './skill-page.mjs'; // sow-425: a skill previews as a skill
+import { KIND_LABEL } from '../../membership/prompt-kind.mjs';
+import { loadSkillBoxFromText } from '../../client-ui/src/skill-reader.mjs';
+
+/**
+ * sow-425: fill a skill preview's install box and file block. The steps come from the site's /skill-install.json and
+ * the name from the file, exactly as the published page and the reader build them. `skillFile` is the draft's own
+ * file (a draft saved from the editor carries it); `readSkillFile` reads the one beside a committed draft. With no
+ * file at all the preview shows the author's text only, as a published skill without steps does.
+ */
+export async function fillSkillPreview(doc, { fm = {}, skillFile = null, readSkillFile = null, site = globalThis.location?.origin || '', fetchImpl = globalThis.fetch } = {}) {
+  let text = typeof skillFile === 'string' && skillFile.trim() ? skillFile : null;
+  if (!text && readSkillFile) { try { text = (await readSkillFile()) || null; } catch { text = null; } }
+  const boxSlot = doc.querySelector('[data-pv-skill-box]');
+  const fileSlot = doc.querySelector('[data-pv-skill-file]');
+  if (!text) { boxSlot?.remove(); fileSlot?.remove(); return false; }
+  const fileHref = (t) => { try { return URL.createObjectURL(new Blob([t], { type: 'text/markdown' })); } catch { return ''; } };
+  let box = null;
+  try { box = await loadSkillBoxFromText({ site, targets: Array.isArray(fm.targets) ? fm.targets : [], text, fileHref, fetchImpl }); } catch { box = null; }
+  if (boxSlot) { if (box?.html) boxSlot.outerHTML = box.html; else boxSlot.remove(); }
+  if (fileSlot) fileSlot.outerHTML = buildSkillFileHtml({ text });
+  wireSkillPage(doc);
+  return true;
+}
 
 /**
  * Does this type's published page carry a Contents rail?
@@ -53,7 +77,7 @@ export function shellHasToc(type) {
  * @param {(v: any, itemPath: string) => string} ctx.asset  resolves a repo-relative image to a URL
  * @param {string} ctx.itemPath  the draft's repo path, for `asset`
  */
-export function applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath }) {
+export function applyPreviewShell(document, { type, fm, slug, cats, labels, catPath, hero, esc, asset, itemPath, skillFile = null, signupBase = '', ref = '' }) {
   // sow-214: an ARTICLE is not a project, and until now the preview rendered it as one. The published
   // page picks ArticleJournal / ArticleEditorial / ArticleCard from `layout`; this preview rendered every
   // type through the project Doc Shell, so an article preview was a different page from the article and
@@ -158,11 +182,15 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     // MOVES into it rather than being duplicated: a draft has no publication date and no price, so the
     // preview says so where the real byline would be instead of inventing one.
     const pbyline = document.querySelector('.pd-byline');
+    // sow-425: a skill previews as the skill page it publishes as: its SKILL label beside the byline, the install box,
+    // the author's text and the skill file, and no prompt block (the page never wraps a skill in one).
+    const isSkill = fm.kind === 'skill';
+    const kindBadge = isSkill ? `<span class="kind-badge kind-skill"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href="#ico-kind-skill"/></svg>${esc(KIND_LABEL.skill)}</span>` : '';
     const head = buildPromptHeadHtml({
       title: fm.title || slug,
       crumbs: [{ label: 'AI Prompts', href: '/prompts/' },
         ...cats.map((c) => ({ label: labels[c] || c, href: `/prompts/?cat=${encodeURIComponent(c)}` }))],
-      metaHtml: pbyline ? pbyline.innerHTML : '',
+      metaHtml: (pbyline ? pbyline.innerHTML : '') + kindBadge,
       lead: fm.shortDescription || fm.exampleOutput || '',
     });
     if (pbyline) pbyline.remove();
@@ -171,7 +199,29 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     // moved inside it, so every listener already attached to that element survives the reshape. The mode
     // switch and Copy act on a published prompt, so the preview asks for the bar without them.
     const povw = document.getElementById('pd-overview');
-    if (povw?.parentElement) {
+    if (isSkill && povw?.parentElement) {
+      // The body is the author's page text, wrapped as the page wraps it; the box goes above it and the file below.
+      const notes = document.createElement('div');
+      notes.className = SKILL_SHELL.notes;
+      povw.parentElement.insertBefore(notes, povw);
+      notes.appendChild(povw);
+      notes.insertAdjacentHTML('beforebegin', '<div data-pv-skill-box></div>');
+      notes.insertAdjacentHTML('afterend', '<div data-pv-skill-file></div>');
+      const framing = promptImageFraming(fm);
+      const fig = buildPromptResultHtml({
+        imgHtml: hero.image ? `<img src="${esc(asset(hero.image, itemPath))}" alt="${esc(framing.alt)}" />` : '',
+        caption: framing.caption,
+      });
+      if (fig) document.querySelector('[data-pv-skill-box]')?.insertAdjacentHTML('beforebegin', fig);
+      // A committed draft carries no file of its own; a PUBLIC skill's file sits beside it. A members-only skill's is
+      // encrypted, and the preview does not decrypt it: that preview shows the author's text only.
+      const skillPath = /\/index\.md$/.test(String(itemPath || '')) && !fm.encryptedSkill ? String(itemPath).replace(/index\.md$/, 'SKILL.md') : null;
+      const readSkillFile = skillPath && signupBase ? async () => {
+        const res = await fetch(`${signupBase}/membership/file?path=${encodeURIComponent(skillPath)}&ref=${encodeURIComponent(ref || 'main')}`, { credentials: 'include' });
+        return res.ok ? (await res.json())?.text ?? null : null;
+      } : null;
+      void fillSkillPreview(document, { fm, skillFile, readSkillFile });
+    } else if (povw?.parentElement) {
       povw.insertAdjacentHTML('beforebegin', buildPromptBlockHtml({ interactive: false }));
       const pbody = document.querySelector(`.${PROMPT_SHELL.body}`);
       if (pbody) {
