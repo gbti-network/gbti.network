@@ -6,10 +6,17 @@
 // component's Shadow DOM (which hides the light-DOM notice). A non-paid member, or any failure, shows a
 // locked / upgrade message. Read-only: it never holds the key or the ciphertext beyond this call.
 
-import { GbtiElement, define } from '../base.mjs';
+import { GbtiElement, define, esc } from '../base.mjs';
 import { imageLayoutProseCss } from '../image-layout-ui.mjs'; // {full} / {left wrap} image layout classes
 import { listStyleProseCss } from '../list-style-ui.mjs'; // sow-322: {square} / {lower-alpha} list marker styles
 import { EMBED_POSTER_CSS, wireEmbedPosters } from '../embed-lightbox.mjs'; // a comment's video poster opens the lightbox
+import { loadMembersSkillBox, SKILL_READER_CSS } from '../skill-reader.mjs'; // sow-109 Phase 7: a members-only skill's install box
+import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
+
+/** The tools a locked skill file is made for, from the attribute LockedBody bakes; [] for anything malformed. */
+export function lockedTargets(raw) {
+  try { const v = JSON.parse(String(raw || '[]')); return Array.isArray(v) ? v.filter((t) => typeof t === 'string') : []; } catch { return []; }
+}
 
 // A long code block in a comment (e.g. a shared prompt) is clipped to CLIP_LINES with a fade + a Show
 // more / Show less toggle, so a member can scan the note without scrolling past the whole block.
@@ -66,6 +73,7 @@ class GbtiLockedContent extends GbtiElement {
   async render() {
     const encPath = this.dataset?.gbtiEnc || this.getAttribute?.('data-gbti-enc');
     if (!this.client || !encPath) return; // inert: no host yet -> the baked light-DOM notice stays visible
+    if ((this.dataset?.gbtiKind || this.getAttribute?.('data-gbti-kind')) === 'skillfile') return this.renderSkill(encPath);
     this.set(this.css(PROSE) + `<div class="state">Unlocking member content…</div>`);
     let text;
     try {
@@ -89,6 +97,43 @@ class GbtiLockedContent extends GbtiElement {
     this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
     this.decorateCode();
     wireEmbedPosters(this.root);
+    this.emit('gbti-unlocked', { encPath });
+  }
+
+  /**
+   * sow-109 Phase 7: a members-only skill's own file. Decrypted like a body, but shown as the skill page's install box
+   * (the steps from /skill-install.json, the name from the file) with Copy SKILL.md and a Download of a local copy,
+   * rather than rendered as markdown, which would turn its frontmatter into rules and headings.
+   */
+  async renderSkill(encPath) {
+    const css = this.css(PROSE + SKILL_READER_CSS + '\n[data-skill-raw][hidden] { display:none !important; }');
+    this.set(css + `<div class="state">Unlocking the skill file…</div>`);
+    if (this._skillUrl) { try { URL.revokeObjectURL(this._skillUrl); } catch { /* already gone */ } this._skillUrl = null; }
+    const site = typeof location !== 'undefined' && /^https?:$/.test(location.protocol) ? location.origin : 'https://gbti.network';
+    let box = null;
+    try {
+      box = await loadMembersSkillBox({
+        site,
+        targets: lockedTargets(this.dataset?.gbtiTargets || this.getAttribute?.('data-gbti-targets')),
+        decrypt: async () => (await this.client.decrypt({ encPath }))?.text,
+        fileHref: (text) => {
+          try { this._skillUrl = URL.createObjectURL(new Blob([text], { type: 'text/markdown' })); } catch { this._skillUrl = null; }
+          return this._skillUrl || '';
+        },
+      });
+    } catch (err) {
+      const locked = err?.code === 'membership-required' || err?.code === 'not-authenticated';
+      this.set(css + `<div class="locked">${locked
+        ? 'The skill file and its install steps are for members. <a href="/membership/">Become a member</a> to unlock them.'
+        : 'The skill file could not be unlocked right now.'}</div>`);
+      return;
+    }
+    if (!box?.html) {
+      this.set(css + '<div class="state">The install steps could not be loaded right now.</div>');
+      return;
+    }
+    this.set(css + `${box.html}<pre data-skill-raw hidden>${esc(box.text)}</pre>`);
+    wireSkillPage(this.root);
     this.emit('gbti-unlocked', { encPath });
   }
 

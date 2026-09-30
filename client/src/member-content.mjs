@@ -91,3 +91,14 @@ export function encAssetFor(type, username, slug, scope = 'member') {
   const path = `${folder}/_enc/${type}-${slug}-body.enc`;
   return { assetId, path };
 }
+
+/**
+ * sow-109 Phase 7: the same for a members-only skill's own file (its SKILL.md), which is encrypted beside the body as
+ * `_enc/prompt-<slug>-skillfile.enc`. Derived from the item's index.md path, so the publish, the content check and a
+ * move all name the same file. Null for a path that is not a prompt item.
+ */
+export function encSkillAssetFor(indexPath) {
+  const m = /^(members\/[a-z0-9][a-z0-9-]*|house)\/prompts\/([a-z0-9][a-z0-9-]*)\/index\.md$/.exec(String(indexPath || ''));
+  if (!m) return null;
+  return { assetId: `prompt:${m[2]}:skillfile`, path: `${m[1]}/_enc/prompt-${m[2]}-skillfile.enc` };
+}

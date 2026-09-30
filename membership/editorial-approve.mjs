@@ -33,24 +33,28 @@ export function authoredBody(frontmatter, indexBody, memberText) {
  * @param frontmatter the item's stored frontmatter
  * @param indexBody   the body stored in index.md (a teaser, or the whole body for a public item)
  * @param memberText  the decrypted members-only body, or '' when the item has none
- * @returns { frontmatter, body, gated, encPath, removeEnc, alreadyPublic }
+ * @returns { frontmatter, body, gated, encPath, removeEnc, skillEncPath, alreadyPublic }
  *          `gated` is the section to re-encrypt (null when there is none), `encPath` where its ciphertext lives,
- *          and `removeEnc` true when the old ciphertext must be deleted.
+ *          and `removeEnc` true when the old ciphertext must be deleted. `skillEncPath` (sow-109 Phase 7) is a
+ *          members-only skill's encrypted file: a public skill keeps its file as plain SKILL.md, so the caller
+ *          decrypts it there and deletes the ciphertext, and the pointer is already gone from `frontmatter`.
  */
 export function planApproval({ frontmatter = {}, indexBody = '', memberText = '' } = {}) {
   const fm = { ...frontmatter };
   const encPath = typeof fm.encryptedBody === 'string' && fm.encryptedBody ? fm.encryptedBody : null;
   if ((fm.visibility ?? 'public') === 'public') {
-    return { frontmatter: fm, body: String(indexBody ?? ''), gated: null, encPath, removeEnc: false, alreadyPublic: true };
+    return { frontmatter: fm, body: String(indexBody ?? ''), gated: null, encPath, removeEnc: false, skillEncPath: null, alreadyPublic: true };
   }
+  const skillEncPath = typeof fm.encryptedSkill === 'string' && fm.encryptedSkill ? fm.encryptedSkill : null;
+  delete fm.encryptedSkill; // never beside public: the content check refuses it (the file becomes plain SKILL.md)
   const whole = authoredBody(frontmatter, indexBody, memberText);
   const { publicPart, memberPart } = splitMemberMarkdown(whole);
   fm.visibility = 'public';
   delete fm.publicStub; // never beside public: the content check refuses the pair
   if (memberPart) {
     fm.encryptedBody = encPath; // the section stays gated, and its ciphertext is rewritten in place
-    return { frontmatter: fm, body: publicPart, gated: memberPart, encPath, removeEnc: false, alreadyPublic: false };
+    return { frontmatter: fm, body: publicPart, gated: memberPart, encPath, removeEnc: false, skillEncPath, alreadyPublic: false };
   }
   delete fm.encryptedBody;
-  return { frontmatter: fm, body: publicPart, gated: null, encPath, removeEnc: !!encPath, alreadyPublic: false };
+  return { frontmatter: fm, body: publicPart, gated: null, encPath, removeEnc: !!encPath, skillEncPath, alreadyPublic: false };
 }

@@ -76,5 +76,5 @@ test('the website publisher applies the same rule to the file it loaded', () => 
   const src = fs.readFileSync(new URL('../src/lib/workbench-client.ts', import.meta.url), 'utf8');
   const at = src.indexOf("if (type === 'prompt') { const k = kindForPublish(input?.kind, oldFm?.kind); if (k) effInput.kind = k; }");
   assert.ok(at > src.indexOf('const effInput: any = { ...input };'), 'after effInput exists');
-  assert.ok(at < src.indexOf('built = buildContentFile({ type, username: target.username'), 'before the file is built');
+  assert.ok(at < src.indexOf('return buildContentFile({ type, username: target.username'), 'before the file is built');
 });

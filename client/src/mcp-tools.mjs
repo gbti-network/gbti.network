@@ -51,7 +51,7 @@ const COMMENT_TARGET = { type: 'string', enum: ['post', 'project', 'prompt', 'sh
 // re-checked server-side); omit it for your own folder.
 const PATH_PARAM = { type: 'string', description: 'The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate.' };
 const SCOPE_PARAM = { type: 'string', enum: ['member', 'house'], description: 'Target folder. "member" (default) is your own folder; "house" is the non-member house/ content and is superadmin-only, re-checked server-side.' };
-const SKILL_FILE_PARAM = { type: 'string', description: 'A skill\'s whole SKILL.md (frontmatter with a name: line, then the instructions). Published beside the item\'s index.md; omit it on a re-publish to keep the file the skill already has. A prompt ignores it.' };
+const SKILL_FILE_PARAM = { type: 'string', description: 'A skill\'s whole SKILL.md (frontmatter with a name: line, then the instructions). Published beside the item\'s index.md, as plain SKILL.md for a public skill or encrypted for a members-only one (paid members only can read it); omit it on a re-publish to keep the file the skill already has. A prompt ignores it.' };
 
 // sow-194 + sow-193: RESOLVE a draft's store server-side before acting on it.
 //
@@ -123,7 +123,7 @@ export const TOOLS = [
   },
   {
     name: 'get_content',
-    description: "Read one of the member's own content files (frontmatter + body) by repo `path`. A skill also returns `skillFile`, its SKILL.md.",
+    description: "Read one of the member's own content files (frontmatter + body) by repo `path`. A skill also returns `skillFile`, its SKILL.md (a members-only skill's file is decrypted for a paid member).",
     inputSchema: obj({ path: { type: 'string' } }, ['path']),
     handler: (ctx, args) => getContentItem(ctx, { path: args?.path }),
   },

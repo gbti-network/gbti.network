@@ -11,6 +11,7 @@ import { mergeCommentEchoes } from '../../membership/comment-echo.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
 import { NETWORK_CONTENT_PATH_RE, OperationError, isNetworkContentPath, membershipOf, requireIdentity, requireSuperadminForHouse } from './operations-core.mjs';
 import { skillFileBeside } from './skill-file.mjs'; // sow-109: a skill's SKILL.md opens with it
+import { decryptMemberAsset } from './operations-drafts.mjs'; // sow-109 Phase 7: a members-only skill's file (used only inside a function, so the circular import is safe)
 
 // SOW-145: `scope` selects which folder the WorkBench lists. 'member' (default) lists the caller's own
 // members/<username>/; 'house' lists the NETWORK's own folder, members/gbtilabs/ since sow-195 (a superadmin
@@ -186,14 +187,15 @@ export async function readContent(ctx, { path } = {}) {
 }
 
 
-/** sow-109: `{ skillFile }` from beside a skill's index.md: the host's reader first, then the repository client. */
+/** sow-109: `{ skillFile }` from beside a skill's index.md: the host's reader first, then the repository client. A
+ *  members-only skill's file is decrypted through the Worker (paid members only; the key stays there). */
 export function skillFileBesideItem(ctx, indexPath, frontmatter) {
   return skillFileBeside(indexPath, frontmatter, async (p) => {
     let text = null;
     try { text = (await ctx.reader?.readFile?.(p)) ?? null; } catch { text = null; }
     if (text == null) { try { text = (await ctx.getRepoClient?.()?.getFileContent?.(p)) ?? null; } catch { text = null; } }
     return text;
-  });
+  }, async (encPath) => (await decryptMemberAsset(ctx, { encPath })).text);
 }
 
 

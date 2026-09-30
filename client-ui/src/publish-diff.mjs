@@ -24,7 +24,7 @@ import { parseBlocks, serializeBlocks } from './markdown-blocks.mjs';
  *   the rest    are machine-managed (ciphertext pointers, credits, the rename trail)
  */
 export const IGNORED_FIELDS = Object.freeze(new Set([
-  'updatedAt', 'publishedAt', 'status', 'encryptedBody', 'contributors', 'redirectFrom', 'author',
+  'updatedAt', 'publishedAt', 'status', 'encryptedBody', 'encryptedSkill', 'contributors', 'redirectFrom', 'author',
 ]));
 
 /**

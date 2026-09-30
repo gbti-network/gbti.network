@@ -313,20 +313,25 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // repairs a draft saved before the stager was fixed, which still holds the old flat value.
     Object.assign(effInput, normalizeImageFields(effInput, user));
 
-    let built: any;
-    try {
-      built = buildContentFile({ type, username: target.username, input: { ...effInput, status: effInput.status || 'published' }, body, scope: target.scope });
-    } catch (e: any) {
-      throw new WorkbenchClientError('invalid-content', e?.message || 'the content is invalid');
-    }
+    // sow-109 Phase 7: the encrypted skill-file pointer is decided by the skill-file plan below, never by the caller.
+    delete effInput.encryptedSkill;
+    const build = (extra: any = {}) => {
+      try {
+        return buildContentFile({ type, username: target.username, input: { ...effInput, ...extra, status: effInput.status || 'published' }, body, scope: target.scope });
+      } catch (e: any) {
+        throw new WorkbenchClientError('invalid-content', e?.message || 'the content is invalid');
+      }
+    };
+    let built: any = build();
     if (moved) {
       // The new path must not already exist (the CI unique-slug guard is the backstop).
       const collision = await readOwnFile(built.path);
       if (collision != null) throw err('bad-request', `"${built.slug}" already exists at the target location`);
     }
     // sow-109: a skill's SKILL.md is written, kept, moved or removed with it (the rule is shared with the agent publisher).
-    const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, moved, skillFile, readFile: readOwnFile });
+    const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, priorEncryptedSkill: oldFm?.encryptedSkill, moved, skillFile, readFile: readOwnFile, encrypt: encryptViaCookie });
     if (skillPlan.refusal) throw new WorkbenchClientError('invalid-content', skillPlan.refusal);
+    if (skillPlan.pointer) built = build({ encryptedSkill: skillPlan.pointer }); // a members-only skill's file, encrypted
     // SOW-016 / Phase 3c: a whole-item members body OR a `<!-- members-only -->` section is encrypted to a sibling
     // .enc (via the cookie /membership/encrypt), and index.md keeps only the public teaser + the encryptedBody
     // pointer. planMemberFiles overrides any stale encryptedBody with the deterministic path, so a re-publish
@@ -507,7 +512,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     const text = await readOwnFile(path);
     if (text == null) throw err('not-found', 'could not load that item');
     const { frontmatter, body } = parseContentFile(text);
-    const skill = await skillFileBeside(path, frontmatter, readOwnFile); // sow-109: the editor opens the file it publishes back
+    const skill = await skillFileBeside(path, frontmatter, readOwnFile, decryptEnc); // sow-109: the editor opens the file it publishes back (decrypted for a members-only skill)
     const enc = (frontmatter as any)?.encryptedBody;
     if (!enc) return { path, frontmatter, body, ...skill };
     let memberText: string;

@@ -17174,6 +17174,8 @@ var promptSchema = external_exports.object({
   // SOW-016
   encryptedBody: external_exports.string().optional(),
   // SOW-016: set by the publish flow (encrypt-on-publish)
+  encryptedSkill: external_exports.string().optional(),
+  // sow-109 Phase 7: a members-only skill's SKILL.md, encrypted by the publish flow
   targets: external_exports.array(external_exports.string()).default([]),
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.
@@ -17312,6 +17314,11 @@ function encAssetFor(type, username, slug, scope = "member") {
   const folder = scope === "house" ? "house" : `members/${username}`;
   const path4 = `${folder}/_enc/${type}-${slug}-body.enc`;
   return { assetId, path: path4 };
+}
+function encSkillAssetFor(indexPath) {
+  const m = /^(members\/[a-z0-9][a-z0-9-]*|house)\/prompts\/([a-z0-9][a-z0-9-]*)\/index\.md$/.exec(String(indexPath || ""));
+  if (!m) return null;
+  return { assetId: `prompt:${m[2]}:skillfile`, path: `${m[1]}/_enc/prompt-${m[2]}-skillfile.enc` };
 }
 
 // client/src/url-normalize.mjs
@@ -18550,182 +18557,98 @@ function skillNameFrom(skillMd) {
 // client/src/skill-file.mjs
 var skillPathFor = (indexPath) => String(indexPath || "").replace(/index\.md$/, "SKILL.md");
 var needsOldSkillFile = ({ priorKind, kind, moved, visibility }) => priorKind === "skill" && (Boolean(moved) || kind !== "skill" || visibility === "members");
-var MEMBERS_REFUSAL = "A members-only skill cannot carry a skill file yet, because the file would be readable by anyone. For now, leave the skill file empty and include it in the page text, or ask a superadmin to make the skill public.";
-function planSkillFile({ kind, visibility, skillFile, newIndexPath, oldIndexPath = null, priorKind, oldSkillText = null }) {
+var NEEDS_FILE = 'A skill needs its skill file. Paste the whole SKILL.md into "The skill file".';
+var NEEDS_NAME = "The skill file needs a name: line in its frontmatter (lowercase letters, digits and dashes, for example name: farley). The install steps use it for the folder and the command.";
+var PUBLIC_NEEDS_FILE = "To make a members-only skill public, send its skill file with the change, so it can be published as plain text.";
+function planSkillFile({ kind, visibility, skillFile, newIndexPath, oldIndexPath = null, priorKind, oldSkillText = null, oldEncPath = null, oldEncText = null }) {
   const files = [];
+  const out = (extra = {}) => ({ files, refusal: null, encrypt: null, pointer: null, ...extra });
+  const refuse = (refusal) => ({ files: [], refusal, encrypt: null, pointer: null });
   const newPath = skillPathFor(newIndexPath);
   const oldPath = oldIndexPath ? skillPathFor(oldIndexPath) : null;
   const moved = Boolean(oldPath) && oldPath !== newPath;
   const sent = typeof skillFile === "string" && skillFile.trim() ? skillFile : null;
+  const dropOldEnc = (unless) => {
+    if (oldEncPath && oldEncPath !== unless) files.push({ path: oldEncPath, content: null });
+  };
   if (kind !== "skill") {
     if (oldSkillText != null) files.push({ path: oldPath ?? newPath, content: null });
-    return { files, refusal: null };
+    dropOldEnc(null);
+    return out();
   }
+  if (visibility === "members") {
+    const enc = encSkillAssetFor(newIndexPath);
+    if (!enc) return refuse("This item cannot carry an encrypted skill file.");
+    const text2 = sent ?? oldSkillText;
+    if (text2 != null) {
+      if (!skillNameFrom(text2)) return refuse(NEEDS_NAME);
+      if (oldSkillText != null) files.push({ path: oldPath ?? newPath, content: null });
+      dropOldEnc(enc.path);
+      return out({ encrypt: { text: text2, assetId: enc.assetId, path: enc.path }, pointer: enc.path });
+    }
+    if (oldEncPath) {
+      if (oldEncPath === enc.path) return out({ pointer: enc.path });
+      if (oldEncText == null) return refuse("The encrypted skill file could not be read to move it. Nothing was published; try again.");
+      files.push({ path: enc.path, content: oldEncText }, { path: oldEncPath, content: null });
+      return out({ pointer: enc.path });
+    }
+    return out();
+  }
+  if (!sent && oldEncPath) return refuse(PUBLIC_NEEDS_FILE);
   const text = sent ?? (moved ? oldSkillText : null);
   const keepsExisting = !sent && !moved && priorKind === "skill";
-  if (visibility === "members") {
-    if (sent || oldSkillText != null) return { files: [], refusal: MEMBERS_REFUSAL };
-    return { files, refusal: null };
-  }
-  if (text == null && !keepsExisting) {
-    return { files: [], refusal: 'A skill needs its skill file. Paste the whole SKILL.md into "The skill file".' };
-  }
+  if (text == null && !keepsExisting) return refuse(NEEDS_FILE);
   if (text != null) {
-    if (!skillNameFrom(text)) {
-      return { files: [], refusal: "The skill file needs a name: line in its frontmatter (lowercase letters, digits and dashes, for example name: farley). The install steps use it for the folder and the command." };
-    }
+    if (!skillNameFrom(text)) return refuse(NEEDS_NAME);
     files.push({ path: newPath, content: text });
   }
   if (moved && oldSkillText != null) files.push({ path: oldPath, content: null });
-  return { files, refusal: null };
+  dropOldEnc(null);
+  return out();
 }
-async function skillFilesForPublish({ type, built, oldIndexPath = null, priorKind, moved = false, skillFile, readFile }) {
-  if (type !== "prompt") return { files: [], refusal: null };
+async function skillFilesForPublish({ type, built, oldIndexPath = null, priorKind, priorEncryptedSkill = null, moved = false, skillFile, readFile, encrypt }) {
+  if (type !== "prompt") return { files: [], refusal: null, pointer: null };
   const kind = built?.frontmatter?.kind;
   const visibility = built?.frontmatter?.visibility;
-  let oldSkillText = null;
-  if (oldIndexPath && needsOldSkillFile({ priorKind, kind, moved, visibility })) {
+  const read = async (p) => {
     try {
-      oldSkillText = await readFile(skillPathFor(oldIndexPath)) ?? null;
+      return await readFile(p) ?? null;
     } catch {
-      oldSkillText = null;
+      return null;
     }
+  };
+  const oldEncPath = typeof priorEncryptedSkill === "string" && priorEncryptedSkill ? priorEncryptedSkill : null;
+  const oldSkillText = oldIndexPath && needsOldSkillFile({ priorKind, kind, moved, visibility }) ? await read(skillPathFor(oldIndexPath)) : null;
+  const sent = typeof skillFile === "string" && skillFile.trim();
+  const newEnc = encSkillAssetFor(built?.path);
+  const oldEncText = oldEncPath && !sent && kind === "skill" && visibility === "members" && newEnc && newEnc.path !== oldEncPath ? await read(oldEncPath) : null;
+  const plan = planSkillFile({ kind, visibility, skillFile, newIndexPath: built.path, oldIndexPath, priorKind, oldSkillText, oldEncPath, oldEncText });
+  if (plan.refusal) return { files: [], refusal: plan.refusal, pointer: null };
+  const files = [...plan.files];
+  if (plan.encrypt) {
+    const envelope = await encrypt(plan.encrypt.text, plan.encrypt.assetId);
+    files.push({ path: plan.encrypt.path, content: JSON.stringify(envelope) });
   }
-  return planSkillFile({ kind, visibility, skillFile, newIndexPath: built.path, oldIndexPath, priorKind, oldSkillText });
+  return { files, refusal: null, pointer: plan.pointer };
 }
-async function skillFileBeside(indexPath, frontmatter, readFile) {
+async function skillFileBeside(indexPath, frontmatter, readFile, decrypt) {
   if (frontmatter?.kind !== "skill" || !/\/prompts\/[^/]+\/index\.md$/.test(String(indexPath || ""))) return {};
   let text = null;
-  try {
-    text = await readFile(skillPathFor(indexPath)) ?? null;
-  } catch {
-    text = null;
-  }
-  return text == null ? {} : { skillFile: text };
-}
-
-// client/src/operations-read.mjs
-async function listContent(ctx2, { type, scope = "member" } = {}) {
-  const id = requireIdentity(ctx2);
-  if (scope === "house") {
-    await requireSuperadminForHouse(ctx2);
-    return { items: await ctx2.reader.list(NETWORK_CONTENT_OWNER, type || void 0, "member") };
-  }
-  return { items: await ctx2.reader.list(id.username, type || void 0, "member") };
-}
-function gateMemberComments(items, membership) {
-  if (canSeeShares(membership ?? "unknown")) return items ?? [];
-  return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
-}
-async function mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed }) {
-  const token = ctx2.store?.get?.("githubToken");
-  if (!token || !targetType || !targetSlug) return deployed;
-  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
-  let echoes = [];
-  try {
-    echoes = (await getCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? [];
-  } catch {
-    return deployed;
-  }
-  if (!echoes.length) return deployed;
-  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
-  if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
-  });
-  return comments;
-}
-var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share", "news"]);
-var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
-var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
-var COMMENTS_INDEX_TTL_MS = 6e4;
-var commentsIndexCache = null;
-async function fetchCommentsIndex(ctx2) {
-  const now = Date.now();
-  if (commentsIndexCache && now - commentsIndexCache.at < COMMENTS_INDEX_TTL_MS) return commentsIndexCache.items;
-  const f = ctx2.fetch ?? globalThis.fetch;
-  const res = await f(COMMENTS_INDEX_URL, { cache: "no-cache" });
-  if (!res.ok) throw new Error(`comments index ${res.status}`);
-  const data = await res.json();
-  const items = Array.isArray(data?.items) ? data.items : [];
-  commentsIndexCache = { at: now, items };
-  return items;
-}
-async function listComments(ctx2, { targetType, targetSlug, limit, aliases } = {}) {
-  requireIdentity(ctx2);
-  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
-  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
-  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
-  let items = null;
-  try {
-    const all = await fetchCommentsIndex(ctx2);
-    const slugs = /* @__PURE__ */ new Set([targetSlug, ...Array.isArray(aliases) ? aliases : []]);
-    items = all.filter((c) => c?.targetType === targetType && slugs.has(c?.targetSlug) && (c?.status ?? "published") === "published").sort(byCommentOldest).slice(0, n);
-  } catch {
-    if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
-    items = await ctx2.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
-  }
-  const gated = gateMemberComments(items, await membershipOf(ctx2));
-  return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
-}
-function skillFileBesideItem(ctx2, indexPath, frontmatter) {
-  return skillFileBeside(indexPath, frontmatter, async (p) => {
-    let text = null;
+  if (typeof frontmatter?.encryptedSkill === "string" && frontmatter.encryptedSkill) {
+    if (typeof decrypt !== "function") return {};
     try {
-      text = await ctx2.reader?.readFile?.(p) ?? null;
+      text = await decrypt(frontmatter.encryptedSkill) ?? null;
     } catch {
       text = null;
     }
-    if (text == null) {
-      try {
-        text = await ctx2.getRepoClient?.()?.getFileContent?.(p) ?? null;
-      } catch {
-        text = null;
-      }
-    }
-    return text;
-  });
-}
-async function getContentItem(ctx2, args = {}) {
-  const item = await getContentItemFile(ctx2, args);
-  return { ...item, ...await skillFileBesideItem(ctx2, item.path, item.frontmatter) };
-}
-async function getContentItemFile(ctx2, { path: path4 } = {}) {
-  const id = requireIdentity(ctx2);
-  if (!path4) throw new OperationError("bad-request", "path is required");
-  if (isNetworkContentPath(path4) && id.username !== NETWORK_CONTENT_OWNER) {
-    if (!NETWORK_CONTENT_PATH_RE.test(path4)) throw new OperationError("bad-request", "invalid network content path");
-    await requireSuperadminForHouse(ctx2);
-    const text = await ctx2.reader?.readFile?.(path4);
-    if (text == null) throw new OperationError("not-found", "no such network content item");
-    const { frontmatter, body } = parseContentFile(text);
-    return { path: path4, frontmatter, body };
-  }
-  const item = await ctx2.reader.get(id.username, path4);
-  if (item) return item;
-  const own = path4.startsWith(`members/${id.username}/`) && !path4.includes("..") && !path4.includes("\\");
-  let repo = null;
-  try {
-    repo = own ? ctx2.getRepoClient?.() : null;
-  } catch {
-    repo = null;
-  }
-  if (repo?.getFileContent) {
-    const text = await repo.getFileContent(path4);
-    if (text != null) {
-      const { frontmatter, body } = parseContentFile(text);
-      return { path: path4, frontmatter, body };
+  } else {
+    try {
+      text = await readFile(skillPathFor(indexPath)) ?? null;
+    } catch {
+      text = null;
     }
   }
-  throw new OperationError("not-found", "no such item in your folder");
-}
-function validateContent(ctx2, { type, input, body } = {}) {
-  const id = requireIdentity(ctx2);
-  try {
-    const built = buildContentFile({ type, username: id.username, input, body });
-    return { valid: true, path: built.path };
-  } catch (err) {
-    if (err instanceof ContentValidationError) return { valid: false, error: err.message, issues: err.issues };
-    return { valid: false, error: err.message };
-  }
+  return text == null ? {} : { skillFile: text };
 }
 
 // client/src/hosted-publish.mjs
@@ -18973,36 +18896,45 @@ async function publish(ctx2, { type, input, body, title, authorNote, path: path4
       if (k) effInput.kind = k;
     }
   }
-  let built;
-  try {
-    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body, scope: targetScope });
-  } catch (err) {
-    throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
-  }
+  delete effInput.encryptedSkill;
+  const build = (extra = {}) => {
+    try {
+      return buildContentFile({ type, username: id.username, input: { ...effInput, ...extra, status: effInput.status || "published" }, body, scope: targetScope });
+    } catch (err) {
+      throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
+    }
+  };
+  let built = build();
   if (renaming) {
     const collision = await repo.getFileContent(built.path).catch(() => null);
     if (collision != null) throw new OperationError("bad-request", `the permalink "${built.slug}" is already taken`);
   }
-  const skillPlan = await skillFilesForPublish({
-    type,
-    built,
-    oldIndexPath: renaming ? origin.oldPath : priorFm ? built.path : null,
-    priorKind: priorFm?.kind,
-    moved: renaming,
-    skillFile,
-    readFile: (p) => readCanonical(ctx2, repo, p)
-  });
-  if (skillPlan.refusal) throw new OperationError("invalid-content", skillPlan.refusal);
   const token = ctx2.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+  const lockedNudge = (err) => err instanceof MemberContentLockedError ? new OperationError("membership-required", "Publishing member-only content requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish.", { membership }) : err;
+  let skillPlan;
+  try {
+    skillPlan = await skillFilesForPublish({
+      type,
+      built,
+      oldIndexPath: renaming ? origin.oldPath : priorFm ? built.path : null,
+      priorKind: priorFm?.kind,
+      priorEncryptedSkill: priorFm?.encryptedSkill,
+      moved: renaming,
+      skillFile,
+      readFile: (p) => readCanonical(ctx2, repo, p),
+      encrypt
+    });
+  } catch (err) {
+    throw lockedNudge(err);
+  }
+  if (skillPlan.refusal) throw new OperationError("invalid-content", skillPlan.refusal);
+  if (skillPlan.pointer) built = build({ encryptedSkill: skillPlan.pointer });
   let plan;
   try {
     plan = await planMemberFiles({ built, body, encrypt });
   } catch (err) {
-    if (err instanceof MemberContentLockedError) {
-      throw new OperationError("membership-required", "Publishing member-only content requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish.", { membership });
-    }
-    throw err;
+    throw lockedNudge(err);
   }
   const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx2.now?.() });
   const desc = describeContentPublish(built, { hasIntro: Boolean(introFile) });
@@ -19356,6 +19288,130 @@ async function decryptMemberAsset(ctx2, { encPath } = {}) {
   }
 }
 
+// client/src/operations-read.mjs
+async function listContent(ctx2, { type, scope = "member" } = {}) {
+  const id = requireIdentity(ctx2);
+  if (scope === "house") {
+    await requireSuperadminForHouse(ctx2);
+    return { items: await ctx2.reader.list(NETWORK_CONTENT_OWNER, type || void 0, "member") };
+  }
+  return { items: await ctx2.reader.list(id.username, type || void 0, "member") };
+}
+function gateMemberComments(items, membership) {
+  if (canSeeShares(membership ?? "unknown")) return items ?? [];
+  return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
+}
+async function mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed }) {
+  const token = ctx2.store?.get?.("githubToken");
+  if (!token || !targetType || !targetSlug) return deployed;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
+  let echoes = [];
+  try {
+    echoes = (await getCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? [];
+  } catch {
+    return deployed;
+  }
+  if (!echoes.length) return deployed;
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
+  });
+  return comments;
+}
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share", "news"]);
+var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt"]);
+var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
+var COMMENTS_INDEX_TTL_MS = 6e4;
+var commentsIndexCache = null;
+async function fetchCommentsIndex(ctx2) {
+  const now = Date.now();
+  if (commentsIndexCache && now - commentsIndexCache.at < COMMENTS_INDEX_TTL_MS) return commentsIndexCache.items;
+  const f = ctx2.fetch ?? globalThis.fetch;
+  const res = await f(COMMENTS_INDEX_URL, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`comments index ${res.status}`);
+  const data = await res.json();
+  const items = Array.isArray(data?.items) ? data.items : [];
+  commentsIndexCache = { at: now, items };
+  return items;
+}
+async function listComments(ctx2, { targetType, targetSlug, limit, aliases } = {}) {
+  requireIdentity(ctx2);
+  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
+  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  let items = null;
+  try {
+    const all = await fetchCommentsIndex(ctx2);
+    const slugs = /* @__PURE__ */ new Set([targetSlug, ...Array.isArray(aliases) ? aliases : []]);
+    items = all.filter((c) => c?.targetType === targetType && slugs.has(c?.targetSlug) && (c?.status ?? "published") === "published").sort(byCommentOldest).slice(0, n);
+  } catch {
+    if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
+    items = await ctx2.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
+  }
+  const gated = gateMemberComments(items, await membershipOf(ctx2));
+  return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
+}
+function skillFileBesideItem(ctx2, indexPath, frontmatter) {
+  return skillFileBeside(indexPath, frontmatter, async (p) => {
+    let text = null;
+    try {
+      text = await ctx2.reader?.readFile?.(p) ?? null;
+    } catch {
+      text = null;
+    }
+    if (text == null) {
+      try {
+        text = await ctx2.getRepoClient?.()?.getFileContent?.(p) ?? null;
+      } catch {
+        text = null;
+      }
+    }
+    return text;
+  }, async (encPath) => (await decryptMemberAsset(ctx2, { encPath })).text);
+}
+async function getContentItem(ctx2, args = {}) {
+  const item = await getContentItemFile(ctx2, args);
+  return { ...item, ...await skillFileBesideItem(ctx2, item.path, item.frontmatter) };
+}
+async function getContentItemFile(ctx2, { path: path4 } = {}) {
+  const id = requireIdentity(ctx2);
+  if (!path4) throw new OperationError("bad-request", "path is required");
+  if (isNetworkContentPath(path4) && id.username !== NETWORK_CONTENT_OWNER) {
+    if (!NETWORK_CONTENT_PATH_RE.test(path4)) throw new OperationError("bad-request", "invalid network content path");
+    await requireSuperadminForHouse(ctx2);
+    const text = await ctx2.reader?.readFile?.(path4);
+    if (text == null) throw new OperationError("not-found", "no such network content item");
+    const { frontmatter, body } = parseContentFile(text);
+    return { path: path4, frontmatter, body };
+  }
+  const item = await ctx2.reader.get(id.username, path4);
+  if (item) return item;
+  const own = path4.startsWith(`members/${id.username}/`) && !path4.includes("..") && !path4.includes("\\");
+  let repo = null;
+  try {
+    repo = own ? ctx2.getRepoClient?.() : null;
+  } catch {
+    repo = null;
+  }
+  if (repo?.getFileContent) {
+    const text = await repo.getFileContent(path4);
+    if (text != null) {
+      const { frontmatter, body } = parseContentFile(text);
+      return { path: path4, frontmatter, body };
+    }
+  }
+  throw new OperationError("not-found", "no such item in your folder");
+}
+function validateContent(ctx2, { type, input, body } = {}) {
+  const id = requireIdentity(ctx2);
+  try {
+    const built = buildContentFile({ type, username: id.username, input, body });
+    return { valid: true, path: built.path };
+  } catch (err) {
+    if (err instanceof ContentValidationError) return { valid: false, error: err.message, issues: err.issues };
+    return { valid: false, error: err.message };
+  }
+}
+
 // client/src/operations-social.mjs
 async function publishShare(ctx2, { input = {}, body = "", removeEnc = null, title, authorTarget } = {}) {
   const id = requireIdentity(ctx2);
@@ -19699,7 +19755,7 @@ var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: '
 var COMMENT_TARGET = { type: "string", enum: ["post", "project", "prompt", "share", "news"] };
 var PATH_PARAM = { type: "string", description: "The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate." };
 var SCOPE_PARAM = { type: "string", enum: ["member", "house"], description: 'Target folder. "member" (default) is your own folder; "house" is the non-member house/ content and is superadmin-only, re-checked server-side.' };
-var SKILL_FILE_PARAM = { type: "string", description: "A skill's whole SKILL.md (frontmatter with a name: line, then the instructions). Published beside the item's index.md; omit it on a re-publish to keep the file the skill already has. A prompt ignores it." };
+var SKILL_FILE_PARAM = { type: "string", description: "A skill's whole SKILL.md (frontmatter with a name: line, then the instructions). Published beside the item's index.md, as plain SKILL.md for a public skill or encrypted for a members-only one (paid members only can read it); omit it on a re-publish to keep the file the skill already has. A prompt ignores it." };
 async function resolveDraftRow(ctx2, { type, slug }) {
   try {
     const { drafts } = await listDrafts(ctx2, { type });
@@ -19750,7 +19806,7 @@ var TOOLS = [
   },
   {
     name: "get_content",
-    description: "Read one of the member's own content files (frontmatter + body) by repo `path`. A skill also returns `skillFile`, its SKILL.md.",
+    description: "Read one of the member's own content files (frontmatter + body) by repo `path`. A skill also returns `skillFile`, its SKILL.md (a members-only skill's file is decrypted for a paid member).",
     inputSchema: obj({ path: { type: "string" } }, ["path"]),
     handler: (ctx2, args) => getContentItem(ctx2, { path: args?.path })
   },

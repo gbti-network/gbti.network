@@ -50,11 +50,29 @@ export async function loadSkillBox({ site, slug, targets, fileHref, fetchImpl = 
     ]);
     if (!fileRes.ok) return null;
     const text = await fileRes.text();
-    const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text) });
-    return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text) : '' }), text };
+    return boxFor({ tools, text, targets, fileHref });
   } catch {
     return null;
   }
+}
+
+function boxFor({ tools, text, targets, fileHref }) {
+  const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text) });
+  return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text) : '' }), text };
+}
+
+/**
+ * sow-109 Phase 7: the same box for a MEMBERS-ONLY skill, whose file is decrypted first. `decrypt()` answers the file's
+ * text (the host reads the envelope and the Worker decrypts it; the key never reaches the page) and throws for a
+ * reader who is not a paid member, which is passed on so the caller can say the box is for members. A failed steps
+ * fetch still shows nothing rather than a wrong box.
+ */
+export async function loadMembersSkillBox({ site, targets, decrypt, fileHref, fetchImpl = globalThis.fetch }) {
+  const text = await decrypt();
+  if (typeof text !== 'string' || !text) return null;
+  let tools;
+  try { tools = await loadSteps(site, fetchImpl); } catch { return null; }
+  return boxFor({ tools, text, targets, fileHref });
 }
 
 /** Test seam: forget the cached steps. */

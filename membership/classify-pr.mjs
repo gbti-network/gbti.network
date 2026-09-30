@@ -191,8 +191,11 @@ export function isContributionToFolder(paths, ownerFolder) {
 export const TYPE_OTHER = 'other';
 
 /** sow-323 Phase 3: an encrypted members-only body, `_enc/<type>-<slug>-body.enc`, and the type its name declares.
- *  The types are the ones encAssetFor is called with; the slug shape is the content slug shape. */
-const ENC_BODY_TYPE_RE = /^_enc\/(post|project|product|prompt|share|comment)-[a-z0-9][a-z0-9._-]*-body\.enc$/;
+ *  The types are the ones encAssetFor is called with; the slug shape is the content slug shape.
+ *  sow-109 Phase 7: a members-only skill's own file is `_enc/prompt-<slug>-skillfile.enc` (encSkillAssetFor), and it
+ *  is a prompt's part exactly as its body is. Without this it fell to TYPE_OTHER, which asks for the higher tier, so
+ *  the gate would have closed an ordinary member's members-only skill while passing a superadmin's. */
+const ENC_BODY_TYPE_RE = /^_enc\/(post|project|product|prompt|share|comment)-[a-z0-9][a-z0-9._-]*-body\.enc$|^_enc\/(prompt)-[a-z0-9][a-z0-9._-]*-skillfile\.enc$/;
 
 /** sow-323 Phase 3: the own-folder types whose AUDIENCE a superadmin reviews (comments and profiles are not). */
 const REVIEWED_TYPES = Object.freeze(['post', 'project', 'product', 'prompt', 'share']);
@@ -222,7 +225,7 @@ export function contentTypesTouched(paths, ownedFolder) {
         // to TYPE_OTHER, which requires the higher tier, so the gate closed EVERY supporter's members-only article
         // and comment: the exact thing the one-plan change promised them. Classify it by the type its name
         // declares; a name this cannot read still reports TYPE_OTHER, so the fail-closed default is unchanged.
-        else if (dir === '_enc' && ENC_BODY_TYPE_RE.test(rest)) types.add(ENC_BODY_TYPE_RE.exec(rest)[1]);
+        else if (dir === '_enc' && ENC_BODY_TYPE_RE.test(rest)) { const e = ENC_BODY_TYPE_RE.exec(rest); types.add(e[1] || e[2]); }
         else types.add(TYPE_OTHER); // never silently drop it: an unclassified own-folder path requires creator
       }
     }

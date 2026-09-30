@@ -80,19 +80,35 @@ async function readMain(fetchImpl, instToken, upstream, path) {
  * author marked members-only re-encrypted so it stays gated. Returns `{ files }`, `{ alreadyPublic: true }`, or
  * `{ error }` (a message, and never a key or a fragment of plaintext).
  */
-export async function buildApproval(env, { item, indexText, encText }) {
+export async function buildApproval(env, { item, indexText, encText, skillEncText = null }) {
   const { frontmatter, body } = parseContentFile(indexText);
+  const open = async (text, what) => {
+    let envelope;
+    try { envelope = JSON.parse(text); } catch { return { error: `the members-only ${what} could not be read` }; }
+    const key = resolveEpochKey(env, String(envelope?.kid ?? env?.MEMBER_CONTENT_KID ?? '1'));
+    if (!key) return { error: `the members-only ${what} was encrypted with a key this Worker does not hold` };
+    try { return { text: await decryptAssetText({ envelope, key }) }; } catch { return { error: `the members-only ${what} could not be decrypted` }; }
+  };
   let memberText = '';
   if (encText) {
-    let envelope;
-    try { envelope = JSON.parse(encText); } catch { return { error: 'the members-only body could not be read' }; }
-    const key = resolveEpochKey(env, String(envelope?.kid ?? env?.MEMBER_CONTENT_KID ?? '1'));
-    if (!key) return { error: 'the members-only body was encrypted with a key this Worker does not hold' };
-    try { memberText = await decryptAssetText({ envelope, key }); } catch { return { error: 'the members-only body could not be decrypted' }; }
+    const r = await open(encText, 'body');
+    if (r.error) return r;
+    memberText = r.text;
   }
 
   const plan = planApproval({ frontmatter, indexBody: body, memberText });
   if (plan.alreadyPublic) return { alreadyPublic: true };
+
+  // sow-109 Phase 7: a members-only skill's own file goes public WITH it, as plain SKILL.md beside index.md, and its
+  // ciphertext goes. Without this an approved skill would keep a pointer the content check refuses beside public,
+  // and have no SKILL.md, which the check refuses too, and the gate does not wait for that check.
+  const skillFiles = [];
+  if (plan.skillEncPath) {
+    if (!skillEncText) return { error: 'the members-only skill file could not be read' };
+    const r = await open(skillEncText, 'skill file');
+    if (r.error) return r;
+    skillFiles.push({ path: item.path.replace(/index\.md$/, 'SKILL.md'), content: r.text }, { path: plan.skillEncPath, content: null });
+  }
 
   if (plan.gated) {
     // A public page with a members-only section (SOW-016 Mode C): the ciphertext is rewritten under the
@@ -107,12 +123,12 @@ export async function buildApproval(env, { item, indexText, encText }) {
       { path: encPath, content: JSON.stringify(envelope) },
     ];
     if (plan.encPath && plan.encPath !== encPath) files.push({ path: plan.encPath, content: null });
-    return { files };
+    return { files: [...files, ...skillFiles] };
   }
 
   const files = [{ path: item.path, content: serializeContentFile(plan.frontmatter, plan.body) }];
   if (plan.removeEnc && plan.encPath) files.push({ path: plan.encPath, content: null }); // the whole item is public now
-  return { files };
+  return { files: [...files, ...skillFiles] };
 }
 
 /** Commit the approval on a hosted-admin branch and open its pull request, which the gate auto-merges. */
@@ -208,12 +224,17 @@ export async function editorialDecide(request, env, deps = {}) {
   if (indexText == null) {
     return bad(409, 'not_on_main', 'this item is not on the site yet: the publish is still merging. Try again in a minute.');
   }
-  const encPath = parseContentFile(indexText)?.frontmatter?.encryptedBody;
+  const stored = parseContentFile(indexText)?.frontmatter ?? {};
+  const encPath = stored.encryptedBody;
   const hasEnc = typeof encPath === 'string' && encPath.length > 0;
   const encText = hasEnc ? await readMain(fetchImpl, instToken, upstream, encPath) : null;
   if (hasEnc && encText == null) return bad(502, 'git_failed', 'the members-only body could not be read from the site');
+  // sow-109 Phase 7: a members-only skill's own file, which the approval publishes as plain SKILL.md.
+  const skillEncPath = typeof stored.encryptedSkill === 'string' && stored.encryptedSkill ? stored.encryptedSkill : null;
+  const skillEncText = skillEncPath ? await readMain(fetchImpl, instToken, upstream, skillEncPath) : null;
+  if (skillEncPath && skillEncText == null) return bad(502, 'git_failed', 'the members-only skill file could not be read from the site');
 
-  const built = await buildApproval(env, { item, indexText, encText });
+  const built = await buildApproval(env, { item, indexText, encText, skillEncText });
   if (built.error) return bad(500, 'approval_failed', built.error);
   let pr = { number: null, html_url: null };
   if (!built.alreadyPublic) {

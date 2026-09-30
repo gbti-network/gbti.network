@@ -69,10 +69,15 @@ test('sow-109: nothing interpolated is trusted as markup', () => {
 
 test('sow-109: the skill page renders the box, the author text and the file, and a prompt page is unchanged', () => {
   const page = src('src/pages/prompts/[slug].astro');
-  assert.match(page, /const skillFile = isSkill && !stub \? skillFileOf\(prompt\) : null;/, 'a members-only skill keeps the prompt layout');
+  assert.match(page, /const skillFile = isSkill && !stub \? skillFileOf\(prompt\) : null;/, 'a members-only skill never reads a plain file');
+  // sow-109 Phase 7: a members-only skill with an ENCRYPTED file gets the skill layout, its box locked until a paid
+  // member's browser decrypts it; one without keeps the prompt layout.
+  assert.match(page, /const membersSkill = isSkill && stub && typeof d\.encryptedSkill === 'string' && d\.encryptedSkill \? d\.encryptedSkill : null;/);
+  assert.match(page, /const skillView = !!skillFile \|\| !!membersSkill;/);
+  assert.match(page, /\{membersSkill \? <LockedBody encPath=\{membersSkill\} kind="skillfile" targets=\{d\.targets \?\? \[\]\} \/> : <Fragment set:html=\{installHtml\} \/>\}/);
   assert.match(page, /buildSkillInstallHtml\(\{ \.\.\.install, fileHref: `\/prompts\/\$\{d\.slug\}\/SKILL\.md` \}\)/);
-  assert.match(page, /\{skillView \? \(\s*<>\s*<Fragment set:html=\{installHtml\} \/>\s*<div class="skill-notes" data-gbti-region="body">/);
-  assert.match(page, /<Fragment set:html=\{skillFileHtml\} \/>\s*<\/>\s*\) : \(/);
+  assert.match(page, /\{skillView \? \(\s*<>\s*\{membersSkill \? [^\n]+\}\s*<div class="skill-notes" data-gbti-region="body">\s*\{stub \? \(/);
+  assert.match(page, /\{!membersSkill && <Fragment set:html=\{skillFileHtml\} \/>\}\s*<\/>\s*\) : \(/, 'no plain file block for a members-only skill');
   assert.match(page, /\{isSkill \? 'Made for' : 'Works with'\}/);
   assert.match(page, /<span class=\{`kind-badge kind-\$\{d\.kind\}`\}>/, 'every prompt page says which it is');
   assert.match(page, /^\s*wireSkillPage\(document\);/m);

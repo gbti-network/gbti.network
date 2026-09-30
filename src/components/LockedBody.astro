@@ -8,28 +8,30 @@
 // absolute secrecy (see SOW-016).
 interface Props {
   encPath?: string; // repo-relative path to the .enc envelope (same convention as EditHooks data-gbti-path)
-  kind?: 'body' | 'section' | 'comment' | 'share';
+  kind?: 'body' | 'section' | 'comment' | 'share' | 'skillfile'; // sow-109 Phase 7: a members-only skill's own file
+  targets?: string[]; // skillfile: the tools the skill is made for, so the unlocked install box has its tabs
   label?: string;
   readerPath?: string; // SOW-112 QA: the parent item's index.md path; a signed-in PAID member gets an
   // open-in-the-extension CTA deep-linking the reader (newtab.html#tab=<type>&read=<path>) via the
   // gbti:open relay instead of the become-a-member nudge. Presentation only (html.is-gbti-paid, untrusted).
   readerType?: string;
 }
-const { encPath, kind = 'body', label, readerPath, readerType } = Astro.props;
+const { encPath, kind = 'body', label, readerPath, readerType, targets = [] } = Astro.props;
 const readerHash = readerPath && readerType ? `tab=${readerType}&read=${encodeURIComponent(readerPath)}` : null;
-const HEADINGS = { comment: 'Members-only comment', section: 'Members-only section', share: 'Members-only Share', body: 'Members-only content' } as const;
+const HEADINGS = { comment: 'Members-only comment', section: 'Members-only section', share: 'Members-only Share', body: 'Members-only content', skillfile: 'Install this skill' } as const;
 const heading = label ?? HEADINGS[kind];
-const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : 'content';
+const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : kind === 'skillfile' ? 'skill file and its install steps' : 'content';
+const skill = kind === 'skillfile';
 ---
 {encPath && (
-  <gbti-locked-content data-gbti-enc={encPath} data-gbti-kind={kind} data-gbti-region="locked">
+  <gbti-locked-content data-gbti-enc={encPath} data-gbti-kind={kind} data-gbti-region="locked" data-gbti-targets={skill ? JSON.stringify(targets) : undefined}>
     <div class="locked-notice">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#ico-lock" /></svg>
       <div>
         <p class="locked-title">{heading}</p>
-        <p class="locked-sub for-visitor">This {noun} is for members. <a href="/membership/">Become a member</a> and it unlocks here, or <button type="button" class="locked-signin" data-signin>sign in</button> if you already are.</p>
+        <p class="locked-sub for-visitor">{skill ? 'The skill file and its install steps are for members. ' : `This ${noun} is for members. `}<a href="/membership/">Become a member</a> and {skill ? 'they unlock' : 'it unlocks'} here, or <button type="button" class="locked-signin" data-signin>sign in</button> if you already are.</p>
         <p class="locked-sub for-paid">
-          You are signed in. Unlocking this {noun} now.
+          You are signed in. {skill ? 'Unlocking the skill file now.' : `Unlocking this ${noun} now.`}
           {readerHash && <button type="button" class="open-ext" data-gbti-open-reader data-hash={readerHash}>Open in the extension</button>}
         </p>
       </div>

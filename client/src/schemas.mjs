@@ -227,6 +227,7 @@ export const promptSchema = z.object({
   visibility: VISIBILITY.default('public'),
   publicStub: z.boolean().default(false), // SOW-016
   encryptedBody: z.string().optional(), // SOW-016: set by the publish flow (encrypt-on-publish)
+  encryptedSkill: z.string().optional(), // sow-109 Phase 7: a members-only skill's SKILL.md, encrypted by the publish flow
   targets: z.array(z.string()).default([]),
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.

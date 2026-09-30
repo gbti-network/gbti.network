@@ -3445,6 +3445,7 @@ ${listStyleProseCss(".doc-blocks")}
     "publishedAt",
     "status",
     "encryptedBody",
+    "encryptedSkill",
     "contributors",
     "redirectFrom",
     "author"
@@ -12655,11 +12656,25 @@ ${SKILL_BOX_CSS}`;
       ]);
       if (!fileRes.ok) return null;
       const text2 = await fileRes.text();
-      const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text2) });
-      return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text2) : "" }), text: text2 };
+      return boxFor({ tools, text: text2, targets, fileHref });
     } catch {
       return null;
     }
+  }
+  function boxFor({ tools, text: text2, targets, fileHref }) {
+    const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text2) });
+    return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text2) : "" }), text: text2 };
+  }
+  async function loadMembersSkillBox({ site, targets, decrypt, fileHref, fetchImpl = globalThis.fetch }) {
+    const text2 = await decrypt();
+    if (typeof text2 !== "string" || !text2) return null;
+    let tools;
+    try {
+      tools = await loadSteps(site, fetchImpl);
+    } catch {
+      return null;
+    }
+    return boxFor({ tools, text: text2, targets, fileHref });
   }
 
   // membership/skill-install-edits.mjs
@@ -16218,6 +16233,14 @@ ${SKILL_BOX_CSS}`;
   define("gbti-edit-panel", GbtiEditPanel);
 
   // client-ui/src/elements/gbti-locked-content.mjs
+  function lockedTargets(raw) {
+    try {
+      const v = JSON.parse(String(raw || "[]"));
+      return Array.isArray(v) ? v.filter((t) => typeof t === "string") : [];
+    } catch {
+      return [];
+    }
+  }
   var CLIP_LINES = 8;
   function codeBlockPlan(lineCount) {
     const lines = Number.isFinite(lineCount) ? lineCount : 0;
@@ -16260,6 +16283,7 @@ ${SKILL_BOX_CSS}`;
     async render() {
       const encPath = this.dataset?.gbtiEnc || this.getAttribute?.("data-gbti-enc");
       if (!this.client || !encPath) return;
+      if ((this.dataset?.gbtiKind || this.getAttribute?.("data-gbti-kind")) === "skillfile") return this.renderSkill(encPath);
       this.set(this.css(PROSE) + `<div class="state">Unlocking member content…</div>`);
       let text2;
       try {
@@ -16279,6 +16303,50 @@ ${SKILL_BOX_CSS}`;
       this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
       this.decorateCode();
       wireEmbedPosters(this.root);
+      this.emit("gbti-unlocked", { encPath });
+    }
+    /**
+     * sow-109 Phase 7: a members-only skill's own file. Decrypted like a body, but shown as the skill page's install box
+     * (the steps from /skill-install.json, the name from the file) with Copy SKILL.md and a Download of a local copy,
+     * rather than rendered as markdown, which would turn its frontmatter into rules and headings.
+     */
+    async renderSkill(encPath) {
+      const css = this.css(PROSE + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }");
+      this.set(css + `<div class="state">Unlocking the skill file…</div>`);
+      if (this._skillUrl) {
+        try {
+          URL.revokeObjectURL(this._skillUrl);
+        } catch {
+        }
+        this._skillUrl = null;
+      }
+      const site = typeof location !== "undefined" && /^https?:$/.test(location.protocol) ? location.origin : "https://gbti.network";
+      let box = null;
+      try {
+        box = await loadMembersSkillBox({
+          site,
+          targets: lockedTargets(this.dataset?.gbtiTargets || this.getAttribute?.("data-gbti-targets")),
+          decrypt: async () => (await this.client.decrypt({ encPath }))?.text,
+          fileHref: (text2) => {
+            try {
+              this._skillUrl = URL.createObjectURL(new Blob([text2], { type: "text/markdown" }));
+            } catch {
+              this._skillUrl = null;
+            }
+            return this._skillUrl || "";
+          }
+        });
+      } catch (err) {
+        const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+        this.set(css + `<div class="locked">${locked ? 'The skill file and its install steps are for members. <a href="/membership/">Become a member</a> to unlock them.' : "The skill file could not be unlocked right now."}</div>`);
+        return;
+      }
+      if (!box?.html) {
+        this.set(css + '<div class="state">The install steps could not be loaded right now.</div>');
+        return;
+      }
+      this.set(css + `${box.html}<pre data-skill-raw hidden>${esc(box.text)}</pre>`);
+      wireSkillPage(this.root);
       this.emit("gbti-unlocked", { encPath });
     }
     /** Give every decrypted <pre> a Copy button, and clip the long ones behind a Show more / Show less toggle. */
@@ -26313,21 +26381,25 @@ ${BLOCKED_PILL_CSS}
         this._skillUrl = null;
       }
       const fm = this._fm || {};
-      if (this._kind(it) !== "skill" || String(it.visibility || fm.visibility || "public") !== "public") return null;
+      if (this._kind(it) !== "skill") return null;
       const targets = Array.isArray(it.targets) ? it.targets : Array.isArray(fm.targets) ? fm.targets : [];
-      return loadSkillBox({
-        site: SITE20,
-        slug: fm.slug || promptSlugOf(it.url),
-        targets,
-        fileHref: (text2) => {
-          try {
-            this._skillUrl = URL.createObjectURL(new Blob([text2], { type: "text/markdown" }));
-          } catch {
-            this._skillUrl = null;
-          }
-          return this._skillUrl || "";
+      const fileHref = (text2) => {
+        try {
+          this._skillUrl = URL.createObjectURL(new Blob([text2], { type: "text/markdown" }));
+        } catch {
+          this._skillUrl = null;
         }
-      });
+        return this._skillUrl || "";
+      };
+      if (String(it.visibility || fm.visibility || "public") !== "public") {
+        if (typeof fm.encryptedSkill !== "string" || !fm.encryptedSkill || typeof this.client?.decrypt !== "function") return null;
+        try {
+          return await loadMembersSkillBox({ site: SITE20, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
+        } catch {
+          return null;
+        }
+      }
+      return loadSkillBox({ site: SITE20, slug: fm.slug || promptSlugOf(it.url), targets, fileHref });
     }
     // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
     _backfillFromFrontmatter(it) {

@@ -32,7 +32,7 @@ import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs';
 // sow-398: it moved to ../target-slug.mjs so the feed cards key their heart and Save the same way.
 import { targetSlugFor } from '../target-slug.mjs';
 // sow-109: a public skill shows the website's install box; every prompt item says prompt or skill.
-import { SKILL_READER_CSS, loadSkillBox, promptSlugOf } from '../skill-reader.mjs';
+import { SKILL_READER_CSS, loadSkillBox, loadMembersSkillBox, promptSlugOf } from '../skill-reader.mjs';
 import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
 import { KIND_LABEL } from '../../../membership/prompt-kind.mjs';
 
@@ -297,17 +297,21 @@ class GbtiReader extends GbtiElement {
   async _resolveSkill(it) {
     if (this._skillUrl) { try { URL.revokeObjectURL(this._skillUrl); } catch { /* already gone */ } this._skillUrl = null; }
     const fm = this._fm || {};
-    if (this._kind(it) !== 'skill' || String(it.visibility || fm.visibility || 'public') !== 'public') return null;
+    if (this._kind(it) !== 'skill') return null;
     const targets = Array.isArray(it.targets) ? it.targets : (Array.isArray(fm.targets) ? fm.targets : []);
-    return loadSkillBox({
-      site: SITE,
-      slug: fm.slug || promptSlugOf(it.url),
-      targets,
-      fileHref: (text) => {
-        try { this._skillUrl = URL.createObjectURL(new Blob([text], { type: 'text/markdown' })); } catch { this._skillUrl = null; }
-        return this._skillUrl || '';
-      },
-    });
+    const fileHref = (text) => {
+      try { this._skillUrl = URL.createObjectURL(new Blob([text], { type: 'text/markdown' })); } catch { this._skillUrl = null; }
+      return this._skillUrl || '';
+    };
+    if (String(it.visibility || fm.visibility || 'public') !== 'public') {
+      // sow-109 Phase 7: a members-only skill's file is encrypted; a paid member gets the same box once the Worker
+      // decrypts it. Anyone else keeps the reader's locked body and no box, and a failure is quiet for the same reason.
+      if (typeof fm.encryptedSkill !== 'string' || !fm.encryptedSkill || typeof this.client?.decrypt !== 'function') return null;
+      try {
+        return await loadMembersSkillBox({ site: SITE, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
+      } catch { return null; }
+    }
+    return loadSkillBox({ site: SITE, slug: fm.slug || promptSlugOf(it.url), targets, fileHref });
   }
 
   // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.

@@ -13,7 +13,7 @@ import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: a
 import { skillFilesForPublish, skillPathFor } from './skill-file.mjs'; // sow-109: a skill's SKILL.md travels with it
 import { SLUG_MAX, SLUG_PATTERN } from '../../membership/item-id.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
-import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
+import { splitMemberMarkdown, encAssetFor, encSkillAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
 import { stripTrackingParamsInText } from './url-normalize.mjs'; // sow-364: the members path cleans its own body
 import { workerDeleteDraft } from './drafts-client.mjs'; // sow-326: a publish clears its own staged record
 import { SIGNUP_BASE } from './signup-base.mjs';
@@ -104,12 +104,22 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
     fm.encryptedBody = newEnc;
     files.push({ path: newEnc, content: encText }, { path: oldEnc, content: null });
   }
-  files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
-  // sow-109: a skill's SKILL.md moves with it, byte for byte.
+  // sow-109: a skill's own file moves with it, byte for byte: the plain SKILL.md of a public skill, or the encrypted
+  // envelope of a members-only one (it decrypts anywhere, like the body's), with the pointer following it.
   if (type === 'prompt' && fm.kind === 'skill') {
-    const skillText = await readCanonical(ctx, repo, skillPathFor(rel));
-    if (skillText != null) files.push({ path: skillPathFor(newPath), content: skillText }, { path: skillPathFor(rel), content: null });
+    if (typeof fm.encryptedSkill === 'string' && fm.encryptedSkill) {
+      const oldEnc = fm.encryptedSkill;
+      const encText = await readCanonical(ctx, repo, oldEnc);
+      if (encText == null) throw new OperationError('not-found', `the encrypted skill file is missing: ${oldEnc}`);
+      const next = encSkillAssetFor(newPath);
+      fm.encryptedSkill = next.path;
+      files.push({ path: next.path, content: encText }, { path: oldEnc, content: null });
+    } else {
+      const skillText = await readCanonical(ctx, repo, skillPathFor(rel));
+      if (skillText != null) files.push({ path: skillPathFor(newPath), content: skillText }, { path: skillPathFor(rel), content: null });
+    }
   }
+  files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
   // The from-the-author intro comment (project/prompt) moves + retargets in the same PR.
   files.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug, newSlug: slug }));
 
@@ -255,26 +265,24 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
     // sow-109: a republish that sends no kind keeps the item's own (an existing skill stays a skill).
     if (type === 'prompt') { const k = kindForPublish(effInput.kind, priorFm?.kind); if (k) effInput.kind = k; }
   }
-  let built;
-  try {
-    // SOW-106: publishing merges into the network repo, and merged content is PUBLIC. Force status: published (an
-    // explicit caller status still wins), so a publish can never silently produce a hidden merged draft.
-    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || 'published' }, body, scope: targetScope });
-  } catch (err) {
-    throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
-  }
+  // sow-109 Phase 7: the encrypted skill-file pointer is the publish's to decide, never the caller's (a round-tripped
+  // frontmatter could carry a stale one); the skill-file plan below writes it back when there is a file to point at.
+  delete effInput.encryptedSkill;
+  const build = (extra = {}) => {
+    try {
+      // SOW-106: publishing merges into the network repo, and merged content is PUBLIC. Force status: published (an
+      // explicit caller status still wins), so a publish can never silently produce a hidden merged draft.
+      return buildContentFile({ type, username: id.username, input: { ...effInput, ...extra, status: effInput.status || 'published' }, body, scope: targetScope });
+    } catch (err) {
+      throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
+    }
+  };
+  let built = build();
   if (renaming) {
     // Collision pre-check (CI's unique-slug guard is the backstop) — the new path must not exist upstream.
     const collision = await repo.getFileContent(built.path).catch(() => null);
     if (collision != null) throw new OperationError('bad-request', `the permalink "${built.slug}" is already taken`);
   }
-  // sow-109: a skill's SKILL.md is written, kept, moved or removed with it (client/src/skill-file.mjs holds the rule).
-  // Decided before anything is encrypted, so a refusal costs nothing.
-  const skillPlan = await skillFilesForPublish({
-    type, built, oldIndexPath: renaming ? origin.oldPath : (priorFm ? built.path : null), priorKind: priorFm?.kind,
-    moved: renaming, skillFile, readFile: (p) => readCanonical(ctx, repo, p),
-  });
-  if (skillPlan.refusal) throw new OperationError('invalid-content', skillPlan.refusal);
 
   // SOW-016: if the content is whole-item members-only or has a `<!-- members-only -->` section, encrypt the
   // gated markdown SERVER-SIDE (the Worker holds the key; it never reaches us) and commit the ciphertext plus
@@ -282,17 +290,27 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
   const token = ctx.store?.get?.('githubToken');
   const encrypt = (plaintext, assetId) =>
     encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  // The Worker rejected encrypt with 401/403 (the author is not effective-paid). This is the fail-CLOSED path when
+  // the local oracle was 'unknown': surface a clean upgrade nudge, and NO PR is opened.
+  const lockedNudge = (err) => (err instanceof MemberContentLockedError
+    ? new OperationError('membership-required', 'Publishing member-only content requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish.', { membership })
+    : err);
+  // sow-109: a skill's own file is written, kept, moved, encrypted or removed with it (client/src/skill-file.mjs holds
+  // the rule). Decided before the body is encrypted, so a refusal costs nothing.
+  let skillPlan;
+  try {
+    skillPlan = await skillFilesForPublish({
+      type, built, oldIndexPath: renaming ? origin.oldPath : (priorFm ? built.path : null), priorKind: priorFm?.kind,
+      priorEncryptedSkill: priorFm?.encryptedSkill, moved: renaming, skillFile, readFile: (p) => readCanonical(ctx, repo, p), encrypt,
+    });
+  } catch (err) { throw lockedNudge(err); }
+  if (skillPlan.refusal) throw new OperationError('invalid-content', skillPlan.refusal);
+  if (skillPlan.pointer) built = build({ encryptedSkill: skillPlan.pointer });
+
   let plan;
   try {
     plan = await planMemberFiles({ built, body, encrypt });
-  } catch (err) {
-    // The Worker rejected encrypt with 401/403 (the author is not effective-paid). This is the fail-CLOSED
-    // path when the local oracle was 'unknown': surface a clean upgrade nudge, and NO PR is opened.
-    if (err instanceof MemberContentLockedError) {
-      throw new OperationError('membership-required', 'Publishing member-only content requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish.', { membership });
-    }
-    throw err;
-  }
+  } catch (err) { throw lockedNudge(err); }
   // SOW-014: a published project/prompt must carry a from-the-author intro comment IN THE SAME PR. When authorNote
   // is provided, seed intro-<slug>.md (public, authorNote:true) into this same publish, so validate-content's
   // diff-scoped intro check passes and a compliant prompt/product ships in ONE PR (deterministic id -> a re-publish

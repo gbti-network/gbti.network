@@ -138,6 +138,11 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
           if (fmField(txt, 'visibility') !== 'members') continue;
           const stubFlag = /^true$/i.test(String(fmField(txt, 'publicStub') ?? '')); // YAML accepts true/True/TRUE
           const slug = fmField(txt, 'slug') || slugDir;
+          // sow-109 Phase 7: a members-only skill's own file is encrypted, and only a public skill's is served as
+          // /prompts/<slug>/SKILL.md. A plain copy in dist would hand every visitor the file the page locks.
+          if (sub === 'prompts' && fs.existsSync(path.join(distDir, distSeg, slug, 'SKILL.md'))) {
+            errors.push(`members-only skill has its skill file in the clear in dist: ${path.relative(root, path.join(distDir, distSeg, slug, 'SKILL.md'))}. Only a public skill's file is served. See sow-109.`);
+          }
           // sow-246: MODE B (members + stub). The one mode this guard did not guard: a stub item MUST have a
           // public page, and that page MUST carry the locked body the gate renders in place of the members
           // text. A page without the marker means the gate silently stopped presenting (the realistic failure,

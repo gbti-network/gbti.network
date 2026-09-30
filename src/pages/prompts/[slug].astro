@@ -61,13 +61,16 @@ const crumbs = breadcrumb(d.categories);
 const stub = isStub(prompt); // sow-323 Phase 3: a members-only prompt page asks search engines to skip it
 
 // sow-109: a public skill shows how to install it, then the author's own text, then the skill file. A members-only
-// skill keeps the prompt layout, because its file is inside the encrypted body until it has one of its own.
+// skill whose file is encrypted (Phase 7) gets the same layout with the install box LOCKED: a paid member's browser
+// decrypts the file through the Worker and builds the box there, and every other reader sees the members notice.
+// One with no encrypted file keeps the prompt layout, because its file is still inside its body.
 const isSkill = d.kind === 'skill';
 const skillFile = isSkill && !stub ? skillFileOf(prompt) : null;
+const membersSkill = isSkill && stub && typeof d.encryptedSkill === 'string' && d.encryptedSkill ? d.encryptedSkill : null;
 const install = skillFile ? skillInstallTabs(d.targets ?? [], skillFile.name) : { tabs: [], without: [] };
 const installHtml = skillFile ? buildSkillInstallHtml({ ...install, fileHref: `/prompts/${d.slug}/SKILL.md` }) : '';
 const skillFileHtml = skillFile ? buildSkillFileHtml({ text: skillFile.text }) : '';
-const skillView = !!skillFile;
+const skillView = !!skillFile || !!membersSkill;
 
 // SOW-014: pricing badge + Resources links (public live, member-only inert/locked).
 const paid = d.pricing && d.pricing !== 'free';
@@ -135,16 +138,21 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
           )}
           {skillView ? (
             <>
-              <Fragment set:html={installHtml} />
+              {membersSkill ? <LockedBody encPath={membersSkill} kind="skillfile" targets={d.targets ?? []} /> : <Fragment set:html={installHtml} />}
               <div class="skill-notes" data-gbti-region="body">
-                {d.encryptedBody ? (
+                {stub ? (
+                  <>
+                    {rawBody && <Prose><Content /></Prose>}
+                    <LockedBody encPath={d.encryptedBody} kind="body" />
+                  </>
+                ) : d.encryptedBody ? (
                   <FootnotesLast wrap="prose">
                     <Content />
                     <Fragment slot="between"><LockedBody encPath={d.encryptedBody} kind="section" /></Fragment>
                   </FootnotesLast>
                 ) : <Prose><Content /></Prose>}
               </div>
-              <Fragment set:html={skillFileHtml} />
+              {!membersSkill && <Fragment set:html={skillFileHtml} />}
             </>
           ) : (
             <>

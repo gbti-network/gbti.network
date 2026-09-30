@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { planSkillFile, needsOldSkillFile, skillPathFor, skillFilesForPublish, skillFileBeside, MEMBERS_REFUSAL } from '../client/src/skill-file.mjs';
+import { planSkillFile, needsOldSkillFile, skillPathFor, skillFilesForPublish, skillFileBeside } from '../client/src/skill-file.mjs';
 import { publish, saveDraft, readDraft, publishDraft, getContentItem, renameContent, authorContent } from '../client/src/operations.mjs';
 import { parseContentFile } from '../client/src/content-ops.mjs';
 import { applyDraftPut } from '../membership/member-drafts.mjs';
@@ -22,7 +22,7 @@ const SK = 'members/alice/prompts/farley/SKILL.md';
 
 test('the rule: write, keep, move, remove or refuse', () => {
   const plan = (a) => planSkillFile({ newIndexPath: IDX, ...a });
-  assert.deepEqual(plan({ kind: 'skill', skillFile: FILE }), { files: [{ path: SK, content: FILE }], refusal: null }, 'a new skill writes its file');
+  assert.deepEqual(plan({ kind: 'skill', skillFile: FILE }), { files: [{ path: SK, content: FILE }], refusal: null, encrypt: null, pointer: null }, 'a new skill writes its file');
   assert.match(plan({ kind: 'skill' }).refusal, /needs its skill file/, 'a new skill without one is refused');
   assert.match(plan({ kind: 'skill', skillFile: '---\nname: Bad Name\n---\n' }).refusal, /name: line/);
   assert.deepEqual(plan({ kind: 'skill', oldIndexPath: IDX, priorKind: 'skill' }).files, [], 'an edit that sends no file keeps the one it has');
@@ -38,9 +38,8 @@ test('the rule: write, keep, move, remove or refuse', () => {
   assert.deepEqual(plan({ kind: 'prompt', oldIndexPath: IDX, priorKind: 'skill', oldSkillText: FILE }).files, [{ path: SK, content: null }], 'a skill turned prompt loses its file');
   assert.deepEqual(plan({ kind: 'prompt', skillFile: FILE }).files, [], 'a prompt never writes one');
   assert.deepEqual(plan({ kind: 'prompt', oldIndexPath: IDX, priorKind: 'skill', oldSkillText: null }).files, [], 'only a file known to exist is deleted');
-  assert.equal(plan({ kind: 'skill', visibility: 'members', skillFile: FILE }).refusal, MEMBERS_REFUSAL);
-  assert.equal(plan({ kind: 'skill', visibility: 'members', oldIndexPath: IDX, priorKind: 'skill', oldSkillText: FILE }).refusal, MEMBERS_REFUSAL, 'switching to members-only never throws the file away');
-  assert.deepEqual(plan({ kind: 'skill', visibility: 'members' }), { files: [], refusal: null }, 'a members-only skill with no plain file is fine');
+  // Members-only skills (Phase 7) are covered in test/skill-members.test.mjs: their file is encrypted, never refused.
+  assert.deepEqual(plan({ kind: 'skill', visibility: 'members' }), { files: [], refusal: null, encrypt: null, pointer: null }, 'a members-only skill with no file is fine');
 });
 
 test('the old file is read only when it has to move, go, or be checked', () => {
@@ -58,10 +57,10 @@ test('the shared step reads only what the plan needs, and never throws on a fail
   const built = { path: IDX, frontmatter: { kind: 'skill', visibility: 'public' } };
   assert.deepEqual((await skillFilesForPublish({ type: 'prompt', built, oldIndexPath: IDX, priorKind: 'skill', skillFile: FILE, readFile })).files, [{ path: SK, content: FILE }]);
   assert.deepEqual(reads, [], 'a plain edit does not read');
-  assert.deepEqual(await skillFilesForPublish({ type: 'post', built, skillFile: FILE, readFile }), { files: [], refusal: null });
+  assert.deepEqual(await skillFilesForPublish({ type: 'post', built, skillFile: FILE, readFile }), { files: [], refusal: null, pointer: null });
   const failing = async () => { throw new Error('offline'); };
   const r = await skillFilesForPublish({ type: 'prompt', built: { path: IDX, frontmatter: { kind: 'prompt' } }, oldIndexPath: IDX, priorKind: 'skill', readFile: failing });
-  assert.deepEqual(r, { files: [], refusal: null }, 'a read that fails deletes nothing');
+  assert.deepEqual(r, { files: [], refusal: null, pointer: null }, 'a read that fails deletes nothing');
   assert.deepEqual(await skillFileBeside(IDX, { kind: 'skill' }, async () => FILE), { skillFile: FILE });
   assert.deepEqual(await skillFileBeside(IDX, { kind: 'prompt' }, async () => FILE), {});
   assert.deepEqual(await skillFileBeside('members/alice/posts/x/index.md', { kind: 'skill' }, async () => FILE), {}, 'only a prompt folder');
@@ -124,7 +123,9 @@ test('npm publish: an edit keeps the file, a new file replaces it, a rename move
   assert.equal(skillEntry(drop)?.content, null);
 
   const members = network();
-  await assert.rejects(publish(ctxFor(members, repo), { type: 'prompt', input: { ...INPUT, visibility: 'members' }, body: 'x', path: IDX }), /members-only skill/);
+  await assert.rejects(publish(ctxFor(members, repo), { type: 'prompt', input: { ...INPUT, visibility: 'members' }, body: 'x', path: IDX }), /encrypt/,
+    'going members-only encrypts the file, which asks the Worker (this fake has no encrypt route); nothing is sent');
+  assert.equal(members.authored.length, 0);
 });
 
 test('npm drafts: the skill file is saved, read back and published with the draft', async () => {
@@ -191,13 +192,13 @@ test('the Worker judges SKILL.md by its item, never by its own frontmatter', asy
 
 test('the website publisher runs the same rule, before encrypting, and carries the file through drafts and reads', () => {
   const w = src('src/lib/workbench-client.ts');
-  const at = w.indexOf('const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, moved, skillFile, readFile: readOwnFile });');
+  const at = w.indexOf('const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, priorEncryptedSkill: oldFm?.encryptedSkill, moved, skillFile, readFile: readOwnFile, encrypt: encryptViaCookie });');
   assert.ok(at > 0);
   assert.ok(at < w.indexOf('const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });'), 'a refusal costs no encryption');
   assert.match(w, /if \(skillPlan\.refusal\) throw new WorkbenchClientError\('invalid-content', skillPlan\.refusal\);/);
   assert.match(w, /files\.push\(\.\.\.skillPlan\.files\);/);
   assert.match(w, /async function publish\(\{ type, input = \{\}, body = '', authorNote, path, scope, authorTarget, skillFile \}: any\)/);
-  assert.match(w, /const skill = await skillFileBeside\(path, frontmatter, readOwnFile\);/, 'read-back, so repo drafts get it too');
+  assert.match(w, /const skill = await skillFileBeside\(path, frontmatter, readOwnFile, decryptEnc\);/, 'read-back (decrypted for a members-only skill), so repo drafts get it too');
   assert.match(w, /async saveDraft\(\{ type, input = \{\}, body = '', path, authorNote, authorTarget, skillFile \}: any\)[\s\S]{0,1400}\.\.\.\(typeof skillFile === 'string' \? \{ skillFile \} : \{\}\),/);
   assert.match(w, /\.\.\.\(typeof rec\.skillFile === 'string' \? \{ skillFile: rec\.skillFile \} : \{\}\), \/\/ sow-109: the skill file publishes with it/);
 });

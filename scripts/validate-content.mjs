@@ -15,6 +15,7 @@ import { shareCategoryProblem } from '../membership/share-category.mjs'; // a pu
 import { targetProblems } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
 import { promptKindProblems } from '../membership/prompt-kind.mjs'; // sow-109: every prompt item says prompt or skill
 import { skillNameFrom } from '../membership/skill-install.mjs'; // sow-109: the name a skill file declares
+import { encSkillAssetFor } from '../client/src/member-content.mjs'; // sow-109 Phase 7: where a members-only skill's file is encrypted
 import { licenseProblems } from '../membership/licenses.mjs'; // sow-305: the controlled license list
 import { validateHouseConfig } from './lib/validate-house-config.mjs'; // the house/*.yml settings checks
 import { withoutSystemOnlyChanges } from './lib/system-only-change.mjs'; // a system-only change is not an author's edit
@@ -135,19 +136,23 @@ function checkMemberGating(fm, rel, body = '') {
     errors.push(`${rel}: encryptedBody must be a repo-relative path string to a .enc envelope`);
     return;
   }
+  const problem = envelopeProblem(enc);
+  if (problem) errors.push(`${rel}: encryptedBody ${problem}`);
+}
+
+/** What is wrong with the encrypted envelope at a repo path, or '' (shared by the body and a skill's own file). */
+function envelopeProblem(enc) {
   const abs = path.join(ROOT, enc);
-  if (!fs.existsSync(abs)) {
-    errors.push(`${rel}: encryptedBody points at a missing file: ${enc} (publish via the client so the .enc ships in the same PR). See SOW-016.`);
-    return;
-  }
+  if (!fs.existsSync(abs)) return `points at a missing file: ${enc} (publish via the client so the .enc ships in the same PR). See SOW-016.`;
   try {
     const env = JSON.parse(fs.readFileSync(abs, 'utf8'));
     if (env?.v !== 1 || typeof env.iv !== 'string' || typeof env.ct !== 'string' || typeof env.aad !== 'string') {
-      errors.push(`${rel}: encryptedBody ${enc} is not a valid v1 encrypted envelope (it may be plaintext; encrypt it via the client)`);
+      return `${enc} is not a valid v1 encrypted envelope (it may be plaintext; encrypt it via the client)`;
     }
   } catch {
-    errors.push(`${rel}: encryptedBody ${enc} is not valid JSON (a .enc must be an encrypted v1 envelope, not raw plaintext)`);
+    return `${enc} is not valid JSON (a .enc must be an encrypted v1 envelope, not raw plaintext)`;
   }
+  return '';
 }
 
 // sow-165: a body image reference whose file is not in the repository does NOT render as a broken image.
@@ -236,6 +241,15 @@ function checkSkillFile(fm, file, rel) {
   const skillPath = path.join(path.dirname(file), 'SKILL.md');
   const hasFile = has(skillPath);
   const skillRel = path.relative(ROOT, skillPath);
+  // sow-109 Phase 7: a members-only skill's file is encrypted, and `encryptedSkill` points at it. Only there: a public
+  // item or a prompt carrying one is a half-flip (the file its page should show, or should not have, is locked away).
+  // The errors name the index.md, so the after-publish check can draft the item instead of leaving it broken.
+  if (fm.encryptedSkill != null) {
+    const want = encSkillAssetFor(rel)?.path;
+    if (fm.kind !== 'skill' || fm.visibility !== 'members') errors.push(`${rel}: encryptedSkill belongs only to a members-only skill; publish it via the client so the file is made public or removed`);
+    else if (typeof fm.encryptedSkill !== 'string' || fm.encryptedSkill !== want) errors.push(`${rel}: encryptedSkill must be ${want}`);
+    else { const problem = envelopeProblem(fm.encryptedSkill); if (problem) errors.push(`${rel}: encryptedSkill ${problem}`); }
+  }
   if (fm.visibility === 'members') {
     if (hasFile) errors.push(`${skillRel}: a members-only item cannot carry a plaintext SKILL.md; it would publish the file its page locks`);
     return;

@@ -17117,6 +17117,8 @@ var promptSchema = external_exports.object({
   // SOW-016
   encryptedBody: external_exports.string().optional(),
   // SOW-016: set by the publish flow (encrypt-on-publish)
+  encryptedSkill: external_exports.string().optional(),
+  // sow-109 Phase 7: a members-only skill's SKILL.md, encrypted by the publish flow
   targets: external_exports.array(external_exports.string()).default([]),
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.
@@ -18333,152 +18335,24 @@ function skillInstallEntries(doc) {
 
 // client/src/skill-file.mjs
 var skillPathFor = (indexPath) => String(indexPath || "").replace(/index\.md$/, "SKILL.md");
-async function skillFileBeside(indexPath, frontmatter, readFile) {
+async function skillFileBeside(indexPath, frontmatter, readFile, decrypt) {
   if (frontmatter?.kind !== "skill" || !/\/prompts\/[^/]+\/index\.md$/.test(String(indexPath || ""))) return {};
   let text = null;
-  try {
-    text = await readFile(skillPathFor(indexPath)) ?? null;
-  } catch {
-    text = null;
-  }
-  return text == null ? {} : { skillFile: text };
-}
-
-// client/src/operations-read.mjs
-async function listContent(ctx, { type, scope = "member" } = {}) {
-  const id = requireIdentity(ctx);
-  if (scope === "house") {
-    await requireSuperadminForHouse(ctx);
-    return { items: await ctx.reader.list(NETWORK_CONTENT_OWNER, type || void 0, "member") };
-  }
-  return { items: await ctx.reader.list(id.username, type || void 0, "member") };
-}
-async function listMembersOnly(ctx) {
-  requireIdentity(ctx);
-  return { items: await ctx.reader.listMembersOnly() ?? [] };
-}
-async function listShares(ctx, { limit } = {}) {
-  requireIdentity(ctx);
-  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
-  if (typeof ctx.reader?.listShares !== "function") return { items: [] };
-  const items = await ctx.reader.listShares(n) ?? [];
-  const membership = await membershipOf(ctx);
-  if (canSeeShares(membership)) return { items };
-  return { items: items.filter((s) => String(s?.visibility || "members").toLowerCase() === "public") };
-}
-function gateMemberComments(items, membership) {
-  if (canSeeShares(membership ?? "unknown")) return items ?? [];
-  return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
-}
-async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) {
-  const token = ctx.store?.get?.("githubToken");
-  if (!token || !targetType || !targetSlug) return deployed;
-  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
-  let echoes = [];
-  try {
-    echoes = (await getCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? [];
-  } catch {
-    return deployed;
-  }
-  if (!echoes.length) return deployed;
-  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
-  if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
-  });
-  return comments;
-}
-async function listShareComments(ctx, { targetSlug, limit } = {}) {
-  return listComments(ctx, { targetType: "share", targetSlug, limit });
-}
-var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share", "news"]);
-var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
-var COMMENTS_INDEX_TTL_MS = 6e4;
-var commentsIndexCache = null;
-async function fetchCommentsIndex(ctx) {
-  const now = Date.now();
-  if (commentsIndexCache && now - commentsIndexCache.at < COMMENTS_INDEX_TTL_MS) return commentsIndexCache.items;
-  const f = ctx.fetch ?? globalThis.fetch;
-  const res = await f(COMMENTS_INDEX_URL, { cache: "no-cache" });
-  if (!res.ok) throw new Error(`comments index ${res.status}`);
-  const data = await res.json();
-  const items = Array.isArray(data?.items) ? data.items : [];
-  commentsIndexCache = { at: now, items };
-  return items;
-}
-async function listComments(ctx, { targetType, targetSlug, limit, aliases } = {}) {
-  requireIdentity(ctx);
-  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
-  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
-  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
-  let items = null;
-  try {
-    const all = await fetchCommentsIndex(ctx);
-    const slugs = /* @__PURE__ */ new Set([targetSlug, ...Array.isArray(aliases) ? aliases : []]);
-    items = all.filter((c) => c?.targetType === targetType && slugs.has(c?.targetSlug) && (c?.status ?? "published") === "published").sort(byCommentOldest).slice(0, n);
-  } catch {
-    if (typeof ctx.reader?.listComments !== "function") return { items: [] };
-    items = await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
-  }
-  const gated = gateMemberComments(items, await membershipOf(ctx));
-  return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) };
-}
-async function readContent(ctx, { path } = {}) {
-  requireIdentity(ctx);
-  if (!path || typeof path !== "string") throw new OperationError("bad-request", "path is required");
-  if (typeof ctx.reader?.read !== "function") throw new OperationError("not-found", "no such readable content");
-  const item = await ctx.reader.read(path);
-  if (!item) throw new OperationError("not-found", "no such readable content");
-  return item;
-}
-function skillFileBesideItem(ctx, indexPath, frontmatter) {
-  return skillFileBeside(indexPath, frontmatter, async (p) => {
-    let text = null;
+  if (typeof frontmatter?.encryptedSkill === "string" && frontmatter.encryptedSkill) {
+    if (typeof decrypt !== "function") return {};
     try {
-      text = await ctx.reader?.readFile?.(p) ?? null;
+      text = await decrypt(frontmatter.encryptedSkill) ?? null;
     } catch {
       text = null;
     }
-    if (text == null) {
-      try {
-        text = await ctx.getRepoClient?.()?.getFileContent?.(p) ?? null;
-      } catch {
-        text = null;
-      }
-    }
-    return text;
-  });
-}
-async function getContentItem(ctx, args = {}) {
-  const item = await getContentItemFile(ctx, args);
-  return { ...item, ...await skillFileBesideItem(ctx, item.path, item.frontmatter) };
-}
-async function getContentItemFile(ctx, { path } = {}) {
-  const id = requireIdentity(ctx);
-  if (!path) throw new OperationError("bad-request", "path is required");
-  if (isNetworkContentPath(path) && id.username !== NETWORK_CONTENT_OWNER) {
-    if (!NETWORK_CONTENT_PATH_RE.test(path)) throw new OperationError("bad-request", "invalid network content path");
-    await requireSuperadminForHouse(ctx);
-    const text = await ctx.reader?.readFile?.(path);
-    if (text == null) throw new OperationError("not-found", "no such network content item");
-    const { frontmatter, body } = parseContentFile(text);
-    return { path, frontmatter, body };
-  }
-  const item = await ctx.reader.get(id.username, path);
-  if (item) return item;
-  const own = path.startsWith(`members/${id.username}/`) && !path.includes("..") && !path.includes("\\");
-  let repo = null;
-  try {
-    repo = own ? ctx.getRepoClient?.() : null;
-  } catch {
-    repo = null;
-  }
-  if (repo?.getFileContent) {
-    const text = await repo.getFileContent(path);
-    if (text != null) {
-      const { frontmatter, body } = parseContentFile(text);
-      return { path, frontmatter, body };
+  } else {
+    try {
+      text = await readFile(skillPathFor(indexPath)) ?? null;
+    } catch {
+      text = null;
     }
   }
-  throw new OperationError("not-found", "no such item in your folder");
+  return text == null ? {} : { skillFile: text };
 }
 
 // client/src/hosted-publish.mjs
@@ -18699,6 +18573,143 @@ async function decryptMemberAsset(ctx, { encPath } = {}) {
     }
     throw new OperationError("decrypt-failed", err?.message || "could not decrypt the asset");
   }
+}
+
+// client/src/operations-read.mjs
+async function listContent(ctx, { type, scope = "member" } = {}) {
+  const id = requireIdentity(ctx);
+  if (scope === "house") {
+    await requireSuperadminForHouse(ctx);
+    return { items: await ctx.reader.list(NETWORK_CONTENT_OWNER, type || void 0, "member") };
+  }
+  return { items: await ctx.reader.list(id.username, type || void 0, "member") };
+}
+async function listMembersOnly(ctx) {
+  requireIdentity(ctx);
+  return { items: await ctx.reader.listMembersOnly() ?? [] };
+}
+async function listShares(ctx, { limit } = {}) {
+  requireIdentity(ctx);
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
+  if (typeof ctx.reader?.listShares !== "function") return { items: [] };
+  const items = await ctx.reader.listShares(n) ?? [];
+  const membership = await membershipOf(ctx);
+  if (canSeeShares(membership)) return { items };
+  return { items: items.filter((s) => String(s?.visibility || "members").toLowerCase() === "public") };
+}
+function gateMemberComments(items, membership) {
+  if (canSeeShares(membership ?? "unknown")) return items ?? [];
+  return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
+}
+async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) {
+  const token = ctx.store?.get?.("githubToken");
+  if (!token || !targetType || !targetSlug) return deployed;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
+  let echoes = [];
+  try {
+    echoes = (await getCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? [];
+  } catch {
+    return deployed;
+  }
+  if (!echoes.length) return deployed;
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
+  });
+  return comments;
+}
+async function listShareComments(ctx, { targetSlug, limit } = {}) {
+  return listComments(ctx, { targetType: "share", targetSlug, limit });
+}
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share", "news"]);
+var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
+var COMMENTS_INDEX_TTL_MS = 6e4;
+var commentsIndexCache = null;
+async function fetchCommentsIndex(ctx) {
+  const now = Date.now();
+  if (commentsIndexCache && now - commentsIndexCache.at < COMMENTS_INDEX_TTL_MS) return commentsIndexCache.items;
+  const f = ctx.fetch ?? globalThis.fetch;
+  const res = await f(COMMENTS_INDEX_URL, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`comments index ${res.status}`);
+  const data = await res.json();
+  const items = Array.isArray(data?.items) ? data.items : [];
+  commentsIndexCache = { at: now, items };
+  return items;
+}
+async function listComments(ctx, { targetType, targetSlug, limit, aliases } = {}) {
+  requireIdentity(ctx);
+  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
+  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  let items = null;
+  try {
+    const all = await fetchCommentsIndex(ctx);
+    const slugs = /* @__PURE__ */ new Set([targetSlug, ...Array.isArray(aliases) ? aliases : []]);
+    items = all.filter((c) => c?.targetType === targetType && slugs.has(c?.targetSlug) && (c?.status ?? "published") === "published").sort(byCommentOldest).slice(0, n);
+  } catch {
+    if (typeof ctx.reader?.listComments !== "function") return { items: [] };
+    items = await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
+  }
+  const gated = gateMemberComments(items, await membershipOf(ctx));
+  return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) };
+}
+async function readContent(ctx, { path } = {}) {
+  requireIdentity(ctx);
+  if (!path || typeof path !== "string") throw new OperationError("bad-request", "path is required");
+  if (typeof ctx.reader?.read !== "function") throw new OperationError("not-found", "no such readable content");
+  const item = await ctx.reader.read(path);
+  if (!item) throw new OperationError("not-found", "no such readable content");
+  return item;
+}
+function skillFileBesideItem(ctx, indexPath, frontmatter) {
+  return skillFileBeside(indexPath, frontmatter, async (p) => {
+    let text = null;
+    try {
+      text = await ctx.reader?.readFile?.(p) ?? null;
+    } catch {
+      text = null;
+    }
+    if (text == null) {
+      try {
+        text = await ctx.getRepoClient?.()?.getFileContent?.(p) ?? null;
+      } catch {
+        text = null;
+      }
+    }
+    return text;
+  }, async (encPath) => (await decryptMemberAsset(ctx, { encPath })).text);
+}
+async function getContentItem(ctx, args = {}) {
+  const item = await getContentItemFile(ctx, args);
+  return { ...item, ...await skillFileBesideItem(ctx, item.path, item.frontmatter) };
+}
+async function getContentItemFile(ctx, { path } = {}) {
+  const id = requireIdentity(ctx);
+  if (!path) throw new OperationError("bad-request", "path is required");
+  if (isNetworkContentPath(path) && id.username !== NETWORK_CONTENT_OWNER) {
+    if (!NETWORK_CONTENT_PATH_RE.test(path)) throw new OperationError("bad-request", "invalid network content path");
+    await requireSuperadminForHouse(ctx);
+    const text = await ctx.reader?.readFile?.(path);
+    if (text == null) throw new OperationError("not-found", "no such network content item");
+    const { frontmatter, body } = parseContentFile(text);
+    return { path, frontmatter, body };
+  }
+  const item = await ctx.reader.get(id.username, path);
+  if (item) return item;
+  const own = path.startsWith(`members/${id.username}/`) && !path.includes("..") && !path.includes("\\");
+  let repo = null;
+  try {
+    repo = own ? ctx.getRepoClient?.() : null;
+  } catch {
+    repo = null;
+  }
+  if (repo?.getFileContent) {
+    const text = await repo.getFileContent(path);
+    if (text != null) {
+      const { frontmatter, body } = parseContentFile(text);
+      return { path, frontmatter, body };
+    }
+  }
+  throw new OperationError("not-found", "no such item in your folder");
 }
 
 // client/src/operations-social.mjs

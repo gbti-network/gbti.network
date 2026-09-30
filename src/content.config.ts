@@ -307,6 +307,7 @@ const prompt = defineCollection({
     visibility: VISIBILITY.default('public'),
     publicStub: z.boolean().default(false), // SOW-016: members + publicStub -> a public stub page (Mode B); false -> no public page (Mode A)
     encryptedBody: z.string().optional(), // SOW-016: repo-relative path to the .enc body envelope (Mode B whole body / Mode C tail)
+    encryptedSkill: z.string().optional(), // sow-109 Phase 7: a members-only skill's SKILL.md, encrypted (_enc/prompt-<slug>-skillfile.enc)
     targets: z.array(z.string()).default([]),
     // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml), validated by
     // scripts/validate-content.mjs. Same shape as posts so all content types share one taxonomy (SOW-012).
