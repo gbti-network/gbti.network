@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Black Suit, Light Blue Shirt, Navy Tie"
 slug: nano-banana-headshot-black-suit-light-blue-shirt-navy-tie
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a black suit jacket, light blue dress shirt, and dark navy tie against a softly blurred bookshelf."

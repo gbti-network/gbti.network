@@ -26,6 +26,7 @@ image: ./images/stranger-in-a-strange-land-header.webp
 publishedAt: '2026-08-27T00:22:08.659Z'
 updatedAt: '2026-08-27T00:22:08.659Z'
 type: prompt
+kind: skill
 author: atwellpub
 ---
 

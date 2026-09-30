@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Navy Blazer on a Dark Background"
 slug: nano-banana-headshot-navy-blazer-dark-background
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a dark navy blazer over a blue-gray crew tee with dimensional side lighting on a dark background."

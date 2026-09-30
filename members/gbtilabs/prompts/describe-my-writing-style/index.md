@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Describe My Writing Style"
 slug: describe-my-writing-style
 shortDescription: "Ask ChatGPT to honestly describe your writing style: the feel, the recurring habits, the strengths and the weaknesses, with short quotes of yours as evidence."

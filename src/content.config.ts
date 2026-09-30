@@ -287,11 +287,17 @@ const page = defineCollection({
   }),
 });
 
-// 5. Prompt — members/<username>/prompts/<slug>.md (or house/prompts/<slug>.md)
+// 5. Prompt — members/<username>/prompts/<slug>/index.md (or house/prompts/<slug>/index.md)
+// sow-109: the pattern names each item's index.md only. A skill keeps its skill file as a sibling SKILL.md in the
+// same folder, and the old `**/*.md` pattern would have loaded that file as a second prompt and failed the build.
 const prompt = defineCollection({
-  loader: glob({ base: '.', pattern: ['members/*/prompts/**/*.md', 'house/prompts/**/*.{md,mdx}'] }),
+  loader: glob({ base: '.', pattern: ['members/*/prompts/*/index.md', 'house/prompts/*/index.{md,mdx}'] }),
   schema: ({ image }) => z.object({
     type: z.literal('prompt').default('prompt'),
+    // sow-109 (owner, 2026-09-29): what the item IS. REQUIRED, with no default, so an item saved without it fails
+    // here rather than quietly showing as a prompt. The authoring tools write it (client/src/content-ops.mjs
+    // buildContentFile), and sow-424 gave every existing item one.
+    kind: z.enum(['prompt', 'skill']),
     title: titleText(),
     slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
     shortDescription: z.string(), // one-line blurb shown on prompt cards + the activity feed

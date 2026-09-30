@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Black Blazer, White Open Collar"
 slug: nano-banana-headshot-black-blazer-white-open-collar
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a black blazer over a white open-collar shirt on a clean white/light gray background."

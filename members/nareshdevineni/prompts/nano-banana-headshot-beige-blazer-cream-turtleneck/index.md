@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Beige Blazer and Cream Turtleneck"
 slug: nano-banana-headshot-beige-blazer-cream-turtleneck
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a tan textured blazer over a cream turtleneck on a warm peachy-beige background."

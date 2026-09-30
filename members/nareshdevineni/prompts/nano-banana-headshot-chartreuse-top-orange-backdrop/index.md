@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Chartreuse Top, Bright Orange Backdrop"
 slug: nano-banana-headshot-chartreuse-top-orange-backdrop
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a bold chartreuse casual top against a vibrant orange studio backdrop (the highly detailed favorite)."

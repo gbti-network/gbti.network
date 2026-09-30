@@ -137,6 +137,9 @@ export function buildContentFile({ type, username, input, body = '', scope = 'me
   // "Claude Code" serializes as the dash-connected "claude-code" the schema transformed it into.
   const frontmatter = stripUndefined(cleaned);
   if (result.data && Array.isArray(result.data.tags) && 'tags' in frontmatter) frontmatter.tags = result.data.tags;
+  // sow-109: a prompt file always states its kind, because the site schema requires it. Defaults are otherwise left
+  // out of the file (see above), so this one is written explicitly when the input did not carry it.
+  if (type === 'prompt' && frontmatter.kind === undefined) frontmatter.kind = result.data?.kind ?? 'prompt';
   if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
 

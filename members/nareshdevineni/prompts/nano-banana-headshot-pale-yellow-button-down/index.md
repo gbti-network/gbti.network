@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Pale Yellow Button-Down"
 slug: nano-banana-headshot-pale-yellow-button-down
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a pale yellow button-down over a navy tee on a dark slate blue-gray background."

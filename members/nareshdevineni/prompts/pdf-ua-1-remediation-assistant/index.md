@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "PDF/UA-1 Remediation Assistant"
 slug: pdf-ua-1-remediation-assistant
 shortDescription: "Guide Claude through remediating a tagged PDF to PDF/UA-1, inspecting before editing and validating each fix with veraPDF."

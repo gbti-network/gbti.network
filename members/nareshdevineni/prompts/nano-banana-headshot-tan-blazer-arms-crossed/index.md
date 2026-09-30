@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Tan Blazer, Arms Crossed"
 slug: nano-banana-headshot-tan-blazer-arms-crossed
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a tan blazer over a white collared shirt, arms crossed, on a neutral background."

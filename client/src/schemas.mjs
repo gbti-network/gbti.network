@@ -213,6 +213,10 @@ export const profileSchema = z.object({
 
 export const promptSchema = z.object({
   type: z.literal('prompt').default('prompt'),
+  // sow-109: mirrors src/content.config.ts, where `kind` is REQUIRED. The default here is for INPUT only: an older
+  // client or an agent that sends no kind is authoring a prompt. buildContentFile writes the value into every
+  // prompt file it builds, so a stored item always carries it and the site build never sees one without.
+  kind: z.enum(['prompt', 'skill']).default('prompt'),
   title: titleText(),
   slug: z.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   shortDescription: z.string(), // REQUIRED, mirrors src/content.config.ts (one-line blurb on cards + the feed).

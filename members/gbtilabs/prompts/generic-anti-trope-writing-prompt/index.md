@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Generic anti-trope writing prompt"
 slug: generic-anti-trope-writing-prompt
 shortDescription: "A writing persona that makes an AI write in a natural human voice by banning the patterns that read as AI-generated: negative parallelism, rhetorical questions, em-dash addiction, tricolon abuse, filler transitions, and the rest of the tells."

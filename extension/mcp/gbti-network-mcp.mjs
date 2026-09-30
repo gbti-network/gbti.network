@@ -17157,6 +17157,10 @@ var profileSchema = external_exports.object({
 });
 var promptSchema = external_exports.object({
   type: external_exports.literal("prompt").default("prompt"),
+  // sow-109: mirrors src/content.config.ts, where `kind` is REQUIRED. The default here is for INPUT only: an older
+  // client or an agent that sends no kind is authoring a prompt. buildContentFile writes the value into every
+  // prompt file it builds, so a stored item always carries it and the site build never sees one without.
+  kind: external_exports.enum(["prompt", "skill"]).default("prompt"),
   title: titleText(),
   slug: external_exports.string().max(SLUG_MAX, SLUG_TOO_LONG).regex(/^[a-z0-9-]+$/),
   shortDescription: external_exports.string(),
@@ -17466,6 +17470,7 @@ function buildContentFile({ type, username, input, body = "", scope = "member" }
   const path4 = contentPath(type, username, slug, scope);
   const frontmatter = stripUndefined(cleaned);
   if (result.data && Array.isArray(result.data.tags) && "tags" in frontmatter) frontmatter.tags = result.data.tags;
+  if (type === "prompt" && frontmatter.kind === void 0) frontmatter.kind = result.data?.kind ?? "prompt";
   if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
   return { path: path4, frontmatter, markdown, type, username, slug, scope };

@@ -17,6 +17,7 @@ import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the 
 import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
 import { shareCategoryProblem } from '../membership/share-category.mjs'; // a published share needs a category
 import { targetProblems, aiToolEntries } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
+import { promptKindProblems } from '../membership/prompt-kind.mjs'; // sow-109: every prompt item says prompt or skill
 import { licenseProblems, licenseEntries } from '../membership/licenses.mjs'; // sow-305: the controlled license list
 import { normalizeBanword, BANWORD_LIMIT, BANWORD_MIN, BANWORD_MAX } from '../membership/news-banwords.mjs'; // sow-372: the blocked-word list
 import { validateTierDisplay } from '../membership/tiers-display.mjs'; // sow-185: the membership tier display data
@@ -279,6 +280,9 @@ function checkContent(file, owner, type) {
     if (type === 'prompt' && fm && fm.targets !== undefined) {
       for (const problem of targetProblems(fm.targets, AI_TOOLS_DOC)) errors.push(`${rel}: ${problem}`);
     }
+    // sow-109: a prompt item says whether it is a prompt or a skill (required, owner 2026-09-29), and a skill names
+    // the tools it is made for. Same branch as the targets rule above, which is the one a prompt reaches.
+    if (type === 'prompt') for (const problem of promptKindProblems(fm)) errors.push(`${rel}: ${problem}`);
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
     if (type === 'project') checkNewsFeed(fm, rel); // sow-140

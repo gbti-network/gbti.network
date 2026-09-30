@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Cream Blazer with Warm Bokeh"
 slug: nano-banana-headshot-cream-blazer-warm-bokeh
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a beige/cream blazer over a white button-down against warm golden bokeh lights."

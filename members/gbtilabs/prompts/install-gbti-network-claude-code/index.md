@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: Install GBTI Network Access in Claude Code
 slug: install-gbti-network-claude-code
 shortDescription: >-

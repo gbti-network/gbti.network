@@ -28,6 +28,7 @@ redirectFrom:
   - /prompts/responsive-design-audit-with-playwright/
   - /prompts/responsive-design-audit-with-playwright-1/
 type: prompt
+kind: prompt
 author: atwellpub
 ---
 

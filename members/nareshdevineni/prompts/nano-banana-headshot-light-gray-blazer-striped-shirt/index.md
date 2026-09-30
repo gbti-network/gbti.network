@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Light Gray Blazer, Striped Shirt"
 slug: nano-banana-headshot-light-gray-blazer-striped-shirt
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a light gray blazer over a navy and white horizontal striped shirt on a neutral background."

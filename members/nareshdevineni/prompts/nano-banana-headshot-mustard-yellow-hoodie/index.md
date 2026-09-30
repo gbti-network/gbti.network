@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Mustard Yellow Hoodie"
 slug: nano-banana-headshot-mustard-yellow-hoodie
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a relaxed mustard yellow hoodie on a solid mustard background."

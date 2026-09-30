@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Dark Gray Textured Suit, Dotted Tie"
 slug: nano-banana-headshot-dark-gray-textured-suit-dotted-tie
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a dark gray textured suit with a small-dot navy tie against a blurred corporate building."

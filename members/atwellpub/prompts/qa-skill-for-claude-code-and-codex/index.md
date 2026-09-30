@@ -22,6 +22,7 @@ status: published
 visibility: members
 publicStub: true
 type: prompt
+kind: skill
 author: atwellpub
 encryptedBody: members/atwellpub/_enc/prompt-qa-skill-for-claude-code-and-codex-body.enc
 ---

@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Install the Playwright MCP Server into Claude Code"
 slug: install-playwright-mcp-into-claude-code
 shortDescription: "Wire the Playwright MCP server into Claude Code so the agent can drive Chromium, snapshot the DOM, read the console, and screenshot pages from inside a live session."

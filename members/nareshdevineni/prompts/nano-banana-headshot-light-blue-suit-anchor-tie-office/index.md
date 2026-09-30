@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Light Blue Suit, Anchor Tie, Office"
 slug: nano-banana-headshot-light-blue-suit-anchor-tie-office
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a light blue suit with an anchor-pattern navy tie in a blurred indoor office."

@@ -21,6 +21,7 @@ tags:
 publishedAt: '2026-07-02T00:00:00.000Z'
 status: published
 type: prompt
+kind: skill
 author: atwellpub
 ---
 

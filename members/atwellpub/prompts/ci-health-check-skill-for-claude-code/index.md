@@ -23,6 +23,7 @@ variables:
 publishedAt: '2026-07-09T19:09:11.755Z'
 status: published
 type: prompt
+kind: skill
 author: atwellpub
 ---
 

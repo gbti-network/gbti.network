@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Burnt Orange Mandarin Collar Shirt"
 slug: nano-banana-headshot-burnt-orange-mandarin-collar
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a rust/burnt orange mandarin-collar shirt on a solid peachy-orange background."

@@ -1,5 +1,6 @@
 ---
 type: prompt
+kind: prompt
 title: "Nano Banana Headshot: Light Gray Suit, Checkered Tie, Greenery"
 slug: nano-banana-headshot-light-gray-suit-checkered-tie-greenery
 shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn headshot: a light gray suit with a checkered tie against blurred outdoor greenery."

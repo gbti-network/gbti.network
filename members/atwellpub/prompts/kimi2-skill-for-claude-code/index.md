@@ -22,6 +22,7 @@ tags:
   - drafting
   - workflow
 type: prompt
+kind: skill
 author: atwellpub
 ---
 

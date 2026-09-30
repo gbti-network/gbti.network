@@ -25,6 +25,7 @@ image: ./images/farleyfile.jpg
 publishedAt: '2026-09-17T20:05:27.945Z'
 updatedAt: '2026-09-18T17:01:16.461Z'
 type: prompt
+kind: skill
 author: atwellpub
 ---
 
