@@ -183,9 +183,7 @@ export const WELCOME_CSS = `
   .mgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
   .mcard { display:flex; align-items:center; gap:12px; padding:11px 13px; background:var(--wf-panel2);
     border:1.5px solid var(--wf-line); border-radius:7px; box-sizing:border-box; }
-  .mav { width:36px; height:36px; flex:none; border-radius:50%; color:#fff; display:grid; place-items:center;
-    font-weight:700; font-size:13px; overflow:hidden; position:relative; }
-  .mav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .mav { width:36px; height:36px; flex:none; border-radius:50%; display:block; overflow:hidden; position:relative; background:var(--wf-panel2); }
   .mi { flex:1; min-width:0; }
   .mi b { display:block; font-size:13.5px; font-weight:600; color:var(--wf-fg); line-height:1.15; }
   .mi span { display:block; color:var(--wf-mute); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

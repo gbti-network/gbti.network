@@ -102,9 +102,9 @@
     async function ensureClient() {
       if (client) return client;
       const signupBase = document.documentElement.dataset.signupBase || '';
-      const login = (() => { try { return JSON.parse(document.documentElement.dataset.gbtiMember || '{}').login || ''; } catch { return ''; } })();
+      const me = (() => { try { return JSON.parse(document.documentElement.dataset.gbtiMember || '{}'); } catch { return {}; } })();
       const { createWorkbenchClient } = await import('../../lib/workbench-client');
-      client = createWorkbenchClient({ signupBase, login });
+      client = createWorkbenchClient({ signupBase, login: String(me.login || ''), username: String(me.username || me.login || '') });
       return client;
     }
 

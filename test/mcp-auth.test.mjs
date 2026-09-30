@@ -61,6 +61,7 @@ test('confirmDeviceLogin: no local overrides -> membership unknown (fails open t
     pollToken: async () => ({ access_token: 'tok' }),
     makeRepoClient: () => ({ getAuthUser: async () => ({ login: 'gf', id: 9 }) }),
     resolveMembershipImpl: async () => { resolved = true; return { stripeStatus: 'none', membership: 'none' }; },
+    fetchStatusImpl: async () => ({ status: 'none', folder: null }),
     // no readFile -> can't read roles.yml/grandfathered.yml; a grandfather/staff member must NOT be cached as 'none'
     readFile: null,
   });

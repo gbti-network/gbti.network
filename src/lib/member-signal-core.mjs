@@ -2,6 +2,9 @@
 // `node --test` can import it (the test runner has no TS loader). No DOM. `memberSignalFromStatus` maps the public
 // /membership/status payload into the presentation-only MemberSignal; `selectIdentity` is the cookie-wins precedence.
 
+// A member folder, as the members index writes it (membership/hosted-author.mjs FOLDER_RE).
+const FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
 /**
  * Map the /membership/status payload ({ ok, github_id, login, status, canCurate, couponUntil }) into a
  * MemberSignal, or null when there is no signed-in member. Presentation only (it drives header chrome, never a
@@ -16,11 +19,15 @@ export function memberSignalFromStatus(payload) {
   // reveal role-gated items (e.g. Admin tools) to a superadmin on the cookie session.
   const membership = typeof payload.effectiveStatus === 'string' ? payload.effectiveStatus
     : (typeof payload.status === 'string' ? payload.status : 'unknown');
+  // sow-428: `username` is the member's FOLDER, members/<folder>/, their GBTI name. The Worker resolves it from the
+  // members index and it can differ from the GitHub `login` (a member given a GBTI name). Every own-content and self
+  // check reads `username`; `login` stays the GitHub account. An older Worker sends no folder: the login stands in.
+  const folder = typeof payload.folder === 'string' && FOLDER_RE.test(payload.folder) ? payload.folder : String(payload.login).toLowerCase();
   return {
     authenticated: true,
     login: String(payload.login),
     githubId: payload.github_id != null ? String(payload.github_id) : null,
-    username: String(payload.login),
+    username: folder,
     role: typeof payload.role === 'string' && payload.role ? payload.role : 'member',
     membership,
     // sow-185: the resolved paid TIER (none|member|creator) the Worker now folds server-side. Fail closed to

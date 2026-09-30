@@ -22,7 +22,7 @@ const headline = prof?.headline;
 const href = profileHref(author);
 ---
 <div class="author-box mx-auto">
-  <a href={href} class="ab-av" aria-label={name}><Avatar item={{ name, avatar: item?.avatar }} size={46} class="rounded-full" /></a>
+  <a href={href} class="ab-av" aria-label={name}><Avatar item={{ name, avatar: item?.avatar, seed: author }} size={46} class="rounded-full" /></a>
   <div class="ab-info">
     <p class="ab-eyebrow">Written by</p>
     <a href={href} class="ab-name">{name}</a>

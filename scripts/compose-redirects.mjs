@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { spliceOutboundRows, OUTBOUND_MARKER } from '../membership/outbound-link-edits.mjs'; // sow-359
 import { outboundRows } from './lib/outbound-links-store.mjs'; // sow-359: the tracked partner links, validated
+import { parseMembersIndex } from '../membership/hosted-author.mjs';
+import { memberAvatarRedirects } from '../membership/member-avatar.mjs'; // sow-428: /avatar/<folder> by account number
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const SEG = { posts: 'articles', projects: 'projects', products: 'projects', prompts: 'prompts' };
@@ -96,7 +98,7 @@ export function scanContent(root = ROOT) {
  * entry. Committed sources win; duplicate frontmatter sources keep the first; a self-redirect is dropped.
  * Pure over (committedText, items) so it unit-tests without a repo.
  */
-export function composeRedirects(committedText, items, outbound = []) {
+export function composeRedirects(committedText, items, outbound = [], avatars = []) {
   // sow-359: the tracked partner links land FIRST, at the marker's position, before anything else reads the
   // file. Two reasons it happens here and not after: Cloudflare takes the first matching rule, so position is
   // behaviour rather than tidiness, and `taken` below must see these paths so a frontmatter redirect can never
@@ -108,6 +110,14 @@ export function composeRedirects(committedText, items, outbound = []) {
       .filter((l) => l.trim() && !l.trim().startsWith('#'))
       .map((l) => l.trim().split(/\s+/)[0]),
   );
+  // sow-428: one row per member avatar (/avatar/<folder> -> the picture for their GitHub account number). A path the
+  // committed file already claims keeps its committed rule.
+  const avatarLines = [];
+  for (const [from, to, code] of avatars) {
+    if (taken.has(from)) continue;
+    taken.add(from);
+    avatarLines.push(`${from} ${to} ${code}`);
+  }
   const added = [];
   for (const it of items) {
     if (it.status !== 'published' || !it.redirectFrom.length) continue;
@@ -123,6 +133,10 @@ export function composeRedirects(committedText, items, outbound = []) {
     }
   }
   const out = [...lines];
+  if (avatarLines.length) {
+    out.push('# sow-428: member avatars by GitHub account number, from house/members-index.yml (scripts/compose-redirects.mjs).');
+    out.push(...avatarLines);
+  }
   if (added.length) {
     out.push('# SOW-112: frontmatter redirectFrom entries (composed by scripts/compose-redirects.mjs at build).');
     out.push(...added.sort());
@@ -130,11 +144,23 @@ export function composeRedirects(committedText, items, outbound = []) {
   return { text: out.join('\n') + '\n', added: added.length };
 }
 
+/**
+ * sow-428: the member avatar rows from house/members-index.yml. The index is never empty in this repo, so an
+ * unreadable or empty one fails the build rather than shipping a site where every member avatar is a 404.
+ */
+export function avatarRows(root = ROOT) {
+  const text = fs.readFileSync(path.join(root, 'house/members-index.yml'), 'utf8');
+  const index = parseMembersIndex(text);
+  if (!index.size) throw new Error('compose-redirects: house/members-index.yml parsed to no members, so no avatar could be served');
+  return memberAvatarRedirects(index);
+}
+
 export function main({ root = ROOT } = {}) {
   const committedFile = path.join(root, 'public/_redirects');
   const committed = fs.existsSync(committedFile) ? fs.readFileSync(committedFile, 'utf8') : '';
   const outbound = outboundRows(root);
-  const { text, added } = composeRedirects(committed, scanContent(root), outbound);
+  const avatars = avatarRows(root);
+  const { text, added } = composeRedirects(committed, scanContent(root), outbound, avatars);
   // The splice is silent when the marker is absent, which would drop every partner link without a word. The
   // store is never empty in this repo, so "we had rows and emitted none" is a hard failure, not a warning.
   if (outbound.length && !text.includes(`${outbound[0][0]} ${outbound[0][1]} 301`)) {
@@ -149,7 +175,7 @@ export function main({ root = ROOT } = {}) {
     return { added: 0 };
   }
   fs.writeFileSync(path.join(distDir, '_redirects'), text);
-  console.log(`compose-redirects: wrote dist/_redirects (${outbound.length} tracked partner link(s) spliced, ${added} frontmatter redirect(s) appended to the committed base).`);
+  console.log(`compose-redirects: wrote dist/_redirects (${outbound.length} tracked partner link(s) spliced, ${avatars.length} member avatar(s), ${added} frontmatter redirect(s) appended to the committed base).`);
   return { added };
 }
 

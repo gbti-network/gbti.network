@@ -201,7 +201,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
           <div class="card" style="padding:22px">
             <p class="eyebrow">Author</p>
             <div class="flex items-center g12 mt16">
-              <a href={profileHref(d.author)} class="shrink-0"><Avatar item={{ name: authorName, avatar: authorAvatar(d.author, profile?.avatar) }} size={46} /></a>
+              <a href={profileHref(d.author)} class="shrink-0"><Avatar item={{ name: authorName, avatar: authorAvatar(d.author, profile?.avatar), seed: d.author }} size={46} /></a>
               <div class="min-w-0">
                 <a href={profileHref(d.author)} class="link" style="font-weight:700;display:inline-flex">{authorName}</a>
                 {profile?.headline && <p class="body-sm muted line-clamp-2" style="margin-top:2px">{profile.headline}</p>}

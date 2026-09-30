@@ -1,11 +1,15 @@
 ---
-// A single member avatar. The on-brand letter disc is ALWAYS rendered as the base; the profile
-// image is layered on top and removed if it fails to load, so the disc shows through. Member avatars
-// are external (Gravatar/GitHub) URLs, so this uses a plain <img> (not astro:assets). For Gravatar we
-// force the default to `404` (instead of the generic "mystery person" silhouette) so a member with no
-// real avatar yields a failed image and the brand disc shows instead.
+// A single member avatar. The member's BLOBATAR (sow-428: a small creature drawn from their GBTI name, the same one
+// on every surface) is ALWAYS rendered as the base; the profile image is layered on top and removed if it fails to
+// load, so the creature shows through. It replaced the letter disc (owner, 2026-09-30: "We can use blobatar library
+// for anyone who does not have a linked avatar"). Member avatars are external (Gravatar/GitHub) URLs, so this uses a
+// plain <img> (not astro:assets). For Gravatar we force the default to `404` (instead of the generic "mystery person"
+// silhouette) so a member with no real avatar yields a failed image and the blobatar shows instead.
+import { blobSrc } from '../lib/blob-seeds.mjs'; // one shared file per known member, else an inline data URL
+
 interface Props {
-  item: { name: string; avatar?: string };
+  /** `seed` is the member's folder (GBTI name). Without it the blobatar is drawn from the display name. */
+  item: { name: string; avatar?: string; seed?: string };
   class?: string;
   size?: number;
   /** Optional native hover tooltip (e.g. the member's display name). */
@@ -13,17 +17,10 @@ interface Props {
 }
 const { item, class: cls = '', size, title } = Astro.props;
 const name = (item?.name || '?').trim();
-const initial = name.charAt(0).toUpperCase() || '?';
-
-// Deterministic on-brand disc colour from the name (matches the .lav-c* palette), so fallback discs
-// vary pleasantly instead of all being the same flat ink.
-const PALETTE = ['#1f9e5f', '#178a82', '#3f74c9', '#c9683b', '#c6892b', '#7a5cc0'];
-let h = 0;
-for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-const bg = PALETTE[h % PALETTE.length];
+const blob = blobSrc(item?.seed || name);
 
 // Force Gravatar (and any avatar URL carrying a `d=` default) to 404 when there is no real image, so
-// the disc underneath shows through. Other absolute image URLs (e.g. GitHub) are left untouched.
+// the blobatar underneath shows through. Other absolute image URLs (e.g. GitHub) are left untouched.
 function withFallback404(url?: string): string | undefined {
   if (!url) return undefined;
   try {
@@ -39,14 +36,14 @@ const src = withFallback404(item?.avatar);
 // gave up WIDTH to the text while keeping its height, so the circle rendered as a tall oval (52px measured at 43x52
 // in the share page's sidebar author card, beside a two-line headline). A fixed size is never negotiable.
 const dim = size ? `width:${size}px;height:${size}px;flex-shrink:0;` : '';
-const fontSize = size ? `font-size:${Math.round(size * 0.42)}px;` : '';
+const layer = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0';
 ---
 <span
   class:list={[cls]}
   title={title}
-  style={`position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:${bg};color:#fff;font-family:var(--f-display);font-weight:700;${dim}${fontSize}`}
+  style={`position:relative;display:inline-flex;overflow:hidden;background:var(--tint);${dim}`}
 >
-  <span aria-hidden="true">{initial}</span>
+  <img src={blob} alt="" aria-hidden="true" data-blob style={layer} />
   {src && (
     <img
       src={src}
@@ -54,7 +51,7 @@ const fontSize = size ? `font-size:${Math.round(size * 0.42)}px;` : '';
       loading="lazy"
       decoding="async"
       onerror="this.remove()"
-      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0"
+      style={layer}
     />
   )}
 </span>

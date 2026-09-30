@@ -89,7 +89,7 @@ const skill = kind === 'skillfile';
     const signupBase = document.documentElement.dataset.signupBase || '';
     const { createWorkbenchClient } = await import('../lib/workbench-client');
     const { setClient } = await import('../../client-ui/src/base.mjs');
-    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), username: String(signal.username || signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
     await import('../../client-ui/src/elements/gbti-locked-content.mjs');
   }
   upgradeLocked(currentIdentity(readMemberSignal()));

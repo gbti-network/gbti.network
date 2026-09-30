@@ -13,15 +13,6 @@ import { stripListStyleSuffix } from '../../client/src/list-attrs.mjs'; // sow-3
 // sow-159: 'mastodon' removed (retired) so a member's stored handle never propagates into directory JSON.
 const LINK_KEYS = ['github', 'website', 'x', 'bluesky', 'youtube', 'devto', 'reddit', 'linkedin', 'discord', 'instagram', 'threads', 'tiktok', 'twitch', 'facebook', 'dailydev', 'producthunt', 'rumble', 'soundcloud', 'mixcloud', 'spotify', 'bandcamp', 'wordpress', 'substack', 'medium', 'hashnode', 'peerlist', 'gitlab', 'stackoverflow', 'patreon', 'kofi', 'telegram'];
 
-/** Parse a lowercase github login from a profile links.github value (a URL or a bare handle), else undefined. */
-function githubLoginFromLinks(github) {
-  if (!github) return undefined;
-  const m = String(github).match(/github\.com\/([^/?#]+)/i);
-  if (m) return m[1].toLowerCase();
-  const h = String(github).trim().replace(/^@/, '');
-  return /^[a-z0-9-]+$/i.test(h) ? h.toLowerCase() : undefined;
-}
-
 /** Keep only the known, non-empty public link keys (drops unknown keys + blanks). Returns undefined when none. */
 function publicLinks(links) {
   if (!links || typeof links !== 'object') return undefined;
@@ -63,13 +54,14 @@ export function bioExcerpt(body, max = 280) {
 /**
  * @param {{ data: { username:string, displayName?:string, avatar?:string, headline?:string, tier?:string, links?:Record<string,string> } }[]} profiles
  *   ALREADY filtered to public + directory profiles by the caller.
- * @param {(login?:string)=>(string|undefined)} [avatarFallback]  github avatar by login, for profiles without a gravatar.
+ * @param {(folder?:string)=>(string|undefined)} [avatarFallback]  the avatar for a member FOLDER (sow-428: served by
+ *   their GitHub account number), for profiles without a gravatar. Never by the profile's links.github, which the
+ *   member types and which can name any account.
  * @returns {{ username:string, displayName:string, avatar:string|null, headline:string|null, tier:string, links?:Record<string,string>, roles?:string[], skills?:string[] }[]}
  */
 export function buildMembersDirectory(profiles, avatarFallback = () => undefined) {
   return (profiles || []).map((p) => {
     const d = p.data || {};
-    const login = githubLoginFromLinks(d.links?.github) || d.username;
     const links = publicLinks(d.links);
     // SOW-129: carry the PUBLIC roles + skills too (rendered on the profile + the reader author card, owner
     // decision 2026-07-19). Still NO location (kept off the public surfaces).
@@ -81,7 +73,7 @@ export function buildMembersDirectory(profiles, avatarFallback = () => undefined
     return {
       username: d.username,
       displayName: d.displayName || d.username,
-      avatar: d.avatar || avatarFallback(login) || null,
+      avatar: d.avatar || avatarFallback(d.username) || null,
       headline: d.headline || null,
       tier: d.tier || 'trial',
       ...(links ? { links } : {}),

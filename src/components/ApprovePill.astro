@@ -74,6 +74,7 @@ const path = visibility === 'members' ? contentRepoPath(type, owner, slug) : nul
         const client = createWorkbenchClient({
           signupBase,
           login: String(signal?.login || ''),
+          username: String(signal?.username || signal?.login || ''),
           githubId: signal?.githubId != null ? String(signal.githubId) : null,
           isSuperadmin: true,
         });

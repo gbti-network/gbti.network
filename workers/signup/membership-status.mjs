@@ -18,6 +18,7 @@ import { readCouponGrant } from './coupons.mjs'; // SOW-119: the coupon fast-pat
 import { usageBucket, overridesFromMirror } from '../../membership/usage-bucket.mjs'; // SOW-061: effective tier bucket
 import { buildEnvPriceTierMap, resolveEffectiveTier, grantTier } from '../../membership/tier-gate.mjs'; // sow-185: price map + override-aware paid tier
 import { TIER, meetsTier, isTier } from '../../membership/tiers.mjs'; // sow-185: the paid-tier axis (none < member < creator)
+import { memberFolderFor } from './member-folder.mjs'; // sow-428: the caller's GBTI name (folder), which can differ from the login
 
 // SOW-046 C: best-effort read of the caller's NEWS-CURATOR capability from the KV overrides mirror. Used ONLY to
 // hint the client UI (show the "Add to Discord" action); the Worker re-checks server-side on every publish, so a
@@ -44,7 +45,7 @@ function computeCanCurate(mirror, githubId) {
   return canEditNews(role, isNewsEditor(githubId, newsEditorsFromParsed(mirror.roles)));
 }
 
-export async function membershipStatus(request, env, { fetchImpl = globalThis.fetch, makeStripe = createStripeClient, fetchUser = githubFetchUser, verifyCookie, now = new Date() } = {}) {
+export async function membershipStatus(request, env, { fetchImpl = globalThis.fetch, makeStripe = createStripeClient, fetchUser = githubFetchUser, verifyCookie, now = new Date(), folderFor = memberFolderFor } = {}) {
   // SOW-061: a status check with no resolvable identity is an 'anonymous' usage event, recorded before the 401.
   const anon = () => recordUsage(env, { tier: 'anonymous', event: 'status_check', request });
   // sow-158 Phase 1b: the oracle also accepts the website session cookie (allowCookie). It is a GET, so there is
@@ -121,5 +122,9 @@ export async function membershipStatus(request, env, { fetchImpl = globalThis.fe
     }
   }
   recordUsage(env, { tier: effectiveStatus, event: 'status_check', request });
-  return { status: 200, body: { ok: true, github_id: githubId, login: login || null, status, effectiveStatus, role, canCurate, couponUntil, paidTier } };
+  // sow-428: `folder` is the caller's GBTI name, members/<folder>/, from the members index. It is what every client
+  // uses as "my folder" (paths, own-content lists, self checks); `login` stays the GitHub login. For a member whose
+  // name was never changed by hand the two agree, and an index outage falls back to the lowercased login.
+  const folder = await folderFor(env, githubId, login, { fetchImpl });
+  return { status: 200, body: { ok: true, github_id: githubId, login: login || null, folder, status, effectiveStatus, role, canCurate, couponUntil, paidTier } };
 }

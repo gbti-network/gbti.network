@@ -134,16 +134,17 @@ test('discord: the author mention resolves from the registry and the forward hit
   const postDiscord = async (channelId, item, { textOverride }) => { posts.push({ channelId, textOverride, mention: item.mention }); return { ok: true, id: 'msg9', url: 'https://discord.com/m9' }; };
   const forwards = [];
   const makeDiscord = () => ({ forwardChannelMessage: async (to, ref) => { forwards.push({ to, ref }); return { id: 'fwd1' }; } });
-  const fetchImpl = async (url) => {
-    if (String(url).startsWith('https://api.github.com/users/')) return { ok: true, async json() { return { id: 2002207 }; } };
-    throw new Error(`unexpected fetch ${url}`);
-  };
+  // sow-428: the author's id comes from the members index (folder -> github_id), never from GitHub's users API.
+  const fetchImpl = async (url) => { throw new Error(`unexpected fetch ${url}`); };
+  const asked = [];
+  const idForFolder = async (_env, folder) => { asked.push(folder); return folder === 'atwellpub' ? '2002207' : null; };
   const makeStripe = () => ({ findCustomerByGithubId: async (id) => (id === '2002207' ? { metadata: { discord_user_id: '777888999000' } } : null) });
   const env = { ...ENV_DISCORD, STRIPE_SECRET_KEY: 'rk', DISCORD_GUILD_ID: 'g1', SIGNUP_KV: kv };
   const r = await handleSyndicateNow(
     req({ destination: 'discord', item: ITEM, template: 'By {member-discord-username}: {title}', channelId: '111222333444555666', forwardChannelId: '999888777666555444' }),
-    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl },
+    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl, idForFolder },
   );
+  assert.deepEqual(asked, ['atwellpub'], 'the author folder was resolved through the members index');
   assert.equal(r.status, 200);
   assert.equal(posts[0].mention, '<@777888999000>'); // the registry mention reached the renderer
   assert.match(posts[0].textOverride, /^By <@777888999000>: CI Skill$/);
@@ -161,12 +162,13 @@ test('discord: the GUILD member search resolves the mention when the registry ha
     searchGuildMembers: async (guild, q) => (q === 'atwellpub' ? [{ user: { id: '424242424242', username: 'atwellpub' } }] : []),
     forwardChannelMessage: async () => ({ id: 'f' }),
   });
-  const fetchImpl = async (url) => (String(url).startsWith('https://api.github.com/') ? { ok: true, async json() { return { id: 2002207 }; } } : (() => { throw new Error('no'); })());
+  const fetchImpl = async () => { throw new Error('no'); };
+  const idForFolder = async () => '2002207';
   const makeStripe = () => ({ findCustomerByGithubId: async () => null }); // the registry misses (status: none)
   const env = { ...ENV_DISCORD, STRIPE_SECRET_KEY: 'rk', DISCORD_GUILD_ID: 'g1', SIGNUP_KV: kv };
   const r = await handleSyndicateNow(
     req({ destination: 'discord', item: ITEM, template: 'By {member-discord-username}', channelId: '111222333444555666' }),
-    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl },
+    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl, idForFolder },
   );
   assert.equal(r.status, 200);
   assert.equal(posts[0].textOverride, 'By <@424242424242>'); // the guild search produced a REAL mention

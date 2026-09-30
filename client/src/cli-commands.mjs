@@ -38,7 +38,10 @@ export async function cmdLogin(deps) {
   const { accessToken } = await deviceFlowLogin({ clientId, scope: activeScope(), onPrompt });
   const user = await makeRepoClient(accessToken).getAuthUser(); // { login, id }
   const repoPath = store.get('repoPath');
-  const username = repoPath ? usernameFromRepo(repoPath, user.id, user.login) : String(user.login).toLowerCase();
+  // sow-428: the folder is the member's GBTI name. Resolution order: a local clone's members index, then the folder
+  // the Worker names in the membership status below, then the lowercased login.
+  const indexed = repoPath ? usernameFromRepo(repoPath, user.id, '') : '';
+  let username = indexed || String(user.login).toLowerCase();
 
   store.set({ githubToken: accessToken, identity: { login: user.login, githubId: user.id, username } });
 
@@ -55,8 +58,9 @@ export async function cmdLogin(deps) {
           }
         }
       : undefined;
-    const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembership({ githubId: user.id, token: accessToken, signupBase, readFile: readLocal, fetch: fetchImpl });
+    const { stripeStatus, membership, couponUntil, paidTier, folder } = await resolveMembership({ githubId: user.id, token: accessToken, signupBase, readFile: readLocal, fetch: fetchImpl });
     store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' });
+    if (!indexed && folder && folder !== username) { username = folder; store.set({ identity: { login: user.login, githubId: user.id, username } }); }
   } catch {
     // leave membership unset (treated as 'unknown')
   }

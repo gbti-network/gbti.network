@@ -12,7 +12,7 @@ import path from 'node:path';
 import yaml from 'js-yaml';
 import { requestDeviceCode, pollForToken } from './auth-device.mjs';
 import { createRepoClient } from './github-repo.mjs';
-import { resolveMembership } from './membership.mjs';
+import { resolveMembership, fetchStripeStatus } from './membership.mjs';
 import { GITHUB_CLIENT_ID, SIGNUP_BASE, activeClientId, activeScope } from './signup-base.mjs';
 import { UPSTREAM } from './context.mjs';
 
@@ -27,8 +27,9 @@ function readLocal(repoPath) {
 }
 
 // Resolve the member's folder username: prefer the reconcile-maintained github_id -> username map
-// (members-index.yml), so a GitHub login RENAME still targets the original folder; fall back to the lowercased
-// login (the folder convention) when there is no local index. Matches cli-commands.usernameFromRepo.
+// (members-index.yml), so a folder that differs from the login (a GBTI name, sow-428) is still targeted; fall back
+// to the lowercased login (the folder convention) when there is no local index. Matches cli-commands.usernameFromRepo.
+// confirmDeviceLogin passes an empty login to learn whether the index answered, then asks the Worker.
 function resolveUsername(readFile, githubId, login) {
   if (readFile) {
     try {
@@ -67,6 +68,7 @@ export async function confirmDeviceLogin(ctx, {
   makeRepoClient = (token) => createRepoClient({ token, upstream: UPSTREAM }),
   pollToken = pollForToken,
   resolveMembershipImpl = resolveMembership,
+  fetchStatusImpl = fetchStripeStatus,
   readFile = readLocal(ctx.store.get('repoPath')),
   signupBase = SIGNUP_BASE,
   fetch = globalThis.fetch,
@@ -100,8 +102,11 @@ export async function confirmDeviceLogin(ctx, {
     return { pending: true, message: 'Signed in; verifying your GitHub identity hit a transient error. Call login_confirm again.' };
   }
 
-  const username = resolveUsername(readFile, user.id, user.login);
+  // sow-428: resolution order: a local clone's members index, then the folder the Worker names, then the login.
+  const indexed = resolveUsername(readFile, user.id, '');
+  let username = indexed || String(user.login || '').toLowerCase();
   ctx.store.set({ githubToken: token, identity: { login: user.login, githubId: user.id, username }, pendingDeviceLogin: null });
+  let workerFolder = null;
 
   // Membership drives the paid-only publish notice. effectiveStatus folds the git-native overrides
   // (ban > staff > grandfather > Stripe) on top of the Stripe-only oracle, so we MUST read those files to avoid
@@ -111,11 +116,18 @@ export async function confirmDeviceLogin(ctx, {
   const overridesReadable = readFile && readFile('house/roles.yml') != null;
   if (overridesReadable) {
     try {
-      const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembershipImpl({ githubId: user.id, token, signupBase, readFile, fetch });
+      const { stripeStatus, membership, couponUntil, paidTier, folder } = await resolveMembershipImpl({ githubId: user.id, token, signupBase, readFile, fetch });
       ctx.store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' });
+      workerFolder = folder ?? null;
     } catch { ctx.store.set({ membership: 'unknown' }); }
   } else {
     ctx.store.set({ membership: 'unknown' });
+    // No clone: the Worker is the only source of the folder. The membership it reports is not cached (see above).
+    if (!indexed) { try { workerFolder = (await fetchStatusImpl({ token, signupBase, fetch }))?.folder ?? null; } catch { workerFolder = null; } }
+  }
+  if (!indexed && workerFolder && workerFolder !== username) {
+    username = workerFolder;
+    ctx.store.set({ identity: { login: user.login, githubId: user.id, username } });
   }
   return { ok: true, login: user.login, username, membership: ctx.store.get('membership') ?? 'unknown' };
 }

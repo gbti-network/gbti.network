@@ -17926,25 +17926,28 @@ function canSave(membership) {
 function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
+function memberFolder(v) {
+  return typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(v) ? v : null;
+}
 async function fetchStripeStatus({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
+  if (!token || !signupBase) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none", folder: null };
   try {
     const res = await fetch2(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
+    if (!res.ok) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none", folder: null };
     const data = await res.json();
-    return { status: data?.status ?? "unknown", effectiveStatus: typeof data?.effectiveStatus === "string" ? data.effectiveStatus : "unknown", couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === "string" ? data.paidTier : "none" };
+    return { status: data?.status ?? "unknown", effectiveStatus: typeof data?.effectiveStatus === "string" ? data.effectiveStatus : "unknown", couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === "string" ? data.paidTier : "none", folder: memberFolder(data?.folder) };
   } catch {
-    return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
+    return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none", folder: null };
   }
 }
 async function resolveMembership({ githubId, token, signupBase, readFile, fetch: fetch2 = globalThis.fetch, now = Date.now() } = {}) {
-  const { status: stripeStatus, effectiveStatus: effectiveStatus2, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
+  const { status: stripeStatus, effectiveStatus: effectiveStatus2, couponUntil: workerCouponUntil, paidTier: workerPaidTier, folder } = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
   const membership = effectiveStatus2 && effectiveStatus2 !== "unknown" ? effectiveStatus2 : stripeStatus || "unknown";
   const couponUntil = membership === "banned" ? null : workerCouponUntil ?? null;
   const paidTier = membership === "banned" ? "none" : workerPaidTier ?? "none";
-  return { stripeStatus, membership, couponUntil, paidTier };
+  return { stripeStatus, membership, couponUntil, paidTier, folder: folder ?? null };
 }
 
 // membership/devlog-core.mjs
@@ -18088,8 +18091,10 @@ function buildExtContext(store) {
       }
       if (!membershipFlight) {
         devlog("membership", "resolving via oracle + house overrides");
-        membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) }).then(({ stripeStatus, membership, couponUntil, paidTier }) => {
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) }).then(({ stripeStatus, membership, couponUntil, paidTier, folder }) => {
           store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? "none" });
+          const cur = store.get("identity");
+          if (folder && cur && cur.githubId === id.githubId && cur.username !== folder) store.set({ identity: { ...cur, username: folder } });
           devlog("membership", "resolved", { stripeStatus, membership: membership ?? "unknown" });
           return membership ?? "unknown";
         }).catch((e) => {
@@ -21511,8 +21516,9 @@ async function completeLogin(store, { accessToken, refreshToken, expiresIn }) {
   });
   try {
     const reader = createGithubReader({ upstream: UPSTREAM, token: accessToken });
-    const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE3, readFile: (p) => reader.readFile(p) });
+    const { stripeStatus, membership, couponUntil, paidTier, folder } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE3, readFile: (p) => reader.readFile(p) });
     store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? "none" });
+    if (folder) store.set({ identity: { login: u.login, githubId: String(u.id), username: folder } });
   } catch {
   }
   return { ok: true, login: u.login };

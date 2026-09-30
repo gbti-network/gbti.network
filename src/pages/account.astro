@@ -169,7 +169,7 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
       if (nameEl) nameEl.textContent = '@' + s.login;
       if (av) { av.src = 'https://github.com/' + encodeURIComponent(s.login) + '.png?size=128'; av.alt = '@' + s.login; }
       if (statusEl) statusEl.textContent = LABELS[s.membership] || LABELS.unknown;
-      if (profileTile) { profileTile.href = '/members/' + encodeURIComponent(s.login) + '/'; profileTile.hidden = false; }
+      if (profileTile) { profileTile.href = '/members/' + encodeURIComponent(s.username || s.login) + '/'; profileTile.hidden = false; } // sow-428: the folder
       if (adminTile) adminTile.hidden = (RANK[s.role] ?? 0) < RANK.moderator; // staff-only, role from the oracle
       // sow-218 gated the composer on the top paid tier, because publishing a Share was a perk of it. sow-323
       // collapsed the two paid plans into one, so sharing belongs to EVERY paid member and the gate widened to
@@ -246,7 +246,7 @@ const { contentItems, membersItems, shareItems, membersShareCount, avatarIndex }
       const signupBase = document.documentElement.dataset.signupBase || '';
       const { createWorkbenchClient } = await import('../lib/workbench-client');
       const { setClient } = await import('../../client-ui/src/base.mjs');
-      const adapter = createWorkbenchClient({ signupBase, login: String(s.login), githubId: s.githubId != null ? String(s.githubId) : null });
+      const adapter = createWorkbenchClient({ signupBase, login: String(s.login), username: String(s.username || s.login), githubId: s.githubId != null ? String(s.githubId) : null });
       setClient(adapter);
       document.querySelectorAll('.hub-load').forEach((el) => el.setAttribute('hidden', ''));
       // Defining an element upgrades its static tag; each renders on the setClient subscriber fan-out.

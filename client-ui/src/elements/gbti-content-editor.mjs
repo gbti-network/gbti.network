@@ -26,6 +26,7 @@ import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-UR
 import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow, uniqueImageName } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break) + P3 unique upload names
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165/sow-268: reuse an image from the member's own published items into a frontmatter field or a gallery row
 import { loadStagedImages, referencedDraftImages } from '../../../src/lib/staged-images.mjs'; // a staged (uploaded, unpublished) image reads back from the Worker store, not from the CDN
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 // SOW-062 P6: inline icons for the edhead toolbar + section headers (the design's sprite is not in the shadow root).
 const _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -289,7 +290,7 @@ class GbtiContentEditor extends GbtiElement {
     // unreachable) shows no notice and does not block, matching the fail-open publish gate.
     let membership = 'unknown';
     let canStage = true; // SOW-082: Save-draft is allowed for trial+paid; 'unknown' fails OPEN like publish
-    let authorInitial = 'A'; // SOW-062 P6: the from-the-author avatar monogram
+    let authorFolder = ''; // SOW-062 P6: the from-the-author avatar. sow-428: the member's photo over their blobatar
     try {
       const st = await this.client.status();
       membership = st?.membership ?? 'unknown';
@@ -299,7 +300,7 @@ class GbtiContentEditor extends GbtiElement {
       // SOW-145: house content publishes directly (fork-staged house drafts are deferred), so Save-draft is
       // hidden in house scope; a superadmin editing a house item Publishes (which auto-merges via SOW-108).
       canStage = this.itemScope !== 'house' && (membership === 'unknown' || st?.canStageDrafts === true);
-      authorInitial = (st?.identity?.login || '').slice(0, 1).toUpperCase() || 'A';
+      authorFolder = String(st?.identity?.username || st?.identity?.login || '').toLowerCase();
     } catch {
       membership = 'unknown';
     }
@@ -397,7 +398,7 @@ class GbtiContentEditor extends GbtiElement {
     const authorSection = showAuthorNote ? `
              <section class="docsec" id="secAuthorNote">
                <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
-               <div class="authornote"><span class="an-av">${esc(authorInitial)}</span>
+               <div class="authornote"><span class="an-av">${avatarLayers(authorFolder || 'gbti')}</span>
                  <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
              </section>` : '';
     const discussionSection = (isPub && slug && ['post', 'project', 'prompt'].includes(this.type)) ? `
@@ -759,7 +760,7 @@ class GbtiContentEditor extends GbtiElement {
         .docsec-h .dsub { text-transform:none; letter-spacing:0; font-weight:500; color:var(--s-fg-mute); }
         #secVideo .inp { width:100%; box-sizing:border-box; }
         .authornote { display:flex; gap:12px; align-items:flex-start; }
-        .an-av { flex:none; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; color:#fff; background:var(--s-green); }
+        .an-av { position:relative; overflow:hidden; display:block; flex:none; width:34px; height:34px; border-radius:50%; background:var(--hover); }
         .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
         .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }

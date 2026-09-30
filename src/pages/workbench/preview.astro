@@ -620,13 +620,15 @@ const labelOf = CATEGORY_LABELS;
         if (!noteBox) return;
         try {
           const author = String(fm.author || '');
-          const { authorDisplay, authorHref } = await import('../../lib/authors.ts');
+          const { authorDisplay, authorHref, authorAvatar } = await import('../../lib/authors.ts');
           let avatarUrl = '';
           try {
             const idx = await fetch('/members-index.json').then((r) => (r.ok ? r.json() : null));
             avatarUrl = (idx?.members || []).find((m: any) => m?.username === author)?.avatar || '';
-          } catch { /* the letter disc is the documented fallback */ }
-          noteMeta = { name: authorDisplay(author), href: authorHref(author), avatarUrl };
+          } catch { /* the author's own address below, then the blobatar, are the fallbacks */ }
+          // sow-428: an author who is not in the directory still has their account-number picture, as on the page.
+          if (!avatarUrl) avatarUrl = authorAvatar(author) || '';
+          noteMeta = { name: authorDisplay(author), href: authorHref(author), avatarUrl, seed: author };
 
           // The draft already carries the note once it has been edited here or in the editor. Only go to the
           // committed file when it does not, so a staged edit is never masked by the older committed copy.
@@ -839,7 +841,7 @@ const labelOf = CATEGORY_LABELS;
             if (!who?.login) { clientP = null; return null; }
             return createWorkbenchClient({
               signupBase: base,
-              login: String(who.login),
+              login: String(who.login), username: String(who.username || who.login),
               githubId: who.githubId != null ? String(who.githubId) : null,
             });
           })();

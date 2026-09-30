@@ -216,7 +216,9 @@ export async function membershipAuthor(request, env, deps = {}) {
   // Open the PR (canonical-head: head is just the branch name). The gate resolves the member from the
   // hosted/<github_id>/ ref, gates paid + own-folder, and auto-merges; the Worker never merges.
   const title = String(payload?.title || `Content update from ${folder}`).slice(0, 256);
-  const body = `Hosted authoring: published on behalf of @${folder} (github_id ${githubId}) via the GBTI publishing app.`;
+  // sow-428: the folder is a GBTI name, not necessarily a GitHub login, so it is never written as an @mention: a
+  // member named `mike-conley` would otherwise ping whichever stranger owns that GitHub account.
+  const body = `Hosted authoring: published on behalf of ${folder} (github_id ${githubId}) via the GBTI publishing app.`;
   const pr = await ghJson(fetchImpl, `${GH}/repos/${upstream}/pulls`, {
     method: 'POST', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, head: branch, base: 'main', body, maintainer_can_modify: false }),

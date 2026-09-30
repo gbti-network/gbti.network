@@ -62,7 +62,7 @@ const isSlider = items.length > 1;
                   <p class="lead">{p.data.shortDescription ?? ''}</p>
                   <div class="pfeat-cta">
                     <a class="btn btn-primary" href={`/projects/${p.data.slug}/`}>View details <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#g-arrow"/></svg></a>
-                    <span class="prow-author"><Avatar item={{ name: authorDisplay(author), avatar: authorAvatar(author, profileByUser.get(author)?.avatar) }} class="shrink-0" size={22} />{profileByUser.has(author) ? <a href={profileHref(author)}>{authorDisplay(author)}</a> : <span>{authorDisplay(author)}</span>}</span>
+                    <span class="prow-author"><Avatar item={{ name: authorDisplay(author), avatar: authorAvatar(author, profileByUser.get(author)?.avatar), seed: author }} class="shrink-0" size={22} />{profileByUser.has(author) ? <a href={profileHref(author)}>{authorDisplay(author)}</a> : <span>{authorDisplay(author)}</span>}</span>
                   </div>
                 </div>
               </article>

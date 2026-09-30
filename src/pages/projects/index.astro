@@ -121,7 +121,7 @@ import DirectorySearch from '../../components/DirectorySearch.astro'; // sow-177
             return (
               <article class="cmt card">
                 <div class="cmt-head">
-                  <Avatar item={{ name: authorDisplay(cm.data.author), avatar: authorAvatar(cm.data.author) }} class="cmt-av" size={40} />
+                  <Avatar item={{ name: authorDisplay(cm.data.author), avatar: authorAvatar(cm.data.author), seed: cm.data.author }} class="cmt-av" size={40} />
                   <div class="cmt-who"><div class="cmt-name">{authorDisplay(cm.data.author)}</div>
                     <div class="cmt-meta"><span class="on">commented on</span> <a href={catalogHref(p)}>{p.data.title}</a></div></div>
                 </div>

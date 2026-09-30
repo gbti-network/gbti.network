@@ -35,6 +35,7 @@ import { targetSlugFor } from '../target-slug.mjs';
 import { SKILL_READER_CSS, loadSkillBox, loadMembersSkillBox, promptSlugOf } from '../skill-reader.mjs';
 import { wireSkillPage } from '../../../src/lib/skill-page.mjs';
 import { KIND_LABEL } from '../../../membership/prompt-kind.mjs';
+import { avatarLayers, memberAvatarUrl } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const SITE = 'https://gbti.network';
 // The kind marks, drawn inline because a shadow root cannot see the site's icon sprite (IconSprite's ico-kind-*).
@@ -48,8 +49,6 @@ const READER_CSS = () => CSS + SKILL_READER_CSS + '\n[data-skill-raw][hidden] { 
 const lc = (s) => String(s || '').toLowerCase();
 const isHouse = (a) => { const x = lc(a); return !x || x === 'gbti' || x === 'house'; };
 const authorName = (a) => (isHouse(a) ? 'GBTI Network' : a);
-const githubLogin = (a) => (lc(a) === 'gbti' || lc(a) === 'house' ? 'gbti-network' : a);
-const githubAvatar = (a) => (a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : '');
 
 const TYPE_LABEL = { post: 'Article', project: 'Project', prompt: 'Prompt', share: 'Share' };
 const dateStr = (ms) => { try { return ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''; } catch { return ''; } };
@@ -118,8 +117,7 @@ const CSS = `
 
   .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .meta .who { display:inline-flex; align-items:center; gap:8px; }
-  .meta .av { width:24px; height:24px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-size:11px; font-weight:700; }
-  .meta .av img { width:100%; height:100%; object-fit:cover; }
+  .meta .av { position:relative; width:24px; height:24px; border-radius:50%; overflow:hidden; flex:none; display:block; background:var(--hover); }
   .meta .who b { color:var(--fg); font-weight:600; }
   .meta .m-actions { margin-left:auto; display:inline-flex; align-items:center; gap:8px; }
   .meta gbti-favorite, .meta gbti-collection { display:inline-flex; }
@@ -195,8 +193,7 @@ const CSS = `
   .side { display:flex; flex-direction:column; gap:22px; }
   .author { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .author .a-top { display:flex; align-items:center; gap:12px; }
-  .author .a-av { width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-weight:700; }
-  .author .a-av img { width:100%; height:100%; object-fit:cover; }
+  .author .a-av { position:relative; width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:block; background:var(--hover); }
   .author .a-name { font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; }
   .author .a-user { font-size:12px; color:var(--muted); }
   .author .a-note { font-size:13.5px; line-height:1.5; color:var(--fg); margin:12px 0 0; }
@@ -209,7 +206,7 @@ const CSS = `
   /* the share meta stack: source favicon large, member avatar as the badge */
   .av.srcstack { position: relative; overflow: visible; }
   .av.srcstack .src-big { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; background: #fff; padding: 3px; box-sizing: border-box; }
-  .av.srcstack .src-mini { position: absolute; right: -5px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card, #1c1a21); object-fit: cover; }
+  .av.srcstack .src-mini { position: absolute; right: -5px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card, #1c1a21); overflow: hidden; display: block; background: var(--hover); }
   /* the sidebar source card (favicon + domain + credit + the open action) */
   .side-src { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .side-src .ss-fav { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; padding: 4px; box-sizing: border-box; }
@@ -433,14 +430,16 @@ class GbtiReader extends GbtiElement {
   _metaHtml(it, when) {
     const t = TYPE_LABEL[it.type] || it.type || '';
     const name = authorName(it.author);
-    const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
-    const ini = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
+    // sow-428: the directory's photo, else the author's photo by GitHub account number (addressed by their folder),
+    // over their blobatar.
+    const folder = lc(it.author) || 'gbti';
+    const avUrl = this._author?.entry?.avatar || memberAvatarUrl(folder);
     // Owner QA 2026-07-22: on a Share the SOURCE favicon is the larger circle and the member avatar
     // rides as the badge (mirrors the site share page).
     const srcFav = it.type === 'share' && it.url ? faviconFor(it.url) : '';
     const av = srcFav
-      ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt="">${avUrl ? `<img class="src-mini" src="${esc(avUrl)}" alt="">` : ''}</span>`
-      : `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
+      ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt=""><span class="src-mini">${avatarLayers(folder, avUrl)}</span></span>`
+      : `<span class="av">${avatarLayers(folder, avUrl)}</span>`;
     const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length
       ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join('')}</span>` : '';
     // SOW-013/064: favorite + add-to-collection, on the meta row (right-justified on desktop, a right-justified row
@@ -472,14 +471,13 @@ class GbtiReader extends GbtiElement {
     const a = this._author;
     if (!a || a.house) {
       return `<div class="author"><div class="a-top">`
-        + `<span class="a-av"><img src="${esc(githubAvatar('gbti'))}" alt=""></span>`
+        + `<span class="a-av">${avatarLayers('gbti')}</span>`
         + `<div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div>`
         + `<p class="a-note">Articles, projects, and prompts from the GBTI Network co-op.</p></div>`;
     }
     const e = a.entry || {};
     const name = e.displayName || it.author;
-    const avUrl = e.avatar || githubAvatar(it.author);
-    const ini = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
+    const avUrl = e.avatar || memberAvatarUrl(it.author);
     const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : '';
     // Follow control: paid viewer -> toggle; self -> an Edit deep-link into the WorkBench; otherwise a prompt.
     let follow = '';
@@ -522,7 +520,7 @@ class GbtiReader extends GbtiElement {
     for (const s of (Array.isArray(e.skills) ? e.skills : [])) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
     const tags = tagPills.length && it.type !== 'share' ? `<div class="tags">${tagPills.join('')}</div>` : '';
     return `<div class="author"><div class="a-top">`
-      + `<span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`
+      + `<span class="a-av">${avatarLayers(lc(it.author), avUrl)}</span>`
       + `<div>${it.type === 'share' ? '<div class="a-shared">Shared by</div>' : ''}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>`
       + `${note}${follow}${tags}${socials}</div>`;
   }

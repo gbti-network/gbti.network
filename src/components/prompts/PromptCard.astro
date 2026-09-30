@@ -88,7 +88,7 @@ const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.tar
 
   <div class="va-right">
     <a href={`/prompts/?author=${encodeURIComponent(d.author)}`} class="pmeta" data-tooltip={`See all prompts by ${authorName}`}>
-      <Avatar item={{ name: authorName, avatar }} class="lav" size={24} />
+      <Avatar item={{ name: authorName, avatar, seed: d.author }} class="lav" size={24} />
       <span class="who">{authorName}</span>
       {date && <><span class="dot-sep"></span><span class="when">{date}</span></>}
     </a>

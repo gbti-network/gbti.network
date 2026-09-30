@@ -11,6 +11,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { glyphFor, typeAccent } from '../cat-glyph.mjs';
 import { resolveAsset } from '../assets.mjs';
+import { avatarLayers, memberAvatarUrl } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 // sow-398 (owner, 2026-09-24): heart + Save on the cards, as the website's feed cards carry them.
 import { targetSlugFor, SAVABLE_TYPES } from '../target-slug.mjs';
 import './gbti-favorite.mjs';
@@ -31,16 +32,17 @@ export function faviconFor(urlOrHost) {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
 }
 
-// SOW-049: the meta-row avatar for a card. A MEMBER-authored item -> the author's GitHub avatar (the extension
-// convention; a profile gravatar can layer on later via an enriched authorAvatar field); a NEWS item -> the
-// publisher favicon. `title` is the name/source shown as a hover tooltip on the avatar. Pure.
+// SOW-049: the meta-row avatar for a card. A MEMBER-authored item -> the author's photo by GitHub account number,
+// addressed by their folder (sow-428: never github.com/<folder>.png, since a folder is a GBTI name that another
+// GitHub account can hold); a NEWS item -> the publisher favicon. `seed` draws the blobatar under the photo. `title`
+// is the name/source shown as a hover tooltip on the avatar. Pure.
 export function avatarFor(item = {}) {
   if (lc(item.type) === 'news') {
-    return { src: faviconFor(item.link || item.openHref), title: item.source || item.author || 'News' };
+    const title = item.source || item.author || 'News';
+    return { src: faviconFor(item.link || item.openHref), title, seed: title };
   }
-  const a = lc(item.author);
-  const login = (a === 'gbti' || a === 'house') ? 'gbti-network' : item.author;
-  return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : '', title: authorName(item.author) };
+  const folder = lc(item.author);
+  return { src: memberAvatarUrl(folder), title: authorName(item.author), seed: folder || authorName(item.author) };
 }
 
 // SOW-050/067: the RAW thumbnail field for a mode — the card box uses the larger thumbCard derivative; dense rows use
@@ -96,10 +98,8 @@ const CSS = `
   .meta .who { color:var(--fg); font-weight:500; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
   .meta .dot { width:3px; height:3px; border-radius:50%; background:var(--line); flex:none; }
   /* SOW-049: the meta avatar (member github avatar / news publisher favicon). The name/source is the title tooltip. */
-  .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center;
-    background:var(--hover); color:var(--muted); font-size:10px; font-weight:700; line-height:1; }
-  .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .av .ini { user-select:none; }
+  .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:block;
+    background:var(--hover); }
   .meta .ago { color:var(--muted); }
   /* sow-296: the display face and the website's title weight, so a feed row reads the same on both hosts. */
   .title { font-family:var(--font-display, var(--font-body)); font-weight:700; color:var(--fg); letter-spacing:-.01em; overflow-wrap:anywhere; }
@@ -260,18 +260,16 @@ class GbtiCardList extends GbtiElement {
   }
   // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
   _lock(item) { return item.visibility === 'members' && lc(item.type) !== 'news' ? `<span class="lock">${lockIco}Members</span>` : ''; }
-  // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
-  // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
+  // SOW-049: the meta leads with a small avatar (member -> their photo; news -> publisher favicon); the name/source
+  // is the avatar's hover tooltip (title), not a persistent label. A missing or broken image leaves the blobatar.
   _meta(item, { named = true } = {}) {
     const ago = relTime(item.createdAt ?? item.publishedAt);
     const av = avatarFor(item);
-    const ini = esc((av.title || '?').trim().charAt(0).toUpperCase() || '?');
-    const img = av.src ? `<img class="avimg" src="${esc(av.src)}" alt="" loading="lazy">` : '';
     // sow-296: the website card names the author beside the avatar, so this one does too. The compact row is the
     // exception (`named: false`): it is one line per item by definition and the title needs that width.
     const who = named && av.title ? `<span class="who">${esc(av.title)}</span>` : '';
     const sep = who && ago ? '<span class="dot"></span>' : '';
-    return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${who}${sep}${ago ? `<span class="ago">${esc(ago)}</span>` : ''}</span>`;
+    return `<span class="meta"><span class="av" title="${esc(av.title)}">${avatarLayers(av.seed, av.src)}</span>${who}${sep}${ago ? `<span class="ago">${esc(ago)}</span>` : ''}</span>`;
   }
   _open(item, i, cls) {
     // data-type drives the separation treatment (accent bar + tint + colored chip); --cbar carries the type
@@ -322,12 +320,12 @@ class GbtiCardList extends GbtiElement {
     if (!this._items.length) { this.set(this.css(CSS) + `<p class="empty">Nothing here yet.</p>`); return; }
     const body = this.mode === 'compact' ? this._compact(this._items) : this.mode === 'card' ? this._card(this._items) : this._detailed(this._items);
     this.set(this.css(CSS) + body);
-    // A content image (.cimg) or a meta avatar/favicon (.avimg) that 404s drops out so the glyph / initial disc
-    // shows through (CSP-safe capture-phase; img error does not bubble).
+    // A content image (.cimg) that 404s drops out so the glyph shows through (CSP-safe capture-phase; img error does
+    // not bubble). A meta avatar or favicon that fails is removed by the base (sow-428), leaving the blobatar.
     if (!this._wiredErr) {
       this.root?.addEventListener('error', (e) => {
         const t = e.target;
-        if (t?.tagName !== 'IMG' || !(t.classList?.contains('cimg') || t.classList?.contains('avimg'))) return;
+        if (t?.tagName !== 'IMG' || !t.classList?.contains('cimg')) return;
         // Owner, 2026-09-30: a news story is shown only with its own picture, so a news card whose picture fails to
         // load leaves the feed entirely rather than falling back to the glyph. Every other card keeps the glyph.
         const card = t.classList.contains('cimg') ? t.closest('[data-card][data-type="news"]') : null;

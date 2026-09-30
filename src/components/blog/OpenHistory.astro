@@ -60,14 +60,14 @@ function who(login: string | null, name: string) {
   // so its commits name gbti-network-publisher[bot] and nobody else; which person pressed publish is not in the
   // commit. Show the network itself, the identity the house and automation commits already use, rather than a
   // bot handle with an avatar GitHub does not serve.
-  if (isBotLogin(login)) return index.byUsername.get('gbtilabs') ?? { name: 'GBTI Network', avatar: GBTI_AVATAR };
+  if (isBotLogin(login)) return index.byUsername.get('gbtilabs') ?? { name: 'GBTI Network', avatar: GBTI_AVATAR, seed: 'gbtilabs' };
   const l = login ? login.toLowerCase() : null;
   const member = l ? (index.byLogin.get(l) ?? index.byUsername.get(l)) : null;
-  return { name: member?.name ?? name, avatar: member?.avatar ?? githubAvatarUrl(login) };
+  return { name: member?.name ?? name, avatar: member?.avatar ?? githubAvatarUrl(login), seed: member?.seed ?? l ?? name };
 }
 
 // Distinct ACCEPTED contributors (for the summary stack), in commit order. Only real contributions.
-const distinct: { name: string; avatar?: string }[] = [];
+const distinct: { name: string; avatar?: string; seed?: string }[] = [];
 const seenWho = new Set<string>();
 for (const c of commits) {
   if (roleOf(c.authorLogin) !== 'contributor') continue;
@@ -106,7 +106,7 @@ const plur = (n: number, s: string) => `${n} ${s}${n === 1 ? '' : 's'}`;
 // The network's own identity for the empty state. Prefer the gbtilabs profile now that house content lives
 // in a real member folder (sow-195), so this cannot drift from the byline the way a second hardcoded copy
 // would; the literal stays as the fallback for a build where that profile is absent.
-const houseItem = index.byUsername.get('gbtilabs') ?? { name: 'GBTI Network', avatar: GBTI_AVATAR };
+const houseItem = index.byUsername.get('gbtilabs') ?? { name: 'GBTI Network', avatar: GBTI_AVATAR, seed: 'gbtilabs' };
 const n = commits.length; // commits shown as history
 ---
 {show && (

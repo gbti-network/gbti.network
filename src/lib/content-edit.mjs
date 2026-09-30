@@ -6,10 +6,13 @@
 // Node-free (no Astro types, no DOM) so it stays node --test-covered; relocated out of project-page.mjs (which
 // used to be its only caller) now that every content-detail page (post/product/prompt) needs it, not just
 // projects.
+//
+// sow-428: ownership is by FOLDER (identity.username, the member's GBTI name), which can differ from the GitHub login.
 export function canEditItem(identity, owner) {
   if (!identity) return false;
   if (identity.role === 'superadmin') return true;
-  return !!identity.login && !!owner && identity.login.toLowerCase() === String(owner).toLowerCase();
+  const mine = identity.username || identity.login;
+  return !!mine && !!owner && String(mine).toLowerCase() === String(owner).toLowerCase();
 }
 
 /**

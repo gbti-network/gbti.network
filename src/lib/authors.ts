@@ -12,6 +12,7 @@
  * network wrote it, because it is editorial rather than somebody being quoted (owner, 2026-09-22).
  */
 import { NETWORK_AUTHORS, isNetworkAuthor } from './network-authors.mjs';
+import { memberAvatarUrl } from '../../membership/member-avatar.mjs';
 
 export { isNetworkAuthor };
 
@@ -28,14 +29,15 @@ export function authorHref(username: string): string {
 
 /** House (GBTI Network) avatar: the Gravatar for the gbti.labs account. Only the Gravatar HASH (a
  *  one-way digest) is stored, never the email, since the content repo is public. The Avatar component
- *  rewrites `d=` to 404, so the brand letter disc shows if the Gravatar is ever removed. The gbtilabs
+ *  rewrites `d=` to 404, so the blobatar shows if the Gravatar is ever removed. The gbtilabs
  *  profile carries this same hash, so the avatar is unchanged by the sow-195 move either way. */
 export const GBTI_AVATAR = 'https://secure.gravatar.com/avatar/061a44e977c1338f8b6d2e0e36b36f1a?s=512&d=mm';
 
-/** Avatar URL for a content author: the member's profile avatar if provided, else the house Gravatar
- *  for the network identity, else undefined (the Avatar component then renders a letter disc). */
+/** Avatar URL for a content author: the member's profile avatar if provided, else the house Gravatar for the network
+ *  identity, else the picture for the member's GitHub ACCOUNT NUMBER, served at /avatar/<folder> (sow-428). A folder
+ *  that is not enrolled 404s there, and the Avatar component's blobatar shows instead. */
 export function authorAvatar(username: string, profileAvatar?: string): string | undefined {
-  return profileAvatar ?? (NETWORK_AUTHORS.has(username) ? GBTI_AVATAR : undefined);
+  return profileAvatar ?? (NETWORK_AUTHORS.has(username) ? GBTI_AVATAR : (memberAvatarUrl(username, { site: '' }) || undefined));
 }
 
 /** Format a date the way the legacy site did: ordinal day + short month + year ("13th Oct 2025"). UTC

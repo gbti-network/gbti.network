@@ -360,7 +360,7 @@ for (const it of narrowed) {
   import { canReadMemberStream } from '../../lib/member-stream.mjs';
   import { mergeSharesIntoFeed } from '../../lib/feed-share-cards.mjs';
   import { authorDisplay, authorHref } from '../../lib/authors';
-  import { githubAvatarUrl } from '../../lib/avatars';
+  import { memberAvatarUrl } from '../../../membership/member-avatar.mjs'; // sow-428: by account number, never by name
   import { defaultFeatureImage } from '../../lib/feature-image';
 
   (() => {
@@ -379,7 +379,7 @@ for (const it of narrowed) {
         const { createWorkbenchClient } = await import('../../lib/workbench-client');
         const client = createWorkbenchClient({
           signupBase,
-          login: String(s!.login),
+          login: String(s!.login), username: String(s!.username || s!.login),
           githubId: s!.githubId != null ? String(s!.githubId) : null,
         });
         const r = await client.listShares({ limit: 100 });
@@ -387,7 +387,7 @@ for (const it of narrowed) {
         const pages = new Set((view!.dataset.profilePages || '').split(' ').filter(Boolean));
         mergeSharesIntoFeed(list, r?.items ?? [], {
           now: Date.now(),
-          avatarUrl: (login: string) => githubAvatarUrl(login, 64),
+          avatarUrl: (folder: string) => memberAvatarUrl(folder, { site: '' }),
           authorDisplay,
           authorHref: (u: string) => (pages.has(u) ? authorHref(u) : undefined),
           fallbackImage: defaultFeatureImage('share'),

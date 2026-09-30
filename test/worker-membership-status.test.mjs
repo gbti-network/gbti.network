@@ -35,7 +35,8 @@ test('verifies the token -> github_id and returns the Stripe-derived status (can
   // are additive fields the static site reads.)
   // sow-185: paidTier fails closed to 'none' with NO fresh mirror (the gate DENIES creator on an absent mirror,
   // so the oracle must not surface it either), even for a Stripe-paid member.
-  assert.deepEqual(r.body, { ok: true, github_id: '1', login: 'alice', status: 'paid', effectiveStatus: 'paid', role: 'member', canCurate: false, couponUntil: null, paidTier: 'none' });
+  // sow-428: `folder` is the member's GBTI name. With no members index reachable here it falls back to the login.
+  assert.deepEqual(r.body, { ok: true, github_id: '1', login: 'alice', folder: 'alice', status: 'paid', effectiveStatus: 'paid', role: 'member', canCurate: false, couponUntil: null, paidTier: 'none' });
 });
 
 test('sow-158: folds staff into effectiveStatus + returns the role (a superadmin with NO Stripe sub reads as paid)', async () => {

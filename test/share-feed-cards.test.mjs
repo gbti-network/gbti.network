@@ -36,7 +36,8 @@ test('shareCardHtml: the card carries the feed hooks, the members tag, the escap
 
 test('drift census: every class and data-* hook the client card emits exists in the Astro card, the favorite pill and the collection pill', () => {
   const html = shareCardHtml(members, { now: NOW, avatarUrl: (u) => `https://github.com/${u}.png`, fallbackImage: '/fb.png' }) + shareCardHtml(pub, { now: NOW, fallbackImage: '/fb.png' });
-  const astro = read('src/components/feeds/FeedCard.astro') + read('src/components/FavoriteButton.astro') + read('src/components/CollectionButton.astro'); // sow-323 Phase 3: the card moved out of FeedList
+  // sow-428: the built card draws its avatar through Avatar.astro, so its hooks (data-blob) count as the card's.
+  const astro = read('src/components/feeds/FeedCard.astro') + read('src/components/Avatar.astro') + read('src/components/FavoriteButton.astro') + read('src/components/CollectionButton.astro'); // sow-323 Phase 3: the card moved out of FeedList
   const classes = new Set([...html.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)));
   for (const c of classes) assert.ok(astro.includes(c), `class "${c}" is not one the Astro card emits`);
   const hooks = new Set([...html.matchAll(/\s(data-[a-z-]+)(?:=|\s|>)/g)].map((m) => m[1]));

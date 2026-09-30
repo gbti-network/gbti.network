@@ -133,6 +133,7 @@
       return createWorkbenchClient({
         signupBase: document.documentElement.dataset.signupBase || '',
         login: String(signal?.login || ''),
+          username: String(signal?.username || signal?.login || ''),
         githubId: signal?.githubId != null ? String(signal.githubId) : null,
         isSuperadmin: true,
       });

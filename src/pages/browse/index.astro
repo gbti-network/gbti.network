@@ -46,13 +46,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     function showSignedOut() { if (signedOut) signedOut.hidden = false; if (mountEl) mountEl.hidden = true; }
 
-    async function mount(login: string, githubId: string | null) {
+    async function mount(login: string, githubId: string | null, username: string) {
       if (signedOut) signedOut.hidden = true;
       if (mountEl) mountEl.hidden = false;
       const signupBase = document.documentElement.dataset.signupBase || '';
       const { createWorkbenchClient } = await import('../../lib/workbench-client');
       const { setClient } = await import('../../../client-ui/src/base.mjs');
-      setClient(createWorkbenchClient({ signupBase, login, githubId }));
+      setClient(createWorkbenchClient({ signupBase, login, username, githubId }));
       document.querySelector('.browse-load')?.setAttribute('hidden', '');
       // Defining the element upgrades the static tag; it renders on the setClient subscriber fan-out.
       await import('../../../client-ui/src/elements/gbti-browse.mjs');
@@ -67,7 +67,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const { resolveMemberSession } = await import('../../lib/member-gate');
       const s = await resolveMemberSession({ base });
       if (s.state === 'in') {
-        mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null);
+        mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null, String(s.payload.folder || s.payload.login)); // sow-428
       } else if (s.state === 'error') {
         // Transient (a deploy window / network blip) that survived the retries: the session is still valid, so do
         // NOT show the sign-in prompt (it reads as a false logout). Show a soft retry that keeps the session.

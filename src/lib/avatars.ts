@@ -7,6 +7,8 @@ export interface AvatarItem {
   name: string;
   href: string;
   avatar?: string;
+  /** sow-428: what the blobatar is drawn from, the member's folder (GBTI name), so it matches on every surface. */
+  seed?: string;
 }
 
 interface ProfileLike {
@@ -22,9 +24,10 @@ interface CommentLike {
   data: { author: string; targetType: string; targetSlug: string };
 }
 
-/** Canonical GitHub avatar for a login. GitHub serves every account's avatar at `github.com/<login>.png`
- *  and 404s for an unknown login (so the Avatar component falls back to its letter disc). Use this for a
- *  commit author or contributor who is not a network member (no profile gravatar of our own to show). */
+/** Canonical GitHub avatar for a GitHub LOGIN. GitHub serves every account's avatar at `github.com/<login>.png`
+ *  and 404s for an unknown login (so the Avatar component falls back to its blobatar). Use this ONLY for a real
+ *  GitHub login, such as a commit author or a contributor who is not a network member. A member FOLDER is a GBTI
+ *  name that can belong to an unrelated GitHub account (sow-428): use authorAvatar / memberAvatarUrl for those. */
 export function githubAvatarUrl(login?: string | null, size = 80): string | undefined {
   if (!login) return undefined;
   // A GitHub App's bot account (`<app>[bot]`, e.g. our gbti-network-publisher[bot], which authors every commit
@@ -58,7 +61,7 @@ export function buildAvatarIndex(profiles: ProfileLike[]): AvatarIndex {
   const byLogin = new Map<string, AvatarItem>();
   for (const p of profiles) {
     const d = p.data;
-    const item: AvatarItem = { name: d.displayName || d.username, href: authorHref(d.username), avatar: d.avatar };
+    const item: AvatarItem = { name: d.displayName || d.username, href: authorHref(d.username), avatar: authorAvatar(d.username, d.avatar), seed: d.username };
     byUsername.set(d.username, item);
     const login = githubLogin(d.links?.github);
     if (login) byLogin.set(login, item);
@@ -76,7 +79,7 @@ export function buildAvatarIndex(profiles: ProfileLike[]): AvatarIndex {
  * `a:not([href])` rule in gbti-v3.css renders as plain text.
  */
 export function authorItem(username: string, index: AvatarIndex): AvatarItem {
-  return index.byUsername.get(username) ?? { name: authorDisplay(username), avatar: authorAvatar(username) };
+  return index.byUsername.get(username) ?? { name: authorDisplay(username), avatar: authorAvatar(username), seed: username };
 }
 
 /** Resolve the frontmatter contributors[] (github logins) to deduped avatar items. */
@@ -87,7 +90,7 @@ export function contributorItems(contributors: ContributorLike[] | undefined, in
     const login = (c.login ?? '').toLowerCase();
     if (!login || seen.has(login)) continue;
     seen.add(login);
-    out.push(index.byLogin.get(login) ?? { name: c.login, href: `https://github.com/${c.login}`, avatar: githubAvatarUrl(c.login) });
+    out.push(index.byLogin.get(login) ?? { name: c.login, href: `https://github.com/${c.login}`, avatar: githubAvatarUrl(c.login), seed: login });
   }
   return out;
 }

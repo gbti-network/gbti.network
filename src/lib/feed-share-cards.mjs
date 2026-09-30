@@ -11,6 +11,7 @@
 // CollectionButton.astro and checks every class and data-* hook this template emits exists there. Change a
 // hook in the Astro card and that test names the one to change here.
 import { relativeTime } from './home-feed.mjs';
+import { memberBlob } from '../../membership/member-blob.mjs'; // sow-428: the picture under the photo
 
 export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -54,13 +55,13 @@ export function shareCardHtml(share, {
   const tags = (Array.isArray(share.tags) ? share.tags : []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
   const href = shareReadHref(slug);
   const av = avatarUrl(author);
-  const initial = escapeHtml((authorDisplay(author) || author || '?').replace(/^@/, '').charAt(0).toUpperCase() || '?');
+  const blob = memberBlob(author);
   const comments = Number.isFinite(Number(share.comments)) ? Number(share.comments) : null;
   const e = escapeHtml;
   return `<article class="feed-item${cover ? '' : ' nocover'}" data-fi data-kind="share" data-author="${e(author)}" data-comments="${comments ?? 0}" data-visibility="${members ? 'members' : 'public'}" data-tags="${e(tags)}" data-cats="" data-share-slug="${e(slug)}" data-ts="${ts}" data-live-share>
   <div class="feed-main">
     <div class="feed-meta">
-      <span class="av" style="position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:var(--fg-mute);color:#fff;font-family:var(--f-display);font-weight:700;width:26px;height:26px;flex-shrink:0;font-size:11px;border-radius:999px"><span aria-hidden="true">${initial}</span>${av ? `<img src="${e(av)}" alt="" loading="lazy" decoding="async" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0" />` : ''}</span>
+      <span class="av" style="position:relative;display:inline-flex;overflow:hidden;background:var(--tint);width:26px;height:26px;flex-shrink:0;border-radius:999px"><img src="${e(blob)}" alt="" aria-hidden="true" data-blob style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0" />${av ? `<img src="${e(av)}" alt="" loading="lazy" decoding="async" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0" />` : ''}</span>
       <span class="tmeta"><a class="who" href="${e(authorHref(author))}">${e(authorDisplay(author))}</a><span class="dotsep"></span>${e(relativeTime(ts, now))}</span>
       <span class="kind-tag kt-share">shared${domain ? ` · ${e(domain)}` : ''}</span>${members ? '<span class="kind-tag kt-members">members</span>' : ''}
     </div>

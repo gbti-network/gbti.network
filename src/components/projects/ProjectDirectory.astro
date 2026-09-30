@@ -97,10 +97,10 @@ const desc = (p: any) => p.data.shortDescription ?? '';
           </div>
           <div class="prow-author">
             <div class="author-hover">
-              <Avatar item={{ name: authorDisplay(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar) }} class="prow-av" size={44} />
+              <Avatar item={{ name: authorDisplay(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar), seed: p.data.author }} class="prow-av" size={44} />
               <div class="author-pop card" role="tooltip">
                 <div class="author-pop-top">
-                  <Avatar item={{ name: profileByUser.get(p.data.author)?.displayName ?? authorDisplay(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar) }} class="apop-av" size={46} />
+                  <Avatar item={{ name: profileByUser.get(p.data.author)?.displayName ?? authorDisplay(p.data.author), avatar: authorAvatar(p.data.author, profileByUser.get(p.data.author)?.avatar), seed: p.data.author }} class="apop-av" size={46} />
                   <div>
                     <span class="author-pop-name">{profileByUser.get(p.data.author)?.displayName ?? authorDisplay(p.data.author)}</span>
                     {profileByUser.get(p.data.author)?.headline && <span class="author-pop-head">{profileByUser.get(p.data.author)?.headline}</span>}

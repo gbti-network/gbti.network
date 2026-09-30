@@ -310,14 +310,17 @@ test('site-relative links are absolutized against ctx.siteUrl (external links pa
   assert.match(ext, /<a href="https:\/\/news\.example\/z"/);
 });
 
-test('a member item derives its author avatar from the github login; a news item has none', () => {
+// sow-428: by the member's FOLDER at gbti.network/avatar/<folder>, which redirects to their GitHub account number.
+// Never github.com/<folder>.png: a folder is a GBTI name another GitHub account can hold.
+test('a member item derives its author avatar from the member folder; a news item has none', () => {
   const issue = { layout: [
     { key: 'news', label: 'News', empty: false, items: [{ title: 'N', url: 'https://n/x', source: 'Src', date: 1 }] },
     { key: 'article', label: 'Articles', empty: false, items: [{ kind: 'article', title: 'T', url: '/p/', author: 'dikafei', authorName: 'Dika Fei', date: 1 }] },
   ] };
   const { html } = renderIssue(issue, {});
-  assert.match(html, /<img src="https:\/\/github\.com\/dikafei\.png\?size=32"[^>]*alt=""/);
-  assert.doesNotMatch(html, /github\.com\/Src\.png/, 'the news source is not treated as an avatar login');
+  assert.match(html, /<img src="https:\/\/gbti\.network\/avatar\/dikafei"[^>]*alt=""/);
+  assert.doesNotMatch(html, /github\.com\/[^"]*\.png/, 'no avatar is looked up on GitHub by name');
+  assert.doesNotMatch(html, /avatar\/src"/i, 'the news source is not treated as an avatar');
 });
 
 // ---- CAN-SPAM PRIMARY-PURPOSE GUARDS ----

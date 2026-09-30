@@ -27,6 +27,7 @@ import { postToChannel } from '../../clients/syndication/discord-channel.mjs';
 import { readSyndicationConfig, readContentChannels, putItem, getItem, removeFromPending, SYND_DEDUPE_KEY } from './syndication-store.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
+import { githubIdForFolder } from './member-folder.mjs'; // sow-428: folder -> github_id from the members index
 
 // The destinations the manual flow offers (SOW-088: the Reddit adapter landed, the Radle port).
 // sow-159: Mastodon retired (2026-07-28); dropped from the Manually-Syndicate destinations so no manual post can target it either.
@@ -109,24 +110,21 @@ export async function resolveGuildMention(env, item, { fetchImpl = globalThis.fe
   return null;
 }
 
-async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord }) {
-  const login = String(item.author || '').trim();
-  if (!login) return null;
-  // 1. The registry: github login -> github_id -> the Stripe customer's discord_user_id (SOW-002).
+async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord, idForFolder = githubIdForFolder }) {
+  const folder = String(item.author || '').trim();
+  if (!folder) return null;
+  // 1. The registry: folder -> github_id (the members index) -> the Stripe customer's discord_user_id (SOW-002).
+  // sow-428: the id comes from the members index, never from GitHub's users API by name. An author is a FOLDER,
+  // which can be a GBTI name that some unrelated GitHub account also holds, and looking that name up would have
+  // mentioned the stranger's Discord account, if they had one.
   try {
     if (env?.STRIPE_SECRET_KEY) {
-      const auth = request.headers.get('Authorization') || '';
-      const ghRes = await fetchImpl(`https://api.github.com/users/${encodeURIComponent(login)}`, {
-        headers: { 'User-Agent': 'gbti-syndicate/0.1', Accept: 'application/vnd.github+json', ...(auth ? { Authorization: auth } : {}) },
-      });
-      if (ghRes?.ok) {
-        const githubId = String((await ghRes.json())?.id ?? '');
-        if (githubId) {
-          const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
-          const customer = await stripe.findCustomerByGithubId(githubId);
-          const discordId = String(customer?.metadata?.discord_user_id ?? '').trim();
-          if (/^\d{5,}$/.test(discordId)) return `<@${discordId}>`;
-        }
+      const githubId = await idForFolder(env, folder, { fetchImpl });
+      if (githubId) {
+        const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
+        const customer = await stripe.findCustomerByGithubId(githubId);
+        const discordId = String(customer?.metadata?.discord_user_id ?? '').trim();
+        if (/^\d{5,}$/.test(discordId)) return `<@${discordId}>`;
       }
     }
   } catch { /* fall through to the guild search */ }
@@ -136,7 +134,7 @@ async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe,
 }
 
 export async function handleSyndicateNow(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, postDiscord = postToChannel, makeStripe = createStripeClient, makeDiscord = createDiscordClient, allowCookie = false } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, postDiscord = postToChannel, makeStripe = createStripeClient, makeDiscord = createDiscordClient, allowCookie = false, idForFolder = githubIdForFolder } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
   const g = await gate(request, env, { fetchImpl, authorize, allowCookie });
@@ -170,7 +168,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
 
   // A REAL Discord mention for the author when the registry knows them (fail-soft to the text fallback).
   if (destination === 'discord' && !item.mention) {
-    const mention = await resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord });
+    const mention = await resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord, idForFolder });
     if (mention) item = { ...item, mention };
   }
 

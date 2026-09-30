@@ -149,7 +149,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
     }
     function bounce() { location.replace('/account/'); }
 
-    async function mount(login: string, githubId: string | null, rank: number) {
+    async function mount(login: string, githubId: string | null, rank: number, username: string) {
       if (gate) gate.hidden = true;
       if (body) body.hidden = false;
       const signupBase = document.documentElement.dataset.signupBase || '';
@@ -158,7 +158,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
       // sow-161 B: pass isSuperadmin so the workbench client exposes the channel-map surface (discordChannels +
       // the manager reads/writes) ONLY to a superadmin. This is the role gate for the categories channel column:
       // the shared element decides to draw the column by a capability check, so the capability must be role-scoped.
-      setClient(createWorkbenchClient({ signupBase, login, githubId, isSuperadmin: rank >= RANK.superadmin }));
+      setClient(createWorkbenchClient({ signupBase, login, username, githubId, isSuperadmin: rank >= RANK.superadmin }));
       await import('../../client-ui/src/elements/gbti-admin.mjs'); // defines the element; it renders on the setClient fan-out
       // Config managers are admin+ only. Importing the module upgrades the static tag (which then renders on the
       // setClient fan-out); a moderator never imports it, so the tag stays inert and the card stays hidden.
@@ -246,7 +246,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
       if (s.state === 'in') {
         const rank = RANK[s.payload.role ?? 'member'] ?? 0;
         if (s.payload.login && rank >= RANK.moderator) {
-          mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null, rank);
+          mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null, rank, String(s.payload.folder || s.payload.login)); // sow-428
         } else {
           bounce(); // signed in but not staff -> no admin surface
         }

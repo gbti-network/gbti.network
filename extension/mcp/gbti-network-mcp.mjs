@@ -18249,25 +18249,28 @@ function canSave(membership) {
 function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
+function memberFolder(v) {
+  return typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(v) ? v : null;
+}
 async function fetchStripeStatus({ token, signupBase, fetch = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
+  if (!token || !signupBase) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none", folder: null };
   try {
     const res = await fetch(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
+    if (!res.ok) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none", folder: null };
     const data = await res.json();
-    return { status: data?.status ?? "unknown", effectiveStatus: typeof data?.effectiveStatus === "string" ? data.effectiveStatus : "unknown", couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === "string" ? data.paidTier : "none" };
+    return { status: data?.status ?? "unknown", effectiveStatus: typeof data?.effectiveStatus === "string" ? data.effectiveStatus : "unknown", couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === "string" ? data.paidTier : "none", folder: memberFolder(data?.folder) };
   } catch {
-    return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
+    return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none", folder: null };
   }
 }
 async function resolveMembership({ githubId, token, signupBase, readFile, fetch = globalThis.fetch, now = Date.now() } = {}) {
-  const { status: stripeStatus, effectiveStatus: effectiveStatus2, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch });
+  const { status: stripeStatus, effectiveStatus: effectiveStatus2, couponUntil: workerCouponUntil, paidTier: workerPaidTier, folder } = await fetchStripeStatus({ token, signupBase, fetch });
   const membership = effectiveStatus2 && effectiveStatus2 !== "unknown" ? effectiveStatus2 : stripeStatus || "unknown";
   const couponUntil = membership === "banned" ? null : workerCouponUntil ?? null;
   const paidTier = membership === "banned" ? "none" : workerPaidTier ?? "none";
-  return { stripeStatus, membership, couponUntil, paidTier };
+  return { stripeStatus, membership, couponUntil, paidTier, folder: folder ?? null };
 }
 
 // membership/devlog-core.mjs
@@ -18383,8 +18386,10 @@ function buildContext(store) {
       const id = store.get("identity");
       if (!token || !id?.githubId) return "unknown";
       if (!membershipFlight) {
-        membershipFlight = resolveMembership({ githubId: String(id.githubId), token, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) }).then(({ stripeStatus, membership, couponUntil, paidTier }) => {
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) }).then(({ stripeStatus, membership, couponUntil, paidTier, folder }) => {
           store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? "none" });
+          const cur = store.get("identity");
+          if (folder && cur && String(cur.githubId) === String(id.githubId) && cur.username !== folder && !store.get("repoPath")) store.set({ identity: { ...cur, username: folder } });
           return membership ?? "unknown";
         }).catch(() => "unknown").finally(() => {
           membershipFlight = null;
@@ -19702,6 +19707,7 @@ async function confirmDeviceLogin(ctx2, {
   makeRepoClient = (token) => createRepoClient({ token, upstream: UPSTREAM }),
   pollToken = pollForToken,
   resolveMembershipImpl = resolveMembership,
+  fetchStatusImpl = fetchStripeStatus,
   readFile = readLocal(ctx2.store.get("repoPath")),
   signupBase = SIGNUP_BASE,
   fetch = globalThis.fetch
@@ -19727,18 +19733,32 @@ async function confirmDeviceLogin(ctx2, {
     ctx2.store.set({ pendingDeviceLogin: { ...pending, accessToken: token } });
     return { pending: true, message: "Signed in; verifying your GitHub identity hit a transient error. Call login_confirm again." };
   }
-  const username = resolveUsername(readFile, user.id, user.login);
+  const indexed = resolveUsername(readFile, user.id, "");
+  let username = indexed || String(user.login || "").toLowerCase();
   ctx2.store.set({ githubToken: token, identity: { login: user.login, githubId: user.id, username }, pendingDeviceLogin: null });
+  let workerFolder = null;
   const overridesReadable = readFile && readFile("house/roles.yml") != null;
   if (overridesReadable) {
     try {
-      const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembershipImpl({ githubId: user.id, token, signupBase, readFile, fetch });
+      const { stripeStatus, membership, couponUntil, paidTier, folder } = await resolveMembershipImpl({ githubId: user.id, token, signupBase, readFile, fetch });
       ctx2.store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? "none" });
+      workerFolder = folder ?? null;
     } catch {
       ctx2.store.set({ membership: "unknown" });
     }
   } else {
     ctx2.store.set({ membership: "unknown" });
+    if (!indexed) {
+      try {
+        workerFolder = (await fetchStatusImpl({ token, signupBase, fetch }))?.folder ?? null;
+      } catch {
+        workerFolder = null;
+      }
+    }
+  }
+  if (!indexed && workerFolder && workerFolder !== username) {
+    username = workerFolder;
+    ctx2.store.set({ identity: { login: user.login, githubId: user.id, username } });
   }
   return { ok: true, login: user.login, username, membership: ctx2.store.get("membership") ?? "unknown" };
 }

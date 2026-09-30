@@ -71,7 +71,7 @@ const attrs = syndicateAttrs(Astro.props as Props);
     for (const a of Array.from(src.attributes)) el.setAttribute(a.name, a.value);
     el.client = createWorkbenchClient({
       signupBase,
-      login: String(identity.login),
+      login: String(identity.login), username: String(identity.username || identity.login),
       githubId: identity.githubId != null ? String(identity.githubId) : null,
       isSuperadmin: true,
     });

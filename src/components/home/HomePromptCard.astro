@@ -63,7 +63,7 @@ const avatar = authorAvatar(d.author, profile?.avatar);
     {body && <p class="hp-body">{body}</p>}
     <div class="hp-foot">
       <a class="hp-author" href={`/prompts/?author=${encodeURIComponent(d.author)}`}>
-        <Avatar item={{ name: authorName, avatar }} class="hp-av" size={24} />
+        <Avatar item={{ name: authorName, avatar, seed: d.author }} class="hp-av" size={24} />
         <span>{authorName}</span>
       </a>
       <div class="hp-actions">

@@ -47,9 +47,11 @@ test('the save deep-link into the extension is retired', () => {
   assert.equal(core.shouldDeepLinkSaveToExtension, undefined, 'shouldDeepLinkSaveToExtension no longer exists');
 });
 
-test('the client is built from the same three fields whoever asks for it', () => {
-  assert.deepEqual(websiteClientArgs(SIGNAL, 'https://signup.gbti.network'), { signupBase: 'https://signup.gbti.network', login: 'stefanoginella', githubId: '123' });
-  assert.deepEqual(websiteClientArgs({ login: 'x' }, undefined), { signupBase: '', login: 'x', githubId: null });
+// sow-428: plus the member's folder (their GBTI name), which the login stands in for only when the signal has none.
+test('the client is built from the same four fields whoever asks for it', () => {
+  assert.deepEqual(websiteClientArgs(SIGNAL, 'https://signup.gbti.network'), { signupBase: 'https://signup.gbti.network', login: 'stefanoginella', username: 'stefanoginella', githubId: '123' });
+  assert.deepEqual(websiteClientArgs({ login: 'x' }, undefined), { signupBase: '', login: 'x', username: 'x', githubId: null });
+  assert.equal(websiteClientArgs({ login: 'loraxian666', username: 'mike-conley' }, '').username, 'mike-conley', 'the folder, not the login');
 });
 
 test('cookieValue reads one cookie and nothing else', () => {

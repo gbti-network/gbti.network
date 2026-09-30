@@ -14,6 +14,7 @@ import { relTime } from '../time-core.mjs';
 import './gbti-comment-box.mjs';
 import { RANK } from '../mod-actions-core.mjs'; // SOW-071: the moderator+ gate for per-comment Hide
 import { echoNote } from '../comment-echo-core.mjs'; // a pending (echo) row's merge-status note, worded like the website's
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -21,8 +22,7 @@ const CSS = `
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
   .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
   .comment.reply { margin-left:16px; }
-  .comment .cav { flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:grid; place-items:center; color:var(--muted); font-size:10px; font-weight:700; margin-top:1px; }
-  .comment .cav img { width:100%; height:100%; object-fit:cover; }
+  .comment .cav { position:relative; flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:block; margin-top:1px; }
   .comment .cmain { min-width:0; flex:1; }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
   .cmeta .cwhen { white-space:nowrap; flex-shrink:0; }
@@ -62,13 +62,10 @@ const CSS = `
 
 const lc = (s) => String(s || '').toLowerCase();
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a || 'A member');
-// SOW-067: the commenter's GitHub avatar (gbti/house -> the org logo). A missing author falls back to initials.
-const ghLogin = (a) => (lc(a) === 'gbti' || lc(a) === 'house' ? 'gbti-network' : a);
-const ghAvatar = (a) => (a ? `https://github.com/${encodeURIComponent(ghLogin(a))}.png?size=48` : '');
+// SOW-067: the commenter's avatar. sow-428: their photo by GitHub account number, addressed by their folder (the
+// network identities map to the network's picture), over their blobatar, which a missing author gets alone.
 function avatarHtml(author) {
-  const url = ghAvatar(author);
-  const ini = esc((authorName(author) || '?').trim().charAt(0).toUpperCase() || '?');
-  return `<span class="cav">${url ? `<img src="${esc(url)}" alt="" loading="lazy">` : ini}</span>`;
+  return `<span class="cav">${avatarLayers(lc(author) || authorName(author), author ? undefined : '')}</span>`;
 }
 
 class GbtiDiscussion extends GbtiElement {
@@ -195,7 +192,7 @@ class GbtiDiscussion extends GbtiElement {
       // Admin+ hard-delete (the existing admin 'remove' rail); a member deletes their OWN comment (a real
       // canonical file only — an in-flight echo has no path and reaps on its own; own-delete deliberately
       // excludes the author-note intro, which projects/prompts REQUIRE).
-      const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
+      const own = this._me && String(c.author || '').toLowerCase() === String(this._me).toLowerCase() && c.path && c.id && !c.authorNote;
       const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}"${noteFlag}>${TRASH} Delete</button>`
         : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH} Delete</button>` : '';
       const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : '';

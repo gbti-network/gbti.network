@@ -47,6 +47,7 @@ export function websiteClientArgs(signal, signupBase) {
   return {
     signupBase: signupBase || '',
     login: String(signal.login),
+    username: String(signal.username || signal.login), // sow-428: the member's folder (GBTI name)
     githubId: signal.githubId != null ? String(signal.githubId) : null,
   };
 }

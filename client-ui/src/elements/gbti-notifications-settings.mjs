@@ -8,6 +8,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { MATRIX_ROWS, defaultMatrix, matrixToNotify, toggleCell, summarizeFollow, isCustomFollow, cellBlockedTip } from '../notify-matrix-core.mjs';
 import { BLOCKED_PILL_CSS, notifyPillHtml } from './notify-pill.mjs'; // sow-385: email notifications are off for now
 import { openNotifyModal } from './gbti-notify-modal.mjs';
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const SITE = 'https://gbti.network';
 const CHANNELS = [
@@ -36,7 +37,7 @@ const CSS = `
   .frow { display:grid; grid-template-columns:auto 1fr auto auto; gap:14px; align-items:center; padding:14px 24px; width:100%; border:0; background:transparent; color:var(--fg); font:inherit; text-align:left; cursor:pointer; }
   .frow + .frow { border-top:1px solid var(--line); }
   .frow:hover { background:var(--hover); }
-  .frow .av { width:38px; height:38px; border-radius:50%; background:var(--hover); object-fit:cover; }
+  .frow .av { position:relative; overflow:hidden; display:block; flex:none; width:38px; height:38px; border-radius:50%; background:var(--hover); }
   .frow .ft { min-width:0; }
   /* sow-386: the name and its summary are two stacked lines. As bare spans they ran together ("@nameEverything...")
      and, on a phone, the summary slid under the Default/Custom tag, since an inline span ignores its own overflow. */
@@ -135,7 +136,7 @@ class GbtiNotificationsSettings extends GbtiElement {
           const u = esc(f.username);
           const custom = isCustomFollow(f);
           return `<button type="button" class="frow" data-follow="${u}">
-            <img class="av" src="https://github.com/${u}.png?size=76" alt="" width="38" height="38" loading="lazy" />
+            <span class="av">${avatarLayers(f.username)}</span>
             <span class="ft"><span class="t">@${u}</span><span class="d">${esc(summarizeFollow(f, this._global))}</span></span>
             <span class="tag${custom ? ' custom' : ''}">${custom ? 'Custom' : 'Default'}</span>
             ${CHEV}

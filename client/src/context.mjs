@@ -79,7 +79,14 @@ export function buildContext(store) {
       if (!token || !id?.githubId) return 'unknown';
       if (!membershipFlight) {
         membershipFlight = resolveMembership({ githubId: String(id.githubId), token, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) })
-          .then(({ stripeStatus, membership, couponUntil, paidTier }) => { store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' }); return membership ?? 'unknown'; })
+          .then(({ stripeStatus, membership, couponUntil, paidTier, folder }) => {
+            store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' });
+            // sow-428: keep the stored folder (GBTI name) in step with the members index, unless a local clone's
+            // index named it (that one is read at sign-in and wins).
+            const cur = store.get('identity');
+            if (folder && cur && String(cur.githubId) === String(id.githubId) && cur.username !== folder && !store.get('repoPath')) store.set({ identity: { ...cur, username: folder } });
+            return membership ?? 'unknown';
+          })
           .catch(() => 'unknown')
           .finally(() => { membershipFlight = null; });
       }

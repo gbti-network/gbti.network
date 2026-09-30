@@ -27,6 +27,8 @@ export const AUTHOR_NOTE_BLOCK = {
   avatarSize: 44,
 };
 
+import { memberBlob } from '../../membership/member-blob.mjs'; // sow-428: the picture when there is no photo
+
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
@@ -46,12 +48,15 @@ export function introPathFor(repoPath, slug) {
  * The pinned block as an HTML string. `bodyHtml` is already-rendered markdown and is injected as-is (the
  * caller renders it through the same renderMarkdown the preview body uses); everything else is escaped here.
  */
-export function buildAuthorNoteHtml({ name, href, avatarUrl, bodyHtml } = {}) {
+export function buildAuthorNoteHtml({ name, href, avatarUrl, bodyHtml, seed } = {}) {
   const b = AUTHOR_NOTE_BLOCK;
-  const initial = String(name ?? '?').trim().charAt(0).toUpperCase() || '?';
-  const avatar = avatarUrl
-    ? `<img src="${esc(avatarUrl)}" alt="" width="${b.avatarSize}" height="${b.avatarSize}" class="rounded-full" style="width:${b.avatarSize}px;height:${b.avatarSize}px;object-fit:cover" />`
-    : `<span class="rounded-full" style="width:${b.avatarSize}px;height:${b.avatarSize}px;display:inline-flex;align-items:center;justify-content:center;background:var(--ink-3);font-weight:700">${esc(initial)}</span>`;
+  // sow-428: the author's blobatar (drawn from their folder when the caller knows it) sits under the photo, and a photo
+  // that is missing or fails to load leaves it showing, as on the published page (Avatar.astro).
+  const layer = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0';
+  const avatar = `<span class="rounded-full" style="position:relative;display:inline-flex;overflow:hidden;width:${b.avatarSize}px;height:${b.avatarSize}px;flex-shrink:0;background:var(--tint)">`
+    + `<img src="${esc(memberBlob(seed || name))}" alt="" aria-hidden="true" data-blob style="${layer}" />`
+    + (avatarUrl ? `<img src="${esc(avatarUrl)}" alt="" width="${b.avatarSize}" height="${b.avatarSize}" onerror="this.remove()" style="${layer}" />` : '')
+    + `</span>`;
   return `<article class="${b.card}" style="${b.cardStyle}">`
     + `<div class="${b.head}">`
     + `<a href="${esc(href)}" class="shrink-0">${avatar}</a>`

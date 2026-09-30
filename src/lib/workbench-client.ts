@@ -135,12 +135,15 @@ function mapDraftRecord(rec: any) {
 /**
  * Build the website WorkBench client.
  * @param signupBase the signup Worker origin (stamped on <html data-signup-base> by BaseLayout).
- * @param login the signed-in member's GitHub login (the folder username; drives the own-content filter).
+ * @param login the signed-in member's GitHub login.
+ * @param username the member's FOLDER, members/<username>/, their GBTI name (sow-428). It drives every path this
+ *   client writes and the own-content filter. It can differ from the login, so it is never derived from it here;
+ *   the login stands in only for a caller that has no folder to pass.
  * @param githubId the signed-in member's immutable id (fallback identity; the session cookie is authoritative).
  */
-export function createWorkbenchClient({ signupBase, login, githubId = null, isSuperadmin = false }: { signupBase: string; login: string; githubId?: string | null; isSuperadmin?: boolean }) {
+export function createWorkbenchClient({ signupBase, login, username = '', githubId = null, isSuperadmin = false }: { signupBase: string; login: string; username?: string; githubId?: string | null; isSuperadmin?: boolean }) {
   const base = String(signupBase || '').replace(/\/$/, '');
-  const user = String(login || '');
+  const user = String(username || login || '').toLowerCase();
   // sow-158 image upload: staged image binaries (base64), keyed by their own-folder repo path. stageImage fills
   // this; publish() flushes the ones the content actually references into the SAME author PR, so the image + the
   // .md land atomically and the path resolves on merge.
@@ -670,7 +673,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
       const membership = typeof payload?.effectiveStatus === 'string' ? payload.effectiveStatus
         : (typeof payload?.status === 'string' ? payload.status : 'unknown');
       const role = typeof payload?.role === 'string' && payload.role ? payload.role : 'member';
-      const lg = payload?.login || user;
+      const lg = payload?.login || login || user;
+      // sow-428: the folder (GBTI name) the Worker resolved, else the one this client was built with.
+      const folder = typeof payload?.folder === 'string' && payload.folder ? String(payload.folder) : user;
       const gid = payload?.github_id != null ? String(payload.github_id) : githubId;
       return {
         authenticated: payload?.ok === true,
@@ -686,9 +691,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
         // reads `identity.username` and returns false without it, so omitting it makes the in-place edit
         // panel invisible to the folder OWNER as well as to everyone else, with no error anywhere. The
         // extension host supplies it; the website host did not, which is why the panel never worked here.
-        identity: { login: lg, username: lg, githubId: gid },
+        identity: { login: lg, username: folder, githubId: gid },
         login: lg,
-        username: lg,
+        username: folder,
         githubId: gid,
       };
     },

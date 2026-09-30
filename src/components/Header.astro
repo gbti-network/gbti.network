@@ -340,7 +340,7 @@ import { isGithubLogin } from '../lib/github-login.mjs'; // sow-369: the hint is
     // richer one (isSuperadmin attaches the Channels methods). Whichever setClient landed last won, so in 19 of 30
     // runs of the built admin page the header's replaced it and the Channels manager lost its methods. The bell
     // needs only the shared methods, which every page's client carries.
-    if (!getClient()) setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+    if (!getClient()) setClient(createWorkbenchClient({ signupBase, login: String(signal.login), username: String(signal.username || signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
     await import('../../client-ui/src/elements/gbti-notification-bell.mjs');
   }
   upgradeBell(currentIdentity(readMemberSignal()));
@@ -376,7 +376,7 @@ import { isGithubLogin } from '../lib/github-login.mjs'; // sow-369: the hint is
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', 'Social Queue');
     const el = document.createElement('gbti-social-queue') as HTMLElement & { client?: unknown };
-    el.client = createWorkbenchClient({ signupBase, login: String(sig.login), githubId: sig.githubId != null ? String(sig.githubId) : null, isSuperadmin: true });
+    el.client = createWorkbenchClient({ signupBase, login: String(sig.login), username: String(sig.username || sig.login), githubId: sig.githubId != null ? String(sig.githubId) : null, isSuperadmin: true });
     overlay.appendChild(el);
     const close = () => {
       overlay.remove();

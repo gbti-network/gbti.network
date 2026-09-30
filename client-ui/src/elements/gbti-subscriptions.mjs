@@ -10,6 +10,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 // sow-227: the Topics sub-tab renders <gbti-topic-picker>, and on the website nothing else on /workbench/ defines it
 // (only the extension's barrel import did), so the sub-tab rendered blank there. The element imports it itself now.
 import './gbti-topic-picker.mjs';
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
@@ -25,7 +26,7 @@ const CSS = `
   ul.rows { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:11px; padding:9px 2px; border-top:1px solid var(--line); }
   .row:first-child { border-top:0; }
-  .av { width:30px; height:30px; border-radius:50%; flex:none; object-fit:cover; background:var(--hover); }
+  .av { position:relative; overflow:hidden; display:block; width:30px; height:30px; border-radius:50%; flex:none; background:var(--hover); }
   .ico { width:30px; height:30px; border-radius:8px; flex:none; display:flex; align-items:center; justify-content:center; background:var(--hover); color:var(--muted); font-weight:800; font-size:13px; }
   .row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; font-size:14px; color:var(--fg); text-decoration:none; }
   .row .nm .d { display:block; font-weight:500; font-size:12px; color:var(--muted); }
@@ -112,7 +113,6 @@ class GbtiSubscriptions extends GbtiElement {
     </div>`);
 
     this.$$('[data-view]').forEach((b) => b.addEventListener('click', () => this._setView(b.dataset.view)));
-    this.$$('[data-avfor]').forEach((img) => img.addEventListener('error', () => { img.style.visibility = 'hidden'; }, { once: true }));
     this.$$('[data-unfollow]').forEach((b) => b.addEventListener('click', () => this._unfollow(b.dataset.unfollow)));
     this.$$('[data-unfollowchan]').forEach((b) => b.addEventListener('click', () => this._unfollowChannel(b.dataset.unfollowchan)));
   }
@@ -127,7 +127,7 @@ class GbtiSubscriptions extends GbtiElement {
     const rows = this._follows.map((f) => {
       const u = esc(f.username);
       return `<li class="row">
-        <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
+        <span class="av">${avatarLayers(f.username)}</span>
         <a class="nm" href="${SITE}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;

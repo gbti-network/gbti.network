@@ -12,10 +12,10 @@ import { loadMembersDirectory } from '../members-index.mjs';
 import { memberContent, MEMBER_SECTIONS } from '../member-view-core.mjs';
 import './gbti-subscribe.mjs'; // the follow toggle (reused verbatim)
 import './gbti-card-list.mjs'; // the content section renderer
+import { avatarLayers, memberAvatarUrl } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
-const githubAvatar = (login) => (login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : '');
 // SOW-129 role humanizer (mcp-developer -> "MCP Developer"; short tokens uppercase).
 const prettyRole = (s) => String(s || '').split(/[-_]/).filter(Boolean).map((w) => (w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
 const USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
@@ -24,9 +24,8 @@ const CSS = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
-  .av { flex:0 0 auto; width:96px; height:96px; border-radius:50%; overflow:hidden; display:grid; place-items:center;
-    background:var(--panel, #f2f2f5); border:1px solid var(--line, #e5e5ea); font-weight:800; font-size:34px; color:var(--muted, #6c6976); }
-  .av img { width:100%; height:100%; object-fit:cover; }
+  .av { position:relative; flex:0 0 auto; width:96px; height:96px; border-radius:50%; overflow:hidden; display:block;
+    background:var(--panel, #f2f2f5); border:1px solid var(--line, #e5e5ea); }
   .id { flex:1 1 auto; min-width:0; }
   .name { font-family:var(--font-display, inherit); font-weight:800; font-size:24px; line-height:1.15; color:var(--fg, #25232b); }
   .user { color:var(--muted, #6c6976); font-size:13.5px; margin-top:1px; }
@@ -95,10 +94,11 @@ class GbtiMemberView extends GbtiElement {
   _heroHtml() {
     const username = this._username;
     const e = this._entry || {};
-    const login = e.username || username;
-    const avUrl = resolveAsset(e.avatar) || githubAvatar(login);
+    // sow-428: the folder, never a GitHub login. The photo is the profile's own, else the one for the member's GitHub
+    // account number, over their blobatar.
+    const folder = String(e.username || username || '').toLowerCase();
+    const avUrl = resolveAsset(e.avatar) || memberAvatarUrl(folder);
     const name = e.displayName || username;
-    const ini = esc((name || '?').charAt(0).toUpperCase());
     const headline = e.headline ? `<p class="headline">${esc(e.headline)}</p>` : '';
     // SOW-143: the bio is a build-time PLAIN-TEXT excerpt on the directory entry; render ESCAPED, never as HTML.
     const bio = e.bio ? `<p class="bio">${esc(e.bio)}</p>` : '';
@@ -139,7 +139,7 @@ class GbtiMemberView extends GbtiElement {
       ? `<div class="note">This member has not published a public profile. You can still follow them.</div>` : '';
 
     return `<div class="hero">`
-      + `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`
+      + `<span class="av">${avatarLayers(folder || name, avUrl)}</span>`
       + `<div class="id"><div class="name">${esc(name)}</div><div class="user">@${esc(username)}</div>`
       + `${headline}${bio}${since}${actions}${tags}${socials}</div></div>${note}`;
   }

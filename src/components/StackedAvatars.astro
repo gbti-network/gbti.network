@@ -1,8 +1,10 @@
 ---
 // Overlapping circular avatars crediting the people behind a piece of content: the author plus
 // accepted contributors plus commenters. Capped with a +N overflow chip. Size class strings are
-// literal so Tailwind keeps them.
+// literal so Tailwind keeps them. sow-428: each is the person's blobatar with their photo on top; a photo that is
+// missing or fails to load leaves the blobatar showing (it replaced the letter disc).
 import type { AvatarItem } from '../lib/avatars';
+import { blobSrc } from '../lib/blob-seeds.mjs'; // one shared file per known member, else an inline data URL
 
 interface Props {
   items: AvatarItem[];
@@ -16,18 +18,18 @@ const dim = SIZES[size];
 
 const shown = items.slice(0, max);
 const overflow = items.length - shown.length;
-const initial = (name: string) => (name?.trim()?.charAt(0) || '?').toUpperCase();
+const ring = 'border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.12);background:var(--tint)';
+const layer = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0';
 ---
 {items.length > 0 && (
   <div class="flex items-center" aria-label={`${items.length} ${items.length === 1 ? 'person' : 'people'} credited`}>
     <div class="flex -space-x-2">
       {shown.map((it) => (
         <a href={it.href} data-tooltip={it.name} aria-label={it.name} class="relative inline-block transition-transform hover:z-10 hover:-translate-y-0.5">
-          {it.avatar ? (
-            <img src={it.avatar} alt={it.name} loading="lazy" class={`${dim} rounded-full object-cover`} style="border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.12)" />
-          ) : (
-            <span class={`${dim} grid place-items-center rounded-full font-bold`} style="background:var(--ink);color:#fff;border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.12)">{initial(it.name)}</span>
-          )}
+          <span class={`${dim} relative block overflow-hidden rounded-full`} style={ring}>
+            <img src={blobSrc(it.seed || it.name)} alt="" aria-hidden="true" data-blob style={layer} />
+            {it.avatar && <img src={it.avatar} alt={it.name} loading="lazy" onerror="this.remove()" style={layer} />}
+          </span>
         </a>
       ))}
       {overflow > 0 && (

@@ -73,12 +73,12 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
       return null;
     }
 
-    async function mount(login: string, githubId: string | null) {
+    async function mount(login: string, githubId: string | null, username: string) {
       const signupBase = document.documentElement.dataset.signupBase || '';
       // Lazy + page-scoped: the adapter and the client-ui bundle load ONLY here, ONLY for a signed-in member.
       const { createWorkbenchClient } = await import('../lib/workbench-client');
       const { setClient } = await import('../../client-ui/src/base.mjs');
-      const adapter = createWorkbenchClient({ signupBase, login, githubId });
+      const adapter = createWorkbenchClient({ signupBase, login, username, githubId });
       // Set the client BEFORE the elements upgrade, so <gbti-lock-gate>'s one-shot connectedCallback checks
       // membership with the client already present (it does not re-check on the setClient fan-out).
       setClient(adapter);
@@ -102,7 +102,7 @@ import HomeShareModal from '../components/home/HomeShareModal.astro'; // sow-225
       const s = await resolveMemberSession({ base });
       if (s.state === 'in') {
         renderQuick(s.payload); // sow-225: the quick actions, gated on the resolved session
-        mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null);
+        mount(String(s.payload.login), s.payload.github_id != null ? String(s.payload.github_id) : null, String(s.payload.folder || s.payload.login)); // sow-428: the folder, the member's GBTI name
       } else if (s.state === 'error') {
         document.querySelector('[data-wb-loading]')?.setAttribute('hidden', '');
         (document.querySelector('[data-wb-error]') as HTMLElement | null)?.removeAttribute('hidden');

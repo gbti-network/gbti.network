@@ -46,16 +46,20 @@ test('faviconFor derives a favicon URL from a news article link or bare host', (
   assert.equal(faviconFor(undefined), '');
 });
 
-test('avatarFor: a member item -> github avatar + the name as the tooltip', () => {
+// sow-428: a member's photo is addressed by their folder and served by their GitHub ACCOUNT NUMBER. Never by name on
+// github.com, where a GBTI name like mike-conley belongs to an unrelated account.
+test('avatarFor: a member item -> their gbti.network avatar by folder, a blobatar seed, and the name as the tooltip', () => {
   const m = avatarFor({ type: 'post', author: 'alice' });
-  assert.match(m.src, /github\.com\/alice\.png/);
+  assert.equal(m.src, 'https://gbti.network/avatar/alice');
+  assert.doesNotMatch(m.src, /github\.com/);
+  assert.equal(m.seed, 'alice');
   assert.equal(m.title, 'alice');
 });
 
-test('avatarFor: a gbti/house item -> the GBTI org avatar + "GBTI Network" tooltip', () => {
+test('avatarFor: a gbti/house item -> the network avatar + "GBTI Network" tooltip', () => {
   for (const author of ['gbti', 'house', 'GBTI']) {
     const h = avatarFor({ type: 'project', author });
-    assert.match(h.src, /github\.com\/gbti-network\.png/);
+    assert.equal(h.src, `https://gbti.network/avatar/${author.toLowerCase()}`);
     assert.equal(h.title, 'GBTI Network');
   }
 });

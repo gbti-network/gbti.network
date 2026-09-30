@@ -195,18 +195,23 @@ export function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
 
+/** A folder name as the members index writes it, or null. */
+export function memberFolder(v) {
+  return typeof v === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(v) ? v : null;
+}
+
 /**
  * Fetch the member's Stripe-derived status from the signup Worker (the one Stripe oracle; the client holds
  * no Stripe key). Returns 'paid'|'trialing'|'expired'|'cancelled'|'none', or 'unknown' on any error so the
  * client fails OPEN to the gate rather than wrongly blocking a paid member when the oracle is unreachable.
  */
 export async function fetchStripeStatus({ token, signupBase, fetch = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none' };
+  if (!token || !signupBase) return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none', folder: null };
   try {
     const res = await fetch(`${String(signupBase).replace(/\/$/, '')}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none' };
+    if (!res.ok) return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none', folder: null };
     const data = await res.json();
     // SOW-119 QA: couponUntil is the grant end date the oracle emits ONLY when the paid signal is a coupon
     // grant (never for a real subscription); it drives the extension expiry countdown.
@@ -217,9 +222,11 @@ export async function fetchStripeStatus({ token, signupBase, fetch = globalThis.
     // the KV overrides mirror (the same value the gate decides on). The client trusts it instead of re-reading
     // house/bans.yml + house/grandfathered.yml, which have left the public repo. Fail closed to 'unknown' for an
     // older Worker that omits it, which resolveMembership then treats as the fail-open non-banned/non-paid view.
-    return { status: data?.status ?? 'unknown', effectiveStatus: typeof data?.effectiveStatus === 'string' ? data.effectiveStatus : 'unknown', couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === 'string' ? data.paidTier : 'none' };
+    // sow-428: `folder` is the member's GBTI name, members/<folder>/, resolved by the Worker from the members index.
+    // It can differ from the GitHub login, and it is what every host uses as "my folder". null for an older Worker.
+    return { status: data?.status ?? 'unknown', effectiveStatus: typeof data?.effectiveStatus === 'string' ? data.effectiveStatus : 'unknown', couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === 'string' ? data.paidTier : 'none', folder: memberFolder(data?.folder) };
   } catch {
-    return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none' };
+    return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none', folder: null };
   }
 }
 
@@ -247,7 +254,7 @@ export async function fetchStripeStatus({ token, signupBase, fetch = globalThis.
  * client path folds bans/grandfathered locally.
  */
 export async function resolveMembership({ githubId, token, signupBase, readFile, fetch = globalThis.fetch, now = Date.now() } = {}) {
-  const { status: stripeStatus, effectiveStatus, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch });
+  const { status: stripeStatus, effectiveStatus, couponUntil: workerCouponUntil, paidTier: workerPaidTier, folder } = await fetchStripeStatus({ token, signupBase, fetch });
   // effectiveStatus is the Worker's server-folded value; 'unknown' is its "did not fold / unavailable" sentinel.
   // Fall back to the Stripe status for it: an older Worker that omits effectiveStatus still sends its Stripe
   // status, and when the Worker is unreachable BOTH are 'unknown' so this stays 'unknown' (the fail-open view).
@@ -259,5 +266,5 @@ export async function resolveMembership({ githubId, token, signupBase, readFile,
   // sow-185: the Worker's authoritative paid TIER, carried through; a ban forces it to none (the real creator
   // gate is authorizeCreator server-side). Any Worker error already resolved workerPaidTier to 'none'.
   const paidTier = membership === 'banned' ? 'none' : (workerPaidTier ?? 'none');
-  return { stripeStatus, membership, couponUntil, paidTier };
+  return { stripeStatus, membership, couponUntil, paidTier, folder: folder ?? null };
 }

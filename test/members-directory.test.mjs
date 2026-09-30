@@ -27,12 +27,12 @@ test('omits links entirely when the profile has none (or only blanks/unknown key
   assert.ok(!('links' in out[1]), 'no links object when only blanks/unknown keys are present');
 });
 
-test('falls back to the github avatar (by login) when a profile has no gravatar', () => {
+test('falls back to the avatar for the member FOLDER when a profile has no gravatar (sow-428)', () => {
   const out = buildMembersDirectory([
-    P({ username: 'bob', tier: 'trial', links: { github: 'bobgh' } }),     // bare handle
-    P({ username: 'carol' }),                                              // no link -> login = username
-  ], (login) => `gh://${login}`);
-  assert.equal(out[0].avatar, 'gh://bobgh');
+    P({ username: 'bob', tier: 'trial', links: { github: 'bobgh' } }),     // the profile link is member-typed: never used
+    P({ username: 'carol' }),
+  ], (folder) => `gh://${folder}`);
+  assert.equal(out[0].avatar, 'gh://bob', 'by folder, not by the links.github handle');
   assert.equal(out[0].displayName, 'bob', 'displayName falls back to username');
   assert.equal(out[1].avatar, 'gh://carol');
 });

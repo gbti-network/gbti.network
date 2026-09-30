@@ -28,6 +28,7 @@ test('the article history shows a bot commit as the network, not as the bot hand
   const src = read('src/components/blog/OpenHistory.astro');
   const fn = src.slice(src.indexOf('function who('), src.indexOf('// Distinct ACCEPTED contributors'));
   assert.ok(fn.length > 0, 'who() must be found, or this checks nothing');
-  assert.match(fn, /if \(isBotLogin\(login\)\) return index\.byUsername\.get\('gbtilabs'\) \?\? \{ name: 'GBTI Network', avatar: GBTI_AVATAR \};/);
+  // sow-428: the fallback also names the blobatar seed, the network's own folder.
+  assert.match(fn, /if \(isBotLogin\(login\)\) return index\.byUsername\.get\('gbtilabs'\) \?\? \{ name: 'GBTI Network', avatar: GBTI_AVATAR, seed: 'gbtilabs' \};/);
   assert.ok(fn.indexOf('isBotLogin(login)') < fn.indexOf('githubAvatarUrl(login)'), 'before any avatar URL is built');
 });

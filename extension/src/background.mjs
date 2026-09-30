@@ -61,8 +61,10 @@ async function completeLogin(store, { accessToken, refreshToken, expiresIn }) {
   // the gate). The reader reads the public house/*.yml overrides; the Worker supplies the Stripe-derived status.
   try {
     const reader = createGithubReader({ upstream: UPSTREAM, token: accessToken });
-    const { stripeStatus, membership, couponUntil, paidTier } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) });
+    const { stripeStatus, membership, couponUntil, paidTier, folder } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) });
     store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' }); // SOW-119 QA: drives the expiry countdown; sow-185: paidTier for the creator-tier UI + page signal
+    // sow-428: the member's folder (GBTI name) from the members index, which can differ from the login.
+    if (folder) store.set({ identity: { login: u.login, githubId: String(u.id), username: folder } });
   } catch {
     // leave membership unset (treated as 'unknown')
   }

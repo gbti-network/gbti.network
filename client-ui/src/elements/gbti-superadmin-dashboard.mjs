@@ -8,6 +8,8 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { indexFileFor, SAVED_TYPES } from '../saved-core.mjs';
 import { tierLabel } from '../../../membership/tiers.mjs'; // sow-229: the node-free tier label; bind to the constant, never a literal (sow-226 renames it in one place)
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
+import { idAvatarUrl } from '../../../membership/member-avatar.mjs';
 
 const SITE = 'https://gbti.network';
 
@@ -21,7 +23,7 @@ const CSS = `
   td { padding:9px 8px; border-top:1px solid var(--line); vertical-align:middle; }
   tr:first-child td { border-top:0; }
   .who { display:flex; align-items:center; gap:9px; min-width:0; }
-  .av { width:26px; height:26px; border-radius:50%; flex:none; object-fit:cover; background:var(--hover); }
+  .av { position:relative; overflow:hidden; display:block; width:26px; height:26px; border-radius:50%; flex:none; background:var(--hover); }
   .nm { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; }
   a.nm:hover { color:var(--accent); }
   .id { color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
@@ -227,9 +229,8 @@ class GbtiSuperadminDashboard extends GbtiElement {
       const who = m.username
         ? `<a class="nm" href="https://gbti.network/members/${u}/" target="_blank" rel="noopener">@${u}</a>`
         : `<span class="nm id">id ${esc(m.githubId)}</span>`;
-      const av = m.username
-        ? `<img class="av" src="https://github.com/${encodeURIComponent(m.username)}.png?size=52" alt="" loading="lazy" data-avfor="${u}" />`
-        : `<span class="av"></span>`;
+      // sow-428: the roster carries the account number, so the photo comes straight from it.
+      const av = `<span class="av">${avatarLayers(m.username || String(m.githubId || ''), idAvatarUrl(m.githubId, 52) || undefined)}</span>`;
       const tags = [];
       if (m.banned) tags.push(`<span class="tag ban">banned</span>`);
       // sow-229: the effective TIER, bound to the label constant (never a literal). Suppressed for `none`.
@@ -268,7 +269,6 @@ class GbtiSuperadminDashboard extends GbtiElement {
       ${this._pullsSection()}
       ${this._opsSection()}`);
 
-    this.$$('[data-avfor]').forEach((img) => img.addEventListener('error', () => { img.style.visibility = 'hidden'; }, { once: true }));
     this.$$('[data-op]').forEach((b) => b.addEventListener('click', () => this._runOp(b.dataset.op, b))); // SOW-038 P3
     this.$$('[data-manage]').forEach((b) => b.addEventListener('click', () => { this._managing = this._managing === b.dataset.manage ? null : b.dataset.manage; this._actMsg = ''; this._actErr = false; this.render(); }));
     this.$$('[data-act]').forEach((b) => b.addEventListener('click', () => this._doAction(b.dataset.act)));

@@ -50,6 +50,7 @@ import { resolveDigestConfig } from './digest-config.mjs'; // sow-266: the owner
 import { sanitizeSponsorHtml, sponsorText } from './mail-sponsor-sanitize.mjs'; // sow-266: a sponsor's markup, made safe for an inbox
 import { webEditionUrl, webLinkCellHtml, socialRowHtml, socialText, subscribeBoxHtml, webFooterHtml, webHeadHtml } from './mail-render-parts.mjs'; // sow-383
 import { WEEKLY_HEADER_LINE, CLOSING_LEAD, closingHtml, closingText, closingAudience, SIGN_OFF, signOffHtml } from './mail-closing.mjs'; // owner copy, 2026-09-29
+import { memberAvatarUrl } from './member-avatar.mjs'; // sow-428: avatars by account number, addressed by folder
 // The web edition's social image: the engraved coffee cup in line and flat tone, chosen by the owner on 2026-09-29
 // (it replaced the first pick, og.png, the same day). Served from the site, 1200 x 630. A new design gets a NEW
 // file name: link previews cache the image by its address, so overwriting the old file would leave every preview
@@ -86,12 +87,13 @@ function byline(it) {
   return name ? `by ${name}` : '';
 }
 
-/** The canonical GitHub avatar for a login, derived (no stored field). GitHub serves every account's avatar at
- *  github.com/<login>.png and 404s for an unknown login; here that means a blocked or broken decorative image,
- *  which shows nothing. Mirrors src/lib/avatars.ts githubAvatarUrl. */
-function avatarUrl(login) {
-  const l = str(login).trim();
-  return l ? `https://github.com/${encodeURIComponent(l)}.png?size=32` : '';
+/** The author's avatar, derived (no stored field). sow-428: gbti.network/avatar/<folder>, which redirects to the
+ *  picture for the member's GitHub ACCOUNT NUMBER, so a GBTI name that some other GitHub account holds never shows
+ *  that stranger. A mail client follows the redirect just as it followed github.com/<login>.png before. An unknown
+ *  folder is a 404: a blocked or broken decorative image, which shows nothing. No blobatar here: it is SVG, which
+ *  email clients do not display. */
+function avatarUrl(folder) {
+  return memberAvatarUrl(str(folder).trim());
 }
 
 /** An ABSOLUTE, safe url for an email. safeUrl fails an unsafe value closed to ''; a surviving site-relative

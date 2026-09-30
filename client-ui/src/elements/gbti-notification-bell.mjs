@@ -13,6 +13,7 @@ import { buildFollowingBell, selectBellEntries, unreadLabel } from '../notificat
 import { markGroup, seedFromWatermark, sameSeen } from '../../../membership/bell-seen.mjs';
 import { readLocalSeen, writeLocalSeen, readLegacy, fetchAccountSeen, pushAccountSeen, onLocalSeenChange, mergeSeen } from '../bell-seen-sync.mjs';
 import { relTime, absTime } from '../time-core.mjs';
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const INDEX_URL = '/activity-index.json'; // same-origin public build artifact (site root)
 const SHARES_URL = '/shares-index.json';  // sow-386: the public shares list, the same shape (same-origin build artifact)
@@ -52,7 +53,7 @@ const CSS = `
   .it:hover { background:var(--hover); }
   .it.unread { background:color-mix(in srgb, var(--brand) 8%, transparent); }
   .it.unread:hover { background:color-mix(in srgb, var(--brand) 13%, transparent); }
-  .av { width:28px; height:28px; border-radius:50%; flex:none; background:var(--hover); object-fit:cover; margin-top:1px; }
+  .av { position:relative; overflow:hidden; display:block; width:28px; height:28px; border-radius:50%; flex:none; background:var(--hover); margin-top:1px; }
   .av.nav { display:flex; align-items:center; justify-content:center; color:var(--muted); }
   .av.nav svg { width:16px; height:16px; }
   .it .body { flex:1; min-width:0; }
@@ -242,12 +243,12 @@ class GbtiNotificationBell extends GbtiElement {
     const rows = this._bell.rows.slice(0, 12).map((r) => {
       const when = relTime(r.ts);
       const abs = when ? absTime(r.ts) : '';
-      const av = r.kind === 'person' && r.actor ? `https://github.com/${encodeURIComponent(r.actor)}.png?size=56` : '';
+      const person = r.kind === 'person' && r.actor; // sow-428: the actor is a member folder
       const href = r.url || SETTINGS_URL;
       const internal = /^\//.test(href);
       const ext = internal ? '' : ' target="_blank" rel="noopener nofollow"';
       return `<a class="it${r.unread ? ' unread' : ''}" href="${esc(href)}"${ext}${abs ? ` title="${esc(abs)}"` : ''}>`
-        + (av ? `<img class="av" src="${esc(av)}" alt="" width="28" height="28" decoding="async" loading="lazy" />` : `<span class="av nav">${I_NEWS}</span>`)
+        + (person ? `<span class="av">${avatarLayers(r.actor)}</span>` : `<span class="av nav">${I_NEWS}</span>`)
         + `<span class="body"><span class="line"><b>${esc(r.actor)}</b> ${esc(r.action)} <span class="tg">${esc(r.target)}</span></span>`
         + `${when ? `<span class="when">${esc(when)}</span>` : ''}</span>`
         + `${r.unread ? '<span class="dot"></span>' : ''}</a>`;

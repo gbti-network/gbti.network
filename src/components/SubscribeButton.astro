@@ -125,8 +125,9 @@ const { name = 'this member', username, variant = 'primary' } = Astro.props;
   async function upgradeFollows(signal: any) {
     if (!signal || !signal.login) return; // signed out / not yet resolved -> leave the inert fallback
     // Hide the follow control on the member's OWN content (no "follow yourself"). Site-scoped guard: the
-    // element itself is host-agnostic, but here the signed-in login is known.
-    const mine = String(signal.login).toLowerCase();
+    // element itself is host-agnostic, but here the signed-in member is known. sow-428: by FOLDER, which a GBTI name
+    // makes different from the login.
+    const mine = String(signal.username || signal.login).toLowerCase();
     document.querySelectorAll('.subscribe-wrap').forEach((wrap) => {
       if (((wrap as HTMLElement).dataset.gbtiUsername || '').trim().toLowerCase() === mine) (wrap as HTMLElement).style.display = 'none';
     });
@@ -135,7 +136,7 @@ const { name = 'this member', username, variant = 'primary' } = Astro.props;
     const signupBase = document.documentElement.dataset.signupBase || '';
     const { createWorkbenchClient } = await import('../lib/workbench-client');
     const { setClient } = await import('../../client-ui/src/base.mjs');
-    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), username: String(signal.username || signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
     await import('../../client-ui/src/elements/gbti-subscribe.mjs');
   }
   upgradeFollows(currentIdentity(readMemberSignal())); // extension/cookie signal, if present, before hydration

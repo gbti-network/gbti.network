@@ -30,7 +30,7 @@ const href = profileHref(author);
 <div class:list={['content-meta', center && 'cm-center', dark && 'cm-dark']}>
   {stack && stack.length
     ? <StackedAvatars items={stack} size="md" />
-    : <a href={href} class="cm-av" aria-label={name}><Avatar item={{ name, avatar }} size={40} class="rounded-full" /></a>}
+    : <a href={href} class="cm-av" aria-label={name}><Avatar item={{ name, avatar, seed: author }} size={40} class="rounded-full" /></a>}
   <div class="cm-txt">
     <a href={href} class="cm-name">{name}</a>
     {publishedAt && <time class="cm-date" datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time>}

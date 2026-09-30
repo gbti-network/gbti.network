@@ -145,14 +145,18 @@ export async function syncEnrollments({
   if (dryRun) return { synced: false, reason: 'dry run', additions, rejects };
   if (!github) return { synced: false, reason: 'no github client to write the enrollment PR', additions, rejects };
 
-  const indexText = fs.readFileSync(path.join(root, MEMBERS_INDEX_PATH), 'utf8');
-  const nextText = appendIndexEntries(indexText, additions, now);
   const branch = `gbti/enroll-${now.getTime()}`;
   const baseRef = await github.getRef('heads/main');
   const baseSha = baseRef?.object?.sha;
   if (!baseSha) throw new Error('enroll: cannot resolve the main head sha');
   await github.createRef(branch, baseSha);
   const existing = await github.getContent(MEMBERS_INDEX_PATH, branch);
+  // sow-428: append onto the index as it is on main NOW, never onto this run's checkout. The checkout can be minutes
+  // old, and writing it back reverted any edit merged in between, such as a member's folder being renamed by hand.
+  const { text: indexText, additions: fresh } = freshIndexAdditions(existing?.content, additions,
+    () => fs.readFileSync(path.join(root, MEMBERS_INDEX_PATH), 'utf8'));
+  if (!fresh.length) return { synced: false, reason: 'every addition was enrolled on main meanwhile', additions: fresh, rejects };
+  const nextText = appendIndexEntries(indexText, fresh, now);
   await github.putContent(MEMBERS_INDEX_PATH, {
     message: 'reconcile: enroll hosted members into the members index (SOW-157)',
     content: Buffer.from(nextText, 'utf8').toString('base64'),
@@ -163,8 +167,26 @@ export async function syncEnrollments({
     title: 'reconcile: hosted-member enrollment (SOW-157)',
     head: branch,
     base: 'main',
-    body: `Enrolls ${additions.length} effective-paid member(s) into house/members-index.yml so hosted authoring can resolve their folder.`,
+    body: `Enrolls ${fresh.length} effective-paid member(s) into house/members-index.yml so hosted authoring can resolve their folder.`,
   });
   await github.mergePull(pull.number, { method: 'squash' });
-  return { synced: true, prNumber: pull.number, additions, rejects };
+  return { synced: true, prNumber: pull.number, additions: fresh, rejects };
+}
+
+/**
+ * sow-428: the index text to append to, and the additions still to make, measured against main's CURRENT copy
+ * (`contentB64`, as the contents API returns it). An id enrolled on main meanwhile is dropped, and so is a folder
+ * main has since given to someone else, so the write can never duplicate a key or hand one folder to two ids.
+ * `readLocal` is the fallback when main's copy could not be read; it is the pre-sow-428 behaviour.
+ */
+export function freshIndexAdditions(contentB64, additions, readLocal) {
+  let text = '';
+  if (contentB64) {
+    try { text = Buffer.from(String(contentB64).replace(/\n/g, ''), 'base64').toString('utf8'); } catch { text = ''; }
+  }
+  if (!text) text = readLocal();
+  const current = parseMembersIndex(text);
+  const claimed = new Set(current.values());
+  const out = (additions ?? []).filter((a) => !current.has(String(a.githubId)) && !claimed.has(a.folder));
+  return { text, additions: out };
 }

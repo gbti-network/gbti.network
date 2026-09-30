@@ -6,6 +6,7 @@
 
 import { attachCdnFallback } from './assets.mjs'; // sow-315: retry a pinned image against `main`
 import { TOKENS, BASE_CSS } from './tokens.mjs';
+import { attachAvatarFallback, AVATAR_LAYER_CSS } from './member-avatars.mjs'; // sow-428: the blobatar under every member photo
 
 const HAS_DOM = typeof HTMLElement !== 'undefined';
 
@@ -70,12 +71,16 @@ export class GbtiElement extends Base {
     // and until the index job finishes the pinned ref is the PREVIOUS content commit, where a just-added
     // image does not exist. Without this a pin turns a stale image into a broken one.
     if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
+    // sow-428: a member photo that fails to load is removed, so the blobatar drawn under it shows.
+    if (this.root) this._detachAvatarFallback = attachAvatarFallback(this.root);
     this.render?.();
   }
   disconnectedCallback() {
     SUBSCRIBERS.delete(this._onClient);
     this._detachCdnFallback?.();
     this._detachCdnFallback = null;
+    this._detachAvatarFallback?.();
+    this._detachAvatarFallback = null;
   }
 
   get client() {
@@ -95,7 +100,7 @@ export class GbtiElement extends Base {
 
   /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
   css(extra = '') {
-    return `<style>${TOKENS}${BASE_CSS}${extra}</style>`;
+    return `<style>${TOKENS}${BASE_CSS}${AVATAR_LAYER_CSS}${extra}</style>`;
   }
   set(markup) {
     if (this.root) this.root.innerHTML = markup;

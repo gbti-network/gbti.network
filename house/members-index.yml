@@ -1,10 +1,16 @@
-# Authoritative github_id -> username map (ADMIN-owned; reconcile-maintained).
-# The PR-gate and the scoping CI resolve a PR author's immutable github_id to the folder they own
-# through this map, NOT through "folder name == current login" (which breaks on a GitHub rename).
-# On a rename the reconcile migrates the folder, adds a redirect, and updates this entry, so a member
-# is never locked out of their own folder. Each members/<username>/profile.md also carries its
-# links.github; this file is the fast index resolved from those (see scripts/resolve-member-ids.mjs).
+# Authoritative github_id -> folder map (ADMIN-owned; reconcile-maintained).
+# The PR-gate, the scoping CI and the publishing Worker resolve a member's immutable github_id to the
+# folder they own through this map, NOT through "folder name == current login".
+# The folder is the member's GBTI name (sow-428). Reconcile enrolls a new member under their lowercased
+# GitHub login, and an admin may change an entry by hand (for example to replace an off-brand login).
+# Clients learn the folder from /membership/status and avatars are served by github_id, so the folder
+# never has to match a GitHub account.
+# Nothing follows a GitHub RENAME yet and nothing moves a folder that already holds content (sow-429):
+# change a folder by hand only while members/<folder>/ has no content.
 #
+# Format: each entry is one line, "<github_id>": <folder>, with the folder lowercase, unquoted and
+# followed by no comment.
+# The Worker's line parser skips any other shape, and that member then cannot publish.
 # Keys are immutable github_id values (strings). Values are the lowercase folder/username.
 members:
   "132623795": aliayashi517

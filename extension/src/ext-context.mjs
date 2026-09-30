@@ -66,7 +66,14 @@ export function buildExtContext(store) {
       if (!membershipFlight) {
         devlog('membership', 'resolving via oracle + house overrides');
         membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) })
-          .then(({ stripeStatus, membership, couponUntil, paidTier }) => { store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' }); devlog('membership', 'resolved', { stripeStatus, membership: membership ?? 'unknown' }); return membership ?? 'unknown'; })
+          .then(({ stripeStatus, membership, couponUntil, paidTier, folder }) => {
+            store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null, paidTier: paidTier ?? 'none' });
+            // sow-428: keep the stored folder (GBTI name) in step with the members index.
+            const cur = store.get('identity');
+            if (folder && cur && cur.githubId === id.githubId && cur.username !== folder) store.set({ identity: { ...cur, username: folder } });
+            devlog('membership', 'resolved', { stripeStatus, membership: membership ?? 'unknown' });
+            return membership ?? 'unknown';
+          })
           .catch((e) => { devlog('membership', 'resolve failed, fail-closed to unknown', { error: e?.message }); return 'unknown'; })
           .finally(() => { membershipFlight = null; });
       }

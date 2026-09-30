@@ -10,6 +10,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { discordJoinAllowed } from '../../../membership/discord-roles.mjs'; // sow-356: the community is a paid perk
 import { currentLayout, currentTheme, applyLayout, applyTheme, currentGlass, applyGlass, currentGlow, applyGlow } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const SITE = 'https://gbti.network';
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
@@ -57,7 +58,7 @@ const CSS = `
   .badge.warn { background:#fdecea; color:#b3261e; border:1.5px solid #f0c2bd; }
   /* membership row (avatar + identity + pill + action) */
   .memrow { display:flex; align-items:center; gap:16px; padding:20px 24px; }
-  .memav { width:50px; height:50px; border-radius:50%; flex:none; background:var(--brand); display:flex; align-items:center; justify-content:center; color:#fff; font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:20px; }
+  .memav { position:relative; overflow:hidden; display:block; width:50px; height:50px; border-radius:50%; flex:none; background:var(--hover); }
   .memrow .mtx { flex:1; min-width:0; }
   .memrow .mtx .t { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
   .memrow .mtx .t b { font-weight:700; font-size:16px; }
@@ -229,10 +230,11 @@ class GbtiAccount extends GbtiElement {
     const m = this._membership;
     const cls = m === 'paid' ? 'paid' : (LOCKED.has(m) ? 'warn' : '');
     const portal = this._billing?.portal;
-    const initial = esc((this._login || 'G').trim().charAt(0).toUpperCase() || 'G');
+    // sow-428: the member's own photo, by their folder, over their blobatar (it replaced a letter disc).
+    const folder = String(this._status?.identity?.username || this._login || '').toLowerCase();
     return `<section class="sec">
       <div class="memrow">
-        <span class="memav">${initial}</span>
+        <span class="memav">${avatarLayers(folder || 'gbti')}</span>
         <div class="mtx">
           <div class="t"><b>Membership</b><span class="badge ${cls}">${esc(STATUS_LABEL[m] || m)}</span></div>
           <div class="d">Your plan, invoices, and payment method are managed in the Stripe customer portal.</div>

@@ -128,13 +128,15 @@ class GbtiActivityBell extends GbtiElement {
     this._busy = true;
     try {
       let membership = 'unknown';
-      try { const st = await this.client?.status?.(); membership = st?.membership ?? 'unknown'; this._login = st?.identity?.login || null; this._role = st?.role || 'member'; }
-      catch { membership = 'unknown'; this._login = null; this._role = 'member'; }
+      // sow-428: `_login` keys this browser's read record (per account); `_folder` is the member's GBTI name, which is
+      // what their shares are filed under, so "replies on my shares" matches by it.
+      try { const st = await this.client?.status?.(); membership = st?.membership ?? 'unknown'; this._login = st?.identity?.login || null; this._folder = String(st?.identity?.username || st?.identity?.login || '').toLowerCase() || null; this._role = st?.role || 'member'; }
+      catch { membership = 'unknown'; this._login = null; this._folder = null; this._role = 'member'; }
       // The bell is for active members only; a Locked/unknown/signed-out account hides it (no count).
       if (!canSeeShares(membership) || !this._login) { this._gated = true; this._bell = { total: 0, groups: [] }; this.render(); return; }
       this._gated = false;
       this._listenForSeen(this._login);
-      const [sources, account] = await Promise.all([this._fetchSources(this._login), fetchAccountSeen(this.client)]);
+      const [sources, account] = await Promise.all([this._fetchSources(this._folder || this._login), fetchAccountSeen(this.client)]);
       this._sources = sources;
       // Re-read this browser's copy EVERY load (another tab may have marked read since this one opened) and merge
       // the account's record in. The first time the account has nothing for a group, this browser's old "last read"

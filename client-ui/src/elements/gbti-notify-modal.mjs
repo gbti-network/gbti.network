@@ -14,6 +14,7 @@ import { PERSON_ROWS, defaultMatrix, resolveMatrix, toggleCell, notifyPayload, c
 // people, so it is set on the account page's grid and has no row here.
 const ROWS = { rows: PERSON_ROWS };
 import { BLOCKED_PILL_CSS, notifyPillHtml } from './notify-pill.mjs'; // sow-385: email notifications are off for now
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const CHANNELS = [
   { key: 'api', label: 'In app' },
@@ -28,7 +29,7 @@ const CSS = `
     max-height:calc(100vh - 48px); overflow:auto; background:var(--panel); color:var(--fg); border:1.5px solid var(--line);
     border-radius:18px; box-shadow:0 20px 60px rgba(0,0,0,.35); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:18px 20px 14px; border-bottom:1.5px solid var(--line); }
-  .hd .av { width:40px; height:40px; border-radius:50%; flex:none; background:var(--hover); object-fit:cover; }
+  .hd .av { position:relative; overflow:hidden; display:block; width:40px; height:40px; border-radius:50%; flex:none; background:var(--hover); }
   .hd .mtx { flex:1; min-width:0; }
   .hd .mtx .t { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .hd .mtx .d { color:var(--muted); font-size:13px; margin-top:2px; }
@@ -156,7 +157,6 @@ class GbtiNotifyModal extends GbtiElement {
   render() {
     if (!this.hasAttribute('open')) { this.set(this.css(CSS)); return; }
     const u = esc(this._username || '');
-    const av = `https://github.com/${u}.png?size=80`;
     if (!this._loaded) {
       this.set(this.css(CSS) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
       this._wire();
@@ -175,7 +175,7 @@ class GbtiNotifyModal extends GbtiElement {
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
-          <img class="av" src="${av}" alt="" width="40" height="40" loading="lazy" />
+          <span class="av">${avatarLayers(this._username || '')}</span>
           <div class="mtx"><div class="t">@${u}</div><div class="d">What this follow sends you</div></div>
           <button class="x" type="button" data-close aria-label="Close">&times;</button>
         </div>

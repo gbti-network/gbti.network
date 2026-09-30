@@ -11,6 +11,7 @@
 import { getInstallationToken } from './github-app.mjs';
 import { authorizeSignedIn } from './membership-content.mjs';
 import { parseContentFile, shareSummary, byShareNewest } from '../../client/src/content-ops.mjs';
+import { memberFolderFor } from './member-folder.mjs'; // sow-428: the caller's folder, not their login
 
 const GH = 'https://api.github.com';
 const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
@@ -235,16 +236,19 @@ export async function listMemberShares(env, login, { fetchImpl = globalThis.fetc
 
 /**
  * GET /membership/my-shares: the caller's own shares (see listMemberShares). Cookie-or-bearer via
- * authorizeSignedIn; the login comes from the verified session, never from a query parameter, so the route can
- * only ever list the caller's own folder.
+ * authorizeSignedIn; the folder is resolved from the verified session's github_id, never from a query parameter, so
+ * the route can only ever list the caller's own folder.
  */
 export async function listMyShares(request, env, deps = {}) {
-  const { authorize = authorizeSignedIn } = deps;
+  const { authorize = authorizeSignedIn, folderFor = memberFolderFor } = deps;
   const auth = await authorize(request, env, { ...deps, allowCookie: true });
   if (!auth.ok) return { status: auth.status, body: auth.body };
   const login = String(auth.login || '');
   if (!login) return { status: 401, body: { error: 'unauthorized', message: 'could not resolve the member login' } };
+  // sow-428: the caller's FOLDER, which can differ from their login (a member given a GBTI name). Listing
+  // members/<login>/ for such a member read a folder that does not exist and showed them no shares at all.
+  const folder = await folderFor(env, auth.githubId, login, deps);
   let items;
-  try { items = await listMemberShares(env, login, deps); } catch { return { status: 502, body: { error: 'shares_failed', message: 'could not load your shares right now' } }; }
+  try { items = await listMemberShares(env, folder, deps); } catch { return { status: 502, body: { error: 'shares_failed', message: 'could not load your shares right now' } }; }
   return { status: 200, body: { ok: true, items } };
 }

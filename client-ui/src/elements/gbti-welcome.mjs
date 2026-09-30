@@ -24,6 +24,7 @@ import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs';
 import { recallProfileSocials } from '../profile-fields.mjs'; // SOW-129 QA: recall saved profile socials into the welcome step
 import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 import { WELCOME_CSS as CSS } from './welcome-css.mjs'; // sow-349: the stylesheet lives in its own module
+import { avatarLayers } from '../member-avatars.mjs'; // sow-428: account-number photo over a blobatar
 
 const SITE = 'https://gbti.network';
 // The paid plan's name as the reader meets it. house/membership-tiers.yml owns this label and the site builds its
@@ -71,9 +72,6 @@ const SOCIALS_STAGE_KEY = 'gbti-welcome-socials';
 const SOCIAL_STARTERS = ['x', 'bluesky', 'linkedin', 'youtube', 'website']; // sow-159: mastodon retired
 const SOCIAL_HIDDEN = new Set(['github', 'discord']);
 
-// The member-card avatar fallback palette (the design handoff's initials discs).
-const AV_COLORS = ['#1f9e5f', '#c98a2b', '#5a8ad6', '#9b6fd0', '#d0715f', '#3fa88a', '#c85b8e'];
-const avColor = (name) => { let h = 0; for (const c of String(name || '?')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; };
 
 const lc = (s) => String(s || '').toLowerCase();
 const discordIco = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
@@ -167,7 +165,7 @@ class GbtiWelcome extends GbtiElement {
       this._membership = s?.membership ?? 'unknown';
       this._couponUntil = s?.couponUntil ?? null; // SOW-119 QA: a live coupon grant reframes the paid banner
       this._own = lc(s?.identity?.username || s?.identity?.login);
-      this._login = s?.identity?.login || s?.identity?.username || ''; // sow-343: a new profile's display name
+      this._login = s?.identity?.username || s?.identity?.login || ''; // sow-343: a new profile's display name. sow-428: the GBTI name first, never an off-brand login
     } catch {
       this._membership = 'unknown';
       this._couponUntil = null;
@@ -525,8 +523,6 @@ class GbtiWelcome extends GbtiElement {
       this.$$('[data-follow]').forEach((b) => b.addEventListener('click', () => this._toggleFollow(b.getAttribute('data-follow'))));
       this.on('[data-prev]', 'click', () => { this._page--; this.render(); });
       this.on('[data-next]', 'click', () => { this._page++; this.render(); });
-      // Avatar fallback: drop a broken image so the letter disc shows through.
-      this.$$('.mav img').forEach((img) => img.addEventListener('error', () => img.remove(), { once: true }));
     }
   }
 
@@ -669,8 +665,9 @@ class GbtiWelcome extends GbtiElement {
     const u = lc(m.username);
     const followed = this._follows.has(u);
     const name = m.displayName || m.username || '?';
-    const initial = esc(String(name).trim().charAt(0).toUpperCase());
-    const av = `<span class="mav" style="background:${avColor(name)}">${initial}${m.avatar ? `<img src="${esc(m.avatar)}" alt="" />` : ''}</span>`;
+    // sow-428: the directory's photo (the profile's own, else the one for the member's GitHub account number) over the
+    // member's blobatar, which replaced the coloured letter disc and shows whenever the photo is missing or fails.
+    const av = `<span class="mav">${avatarLayers(u || name, m.avatar || undefined)}</span>`;
     const sub = m.headline ? `<span>${esc(m.headline)}</span>` : '';
     return `<div class="mcard">
       ${av}

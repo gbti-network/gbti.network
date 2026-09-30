@@ -180,6 +180,284 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 @media (hover: none) { [data-tooltip]::after, [data-tooltip]::before { display: none; } }
 `;
 
+  // membership/member-avatar.mjs
+  var SITE2 = "https://gbti.network";
+  var AVATAR_ROUTE = "/avatar/";
+  var NETWORK_FOLDERS = Object.freeze(["gbtilabs", "gbti", "house"]);
+  var FOLDER_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  var ID_RE = /^\d{1,20}$/;
+  function isFolder(v2) {
+    return FOLDER_RE.test(String(v2 ?? ""));
+  }
+  function idAvatarUrl(githubId, size = 128) {
+    const id = String(githubId ?? "").trim();
+    return ID_RE.test(id) ? `https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4` : "";
+  }
+  function memberAvatarUrl(folder2, { site = SITE2 } = {}) {
+    const f = String(folder2 ?? "").trim().toLowerCase();
+    return isFolder(f) ? `${site}${AVATAR_ROUTE}${f}` : "";
+  }
+
+  // node_modules/blobatar/dist/uri.js
+  function v({ l: t, c: e, h: n }) {
+    let a = n * Math.PI / 180, o = e * Math.cos(a), r = e * Math.sin(a), s = t + 0.3963377774 * o + 0.2158037573 * r, c = t - 0.1055613458 * o - 0.0638541728 * r, i = t - 0.0894841775 * o - 1.291485548 * r, l = s * s * s, m = c * c * c, u = i * i * i;
+    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * u, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * u, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * u];
+  }
+  var q = (t) => t.every((e) => e >= -1e-4 && e <= 1.0001);
+  function V(t) {
+    let e = v(t);
+    if (!q(e)) {
+      let n = 0, a = t.c;
+      for (let o = 0; o < 12; o++) {
+        let r = (n + a) / 2;
+        if (q(v({ ...t, c: r }))) n = r;
+        else a = r;
+      }
+      e = v({ ...t, c: n });
+    }
+    return e.map((n) => Math.min(1, Math.max(0, n)));
+  }
+  function U(t) {
+    let [e, n, a] = V(t);
+    return 0.2126 * e + 0.7152 * n + 0.0722 * a;
+  }
+  function B(t, e) {
+    let n = U(t), a = U(e);
+    return (Math.max(n, a) + 0.05) / (Math.min(n, a) + 0.05);
+  }
+  function w(t, e, n) {
+    if (B(t, e) >= n) return t;
+    let a = t.l >= e.l ? 1 : -1;
+    for (let s of [a, -a]) {
+      let c = { ...t };
+      for (let i = 0; i < 60; i++) {
+        if (c.l = Math.min(1, Math.max(0, c.l + s * 0.02)), B(c, e) >= n) return c;
+        if (c.l === 0 || c.l === 1) break;
+      }
+    }
+    let o = { ...t, l: 0, c: 0 }, r = { ...t, l: 1, c: 0 };
+    return B(o, e) >= B(r, e) ? o : r;
+  }
+  function T(t) {
+    return "#" + V(t).map((e) => {
+      let n = e <= 31308e-7 ? 12.92 * e : 1.055 * Math.pow(e, 0.4166666666666667) - 0.055;
+      return Math.round(n * 255).toString(16).padStart(2, "0");
+    }).join("");
+  }
+  var N = [[0.2, { l: 0.86, c: 0.085 }], [0.36, { l: 0.9, c: 0.028 }], [0.62, { l: 0.73, c: 0.135 }], [0.8, { l: 0.62, c: 0.165 }], [0.93, { l: 0.87, c: 0.16 }], [1, { l: 0.34, c: 0.035 }]];
+  var wt = (t) => N.find(([e]) => t < e)?.[1] ?? N[0][1];
+  var K = { l: 0.145, c: 0, h: 0 };
+  var Q = 1.5;
+  var Et = (t, e) => {
+    let n = wt(e), a = w({ l: n.l, c: n.c, h: t }, K, Q);
+    return { bg: { l: 0.965, c: 0.01, h: t }, head: a, eye: a.l >= 0.5 ? { l: 0.17, c: 0.02, h: t } : { l: 0.97, c: 0.012, h: t } };
+  };
+  var vt = [["head", "bg", 1.25], ["eye", "head", 4.5]];
+  function It(t, e = true, n = 0) {
+    let a = Et(t, n);
+    if (e) for (let [o, r, s] of vt) a[o] = w(a[o], a[r], s);
+    return a;
+  }
+  function G(t, e = true, n = 0) {
+    let a = It(t, e, n), o = {};
+    for (let r in a) o[r] = T(a[r]);
+    return o;
+  }
+  var y = (t) => {
+    let e = Math.round(t * 100) / 100;
+    return Object.is(e, -0) ? "0" : String(e);
+  };
+  function P({ cx: t, cy: e, rx: n, ry: a, n: o = 4, rot: r = 0 }) {
+    let s = Math.min(1, (8 * Math.pow(2, -1 / o) - 4) / 3), c = n, i = a, l = c * s, m = i * s, u = [[c, 0], [c, m], [l, i], [0, i], [-l, i], [-c, m], [-c, 0], [-c, -m], [-l, -i], [0, -i], [l, -i], [c, -m], [c, 0]], b = r * Math.PI / 180, p = Math.cos(b), d = Math.sin(b), h = (x) => {
+      let [g, k] = u[x];
+      return `${y(t + g * p - k * d)} ${y(e + g * d + k * p)}`;
+    }, f = `M${h(0)}`;
+    for (let x = 1; x < 13; x += 3) f += `C${h(x)} ${h(x + 1)} ${h(x + 2)}`;
+    return f + "Z";
+  }
+  function J(t, e, n, a, o, r = 0) {
+    let s = o.length, c = r * Math.PI / 180, i = o.map((u, b) => {
+      let p = c + 2 * Math.PI * b / s;
+      return [t + n * u * Math.cos(p), e + a * u * Math.sin(p)];
+    }), l = (u) => i[(u % s + s) % s], m = `M${y(l(0)[0])} ${y(l(0)[1])}`;
+    for (let u = 0; u < s; u++) {
+      let [b, p] = l(u - 1), [d, h] = l(u), [f, x] = l(u + 1), [g, k] = l(u + 2);
+      m += `C${y(d + (f - b) / 6)} ${y(h + (x - p) / 6)} ${y(f - (g - d) / 6)} ${y(x - (k - h) / 6)} ${y(f)} ${y(x)}`;
+    }
+    return m + "Z";
+  }
+  function W({ cx: t, cy: e, rx: n, ry: a, sides: o, round: r = 0.3, rot: s = 0 }) {
+    let c = r > 0 ? r < 1 ? r / 2 : 0.5 : 0, i = s * Math.PI / 180 - Math.PI / 2, l = Array.from({ length: o }, (p, d) => {
+      let h = i + 2 * Math.PI * d / o;
+      return [t + n * Math.cos(h), e + a * Math.sin(h)];
+    }), m = (p) => l[(p % o + o) % o], u = (p, d) => {
+      let [h, f] = m(p), [x, g] = m(d);
+      return `${y(h + (x - h) * c)} ${y(f + (g - f) * c)}`;
+    }, b = `M${u(0, -1)}`;
+    for (let p = 0; p < o; p++) {
+      let [d, h] = m(p);
+      if (b += `Q${y(d)} ${y(h)} ${u(p, p + 1)}`, c < 0.5) b += `L${u(p + 1, p)}`;
+    }
+    return b + "Z";
+  }
+  function tt(t, e, n, a) {
+    let o = y(t - n), r = y(t + n);
+    return `M${o} ${y(e - a)}H${r}V${y(e + a)}H${o}Z`;
+  }
+  function et(t, e, n, a, o) {
+    let r = Math.max(1.05, o), s = n * Math.sqrt(1 - 1 / (r * r)), c = e - a / r, i = e - r * a, l = s * 0.14, m = c + 0.86 * (i - c);
+    return `M${y(t - s)} ${y(c)}L${y(t - l)} ${y(m)}Q${y(t)} ${y(i)} ${y(t + l)} ${y(m)}L${y(t + s)} ${y(c)}Z`;
+  }
+  function I(t, e) {
+    for (let n = 0; n < e.length; n++) t = Math.imul(t ^ e[n], 3432918353), t = t << 13 | t >>> 19;
+    return t;
+  }
+  function At(t) {
+    return t = Math.imul(t ^ t >>> 16, 2246822507), t = Math.imul(t ^ t >>> 13, 3266489909), (t ^ t >>> 16) >>> 0;
+  }
+  var nt = new TextEncoder();
+  function Rt(t) {
+    return t.normalize("NFC").trim().toLowerCase();
+  }
+  function rt(t, e = true) {
+    let n = e ? Rt(t) : t;
+    return I(1779033703 ^ n.length, nt.encode(n));
+  }
+  function A(t, e) {
+    return At(I(I(t, Uint8Array.of(255)), nt.encode(e))) / 4294967296;
+  }
+  function ot(t, e = true, n) {
+    let a = rt(t, e), o = (r) => {
+      let s = n?.[r], c = Array.isArray(s) ? s[Math.floor(A(a, r) * s.length)] : s;
+      return c === void 0 ? A(a, r) : c > 0 ? c < 1 ? c : 0.999999 : 0;
+    };
+    return o.num = (r, s, c) => s + o(r) * (c - s), o.int = (r, s, c) => s + Math.floor(o(r) * (c - s + 1)), o.pick = (r, s) => s[Math.floor(o(r) * s.length)], o.bool = (r, s = 0.5) => o(r) < s, o.jitter = (r, s) => (o(r) * 2 - 1) * s, o;
+  }
+  function E(t, e, n) {
+    let a = e.expression;
+    if (n || !a) return { l: t, wrap: "" };
+    return a.bake(t, a.p);
+  }
+  var R = (t, e) => e?.tint ? e.tint(t, e.p) : t;
+  var at = (t, e) => e ? `<g transform="${e}">${t}</g>` : t;
+  var Ft = (t) => t.replace(/[&<>]/g, (e) => e === "&" ? "&amp;" : e === "<" ? "&lt;" : "&gt;");
+  function S(t, e) {
+    let n = ot(t, e.normalize ?? true, e.traits);
+    return { t: n, palette: { ...G(e.hue ?? n.num("hue", 0, 360), e.contrast ?? true, e.tone ?? n("tone")), ...e.palette } };
+  }
+  var jt = (t) => t.title ? `<title>${Ft(t.title)}</title>` : "";
+  function L(t, e, n) {
+    let a = e.background ?? t.background;
+    if (a === false) return;
+    return { d: a === "square" ? "M0 0H100V100H0Z" : P({ cx: 50, cy: 50, rx: 50, ry: 50, n: a === "circle" ? 2 : 6 }), fill: n.bg };
+  }
+  var Ct = (t) => t ? `<path d="${t.d}" fill="${t.fill}"/>` : "";
+  function st(t) {
+    return (e, n = {}) => {
+      let { t: a, palette: o } = S(e, n), r = R(o, n.expression), s = n.size ? ` width="${n.size}" height="${n.size}"` : "", c = E(t.layout(a), n), i = jt(n) + Ct(L(t, n, r)) + at(t.render(c.l, r), c.wrap);
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"${s}>${i}</svg>`;
+    };
+  }
+  var it = (t, e, n) => {
+    let a = e.rx, o = t.num("eye.rx", 0.075, 0.105) * a, r = t.num("eye.ratio", 1.9, 3.2), s = t.num("eye.scale", 0.78, 1.24), c = t.num("eye.stretch", 0.85, 1.18), i = t.num("eye.gap", 0.1, 0.24) * a, l = o * Math.max(1, s), m = o * r * Math.max(1, s * c), u = l + a * 0.03 + i, b = t.jitter("gaze.x", 0.09) * n.rx, p = t.num("gaze.y", -0.2, 0.08) * n.ry, d = t.jitter("eye.dy", 0.04) * n.ry, h = Math.hypot(l, m), f = Math.hypot((Math.abs(b) + u + h) / n.rx, (Math.abs(p) + Math.abs(d) + h) / n.ry), x = f > 0.9 ? 0.9 / f : 1, g = o * x, k = g * r, C2 = u * x, Ot = Math.max(0, Math.min(1, i / m)), St = Math.min(12, Math.asin(Ot) * 180 / Math.PI), _ = t.num("eye.lean", -1, 1) * St, Bt = Math.max(-12, Math.min(12, _ + t.jitter("eye.lean2", 3.5))), H = n.cx + b * x, z = n.cy + p * x;
+    return [{ cx: H - C2, cy: z, rx: g, ry: k, n: t.num("eye.n", 3.5, 6), rot: _ }, { cx: H + C2, cy: z + d * x, rx: g * s, ry: k * s * c, n: t.num("eye.n", 3.5, 6), rot: Bt }];
+  };
+  function ut(t, e) {
+    let n = (r) => (t.find(([, s]) => r < s) ?? t[t.length - 1])[0];
+    function a(r) {
+      let s = n(r("shape")), c = r.num("body.r", 31, 38) * s.core, i = { cx: 50 + r.jitter("body.x", 1.5), cy: 50 + r.jitter("body.y", 1.5), rx: c, ry: c * r.num("body.ratio", 0.92, 1.08), n: r.num("body.n", 1.9, 2.5), rot: 0, radii: Array.from({ length: r.int("body.pts", 6, 8) }, (u, b) => 1 + r.jitter(`body.r${b}`, 0.16)) };
+      s.body?.(r, i);
+      let l = s.face?.(i) ?? i, m = { petals: [], extra: [] };
+      return s.decorate?.(r, i, m), { shape: s.name, draw: s.path, body: i, face: l, petals: m.petals, extra: m.extra, eyes: e(r, i, l) };
+    }
+    function o(r, s, c) {
+      let i = (u) => Math.round(u * 100) / 100, l = (u, b) => {
+        let p = `<path d="${P(u)}"/>`;
+        return c ? `<g class="mo-eye" style="--mo-wrap:${b ? 1 : -1};--mo-lean:${i(u.rot)};transform-origin:${i(u.cx)}px ${i(u.cy)}px">${p}</g>` : p;
+      }, m = `<g fill="${s.head}">` + r.petals.map((u) => `<circle cx="${i(u.cx)}" cy="${i(u.cy)}" r="${i(u.r)}"/>`).join("") + r.extra.map((u) => `<path d="${u}"/>`).join("") + `<path d="${r.draw ? r.draw(r.body) : P(r.body)}"/></g><g fill="${s.eye}"${c ? ' class="mo-eyes"' : ""}>` + r.eyes.map(l).join("") + "</g>";
+      return c ? `<g class="mo-breathe"><g class="mo-bob">${m}</g></g>` : m;
+    }
+    return { layout: a, render: o, background: false };
+  }
+  var lt = (t) => W(t);
+  var mt = (t) => J(t.cx, t.cy, t.rx, t.ry, t.radii, t.rot);
+  var j = (t) => (e) => ({ cx: e.cx, cy: e.cy, rx: e.rx * t, ry: e.ry * t });
+  var pt = (t) => j(Math.min(...t.radii) * 0.95)(t);
+  var _t = (t) => j(0.84)(t);
+  var yt = { name: "round", core: 1 };
+  var bt = { name: "organic", core: 0.98, path: mt, face: pt };
+  var xt = { name: "boxy", core: 0.86, body: (t, e) => {
+    e.n = t.num("body.n", 3.4, 6), e.rot = t.num("body.rot", -20, 20);
+  } };
+  var ht = { name: "capsule", core: 1.02, body: (t, e) => {
+    e.ry *= t.num("capsule.squat", 0.55, 0.68);
+  }, face: j(0.94), decorate: (t, e, n) => {
+    for (let a of [-1, 1]) n.petals.push({ cx: e.cx + a * (e.rx - e.ry), cy: e.cy, r: e.ry });
+  }, path: (t) => tt(t.cx, t.cy, t.rx - t.ry, t.ry) };
+  var dt = { name: "nub", core: 0.88, decorate: (t, e, n) => {
+    let a = t.int("nub.n", 1, 2);
+    for (let o = 0; o < a; o++) {
+      let r = t.num(`nub.a${o}`, 0, 2 * Math.PI);
+      n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.88, cy: e.cy + Math.sin(r) * e.rx * 0.88, r: e.rx * t.num(`nub.r${o}`, 0.24, 0.4) });
+    }
+  } };
+  var ft = { name: "cloud", core: 0.78, face: pt, path: mt, decorate: (t, e, n) => {
+    let a = t.int("cloud.n", 4, 6);
+    for (let o = 0; o < a; o++) {
+      let r = Math.PI + Math.PI * (o + 0.5) / a;
+      n.petals.push({ cx: e.cx + Math.cos(r) * e.rx * 0.8, cy: e.cy + Math.sin(r) * e.rx * 0.5, r: e.rx * t.num(`cloud.r${o}`, 0.44, 0.62) });
+    }
+  } };
+  var gt = { name: "droplet", core: 0.78, body: (t, e) => {
+    e.cy += 0.22 * e.ry, e.n = 2;
+  }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.05, rx: t.rx * 0.88, ry: t.ry * 0.88 }), decorate: (t, e, n) => {
+    n.extra.push(et(e.cx, e.cy, e.rx, e.ry, t.num("droplet.tip", 1.4, 1.65)));
+  } };
+  var Mt = { name: "hexagon", core: 1.05, path: lt, face: _t, body: (t, e) => {
+    e.sides = 6, e.rot = t.num("body.rot", -12, 12), e.round = t.num("poly.round", 0.24, 0.5);
+  } };
+  var kt = { name: "sun", core: 0.7, decorate: (t, e, n) => {
+    let a = t.int("sun.n", 6, 9), o = e.rx * t.num("sun.dist", 1, 1.08), r = e.rx * t.num("sun.r", 0.2, 0.26), s = t.num("sun.rot", 0, 2 * Math.PI);
+    for (let c = 0; c < a; c++) {
+      let i = s + 2 * Math.PI * c / a;
+      n.petals.push({ cx: e.cx + Math.cos(i) * o, cy: e.cy + Math.sin(i) * o, r });
+    }
+  } };
+  var $t = { name: "triangle", core: 1.15, path: lt, body: (t, e) => {
+    e.sides = 3, e.rot = t.num("body.rot", -5, 5), e.round = t.num("poly.round", 0.24, 0.5);
+  }, face: (t) => ({ cx: t.cx, cy: t.cy + t.ry * 0.1, rx: t.rx * 0.54, ry: t.ry * 0.36 }) };
+  var Ht = [[yt, 0.22], [bt, 0.48], [xt, 0.6], [ht, 0.7], [dt, 0.79], [ft, 0.86], [gt, 0.915], [Mt, 0.95], [kt, 0.98], [$t, 1]];
+  var M = ut(Ht, it);
+  var Pt = st(M);
+  function ke(t, e) {
+    return "data:image/svg+xml," + Pt(t, e).replace(/"/g, "'").replace(/[%#<>{}|\\^[\]`]/g, (a) => "%" + a.charCodeAt(0).toString(16).toUpperCase()).replace(/\s+/g, " ");
+  }
+
+  // membership/member-blob.mjs
+  var OPTIONS = Object.freeze({ background: "square" });
+  var seedOf = (name) => String(name ?? "").trim() || "gbti";
+  function memberBlob(name) {
+    return ke(seedOf(name), OPTIONS);
+  }
+
+  // client-ui/src/member-avatars.mjs
+  var esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  var AVATAR_LAYER_CSS = `img[data-blob], img[data-avphoto] { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; border:0; margin:0; max-width:none; }`;
+  function avatarLayers(seed, photo) {
+    const src = photo === void 0 ? memberAvatarUrl(seed) : String(photo || "");
+    return `<img data-blob src="${esc(memberBlob(seed))}" alt="" aria-hidden="true">` + (src ? `<img data-avphoto src="${esc(src)}" alt="" loading="lazy">` : "");
+  }
+  function attachAvatarFallback(root) {
+    if (!root || typeof root.addEventListener !== "function") return () => {
+    };
+    const onError = (ev) => {
+      const el2 = ev.target;
+      if (el2 && el2.tagName === "IMG" && el2.hasAttribute?.("data-avphoto")) el2.remove();
+    };
+    root.addEventListener("error", onError, true);
+    return () => root.removeEventListener("error", onError, true);
+  }
+
   // client-ui/src/base.mjs
   var HAS_DOM = typeof HTMLElement !== "undefined";
   var CLIENT = null;
@@ -221,12 +499,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     connectedCallback() {
       SUBSCRIBERS.add(this._onClient);
       if (this.root) this._detachCdnFallback = attachCdnFallback(this.root);
+      if (this.root) this._detachAvatarFallback = attachAvatarFallback(this.root);
       this.render?.();
     }
     disconnectedCallback() {
       SUBSCRIBERS.delete(this._onClient);
       this._detachCdnFallback?.();
       this._detachCdnFallback = null;
+      this._detachAvatarFallback?.();
+      this._detachAvatarFallback = null;
     }
     get client() {
       return this._ownClient || getClient();
@@ -244,7 +525,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
     css(extra = "") {
-      return `<style>${TOKENS}${BASE_CSS}${extra}</style>`;
+      return `<style>${TOKENS}${BASE_CSS}${AVATAR_LAYER_CSS}${extra}</style>`;
     }
     set(markup) {
       if (this.root) this.root.innerHTML = markup;
@@ -268,7 +549,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!ce || ce.get(tag)) return;
     ce.define(tag, ctor);
   }
-  function esc(s) {
+  function esc2(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
 
@@ -290,7 +571,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (id && authed) {
         this.set(
           this.css() + `<div class="panel row" style="justify-content:space-between">
-             <div>Signed in as <strong>@${esc(id.login)}</strong> ${role !== "member" ? `<span class="tag ok">${esc(role)}</span>` : ""}</div>
+             <div>Signed in as <strong>@${esc2(id.login)}</strong> ${role !== "member" ? `<span class="tag ok">${esc2(role)}</span>` : ""}</div>
              <button class="ghost" id="out">Sign out</button>
            </div>`
         );
@@ -311,13 +592,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const slot = this.$("#prompt");
           try {
             await this.client.login(({ userCode, verificationUri }) => {
-              slot.innerHTML = `Enter code <strong>${esc(userCode)}</strong> at <a href="${esc(verificationUri)}" target="_blank" rel="noopener">${esc(verificationUri)}</a>`;
+              slot.innerHTML = `Enter code <strong>${esc2(userCode)}</strong> at <a href="${esc2(verificationUri)}" target="_blank" rel="noopener">${esc2(verificationUri)}</a>`;
             });
             getIdentity();
             this.render();
             this.emit("gbti-signin");
           } catch (err) {
-            slot.innerHTML = `<span class="danger">${esc(err.message || "sign-in failed")}</span>`;
+            slot.innerHTML = `<span class="danger">${esc2(err.message || "sign-in failed")}</span>`;
           }
         });
       }
@@ -341,13 +622,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const words = String(suffix).trim().split(/\s+/).filter(Boolean);
     if (!words.length) return null;
     const out = {};
-    for (const w of words) {
-      if (!IMAGE_LAYOUT_WORDS.includes(w)) return null;
-      if (w === "full") out.width = "full";
-      else if (w === "wrap") out.wrap = true;
-      else if (ALIGNS.has(w)) {
-        if (out.align && out.align !== w) return null;
-        out.align = w;
+    for (const w2 of words) {
+      if (!IMAGE_LAYOUT_WORDS.includes(w2)) return null;
+      if (w2 === "full") out.width = "full";
+      else if (w2 === "wrap") out.wrap = true;
+      else if (ALIGNS.has(w2)) {
+        if (out.align && out.align !== w2) return null;
+        out.align = w2;
       }
     }
     return out;
@@ -418,9 +699,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var LIST_STYLE_DEFAULTS = Object.freeze({ bullet: "disc", number: "decimal" });
   var LIST_STYLE_CLASS_RE = /^list-(circle|square|lower-alpha|upper-alpha|lower-roman|upper-roman)$/;
   function styleKind(word) {
-    const w = String(word ?? "");
-    if (BULLET_WORDS.includes(w)) return "bullet";
-    if (NUMBER_WORDS.includes(w)) return "number";
+    const w2 = String(word ?? "");
+    if (BULLET_WORDS.includes(w2)) return "bullet";
+    if (NUMBER_WORDS.includes(w2)) return "number";
     return null;
   }
   function isDefaultStyle(word) {
@@ -468,33 +749,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return LIST_ITEM_RE.test(String(line ?? ""));
   }
   function opensRunBefore(items, i, depth, ordered) {
-    for (let j = i - 1; j >= 0; j--) {
-      if (items[j].depth < depth) return true;
-      if (items[j].depth === depth) return items[j].ordered !== ordered;
+    for (let j2 = i - 1; j2 >= 0; j2--) {
+      if (items[j2].depth < depth) return true;
+      if (items[j2].depth === depth) return items[j2].ordered !== ordered;
     }
     return true;
   }
   function opensRun(items, i) {
-    const it = items[i];
-    return !!it && opensRunBefore(items, i, it.depth, it.ordered);
+    const it2 = items[i];
+    return !!it2 && opensRunBefore(items, i, it2.depth, it2.ordered);
   }
   function runOf(items, i) {
     const d = items[i].depth;
     const o = items[i].ordered;
     let start = i;
-    for (let j = i - 1; j >= 0; j--) {
-      if (items[j].depth < d) break;
-      if (items[j].depth === d) {
-        if (items[j].ordered !== o) break;
-        start = j;
+    for (let j2 = i - 1; j2 >= 0; j2--) {
+      if (items[j2].depth < d) break;
+      if (items[j2].depth === d) {
+        if (items[j2].ordered !== o) break;
+        start = j2;
       }
     }
     const out = [];
-    for (let j = start; j < items.length; j++) {
-      if (j > start && items[j].depth < d) break;
-      if (items[j].depth === d) {
-        if (items[j].ordered !== o) break;
-        out.push(j);
+    for (let j2 = start; j2 < items.length; j2++) {
+      if (j2 > start && items[j2].depth < d) break;
+      if (items[j2].depth === d) {
+        if (items[j2].ordered !== o) break;
+        out.push(j2);
       }
     }
     return out;
@@ -532,13 +813,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const out = [];
     let prevDepth = -1;
     for (const raw of Array.isArray(items) ? items : []) {
-      const it = raw && typeof raw === "object" ? raw : { text: raw, depth: 0 };
-      let depth = Math.max(0, Math.floor(Number(it.depth) || 0));
+      const it2 = raw && typeof raw === "object" ? raw : { text: raw, depth: 0 };
+      let depth = Math.max(0, Math.floor(Number(it2.depth) || 0));
       if (depth > prevDepth + 1) depth = prevDepth + 1;
-      const own = typeof it.ordered === "boolean" ? it.ordered : false;
+      const own = typeof it2.ordered === "boolean" ? it2.ordered : false;
       const isOrdered = depth === 0 ? !!ordered : own;
-      const item = { text: String(it.text ?? ""), depth, ordered: isOrdered };
-      const style = it.style ? normalizeListStyle(it.style, isOrdered) : null;
+      const item = { text: String(it2.text ?? ""), depth, ordered: isOrdered };
+      const style = it2.style ? normalizeListStyle(it2.style, isOrdered) : null;
       if (style && opensRunBefore(out, out.length, depth, isOrdered)) item.style = style;
       out.push(item);
       prevDepth = depth;
@@ -550,9 +831,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!list.length) return true;
     const first = list[0];
     const firstOrdered = first && typeof first === "object" ? !!first.ordered : null;
-    return list.every((it) => {
-      if (!it || typeof it !== "object") return firstOrdered === null;
-      return (Number(it.depth) || 0) === 0 && !!it.ordered === firstOrdered && !it.style;
+    return list.every((it2) => {
+      if (!it2 || typeof it2 !== "object") return firstOrdered === null;
+      return (Number(it2.depth) || 0) === 0 && !!it2.ordered === firstOrdered && !it2.style;
     });
   }
   function serializeListItems(items, ordered = false) {
@@ -563,59 +844,59 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const markerWidth = [];
     let prevDepth = -1;
     let prevOrderedAtDepth = [];
-    for (const it of norm2) {
-      if (it.depth > prevDepth) {
-        counters[it.depth] = 0;
-        indents[it.depth] = it.depth === 0 ? "" : indents[it.depth - 1] + " ".repeat(markerWidth[it.depth - 1] || 2);
-        prevOrderedAtDepth[it.depth] = it.ordered;
-      } else if (it.depth < prevDepth) {
-        counters.length = it.depth + 1;
-        prevOrderedAtDepth.length = it.depth + 1;
+    for (const it2 of norm2) {
+      if (it2.depth > prevDepth) {
+        counters[it2.depth] = 0;
+        indents[it2.depth] = it2.depth === 0 ? "" : indents[it2.depth - 1] + " ".repeat(markerWidth[it2.depth - 1] || 2);
+        prevOrderedAtDepth[it2.depth] = it2.ordered;
+      } else if (it2.depth < prevDepth) {
+        counters.length = it2.depth + 1;
+        prevOrderedAtDepth.length = it2.depth + 1;
       }
-      if (prevOrderedAtDepth[it.depth] !== it.ordered) {
-        counters[it.depth] = 0;
-        prevOrderedAtDepth[it.depth] = it.ordered;
+      if (prevOrderedAtDepth[it2.depth] !== it2.ordered) {
+        counters[it2.depth] = 0;
+        prevOrderedAtDepth[it2.depth] = it2.ordered;
       }
-      counters[it.depth] = (counters[it.depth] || 0) + 1;
-      const marker = it.ordered ? `${counters[it.depth]}. ` : "- ";
-      markerWidth[it.depth] = marker.length;
-      const suffix = it.style && it.text.trim() !== "" ? ` {${it.style}}` : "";
-      lines.push(`${indents[it.depth]}${marker}${it.text}${suffix}`);
-      prevDepth = it.depth;
+      counters[it2.depth] = (counters[it2.depth] || 0) + 1;
+      const marker = it2.ordered ? `${counters[it2.depth]}. ` : "- ";
+      markerWidth[it2.depth] = marker.length;
+      const suffix = it2.style && it2.text.trim() !== "" ? ` {${it2.style}}` : "";
+      lines.push(`${indents[it2.depth]}${marker}${it2.text}${suffix}`);
+      prevDepth = it2.depth;
     }
     return lines;
   }
   function withClass(attrs, cls) {
     const a = String(attrs || "");
     if (!cls) return a;
-    if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v) => `class="${v ? `${v} ` : ""}${cls}"`);
+    if (/\bclass="[^"]*"/.test(a)) return a.replace(/\bclass="([^"]*)"/, (_m, v2) => `class="${v2 ? `${v2} ` : ""}${cls}"`);
     return `${a ? `${a} ` : ""}class="${cls}"`;
   }
   function listHtml(items, inline4 = (t) => t, { ordered = false, rootAttrs = "" } = {}) {
     const norm2 = normalizeListItems(items, ordered);
     let html = "";
     const open = [];
-    const openList = (it) => {
-      const tag = it.ordered ? "ol" : "ul";
-      const attrs = withClass(open.length ? "" : rootAttrs, listStyleClass(it.style));
+    const openList = (it2) => {
+      const tag = it2.ordered ? "ol" : "ul";
+      const attrs = withClass(open.length ? "" : rootAttrs, listStyleClass(it2.style));
       html += `<${tag}${attrs ? ` ${attrs}` : ""}>`;
-      open.push({ tag, ordered: it.ordered });
+      open.push({ tag, ordered: it2.ordered });
     };
     const closeList = () => {
       html += `</li></${open.pop().tag}>`;
     };
-    for (const it of norm2) {
-      while (open.length > it.depth + 1) closeList();
-      if (open.length === it.depth + 1) {
+    for (const it2 of norm2) {
+      while (open.length > it2.depth + 1) closeList();
+      if (open.length === it2.depth + 1) {
         const cur = open[open.length - 1];
-        if (cur.ordered !== it.ordered) {
+        if (cur.ordered !== it2.ordered) {
           closeList();
-          openList(it);
-          html += `<li>${inline4(it.text)}`;
-        } else html += `</li><li>${inline4(it.text)}`;
+          openList(it2);
+          html += `<li>${inline4(it2.text)}`;
+        } else html += `</li><li>${inline4(it2.text)}`;
       } else {
-        openList(it);
-        html += `<li>${inline4(it.text)}`;
+        openList(it2);
+        html += `<li>${inline4(it2.text)}`;
       }
     }
     while (open.length) closeList();
@@ -630,26 +911,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const newDepth = Math.max(0, Math.min(maxDepth, oldDepth + (delta > 0 ? 1 : -1)));
     if (newDepth === oldDepth) return null;
     const shift = newDepth - oldDepth;
-    const out = norm2.map((it) => ({ ...it }));
+    const out = norm2.map((it2) => ({ ...it2 }));
     if (out[i].style) {
-      for (let j = i + 1; j < out.length; j++) {
-        if (out[j].depth < oldDepth) break;
-        if (out[j].depth === oldDepth) {
-          if (out[j].ordered === out[i].ordered) out[j].style = out[i].style;
+      for (let j2 = i + 1; j2 < out.length; j2++) {
+        if (out[j2].depth < oldDepth) break;
+        if (out[j2].depth === oldDepth) {
+          if (out[j2].ordered === out[i].ordered) out[j2].style = out[i].style;
           break;
         }
       }
       delete out[i].style;
     }
     out[i].depth = newDepth;
-    for (let j = i - 1; j >= 0; j--) {
-      if (out[j].depth < newDepth) break;
-      if (out[j].depth === newDepth) {
-        out[i].ordered = out[j].ordered;
+    for (let j2 = i - 1; j2 >= 0; j2--) {
+      if (out[j2].depth < newDepth) break;
+      if (out[j2].depth === newDepth) {
+        out[i].ordered = out[j2].ordered;
         break;
       }
     }
-    for (let j = i + 1; j < out.length && out[j].depth > oldDepth; j++) out[j].depth = Math.max(0, out[j].depth + shift);
+    for (let j2 = i + 1; j2 < out.length && out[j2].depth > oldDepth; j2++) out[j2].depth = Math.max(0, out[j2].depth + shift);
     return normalizeListItems(out, ordered);
   }
   function listRunState(items, ordered = false, index = 0) {
@@ -678,11 +959,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         wantStyle = normalizeListStyle(word, wantOrdered);
       }
     } else return null;
-    const out = norm2.map((it) => ({ ...it }));
-    if (wantOrdered !== null) for (const j of runOf(out, i)) out[j].ordered = wantOrdered;
+    const out = norm2.map((it2) => ({ ...it2 }));
+    if (wantOrdered !== null) for (const j2 of runOf(out, i)) out[j2].ordered = wantOrdered;
     if (wantStyle !== void 0) {
       const run = runOf(out, i);
-      for (const j of run) delete out[j].style;
+      for (const j2 of run) delete out[j2].style;
       if (wantStyle) out[run[0]].style = wantStyle;
     }
     const topOrdered = out[0].ordered;
@@ -727,22 +1008,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const runs = [];
     for (let i = 0; i < toks.length; i++) {
       if (toks[i].ch !== "_") continue;
-      let j = i;
-      while (j + 1 < toks.length && toks[j + 1].ch === "_") j++;
+      let j2 = i;
+      while (j2 + 1 < toks.length && toks[j2 + 1].ch === "_") j2++;
       const before = kind(toks[i - 1]);
-      const after = kind(toks[j + 1]);
+      const after = kind(toks[j2 + 1]);
       const left = after !== "ws" && (after !== "punct" || before === "ws" || before === "punct");
       const right = before !== "ws" && (before !== "punct" || after === "ws" || after === "punct");
       runs.push({
         at: i,
-        len: j - i + 1,
-        count: j - i + 1,
+        len: j2 - i + 1,
+        count: j2 - i + 1,
         canOpen: left && (!right || before === "punct"),
         canClose: right && (!left || after === "punct"),
         opens: [],
         closes: []
       });
-      i = j;
+      i = j2;
     }
     if (!runs.length) return render(toks, /* @__PURE__ */ new Map(), keepEscapes);
     const emClose = em.replace(/^<([a-z]+)[\s\S]*$/i, "</$1>");
@@ -806,7 +1087,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   var isTableStart = (lines, i) => i + 1 < lines.length && lines[i].includes("|") && isTableDelimLine(lines[i + 1]);
   var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-  var normalizeVariant = (v) => CALLOUT_VARIANTS.includes(v) ? v : "note";
+  var normalizeVariant = (v2) => CALLOUT_VARIANTS.includes(v2) ? v2 : "note";
   var isMarker = (l) => l.trim() === MEMBERS_MARKER;
   var isFence = (l) => /^```/.test(l);
   var isHeading = (l) => /^#{1,6}\s+/.test(l);
@@ -908,18 +1189,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isQuote(line)) {
-        const q = [];
+        const q2 = [];
         while (i < n && isQuote(lines[i])) {
-          q.push(lines[i].replace(/^>\s?/, ""));
+          q2.push(lines[i].replace(/^>\s?/, ""));
           i++;
         }
-        blocks2.push({ type: "quote", text: q.join("\n") });
+        blocks2.push({ type: "quote", text: q2.join("\n") });
         continue;
       }
       if (isListItem(line)) {
         const run = takeListRun(lines, i);
         const ordered = !!run.items[0]?.ordered;
-        const items = isFlatList(run.items) ? run.items.map((it) => it.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
+        const items = isFlatList(run.items) ? run.items.map((it2) => it2.text) : run.items.map(({ text: text2, depth, ordered: o, style }) => ({ text: text2, depth, ordered: o, ...style ? { style } : {} }));
         blocks2.push({ type: "list", ordered, items });
         i = run.next;
         continue;
@@ -1053,10 +1334,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var EM_US = `<em ${UNDERSCORE_MARK}>`;
   var STRONG_US = `<strong ${UNDERSCORE_MARK}>`;
   var WORD_CHAR = /[\p{L}\p{N}]/u;
-  function emphasisMark(attrs, all, at, len, star) {
+  function emphasisMark(attrs, all, at2, len, star) {
     if (!/\bdata-md="_"/.test(attrs)) return star;
-    const before = all[at - 1] ?? "";
-    const after = all[at + len] ?? "";
+    const before = all[at2 - 1] ?? "";
+    const after = all[at2 + len] ?? "";
     return WORD_CHAR.test(before) || WORD_CHAR.test(after) ? star : star.replace(/\*/g, "_");
   }
   function inlineMdToHtml(md) {
@@ -1099,12 +1380,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       keep.push(rawAnchor(a.href, a.rel, a.blank, inner));
       return `\0A${keep.length - 1}\0`;
     });
-    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t, attrs, inner, at, all) => {
-      const d = emphasisMark(attrs, all, at, m.length, "**");
+    s = s.replace(/<(strong|b)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at2, all) => {
+      const d = emphasisMark(attrs, all, at2, m.length, "**");
       return `${d}${inner}${d}`;
     });
-    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t, attrs, inner, at, all) => {
-      const d = emphasisMark(attrs, all, at, m.length, "*");
+    s = s.replace(/<(em|i)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (m, _t2, attrs, inner, at2, all) => {
+      const d = emphasisMark(attrs, all, at2, m.length, "*");
       return `${d}${inner}${d}`;
     });
     s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
@@ -1114,13 +1395,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/^\s*<div>/i, "");
     s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
     s = s.replace(/<img\b([^>]*)>/gi, (_m, attrs) => {
-      const at = (name) => {
+      const at2 = (name) => {
         const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(attrs);
         return m ? m[1] ?? m[2] ?? "" : "";
       };
-      const ref = at("data-ref") || at("src");
+      const ref = at2("data-ref") || at2("src");
       if (!/^(https?:\/\/|\.\/)/i.test(ref)) return "";
-      return `![${at("alt").replace(/[\[\]]/g, "")}](${ref})`;
+      return `![${at2("alt").replace(/[\[\]]/g, "")}](${ref})`;
     });
     s = s.replace(/<[^>]+>/g, "");
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -1242,7 +1523,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function listStyleProseCss(scope) {
     const s = String(scope || "").trim();
-    return LIST_STYLE_WORDS.filter((w) => !isDefaultStyle(w)).map((w) => `  ${s} ${styleKind(w) === "number" ? "ol" : "ul"}.list-${w} > li { list-style: ${w}; }`).join("\n");
+    return LIST_STYLE_WORDS.filter((w2) => !isDefaultStyle(w2)).map((w2) => `  ${s} ${styleKind(w2) === "number" ? "ol" : "ul"}.list-${w2} > li { list-style: ${w2}; }`).join("\n");
   }
 
   // client-ui/src/block-commit.mjs
@@ -1506,35 +1787,35 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (list) showListTools(list, void 0, { lift: !!tb && tb.style.display !== "none" });
     }
-    function wrap(w) {
+    function wrap(w2) {
       const sel = getSel();
       if (!sel || sel.isCollapsed) return;
       const el2 = editableOf(sel.anchorNode);
       if (!el2) return;
-      if (w === "image") {
+      if (w2 === "image") {
         openImagePanel(sel, el2);
         return;
       }
-      if (w === "h2" || w === "h3" || w === "p") {
-        if (typeof onRetype === "function") onRetype(el2, w === "p" ? "paragraph" : "heading", w === "h2" ? 2 : w === "h3" ? 3 : null);
+      if (w2 === "h2" || w2 === "h3" || w2 === "p") {
+        if (typeof onRetype === "function") onRetype(el2, w2 === "p" ? "paragraph" : "heading", w2 === "h2" ? 2 : w2 === "h3" ? 3 : null);
         hideTb();
         return;
       }
       if (!allowInline(el2)) return;
-      if (w === "link") {
+      if (w2 === "link") {
         openPanel(sel, el2);
         return;
       }
-      if (w === "code") toggleInline(sel, "code");
-      else if (typeof document !== "undefined") document.execCommand(w);
+      if (w2 === "code") toggleInline(sel, "code");
+      else if (typeof document !== "undefined") document.execCommand(w2);
       onCommit(el2, "format");
       hideTb();
     }
     function toggleInline(sel, tag) {
       if (!sel.rangeCount || sel.isCollapsed) return;
       const r = sel.getRangeAt(0);
-      const at = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
-      const existing = at && at.closest ? at.closest(tag) : null;
+      const at2 = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+      const existing = at2 && at2.closest ? at2.closest(tag) : null;
       if (existing) {
         existing.replaceWith(document.createTextNode(existing.textContent));
         return;
@@ -1901,13 +2182,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const current = readListDom(el2, (h) => inlineHtmlToMd(h));
     const next = indentListItem(current, index, e.shiftKey ? -1 : 1, !!ordered);
     if (!next) return true;
-    const again = apply2(isFlatList(next) ? next.map((it) => it.text) : next);
+    const again = apply2(isFlatList(next) ? next.map((it2) => it2.text) : next);
     const li = again ? again.querySelectorAll("li")[index] : null;
     if (again) again.focus();
     if (li) caretAtEndOfItem(li, sel);
     return true;
   }
-  var shapeOf = (items) => isFlatList(items) ? items.map((it) => it.text) : items;
+  var shapeOf = (items) => isFlatList(items) ? items.map((it2) => it2.text) : items;
   function listBarTools(host) {
     const md = (h) => inlineHtmlToMd(h);
     return {
@@ -1926,7 +2207,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (action === "unwrap") {
           const i = host.indexOf(b._id);
           if (i < 0) return;
-          const texts = normalizeListItems(current, !!b.ordered).map((it) => it.text).filter((t) => t.trim() !== "");
+          const texts = normalizeListItems(current, !!b.ordered).map((it2) => it2.text).filter((t) => t.trim() !== "");
           const paras = (texts.length ? texts : [""]).map((text2) => host.withId({ type: "paragraph", text: text2 }));
           host.blocks().splice(i, 1, ...paras);
           host.render();
@@ -1955,10 +2236,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return Array.isArray(rows) ? rows.filter((r) => r && typeof r.name === "string" && typeof r.itemPath === "string") : [];
   }
   function filterMedia(rows, query) {
-    const q = String(query ?? "").trim().toLowerCase();
+    const q2 = String(query ?? "").trim().toLowerCase();
     const list = Array.isArray(rows) ? rows : [];
-    if (!q) return list.slice();
-    return list.filter((r) => `${r?.name ?? ""} ${r?.itemTitle ?? ""}`.toLowerCase().includes(q));
+    if (!q2) return list.slice();
+    return list.filter((r) => `${r?.name ?? ""} ${r?.itemTitle ?? ""}`.toLowerCase().includes(q2));
   }
   function reusePlan(record, currentItemPath) {
     const name = record?.name;
@@ -1985,8 +2266,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var FLAT_G = new RegExp(String.raw`members\/[A-Za-z0-9-]+\/images\/${NAME}`, "gi");
   var CANONICAL = new RegExp(String.raw`^\.\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
   var FLAT = new RegExp(String.raw`^members\/[A-Za-z0-9-]+\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
-  function isStagedImagePath(v) {
-    const s = String(v ?? "");
+  function isStagedImagePath(v2) {
+    const s = String(v2 ?? "");
     return CANONICAL.test(s) || FLAT.test(s);
   }
   function stagedImageName(p) {
@@ -2218,7 +2499,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "image", label: "Image", icon: "img", desc: "Upload or embed a picture" },
     { key: "embed", label: "Video / embed", icon: "video", desc: "YouTube or Vimeo" }
   ];
-  var paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? " on" : ""}" ${dataAttr}><span class="mi-ic">${svg(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc(c.label)}</span><span class="mi-ds">${esc(c.desc)}</span></span></div>`;
+  var paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? " on" : ""}" ${dataAttr}><span class="mi-ic">${svg(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc2(c.label)}</span><span class="mi-ds">${esc2(c.desc)}</span></span></div>`;
   var convertKey = (b) => b.type === "heading" ? `h${Math.min(3, Math.max(1, b.level || 2))}` : b.type === "list" ? b.ordered ? "ol" : "ul" : b.type;
   var blockFromKey = (key) => {
     const c = CONVERT.find((x) => x.key === key) || CONVERT[0];
@@ -2252,8 +2533,8 @@ ${listStyleProseCss(".doc-blocks")}
   var svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
   var GbtiDocEditor = class extends GbtiElement {
     // sow-165: the owning editor sets this so a repo-relative body image resolves against the item's folder.
-    set itemPath(v) {
-      this._itemPath = v || null;
+    set itemPath(v2) {
+      this._itemPath = v2 || null;
       if (this.isConnected) this._render();
     }
     get itemPath() {
@@ -2261,8 +2542,8 @@ ${listStyleProseCss(".doc-blocks")}
     }
     // The owning editor's `<type>:<slug>` draft token, which scopes the staged-image store. Set by
     // gbti-content-editor alongside itemPath; a body image belongs to the same draft the rail fields do.
-    set item(v) {
-      this._item = v || null;
+    set item(v2) {
+      this._item = v2 || null;
     }
     get item() {
       return this._item || null;
@@ -2421,17 +2702,17 @@ ${listStyleProseCss(".doc-blocks")}
       const cur = CONVERT.find((c) => c.key === convertKey(b)) || CONVERT[0];
       return `<div class="blk-tools">
       <span class="bt grip" draggable="true" data-grip="${id}" title="Drag to reorder">${svg("grip")}</span>
-      <button class="bt" type="button" data-convert="${id}" title="Turn into (now: ${esc(cur.label)})">${svg(cur.icon)}</button>
+      <button class="bt" type="button" data-convert="${id}" title="Turn into (now: ${esc2(cur.label)})">${svg(cur.icon)}</button>
       <button class="bt" type="button" data-up="${id}" title="Move up">${svg("up")}</button>
       <button class="bt" type="button" data-down="${id}" title="Move down">${svg("down")}</button>
       <button class="bt danger" type="button" data-del="${id}" title="Delete">${svg("x")}</button>
     </div>`;
     }
     _blockHtml(b, inMem) {
-      return `<div class="blk blk-${esc(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
+      return `<div class="blk blk-${esc2(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
     }
     _ce(cls, edit, b, ph) {
-      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${textBlockToHtml(b.text || "")}</div>`;
+      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc2(ph || "")}">${textBlockToHtml(b.text || "")}</div>`;
     }
     _bodyHtml(b) {
       switch (b.type) {
@@ -2440,12 +2721,12 @@ ${listStyleProseCss(".doc-blocks")}
         case "quote":
           return this._ce("ce-q", "text", b, "Quote");
         case "callout": {
-          const v = CALLOUT_VARIANTS.includes(b.variant) ? b.variant : "note";
-          const bar = `<div class="cvar"><span class="cvar-lab">${svg("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
-          return `<div class="cwrap">${bar}<div class="callout callout-${v}"><span class="cicon">${svg("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
+          const v2 = CALLOUT_VARIANTS.includes(b.variant) ? b.variant : "note";
+          const bar = `<div class="cvar"><span class="cvar-lab">${svg("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v2 ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
+          return `<div class="cwrap">${bar}<div class="callout callout-${v2}"><span class="cicon">${svg("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
         case "code":
-          return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || "")}</div>`;
+          return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc2(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc2(b.code || "")}</div>`;
         case "list": {
           const items = Array.isArray(b.items) && b.items.length ? b.items : [""];
           return listHtml(items, inlineMdToHtml, { ordered: !!b.ordered, rootAttrs: `class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}"` });
@@ -2457,18 +2738,18 @@ ${listStyleProseCss(".doc-blocks")}
           const cols = Math.max(1, head.length);
           const alignStyle = (c) => aligns[c] ? ` style="text-align:${aligns[c]}"` : "";
           const alignLabel = (c) => ({ "": "–", left: "L", center: "C", right: "R" })[aligns[c] || ""];
-          const cell = (r, c, v) => `<div class="tc" contenteditable="true" data-edit="cell" data-id="${b._id}" data-r="${r}" data-c="${c}" data-ph="">${inlineMdToHtml(v || "")}</div>`;
+          const cell = (r, c, v2) => `<div class="tc" contenteditable="true" data-edit="cell" data-id="${b._id}" data-r="${r}" data-c="${c}" data-ph="">${inlineMdToHtml(v2 || "")}</div>`;
           const headCells = Array.from({ length: cols }, (_, c) => `<th${alignStyle(c)}>${cell(-1, c, head[c])}<div class="th-ctl"><button type="button" class="tbtn" data-talign="${b._id}" data-c="${c}" title="Cycle column alignment">${alignLabel(c)}</button><button type="button" class="tbtn del" data-tcolrm="${b._id}" data-c="${c}" title="Delete this column">${svg("x")}</button></div></th>`).join("");
           const bodyRows = rows.map((row, r) => `<tr>` + Array.from({ length: cols }, (_, c) => `<td${alignStyle(c)}>${cell(r, c, row[c])}</td>`).join("") + `<td class="row-ctl"><button type="button" class="tbtn del" data-trowrm="${b._id}" data-r="${r}" title="Delete this row">${svg("x")}</button></td></tr>`).join("");
           return `<div class="card tbl-card"><div class="card-h">${svg("table")} Table</div><div class="tbl-scroll"><table class="tbl"><thead><tr>${headCells}<th class="corner"></th></tr></thead><tbody>${bodyRows || ""}</tbody></table></div><div class="tbl-ctl"><button type="button" class="tadd" data-taddrow="${b._id}">${svg("plus")} Row</button><button type="button" class="tadd" data-taddcol="${b._id}">${svg("plus")} Column</button></div></div>`;
         }
         case "image": {
           const hasUrl = !!b.url;
-          const src = hasUrl ? esc(this._stagedSrc && this._stagedSrc[b.url] || resolveContentAsset(b.url, this.itemPath)) : "";
-          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ""}` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><input data-edit="caption" data-id="${b._id}" value="${esc(b.caption || "")}" placeholder="Caption (shown under the image)" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
+          const src = hasUrl ? esc2(this._stagedSrc && this._stagedSrc[b.url] || resolveContentAsset(b.url, this.itemPath)) : "";
+          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />${b.caption ? `<figcaption>${esc2(b.caption)}</figcaption>` : ""}` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc2(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc2(b.alt || "")}" placeholder="Alt text" /><input data-edit="caption" data-id="${b._id}" value="${esc2(b.caption || "")}" placeholder="Caption (shown under the image)" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg("img")} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div><div class="imglay" data-imglay="${b._id}">${imageLayoutButtonsHtml(b)}</div></div>`;
         }
         case "embed":
-          return `<div class="card"><div class="card-h">${svg("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
+          return `<div class="card"><div class="card-h">${svg("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc2(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
         case "paragraph":
         default:
           return this._ce("ce-p", "text", b, "Write, or use the Add block button");
@@ -2532,7 +2813,7 @@ ${listStyleProseCss(".doc-blocks")}
           } else if (f === "code") b.code = el2.innerText.replace(/\n$/, "");
           else if (f === "list") {
             const items = readListDom(el2, (h) => inlineHtmlToMd(h));
-            b.items = isFlatList(items) ? items.map((it) => it.text) : items;
+            b.items = isFlatList(items) ? items.map((it2) => it2.text) : items;
           } else if (f === "cell") {
             const r = Number(el2.dataset.r);
             const c = Number(el2.dataset.c);
@@ -2864,18 +3145,18 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _move(id, dir) {
       const i = this._indexOf(id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= this._blocks.length) return;
+      const j2 = i + dir;
+      if (i < 0 || j2 < 0 || j2 >= this._blocks.length) return;
       const [b] = this._blocks.splice(i, 1);
-      this._blocks.splice(j, 0, b);
+      this._blocks.splice(j2, 0, b);
       this._render();
       this._change();
     }
     async _uploadImage(file, id) {
       const b = this._byId(id);
       if (!file || !b || !this.client?.stageImage) return;
-      const st = this.$(`[data-imgst="${id}"]`);
-      if (st) st.textContent = "Uploading...";
+      const st2 = this.$(`[data-imgst="${id}"]`);
+      if (st2) st2.textContent = "Uploading...";
       try {
         const dataBase64 = await new Promise((res, rej) => {
           const r = new FileReader();
@@ -2893,7 +3174,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._render();
         this._change();
       } catch {
-        if (st) st.textContent = "Upload failed";
+        if (st2) st2.textContent = "Upload failed";
       }
     }
     // --- sow-165 Q36: reuse an image from this member's own published items ---------------------------------
@@ -2930,12 +3211,12 @@ ${listStyleProseCss(".doc-blocks")}
       this._mediaPop = pop;
       const rows = await this._loadMediaIndex();
       if (this._mediaPop !== pop) return;
-      const draw = (q2) => {
-        const shown = filterMedia(rows, q2);
+      const draw = (q3) => {
+        const shown = filterMedia(rows, q3);
         pop.querySelector(".media-grid").innerHTML = shown.length ? shown.map((r, i) => {
           const plan = reusePlan(r, this.itemPath);
-          return `<button type="button" class="media-cell" data-mi="${i}" title="${esc(r.name)} (from ${esc(r.itemTitle || r.slug || "")})"><img src="${esc(plan?.sourceUrl || "")}" alt="" loading="lazy" /><span>${esc(r.name)}</span></button>`;
-        }).join("") : `<div class="media-load">${esc(rows.length ? "Nothing matches that." : this._mediaErr || "No images.")}</div>`;
+          return `<button type="button" class="media-cell" data-mi="${i}" title="${esc2(r.name)} (from ${esc2(r.itemTitle || r.slug || "")})"><img src="${esc2(plan?.sourceUrl || "")}" alt="" loading="lazy" /><span>${esc2(r.name)}</span></button>`;
+        }).join("") : `<div class="media-load">${esc2(rows.length ? "Nothing matches that." : this._mediaErr || "No images.")}</div>`;
         pop.querySelectorAll("[data-mi]").forEach((cell) => {
           cell.addEventListener("click", () => {
             this._closeMediaPicker();
@@ -2947,10 +3228,10 @@ ${listStyleProseCss(".doc-blocks")}
         });
       };
       pop.innerHTML = `<input class="media-q" type="search" placeholder="Search your images" aria-label="Search your images" /><div class="media-grid"></div>`;
-      const q = pop.querySelector(".media-q");
-      q?.addEventListener("input", () => draw(q.value));
+      const q2 = pop.querySelector(".media-q");
+      q2?.addEventListener("input", () => draw(q2.value));
       draw("");
-      q?.focus();
+      q2?.focus();
       this._onMediaEsc = (e) => {
         if (e.key === "Escape") this._closeMediaPicker();
       };
@@ -2972,7 +3253,7 @@ ${listStyleProseCss(".doc-blocks")}
       const b = this._byId(id);
       const plan = reusePlan(record, this.itemPath);
       if (!b || !plan) return;
-      const st = this.$(`[data-imgst="${id}"]`);
+      const st2 = this.$(`[data-imgst="${id}"]`);
       if (plan.alreadyHere) {
         b.url = plan.ref;
         if (!b.alt) b.alt = plan.name.replace(/\.[^.]+$/, "");
@@ -2981,10 +3262,10 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (!this.client?.stageImage) {
-        if (st) st.textContent = "Reuse is not available in this client";
+        if (st2) st2.textContent = "Reuse is not available in this client";
         return;
       }
-      if (st) st.textContent = "Copying...";
+      if (st2) st2.textContent = "Copying...";
       try {
         const res = await fetch(plan.sourceUrl);
         if (!res.ok) throw new Error(String(res.status));
@@ -2997,7 +3278,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._render();
         this._change();
       } catch {
-        if (st) st.textContent = "Could not copy that image";
+        if (st2) st2.textContent = "Could not copy that image";
       }
     }
     // --- SOW-062 5c-2: slash menu (type "/" in a fresh paragraph -> a filtered block picker) ---
@@ -3044,8 +3325,8 @@ ${listStyleProseCss(".doc-blocks")}
       this._change();
     }
     _openSlash(el2, query) {
-      const q = String(query || "").toLowerCase();
-      const matches = this._palette().filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q));
+      const q2 = String(query || "").toLowerCase();
+      const matches = this._palette().filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q2));
       this._closeSlash();
       const host = this.$(".doc-blocks");
       const blk = el2.closest(".blk");
@@ -3131,8 +3412,8 @@ ${listStyleProseCss(".doc-blocks")}
   var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
   function parseWorkspaceNew(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
-    const nt = m ? canonicalType(m[1]) : null;
-    return nt && WORKSPACE_NEW_TYPES.has(nt) ? nt : null;
+    const nt2 = m ? canonicalType(m[1]) : null;
+    return nt2 && WORKSPACE_NEW_TYPES.has(nt2) ? nt2 : null;
   }
   var EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|projects|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
   function parseWorkspaceEdit(hash) {
@@ -3204,17 +3485,17 @@ ${listStyleProseCss(".doc-blocks")}
     return (Array.isArray(prs) ? prs : []).map((pr) => ({ pr, c: classifyPull(pr, null) })).filter(({ pr, c }) => c.label === "Declined" || pr.state !== "closed" && pr.merged !== true).slice(0, 6).map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || "", label: c.label, tone: c.tone }));
   }
   function prEvent(pr = {}) {
-    const at = (v) => typeof v === "string" && v ? v : null;
+    const at2 = (v2) => typeof v2 === "string" && v2 ? v2 : null;
     if (pr.merged === true || pr.state === "merged") {
-      const t = at(pr.mergedAt) ?? at(pr.updatedAt) ?? at(pr.createdAt);
+      const t = at2(pr.mergedAt) ?? at2(pr.updatedAt) ?? at2(pr.createdAt);
       return t ? { verb: "merged", at: t } : { verb: "", at: null };
     }
     if (pr.state === "closed") {
-      const t = at(pr.closedAt) ?? at(pr.updatedAt) ?? at(pr.createdAt);
+      const t = at2(pr.closedAt) ?? at2(pr.updatedAt) ?? at2(pr.createdAt);
       return t ? { verb: "closed", at: t } : { verb: "", at: null };
     }
-    const created = at(pr.createdAt);
-    const updated = at(pr.updatedAt);
+    const created = at2(pr.createdAt);
+    const updated = at2(pr.updatedAt);
     if (updated && created && Date.parse(updated) - Date.parse(created) > 6e4) return { verb: "updated", at: updated };
     if (created) return { verb: "opened", at: created };
     return updated ? { verb: "updated", at: updated } : { verb: "", at: null };
@@ -3297,8 +3578,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
   function authorsIn(items) {
     const set = /* @__PURE__ */ new Set();
-    for (const it of Array.isArray(items) ? items : []) {
-      const a = authorOf(it);
+    for (const it2 of Array.isArray(items) ? items : []) {
+      const a = authorOf(it2);
       if (a) set.add(a);
     }
     return [...set].sort();
@@ -3306,7 +3587,7 @@ ${listStyleProseCss(".doc-blocks")}
   function filterByAuthor(items, author = "") {
     const a = String(author || "").toLowerCase();
     if (!a || a === "all") return Array.isArray(items) ? items : [];
-    return (Array.isArray(items) ? items : []).filter((it) => authorOf(it) === a);
+    return (Array.isArray(items) ? items : []).filter((it2) => authorOf(it2) === a);
   }
   function sortItems(items, sort = DEFAULT_SORT) {
     const list = Array.isArray(items) ? [...items] : [];
@@ -3342,11 +3623,11 @@ ${listStyleProseCss(".doc-blocks")}
     return [...Array.isArray(content) ? content : [], ...extra];
   }
   function authorSelectValue({ itemPath, author, pendingTarget } = {}) {
-    const pt = pendingTarget && typeof pendingTarget === "object" ? pendingTarget : null;
-    if (pt) {
-      if (pt.scope === "house") return "house";
-      const u = String(pt.username || "").trim().toLowerCase();
-      if (pt.scope === "member" && u) return `member:${u}`;
+    const pt2 = pendingTarget && typeof pendingTarget === "object" ? pendingTarget : null;
+    if (pt2) {
+      if (pt2.scope === "house") return "house";
+      const u = String(pt2.username || "").trim().toLowerCase();
+      if (pt2.scope === "member" && u) return `member:${u}`;
     }
     const p = String(itemPath || "");
     const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(p);
@@ -3356,11 +3637,11 @@ ${listStyleProseCss(".doc-blocks")}
     return a && a !== "gbti" ? `member:${a}` : "";
   }
   function authorTargetFor(selected, initial) {
-    const v = String(selected || "");
-    if (!v || v === String(initial || "")) return void 0;
-    if (v === "house") return { scope: "house" };
-    if (v.startsWith("member:")) {
-      const username = v.slice(7).trim();
+    const v2 = String(selected || "");
+    if (!v2 || v2 === String(initial || "")) return void 0;
+    if (v2 === "house") return { scope: "house" };
+    if (v2.startsWith("member:")) {
+      const username = v2.slice(7).trim();
       return username ? { scope: "member", username } : void 0;
     }
     return void 0;
@@ -3442,9 +3723,9 @@ ${listStyleProseCss(".doc-blocks")}
     const n = Math.max(0, Math.floor(Number(total) || 0));
     const size = Math.max(1, Math.floor(Number(per) || 0) || WORKSPACE_PAGE_SIZE);
     const pages = Math.max(1, Math.ceil(n / size));
-    const at = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
-    const start = at * size;
-    return { page: at, pages, start, end: Math.min(n, start + size), size };
+    const at2 = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
+    const start = at2 * size;
+    return { page: at2, pages, start, end: Math.min(n, start + size), size };
   }
 
   // client-ui/src/publish-diff.mjs
@@ -3529,29 +3810,29 @@ ${listStyleProseCss(".doc-blocks")}
     members: "Members-only divider"
   };
   var blockNoun = (type) => BLOCK_NOUNS[type] || "Block";
-  function normalize(v) {
-    if (v == null) return "";
-    if (v instanceof Date) return Number.isNaN(v.getTime()) ? "" : v.toISOString();
-    if (Array.isArray(v)) return JSON.stringify(v.map((x) => normalize(x)));
-    if (typeof v === "object") {
-      return JSON.stringify(Object.keys(v).sort().map((k) => [k, normalize(v[k])]));
+  function normalize(v2) {
+    if (v2 == null) return "";
+    if (v2 instanceof Date) return Number.isNaN(v2.getTime()) ? "" : v2.toISOString();
+    if (Array.isArray(v2)) return JSON.stringify(v2.map((x) => normalize(x)));
+    if (typeof v2 === "object") {
+      return JSON.stringify(Object.keys(v2).sort().map((k) => [k, normalize(v2[k])]));
     }
-    if (typeof v === "boolean") return v ? "true" : "";
-    return String(v).trim();
+    if (typeof v2 === "boolean") return v2 ? "true" : "";
+    return String(v2).trim();
   }
   function sameValue(a, b) {
     return normalize(a) === normalize(b);
   }
-  function formatValue(v, { max = 120, empty = "empty" } = {}) {
-    if (v == null || v === "") return empty;
-    if (typeof v === "boolean") return v ? "yes" : "no";
-    if (Array.isArray(v)) {
-      const parts = v.map((x) => x && typeof x === "object" ? JSON.stringify(x) : String(x)).filter((s2) => s2 !== "");
+  function formatValue(v2, { max = 120, empty = "empty" } = {}) {
+    if (v2 == null || v2 === "") return empty;
+    if (typeof v2 === "boolean") return v2 ? "yes" : "no";
+    if (Array.isArray(v2)) {
+      const parts = v2.map((x) => x && typeof x === "object" ? JSON.stringify(x) : String(x)).filter((s2) => s2 !== "");
       return parts.length ? truncate(parts.join(", "), max) : empty;
     }
-    if (v instanceof Date) return Number.isNaN(v.getTime()) ? empty : v.toISOString().slice(0, 10);
-    if (typeof v === "object") return truncate(JSON.stringify(v), max);
-    const s = String(v).replace(/\s+/g, " ").trim();
+    if (v2 instanceof Date) return Number.isNaN(v2.getTime()) ? empty : v2.toISOString().slice(0, 10);
+    if (typeof v2 === "object") return truncate(JSON.stringify(v2), max);
+    const s = String(v2).replace(/\s+/g, " ").trim();
     return s ? truncate(s, max) : empty;
   }
   function truncate(s, max = 120) {
@@ -3570,7 +3851,7 @@ ${listStyleProseCss(".doc-blocks")}
       const i = FIELD_ORDER.indexOf(k);
       return i === -1 ? FIELD_ORDER.length : i;
     };
-    keys.sort((x, y) => rank(x) - rank(y) || (x < y ? -1 : x > y ? 1 : 0));
+    keys.sort((x, y2) => rank(x) - rank(y2) || (x < y2 ? -1 : x > y2 ? 1 : 0));
     const out = [];
     for (const key of keys) {
       if (sameValue(a[key], b[key])) continue;
@@ -3580,14 +3861,14 @@ ${listStyleProseCss(".doc-blocks")}
   }
   var DIFF_CELL_CAP = 25e4;
   function blockChanges(liveBody, draftBody) {
-    const A = parseBlocks(liveBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
-    const B = parseBlocks(draftBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
+    const A2 = parseBlocks(liveBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
+    const B2 = parseBlocks(draftBody ?? "").map((b2) => ({ type: b2.type, md: serializeBlocks([b2]) }));
     let head = 0;
-    while (head < A.length && head < B.length && A[head].md === B[head].md) head++;
+    while (head < A2.length && head < B2.length && A2[head].md === B2[head].md) head++;
     let tail = 0;
-    while (tail < A.length - head && tail < B.length - head && A[A.length - 1 - tail].md === B[B.length - 1 - tail].md) tail++;
-    const a = A.slice(head, A.length - tail);
-    const b = B.slice(head, B.length - tail);
+    while (tail < A2.length - head && tail < B2.length - head && A2[A2.length - 1 - tail].md === B2[B2.length - 1 - tail].md) tail++;
+    const a = A2.slice(head, A2.length - tail);
+    const b = B2.slice(head, B2.length - tail);
     if (!a.length && !b.length) return [];
     if (a.length * b.length > DIFF_CELL_CAP) {
       return [{
@@ -3621,37 +3902,37 @@ ${listStyleProseCss(".doc-blocks")}
   function editScript(a, b) {
     const n = a.length;
     const m = b.length;
-    const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    const L2 = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i2 = n - 1; i2 >= 0; i2--) {
-      for (let j2 = m - 1; j2 >= 0; j2--) {
-        L[i2][j2] = a[i2].md === b[j2].md ? L[i2 + 1][j2 + 1] + 1 : Math.max(L[i2 + 1][j2], L[i2][j2 + 1]);
+      for (let j3 = m - 1; j3 >= 0; j3--) {
+        L2[i2][j3] = a[i2].md === b[j3].md ? L2[i2 + 1][j3 + 1] + 1 : Math.max(L2[i2 + 1][j3], L2[i2][j3 + 1]);
       }
     }
     const out = [];
     let i = 0;
-    let j = 0;
-    while (i < n && j < m) {
-      if (a[i].md === b[j].md) {
-        out.push({ op: "keep", ai: i, bi: j });
+    let j2 = 0;
+    while (i < n && j2 < m) {
+      if (a[i].md === b[j2].md) {
+        out.push({ op: "keep", ai: i, bi: j2 });
         i++;
-        j++;
+        j2++;
         continue;
       }
-      if (L[i + 1][j] >= L[i][j + 1]) {
-        out.push({ op: "remove", ai: i, bi: j });
+      if (L2[i + 1][j2] >= L2[i][j2 + 1]) {
+        out.push({ op: "remove", ai: i, bi: j2 });
         i++;
       } else {
-        out.push({ op: "add", ai: i, bi: j });
-        j++;
+        out.push({ op: "add", ai: i, bi: j2 });
+        j2++;
       }
     }
     while (i < n) {
-      out.push({ op: "remove", ai: i, bi: j });
+      out.push({ op: "remove", ai: i, bi: j2 });
       i++;
     }
-    while (j < m) {
-      out.push({ op: "add", ai: i, bi: j });
-      j++;
+    while (j2 < m) {
+      out.push({ op: "add", ai: i, bi: j2 });
+      j2++;
     }
     return out;
   }
@@ -3746,10 +4027,10 @@ ${listStyleProseCss(".doc-blocks")}
     project: { keys: ["icon", "featuredImage", "banner"], one: "image", many: "images" },
     prompt: { keys: ["image"], one: "image", many: "images" }
   };
-  function hasValue(v) {
-    if (v == null) return false;
-    if (Array.isArray(v)) return v.length > 0;
-    return String(v).trim() !== "";
+  function hasValue(v2) {
+    if (v2 == null) return false;
+    if (Array.isArray(v2)) return v2.length > 0;
+    return String(v2).trim() !== "";
   }
   function mediaSummary(type, preset = {}) {
     const spec = MEDIA_FIELDS[type];
@@ -3925,10 +4206,10 @@ ${listStyleProseCss(".doc-blocks")}
   }
   async function wbCacheGet(memberKey, type, { ttl = WB_DEFAULT_TTL_MS, now = Date.now } = {}) {
     if (!memberKey || !type) return null;
-    const v = await rawGet(wbKey(memberKey, type));
-    if (!v || !Array.isArray(v.items)) return null;
-    const at = Number(v.at) || 0;
-    return { items: v.items, at, fresh: now() - at < ttl };
+    const v2 = await rawGet(wbKey(memberKey, type));
+    if (!v2 || !Array.isArray(v2.items)) return null;
+    const at2 = Number(v2.at) || 0;
+    return { items: v2.items, at: at2, fresh: now() - at2 < ttl };
   }
   async function wbCacheSet(memberKey, type, items, { now = Date.now, allowEmpty = false } = {}) {
     if (!memberKey || !type || !Array.isArray(items)) return;
@@ -3941,9 +4222,9 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/time-core.mjs
-  function relTime(v, now = Date.now()) {
-    if (!v) return "";
-    const ms = typeof v === "number" ? v : Date.parse(v);
+  function relTime(v2, now = Date.now()) {
+    if (!v2) return "";
+    const ms = typeof v2 === "number" ? v2 : Date.parse(v2);
     if (!ms) return "";
     const diff = now - ms;
     if (diff < 6e4) return "just now";
@@ -3957,9 +4238,9 @@ ${listStyleProseCss(".doc-blocks")}
     if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
-  function absTime(v) {
-    if (!v) return "";
-    const ms = typeof v === "number" ? v : Date.parse(v);
+  function absTime(v2) {
+    if (!v2) return "";
+    const ms = typeof v2 === "number" ? v2 : Date.parse(v2);
     if (!ms) return "";
     try {
       return new Date(ms).toLocaleString(void 0, {
@@ -3975,8 +4256,8 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client/src/video-embed.mjs
-  function embedUrl(v) {
-    const s = String(v || "").trim();
+  function embedUrl(v2) {
+    const s = String(v2 || "").trim();
     let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
     if (m) return `https://www.youtube.com/embed/${m[1]}`;
     m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
@@ -3997,9 +4278,9 @@ ${listStyleProseCss(".doc-blocks")}
   function embedPoster(url) {
     const src = embedUrl(url);
     if (!src) return null;
-    const yt = src.match(/youtube\.com\/embed\/([\w-]{11})/);
-    const provider = yt ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
-    return { src, thumb: yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
+    const yt2 = src.match(/youtube\.com\/embed\/([\w-]{11})/);
+    const provider = yt2 ? "YouTube" : /vimeo/.test(src) ? "Vimeo" : /tiktok/.test(src) ? "TikTok" : /rumble/.test(src) ? "Rumble" : "Video";
+    return { src, thumb: yt2 ? `https://i.ytimg.com/vi/${yt2[1]}/hqdefault.jpg` : null, provider, portrait: isPortraitEmbed(src) };
   }
   var escAttr2 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   function embedPosterHtml(url, { frameSrc } = {}) {
@@ -4170,9 +4451,9 @@ ${listStyleProseCss(".doc-blocks")}
     const info = String(lang || "").trim().split(/\s+/);
     const body = buf.join("\n");
     if (info[0] === "callout") {
-      const v = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
+      const v2 = CALLOUT_VARIANTS2.includes(info[1]) ? info[1] : "note";
       const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
-      return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+      return `<div class="md-callout md-callout-${v2}"><div class="md-callout-body">${html}</div></div>`;
     }
     if (info[0] === "embed") {
       const url = body.trim();
@@ -4290,9 +4571,9 @@ ${listStyleProseCss(".doc-blocks")}
           continue;
         }
       }
-      const esc8 = escapeKeepingLinks(line, linkKeep);
+      const esc9 = escapeKeepingLinks(line, linkKeep);
       let m;
-      if (m = /^(#{1,6})\s+(.*)$/.exec(esc8)) {
+      if (m = /^(#{1,6})\s+(.*)$/.exec(esc9)) {
         flushList();
         emit(`<h${m[1].length}>${inline(m[2], fn, defs)}</h${m[1].length}>`, i, i);
         i++;
@@ -4359,7 +4640,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       flushList();
       const paraStart = i;
-      const para = [hardBreak(esc8, line)];
+      const para = [hardBreak(esc9, line)];
       i++;
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i]) && !(autoEmbed && bareVideoLine(lines[i]))) {
         para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
@@ -4498,7 +4779,7 @@ ${listStyleProseCss(".doc-blocks")}
         if (text2.trim()) items.push(text2);
       }
       if (!items.length) return;
-      out.push(items.map((it, i) => t === "OL" ? `${i + 1}. ${it}` : `- ${it}`).join("\n"));
+      out.push(items.map((it2, i) => t === "OL" ? `${i + 1}. ${it2}` : `- ${it2}`).join("\n"));
       return;
     }
     if (t === "PRE") {
@@ -4619,7 +4900,7 @@ ${listStyleProseCss(".doc-blocks")}
     render() {
       if (this._rendered) return;
       this._rendered = true;
-      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc(c.label)}" aria-label="${esc(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg2(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
+      const controls = PROSE_CONTROLS.map((c) => c ? `<button type="button" data-act="${c.act}" title="${esc2(c.label)}" aria-label="${esc2(c.label)}">${c.key ? `<span class="k k-${c.act}">${c.key}</span>` : svg2(c.act)}</button>` : '<span class="sep" aria-hidden="true"></span>').join("");
       this.set(this.css(CSS2) + `<div class="box" data-box>
       <div class="hdr" role="toolbar" aria-label="Formatting">${controls}</div>
       <div class="vid" data-vid hidden>
@@ -4627,7 +4908,7 @@ ${listStyleProseCss(".doc-blocks")}
         <button type="button" class="vid-add" data-vid-add>Add</button>
         <button type="button" data-vid-cancel>Cancel</button>
       </div>
-      <div class="surface" contenteditable="true" data-surface data-ph="${esc(this.placeholder)}" role="textbox" aria-multiline="true"></div>
+      <div class="surface" contenteditable="true" data-surface data-ph="${esc2(this.placeholder)}" role="textbox" aria-multiline="true"></div>
     </div>`);
       this._wire();
       this._load(this._pending ?? "");
@@ -4996,7 +5277,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _renderEditAffordance() {
       this._fullRow(false);
-      if (!this._identity || this._identity.username !== this._editAuthor) {
+      if (!this._identity || String(this._identity.username || "").toLowerCase() !== String(this._editAuthor || "").toLowerCase()) {
         this.set(this.css(CSS3) + "");
         return;
       }
@@ -5215,8 +5496,7 @@ ${listStyleProseCss(".doc-blocks")}
   /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
   .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
   .comment.reply { margin-left:16px; }
-  .comment .cav { flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:grid; place-items:center; color:var(--muted); font-size:10px; font-weight:700; margin-top:1px; }
-  .comment .cav img { width:100%; height:100%; object-fit:cover; }
+  .comment .cav { position:relative; flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:block; margin-top:1px; }
   .comment .cmain { min-width:0; flex:1; }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
   .cmeta .cwhen { white-space:nowrap; flex-shrink:0; }
@@ -5255,12 +5535,8 @@ ${listStyleProseCss(".doc-blocks")}
 `;
   var lc = (s) => String(s || "").toLowerCase();
   var authorName = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
-  var ghLogin = (a) => lc(a) === "gbti" || lc(a) === "house" ? "gbti-network" : a;
-  var ghAvatar = (a) => a ? `https://github.com/${encodeURIComponent(ghLogin(a))}.png?size=48` : "";
   function avatarHtml(author) {
-    const url = ghAvatar(author);
-    const ini = esc((authorName(author) || "?").trim().charAt(0).toUpperCase() || "?");
-    return `<span class="cav">${url ? `<img src="${esc(url)}" alt="" loading="lazy">` : ini}</span>`;
+    return `<span class="cav">${avatarLayers(lc(author) || authorName(author), author ? void 0 : "")}</span>`;
   }
   var GbtiDiscussion = class extends GbtiElement {
     static get observedAttributes() {
@@ -5311,9 +5587,9 @@ ${listStyleProseCss(".doc-blocks")}
       }
       if (this._role == null) {
         try {
-          const st = await this.client.status?.();
-          this._role = st?.role || "member";
-          this._me = st?.identity?.username || null;
+          const st2 = await this.client.status?.();
+          this._role = st2?.role || "member";
+          this._me = st2?.identity?.username || null;
         } catch {
           this._role = "member";
           this._me = null;
@@ -5341,13 +5617,13 @@ ${listStyleProseCss(".doc-blocks")}
         wbCacheSet(targetSlug, cacheKey, items).catch(() => {
         });
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS4) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS4) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc2(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
       try {
         await this._resolveAndRender(targetType, targetSlug, items);
       } catch (err) {
-        if (!this._painted) this.set(this.css(CSS4) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS4) + `<p class="empty">Could not render the discussion (${esc2(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
       }
       this._loaded = true;
     }
@@ -5371,27 +5647,27 @@ ${listStyleProseCss(".doc-blocks")}
         const tombKey = [c.path, c.id, `members/${c.author}/comments/${c.id}.md`].find((k) => k && this._tomb?.has(k));
         if (tombKey) {
           const t = this._tomb.get(tombKey);
-          if (t.phase === "error") return `<div class="ctomb err">The deletion failed: ${esc(t.msg || "try again")}. The comment is still live.</div>`;
+          if (t.phase === "error") return `<div class="ctomb err">The deletion failed: ${esc2(t.msg || "try again")}. The comment is still live.</div>`;
           if (t.phase === "busy") return `<div class="ctomb">Deleting the comment…</div>`;
           return `<div class="ctomb">Comment deleted here right away. The public site updates in about 2 to 3 minutes.</div>`;
         }
         const reply = c.parentId ? " reply" : "";
         const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : "") + (c.visibility === "members" ? `<span class="cbadge">Members</span>` : "") + (c._pending ? `<span class="cbadge">Posting</span>` : "");
-        const pendNote = c._pending ? `<div class="cpend">${esc(echoNote({ prNumber: c.prNumber }).text)}</div>` : "";
+        const pendNote = c._pending ? `<div class="cpend">${esc2(echoNote({ prNumber: c.prNumber }).text)}</div>` : "";
         const foldKey = String(c.id ?? c.path ?? `i${i}`);
         const collapsed = this._collapsed?.has(foldKey);
         const clamp2 = collapsed ? " clamp" : "";
         const bodyHtml = html && html.locked ? `<div class="clocked${clamp2}">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody${clamp2}">${html}</div>` : "";
-        const foldBtn = `<button class="cfold${collapsed ? " collapsed" : ""}" type="button" data-fold="${esc(foldKey)}" aria-label="${collapsed ? "Expand" : "Collapse"} comment" aria-expanded="${collapsed ? "false" : "true"}">${CHEV3}</button>`;
+        const foldBtn = `<button class="cfold${collapsed ? " collapsed" : ""}" type="button" data-fold="${esc2(foldKey)}" aria-label="${collapsed ? "Expand" : "Collapse"} comment" aria-expanded="${collapsed ? "false" : "true"}">${CHEV3}</button>`;
         const houseComment = c.author === "gbti" || c.author === "house";
         const modPath = !houseComment && c.author && c.id ? c.path || `members/${c.author}/comments/${c.id}.md` : "";
         const noteFlag = c.authorNote ? ' data-authornote="1"' : "";
-        const hideBtn = canMod && modPath ? `<button class="abtn" type="button" data-hidec="${esc(modPath)}"${noteFlag}>${EYE2} Hide</button>` : "";
-        const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
-        const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}"${noteFlag}>${TRASH2} Delete</button>` : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH2} Delete</button>` : "";
+        const hideBtn = canMod && modPath ? `<button class="abtn" type="button" data-hidec="${esc2(modPath)}"${noteFlag}>${EYE2} Hide</button>` : "";
+        const own = this._me && String(c.author || "").toLowerCase() === String(this._me).toLowerCase() && c.path && c.id && !c.authorNote;
+        const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc2(modPath)}" data-key="${esc2(modPath)}"${noteFlag}>${TRASH2} Delete</button>` : own ? `<button class="abtn danger" type="button" data-delown="${esc2(c.id)}" data-key="${esc2(c.path)}">${TRASH2} Delete</button>` : "";
         const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : "";
         return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
+        <div class="cmeta">${foldBtn}<span class="cname">${esc2(authorName(c.author))}</span><span class="cwhen">${esc2(relTime(c.createdAt))}</span>${badge}</div>
         ${bodyHtml}${pendNote}${acts}
       </div></div>`;
       }).join("");
@@ -5453,7 +5729,7 @@ ${listStyleProseCss(".doc-blocks")}
     // A fresh <gbti-comment-box> for this target (it handles its own paid/trial/visitor gating UX). The injected
     // client is process-global, so it upgrades + talks to the same host with nothing to wire here.
     _composeHtml(targetType, targetSlug) {
-      return `<gbti-comment-box data-gbti-target-type="${esc(targetType)}" data-gbti-target-slug="${esc(targetSlug)}"></gbti-comment-box>`;
+      return `<gbti-comment-box data-gbti-target-type="${esc2(targetType)}" data-gbti-target-slug="${esc2(targetSlug)}"></gbti-comment-box>`;
     }
     async _resolveBody(c) {
       try {
@@ -5472,8 +5748,8 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-discussion", GbtiDiscussion);
 
   // client-ui/src/elements/gbti-cta-assignment.mjs
-  var SITE2 = "https://gbti.network";
-  var ADMIN = `${SITE2}/admin/`;
+  var SITE3 = "https://gbti.network";
+  var ADMIN = `${SITE3}/admin/`;
   var CSS5 = `
   :host { display:block; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); line-height:1.5; }
   b { color:var(--fg); font-weight:600; }
@@ -5498,10 +5774,10 @@ ${listStyleProseCss(".doc-blocks")}
       this._loading = true;
       this._failed = false;
       try {
-        const r = await fetch(`${SITE2}/ctas.json`, { cache: "no-cache" });
+        const r = await fetch(`${SITE3}/ctas.json`, { cache: "no-cache" });
         if (!r.ok) throw new Error(`ctas.json ${r.status}`);
-        const j = await r.json();
-        this._ctas = Array.isArray(j?.ctas) ? j.ctas : [];
+        const j2 = await r.json();
+        this._ctas = Array.isArray(j2?.ctas) ? j2.ctas : [];
       } catch (e) {
         this._ctas = null;
         this._failed = true;
@@ -5522,7 +5798,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS5) + `<span>${esc(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS5) + `<span>${esc2(this._msg)}</span><button class="lk" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -5536,14 +5812,14 @@ ${listStyleProseCss(".doc-blocks")}
         this.set(this.css(CSS5) + `<span>CTA: <b>none</b>. A superadmin assigns one in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
         return;
       }
-      const parts = m.map((c) => `<b>${esc(c.label || c.id)}</b>${c.enabled ? "" : ' <span class="off">(disabled, so it does not render)</span>'}`);
+      const parts = m.map((c) => `<b>${esc2(c.label || c.id)}</b>${c.enabled ? "" : ' <span class="off">(disabled, so it does not render)</span>'}`);
       this.set(this.css(CSS5) + `<span>CTA: ${parts.join(", ")}. Managed by a superadmin in <a href="${ADMIN}" target="_blank" rel="noopener">Admin, CTAs</a>.</span>`);
     }
   };
   function matchesFor(ctas, type, ref) {
     const r = String(ref || "").trim();
     if (!Array.isArray(ctas) || !type || !r) return [];
-    return ctas.filter((c) => Array.isArray(c?.items) && c.items.some((it) => it && it.type === type && it.ref === r)).sort((a, b) => (b.enabled === true) - (a.enabled === true));
+    return ctas.filter((c) => Array.isArray(c?.items) && c.items.some((it2) => it2 && it2.type === type && it2.ref === r)).sort((a, b) => (b.enabled === true) - (a.enabled === true));
   }
   define("gbti-cta-assignment", GbtiCtaAssignment);
 
@@ -5562,10 +5838,10 @@ ${listStyleProseCss(".doc-blocks")}
     return list.map((g) => g && typeof g.label === "string" ? g.label : "").filter(Boolean);
   }
   function filterTopics(list, query) {
-    const q = String(query || "").trim().toLowerCase();
+    const q2 = String(query || "").trim().toLowerCase();
     const arr = Array.isArray(list) ? list : [];
-    if (!q) return arr;
-    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q) || String(t && t.key || "").toLowerCase().includes(q));
+    if (!q2) return arr;
+    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q2) || String(t && t.key || "").toLowerCase().includes(q2));
   }
   function groupTopics(list, order = []) {
     const arr = Array.isArray(list) ? list : [];
@@ -5615,12 +5891,12 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/browse-filter-core.mjs
   function segChips(items, depth, underPrimary) {
     const map = /* @__PURE__ */ new Map();
-    for (const it of Array.isArray(items) ? items : []) {
-      const cats = Array.isArray(it && it.categories) ? it.categories : [];
+    for (const it2 of Array.isArray(items) ? items : []) {
+      const cats = Array.isArray(it2 && it2.categories) ? it2.categories : [];
       if (depth === 1 && cats[0] !== underPrimary) continue;
       const key = cats[depth];
       if (typeof key !== "string" || !key) continue;
-      const labels = Array.isArray(it && it.categoryLabels) ? it.categoryLabels : [];
+      const labels = Array.isArray(it2 && it2.categoryLabels) ? it2.categoryLabels : [];
       const label = typeof labels[depth] === "string" && labels[depth] || key;
       const cur = map.get(key) || { key, label, count: 0 };
       cur.count += 1;
@@ -5638,8 +5914,8 @@ ${listStyleProseCss(".doc-blocks")}
     const p = (Array.isArray(path) ? path : []).filter((s) => typeof s === "string" && s);
     const list = Array.isArray(items) ? items : [];
     if (!p.length) return list;
-    return list.filter((it) => {
-      const cats = Array.isArray(it && it.categories) ? it.categories : [];
+    return list.filter((it2) => {
+      const cats = Array.isArray(it2 && it2.categories) ? it2.categories : [];
       return p.every((seg, i) => cats[i] === seg);
     });
   }
@@ -5658,8 +5934,8 @@ ${listStyleProseCss(".doc-blocks")}
     const nodes = flattenTree(tree);
     const counts = new Map(nodes.map((n) => [n.path.join("/"), { post: 0, prompt: 0, project: 0, total: 0 }]));
     for (const [type, items] of Object.entries(itemsByType)) {
-      for (const it of items || []) {
-        const cats = Array.isArray(it?.categories) ? it.categories : [];
+      for (const it2 of items || []) {
+        const cats = Array.isArray(it2?.categories) ? it2.categories : [];
         for (let d = 1; d <= cats.length; d++) {
           const k = cats.slice(0, d).join("/");
           const c = counts.get(k);
@@ -5767,23 +6043,23 @@ ${listStyleProseCss(".doc-blocks")}
   }
   function highlightParts(label, query) {
     const text2 = String(label ?? "");
-    const q = String(query ?? "").trim().toLowerCase();
-    const i = q ? text2.toLowerCase().indexOf(q) : -1;
+    const q2 = String(query ?? "").trim().toLowerCase();
+    const i = q2 ? text2.toLowerCase().indexOf(q2) : -1;
     if (i < 0) return { pre: text2, mid: "", post: "" };
-    return { pre: text2.slice(0, i), mid: text2.slice(i, i + q.length), post: text2.slice(i + q.length) };
+    return { pre: text2.slice(0, i), mid: text2.slice(i, i + q2.length), post: text2.slice(i + q2.length) };
   }
   function pickerRows(vocab, query) {
-    const q = String(query ?? "").trim().toLowerCase();
+    const q2 = String(query ?? "").trim().toLowerCase();
     if (vocab && vocab.kind === "tree") {
       const nodes = Array.isArray(vocab.nodes) ? vocab.nodes : [];
-      const hit = (n) => !q || n.label.toLowerCase().includes(q) || n.key.split("/").pop().includes(q);
+      const hit = (n) => !q2 || n.label.toLowerCase().includes(q2) || n.key.split("/").pop().includes(q2);
       const keep = /* @__PURE__ */ new Set();
       for (const n of nodes) {
         if (!hit(n)) continue;
         const parts = n.key.split("/");
         for (let i = 1; i <= parts.length; i++) keep.add(parts.slice(0, i).join("/"));
       }
-      const options2 = nodes.filter((n) => keep.has(n.key)).map((n) => ({ type: "option", key: n.key, label: n.label, depth: n.depth, muted: Boolean(q) && !hit(n) }));
+      const options2 = nodes.filter((n) => keep.has(n.key)).map((n) => ({ type: "option", key: n.key, label: n.label, depth: n.depth, muted: Boolean(q2) && !hit(n) }));
       return { rows: options2, options: options2 };
     }
     const rows = [];
@@ -5791,7 +6067,7 @@ ${listStyleProseCss(".doc-blocks")}
     const topics = vocab && Array.isArray(vocab.topics) ? vocab.topics : [];
     const order = vocab && vocab.groupOrder;
     const totals = new Map(groupTopics(topics, order).map((g) => [g.group, g.topics.length]));
-    for (const g of groupTopics(filterTopics(topics, q), order)) {
+    for (const g of groupTopics(filterTopics(topics, q2), order)) {
       if (!g.topics.length) continue;
       if (g.group) rows.push({ type: "group", label: g.group, count: g.topics.length, total: totals.get(g.group) ?? g.topics.length });
       for (const t of g.topics) {
@@ -5803,16 +6079,16 @@ ${listStyleProseCss(".doc-blocks")}
     return { rows, options };
   }
   function valueDisplay(vocab, value) {
-    const v = String(value ?? "");
-    const raw = v.split("/").filter(Boolean).join(PATH_SEP);
-    if (!v) return { state: "empty", crumbs: [], leaf: "" };
+    const v2 = String(value ?? "");
+    const raw = v2.split("/").filter(Boolean).join(PATH_SEP);
+    if (!v2) return { state: "empty", crumbs: [], leaf: "" };
     if (!vocab) return { state: "loading", crumbs: [], leaf: raw };
     if (vocab.kind === "tree") {
-      const n = (vocab.nodes || []).find((x) => x.key === v);
+      const n = (vocab.nodes || []).find((x) => x.key === v2);
       return n ? { state: "known", crumbs: n.crumbs, leaf: n.label } : { state: "unknown", crumbs: [], leaf: raw };
     }
-    const t = (vocab.topics || []).find((x) => x.key === v);
-    return t ? { state: "known", crumbs: t.group ? [t.group] : [], leaf: t.label } : { state: "unknown", crumbs: [], leaf: v };
+    const t = (vocab.topics || []).find((x) => x.key === v2);
+    return t ? { state: "known", crumbs: t.group ? [t.group] : [], leaf: t.label } : { state: "unknown", crumbs: [], leaf: v2 };
   }
   function moveActive(index, dir, length) {
     if (!length) return -1;
@@ -5821,21 +6097,21 @@ ${listStyleProseCss(".doc-blocks")}
   }
   function categoryFieldHtml(path) {
     const segs = (Array.isArray(path) ? path : []).map((s) => String(s).trim()).filter(Boolean);
-    return `<gbti-category-picker vocab="tree" data-cat-picker value="${esc(segs.join("/"))}"></gbti-category-picker><input data-key="categories" data-kind="array" type="hidden" value="${esc(segs.join(", "))}" />`;
+    return `<gbti-category-picker vocab="tree" data-cat-picker value="${esc2(segs.join("/"))}"></gbti-category-picker><input data-key="categories" data-kind="array" type="hidden" value="${esc2(segs.join(", "))}" />`;
   }
 
   // client-ui/src/elements/gbti-category-picker.mjs
-  var SITE3 = "https://gbti.network";
-  var SOURCE = { topics: `${SITE3}/topics.json`, tree: `${SITE3}/taxonomy.json` };
+  var SITE4 = "https://gbti.network";
+  var SOURCE = { topics: `${SITE4}/topics.json`, tree: `${SITE4}/taxonomy.json` };
   var LOADS = /* @__PURE__ */ new Map();
   function loadVocab(kind2) {
     if (!LOADS.has(kind2)) {
       const p = fetch(SOURCE[kind2], { cache: "no-cache" }).then((r) => {
         if (!r.ok) throw new Error(`http-${r.status}`);
         return r.json();
-      }).then((data) => kind2 === "tree" ? { kind: kind2, nodes: treeNodesFromJson(data) } : { kind: kind2, topics: topicsFromJson(data), groupOrder: groupOrderFromJson(data) }).then((v) => {
-        if (!(v.nodes || v.topics).length) throw new Error("empty");
-        return v;
+      }).then((data) => kind2 === "tree" ? { kind: kind2, nodes: treeNodesFromJson(data) } : { kind: kind2, topics: topicsFromJson(data), groupOrder: groupOrderFromJson(data) }).then((v2) => {
+        if (!(v2.nodes || v2.topics).length) throw new Error("empty");
+        return v2;
       }).catch(() => {
         LOADS.delete(kind2);
         return null;
@@ -5931,8 +6207,8 @@ ${listStyleProseCss(".doc-blocks")}
     get value() {
       return this._value;
     }
-    set value(v) {
-      this._value = v == null ? "" : String(v);
+    set value(v2) {
+      this._value = v2 == null ? "" : String(v2);
       this._valueSet = true;
       if (this.isConnected) this.render();
     }
@@ -5944,21 +6220,21 @@ ${listStyleProseCss(".doc-blocks")}
     }
     /** Whether `key` is in the loaded vocabulary (false while it loads). */
     has(key) {
-      const v = this._vocab;
-      if (!v || !key) return false;
-      return v.kind === "tree" ? v.nodes.some((n) => n.key === key) : v.topics.some((t) => t.key === key);
+      const v2 = this._vocab;
+      if (!v2 || !key) return false;
+      return v2.kind === "tree" ? v2.nodes.some((n) => n.key === key) : v2.topics.some((t) => t.key === key);
     }
     focus() {
       this.$(".trig")?.focus();
     }
     _load() {
       if (!this._loading) {
-        this._loading = loadVocab(this.kind).then((v) => {
-          this._vocab = v;
-          this._failed = !v;
-          if (!v) this._loading = null;
+        this._loading = loadVocab(this.kind).then((v2) => {
+          this._vocab = v2;
+          this._failed = !v2;
+          if (!v2) this._loading = null;
           if (this.isConnected) this.render();
-          return Boolean(v);
+          return Boolean(v2);
         });
       }
       return this._loading;
@@ -5968,15 +6244,15 @@ ${listStyleProseCss(".doc-blocks")}
       const bad = this._failed || d.state === "unknown";
       let face;
       if (this._failed) face = `<span class="tv">Categories did not load. Click to try again.</span>`;
-      else if (d.state === "empty") face = `<span class="tv ph">${esc(this.getAttribute("placeholder") || "Choose a category")}</span>`;
-      else if (d.state === "loading") face = `<span class="tv ph">${esc(d.leaf)}</span>`;
-      else if (d.state === "unknown") face = `${WARN}<span class="tv mono">${esc(d.leaf)}</span>`;
-      else face = `<span class="tv">${d.crumbs.length ? `<span class="crumb">${esc(d.crumbs.join(PATH_SEP) + PATH_SEP)}</span>` : ""}<span class="leaf">${esc(d.leaf)}</span></span>`;
+      else if (d.state === "empty") face = `<span class="tv ph">${esc2(this.getAttribute("placeholder") || "Choose a category")}</span>`;
+      else if (d.state === "loading") face = `<span class="tv ph">${esc2(d.leaf)}</span>`;
+      else if (d.state === "unknown") face = `${WARN}<span class="tv mono">${esc2(d.leaf)}</span>`;
+      else face = `<span class="tv">${d.crumbs.length ? `<span class="crumb">${esc2(d.crumbs.join(PATH_SEP) + PATH_SEP)}</span>` : ""}<span class="leaf">${esc2(d.leaf)}</span></span>`;
       const said = d.state === "known" ? `: ${[...d.crumbs, d.leaf].join(", ")}` : "";
       const count2 = this._vocab?.topics?.length;
       this.set(this.css(CSS6) + `
       <button class="trig${bad ? " bad" : ""}" type="button" aria-haspopup="listbox" aria-expanded="${this._open}"
-        aria-label="${esc((this.getAttribute("aria-label") || "Category") + said)}"${this.hasAttribute("required") ? ' aria-required="true"' : ""}>${face}${CARET}</button>
+        aria-label="${esc2((this.getAttribute("aria-label") || "Category") + said)}"${this.hasAttribute("required") ? ' aria-required="true"' : ""}>${face}${CARET}</button>
       ${d.state === "unknown" && !this._open ? '<p class="note">Not in the category list, so publishing would stop here. Choose a category to replace it.</p>' : ""}
       ${this._open ? `<div class="pop">
         <div class="sw">${SEARCH}<input class="srch" type="search" role="combobox" aria-expanded="true" aria-controls="cp-list" aria-autocomplete="list"
@@ -6020,22 +6296,22 @@ ${listStyleProseCss(".doc-blocks")}
       this._options = options;
       if (this._active >= options.length) this._active = options.length - 1;
       const tree = this._vocab.kind === "tree";
-      const q = this._query;
-      const searching = Boolean(String(q ?? "").trim());
+      const q2 = this._query;
+      const searching = Boolean(String(q2 ?? "").trim());
       let i = -1;
       let inSec = false;
       const html = rows.map((r) => {
         if (r.type === "group") {
-          const open = `${inSec ? "</div>" : ""}<div class="sec" role="group" aria-label="${esc(r.label)}">`;
+          const open = `${inSec ? "</div>" : ""}<div class="sec" role="group" aria-label="${esc2(r.label)}">`;
           inSec = true;
-          return `${open}<div class="grp" aria-hidden="true"><span class="gl">${esc(r.label)}</span><span class="gc">${searching ? `${r.count} of ${r.total}` : r.total}</span></div>`;
+          return `${open}<div class="grp" aria-hidden="true"><span class="gl">${esc2(r.label)}</span><span class="gc">${searching ? `${r.count} of ${r.total}` : r.total}</span></div>`;
         }
         i += 1;
         const sel = r.key === this._value;
-        const p = highlightParts(r.label, r.muted ? "" : q);
+        const p = highlightParts(r.label, r.muted ? "" : q2);
         const cls = `opt${sel ? " sel" : ""}${r.muted ? " muted" : ""}${tree && r.depth === 0 ? " top" : ""}`;
         const pad = tree ? 12 + r.depth * 20 : r.depth ? 20 : 12;
-        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc(p.pre)}${p.mid ? `<mark>${esc(p.mid)}</mark>` : ""}${esc(p.post)}</span>${sel ? CHECK : ""}</div>`;
+        return `<div class="${cls}" role="option" id="cp-o${i}" data-i="${i}" aria-selected="${sel}" style="padding-left:${pad}px">${r.depth > 0 ? '<span class="br" aria-hidden="true"></span>' : ""}<span class="lb">${esc2(p.pre)}${p.mid ? `<mark>${esc2(p.mid)}</mark>` : ""}${esc2(p.post)}</span>${sel ? CHECK : ""}</div>`;
       }).join("") + (inSec ? "</div>" : "");
       list.innerHTML = options.length ? html : '<div class="empty">Nothing matches that search.</div>';
       this._paintActive(true);
@@ -6154,7 +6430,7 @@ ${listStyleProseCss(".doc-blocks")}
       "skill-box-on-accent": "#1d1433"
     })
   });
-  var skillTokenDecls = (theme) => Object.entries(SKILL_TOKENS[theme]).map(([k, v]) => `--${k}: ${v};`).join(" ");
+  var skillTokenDecls = (theme) => Object.entries(SKILL_TOKENS[theme]).map(([k, v2]) => `--${k}: ${v2};`).join(" ");
   var SKILL_BOX_CSS = `/* ---------- the label ---------- */
 .kind-badge {
   display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px;
@@ -6230,7 +6506,7 @@ ${listStyleProseCss(".doc-blocks")}
 `;
 
   // client-ui/src/editor-skill.mjs
-  var normalizeKind = (v) => v === "skill" ? "skill" : "prompt";
+  var normalizeKind = (v2) => v2 === "skill" ? "skill" : "prompt";
   var svg4 = (d, size, width = 2.4) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   var ICON = {
     prompt: '<path d="M4 6h16M4 12h11M4 18h7"/>',
@@ -6247,13 +6523,13 @@ ${listStyleProseCss(".doc-blocks")}
   }
   var mainHeadingHtml = (kind2) => {
     const h = mainHeading(kind2);
-    return `<span data-main-title>${esc(h.title)}</span> <span class="dsub-opt" data-main-opt${h.optional ? "" : " hidden"}>Optional</span> <span class="dsub" data-main-sub>${esc(h.sub)}</span>`;
+    return `<span data-main-title>${esc2(h.title)}</span> <span class="dsub-opt" data-main-opt${h.optional ? "" : " hidden"}>Optional</span> <span class="dsub" data-main-sub>${esc2(h.sub)}</span>`;
   };
   function kindSectionHtml(kind2) {
     const cur = normalizeKind(kind2);
     const cards = CARDS.map((c) => `<button type="button" class="kind-card${c.kind === cur ? " on" : ""}" role="radio" aria-checked="${c.kind === cur}" data-kind-pick="${c.kind}">
-      <span class="kc-top"><span class="kc-ico kc-${c.kind}">${svg4(ICON[c.kind], 18)}</span><span class="kc-name">${esc(c.name)}</span><span class="kc-check">${svg4(ICON.check, 13, 3.2)}</span></span>
-      <span class="kc-desc">${esc(c.desc)}</span></button>`).join("");
+      <span class="kc-top"><span class="kc-ico kc-${c.kind}">${svg4(ICON[c.kind], 18)}</span><span class="kc-name">${esc2(c.name)}</span><span class="kc-check">${svg4(ICON.check, 13, 3.2)}</span></span>
+      <span class="kc-desc">${esc2(c.desc)}</span></button>`).join("");
     return `<section class="kind-sec" aria-labelledby="kindh"><h2 id="kindh" class="kind-h">What are you sharing?</h2>
     <div class="kind-cards" role="radiogroup" aria-labelledby="kindh">${cards}</div>
     <input data-key="kind" data-kind="enum" type="hidden" value="${cur}" /></section>`;
@@ -6271,8 +6547,8 @@ ${listStyleProseCss(".doc-blocks")}
     const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
     return list.includes(label) ? list.filter((t) => t !== label) : [...list, label];
   }
-  var madeForButtonsHtml = (rows) => rows.map((r) => `<button type="button" class="mf-tool${r.on ? " on" : ""}" aria-pressed="${r.on}" data-mf-tool="${esc(r.label)}">
-    <span class="mf-box">${svg4(ICON.check, 12, 3.4)}</span><span class="mf-txt"><span class="mf-name">${esc(r.label)}</span><span class="mf-note">${esc(r.note)}</span></span></button>`).join("");
+  var madeForButtonsHtml = (rows) => rows.map((r) => `<button type="button" class="mf-tool${r.on ? " on" : ""}" aria-pressed="${r.on}" data-mf-tool="${esc2(r.label)}">
+    <span class="mf-box">${svg4(ICON.check, 12, 3.4)}</span><span class="mf-txt"><span class="mf-name">${esc2(r.label)}</span><span class="mf-note">${esc2(r.note)}</span></span></button>`).join("");
   function skillSectionsHtml({ kind: kind2, skillFile = "" } = {}) {
     const hide = normalizeKind(kind2) === "skill" ? "" : " hidden";
     return `<div class="skill-note" data-skill-only${hide}><span class="sn-ico">${svg4(ICON.install, 17)}</span><div><b>No install steps needed</b>
@@ -6283,7 +6559,7 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="mf-foot">Not listed? Explain installation for it in Commands and usage, and ask an admin to add its standard steps.</p></section>
     <section class="sf-sec" data-skill-only${hide}><label for="skillfile" class="kind-h">The skill file (SKILL.md)</label>
       <p class="mf-sub">Paste the whole file. Readers copy or download exactly this.</p>
-      <textarea id="skillfile" class="sf-text" rows="12" spellcheck="false" placeholder="---&#10;name: my-skill&#10;description: What it does and when to use it.&#10;---">${esc(skillFile)}</textarea></section>`;
+      <textarea id="skillfile" class="sf-text" rows="12" spellcheck="false" placeholder="---&#10;name: my-skill&#10;description: What it does and when to use it.&#10;---">${esc2(skillFile)}</textarea></section>`;
   }
   function skillFileFrom(root) {
     const kind2 = root.querySelector('input[data-key="kind"]')?.value;
@@ -6300,8 +6576,8 @@ ${listStyleProseCss(".doc-blocks")}
       toolsCache = (async () => {
         const res = await fetchImpl(`${site}/skill-install.json`, { cache: "no-cache" });
         if (!res.ok) throw new Error(String(res.status));
-        const j = await res.json();
-        return { allTools: Array.isArray(j?.allTools) ? j.allTools : [], stepKeys: (Array.isArray(j?.tools) ? j.tools : []).map((t) => t.key) };
+        const j2 = await res.json();
+        return { allTools: Array.isArray(j2?.allTools) ? j2.allTools : [], stepKeys: (Array.isArray(j2?.tools) ? j2.tools : []).map((t) => t.key) };
       })().catch((e) => {
         toolsCache = null;
         throw e;
@@ -6311,25 +6587,25 @@ ${listStyleProseCss(".doc-blocks")}
   }
   function wireSkillEditor(ed, { fetchImpl = globalThis.fetch, site = siteFor() } = {}) {
     const root = ed.root;
-    const q = (s) => root.querySelector(s);
-    const targetsInput = () => q('input[data-key="targets"]');
+    const q2 = (s) => root.querySelector(s);
+    const targetsInput = () => q2('input[data-key="targets"]');
     const targetsNow = () => String(targetsInput()?.value || "").split(",").map((s) => s.trim()).filter(Boolean);
     let toolsLoaded = false;
-    const railTargets = () => q('.fld[data-fkey="targets"]');
+    const railTargets = () => q2('.fld[data-fkey="targets"]');
     const syncChips = (list) => {
-      const box = q('[data-chips="targets"]');
+      const box = q2('[data-chips="targets"]');
       if (!box) return;
       box.querySelectorAll(".chip2").forEach((c) => c.remove());
       const inp = box.querySelector("input");
       for (const label of list) {
         const chip = root.ownerDocument.createElement("span");
         chip.className = "chip2";
-        chip.innerHTML = `${esc(label)}<span class="x" data-rm><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>`;
+        chip.innerHTML = `${esc2(label)}<span class="x" data-rm><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>`;
         box.insertBefore(chip, inp);
       }
     };
     const fillTools = async () => {
-      const box = q("[data-mf-tools]");
+      const box = q2("[data-mf-tools]");
       if (!box) return;
       try {
         const { allTools, stepKeys } = await loadTools(fetchImpl, site);
@@ -6339,7 +6615,7 @@ ${listStyleProseCss(".doc-blocks")}
         box.innerHTML = '<span class="mf-wait">The tool list could not load. Add the tools under Works with in the Details panel.</span>';
         toolsLoaded = false;
       }
-      apply2(normalizeKind(q('input[data-key="kind"]')?.value));
+      apply2(normalizeKind(q2('input[data-key="kind"]')?.value));
     };
     const apply2 = (kind2) => {
       const skill = kind2 === "skill";
@@ -6352,27 +6628,27 @@ ${listStyleProseCss(".doc-blocks")}
         b.setAttribute("aria-checked", String(on));
       });
       const h = mainHeading(kind2);
-      const t = q("[data-main-title]");
+      const t = q2("[data-main-title]");
       if (t) t.textContent = h.title;
-      const s = q("[data-main-sub]");
+      const s = q2("[data-main-sub]");
       if (s) s.textContent = h.sub;
-      const o = q("[data-main-opt]");
+      const o = q2("[data-main-opt]");
       if (o) o.hidden = !h.optional;
-      const pw = q("[data-publish-kind]");
+      const pw = q2("[data-publish-kind]");
       if (pw) pw.textContent = kind2;
       const rail = railTargets();
       if (rail) rail.hidden = skill && toolsLoaded;
     };
     root.querySelectorAll("[data-kind-pick]").forEach((b) => b.addEventListener("click", () => {
       const kind2 = normalizeKind(b.dataset.kindPick);
-      const input = q('input[data-key="kind"]');
+      const input = q2('input[data-key="kind"]');
       if (input && input.value !== kind2) {
         input.value = kind2;
         ed._markDirty?.();
       }
       apply2(kind2);
     }));
-    q("[data-mf-tools]")?.addEventListener("click", (e) => {
+    q2("[data-mf-tools]")?.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-mf-tool]");
       if (!btn) return;
       const next = toggleTarget(targetsNow(), btn.dataset.mfTool);
@@ -6384,7 +6660,7 @@ ${listStyleProseCss(".doc-blocks")}
       syncChips(next);
       ed._markDirty?.();
     });
-    apply2(normalizeKind(q('input[data-key="kind"]')?.value));
+    apply2(normalizeKind(q2('input[data-key="kind"]')?.value));
     return fillTools();
   }
   var SKILL_EDITOR_CSS = `
@@ -6521,26 +6797,26 @@ ${listStyleProseCss(".doc-blocks")}
   var EYE = _svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>');
   var SAVE = _svg('<path d="M5 4h10l4 4v12H5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 4v5h6V4M8 20v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>');
   var MERGE = _svg('<circle cx="6" cy="6" r="2.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="18" r="2.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="13" r="2.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 8.3v7.4M6 10.5c.4 3.4 3 5 9.4 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>');
-  var S = 'fill="none" stroke="currentColor"';
-  var GLOBE = _svg(`<circle cx="12" cy="12" r="8.2" ${S} stroke-width="1.7"/><path d="M3.8 12h16.4M12 3.8c2.2 2.3 3.3 5.2 3.3 8.2S14.2 17.9 12 20.2M12 3.8c-2.2 2.3-3.3 5.2-3.3 8.2S9.8 17.9 12 20.2" ${S} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`);
-  var LOCK = _svg(`<rect x="5" y="11" width="14" height="9" rx="2.2" ${S} stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" ${S} stroke-width="1.8"/>`);
-  var INFO = _svg(`<circle cx="12" cy="12" r="8.2" ${S} stroke-width="1.7"/><path d="M12 11v5" ${S} stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>`);
-  var X = _svg(`<path d="M6 6l12 12M18 6L6 18" ${S} stroke-width="2" stroke-linecap="round"/>`);
-  var CHEV = _svg(`<path d="M6 9l6 6 6-6" ${S} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var S2 = 'fill="none" stroke="currentColor"';
+  var GLOBE = _svg(`<circle cx="12" cy="12" r="8.2" ${S2} stroke-width="1.7"/><path d="M3.8 12h16.4M12 3.8c2.2 2.3 3.3 5.2 3.3 8.2S14.2 17.9 12 20.2M12 3.8c-2.2 2.3-3.3 5.2-3.3 8.2S9.8 17.9 12 20.2" ${S2} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var LOCK = _svg(`<rect x="5" y="11" width="14" height="9" rx="2.2" ${S2} stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" ${S2} stroke-width="1.8"/>`);
+  var INFO = _svg(`<circle cx="12" cy="12" r="8.2" ${S2} stroke-width="1.7"/><path d="M12 11v5" ${S2} stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>`);
+  var X = _svg(`<path d="M6 6l12 12M18 6L6 18" ${S2} stroke-width="2" stroke-linecap="round"/>`);
+  var CHEV = _svg(`<path d="M6 9l6 6 6-6" ${S2} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var GRIP = _svg(`<circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>`);
-  var TAG = _svg(`<path d="M4 11.5V5a1 1 0 0 1 1-1h6.5l8 8-7.5 7.5-8-8z" ${S} stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/>`);
-  var COIN = _svg(`<circle cx="12" cy="12" r="8" ${S} stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" ${S} stroke-width="1.6" stroke-linecap="round"/>`);
-  var LINK = _svg(`<path d="M10 14a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5L11 8" ${S} stroke-width="1.7" stroke-linecap="round"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-2.5 2.5a3.5 3.5 0 0 0 5 5L13 16" ${S} stroke-width="1.7" stroke-linecap="round"/>`);
-  var IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S} stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" ${S} stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
-  var BOOK = _svg(`<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" ${S} stroke-width="1.8" stroke-linejoin="round"/>`);
-  var COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S} stroke-width="1.7"/><path d="M5 15.5V5.5a1.5 1.5 0 0 1 1.5-1.5H15" ${S} stroke-width="1.7" stroke-linecap="round"/>`);
-  var CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
-  var PLUS = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S} stroke-width="2" stroke-linecap="round"/>`);
-  var TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`);
-  var VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
-  var CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S} stroke-width="1.8" stroke-linejoin="round"/>`);
-  var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`);
-  var CHECK2 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var TAG = _svg(`<path d="M4 11.5V5a1 1 0 0 1 1-1h6.5l8 8-7.5 7.5-8-8z" ${S2} stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/>`);
+  var COIN = _svg(`<circle cx="12" cy="12" r="8" ${S2} stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" ${S2} stroke-width="1.6" stroke-linecap="round"/>`);
+  var LINK = _svg(`<path d="M10 14a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5L11 8" ${S2} stroke-width="1.7" stroke-linecap="round"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-2.5 2.5a3.5 3.5 0 0 0 5 5L13 16" ${S2} stroke-width="1.7" stroke-linecap="round"/>`);
+  var IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S2} stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" ${S2} stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" ${S2} stroke-width="1.7" stroke-linejoin="round"/>`);
+  var BOOK = _svg(`<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" ${S2} stroke-width="1.8" stroke-linejoin="round"/>`);
+  var COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S2} stroke-width="1.7"/><path d="M5 15.5V5.5a1.5 1.5 0 0 1 1.5-1.5H15" ${S2} stroke-width="1.7" stroke-linecap="round"/>`);
+  var CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S2} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var PLUS = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S2} stroke-width="2" stroke-linecap="round"/>`);
+  var TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S2} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S2} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S2} stroke-width="1.7" stroke-linejoin="round"/>`);
+  var CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S2} stroke-width="1.8" stroke-linejoin="round"/>`);
+  var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S2} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S2} stroke-width="1.8" stroke-linecap="round"/>`);
+  var CHECK2 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S2} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var DOC_SECTION_KEYS = { project: /* @__PURE__ */ new Set(["video"]), prompt: /* @__PURE__ */ new Set(["kind"]) };
   var STAT_DEFS = [
@@ -6770,13 +7046,13 @@ ${listStyleProseCss(".doc-blocks")}
       }
       let membership = "unknown";
       let canStage = true;
-      let authorInitial = "A";
+      let authorFolder = "";
       try {
-        const st = await this.client.status();
-        membership = st?.membership ?? "unknown";
-        this._paidTier = st?.paidTier ?? null;
-        canStage = this.itemScope !== "house" && (membership === "unknown" || st?.canStageDrafts === true);
-        authorInitial = (st?.identity?.login || "").slice(0, 1).toUpperCase() || "A";
+        const st2 = await this.client.status();
+        membership = st2?.membership ?? "unknown";
+        this._paidTier = st2?.paidTier ?? null;
+        canStage = this.itemScope !== "house" && (membership === "unknown" || st2?.canStageDrafts === true);
+        authorFolder = String(st2?.identity?.username || st2?.identity?.login || "").toLowerCase();
       } catch {
         membership = "unknown";
       }
@@ -6812,10 +7088,10 @@ ${listStyleProseCss(".doc-blocks")}
           return html;
         }).join("");
         if (!inner) return "";
-        if (sec.title === "Links") inner += `<gbti-cta-assignment type="${esc(this.type)}" ref="${esc(this.presetStr(p.slug) || "")}"></gbti-cta-assignment>`;
+        if (sec.title === "Links") inner += `<gbti-cta-assignment type="${esc2(this.type)}" ref="${esc2(this.presetStr(p.slug) || "")}"></gbti-cta-assignment>`;
         const hint = sec.title === "Media" ? mediaSummary(this.type, p) : "";
-        const hintHtml = hint ? `<span class="rsec-sum">${esc(hint)}</span>` : "";
-        return `<details ${open ? "open" : ""} class="rsec${cls ? " " + cls : ""}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
+        const hintHtml = hint ? `<span class="rsec-sum">${esc2(hint)}</span>` : "";
+        return `<details ${open ? "open" : ""} class="rsec${cls ? " " + cls : ""}"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc2(sec.title)}</span>${hintHtml}<span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
       };
       const { media: mediaSec, rest: railSecs } = splitRailSections(schema);
       const sectionsHtml = railSecs.map((sec) => renderSection(sec)).join("");
@@ -6840,23 +7116,23 @@ ${listStyleProseCss(".doc-blocks")}
       const videoSection = docSecKeys.has("video") && videoField ? `
              <section class="docsec" id="secVideo">
                <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the project page</span></div>
-               <input class="inp" data-key="video" data-kind="${esc(videoField.kind || "text")}" type="text" value="${esc(this.presetStr(p.video) || "")}" placeholder="https://youtube.com/watch?v=…" />
+               <input class="inp" data-key="video" data-kind="${esc2(videoField.kind || "text")}" type="text" value="${esc2(this.presetStr(p.video) || "")}" placeholder="https://youtube.com/watch?v=…" />
              </section>` : "";
       const showAuthorNote = AUTHOR_NOTE_TYPES.has(this.type);
       const authorSection = showAuthorNote ? `
              <section class="docsec" id="secAuthorNote">
                <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
-               <div class="authornote"><span class="an-av">${esc(authorInitial)}</span>
+               <div class="authornote"><span class="an-av">${avatarLayers(authorFolder || "gbti")}</span>
                  <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
              </section>` : "";
       const discussionSection = isPub && slug && ["post", "project", "prompt"].includes(this.type) ? `
              <section class="docsec" id="secDiscussion">
                <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
-               <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
+               <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc2(this.type)}" data-gbti-target-slug="${esc2(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc2(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
              </section>` : "";
       const docSections = videoSection + authorSection + discussionSection;
       const ownerFieldHtml = authorMembers ? (() => {
-        const opt = (value, label, selected) => `<option value="${esc(value)}"${selected ? " selected" : ""}>${esc(label)}</option>`;
+        const opt = (value, label, selected) => `<option value="${esc2(value)}"${selected ? " selected" : ""}>${esc2(label)}</option>`;
         const real = [{ value: "house", label: "House / GBTI Network" }].concat(authorMembers.map((m) => ({ value: `member:${m.username}`, label: m.username })));
         const known = real.some((o) => o.value === ownerSelValue);
         this._ownerSelInitial = known ? ownerSelValue : "";
@@ -6877,7 +7153,7 @@ ${listStyleProseCss(".doc-blocks")}
                <div class="rcard-h"><span class="rcard-t">Activity</span></div>
                <div class="rcard-b">
                  <div class="rail-stats">${STAT_DEFS.map((s) => {
-        const inner = `<span class="rs-n" data-statn="${s.key}">…</span><span class="rs-l"${s.title ? ` title="${esc(s.title)}"` : ""}>${esc(s.label)}</span>`;
+        const inner = `<span class="rs-n" data-statn="${s.key}">…</span><span class="rs-l"${s.title ? ` title="${esc2(s.title)}"` : ""}>${esc2(s.label)}</span>`;
         return s.key === "discussions" && discussionSection ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>` : `<div class="rstat">${inner}</div>`;
       }).join("")}</div>
                  <p class="rail-foot-note">Live once published.</p>
@@ -7188,7 +7464,7 @@ ${listStyleProseCss(".doc-blocks")}
         .docsec-h .dsub { text-transform:none; letter-spacing:0; font-weight:500; color:var(--s-fg-mute); }
         #secVideo .inp { width:100%; box-sizing:border-box; }
         .authornote { display:flex; gap:12px; align-items:flex-start; }
-        .an-av { flex:none; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; color:#fff; background:var(--s-green); }
+        .an-av { position:relative; overflow:hidden; display:block; flex:none; width:34px; height:34px; border-radius:50%; background:var(--hover); }
         .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
         .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
@@ -7205,10 +7481,10 @@ ${listStyleProseCss(".doc-blocks")}
         // block as an addition.
         `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<div class="pi-body"><span>You have unpublished changes saved in this editor. <b>Publish</b> to make them live. <button type="button" class="pi-link" id="whatchanged">See what changed</button></span><div class="chg" id="changedlist" hidden></div></div></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
-           <span class="etype">${esc(this.type)}</span>
+           <span class="etype">${esc2(this.type)}</span>
            <span class="edhead-sp"></span>
            <span class="savechip" id="savechip"></span>
-           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's MCP ID: its repo path, which the get_content tool takes">${COPY} <span class="lbl">MCP ID</span></button><code class="mcpid" id="mcpid" title="The MCP ID. Click to copy.">${esc(this.itemPath)}</code>` : ""}
+           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's MCP ID: its repo path, which the get_content tool takes">${COPY} <span class="lbl">MCP ID</span></button><code class="mcpid" id="mcpid" title="The MCP ID. Click to copy.">${esc2(this.itemPath)}</code>` : ""}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
            ${canStage ? `<button class="ebtn" id="preview" type="button" title="Save the draft, then open it in a new tab as the page it will become">${GLOBE} <span class="lbl">Preview</span></button>` : ""}
@@ -7217,11 +7493,11 @@ ${listStyleProseCss(".doc-blocks")}
          <div class="edgrid">
            <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to save your work privately; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
-             <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
+             <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc2(this.presetStr(p.title) || "")}</div>
              ${(() => {
-          const slugVal = `<span class="slug-val locked">${esc(this.presetStr(p.slug) || "")}</span>`;
+          const slugVal = `<span class="slug-val locked">${esc2(this.presetStr(p.slug) || "")}</span>`;
           const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
-          return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>`;
+          return `<div class="doc-slug"><span class="slug-base">${esc2(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc2(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc2(localLabel)}</span>` : ""}</span></div>`;
         })()}
              ${isPrompt ? kindSectionHtml(kind2) + skillSectionsHtml({ kind: kind2, skillFile: this.preset?.skillFile || "" }) : ""}
              <div class="doc-view-row">
@@ -7245,10 +7521,10 @@ ${listStyleProseCss(".doc-blocks")}
            ${mediaHtml ? `<section class="media-slot" aria-label="Media">${mediaHtml}</section>` : ""}
            <aside class="rail">
              <section class="rcard rcard-status">
-               <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc(status.label)}</span></div>
+               <div class="rcard-h"><span class="rcard-t">Status</span><span class="statpill statpill-${status.tone}"><span class="d"></span>${esc2(status.label)}</span></div>
                <div class="rcard-b">
-                 <div class="strow"><span class="sk">Type</span><span class="sv">${esc(this.typeLabel())}</span></div>
-                 ${status.publishedLabel ? `<div class="strow"><span class="sk">Published</span><span class="sv mono">${esc(status.publishedLabel)}</span></div>` : ""}
+                 <div class="strow"><span class="sk">Type</span><span class="sv">${esc2(this.typeLabel())}</span></div>
+                 ${status.publishedLabel ? `<div class="strow"><span class="sk">Published</span><span class="sv mono">${esc2(status.publishedLabel)}</span></div>` : ""}
                  <p class="rcard-note">Type is set at creation and can't be changed here.</p>
                </div>
              </section>
@@ -7260,11 +7536,11 @@ ${listStyleProseCss(".doc-blocks")}
          <div class="mdRefModal" id="mdrefmodal">
            <div class="mr-scrim" data-mrclose></div>
            <div class="mr-panel">
-             <div class="mr-head"><div><h3>Markdown cheatsheet</h3><p>How to write ${esc(cheat.label.toLowerCase())} content in markdown: the standard elements plus the GBTI-specific blocks.</p></div><button class="mm-x" type="button" data-mrclose title="Close">${X}</button></div>
+             <div class="mr-head"><div><h3>Markdown cheatsheet</h3><p>How to write ${esc2(cheat.label.toLowerCase())} content in markdown: the standard elements plus the GBTI-specific blocks.</p></div><button class="mm-x" type="button" data-mrclose title="Close">${X}</button></div>
              <div class="mr-scroll">
-               <p class="mr-blurb">${esc(cheat.blurb)}</p>
-               <div class="mr-legend"><b>GBTI blocks</b><div class="mr-leg-grid">${cheat.directives.map(([d, t]) => `<code>${esc(d)}</code><span>${esc(t)}</span>`).join("")}</div></div>
-               <pre class="mr-code">${esc(cheat.body)}</pre>
+               <p class="mr-blurb">${esc2(cheat.blurb)}</p>
+               <div class="mr-legend"><b>GBTI blocks</b><div class="mr-leg-grid">${cheat.directives.map(([d, t]) => `<code>${esc2(d)}</code><span>${esc2(t)}</span>`).join("")}</div></div>
+               <pre class="mr-code">${esc2(cheat.body)}</pre>
              </div>
            </div>
          </div>`
@@ -7345,8 +7621,8 @@ ${listStyleProseCss(".doc-blocks")}
         setStat("contributions", Array.isArray(credited) ? credited.length : 0);
         this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() }).then((res) => setStat("discussions", (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== "members" || c.encryptedBody)).length)).catch(() => setStat("discussions", 0));
         if (typeof this.client?.itemStats === "function") {
-          this.client.itemStats({ type: this.type, slug, path: this.itemPath }).then((st) => {
-            if (st && st.revisions != null) setStat("revisions", st.revisions);
+          this.client.itemStats({ type: this.type, slug, path: this.itemPath }).then((st2) => {
+            if (st2 && st2.revisions != null) setStat("revisions", st2.revisions);
             else failStat("revisions", "The revision count is not available for this item");
           }).catch((err) => failStat("revisions", err?.message ? `Could not read revisions: ${err.message}` : "Could not read revisions"));
         } else {
@@ -7402,14 +7678,14 @@ ${listStyleProseCss(".doc-blocks")}
       });
     }
     fieldHtml(f, value, visible = true) {
-      const v = value == null ? "" : Array.isArray(value) ? value.join(", ") : value instanceof Date ? Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10) : typeof value === "object" ? JSON.stringify(value) : String(value);
-      const label = `<label>${esc(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ""}${f.hint ? ` <span class="hint">· ${esc(f.hint)}</span>` : ""}</label>`;
+      const v2 = value == null ? "" : Array.isArray(value) ? value.join(", ") : value instanceof Date ? Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10) : typeof value === "object" ? JSON.stringify(value) : String(value);
+      const label = `<label>${esc2(f.label || f.key)}${f.required ? ' <span class="req">*</span>' : ""}${f.hint ? ` <span class="hint">· ${esc2(f.hint)}</span>` : ""}</label>`;
       const wrap = (inner, cls = "") => `<div class="fld${cls ? " " + cls : ""}" data-fkey="${f.key}"${visible ? "" : " hidden"}>${inner}</div>`;
       if (f.kind === "enum" && f.key === "visibility") {
         const aud = audienceControl({
           paidTier: this._paidTier,
           isSuperadmin: this._isSuperadmin === true,
-          currentVisibility: v,
+          currentVisibility: v2,
           existing: !!this.itemPath
         });
         const isMembers = aud.value === "members";
@@ -7420,16 +7696,16 @@ ${listStyleProseCss(".doc-blocks")}
           const word = isMembers ? "Members only" : "Public";
           return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Audience</label>
           <div class="vislocked" data-vislocked>${icon3} <b>${word}</b></div>
-          <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(aud.value)}" />
+          <input data-key="visibility" data-kind="enum" type="hidden" value="${esc2(aud.value)}" />
           ${stubField && aud.publicStub === true ? '<input data-key="publicStub" data-kind="boolean" type="checkbox" checked hidden />' : ""}
-          <div class="infobox">${INFO}<div>${esc(aud.note)}</div></div>
+          <div class="infobox">${INFO}<div>${esc2(aud.note)}</div></div>
           <p class="urlprev"><a href="https://gbti.network/submit-content/" target="_blank" rel="noopener">How publishing works</a></p></div>`;
         }
         return `<div class="fld visfield" data-fkey="visibility"${visible ? "" : " hidden"}><label>Visibility</label>
         <div class="visswitch" data-visswitch data-active="${isMembers ? "members" : "public"}"><span class="vs-thumb"></span>
           <button class="vs-opt ${isMembers ? "" : "on"}" data-vis="public" type="button">${GLOBE} Public</button>
           <button class="vs-opt ${isMembers ? "on" : ""}" data-vis="members" type="button">${LOCK} Members only</button></div>
-        <input data-key="visibility" data-kind="enum" type="hidden" value="${esc(isMembers ? "members" : "public")}" />
+        <input data-key="visibility" data-kind="enum" type="hidden" value="${esc2(isMembers ? "members" : "public")}" />
         ${stubField ? `<div class="stubwrap" data-stubwrap ${isMembers ? "" : "hidden"}>
           <div class="tglrow"><div><div class="tt">Leave a public stub</div><div class="td">Show a teaser on the public site instead of hiding it.</div></div>
             <button class="tgl ${stubOn ? "on" : ""}" data-k="publicStub" type="button" role="switch" aria-checked="${stubOn}"></button></div>
@@ -7438,8 +7714,8 @@ ${listStyleProseCss(".doc-blocks")}
         </div>` : ""}</div>`;
       }
       if (f.kind === "enum" && f.key === "status") {
-        const opts = (f.options || ["draft", "published"]).map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("");
-        return wrap(`${label}<div class="statusrow"><span class="dotpill" data-statuspill><span class="d"></span><span data-statustxt>${esc(v || "draft")}</span></span><select class="selbox" data-key="status" data-kind="enum" style="flex:1">${opts}</select></div>`);
+        const opts = (f.options || ["draft", "published"]).map((o) => `<option ${o === v2 ? "selected" : ""}>${esc2(o)}</option>`).join("");
+        return wrap(`${label}<div class="statusrow"><span class="dotpill" data-statuspill><span class="d"></span><span data-statustxt>${esc2(v2 || "draft")}</span></span><select class="selbox" data-key="status" data-kind="enum" style="flex:1">${opts}</select></div>`);
       }
       if (f.kind === "enum" && f.key === "galleryStyle") {
         const cards = [
@@ -7447,56 +7723,56 @@ ${listStyleProseCss(".doc-blocks")}
           { key: "grid", name: "Grid", desc: "Captioned, 2-up", shape: '<span class="gs-tile"></span><span class="gs-tile"></span>' },
           { key: "carousel", name: "Carousel", desc: "One large frame + a filmstrip", shape: '<span class="gs-frame"></span><span class="gs-strip"><i></i><i></i><i></i></span>' }
         ];
-        const cur = v || "";
+        const cur = v2 || "";
         const cardsHtml = cards.map((c) => `<button type="button" class="gs-card${c.key === cur ? " on" : ""}" data-gs="${c.key}">
-        <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join("");
-        return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
+        <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc2(c.name)}</span><span class="gs-desc">${esc2(c.desc)}</span></button>`).join("");
+        return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc2(cur)}" /></div>`);
       }
       if (f.kind === "enum" && f.key === "layout") {
         const cards = [
           { key: "journal", name: "Journal", desc: "Sticky rail beside one reading column", shape: '<span class="gs-tile" style="flex:0 0 26%"></span><span class="gs-tile"></span>' },
           { key: "card", name: "Card", desc: "Centered card, no rail", shape: '<span class="gs-tile" style="flex:0 0 62%;margin:0 auto"></span>' }
         ];
-        const cur = v === "card" ? "card" : "journal";
+        const cur = v2 === "card" ? "card" : "journal";
         const cardsHtml = cards.map((c) => `<button type="button" class="gs-card${c.key === cur ? " on" : ""}" data-gs="${c.key}">
-        <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join("");
-        return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
+        <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc2(c.name)}</span><span class="gs-desc">${esc2(c.desc)}</span></button>`).join("");
+        return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc2(cur)}" /></div>`);
       }
       if (f.kind === "enum" && f.key === "sidebarPosition") {
         const cards = [
           { key: "left", name: "Left", desc: "Contents rail beside the left edge", shape: '<span class="gs-tile" style="flex:0 0 26%"></span><span class="gs-tile"></span>' },
           { key: "right", name: "Right", desc: "Contents rail beside the right edge", shape: '<span class="gs-tile"></span><span class="gs-tile" style="flex:0 0 26%"></span>' }
         ];
-        const cur = v || "right";
+        const cur = v2 || "right";
         const cardsHtml = cards.map((c) => `<button type="button" class="gs-card${c.key === cur ? " on" : ""}" data-gs="${c.key}">
-        <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc(c.name)}</span><span class="gs-desc">${esc(c.desc)}</span></button>`).join("");
-        return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc(cur)}" /></div>`);
+        <span class="gs-shape">${c.shape}</span><span class="gs-name">${esc2(c.name)}</span><span class="gs-desc">${esc2(c.desc)}</span></button>`).join("");
+        return wrap(`${label}<div class="gs-cards" data-gscards>${cardsHtml}<input data-key="${f.key}" data-kind="enum" type="hidden" value="${esc2(cur)}" /></div>`);
       }
       if (f.kind === "enum") {
-        return wrap(`${label}<select class="selbox" data-key="${f.key}" data-kind="enum">${(f.options || []).map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`);
+        return wrap(`${label}<select class="selbox" data-key="${f.key}" data-kind="enum">${(f.options || []).map((o) => `<option ${o === v2 ? "selected" : ""}>${esc2(o)}</option>`).join("")}</select>`);
       }
       if (f.kind === "boolean") {
         const on = !!value;
-        return wrap(`<div class="tglrow"><div><div class="tt">${esc(f.label || f.key)}</div>${f.desc ? `<div class="td">${esc(f.desc)}</div>` : ""}</div><button class="tgl ${on ? "on" : ""}" data-k="${f.key}" type="button" role="switch" aria-checked="${on}"></button></div><input type="checkbox" data-key="${f.key}" data-kind="boolean" ${on ? "checked" : ""} hidden />`);
+        return wrap(`<div class="tglrow"><div><div class="tt">${esc2(f.label || f.key)}</div>${f.desc ? `<div class="td">${esc2(f.desc)}</div>` : ""}</div><button class="tgl ${on ? "on" : ""}" data-k="${f.key}" type="button" role="switch" aria-checked="${on}"></button></div><input type="checkbox" data-key="${f.key}" data-kind="boolean" ${on ? "checked" : ""} hidden />`);
       }
       if (f.kind === "array") {
-        const arr = String(v).split(",").map((s) => s.trim()).filter(Boolean);
+        const arr = String(v2).split(",").map((s) => s.trim()).filter(Boolean);
         if (f.key === "categories") return wrap(`${label}${categoryFieldHtml(arr)}`);
         const accent = f.key !== "tags";
-        const chips = arr.map((c) => `<span class="chip2 ${accent ? "" : "chip-neutral"}">${esc(c)}<span class="x" data-rm>${X}</span></span>`).join("");
-        return wrap(`${label}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" placeholder="${esc(f.placeholder || "Add…")}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc(arr.join(", "))}" />`);
+        const chips = arr.map((c) => `<span class="chip2 ${accent ? "" : "chip-neutral"}">${esc2(c)}<span class="x" data-rm>${X}</span></span>`).join("");
+        return wrap(`${label}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" placeholder="${esc2(f.placeholder || "Add…")}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc2(arr.join(", "))}" />`);
       }
       if (f.kind === "image") {
-        const url = v ? this.resolveCover(v) : "";
+        const url = v2 ? this.resolveCover(v2) : "";
         const has = !!url;
         const framed = typeof f.frame === "string" && f.frame.includes("/");
-        const frameStyle = framed ? ` style="aspect-ratio:${esc(f.frame)}${f.previewPx ? `;max-width:${Number(f.previewPx)}px` : ""}"` : "";
+        const frameStyle = framed ? ` style="aspect-ratio:${esc2(f.frame)}${f.previewPx ? `;max-width:${Number(f.previewPx)}px` : ""}"` : "";
         const picker = framed ? "" : '<div class="framepick"><button type="button" class="on" data-frame="card4">4:3 card</button><button type="button" data-frame="hero">Hero</button></div>';
-        const hint = f.hint ? `<div class="urlprev" style="color:var(--s-fg-soft)">${esc(f.hint)}</div>` : "";
+        const hint = f.hint ? `<div class="urlprev" style="color:var(--s-fg-soft)">${esc2(f.hint)}</div>` : "";
         const presetVal = f.key === "banner" ? String(this.preset?.input?.bannerPreset || "") : "";
-        const swatchesHtml = f.key === "banner" ? `<div class="swatchrow" data-swatches>${BANNER_PRESETS.map((p) => `<button type="button" class="swatch${p.key === presetVal ? " on" : ""}" data-preset="${p.key}" title="${esc(p.label)}">
-          <span class="sw-dot" style="background:linear-gradient(150deg,${p.from},${p.to})"></span>${esc(p.label)}</button>`).join("")}
-        <input data-key="bannerPreset" data-kind="enum" type="hidden" value="${esc(presetVal)}" /></div>` : "";
+        const swatchesHtml = f.key === "banner" ? `<div class="swatchrow" data-swatches>${BANNER_PRESETS.map((p) => `<button type="button" class="swatch${p.key === presetVal ? " on" : ""}" data-preset="${p.key}" title="${esc2(p.label)}">
+          <span class="sw-dot" style="background:linear-gradient(150deg,${p.from},${p.to})"></span>${esc2(p.label)}</button>`).join("")}
+        <input data-key="bannerPreset" data-kind="enum" type="hidden" value="${esc2(presetVal)}" /></div>` : "";
         return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${label}${hint}
         <div class="cover" data-cover>
           ${picker}
@@ -7504,7 +7780,7 @@ ${listStyleProseCss(".doc-blocks")}
           <input type="file" accept="image/*" hidden data-cover-file />
           <div class="coverbtns"><button type="button" class="ebtn" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button><span class="up-st" data-cover-st></span></div>
           ${swatchesHtml ? `<div class="swatch-or">or pick a color</div>${swatchesHtml}` : ""}
-          <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
+          <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc2(v2)}" />
         </div></div>`;
       }
       if (f.kind === "json" && f.key === "links") {
@@ -7514,10 +7790,10 @@ ${listStyleProseCss(".doc-blocks")}
         return wrap(this._galleryInner(f, value));
       }
       if (f.kind === "textarea" || f.kind === "json") {
-        return wrap(`${label}<textarea class="ta" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder || "")}">${esc(v)}</textarea>`);
+        return wrap(`${label}<textarea class="ta" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc2(f.placeholder || "")}">${esc2(v2)}</textarea>`);
       }
       const mono = f.kind === "date" || f.key === "slug";
-      return wrap(`${label}<input class="inp${mono ? " mono" : ""}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc(v)}" placeholder="${esc(f.placeholder || "")}" />`);
+      return wrap(`${label}<input class="inp${mono ? " mono" : ""}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc2(v2)}" placeholder="${esc2(f.placeholder || "")}" />`);
     }
     // SOW-062 P6: the project links[] editor. One row per link + an Add button + a hidden json input that gather()
     // reads (unchanged contract). _serializeLinks rebuilds the array on every edit, preserving each row's extra fields.
@@ -7533,20 +7809,20 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="linkrows" data-links>${rows}</div>
       <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
       <datalist id="lk-types">${["download", "project", "repository", "github", "website", "docs", "demo"].map((k) => `<option value="${k}"></option>`).join("")}</datalist>
-      <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(links))}" />`;
+      <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc2(JSON.stringify(links))}" />`;
     }
     _linkRowHtml(l = {}, i) {
       const { type, kind: kind2, url, label, visibility, ...extra } = l || {};
-      const t = esc(type || kind2 || "");
+      const t = esc2(type || kind2 || "");
       const vis = visibility === "members" ? "members" : "public";
-      return `<div class="linkrow" data-li="${i}" data-hadvis="${visibility != null ? "1" : "0"}" data-extra="${esc(JSON.stringify(extra))}">
+      return `<div class="linkrow" data-li="${i}" data-hadvis="${visibility != null ? "1" : "0"}" data-extra="${esc2(JSON.stringify(extra))}">
       <div class="lr-top">
         <input class="inp lk-type" list="lk-types" placeholder="type" value="${t}" />
-        <input class="inp lk-url" type="text" placeholder="https://" value="${esc(url || "")}" />
+        <input class="inp lk-url" type="text" placeholder="https://" value="${esc2(url || "")}" />
         <button class="lr-del" type="button" data-lrdel title="Remove">${TRASH}</button>
       </div>
       <div class="lr-bot">
-        <input class="inp lk-label" type="text" placeholder="Button label" value="${esc(label || "")}" />
+        <input class="inp lk-label" type="text" placeholder="Button label" value="${esc2(label || "")}" />
         <div class="lr-vis" data-lrvis>${["public", "members"].map((x) => `<button type="button" data-vis="${x}" class="${vis === x ? "on" : ""}">${x}</button>`).join("")}</div>
       </div>
     </div>`;
@@ -7640,17 +7916,17 @@ ${listStyleProseCss(".doc-blocks")}
         <span class="up-st" data-gal-st></span>
       </div>
       <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden data-galfile />
-      <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(galleryValueFromRows(rows)))}" />`;
+      <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc2(JSON.stringify(galleryValueFromRows(rows)))}" />`;
     }
     _galleryRowHtml(r = {}, i) {
       const src = String(r.src || "");
       const caption = String(r.caption || "");
       const thumb = src ? this.resolveCover(src) : "";
       return `<div class="galrow" data-gi="${i}">
-      <div class="gr-thumb">${thumb ? `<img src="${esc(thumb)}" alt="" />` : ""}</div>
+      <div class="gr-thumb">${thumb ? `<img src="${esc2(thumb)}" alt="" />` : ""}</div>
       <div class="gr-fields">
-        <input class="inp gr-src" type="text" placeholder="./images/shot.webp" value="${esc(src)}" />
-        <input class="inp gr-cap" type="text" placeholder="Caption (optional)" value="${esc(caption)}" />
+        <input class="inp gr-src" type="text" placeholder="./images/shot.webp" value="${esc2(src)}" />
+        <input class="inp gr-cap" type="text" placeholder="Caption (optional)" value="${esc2(caption)}" />
       </div>
       <div class="gr-ctl">
         <button class="gr-grip" type="button" data-grdrag draggable="true"
@@ -7678,7 +7954,7 @@ ${listStyleProseCss(".doc-blocks")}
     _refreshGalleryThumb(row) {
       const src = (row.querySelector(".gr-src")?.value || "").trim();
       const box = row.querySelector(".gr-thumb");
-      if (box) box.innerHTML = src ? `<img src="${esc(this.resolveCover(src))}" alt="" />` : "";
+      if (box) box.innerHTML = src ? `<img src="${esc2(this.resolveCover(src))}" alt="" />` : "";
     }
     _wireGallery() {
       const wrap = this.$("[data-gallery]");
@@ -7780,12 +8056,12 @@ ${listStyleProseCss(".doc-blocks")}
       if (!files.length) return;
       const wrap = this.$("[data-gallery]");
       if (!wrap) return;
-      const st = this.$("[data-gal-st]");
+      const st2 = this.$("[data-gal-st]");
       const taken = this._galleryTakenNames();
       let added = 0;
       let failed = 0;
       for (const file of files) {
-        if (st) st.textContent = `Uploading ${added + failed + 1} of ${files.length}...`;
+        if (st2) st2.textContent = `Uploading ${added + failed + 1} of ${files.length}...`;
         try {
           const dataUrl = await fileToDataUrl(file);
           const filename = uniqueImageName(file.name, taken);
@@ -7797,11 +8073,11 @@ ${listStyleProseCss(".doc-blocks")}
         } catch (err) {
           failed += 1;
           const h = failHint(err);
-          if (st) st.textContent = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+          if (st2) st2.textContent = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
         }
       }
       this._serializeGallery();
-      if (st && !failed) st.textContent = added ? `Added ${added} screenshot${added === 1 ? "" : "s"}.` : "";
+      if (st2 && !failed) st2.textContent = added ? `Added ${added} screenshot${added === 1 ? "" : "s"}.` : "";
     }
     // The bare filenames already in play this session: every current row's basename plus (the caller adds) the
     // names staged in this batch. uniqueImageName suffixes against this so an upload never overwrites a sibling.
@@ -7857,14 +8133,14 @@ ${listStyleProseCss(".doc-blocks")}
       this._mediaPop = pop;
       const rows = await this._loadMediaIndex();
       if (this._mediaPop !== pop) return;
-      const draw = (q2) => {
-        const shown = filterMedia(rows, q2);
+      const draw = (q3) => {
+        const shown = filterMedia(rows, q3);
         const grid = pop.querySelector(".media-grid");
         if (!grid) return;
         grid.innerHTML = shown.length ? shown.map((r, i) => {
           const plan = reusePlan(r, this.itemPath);
-          return `<button type="button" class="media-cell" data-mi="${i}" title="${esc(r.name)} (from ${esc(r.itemTitle || r.slug || "")})"><img src="${esc(plan?.sourceUrl || "")}" alt="" loading="lazy" /><span>${esc(r.name)}</span></button>`;
-        }).join("") : `<div class="media-load">${esc(rows.length ? "Nothing matches that." : this._mediaErr || "No images.")}</div>`;
+          return `<button type="button" class="media-cell" data-mi="${i}" title="${esc2(r.name)} (from ${esc2(r.itemTitle || r.slug || "")})"><img src="${esc2(plan?.sourceUrl || "")}" alt="" loading="lazy" /><span>${esc2(r.name)}</span></button>`;
+        }).join("") : `<div class="media-load">${esc2(rows.length ? "Nothing matches that." : this._mediaErr || "No images.")}</div>`;
         grid.querySelectorAll("[data-mi]").forEach((cell) => {
           cell.addEventListener("click", () => {
             const rec = shown[Number(cell.dataset.mi)];
@@ -7877,10 +8153,10 @@ ${listStyleProseCss(".doc-blocks")}
         });
       };
       pop.innerHTML = '<input class="media-q" type="search" placeholder="Search your images" aria-label="Search your images" /><div class="media-grid"></div>';
-      const q = pop.querySelector(".media-q");
-      q?.addEventListener("input", () => draw(q.value));
+      const q2 = pop.querySelector(".media-q");
+      q2?.addEventListener("input", () => draw(q2.value));
       draw("");
-      q?.focus();
+      q2?.focus();
       this._onMediaEsc = (e) => {
         if (e.key === "Escape") this._closeMediaPicker();
       };
@@ -7902,14 +8178,14 @@ ${listStyleProseCss(".doc-blocks")}
     async _reuseImage(record, dest) {
       const plan = reusePlan(record, this.itemPath);
       if (!plan) return;
-      const st = dest?.cover ? dest.cover.querySelector("[data-cover-st]") : this.$("[data-gal-st]");
+      const st2 = dest?.cover ? dest.cover.querySelector("[data-cover-st]") : this.$("[data-gal-st]");
       let path = plan.ref;
       if (!plan.alreadyHere) {
         if (!this.client?.stageImage) {
-          if (st) st.textContent = "Reuse is not available in this client";
+          if (st2) st2.textContent = "Reuse is not available in this client";
           return;
         }
-        if (st) st.textContent = "Copying...";
+        if (st2) st2.textContent = "Copying...";
         try {
           const res = await fetch(plan.sourceUrl);
           if (!res.ok) throw new Error(String(res.status));
@@ -7920,7 +8196,7 @@ ${listStyleProseCss(".doc-blocks")}
           const out = await this.client.stageImage({ filename: name, dataBase64: btoa(bin), itemPath: this.itemPath, item: this.itemToken });
           path = out.path;
         } catch {
-          if (st) st.textContent = "Could not copy that image";
+          if (st2) st2.textContent = "Could not copy that image";
           return;
         }
       }
@@ -7931,10 +8207,10 @@ ${listStyleProseCss(".doc-blocks")}
           this._appendGalleryRow(wrap, path);
           this._serializeGallery();
         }
-        if (st) st.textContent = "Added.";
+        if (st2) st2.textContent = "Added.";
       } else if (dest?.cover) {
         this._setCoverField(dest.cover, path, plan.sourceUrl);
-        if (st) st.textContent = "";
+        if (st2) st2.textContent = "";
       }
     }
     // Put a reused/staged image path into a frontmatter image control: the hidden field, the reframable preview,
@@ -7995,7 +8271,7 @@ ${listStyleProseCss(".doc-blocks")}
             const accent = box.dataset.accent === "true";
             const chip = document.createElement("span");
             chip.className = `chip2 ${accent ? "" : "chip-neutral"}`;
-            chip.innerHTML = `${esc(val)}<span class="x" data-rm>${X}</span>`;
+            chip.innerHTML = `${esc2(val)}<span class="x" data-rm>${X}</span>`;
             inp.before(chip);
             inp.value = "";
             persist();
@@ -8121,8 +8397,8 @@ ${listStyleProseCss(".doc-blocks")}
       const loaded = this.presetStr(this.preset?.input?.slug) || "";
       const existing = Boolean(this.itemPath);
       const val = this._slugVal ?? loaded;
-      const note = existing && val && val !== loaded ? `<div class="urlprev">/${esc(typePath)}/${esc(loaded)}/ becomes /${esc(typePath)}/${esc(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : "";
-      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" maxlength="${SLUG_MAX}" value="${esc(val)}" /></div>${note}</div>`;
+      const note = existing && val && val !== loaded ? `<div class="urlprev">/${esc2(typePath)}/${esc2(loaded)}/ becomes /${esc2(typePath)}/${esc2(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : "";
+      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc2(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" maxlength="${SLUG_MAX}" value="${esc2(val)}" /></div>${note}</div>`;
     }
     _wirePermalinkField() {
       const input = this.$("#slugfield");
@@ -8130,15 +8406,15 @@ ${listStyleProseCss(".doc-blocks")}
       const typePath = { post: "articles", project: "projects", product: "projects", prompt: "prompts" }[this.type] || this.type;
       const loaded = this.presetStr(this.preset?.input?.slug) || "";
       input.addEventListener("input", () => {
-        const v = String(input.value || "").trim().toLowerCase();
-        this._slugVal = v;
+        const v2 = String(input.value || "").trim().toLowerCase();
+        this._slugVal = v2;
         const mirror = this.$('[data-key="slug"]');
-        if (mirror) mirror.value = v;
+        if (mirror) mirror.value = v2;
         const inline4 = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline4) inline4.textContent = v;
+        if (inline4) inline4.textContent = v2;
         const note = input.closest(".fld")?.querySelector(".urlprev");
         if (note && this.itemPath) {
-          note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
+          note.textContent = v2 && v2 !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v2}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
         }
       });
     }
@@ -8157,7 +8433,7 @@ ${listStyleProseCss(".doc-blocks")}
           }, 1200);
         }
       } catch {
-        this.out(`MCP ID: <code>${esc(id)}</code> (copy it manually)`);
+        this.out(`MCP ID: <code>${esc2(id)}</code> (copy it manually)`);
       }
     }
     // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, project -> /projects/,
@@ -8215,7 +8491,7 @@ ${listStyleProseCss(".doc-blocks")}
       const orig = b.innerHTML;
       b.disabled = true;
       b.setAttribute("aria-busy", "true");
-      b.innerHTML = `<span class="spin"></span> ${esc(label)}`;
+      b.innerHTML = `<span class="spin"></span> ${esc2(label)}`;
       return () => {
         b.disabled = false;
         b.removeAttribute("aria-busy");
@@ -8304,14 +8580,14 @@ ${listStyleProseCss(".doc-blocks")}
       if (!res.items.length) {
         return unread || '<p class="chg-msg">Nothing differs from the live version right now. The saved draft matches what is published.</p>';
       }
-      const row = (was, now) => `<span class="chg-v"><i>was</i> ${esc(was)}</span><span class="chg-v"><i>now</i> ${esc(now)}</span>`;
-      const li = res.items.map((it) => {
-        const head = it.kind === "block" && Number.isInteger(it.index) && it.op !== "removed" ? `<button type="button" class="chg-jump" data-jump="${it.index}">${esc(changeLabel(it))}</button>` : `<span class="chg-h">${esc(changeLabel(it))}</span>`;
-        if (it.kind === "field" || it.kind === "note") return `<li>${head}${row(formatValue(it.was), formatValue(it.now))}</li>`;
-        if (it.op === "coarse") return `<li>${head}<span class="chg-v">${esc(it.was)} live, ${esc(it.now)} in this draft</span></li>`;
-        if (it.op === "added") return `<li>${head}<span class="chg-v">${esc(snippet(it.now))}</span></li>`;
-        if (it.op === "removed") return `<li>${head}<span class="chg-v"><i>was</i> ${esc(snippet(it.was))}</span></li>`;
-        return `<li>${head}${row(snippet(it.was), snippet(it.now))}</li>`;
+      const row = (was, now) => `<span class="chg-v"><i>was</i> ${esc2(was)}</span><span class="chg-v"><i>now</i> ${esc2(now)}</span>`;
+      const li = res.items.map((it2) => {
+        const head = it2.kind === "block" && Number.isInteger(it2.index) && it2.op !== "removed" ? `<button type="button" class="chg-jump" data-jump="${it2.index}">${esc2(changeLabel(it2))}</button>` : `<span class="chg-h">${esc2(changeLabel(it2))}</span>`;
+        if (it2.kind === "field" || it2.kind === "note") return `<li>${head}${row(formatValue(it2.was), formatValue(it2.now))}</li>`;
+        if (it2.op === "coarse") return `<li>${head}<span class="chg-v">${esc2(it2.was)} live, ${esc2(it2.now)} in this draft</span></li>`;
+        if (it2.op === "added") return `<li>${head}<span class="chg-v">${esc2(snippet(it2.now))}</span></li>`;
+        if (it2.op === "removed") return `<li>${head}<span class="chg-v"><i>was</i> ${esc2(snippet(it2.was))}</span></li>`;
+        return `<li>${head}${row(snippet(it2.was), snippet(it2.now))}</li>`;
       }).join("");
       return `${unread}<ol>${li}</ol>`;
     }
@@ -8333,10 +8609,10 @@ ${listStyleProseCss(".doc-blocks")}
         this.$("#publish")?.setAttribute("hidden", "");
         this.staged = false;
         this._banner(`Publishing is not instant. The site rebuilds after you publish, so your change reaches the live site in about 2 to 3 minutes.`);
-        const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : "";
+        const renameNote = res?.renamed ? ` The permalink changed from ${esc2(res.renamed.from)} to ${esc2(res.renamed.to)}; the old link starts redirecting in about 2 to 3 minutes.` : "";
         const ownerLabel = (o) => o?.scope === "house" ? "House / GBTI Network" : o?.username || "a member";
-        const reassignNote = res?.reassigned ? ` This item moved from ${esc(ownerLabel(res.reassigned.from))} to ${esc(ownerLabel(res.reassigned.to))}.` : "";
-        this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}${renameNote}${reassignNote}`);
+        const reassignNote = res?.reassigned ? ` This item moved from ${esc2(ownerLabel(res.reassigned.from))} to ${esc2(ownerLabel(res.reassigned.to))}.` : "";
+        this.out(`<span class="tag ok">submitted</span> ${esc2(submitAck({ prNumber: res.prNumber, autoMerge: true }))}${renameNote}${reassignNote}`);
         if (res?.renamed && this.preset?.input) {
           this.preset.input.slug = res.renamed.to;
         }
@@ -8354,8 +8630,8 @@ ${listStyleProseCss(".doc-blocks")}
         this._setChip("");
         const h = failHint(err);
         const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
-        this._banner(esc(msg), "danger");
-        this.out(esc(msg), "danger");
+        this._banner(esc2(msg), "danger");
+        this.out(esc2(msg), "danger");
       } finally {
         restore();
       }
@@ -8392,7 +8668,7 @@ ${listStyleProseCss(".doc-blocks")}
         slug = String(this.gather()?.input?.slug || "").trim();
       } catch (err) {
         const h = failHint(err);
-        this.out(esc(h.text), "danger");
+        this.out(esc2(h.text), "danger");
         return;
       }
       if (!slug) {
@@ -8430,7 +8706,7 @@ ${listStyleProseCss(".doc-blocks")}
       } catch (err) {
         if (tab) tab.close();
         const h = failHint(err);
-        this.out(esc(h.text), "danger");
+        this.out(esc2(h.text), "danger");
       } finally {
         restore();
       }
@@ -8460,13 +8736,13 @@ ${listStyleProseCss(".doc-blocks")}
         });
         this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
         this._setChip(`${CHECK2} Draft saved`, "ok");
-        if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
-        this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft saved privately with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft saved privately. Open <b>Drafts</b> to review or publish it.');
+        if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc2(res.renamed.from)}</b> becomes <b>${esc2(res.renamed.to)}</b> when you publish. The old link will redirect.`);
+        this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft saved privately with the pending permalink change (${esc2(res.renamed.from)} to ${esc2(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft saved privately. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
       } catch (err) {
         this._setChip("");
         const h = failHint(err);
-        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       } finally {
         restore();
       }
@@ -8481,19 +8757,19 @@ ${listStyleProseCss(".doc-blocks")}
         const wrap = imgField && this.$(`.field[data-fkey="${imgField.key}"]`);
         if (el2 && !el2.value && wrap && !wrap.hidden) {
           el2.value = res.path;
-          this.out(`Image staged into <code>${esc(imgField.label || imgField.key)}</code>: <code>${esc(res.path)}</code>`);
+          this.out(`Image staged into <code>${esc2(imgField.label || imgField.key)}</code>: <code>${esc2(res.path)}</code>`);
         } else {
-          this.out(`Image staged: <code>${esc(res.path)}</code> (reference it in your body)`);
+          this.out(`Image staged: <code>${esc2(res.path)}</code> (reference it in your body)`);
         }
       } catch (err) {
         const h = failHint(err);
-        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     // SOW-062 P6: the inner of the reframable cover preview -- the image (object-fit:cover) when set, else the
     // striped "no image yet" placeholder. Used by the initial render, doCoverImage, and clearCover.
     _coverFrameInner(url) {
-      return url ? `<img data-cimg src="${esc(url)}" alt="" />` : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
+      return url ? `<img data-cimg src="${esc2(url)}" alt="" />` : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
     }
     // SOW-062 P3/P6: stage a picked cover image — drop it into the reframable preview immediately, then stage it and
     // put the returned repo path into the field's hidden input (gather() picks it up like any field).
@@ -8514,7 +8790,7 @@ ${listStyleProseCss(".doc-blocks")}
         (this._stagedSrc ||= {})[res.path] = dataUrl;
         const el2 = control.querySelector('[data-key][data-kind="image"]');
         if (el2) el2.value = res.path;
-        this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
+        this.out(`Cover image staged: <code>${esc2(res.path)}</code>`);
         const swatches = control.querySelector("[data-swatches]");
         if (swatches) {
           swatches.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("on"));
@@ -8523,7 +8799,7 @@ ${listStyleProseCss(".doc-blocks")}
         }
       } catch (err) {
         const h = failHint(err);
-        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+        this.out(esc2(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     clearCover(control) {
@@ -8580,15 +8856,15 @@ ${listStyleProseCss(".doc-blocks")}
         this.css() + `<div class="panel">
            <h2>My content</h2>
            ${items.length === 0 ? `<p class="muted">No content yet. Use the Author tab to create your first post.</p>` : ""}
-           <ul class="list">${items.map((it, i) => this.rowHtml(it, i)).join("")}</ul>
+           <ul class="list">${items.map((it2, i) => this.rowHtml(it2, i)).join("")}</ul>
          </div>`
       );
       this.$$("button[data-i]").forEach(
         (b) => b.addEventListener("click", async () => {
-          const it = items[Number(b.dataset.i)];
+          const it2 = items[Number(b.dataset.i)];
           try {
-            const full = await this.client.getContentItem({ path: it.path });
-            this.emit("gbti-edit", { type: it.type, ...full });
+            const full = await this.client.getContentItem({ path: it2.path });
+            this.emit("gbti-edit", { type: it2.type, ...full });
           } catch (err) {
             b.textContent = err.message;
           }
@@ -8601,14 +8877,14 @@ ${listStyleProseCss(".doc-blocks")}
         })
       );
     }
-    rowHtml(it, i) {
-      const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
-      const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
-      const isPub = String(it.status || "").toLowerCase() === "published";
-      const url = isPub ? publicUrlFor({ type: it.type, slug: it.slug, path: it.path }) : "";
-      const view = url ? `<button class="ghost" data-view="${esc(url)}" title="Open the live public page in a new tab">View</button>` : "";
+    rowHtml(it2, i) {
+      const status = it2.status ? `<span class="tag ${it2.status === "published" ? "ok" : ""}">${esc2(it2.status)}</span>` : "";
+      const vis = it2.visibility === "members" ? `<span class="tag">members</span>` : "";
+      const isPub = String(it2.status || "").toLowerCase() === "published";
+      const url = isPub ? publicUrlFor({ type: it2.type, slug: it2.slug, path: it2.path }) : "";
+      const view = url ? `<button class="ghost" data-view="${esc2(url)}" title="Open the live public page in a new tab">View</button>` : "";
       return `<li class="row" style="justify-content:space-between">
-      <span><strong>${esc(it.title)}</strong> <span class="muted">${esc(it.type || "")}</span> ${status} ${vis}</span>
+      <span><strong>${esc2(it2.title)}</strong> <span class="muted">${esc2(it2.type || "")}</span> ${status} ${vis}</span>
       <span class="rowacts" style="display:inline-flex;gap:6px;flex:none">${view}<button class="ghost" data-i="${i}">Edit</button></span>
     </li>`;
     }
@@ -8630,10 +8906,10 @@ ${listStyleProseCss(".doc-blocks")}
            ${prs.length === 0 ? `<p class="muted">No open PRs.</p>` : ""}
            <ul class="list">${sortPullsByEvent(prs).map((pr) => {
           const ev = prEvent(pr);
-          const when = ev.at ? ` <span class="when" title="${esc(absTime(ev.at))}">· ${esc(ev.verb)} ${esc(relTime(ev.at))}</span>` : "";
-          return `<li class="row" style="justify-content:space-between" data-n="${esc(pr.number)}">
-             <span><a href="${esc(pr.html_url)}" target="_blank" rel="noopener">#${esc(pr.number)}</a> ${esc(pr.title)}${when}</span>
-             <span class="gate tag" data-n="${esc(pr.number)}">checking…</span>
+          const when = ev.at ? ` <span class="when" title="${esc2(absTime(ev.at))}">· ${esc2(ev.verb)} ${esc2(relTime(ev.at))}</span>` : "";
+          return `<li class="row" style="justify-content:space-between" data-n="${esc2(pr.number)}">
+             <span><a href="${esc2(pr.html_url)}" target="_blank" rel="noopener">#${esc2(pr.number)}</a> ${esc2(pr.title)}${when}</span>
+             <span class="gate tag" data-n="${esc2(pr.number)}">checking…</span>
            </li>`;
         }).join("")}</ul>
          </div>`
@@ -8671,9 +8947,9 @@ ${listStyleProseCss(".doc-blocks")}
            <h2>Members-only</h2>
            <p class="muted">Content marked <code>visibility: members</code>, surfaced here (excluded from the public site).</p>
            ${items.length === 0 ? `<p class="muted">Nothing members-only yet.</p>` : ""}
-           <ul class="list">${items.map((it) => `<li class="row" style="justify-content:space-between">
-             <span><strong>${esc(it.title)}</strong> <span class="muted">${esc(it.type || "")}</span></span>
-             <span class="muted">${esc(it.author || "")}</span>
+           <ul class="list">${items.map((it2) => `<li class="row" style="justify-content:space-between">
+             <span><strong>${esc2(it2.title)}</strong> <span class="muted">${esc2(it2.type || "")}</span></span>
+             <span class="muted">${esc2(it2.author || "")}</span>
            </li>`).join("")}</ul>
          </div>`
       );
@@ -8693,24 +8969,24 @@ ${listStyleProseCss(".doc-blocks")}
       this.set(
         this.css() + `<div class="panel">
            <h2>Settings</h2>
-           <label>Local repo path</label><input id="repoPath" value="${esc(settings.repoPath || "")}" />
-           <label>Preferred port</label><input id="preferredPort" type="number" value="${esc(settings.preferredPort || "")}" />
+           <label>Local repo path</label><input id="repoPath" value="${esc2(settings.repoPath || "")}" />
+           <label>Preferred port</label><input id="preferredPort" type="number" value="${esc2(settings.preferredPort || "")}" />
            <label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input id="mcpEnabled" type="checkbox" ${settings.mcpEnabled ? "checked" : ""} style="width:auto" /> Enable the MCP HTTP endpoint</label>
            <label style="display:flex;gap:8px;align-items:center"><input id="autostart" type="checkbox" ${settings.autostart ? "checked" : ""} style="width:auto" /> Start on login (peg-startup)</label>
            <div class="row" style="margin-top:12px"><button id="save">Save</button><span id="out" class="muted"></span></div>
          </div>
          <div class="panel" style="margin-top:14px">
            <h2>Billing</h2>
-           <p class="muted">${esc(billing.note || "Manage your membership in the Stripe customer portal.")}</p>
-           ${billing.portal ? `<a href="${esc(billing.portal)}" target="_blank" rel="noopener"><button class="ghost">Open billing portal</button></a>` : ""}
+           <p class="muted">${esc2(billing.note || "Manage your membership in the Stripe customer portal.")}</p>
+           ${billing.portal ? `<a href="${esc2(billing.portal)}" target="_blank" rel="noopener"><button class="ghost">Open billing portal</button></a>` : ""}
          </div>
          <div class="panel" style="margin-top:14px">
            <h2>Referrals + revenue</h2>
-           ${referral.link ? `<p>Your link: <code>${esc(referral.link)}</code></p>` : ""}
-           <p class="muted">${esc(referral.note || "")}</p>
+           ${referral.link ? `<p>Your link: <code>${esc2(referral.link)}</code></p>` : ""}
+           <p class="muted">${esc2(referral.note || "")}</p>
            <p class="muted">When a member converts after touching your content, you earn the first-touch (30%) or last-touch (10%) share. Contributors and commenters on those items are rewarded automatically from the 5% collaboration mix. You do not set a split.</p>
-           ${referral.connectOnboarding ? `<a href="${esc(referral.connectOnboarding)}" target="_blank" rel="noopener"><button class="ghost">Set up payouts (Stripe Connect)</button></a>` : ""}
-           ${referral.terms ? `<a href="${esc(referral.terms)}" target="_blank" rel="noopener" class="muted" style="margin-left:8px">Terms</a>` : ""}
+           ${referral.connectOnboarding ? `<a href="${esc2(referral.connectOnboarding)}" target="_blank" rel="noopener"><button class="ghost">Set up payouts (Stripe Connect)</button></a>` : ""}
+           ${referral.terms ? `<a href="${esc2(referral.terms)}" target="_blank" rel="noopener" class="muted" style="margin-left:8px">Terms</a>` : ""}
          </div>`
       );
       this.on("#save", "click", async () => {
@@ -8724,7 +9000,7 @@ ${listStyleProseCss(".doc-blocks")}
           await this.client.updateSettings(patch);
           this.$("#out").textContent = "Saved.";
         } catch (err) {
-          this.$("#out").innerHTML = `<span class="danger">${esc(err.message)}</span>`;
+          this.$("#out").innerHTML = `<span class="danger">${esc2(err.message)}</span>`;
         }
       });
     }
@@ -8757,11 +9033,11 @@ ${listStyleProseCss(".doc-blocks")}
   // client-ui/src/display-prefs.mjs
   var LAYOUT_KEY = "gbti-layout";
   var THEME_KEY = "gbti-theme";
-  function normalizeLayout(v) {
-    return v === "flat" ? "flat" : "glass";
+  function normalizeLayout(v2) {
+    return v2 === "flat" ? "flat" : "glass";
   }
-  function normalizeTheme(v) {
-    return v === "light" || v === "dark" || v === "system" ? v : "dark";
+  function normalizeTheme(v2) {
+    return v2 === "light" || v2 === "dark" || v2 === "system" ? v2 : "dark";
   }
   function resolveTheme(theme, prefersDark) {
     const t = normalizeTheme(theme);
@@ -8807,9 +9083,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   }
   var GLASS_KEY = "gbti-glass";
-  function normalizeGlass(v) {
-    if (v == null || v === "") return 85;
-    const n = Math.round(Number(v));
+  function normalizeGlass(v2) {
+    if (v2 == null || v2 === "") return 85;
+    const n = Math.round(Number(v2));
     return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 85;
   }
   function glassStrength(pct) {
@@ -8832,9 +9108,9 @@ ${listStyleProseCss(".doc-blocks")}
     }
   }
   var GLOW_KEY = "gbti-glass-glow";
-  function normalizeGlow(v) {
-    if (v == null || v === "") return 50;
-    const n = Math.round(Number(v));
+  function normalizeGlow(v2) {
+    if (v2 == null || v2 === "") return 50;
+    const n = Math.round(Number(v2));
     return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
   }
   function glowStrength(pct) {
@@ -8858,7 +9134,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-account.mjs
-  var SITE4 = "https://gbti.network";
+  var SITE5 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
   var STATUS_LABEL = {
@@ -8901,7 +9177,7 @@ ${listStyleProseCss(".doc-blocks")}
   .badge.warn { background:#fdecea; color:#b3261e; border:1.5px solid #f0c2bd; }
   /* membership row (avatar + identity + pill + action) */
   .memrow { display:flex; align-items:center; gap:16px; padding:20px 24px; }
-  .memav { width:50px; height:50px; border-radius:50%; flex:none; background:var(--brand); display:flex; align-items:center; justify-content:center; color:#fff; font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:20px; }
+  .memav { position:relative; overflow:hidden; display:block; width:50px; height:50px; border-radius:50%; flex:none; background:var(--hover); }
   .memrow .mtx { flex:1; min-width:0; }
   .memrow .mtx .t { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
   .memrow .mtx .t b { font-weight:700; font-size:16px; }
@@ -8945,7 +9221,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     async _load() {
       const guard = (p) => Promise.race([
-        Promise.resolve(p).then((v) => v, () => null),
+        Promise.resolve(p).then((v2) => v2, () => null),
         new Promise((res) => {
           setTimeout(() => res(null), 8e3);
         })
@@ -8996,7 +9272,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS7) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE4}/membership/">Become a member</a>.</div><slot></slot>`);
+        this.set(this.css(CSS7) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE5}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
@@ -9011,7 +9287,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _account() {
       return `<section class="sec">
-      <div class="sec-h"><h3>Account</h3><p>Signed in as <b>@${esc(this._login)}</b> on this device.</p></div>
+      <div class="sec-h"><h3>Account</h3><p>Signed in as <b>@${esc2(this._login)}</b> on this device.</p></div>
       <div class="rows">
         <div class="row"><div class="rl"><div class="t">Sign out</div><div class="d">End this session on this device.</div></div><div class="rc"><button data-signout type="button">Sign out</button></div></div>
       </div>
@@ -9032,8 +9308,8 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="msg" data-privacy-msg aria-live="polite"></div>
     </section>`;
     }
-    async _setPubFav(v) {
-      const want = v === "on";
+    async _setPubFav(v2) {
+      const want = v2 === "on";
       const prev = this._prefs?.publicFavorites === true;
       if (!this._prefs || want === prev) return;
       this._prefs.publicFavorites = want;
@@ -9058,7 +9334,7 @@ ${listStyleProseCss(".doc-blocks")}
       const theme = currentTheme();
       const glass = currentGlass();
       const glow = currentGlow();
-      const seg = (name, options, active) => `<div class="seg">` + options.map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? " on" : ""}" data-set-${name}="${v}">${esc(lbl)}</button>`).join("") + `</div>`;
+      const seg = (name, options, active) => `<div class="seg">` + options.map(([v2, lbl]) => `<button type="button" class="segbtn${v2 === active ? " on" : ""}" data-set-${name}="${v2}">${esc2(lbl)}</button>`).join("") + `</div>`;
       const slider = (key, label, desc, val) => `<div class="row"><div class="rl"><div class="t">${label}</div><div class="d">${desc}</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${val}" data-set-${key} aria-label="${label}" /><span class="rngval" data-${key}-val>${val}%</span></div></div>`;
       const glassRow = layout === "glass" ? slider("glass", "Surface opacity", "How opaque the frosted glass panels are. Lower is more see-through.", glass) + slider("glow", "Color highlight intensity", "How vivid the colorful backdrop glow is. Lower is calmer; 0 turns the colors off.", glow) : "";
       return `<section class="sec">
@@ -9075,26 +9351,26 @@ ${listStyleProseCss(".doc-blocks")}
       const m = this._membership;
       const cls = m === "paid" ? "paid" : LOCKED2.has(m) ? "warn" : "";
       const portal = this._billing?.portal;
-      const initial = esc((this._login || "G").trim().charAt(0).toUpperCase() || "G");
+      const folder2 = String(this._status?.identity?.username || this._login || "").toLowerCase();
       return `<section class="sec">
       <div class="memrow">
-        <span class="memav">${initial}</span>
+        <span class="memav">${avatarLayers(folder2 || "gbti")}</span>
         <div class="mtx">
-          <div class="t"><b>Membership</b><span class="badge ${cls}">${esc(STATUS_LABEL[m] || m)}</span></div>
+          <div class="t"><b>Membership</b><span class="badge ${cls}">${esc2(STATUS_LABEL[m] || m)}</span></div>
           <div class="d">Your plan, invoices, and payment method are managed in the Stripe customer portal.</div>
         </div>
-        ${portal ? `<a class="btn" href="${esc(portal)}" target="_blank" rel="noopener">Manage membership</a>` : `<span class="d">Billing portal unavailable.</span>`}
+        ${portal ? `<a class="btn" href="${esc2(portal)}" target="_blank" rel="noopener">Manage membership</a>` : `<span class="d">Billing portal unavailable.</span>`}
       </div>
     </section>`;
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE4}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE5}/join?ref=${r.code}` : null);
       const invite = discordJoinAllowed(this._membership) && this._invite?.url || null;
-      const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
+      const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc2(label)}</div>${desc ? `<div class="d">${esc2(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc2(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
       const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
       return `<section class="sec">
-      <div class="sec-h"><h3>Referrals & invites</h3><p>Share your invite link to earn a flat ${esc(r.invitePct || "10%")} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p></div>
+      <div class="sec-h"><h3>Referrals & invites</h3><p>Share your invite link to earn a flat ${esc2(r.invitePct || "10%")} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p></div>
       ${rows ? `<div class="rows">${rows}</div>` : `<div class="sec-h" style="padding-top:0"><p style="margin:0">No referral link yet. Sign in as a member to generate one.</p></div>`}
       <div class="msg" data-ref-msg aria-live="polite"></div>
     </section>`;
@@ -9104,7 +9380,7 @@ ${listStyleProseCss(".doc-blocks")}
       return `<section class="danger">
       <div class="sec-h"><h3>Danger zone</h3><p>These actions end your access or remove your data. They cannot be undone here.</p></div>
       <div class="rows">
-        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
+        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc2(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
         <div class="row"><div class="rl"><div class="t">Delete account</div><div class="d">Request erasure of your account + data (GDPR). Type <b>DELETE</b> to confirm. Your private data is cleared on this device immediately; your published content + billing are removed by our erasure process.</div></div><div class="rc"><div class="confirm"><input data-delete-confirm type="text" placeholder="Type DELETE" aria-label="Type DELETE to confirm" autocomplete="off" /><button data-delete type="button" class="danger-btn" disabled>Request deletion</button></div></div></div>
       </div>
       <div class="msg" data-danger-msg aria-live="polite"></div>
@@ -9184,7 +9460,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-account", GbtiAccount);
 
   // client-ui/src/elements/gbti-mod-actions.mjs
-  var SITE5 = "https://gbti.network";
+  var SITE6 = "https://gbti.network";
   var ACTION_LABEL = { hide: "Hide", unhide: "Unhide", remove: "Remove", stale: "Mark stale", unstale: "Unmark stale", unindex: "Unindex", reindex: "Reindex" };
   var ACTION_API = { hide: "deplatform", unhide: "republish", remove: "remove", stale: "stale", unstale: "unstale", unindex: "unindex", reindex: "reindex" };
   var ACTION_DONE = { hide: "Hidden", unhide: "Republished", remove: "Removed", stale: "Marked stale", unstale: "Stale cleared", unindex: "Unindexed", reindex: "Reindexed" };
@@ -9201,7 +9477,7 @@ ${listStyleProseCss(".doc-blocks")}
   var FLAGS = null;
   function loadFlags() {
     if (!FLAGS) {
-      FLAGS = fetch(`${SITE5}/content-flags.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : Promise.reject(new Error(`http-${r.status}`))).then((d) => d && typeof d.flags === "object" && d.flags ? d.flags : {}).catch(() => {
+      FLAGS = fetch(`${SITE6}/content-flags.json`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : Promise.reject(new Error(`http-${r.status}`))).then((d) => d && typeof d.flags === "object" && d.flags ? d.flags : {}).catch(() => {
         FLAGS = null;
         return null;
       });
@@ -9315,8 +9591,8 @@ ${listStyleProseCss(".doc-blocks")}
       const items = this.$$(".mi");
       if (!items.length) return;
       e.preventDefault();
-      const at = items.indexOf(this.root?.activeElement ?? null);
-      const next = e.key === "ArrowDown" ? (at + 1) % items.length : at <= 0 ? items.length - 1 : at - 1;
+      const at2 = items.indexOf(this.root?.activeElement ?? null);
+      const next = e.key === "ArrowDown" ? (at2 + 1) % items.length : at2 <= 0 ? items.length - 1 : at2 - 1;
       items[next]?.focus?.();
     }
     // Trigger the wired admin op; on success emit 'mod-action' (the host feed/reader can reload to drop a hidden item).
@@ -9421,7 +9697,7 @@ ${listStyleProseCss(".doc-blocks")}
       const caps = this.hasAttribute("caps") ? this.getAttribute("caps").split(",").map((s) => s.trim()).filter(Boolean) : null;
       const capOn = (g) => !caps || caps.includes(g);
       this.set(
-        this.css(CSS9) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc(role)}</span></div>
+        this.css(CSS9) + `<div class="rolebar"><span class="lbl">Acting as</span><span class="badge">${esc2(role)}</span></div>
 
          <div class="grp">
            <h4>Content moderation</h4>
@@ -9464,11 +9740,11 @@ ${listStyleProseCss(".doc-blocks")}
         this.out("Working&hellip;");
         try {
           const res = await this.client.admin(action, args());
-          if (res?.changed === false || res?.noop) this.out(`<span class="tag ok">No change</span> ${esc(res.message || "already in that state")}`);
-          else if (res?.kvWritten === false) this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a> <span class="tag">not yet live</span> The change is committed, but it did not reach the live store (${esc(res.kvReason || "reason not reported")}), so it takes effect at the next sync rather than now.`);
-          else this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
+          if (res?.changed === false || res?.noop) this.out(`<span class="tag ok">No change</span> ${esc2(res.message || "already in that state")}`);
+          else if (res?.kvWritten === false) this.out(`<span class="tag ok">PR opened</span> <a href="${esc2(res.prUrl)}" target="_blank" rel="noopener">#${esc2(res.prNumber)}</a> <span class="tag">not yet live</span> The change is committed, but it did not reach the live store (${esc2(res.kvReason || "reason not reported")}), so it takes effect at the next sync rather than now.`);
+          else this.out(`<span class="tag ok">PR opened</span> <a href="${esc2(res.prUrl)}" target="_blank" rel="noopener">#${esc2(res.prNumber)}</a>`);
         } catch (err) {
-          this.out(esc(err.message), "danger");
+          this.out(esc2(err.message), "danger");
         }
       };
       const cpath = () => ({ path: this.$("#cpath").value.trim() });
@@ -9510,11 +9786,11 @@ ${listStyleProseCss(".doc-blocks")}
   function buildItemIndex(perType = {}) {
     const map = /* @__PURE__ */ new Map();
     for (const [type, items] of Object.entries(perType || {})) {
-      for (const it of items || []) {
-        if (!it || !it.slug) continue;
-        const row = { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null };
-        map.set(`${type}:${it.slug}`, row);
-        for (const a of Array.isArray(it.aliases) ? it.aliases : []) {
+      for (const it2 of items || []) {
+        if (!it2 || !it2.slug) continue;
+        const row = { type, slug: it2.slug, title: it2.title || it2.slug, url: it2.url || null, path: it2.path || null, thumb: it2.thumb || null };
+        map.set(`${type}:${it2.slug}`, row);
+        for (const a of Array.isArray(it2.aliases) ? it2.aliases : []) {
           const k = `${type}:${a}`;
           if (!map.has(k)) map.set(k, row);
         }
@@ -9542,12 +9818,12 @@ ${listStyleProseCss(".doc-blocks")}
       if (t) counts[t] = (counts[t] || 0) + 1;
     };
     for (const f of activity.favorites || []) bump(f?.type);
-    for (const c of activity.collections || []) for (const it of c?.items || []) bump(it?.type);
+    for (const c of activity.collections || []) for (const it2 of c?.items || []) bump(it2?.type);
     return counts;
   }
   function savedTypeChips(activity = {}) {
     const counts = savedTypeCounts(activity);
-    const total = Object.values(counts).reduce((n, v) => n + v, 0);
+    const total = Object.values(counts).reduce((n, v2) => n + v2, 0);
     const chips = [{ type: "all", label: "All", count: total }];
     for (const t of ORDER) if (counts[t]) chips.push({ type: t, label: typeLabel(t), count: counts[t] });
     return chips;
@@ -9556,7 +9832,7 @@ ${listStyleProseCss(".doc-blocks")}
     if (!type || type === "all") return activity;
     return {
       favorites: (activity.favorites || []).filter((f) => f?.type === type),
-      collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) }))
+      collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it2) => it2?.type === type) }))
     };
   }
   var SAVED_SECTIONS = ["favorites", "collections"];
@@ -9566,7 +9842,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
-  var SITE6 = "https://gbti.network";
+  var SITE7 = "https://gbti.network";
   var CSS10 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
@@ -9577,7 +9853,7 @@ ${listStyleProseCss(".doc-blocks")}
   td { padding:9px 8px; border-top:1px solid var(--line); vertical-align:middle; }
   tr:first-child td { border-top:0; }
   .who { display:flex; align-items:center; gap:9px; min-width:0; }
-  .av { width:26px; height:26px; border-radius:50%; flex:none; object-fit:cover; background:var(--hover); }
+  .av { position:relative; overflow:hidden; display:block; width:26px; height:26px; border-radius:50%; flex:none; background:var(--hover); }
   .nm { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; }
   a.nm:hover { color:var(--accent); }
   .id { color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
@@ -9649,10 +9925,10 @@ ${listStyleProseCss(".doc-blocks")}
       const counts = {};
       await Promise.all(SAVED_TYPES.map(async (t) => {
         try {
-          const res = await fetch(`${SITE6}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE7}/${indexFileFor(t)}`, { cache: "no-cache" });
           const items = res.ok ? (await res.json()).items || [] : [];
-          for (const it of items) {
-            const a = String(it?.author || "").toLowerCase();
+          for (const it2 of items) {
+            const a = String(it2?.author || "").toLowerCase();
             if (a && a !== "gbti" && a !== "house") counts[a] = (counts[a] || 0) + 1;
           }
         } catch {
@@ -9694,16 +9970,16 @@ ${listStyleProseCss(".doc-blocks")}
       if (this._pulls === null) return "";
       if (!this._pulls.length) return `<h3 class="sec-h">Open pull requests</h3><p class="muted">No open pull requests right now.</p>`;
       const rows = this._pulls.map((p) => {
-        const author = p.author?.login ? `@${esc(p.author.login)}` : "unknown";
-        const when = p.createdAt ? esc(String(p.createdAt).slice(0, 10)) : "";
-        return `<li class="pr"><a class="pr-t" href="${esc(p.html_url || "#")}" target="_blank" rel="noopener">#${esc(p.number)} ${esc(p.title || "")}</a><span class="pr-m">${author}${when ? ` · ${when}` : ""}</span></li>`;
+        const author = p.author?.login ? `@${esc2(p.author.login)}` : "unknown";
+        const when = p.createdAt ? esc2(String(p.createdAt).slice(0, 10)) : "";
+        return `<li class="pr"><a class="pr-t" href="${esc2(p.html_url || "#")}" target="_blank" rel="noopener">#${esc2(p.number)} ${esc2(p.title || "")}</a><span class="pr-m">${author}${when ? ` · ${when}` : ""}</span></li>`;
       }).join("");
       return `<h3 class="sec-h">Open pull requests <span class="ct">${this._pulls.length}</span></h3><ul class="prs">${rows}</ul>`;
     }
     // SOW-038 P3: the operations section (reconcile / E2E-smoke triggers). The dashboard is admin-gated (the roster
     // loaded), so these show only to a confirmed admin; the Worker re-checks + holds the dispatch token.
     _opsSection() {
-      const note = this._opNote ? `<p class="opnote ${this._opNote.ok ? "ok" : "err"}">${esc(this._opNote.msg)}</p>` : "";
+      const note = this._opNote ? `<p class="opnote ${this._opNote.ok ? "ok" : "err"}">${esc2(this._opNote.msg)}</p>` : "";
       return `<h3 class="sec-h">Operations</h3>
       <div class="ops">
         <button class="opbtn" data-op="reconcile" type="button">Run reconcile (apply)</button>
@@ -9727,13 +10003,13 @@ ${listStyleProseCss(".doc-blocks")}
     _statusCell(m) {
       const LABEL2 = { paid: "paid", trialing: "trial", expired: "expired", cancelled: "cancelled", none: "none", banned: "banned", unknown: "unknown" };
       const cls = m.status === "paid" ? "ok" : m.status === "banned" ? "ban" : m.status === "trialing" ? "tr" : "";
-      const src = m.source && m.source !== "stripe" ? `<span class="src">via ${esc(m.source)}</span>` : "";
-      return `<span class="stat ${cls}">${esc(LABEL2[m.status] || m.status)}</span>${src}`;
+      const src = m.source && m.source !== "stripe" ? `<span class="src">via ${esc2(m.source)}</span>` : "";
+      return `<span class="stat ${cls}">${esc2(LABEL2[m.status] || m.status)}</span>${src}`;
     }
     // SOW-070: the inline per-member action panel (contextual ban / grandfather / role), keyed by the row's immutable
     // github_id -- no typing. The buttons toggle on the member's current state; role assignment is superadmin-only.
     _actionRow(m, rank) {
-      const msg = this._actMsg ? `<div class="actmsg${this._actErr ? " err" : ""}">${esc(this._actMsg)}</div>` : "";
+      const msg = this._actMsg ? `<div class="actmsg${this._actErr ? " err" : ""}">${esc2(this._actMsg)}</div>` : "";
       const roleCtl = rank >= ROLE_RANK.superadmin ? `<div class="actgrp"><span class="actlbl">Role</span><select data-rolefor>${["member", "moderator", "admin", "superadmin"].map((r) => `<option${r === m.role ? " selected" : ""}>${r}</option>`).join("")}</select><button class="abtn" type="button" data-act="role">Set role</button></div>` : "";
       return `<div class="acts">
       <button class="abtn${m.banned ? "" : " danger"}" type="button" data-act="${m.banned ? "unban" : "ban"}">${m.banned ? "Unban" : "Ban"}</button>
@@ -9787,39 +10063,39 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const s = this._data.summary || {};
       const chips = `<div class="chips">
-      <span class="chip"><b>${esc(s.total ?? 0)}</b> known</span>
-      <span class="chip"><b>${esc(s.staff ?? 0)}</b> staff</span>
-      <span class="chip"><b>${esc(s.grandfathered ?? 0)}</b> grandfathered</span>
-      <span class="chip"><b>${esc(s.banned ?? 0)}</b> banned</span>
+      <span class="chip"><b>${esc2(s.total ?? 0)}</b> known</span>
+      <span class="chip"><b>${esc2(s.staff ?? 0)}</b> staff</span>
+      <span class="chip"><b>${esc2(s.grandfathered ?? 0)}</b> grandfathered</span>
+      <span class="chip"><b>${esc2(s.banned ?? 0)}</b> banned</span>
     </div>`;
       const rank = ROLE_RANK[this._role] ?? 0;
       const canManage = rank >= ROLE_RANK.admin;
       const rows = (this._data.roster || []).map((m) => {
-        const u = m.username ? esc(m.username) : "";
-        const who = m.username ? `<a class="nm" href="https://gbti.network/members/${u}/" target="_blank" rel="noopener">@${u}</a>` : `<span class="nm id">id ${esc(m.githubId)}</span>`;
-        const av = m.username ? `<img class="av" src="https://github.com/${encodeURIComponent(m.username)}.png?size=52" alt="" loading="lazy" data-avfor="${u}" />` : `<span class="av"></span>`;
+        const u = m.username ? esc2(m.username) : "";
+        const who = m.username ? `<a class="nm" href="https://gbti.network/members/${u}/" target="_blank" rel="noopener">@${u}</a>` : `<span class="nm id">id ${esc2(m.githubId)}</span>`;
+        const av = `<span class="av">${avatarLayers(m.username || String(m.githubId || ""), idAvatarUrl(m.githubId, 52) || void 0)}</span>`;
         const tags = [];
         if (m.banned) tags.push(`<span class="tag ban">banned</span>`);
         const tierName = tierLabel(m.tier);
-        if (tierName) tags.push(`<span class="tag tier">${esc(tierName)}</span>`);
-        if ((ROLE_RANK[m.role] ?? 0) > 0) tags.push(`<span class="tag staff">${esc(m.role)}</span>`);
+        if (tierName) tags.push(`<span class="tag tier">${esc2(tierName)}</span>`);
+        if ((ROLE_RANK[m.role] ?? 0) > 0) tags.push(`<span class="tag staff">${esc2(m.role)}</span>`);
         if (m.grandfathered) {
-          const prov = m.couponCode ? ` · ${esc(m.couponCode)}` : "";
-          const until = m.grandfatherUntil ? ` · until ${esc(String(m.grandfatherUntil).slice(0, 10))}` : "";
+          const prov = m.couponCode ? ` · ${esc2(m.couponCode)}` : "";
+          const until = m.grandfatherUntil ? ` · until ${esc2(String(m.grandfatherUntil).slice(0, 10))}` : "";
           const soon = typeof m.expiresInDays === "number" && m.expiresInDays >= 0 && m.expiresInDays <= 30 ? " soon" : "";
           tags.push(`<span class="tag gf${soon}">grandfathered${prov}${until}</span>`);
         }
         if (m.pendingGrant) {
-          const pt = tierLabel(m.pendingGrant.tier);
-          const pc = m.pendingGrant.code ? ` ${esc(m.pendingGrant.code)}` : "";
-          const pu = m.pendingGrant.until ? ` · until ${esc(String(m.pendingGrant.until).slice(0, 10))}` : "";
-          tags.push(`<span class="tag pending" title="Redeemed but not yet recorded in git. Reconcile folds it within a day.">pending${pt ? " " + esc(pt) : ""}${pc}${pu}</span>`);
+          const pt2 = tierLabel(m.pendingGrant.tier);
+          const pc = m.pendingGrant.code ? ` ${esc2(m.pendingGrant.code)}` : "";
+          const pu = m.pendingGrant.until ? ` · until ${esc2(String(m.pendingGrant.until).slice(0, 10))}` : "";
+          tags.push(`<span class="tag pending" title="Redeemed but not yet recorded in git. Reconcile folds it within a day.">pending${pt2 ? " " + esc2(pt2) : ""}${pc}${pu}</span>`);
         }
         if (!tags.length) tags.push(`<span class="dash">—</span>`);
         const n = this._counts && m.username ? this._counts[m.username.toLowerCase()] || 0 : null;
-        const content = n == null ? `<span class="dash">—</span>` : esc(n);
-        const manage = canManage ? `<button class="manage${this._managing === m.githubId ? " on" : ""}" type="button" data-manage="${esc(m.githubId)}">Manage</button>` : "";
-        const main = `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td><td class="act-cell">${manage}</td></tr>`;
+        const content = n == null ? `<span class="dash">—</span>` : esc2(n);
+        const manage = canManage ? `<button class="manage${this._managing === m.githubId ? " on" : ""}" type="button" data-manage="${esc2(m.githubId)}">Manage</button>` : "";
+        const main = `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${content}</td><td class="id">${esc2(m.githubId)}</td><td class="act-cell">${manage}</td></tr>`;
         const panel = canManage && this._managing === m.githubId ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : "";
         return main + panel;
       }).join("");
@@ -9828,9 +10104,6 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="note">Effective status and tier follow ban &gt; staff &gt; grandfather &gt; Stripe. The override tiers (ban / staff / grandfather) are always authoritative from the public repo; the live Stripe tier shows when the admin Stripe endpoint is reachable. A <b>pending</b> (dashed) tag is a coupon grant a member has redeemed but reconcile has not yet folded into the repo: it is an annotation, not effective access yet, and it clears once the grant is recorded. Member actions open a house PR and take effect once it merges.</p>
       ${this._pullsSection()}
       ${this._opsSection()}`);
-      this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
-        img.style.visibility = "hidden";
-      }, { once: true }));
       this.$$("[data-op]").forEach((b) => b.addEventListener("click", () => this._runOp(b.dataset.op, b)));
       this.$$("[data-manage]").forEach((b) => b.addEventListener("click", () => {
         this._managing = this._managing === b.dataset.manage ? null : b.dataset.manage;
@@ -9909,7 +10182,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       this._paths = this._flatten(this._tree);
       this.set(this.css(CSS11) + `<div class="${this._busy ? "busy" : ""}">
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <div class="add-top">
         <input class="key" data-newtop-key type="text" placeholder="new-key (kebab-case)" />
         <input class="lab" data-newtop-label type="text" placeholder="Display label" />
@@ -9935,13 +10208,13 @@ ${listStyleProseCss(".doc-blocks")}
         const kids2 = node && node.children ? this._renderLevel(node.children, p) : "";
         return `<li class="node">
         <div class="row">
-          <code class="key">${esc(key)}</code>
-          <input class="lab" data-path="${esc(ps)}" type="text" value="${esc(node && node.label || "")}" />
-          <button class="lk" type="button" data-rename="${esc(ps)}">Label</button>
-          <button class="lk" type="button" data-addsub="${esc(ps)}">+ Sub</button>
-          <button class="lk" type="button" data-key="${esc(ps)}">Key</button>
-          <button class="lk" type="button" data-move="${esc(ps)}">Move</button>
-          <button class="lk danger" type="button" data-remove="${esc(ps)}">Remove</button>
+          <code class="key">${esc2(key)}</code>
+          <input class="lab" data-path="${esc2(ps)}" type="text" value="${esc2(node && node.label || "")}" />
+          <button class="lk" type="button" data-rename="${esc2(ps)}">Label</button>
+          <button class="lk" type="button" data-addsub="${esc2(ps)}">+ Sub</button>
+          <button class="lk" type="button" data-key="${esc2(ps)}">Key</button>
+          <button class="lk" type="button" data-move="${esc2(ps)}">Move</button>
+          <button class="lk danger" type="button" data-remove="${esc2(ps)}">Remove</button>
         </div>
         ${this._moving === ps ? this._movePicker(ps) : ""}
         ${kids2 ? `<ul class="tree">${kids2}</ul>` : ""}
@@ -9952,12 +10225,12 @@ ${listStyleProseCss(".doc-blocks")}
     // and its current parent (a no-op), plus "Top level" when it is not already top-level.
     _movePicker(ps) {
       const parent = ps.split("/").slice(0, -1).join("/");
-      const opts = (this._paths || []).filter(([vp]) => vp !== ps && !vp.startsWith(`${ps}/`) && vp !== parent).map(([vp, lbl]) => `<option value="${esc(vp)}">${esc(lbl)} &middot; ${esc(vp)}</option>`).join("");
+      const opts = (this._paths || []).filter(([vp]) => vp !== ps && !vp.startsWith(`${ps}/`) && vp !== parent).map(([vp, lbl]) => `<option value="${esc2(vp)}">${esc2(lbl)} &middot; ${esc2(vp)}</option>`).join("");
       const top = parent === "" ? "" : `<option value="">Top level</option>`;
       return `<div class="moverow">
       <span class="mlbl">Move under</span>
       <select data-moveto>${top}${opts || '<option value="" disabled>No valid destination</option>'}</select>
-      <button class="lk go" type="button" data-moveconfirm="${esc(ps)}">Move here</button>
+      <button class="lk go" type="button" data-moveconfirm="${esc2(ps)}">Move here</button>
       <button class="lk" type="button" data-movecancel>Cancel</button>
     </div>`;
     }
@@ -10037,7 +10310,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-category-manager", GbtiCategoryManager);
 
   // client-ui/src/elements/gbti-categories-workspace.mjs
-  var SITE7 = "https://gbti.network";
+  var SITE8 = "https://gbti.network";
   var INDEXES = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var TYPE_LABEL3 = { post: "Articles", prompt: "Prompts", project: "Projects" };
   var CB_PER = 6;
@@ -10237,7 +10510,7 @@ ${listStyleProseCss(".doc-blocks")}
       const items = {};
       await Promise.all(Object.entries(INDEXES).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE7}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE8}/${file}`, { cache: "no-cache" });
           const data = await res.json();
           items[type] = Array.isArray(data) ? data : data?.items || [];
         } catch {
@@ -10320,18 +10593,18 @@ ${listStyleProseCss(".doc-blocks")}
         <div class="fld"><label>Display label</label><input id="nclabel" placeholder="Display label" /></div>
         <div class="fld"><label>Parent</label><select id="ncparent">
           <option value="">Top level</option>
-          ${flat2.map((n) => `<option value="${esc(n.path.join("/"))}"${n.path.join("/") === preselect ? " selected" : ""}>${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}
+          ${flat2.map((n) => `<option value="${esc2(n.path.join("/"))}"${n.path.join("/") === preselect ? " selected" : ""}>${esc2(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}
         </select></div>
       </div>
       <div class="ncacts"><button class="btn" id="ncadd" type="button">Add to the pending edits</button><button class="btn soft" id="nccancel" type="button">Cancel</button><span class="hint" id="ncerr"></span></div>
     </div>`;
     }
     _treeHtml() {
-      const q = this._q.trim().toLowerCase();
+      const q2 = this._q.trim().toLowerCase();
       const flat2 = flattenTree(this._tree);
-      const matches = (n) => !q || n.label.toLowerCase().includes(q) || n.key.toLowerCase().includes(q);
+      const matches = (n) => !q2 || n.label.toLowerCase().includes(q2) || n.key.toLowerCase().includes(q2);
       const deepMatch = /* @__PURE__ */ new Set();
-      if (q) {
+      if (q2) {
         for (const n of flat2) {
           if (matches(n)) for (let d = 1; d <= n.path.length; d++) deepMatch.add(n.path.slice(0, d).join("/"));
         }
@@ -10341,23 +10614,23 @@ ${listStyleProseCss(".doc-blocks")}
         for (const [key, node] of Object.entries(tree || {})) {
           const path = [...parentPath, key];
           const pk = path.join("/");
-          if (q && !deepMatch.has(pk)) continue;
+          if (q2 && !deepMatch.has(pk)) continue;
           const level = parentPath.length;
           const kids2 = node?.children && Object.keys(node.children).length;
-          const closed = !q && this._collapsed.has(pk);
+          const closed = !q2 && this._collapsed.has(pk);
           const on = this._sel && this._sel.join("/") === pk;
-          rows.push(`<button class="titem lvl${level} ind${Math.min(level, 3)}${closed ? " closed" : ""}${on ? " on" : ""}" type="button" data-sel="${esc(pk)}" data-kids="${kids2 ? 1 : 0}">
-          <span class="car${kids2 ? "" : " leaf"}" data-car="${esc(pk)}">▾</span>
-          <span class="lab">${esc(this.labelOf(path))}</span>
+          rows.push(`<button class="titem lvl${level} ind${Math.min(level, 3)}${closed ? " closed" : ""}${on ? " on" : ""}" type="button" data-sel="${esc2(pk)}" data-kids="${kids2 ? 1 : 0}">
+          <span class="car${kids2 ? "" : " leaf"}" data-car="${esc2(pk)}">▾</span>
+          <span class="lab">${esc2(this.labelOf(path))}</span>
           <span class="cnt">${this.countOf(path)}</span>
-          ${this._channelsOn ? `<span class="dot ${esc(this.statusOf(path))}"></span>` : ""}
+          ${this._channelsOn ? `<span class="dot ${esc2(this.statusOf(path))}"></span>` : ""}
         </button>`);
           if (kids2 && !closed) walk2(node.children, path);
         }
       };
       walk2(this._tree, []);
       return `<aside class="tree-col">
-      <div class="csearch"><input id="tsearch" type="search" placeholder="Filter categories…" value="${esc(this._q)}" /></div>
+      <div class="csearch"><input id="tsearch" type="search" placeholder="Filter categories…" value="${esc2(this._q)}" /></div>
       <div class="tscroll" role="tree">${rows.join("") || `<p class="muted" style="padding:10px">No categories match.</p>`}
         <button class="titem tnew" type="button" id="newtop2">+ New top-level category</button>
       </div>
@@ -10374,22 +10647,22 @@ ${listStyleProseCss(".doc-blocks")}
       const key = path[path.length - 1];
       const label = this.labelOf(path);
       const lvl = path.length === 1 ? "Top level" : node.children && Object.keys(node.children).length ? "Subcategory" : "Leaf";
-      const crumb = [`<b data-desel>Taxonomy</b>`, ...path.slice(0, -1).map((k, i) => `<b data-crumb="${esc(path.slice(0, i + 1).join("/"))}">${esc(this.labelOf(path.slice(0, i + 1)))}</b>`)].join(" / ");
+      const crumb = [`<b data-desel>Taxonomy</b>`, ...path.slice(0, -1).map((k, i) => `<b data-crumb="${esc2(path.slice(0, i + 1).join("/"))}">${esc2(this.labelOf(path.slice(0, i + 1)))}</b>`)].join(" / ");
       const c = this._counts?.get(path.join("/")) || { post: 0, prompt: 0, project: 0, total: 0 };
       const kids2 = Object.entries(node.children || {});
       const editor = `
       <div class="card">
         <div class="crumb">${crumb}</div>
-        <div class="dtitle"><h3>${esc(label)}</h3><span class="lvltag">${lvl}</span><button class="dclose" type="button" data-desel title="Back to the category dashboard">✕ Close</button></div>
+        <div class="dtitle"><h3>${esc2(label)}</h3><span class="lvltag">${lvl}</span><button class="dclose" type="button" data-desel title="Back to the category dashboard">✕ Close</button></div>
         <div class="fields">
-          <div class="fld"><label>Display label</label><input id="labelin" value="${esc(label)}" /></div>
-          <div class="fld"><label>Key</label><input class="mono" value="${esc(key)}" readonly /><div class="hint">Renaming a key opens a review-gated migration that rewrites every filed item.</div></div>
+          <div class="fld"><label>Display label</label><input id="labelin" value="${esc2(label)}" /></div>
+          <div class="fld"><label>Key</label><input class="mono" value="${esc2(key)}" readonly /><div class="hint">Renaming a key opens a review-gated migration that rewrites every filed item.</div></div>
         </div>
         ${this._discordHtml(key)}
         <div class="sech">Subcategories</div>
         <div class="sublist">${kids2.map(([k2]) => {
         const p2 = [...path, k2];
-        return `<button class="subrow" type="button" data-sel="${esc(p2.join("/"))}"><span>${esc(this.labelOf(p2))}</span><span class="k">${esc(k2)}</span><span class="n">${this.countOf(p2)}</span></button>`;
+        return `<button class="subrow" type="button" data-sel="${esc2(p2.join("/"))}"><span>${esc2(this.labelOf(p2))}</span><span class="k">${esc2(k2)}</span><span class="n">${this.countOf(p2)}</span></button>`;
       }).join("") || `<p class="muted">No subcategories.</p>`}</div>
         <div class="addsub"><input id="subkey" placeholder="new-key" /><input id="sublabel" placeholder="Display label" /><button class="btn soft" id="addsub" type="button">Add subcategory</button></div>
         <div class="sech" style="margin-top:20px">Danger zone</div>
@@ -10427,19 +10700,19 @@ ${listStyleProseCss(".doc-blocks")}
       const menu = this._pickerOpen ? `<div class="dmenu">
         ${options.map((r) => {
         const n = this.chName(r.channelId);
-        const label = n ? `${esc(n.name)}${n.section ? ` <span class="used">${esc(n.section)}</span>` : ""}` : esc(String(r.channelId));
-        return `<button class="dopt" type="button" data-pickch="${esc(String(r.channelId))}"><span class="hash">#</span>${label}<span class="used">${esc(r.category)}${String(r.channelId) === String(effective ?? "") ? " · current" : ""}</span></button>`;
+        const label = n ? `${esc2(n.name)}${n.section ? ` <span class="used">${esc2(n.section)}</span>` : ""}` : esc2(String(r.channelId));
+        return `<button class="dopt" type="button" data-pickch="${esc2(String(r.channelId))}"><span class="hash">#</span>${label}<span class="used">${esc2(r.category)}${String(r.channelId) === String(effective ?? "") ? " · current" : ""}</span></button>`;
       }).join("")}
         ${effective ? `<button class="dopt unlink" type="button" data-unlink="1">Unlink channel</button>` : ""}
       </div>` : "";
       return `
       <div class="sech" style="margin-top:18px">Discord channel</div>
       <div class="dcard">
-        <div class="row1"><span class="sav">G</span><div><b>GBTI Network</b><div class="st">${esc(status)}</div></div></div>
+        <div class="row1"><span class="sav">G</span><div><b>GBTI Network</b><div class="st">${esc2(status)}</div></div></div>
         <div class="pickrow">
           <div class="pick"><button class="pickbtn" id="pickbtn" type="button" aria-expanded="${this._pickerOpen}"><span class="hash">#</span>${effective ? (() => {
         const n = this.chName(effective);
-        return n ? `${esc(n.name)} <span class="chid">${esc(String(effective))}</span>` : esc(String(effective));
+        return n ? `${esc2(n.name)} <span class="chid">${esc2(String(effective))}</span>` : esc2(String(effective));
       })() : '<span class="muted">choose a channel…</span>'}</button>${menu}</div>
         </div>
         <div class="manrow"><input id="manch" placeholder="or paste a channel id (numbers only)" inputmode="numeric" /><button class="btn soft" id="manset" type="button">Set</button></div>
@@ -10448,16 +10721,16 @@ ${listStyleProseCss(".doc-blocks")}
     }
     _browserHtml(path) {
       const items = this._items?.[this._cbType] || [];
-      const filed = items.filter((it) => Array.isArray(it.categories) && path.every((k, i) => it.categories[i] === k));
+      const filed = items.filter((it2) => Array.isArray(it2.categories) && path.every((k, i) => it2.categories[i] === k));
       const pg = paginate(filed, this._cbPage, CB_PER);
       const now = Date.now();
       const tabs = Object.keys(INDEXES).map((t) => {
-        const n = (this._items?.[t] || []).filter((it) => Array.isArray(it.categories) && path.every((k, i) => it.categories[i] === k)).length;
+        const n = (this._items?.[t] || []).filter((it2) => Array.isArray(it2.categories) && path.every((k, i) => it2.categories[i] === k)).length;
         return `<button class="cbtab${t === this._cbType ? " on" : ""}" type="button" data-cbtab="${t}">${TYPE_LABEL3[t]}<span class="n">${n}</span></button>`;
       }).join("");
-      const rows = pg.items.map((it) => `<div class="cbrow">
-        <div style="min-width:0"><a href="${SITE7}${esc(it.url || "")}" target="_blank" rel="noopener">${esc(it.title || it.slug || "")}</a>
-        <div class="sub">@${esc(it.author || "")}${it.publishedAt ? ` · ${esc(relAge(Number(it.publishedAt), now))}` : ""}</div></div>
+      const rows = pg.items.map((it2) => `<div class="cbrow">
+        <div style="min-width:0"><a href="${SITE8}${esc2(it2.url || "")}" target="_blank" rel="noopener">${esc2(it2.title || it2.slug || "")}</a>
+        <div class="sub">@${esc2(it2.author || "")}${it2.publishedAt ? ` · ${esc2(relAge(Number(it2.publishedAt), now))}` : ""}</div></div>
       </div>`).join("");
       const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
         <button class="pgb" type="button" data-cbpage="${pg.page - 1}" ${pg.page === 1 ? "disabled" : ""}>‹</button>
@@ -10478,7 +10751,7 @@ ${listStyleProseCss(".doc-blocks")}
         <div class="stat warn"><div class="n">${needs.length}</div><div class="l">Need a channel</div></div>
         <div class="stat"><div class="n">${this._pending.size}</div><div class="l">Unmerged edits</div></div>
       </div>
-      ${needs.length ? `<div class="needs"><div class="sech">Needs a Discord channel</div>${needs.map((n) => `<button class="subrow" type="button" data-sel="${esc(n.path.join("/"))}"><span class="dot"></span><span>${esc(n.label)}</span><span class="k">${esc(n.key)}</span></button>`).join("")}</div>` : ""}
+      ${needs.length ? `<div class="needs"><div class="sech">Needs a Discord channel</div>${needs.map((n) => `<button class="subrow" type="button" data-sel="${esc2(n.path.join("/"))}"><span class="dot"></span><span>${esc2(n.label)}</span><span class="k">${esc2(n.key)}</span></button>`).join("")}</div>` : ""}
     </div>`;
     }
     _wire() {
@@ -10592,8 +10865,8 @@ ${listStyleProseCss(".doc-blocks")}
         this.render();
       }));
       this.on("#manset", "click", () => {
-        const v = this.$("#manch")?.value?.trim();
-        if (v && /^[0-9]{5,25}$/.test(v)) this._setChannel(v);
+        const v2 = this.$("#manch")?.value?.trim();
+        if (v2 && /^[0-9]{5,25}$/.test(v2)) this._setChannel(v2);
         else this._msg = "A Discord channel id is 5 to 25 digits.";
         this.render();
       });
@@ -10630,7 +10903,7 @@ ${listStyleProseCss(".doc-blocks")}
         this._msg = res?.noop ? "Everything in the batch was already applied." : `Published as PR #${res?.prNumber ?? "?"} — the changes reach the site about 2 to 3 minutes after it merges.`;
         await this.load();
       } catch (err) {
-        this._msg = esc(err?.message || "The batch could not be opened.");
+        this._msg = esc2(err?.message || "The batch could not be opened.");
         this.render();
       }
     }
@@ -10643,7 +10916,7 @@ ${listStyleProseCss(".doc-blocks")}
         await this.client.adminOp("category-migrate", { action, from: [...this._sel], ...extra, apply: true });
         this._msg = "Migration dispatched. It opens a review-gated PR that rewrites the filed content; watch the repository pull requests.";
       } catch (err) {
-        this._msg = esc(err?.message || "The migration could not be dispatched.");
+        this._msg = esc2(err?.message || "The migration could not be dispatched.");
       }
       this.render();
     }
@@ -10660,7 +10933,7 @@ ${listStyleProseCss(".doc-blocks")}
         const selPk = this._sel.join("/");
         return pk !== selPk && !pk.startsWith(`${selPk}/`) && pk !== this._sel.slice(0, -1).join("/");
       });
-      ui.innerHTML = `<div class="moverow"><span class="hint">Move this category AND everything under it beneath:</span><select id="movesel"><option value="">Top level</option>${flat2.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="movego" type="button">Move</button></div>`;
+      ui.innerHTML = `<div class="moverow"><span class="hint">Move this category AND everything under it beneath:</span><select id="movesel"><option value="">Top level</option>${flat2.map((n) => `<option value="${esc2(n.path.join("/"))}">${esc2(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="movego" type="button">Move</button></div>`;
       ui.querySelector("#movego")?.addEventListener("click", () => {
         const to = ui.querySelector("#movesel")?.value || "";
         this._migrate("move", { toParent: to ? to.split("/") : [] }, `Move "${this.labelOf(this._sel)}" and ALL its subcategories${to ? ` under ${to}` : " to the top level"}? One migration PR re-parents the subtree and rewrites every filed item.`);
@@ -10676,7 +10949,7 @@ ${listStyleProseCss(".doc-blocks")}
         const pk = n.path.join("/");
         return pk !== selPk && !pk.startsWith(`${selPk}/`);
       });
-      ui.innerHTML = `<div class="moverow"><span class="hint">Merge this category (content + subcategories) INTO:</span><select id="mergesel">${flat2.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="mergego" type="button">Merge</button></div>`;
+      ui.innerHTML = `<div class="moverow"><span class="hint">Merge this category (content + subcategories) INTO:</span><select id="mergesel">${flat2.map((n) => `<option value="${esc2(n.path.join("/"))}">${esc2(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="mergego" type="button">Merge</button></div>`;
       ui.querySelector("#mergego")?.addEventListener("click", () => {
         const into = ui.querySelector("#mergesel")?.value || "";
         if (!into) return;
@@ -10691,7 +10964,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-categories-workspace", GbtiCategoriesWorkspace);
 
   // client-ui/src/elements/gbti-tag-explorer.mjs
-  var SITE8 = "https://gbti.network";
+  var SITE9 = "https://gbti.network";
   var INDEXES2 = { post: "blog-index.json", prompt: "prompts-index.json", project: "projects-index.json" };
   var SEG = [["all", "All"], ["post", "Articles"], ["prompt", "Prompts"], ["project", "Projects"]];
   var SEARCH_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>';
@@ -10819,10 +11092,10 @@ ${listStyleProseCss(".doc-blocks")}
     // The inline action row under the buttons: rename = a new-tag input, merge = a picker over the other
     // tags, retire = a confirm sentence. One PR per action; the row updates optimistically on success.
     _actionUi(sel) {
-      if (!this._action) return this._note ? `<div class="actrow"><span class="note ${esc(this._note.cls)}">${esc(this._note.text)}</span></div>` : "";
+      if (!this._action) return this._note ? `<div class="actrow"><span class="note ${esc2(this._note.cls)}">${esc2(this._note.text)}</span></div>` : "";
       const others = (this._rows || []).filter((r) => r.tag !== sel.tag).map((r) => r.tag).sort();
-      const inner = this._action === "rename" ? `<input id="act-to" placeholder="new-tag-name" value="${esc(sel.tag)}" spellcheck="false" /><button class="go" id="act-go" type="button">Rename</button>` : this._action === "merge" ? `<select id="act-to">${others.map((t) => `<option${norm(t) === norm(sel.tag) ? " selected" : ""}>${esc(t)}</option>`).join("")}</select><button class="go" id="act-go" type="button">Merge</button>` : `<span class="note">Remove <code>${esc(sel.tag)}</code> from all ${sel.total} item${sel.total === 1 ? "" : "s"}?</span><button class="go" id="act-go" type="button">Retire</button>`;
-      return `<div class="actrow">${inner}${this._note ? `<span class="note ${esc(this._note.cls)}">${esc(this._note.text)}</span>` : ""}</div>`;
+      const inner = this._action === "rename" ? `<input id="act-to" placeholder="new-tag-name" value="${esc2(sel.tag)}" spellcheck="false" /><button class="go" id="act-go" type="button">Rename</button>` : this._action === "merge" ? `<select id="act-to">${others.map((t) => `<option${norm(t) === norm(sel.tag) ? " selected" : ""}>${esc2(t)}</option>`).join("")}</select><button class="go" id="act-go" type="button">Merge</button>` : `<span class="note">Remove <code>${esc2(sel.tag)}</code> from all ${sel.total} item${sel.total === 1 ? "" : "s"}?</span><button class="go" id="act-go" type="button">Retire</button>`;
+      return `<div class="actrow">${inner}${this._note ? `<span class="note ${esc2(this._note.cls)}">${esc2(this._note.text)}</span>` : ""}</div>`;
     }
     async _runAction(sel) {
       const act = this._action;
@@ -10869,10 +11142,10 @@ ${listStyleProseCss(".doc-blocks")}
       const byTag = /* @__PURE__ */ new Map();
       await Promise.all(Object.entries(INDEXES2).map(async ([type, file]) => {
         try {
-          const res = await fetch(`${SITE8}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE9}/${file}`, { cache: "no-cache" });
           const data = await res.json();
-          for (const it of Array.isArray(data) ? data : data?.items || []) {
-            for (const raw of it.tags || []) {
+          for (const it2 of Array.isArray(data) ? data : data?.items || []) {
+            for (const raw of it2.tags || []) {
               const tag = String(raw).trim().toLowerCase();
               if (!tag) continue;
               let row = byTag.get(tag);
@@ -10882,7 +11155,7 @@ ${listStyleProseCss(".doc-blocks")}
               }
               row[type] += 1;
               row.total += 1;
-              row.items.push({ type, title: it.title || it.slug, url: it.url, author: it.author, path: it.path });
+              row.items.push({ type, title: it2.title || it2.slug, url: it2.url, author: it2.author, path: it2.path });
             }
           }
         } catch {
@@ -10936,8 +11209,8 @@ ${listStyleProseCss(".doc-blocks")}
         const t = this._activeTotal(d);
         const pct = Math.max(4, Math.round(t / maxNow * 100));
         const z = (n) => n === 0 ? " zero" : "";
-        return `<div class="row${this._sel === d.tag ? " sel" : ""}" data-tag="${esc(d.tag)}">
-        <div class="tagcell"><span class="tagname">${esc(d.tag)}</span>${d.dup ? '<span class="flag">dup</span>' : ""}</div>
+        return `<div class="row${this._sel === d.tag ? " sel" : ""}" data-tag="${esc2(d.tag)}">
+        <div class="tagcell"><span class="tagname">${esc2(d.tag)}</span>${d.dup ? '<span class="flag">dup</span>' : ""}</div>
         <div class="usage"><div class="bar"><i style="width:${pct}%"></i></div><span class="tot">${t}</span></div>
         <div class="num${z(d.post)}">${d.post}</div>
         <div class="num${z(d.prompt)}">${d.prompt}</div>
@@ -10948,13 +11221,13 @@ ${listStyleProseCss(".doc-blocks")}
       const firstDupe = this._dupes?.[0];
       const dupe = firstDupe && !this._dupeHidden ? `<div class="dupe">
         <span class="dot"></span>
-        <span class="txt"><b>${this._dupes.length} likely duplicate${this._dupes.length === 1 ? "" : "s"}.</b> ${firstDupe.map((r) => `<code>${esc(r.tag)}</code>`).join(" and ")} read as the same label — consider merging.</span>
+        <span class="txt"><b>${this._dupes.length} likely duplicate${this._dupes.length === 1 ? "" : "s"}.</b> ${firstDupe.map((r) => `<code>${esc2(r.tag)}</code>`).join(" and ")} read as the same label — consider merging.</span>
         <button id="reviewdupe" type="button">Review</button>
         <button class="dismiss" id="dismissdupe" type="button">Dismiss</button>
       </div>` : "";
       const sel = this._sel ? this._rows.find((r) => r.tag === this._sel) : null;
       const detail = sel ? `<div class="detail">
-        <div class="dhead"><div class="dtag">${esc(sel.tag)}</div>
+        <div class="dhead"><div class="dtag">${esc2(sel.tag)}</div>
           <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? "" : "s"}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? "" : "s"}` : ""}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? "" : "s"}` : ""}${sel.project ? ` · ${sel.project} product${sel.project === 1 ? "" : "s"}` : ""}</div></div>
         <div class="dactions">
           <button type="button" id="act-rename" title="Rename this tag everywhere">${icon("pencil")} Rename</button>
@@ -10962,16 +11235,16 @@ ${listStyleProseCss(".doc-blocks")}
           <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
         </div>
         ${this._actionUi(sel)}
-        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE8}${esc(i.url || "")}" target="_blank" rel="noopener">
-          <div class="ititle">${esc(i.title)}</div>
-          <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
+        <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE9}${esc2(i.url || "")}" target="_blank" rel="noopener">
+          <div class="ititle">${esc2(i.title)}</div>
+          <div class="isub"><span class="badge ${esc2(i.type)}">${esc2(i.type)}</span><span class="iauth">@${esc2(i.author || "")}</span></div>
         </a>`).join("")}</div>
       </div>` : `<div class="detail empty"><div><div class="ico">${TAG_ICO}</div><p>Select a tag to see the content carrying it.</p></div></div>`;
       this.set(this.css(CSS13) + `
       <div class="top"><div><div class="eyebrow">Admin · Tags</div><div class="title">Tag manager</div></div>
         <div class="count"><b>${list.length}</b> of <b>${this._rows.length}</b> tags · <b>${uses}</b> uses</div></div>
       <div class="toolbar">
-        <label class="search">${SEARCH_ICO}<input id="q" placeholder="Filter tags…" autocomplete="off" value="${esc(this._q)}" /></label>
+        <label class="search">${SEARCH_ICO}<input id="q" placeholder="Filter tags…" autocomplete="off" value="${esc2(this._q)}" /></label>
         <div class="seg">${SEG.map(([k, l]) => `<button type="button" class="${this._type === k ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
       </div>
       ${dupe}
@@ -11041,10 +11314,10 @@ ${listStyleProseCss(".doc-blocks")}
   var BANWORD_MAX = 40;
   var WORD_RE = /^[a-z0-9]+(?:[ -][a-z0-9]+)*$/;
   function normalizeBanword(raw) {
-    const w = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-    if (w.length < BANWORD_MIN || w.length > BANWORD_MAX) return "";
-    if (!/[a-z]/.test(w)) return "";
-    return WORD_RE.test(w) ? w : "";
+    const w2 = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    if (w2.length < BANWORD_MIN || w2.length > BANWORD_MAX) return "";
+    if (!/[a-z]/.test(w2)) return "";
+    return WORD_RE.test(w2) ? w2 : "";
   }
 
   // membership/news-source-weight-edits.mjs
@@ -11056,8 +11329,8 @@ ${listStyleProseCss(".doc-blocks")}
     const d = Number(direction) > 0 ? 1 : -1;
     return clamp(clamp(current) + d);
   }
-  function clamp(w) {
-    const n = Math.round(Number(w));
+  function clamp(w2) {
+    const n = Math.round(Number(w2));
     if (!Number.isFinite(n)) return 0;
     return Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, n));
   }
@@ -11213,7 +11486,7 @@ ${listStyleProseCss(".doc-blocks")}
         <button class="subtab" type="button" role="tab" data-view="sources" aria-selected="${view === "sources"}">Sources <span class="count">${this._sources.length}</span></button>
         <button class="subtab" type="button" role="tab" data-view="banwords" aria-selected="${view === "banwords"}">Blocked words <span class="count">${(this._banwords || []).length}</span></button>
       </div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${view === "banwords" ? this._banwordsView() : this._sourcesView()}
     </div>`);
       this._wire();
@@ -11223,7 +11496,7 @@ ${listStyleProseCss(".doc-blocks")}
       const weighted = Object.keys(this._weights || {}).length;
       const rows = this._sources.map((s) => {
         const on = s && s.enabled !== false;
-        return `<li class="src ${on ? "" : "off"}"><div class="row"><code class="id">${esc(s.id || "")}</code><span class="nm">${esc(s.name || "")}</span><a class="url" href="${esc(s.url || "")}" target="_blank" rel="noopener nofollow">${esc(hostOf(s.url))}</a><span class="sp"></span>` + this._weightControl(s) + `<button class="lk" type="button" data-toggle="${esc(s.id)}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(s.id)}">Remove</button></div></li>`;
+        return `<li class="src ${on ? "" : "off"}"><div class="row"><code class="id">${esc2(s.id || "")}</code><span class="nm">${esc2(s.name || "")}</span><a class="url" href="${esc2(s.url || "")}" target="_blank" rel="noopener nofollow">${esc2(hostOf(s.url))}</a><span class="sp"></span>` + this._weightControl(s) + `<button class="lk" type="button" data-toggle="${esc2(s.id)}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc2(s.id)}">Remove</button></div></li>`;
       }).join("");
       return `<div class="head"><span class="hint">${this._sources.length} sources, ${enabled} enabled, ${weighted} weighted</span></div>
       <div class="add">
@@ -11242,14 +11515,14 @@ ${listStyleProseCss(".doc-blocks")}
      */
     _weightControl(s) {
       const id = String(s?.id || "");
-      const w = Number(this._weights?.[id]) || 0;
-      return `<span class="wt"><button type="button" data-wt="${esc(id)}" data-dir="-1" aria-label="Take less from ${esc(s?.name || id)}" title="Take less from this source"${w <= WEIGHT_MIN ? " disabled" : ""}>&minus;</button><span class="val${w === 0 ? "" : " set"}">${esc(weightLabel(w))}</span><button type="button" data-wt="${esc(id)}" data-dir="1" aria-label="Take more from ${esc(s?.name || id)}" title="Take more from this source"${w >= WEIGHT_MAX ? " disabled" : ""}>+</button></span>`;
+      const w2 = Number(this._weights?.[id]) || 0;
+      return `<span class="wt"><button type="button" data-wt="${esc2(id)}" data-dir="-1" aria-label="Take less from ${esc2(s?.name || id)}" title="Take less from this source"${w2 <= WEIGHT_MIN ? " disabled" : ""}>&minus;</button><span class="val${w2 === 0 ? "" : " set"}">${esc2(weightLabel(w2))}</span><button type="button" data-wt="${esc2(id)}" data-dir="1" aria-label="Take more from ${esc2(s?.name || id)}" title="Take more from this source"${w2 >= WEIGHT_MAX ? " disabled" : ""}>+</button></span>`;
     }
     // sow-372: the superadmin's blocked-word list. A word here keeps every story carrying it out of the stream,
     // in the hourly ingest and in what the feed serves, so the note says both and says what it does NOT touch.
     _banwordsView() {
       const words = this._banwords || [];
-      const chips = words.map((w) => `<span class="chip">${esc(w)}<button type="button" data-unban="${esc(w)}" aria-label="Stop blocking ${esc(w)}" title="Stop blocking ${esc(w)}">&times;</button></span>`).join("");
+      const chips = words.map((w2) => `<span class="chip">${esc2(w2)}<button type="button" data-unban="${esc2(w2)}" aria-label="Stop blocking ${esc2(w2)}" title="Stop blocking ${esc2(w2)}">&times;</button></span>`).join("");
       return `<div class="bw">
       <h4>Blocked words</h4>
       <p class="hint">A story whose headline or summary carries one of these never enters the stream, and any already in the window stop showing. Whole words only, so "trump" leaves a trumpet alone. This is what we republish from other publications; it never touches member writing.</p>
@@ -11391,14 +11664,14 @@ ${listStyleProseCss(".doc-blocks")}
         this.set(this.css(CSS15) + `<p class="muted">Loading quotes...</p>`);
         return;
       }
-      const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
-      const rows = this._quotes.map((q) => {
-        const on = q && q.enabled !== false;
-        return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc(q.text || "")}</span><span class="by">${esc(q.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc(q.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(q.text || "")}">Remove</button></div></li>`;
+      const enabled = this._quotes.filter((q2) => q2 && q2.enabled !== false).length;
+      const rows = this._quotes.map((q2) => {
+        const on = q2 && q2.enabled !== false;
+        return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc2(q2.text || "")}</span><span class="by">${esc2(q2.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc2(q2.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc2(q2.text || "")}">Remove</button></div></li>`;
       }).join("");
       this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><span class="hint">${this._quotes.length} quotes, ${enabled} enabled</span></div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <div class="add">
         <textarea data-add-text placeholder="The quote text"></textarea>
         <input data-add-author type="text" placeholder="Author" />
@@ -11585,22 +11858,22 @@ ${listStyleProseCss(".doc-blocks")}
         const u = this._usage[code] || { count: 0, redemptions: [] };
         const path = landerFor({ code, tier: c.tier });
         const link = path ? `${this._siteBase()}${path}?coupon=${encodeURIComponent(code)}` : "";
-        const reds = (u.redemptions || []).slice(0, 8).map((r) => `<li>${esc(r.login || r.githubId)} · ${esc(String(r.redeemedAt || "").slice(0, 10))} → ${esc(String(r.until || "").slice(0, 10))}</li>`).join("");
-        return `<li class="c${c.active === false ? " off" : ""}" data-code="${esc(code)}">
+        const reds = (u.redemptions || []).slice(0, 8).map((r) => `<li>${esc2(r.login || r.githubId)} · ${esc2(String(r.redeemedAt || "").slice(0, 10))} → ${esc2(String(r.until || "").slice(0, 10))}</li>`).join("");
+        return `<li class="c${c.active === false ? " off" : ""}" data-code="${esc2(code)}">
         <div class="crow">
-          <span class="code">${esc(code)}</span>
-          <span class="meta">${esc(String(c.freeDays))} free day${Number(c.freeDays) === 1 ? "" : "s"}${c.maxRedemptions != null ? ` · max ${esc(String(c.maxRedemptions))}` : " · unlimited"}${c.note ? ` · ${esc(c.note)}` : ""}</span>
+          <span class="code">${esc2(code)}</span>
+          <span class="meta">${esc2(String(c.freeDays))} free day${Number(c.freeDays) === 1 ? "" : "s"}${c.maxRedemptions != null ? ` · max ${esc2(String(c.maxRedemptions))}` : " · unlimited"}${c.note ? ` · ${esc2(c.note)}` : ""}</span>
           <span class="sp"></span>
-          <button class="lk" data-toggle="${esc(code)}">${c.active === false ? "Activate" : "Deactivate"}</button>
+          <button class="lk" data-toggle="${esc2(code)}">${c.active === false ? "Activate" : "Deactivate"}</button>
         </div>
-        ${link ? `<div class="linkrow"><input readonly value="${esc(link)}" aria-label="Share URL for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>` : `<div class="use warn">No lander for tier <b>${esc(String(c.tier || "none"))}</b>, so there is no link to share. Give the coupon a known tier, or add the tier to landerFor().</div>`}
-        <div class="use">Redemptions: <b>${esc(String(u.count ?? 0))}</b>${u.max != null ? ` of ${esc(String(u.max))}` : ""}</div>
+        ${link ? `<div class="linkrow"><input readonly value="${esc2(link)}" aria-label="Share URL for ${esc2(code)}" /><button class="lk" data-copy="${esc2(link)}">Copy</button></div>` : `<div class="use warn">No lander for tier <b>${esc2(String(c.tier || "none"))}</b>, so there is no link to share. Give the coupon a known tier, or add the tier to landerFor().</div>`}
+        <div class="use">Redemptions: <b>${esc2(String(u.count ?? 0))}</b>${u.max != null ? ` of ${esc2(String(u.max))}` : ""}</div>
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
       }).join("");
       this.set(this.css(CSS16) + `
       <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <div class="add">
         <input data-f="code" placeholder="CODE (A-Z 0-9)" maxlength="32" />
         <input data-f="freeDays" type="number" min="1" max="3650" placeholder="Free days" />
@@ -11634,28 +11907,28 @@ ${listStyleProseCss(".doc-blocks")}
      */
     _invitesHtml() {
       const mintable = (this._coupons || []).filter((c) => c.active !== false);
-      const opts = mintable.map((c) => `<option value="${esc(String(c.code).toUpperCase())}">${esc(String(c.code).toUpperCase())}</option>`).join("");
+      const opts = mintable.map((c) => `<option value="${esc2(String(c.code).toUpperCase())}">${esc2(String(c.code).toUpperCase())}</option>`).join("");
       if (this._invites === null) {
         return `<div class="inv-head"><h3>Issued invites</h3></div>
         <p class="use warn">Could not load issued invites. The coupon registry above is unaffected.</p>`;
       }
-      const items = (this._invites || []).map((v) => {
-        const code = esc(String(v.code || ""));
-        const state = String(v.state || "unknown");
-        const path = landerFor({ code: v.campaign, tier: (this._coupons || []).find((c) => String(c.code).toUpperCase() === String(v.campaign).toUpperCase())?.tier });
-        const link = path ? `${this._siteBase()}${path}?coupon=${encodeURIComponent(String(v.code))}` : "";
-        const who = v.redeemedByLogin || v.redeemedBy;
+      const items = (this._invites || []).map((v2) => {
+        const code = esc2(String(v2.code || ""));
+        const state = String(v2.state || "unknown");
+        const path = landerFor({ code: v2.campaign, tier: (this._coupons || []).find((c) => String(c.code).toUpperCase() === String(v2.campaign).toUpperCase())?.tier });
+        const link = path ? `${this._siteBase()}${path}?coupon=${encodeURIComponent(String(v2.code))}` : "";
+        const who = v2.redeemedByLogin || v2.redeemedBy;
         return `<li class="i${state === "issued" ? "" : " spent"}">
         <div class="crow">
           <span class="code">${code}</span>
-          <span class="st ${esc(state)}">${esc(state)}</span>
-          <span class="meta">${esc(String(v.campaign || ""))}${v.issuedAt ? ` · issued ${esc(String(v.issuedAt).slice(0, 10))}` : ""}${v.issuedByLogin ? ` by ${esc(v.issuedByLogin)}` : ""}${who ? ` · redeemed by ${esc(String(who))}` : ""}${v.expiresAt ? ` · expires ${esc(String(v.expiresAt).slice(0, 10))}` : ""}</span>
+          <span class="st ${esc2(state)}">${esc2(state)}</span>
+          <span class="meta">${esc2(String(v2.campaign || ""))}${v2.issuedAt ? ` · issued ${esc2(String(v2.issuedAt).slice(0, 10))}` : ""}${v2.issuedByLogin ? ` by ${esc2(v2.issuedByLogin)}` : ""}${who ? ` · redeemed by ${esc2(String(who))}` : ""}${v2.expiresAt ? ` · expires ${esc2(String(v2.expiresAt).slice(0, 10))}` : ""}</span>
           <span class="sp"></span>
           ${state === "issued" ? `<button class="lk" data-revoke="${code}">Revoke</button>` : ""}
         </div>
-        ${link && state === "issued" ? `<div class="linkrow"><input readonly value="${esc(link)}" aria-label="Invite link for ${code}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>` : ""}
+        ${link && state === "issued" ? `<div class="linkrow"><input readonly value="${esc2(link)}" aria-label="Invite link for ${code}" /><button class="lk" data-copy="${esc2(link)}">Copy</button></div>` : ""}
         <div class="noterow">
-          <input data-note="${code}" value="${esc(v.note || "")}" placeholder="Administration note (who this went to, and why)" maxlength="280" />
+          <input data-note="${code}" value="${esc2(v2.note || "")}" placeholder="Administration note (who this went to, and why)" maxlength="280" />
           <button class="lk" data-savenote="${code}">Save note</button>
         </div>
       </li>`;
@@ -11674,14 +11947,14 @@ ${listStyleProseCss(".doc-blocks")}
       <ul class="list">${items || '<li class="i muted">No invites issued yet.</li>'}</ul>`;
     }
     async _mint() {
-      const v = (k) => this.$(`[data-f="${k}"]`)?.value?.trim() ?? "";
-      const campaign = v("campaign");
+      const v2 = (k) => this.$(`[data-f="${k}"]`)?.value?.trim() ?? "";
+      const campaign = v2("campaign");
       if (!campaign) {
         this._msg = "Pick a campaign to mint against.";
         this.render();
         return;
       }
-      await this._run(() => this.client.inviteCreate({ campaign, note: v("inote"), expiresAt: v("iexpires") || null }), `Invite minted against ${campaign}`);
+      await this._run(() => this.client.inviteCreate({ campaign, note: v2("inote"), expiresAt: v2("iexpires") || null }), `Invite minted against ${campaign}`);
     }
     async _revoke(code) {
       await this._run(() => this.client.inviteUpdate({ code, action: "revoke" }), `${code} revoked`);
@@ -11691,15 +11964,15 @@ ${listStyleProseCss(".doc-blocks")}
       await this._run(() => this.client.inviteUpdate({ code, action: "note", note }), `Note saved for ${code}`);
     }
     async _add() {
-      const v = (k) => this.$(`[data-f="${k}"]`)?.value?.trim() ?? "";
-      const code = v("code");
-      const freeDays = Number(v("freeDays"));
+      const v2 = (k) => this.$(`[data-f="${k}"]`)?.value?.trim() ?? "";
+      const code = v2("code");
+      const freeDays = Number(v2("freeDays"));
       if (!code || !freeDays) {
         this._msg = "A code and the free days are required.";
         this.render();
         return;
       }
-      await this._run(() => this.client.addCoupon({ code, freeDays, note: v("note"), maxRedemptions: v("maxRedemptions") || null, expiresAt: null }), `Coupon ${code.toUpperCase()} added`);
+      await this._run(() => this.client.addCoupon({ code, freeDays, note: v2("note"), maxRedemptions: v2("maxRedemptions") || null, expiresAt: null }), `Coupon ${code.toUpperCase()} added`);
     }
     async _toggle(code) {
       const cur = this._coupons.find((c) => String(c.code).toUpperCase() === code);
@@ -11738,9 +12011,9 @@ ${listStyleProseCss(".doc-blocks")}
     return !!item && item.corrupt !== true && item.state === EDITORIAL_STATE.pending;
   }
   function waitedFor(item, now = /* @__PURE__ */ new Date()) {
-    const at = Date.parse(String(item?.requestedAt ?? ""));
-    if (!Number.isFinite(at)) return "";
-    const days = Math.floor((now.getTime() - at) / 864e5);
+    const at2 = Date.parse(String(item?.requestedAt ?? ""));
+    if (!Number.isFinite(at2)) return "";
+    const days = Math.floor((now.getTime() - at2) / 864e5);
     if (days < 0) return "just now";
     if (days === 0) return "today";
     if (days === 1) return "yesterday";
@@ -11825,7 +12098,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (this._failed) {
-        this.set(this.css(CSS17) + `<p class="msg">${esc(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS17) + `<p class="msg">${esc2(this._msg)}</p><button type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -11838,9 +12111,9 @@ ${listStyleProseCss(".doc-blocks")}
       this.set(this.css(CSS17) + `
       <div class="head">
         <h3>Editorial review</h3>
-        <span class="hint">${esc(queueSummary(this._items))}</span>
+        <span class="hint">${esc2(queueSummary(this._items))}</span>
       </div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${rows || '<p class="muted">Nothing has been submitted yet. Member articles, projects and prompts arrive here when their author publishes them.</p>'}
     `);
       this.$$("[data-decide]").forEach((b) => b.addEventListener("click", () => this._decide(b.dataset.path, b.dataset.decide)));
@@ -11850,15 +12123,15 @@ ${listStyleProseCss(".doc-blocks")}
       const corrupt = item?.corrupt === true || state === "unknown";
       const path = String(item?.path || "");
       const title = item?.title || item?.slug || path || "an unnamed item";
-      const decided = item?.decidedAt ? `<div class="sub">${esc(state)} by ${esc(item.decidedByLogin || item.decidedBy || "a superadmin")} on ${esc(String(item.decidedAt).slice(0, 10))}</div>` : "";
-      const read3 = item?.url ? `<a class="read" href="${esc(item.url)}" target="_blank" rel="noopener">Read it</a>` : "";
+      const decided = item?.decidedAt ? `<div class="sub">${esc2(state)} by ${esc2(item.decidedByLogin || item.decidedBy || "a superadmin")} on ${esc2(String(item.decidedAt).slice(0, 10))}</div>` : "";
+      const read3 = item?.url ? `<a class="read" href="${esc2(item.url)}" target="_blank" rel="noopener">Read it</a>` : "";
       const acts = rowDecidable(item) ? `<div class="acts">${read3}
-           <button data-decide="approve" data-path="${esc(path)}" type="button">Approve for the public site</button>
-           <button data-decide="dismiss" data-path="${esc(path)}" type="button">Set aside</button>
+           <button data-decide="approve" data-path="${esc2(path)}" type="button">Approve for the public site</button>
+           <button data-decide="dismiss" data-path="${esc2(path)}" type="button">Set aside</button>
          </div>` : corrupt ? '<div class="acts"><button type="button" disabled>Cannot be decided: this record is malformed</button></div>' : read3 ? `<div class="acts">${read3}</div>` : "";
       return `<div class="row${corrupt ? " corrupt" : ""}">
-      <div class="top"><b>${esc(title)}</b><span class="st ${esc(state)}">${esc(corrupt ? "malformed" : state)}</span></div>
-      <div class="sub">${esc(corrupt ? `${typeLabel2(item?.type)} at ${path}` : rowSummary(item))}</div>
+      <div class="top"><b>${esc2(title)}</b><span class="st ${esc2(state)}">${esc2(corrupt ? "malformed" : state)}</span></div>
+      <div class="sub">${esc2(corrupt ? `${typeLabel2(item?.type)} at ${path}` : rowSummary(item))}</div>
       ${decided}${acts}
     </div>`;
     }
@@ -11940,10 +12213,10 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const rows = this._toggles.map((t) => {
         const on = this._settings?.[t.key] === true;
-        return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc(t.label || t.key)}</span><span class="desc">${esc(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
+        return `<li class="s"><div class="row"><span class="tx"><span class="label">${esc2(t.label || t.key)}</span><span class="desc">${esc2(t.description || "")}</span></span><span class="state ${on ? "on" : "off"}">${on ? "On" : "Off"}</span><button class="lk" type="button" data-toggle="${esc2(t.key)}" data-on="${on ? "1" : "0"}">Turn ${on ? "off" : "on"}</button></div></li>`;
       }).join("");
       this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <ul class="list">${rows || '<li class="muted">No site settings are defined.</li>'}</ul>
       <p class="hint" style="margin:14px 0 0">Superadmin only. A flip opens a pull request against house/site-settings.yml and goes live on the next site deploy, about three minutes later, so the switch will read the new position before the site does.</p>
     </div>`);
@@ -11982,7 +12255,7 @@ ${listStyleProseCss(".doc-blocks")}
     maxLinks: 1,
     forbiddenClaims: Object.freeze(["collections", "favorites", "favourites"])
   });
-  var str = (v) => typeof v === "string" ? v : "";
+  var str = (v2) => typeof v2 === "string" ? v2 : "";
   function ctaVisibleLength(body, planLabel = "Network Supporter") {
     return str(body).replace(/\{plan\}/g, planLabel).trim().length;
   }
@@ -12027,10 +12300,10 @@ ${listStyleProseCss(".doc-blocks")}
     em: [],
     br: []
   };
-  var isHttps = (v) => /^https:\/\/[^\s"'<>]+$/i.test(v);
-  var isMailto = (v) => /^mailto:[^\s"'<>]+$/i.test(v);
-  var isDigits = (v) => /^[0-9]{1,4}$/.test(v);
-  var escapeAttr = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var isHttps = (v2) => /^https:\/\/[^\s"'<>]+$/i.test(v2);
+  var isMailto = (v2) => /^mailto:[^\s"'<>]+$/i.test(v2);
+  var isDigits = (v2) => /^[0-9]{1,4}$/.test(v2);
+  var escapeAttr = (v2) => String(v2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   function attrValue(tag, name, raw) {
     const value = String(raw ?? "").trim();
     if (!value) return null;
@@ -12213,7 +12486,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS19) + `<p class="msg">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS19) + `<p class="msg">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
@@ -12221,7 +12494,7 @@ ${listStyleProseCss(".doc-blocks")}
         return;
       }
       this.set(this.css(CSS19) + `<div class="${this._busy ? "busy" : ""}">
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${this._ctaBlock()}
       ${this._sponsorBlock()}
       ${this._optinBlock()}
@@ -12245,19 +12518,19 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="lede">One note about membership, after all the articles and before the footer. It renders only in an issue that has articles in it, so a quiet week carries no pitch.</p>
       <div class="f">
         <label for="dm-body">What it says</label>
-        <textarea id="dm-body" data-cta="body" placeholder="${esc(fallback.body || "")}">${esc(d.body)}</textarea>
+        <textarea id="dm-body" data-cta="body" placeholder="${esc2(fallback.body || "")}">${esc2(d.body)}</textarea>
         <span class="note"><span class="count ${over ? "over" : ""}">${visible}</span> of ${CTA_RULES.maxVisibleChars} characters, counting the link label. Write {plan} where the plan name goes and it stays right through a rename. Leave this empty to use the wording the renderer ships with.</span>
       </div>
       <div class="f">
         <label for="dm-label">The link</label>
-        <input id="dm-label" type="text" data-cta="linkLabel" value="${esc(d.linkLabel)}" placeholder="${esc(fallback.linkLabel || "")}">
+        <input id="dm-label" type="text" data-cta="linkLabel" value="${esc2(d.linkLabel)}" placeholder="${esc2(fallback.linkLabel || "")}">
       </div>
       <div class="f">
         <label for="dm-url">Where it goes</label>
-        <input id="dm-url" type="text" data-cta="linkUrl" value="${esc(d.linkUrl)}" placeholder="${esc(fallback.linkUrl || "")}">
+        <input id="dm-url" type="text" data-cta="linkUrl" value="${esc2(d.linkUrl)}" placeholder="${esc2(fallback.linkUrl || "")}">
         <span class="note">A path such as /membership/, or a full https address.</span>
       </div>
-      ${warnings.length ? `<ul class="warn">${warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+      ${warnings.length ? `<ul class="warn">${warnings.map((w2) => `<li>${esc2(w2)}</li>`).join("")}</ul>` : ""}
       <div class="acts"><button class="save" type="button" data-save="cta"${this._clean("cta") ? " disabled" : ""}>Save the pitch</button>${this._clean("cta") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
     </section>`;
     }
@@ -12275,12 +12548,12 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="lede">One standing sponsor, in every issue until you change it, under a Sponsored label that cannot be edited away. Switched on with nothing to show, it renders nothing: a label over an empty box is worse than no block.</p>
       <div class="f">
         <label for="dm-html">The sponsor's markup</label>
-        <textarea id="dm-html" class="code" data-sponsor="html" placeholder="&lt;a href=&quot;https://example.com&quot;&gt;Their line&lt;/a&gt;">${esc(d.html)}</textarea>
+        <textarea id="dm-html" class="code" data-sponsor="html" placeholder="&lt;a href=&quot;https://example.com&quot;&gt;Their line&lt;/a&gt;">${esc2(d.html)}</textarea>
         <span class="note">Links, images and basic text tags survive. Scripts, styles, frames, forms and every event handler are removed. Paste what they sent and check the preview.</span>
       </div>
       ${stripped ? `<ul class="warn"><li>Nothing in this markup survives the allowlist, so no block would render. It is most likely a script or a frame, which no mail client would run anyway.</li></ul>` : ""}
       ${safe ? `<div class="prev"><span class="lbl">Sponsored</span>${safe}</div>
-        <p class="plain">Text-only readers see: ${esc(plain)}</p>` : ""}
+        <p class="plain">Text-only readers see: ${esc2(plain)}</p>` : ""}
       <div class="acts"><button class="save" type="button" data-save="sponsor"${this._clean("sponsor") ? " disabled" : ""}>Save the sponsor</button>${this._clean("sponsor") ? "" : '<span class="muted" style="font-size:12.5px">Unsaved</span>'}</div>
     </section>`;
     }
@@ -12317,19 +12590,19 @@ ${listStyleProseCss(".doc-blocks")}
     _inquiryBlock() {
       const rows = this._inquiries;
       let body;
-      if (this._inqError) body = `<p class="inq-none">${esc(this._inqError)}</p><div class="acts"><button class="lk" type="button" data-inq-load>Try again</button></div>`;
+      if (this._inqError) body = `<p class="inq-none">${esc2(this._inqError)}</p><div class="acts"><button class="lk" type="button" data-inq-load>Try again</button></div>`;
       else if (rows === "loading") body = '<p class="inq-none">Loading...</p>';
       else if (!Array.isArray(rows)) body = '<div class="acts"><button class="lk" type="button" data-inq-load>Show inquiries</button></div>';
       else if (!rows.length) body = '<p class="inq-none">Nothing has come in yet. The form is at /sponsorship/, which is not linked from the site and is not indexed, so it only reaches people you send it to.</p>';
       else {
         body = `<ul class="inq">${rows.map((r) => {
           const when = String(r.at || "").slice(0, 10);
-          const bits = [r.organization, r.website].filter(Boolean).map((b) => esc(b)).join(" &middot; ");
-          const mail = r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : r.emailStored ? "the address could not be read back" : "the address was not stored (the mail keys were unset); it is in the notification email";
+          const bits = [r.organization, r.website].filter(Boolean).map((b) => esc2(b)).join(" &middot; ");
+          const mail = r.email ? `<a href="mailto:${esc2(r.email)}">${esc2(r.email)}</a>` : r.emailStored ? "the address could not be read back" : "the address was not stored (the mail keys were unset); it is in the notification email";
           return `<li>
-          <div class="inq-hd"><span class="inq-who">${esc(r.name || "Someone")}</span><span class="inq-meta">${esc(when)}${bits ? " &middot; " + bits : ""}</span></div>
+          <div class="inq-hd"><span class="inq-who">${esc2(r.name || "Someone")}</span><span class="inq-meta">${esc2(when)}${bits ? " &middot; " + bits : ""}</span></div>
           <p class="inq-mail">${mail}</p>
-          <p class="inq-body">${esc(r.message || "")}</p>
+          <p class="inq-body">${esc2(r.message || "")}</p>
         </li>`;
         }).join("")}</ul>`;
       }
@@ -12364,13 +12637,13 @@ ${listStyleProseCss(".doc-blocks")}
       const retype = (el2, block, key) => el2.addEventListener("input", () => {
         this._draft[block][key] = el2.value;
         const id = el2.id;
-        const at = el2.selectionStart;
+        const at2 = el2.selectionStart;
         this.render();
         const next = id ? this.$(`#${id}`) : null;
         if (next) {
           next.focus();
           try {
-            next.setSelectionRange(at, at);
+            next.setSelectionRange(at2, at2);
           } catch {
           }
         }
@@ -12419,7 +12692,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-digest-manager", GbtiDigestManager);
 
   // membership/skill-install.mjs
-  var str2 = (v) => typeof v === "string" ? v.trim() : "";
+  var str2 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
   function skillNameFrom(skillMd) {
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
@@ -12516,7 +12789,7 @@ ${listStyleProseCss(".doc-blocks")}
   });
 
   // src/lib/skill-page.mjs
-  function esc2(s) {
+  function esc3(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
   var SKILL_SHELL = Object.freeze({
@@ -12540,7 +12813,7 @@ ${listStyleProseCss(".doc-blocks")}
     "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
   };
   var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
-  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc2(r.text)}</code>` : esc2(r.text)).join("");
+  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc3(r.text)}</code>` : esc3(r.text)).join("");
   var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
   function sharedFolderNote(tab, tabs) {
     const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
@@ -12559,15 +12832,15 @@ ${listStyleProseCss(".doc-blocks")}
     const many = tabs.length > 1;
     const tabId = (t) => `skill-tab-${t.key}`;
     const panelId = (t) => `skill-panel-${t.key}`;
-    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc2(t.key)}">${esc2(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc2(tabs[0].label)}</p>`;
-    const download = fileHref ? `<a class="skill-btn" href="${esc2(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc3(t.key)}">${esc3(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc3(tabs[0].label)}</p>`;
+    const download = fileHref ? `<a class="skill-btn" href="${esc3(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
     const panels = tabs.map((t, i) => {
       const shared = sharedFolderNote(t, tabs);
       const local = runsHtml(t.local);
-      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc2(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc2(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc2(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc2(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc3(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc3(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc3(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc3(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
     }).join("");
     const also = withoutNote(without);
-    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc2(also)}</p>` : "") + `</section>`;
+    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc3(also)}</p>` : "") + `</section>`;
   }
   function wireSkillPage(root = document, storage = globalThis.localStorage) {
     const box = root.querySelector("[data-skill-install]");
@@ -12761,7 +13034,7 @@ ${SKILL_BOX_CSS}`;
       return t ? { label: t.label, folder: t.steps?.folder || "", run: t.steps?.run || "", local: t.steps?.local || "" } : blank();
     }
     _dirty() {
-      if (this._sel === NEW) return Object.values(this._draft).some((v) => v.trim());
+      if (this._sel === NEW) return Object.values(this._draft).some((v2) => v2.trim());
       return JSON.stringify(this._draft) !== JSON.stringify(this._savedFor(this._sel));
     }
     _pick(key) {
@@ -12803,7 +13076,7 @@ ${SKILL_BOX_CSS}`;
         return;
       }
       if (this._status === "failed") {
-        this.set(this.css(CSS20) + `<p class="msg err">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.set(this.css(CSS20) + `<p class="msg err">${esc2(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
         this.$("[data-retry]")?.addEventListener("click", () => {
           this._status = "idle";
           this.render();
@@ -12811,29 +13084,29 @@ ${SKILL_BOX_CSS}`;
         return;
       }
       const isNew = this._sel === NEW;
-      const tools = this._tools.map((t) => `<button type="button" class="tool${t.key === this._sel ? " on" : ""}" aria-pressed="${t.key === this._sel}" data-tool="${esc(t.key)}">
-        <span class="tl"><span class="tn">${esc(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
+      const tools = this._tools.map((t) => `<button type="button" class="tool${t.key === this._sel ? " on" : ""}" aria-pressed="${t.key === this._sel}" data-tool="${esc2(t.key)}">
+        <span class="tl"><span class="tn">${esc2(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
       const saved = isNew ? null : this._tools.find((t) => t.key === this._sel);
       const name = isNew ? this._draft.label.trim() || "the new tool" : saved?.label || "";
       this.set(this.css(SKILL_READER_CSS + CSS20) + `<div class="${this._busy ? "busy" : ""}">
       <p class="lede">The install steps for each tool a skill can be made for. An author ticks the tools their skill works with; a reader picks theirs and gets these steps. Write <code>{name}</code> where the skill's folder name goes. Superadmin only.</p>
-      ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc2(this._msg)}</p>` : ""}
       <div class="grid">
         <nav class="list" aria-label="Tools">${tools}<button type="button" class="add${isNew ? " on" : ""}" data-add>+ Add a tool</button></nav>
         <div class="pane">
           <div class="cols">
             <div>
               <div class="f"><label for="si-label">Tool name</label>
-                <input id="si-label" data-k="label" type="text" maxlength="${SKILL_STEP_LIMITS.label}" value="${esc(this._draft.label)}"${isNew ? ' placeholder="Gemini CLI"' : " readonly"} />
-                <span class="note">${isNew ? `Filed as <code>${esc(toolKeyFor(this._draft.label) || "tool-name")}</code>. Authors and readers see the name exactly as written, and it cannot be renamed here once added.` : "Authors tick this name, and readers see it on the tabs. It is stored in every skill made for it, so it cannot be renamed here."}</span></div>
+                <input id="si-label" data-k="label" type="text" maxlength="${SKILL_STEP_LIMITS.label}" value="${esc2(this._draft.label)}"${isNew ? ' placeholder="Gemini CLI"' : " readonly"} />
+                <span class="note">${isNew ? `Filed as <code>${esc2(toolKeyFor(this._draft.label) || "tool-name")}</code>. Authors and readers see the name exactly as written, and it cannot be renamed here once added.` : "Authors tick this name, and readers see it on the tabs. It is stored in every skill made for it, so it cannot be renamed here."}</span></div>
               <div class="f"><label for="si-folder">Folder</label>
-                <input id="si-folder" class="code" data-k="folder" type="text" maxlength="${SKILL_STEP_LIMITS.folder}" value="${esc(this._draft.folder)}" placeholder="~/.agents/skills/{name}" />
+                <input id="si-folder" class="code" data-k="folder" type="text" maxlength="${SKILL_STEP_LIMITS.folder}" value="${esc2(this._draft.folder)}" placeholder="~/.agents/skills/{name}" />
                 <span class="note">Step 1 makes this folder. It must contain <code>{name}</code>.</span></div>
               <div class="f"><label for="si-run">How to run it</label>
-                <input id="si-run" data-k="run" type="text" maxlength="${SKILL_STEP_LIMITS.run}" value="${esc(this._draft.run)}" placeholder="Start a new session and type \`/{name}\`." />
+                <input id="si-run" data-k="run" type="text" maxlength="${SKILL_STEP_LIMITS.run}" value="${esc2(this._draft.run)}" placeholder="Start a new session and type \`/{name}\`." />
                 <span class="note">Step 3. Put a command in \`backticks\` to show it as code.</span></div>
               <div class="f"><label for="si-local">Only in one project <span class="muted">(optional)</span></label>
-                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc(this._draft.local)}" placeholder="Only want it in one project? Use \`.agents/skills/{name}/\` inside it instead." />
+                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc2(this._draft.local)}" placeholder="Only want it in one project? Use \`.agents/skills/{name}/\` inside it instead." />
                 <span class="note">Shown under the steps.</span></div>
             </div>
             <div>
@@ -12842,7 +13115,7 @@ ${SKILL_BOX_CSS}`;
             </div>
           </div>
           <div class="acts">
-            <button class="save" type="button" data-save${this._dirty() ? "" : " disabled"}>${isNew ? `Add ${esc(name)}` : `Save ${esc(name)} steps`}</button>
+            <button class="save" type="button" data-save${this._dirty() ? "" : " disabled"}>${isNew ? `Add ${esc2(name)}` : `Save ${esc2(name)} steps`}</button>
             ${!isNew && saved?.steps ? '<button class="lk rm" type="button" data-clear>Remove its steps</button>' : ""}
             <p class="hint">Each save opens a pull request that merges on its own. Skill pages show the change after the next site deploy.</p>
           </div>
@@ -12882,7 +13155,7 @@ ${SKILL_BOX_CSS}`;
       const { tabs } = installTabsFromTools({ tools: [{ key, label, folder: d.folder, run: d.run, local: d.local }], targets: [label], name: PREVIEW_NAME });
       const box = tabs.length && d.folder.includes("{name}") ? buildSkillInstallHtml({ tabs }) : "";
       if (box) return `<div class="pv" inert>${box}</div>`;
-      return `<div class="none"><b>No standard steps for ${esc(label)} yet</b><span>A skill made for ${esc(label)} still lists it. Its page shows the author's own Commands and usage text in place of the install box until steps are added here.</span></div>`;
+      return `<div class="none"><b>No standard steps for ${esc2(label)} yet</b><span>A skill made for ${esc2(label)} still lists it. Its page shows the author's own Commands and usage text in place of the install box until steps are added here.</span></div>`;
     }
     async _save() {
       if (!this._dirty()) return;
@@ -12927,7 +13200,7 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/outbound-manager-core.mjs
   var STATUS_LABELS = Object.freeze({ live: "Live", placeholder: "Placeholder", retired: "Retired" });
-  var text = (v) => typeof v === "string" ? v.trim() : "";
+  var text = (v2) => typeof v2 === "string" ? v2.trim() : "";
   function suggestPath(partner) {
     const slug = text(partner).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     return slug ? `/outbound/${slug}` : "";
@@ -12951,10 +13224,10 @@ ${SKILL_BOX_CSS}`;
     const out = { path: before.path };
     let changed = false;
     for (const k of ["destination", "partner", "note"]) {
-      const v = text(draft[k]);
-      if (v === before[k]) continue;
-      if (k !== "note" && !v) return { problem: `${k === "destination" ? "A destination" : "A partner label"} cannot be emptied.` };
-      out[k] = v;
+      const v2 = text(draft[k]);
+      if (v2 === before[k]) continue;
+      if (k !== "note" && !v2) return { problem: `${k === "destination" ? "A destination" : "A partner label"} cannot be emptied.` };
+      out[k] = v2;
       changed = true;
     }
     if (!changed) return { noop: true };
@@ -13003,14 +13276,14 @@ ${SKILL_BOX_CSS}`;
   function cardClicksLine(cta, clicks, now = /* @__PURE__ */ new Date(), days = 30) {
     const path = typeof cta?.trackedPath === "string" ? cta.trackedPath.trim() : "";
     if (!path) return null;
-    const w = windowFor(clicks, path, days, now);
-    if (!w.measured) return `${path} · not measured yet`;
-    const gap = w.unmeasured ? `, ${w.unmeasured} of ${days} days not measured` : "";
-    return `${path} · ${w.clicks} click${w.clicks === 1 ? "" : "s"} in ${days} days${gap}`;
+    const w2 = windowFor(clicks, path, days, now);
+    if (!w2.measured) return `${path} · not measured yet`;
+    const gap = w2.unmeasured ? `, ${w2.unmeasured} of ${days} days not measured` : "";
+    return `${path} · ${w2.clicks} click${w2.clicks === 1 ? "" : "s"} in ${days} days${gap}`;
   }
 
   // client-ui/src/elements/gbti-outbound-link-manager.mjs
-  var SITE9 = "https://gbti.network";
+  var SITE10 = "https://gbti.network";
   var GbtiOutboundLinkManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -13023,11 +13296,11 @@ ${SKILL_BOX_CSS}`;
       this.render();
       try {
         const [links, clicks] = await Promise.all([
-          fetch(`${SITE9}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE10}/outbound-links.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`links ${r.status}`);
             return r.json();
           }),
-          fetch(`${SITE9}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
+          fetch(`${SITE10}/outbound-clicks.json`, { cache: "no-cache" }).then((r) => {
             if (!r.ok) throw new Error(`clicks ${r.status}`);
             return r.json();
           })
@@ -13045,7 +13318,7 @@ ${SKILL_BOX_CSS}`;
     }
     render() {
       if (this._failed) {
-        this.set(this.css(CSS) + `<p class="msg">${esc(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
+        this.set(this.css(CSS) + `<p class="msg">${esc2(this._msg)}</p><button class="btn" type="button" data-retry-load>Try again</button>`);
         this.$("[data-retry-load]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -13058,24 +13331,24 @@ ${SKILL_BOX_CSS}`;
       const latest = coverage.length ? [...coverage].sort().pop() : null;
       const rows = this._links.map((l) => {
         const stats = WINDOWS.map((d) => {
-          const w = windowFor(this._clicks, l.path, d, now);
-          const gap = w.unmeasured ? `<span class="sub gap">${w.unmeasured} of ${d} days not measured</span>` : `<span class="sub">${w.other} other answers</span>`;
-          return `<div class="stat"><b>${w.measured ? w.clicks : "?"}</b> clicks in ${d} days <span class="sub">${w.measured ? `${w.crawlers} from known crawlers` : "nothing measured yet"}</span> ${gap}</div>`;
+          const w2 = windowFor(this._clicks, l.path, d, now);
+          const gap = w2.unmeasured ? `<span class="sub gap">${w2.unmeasured} of ${d} days not measured</span>` : `<span class="sub">${w2.other} other answers</span>`;
+          return `<div class="stat"><b>${w2.measured ? w2.clicks : "?"}</b> clicks in ${d} days <span class="sub">${w2.measured ? `${w2.crawlers} from known crawlers` : "nothing measured yet"}</span> ${gap}</div>`;
         }).join("");
         const w30 = windowFor(this._clicks, l.path, 30, now);
         const history2 = w30.list.map((x) => x.measured ? `<tr><td>${x.date}</td><td>${x.clicks}</td><td>${x.crawlers}</td><td>${x.other}</td></tr>` : `<tr><td>${x.date}</td><td class="gap" colspan="3">not measured</td></tr>`).join("");
         return `<li class="lnk">
-        <div class="top"><span class="path">${esc(l.path)}</span> <span class="partner">${esc(l.partner)}</span> <span class="badge ${esc(l.status)}">${esc(l.status)}</span></div>
-        <span class="dest">to <a href="${esc(l.destination)}" target="_blank" rel="noopener noreferrer">${esc(l.destination)}</a></span>
+        <div class="top"><span class="path">${esc2(l.path)}</span> <span class="partner">${esc2(l.partner)}</span> <span class="badge ${esc2(l.status)}">${esc2(l.status)}</span></div>
+        <span class="dest">to <a href="${esc2(l.destination)}" target="_blank" rel="noopener noreferrer">${esc2(l.destination)}</a></span>
         <div class="stats">${stats}</div>
-        ${l.note ? `<details><summary>Where this destination came from</summary><p class="note">${esc(l.note)}</p></details>` : ""}
+        ${l.note ? `<details><summary>Where this destination came from</summary><p class="note">${esc2(l.note)}</p></details>` : ""}
         <details><summary>Last 30 days, by day</summary><table><thead><tr><th>Day</th><th>Clicks</th><th>Crawlers</th><th>Other</th></tr></thead><tbody>${history2}</tbody></table></details>
         ${this._canWrite() ? this._rowControls(l) : ""}
       </li>`;
       }).join("");
       this.set(this.css(CSS) + `
-      <div class="head"><span class="hint">${this._links.length} links. Clicks are estimates from Cloudflare zone analytics: 301 answers only, rolled up daily by reconcile. ${latest ? `Measured through ${esc(latest)}.` : "Nothing measured yet: the first rollup lands with the next daily reconcile."}</span></div>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      <div class="head"><span class="hint">${this._links.length} links. Clicks are estimates from Cloudflare zone analytics: 301 answers only, rolled up daily by reconcile. ${latest ? `Measured through ${esc2(latest)}.` : "Nothing measured yet: the first rollup lands with the next daily reconcile."}</span></div>
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       ${this._canWrite() ? this._addForm() : ""}
       <ul class="list">${rows || '<li class="muted">No outbound links in the store.</li>'}</ul>
     `);
@@ -13088,30 +13361,30 @@ ${SKILL_BOX_CSS}`;
     _addForm() {
       const d = this._new || {};
       if (!this._adding) return `<div class="newlink"><button class="btn" type="button" data-new>Add a tracked link</button></div>`;
-      const f = (k, label, ph) => `<label>${label}<input data-nf="${k}" value="${esc(d[k] || "")}" placeholder="${esc(ph)}"></label>`;
+      const f = (k, label, ph) => `<label>${label}<input data-nf="${k}" value="${esc2(d[k] || "")}" placeholder="${esc2(ph)}"></label>`;
       return `<div class="newlink edit">
       ${f("partner", "Partner (a short lowercase label)", "acme")}
       ${f("path", "Site path", "/outbound/acme")}
       ${f("destination", "Destination", "https://acme.example.com/?ref=YOURCODE")}
       ${f("note", "Note (where this destination came from)", "")}
-      ${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}
+      ${this._err ? `<p class="err">${esc2(this._err)}</p>` : ""}
       <div class="acts"><button class="btn" type="button" data-save-new ${this._busy ? "disabled" : ""}>${this._busy ? "Saving..." : "Mint the link"}</button><button class="btn" type="button" data-cancel-new>Cancel</button></div>
     </div>`;
     }
     _rowControls(l) {
       const editing = this._editing === l.path;
-      const status = LINK_STATUSES.map((v) => `<button class="btn ${String(l.status || "live") === v ? "on" : ""}" type="button" data-status="${esc(v)}" data-path="${esc(l.path)}">${esc(STATUS_LABELS[v])}</button>`).join("");
-      if (!editing) return `<div class="acts">${status}<button class="btn" type="button" data-edit="${esc(l.path)}">Edit</button></div>`;
+      const status = LINK_STATUSES.map((v2) => `<button class="btn ${String(l.status || "live") === v2 ? "on" : ""}" type="button" data-status="${esc2(v2)}" data-path="${esc2(l.path)}">${esc2(STATUS_LABELS[v2])}</button>`).join("");
+      if (!editing) return `<div class="acts">${status}<button class="btn" type="button" data-edit="${esc2(l.path)}">Edit</button></div>`;
       const d = this._draft || draftFromLink(l);
-      const f = (k, label) => `<label>${label}<input data-ef="${k}" value="${esc(d[k] || "")}"></label>`;
+      const f = (k, label) => `<label>${label}<input data-ef="${k}" value="${esc2(d[k] || "")}"></label>`;
       return `<div class="acts">${status}</div>
       <div class="edit">
         ${f("destination", "Destination")}
         ${f("partner", "Partner")}
         ${f("note", "Note")}
-        <p class="sub">The path stays ${esc(l.path)}. Repointing keeps it, so this link keeps one click history.</p>
-        ${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}
-        <div class="acts"><button class="btn" type="button" data-save-edit="${esc(l.path)}" ${this._busy ? "disabled" : ""}>${this._busy ? "Saving..." : "Save"}</button><button class="btn" type="button" data-cancel-edit>Cancel</button></div>
+        <p class="sub">The path stays ${esc2(l.path)}. Repointing keeps it, so this link keeps one click history.</p>
+        ${this._err ? `<p class="err">${esc2(this._err)}</p>` : ""}
+        <div class="acts"><button class="btn" type="button" data-save-edit="${esc2(l.path)}" ${this._busy ? "disabled" : ""}>${this._busy ? "Saving..." : "Save"}</button><button class="btn" type="button" data-cancel-edit>Cancel</button></div>
       </div>`;
     }
     _wire() {
@@ -13238,33 +13511,33 @@ ${SKILL_BOX_CSS}`;
     transform: TRANSFORM
   });
   var ROOT_ATTRS = Object.freeze(["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "fill-rule", "clip-rule", "opacity"]);
-  var isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
-  function attrProblems(attrs, allowed, at, budget) {
+  var isMap = (v2) => !!v2 && typeof v2 === "object" && !Array.isArray(v2);
+  function attrProblems(attrs, allowed, at2, budget) {
     const problems = [];
     if (attrs === void 0) return problems;
-    if (!isMap(attrs)) return [`${at}: attrs must be a map`];
+    if (!isMap(attrs)) return [`${at2}: attrs must be a map`];
     for (const [k, raw] of Object.entries(attrs)) {
       if (!allowed.includes(k)) {
-        problems.push(`${at}: attribute "${k}" is not allowed in an icon`);
+        problems.push(`${at2}: attribute "${k}" is not allowed in an icon`);
         continue;
       }
       if (typeof raw !== "string" && typeof raw !== "number") {
-        problems.push(`${at}: attribute "${k}" must be a string or number`);
+        problems.push(`${at2}: attribute "${k}" must be a string or number`);
         continue;
       }
-      const v = String(raw);
-      budget.total += v.length;
-      if (v.length > ICON_LIMITS.value) problems.push(`${at}: attribute "${k}" is too long`);
-      else if (!ATTRS2[k].test(v)) problems.push(`${at}: attribute "${k}" has a value an icon may not carry`);
+      const v2 = String(raw);
+      budget.total += v2.length;
+      if (v2.length > ICON_LIMITS.value) problems.push(`${at2}: attribute "${k}" is too long`);
+      else if (!ATTRS2[k].test(v2)) problems.push(`${at2}: attribute "${k}" has a value an icon may not carry`);
     }
     return problems;
   }
-  function shapeProblems(shapes, at, depth, budget) {
-    if (!Array.isArray(shapes)) return [`${at}: shapes must be a list`];
-    if (depth > ICON_LIMITS.depth) return [`${at}: shapes are nested too deeply`];
+  function shapeProblems(shapes, at2, depth, budget) {
+    if (!Array.isArray(shapes)) return [`${at2}: shapes must be a list`];
+    if (depth > ICON_LIMITS.depth) return [`${at2}: shapes are nested too deeply`];
     const problems = [];
     shapes.forEach((s, i) => {
-      const here = `${at}[${i}]`;
+      const here = `${at2}[${i}]`;
       budget.nodes += 1;
       if (!isMap(s)) {
         problems.push(`${here}: must be a map of { tag, attrs }`);
@@ -13298,8 +13571,8 @@ ${SKILL_BOX_CSS}`;
     if (budget.total > ICON_LIMITS.total) problems.push(`${where}: the icon is too large`);
     return problems;
   }
-  var escAttr4 = (v) => String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  var attrString = (attrs) => Object.entries(isMap(attrs) ? attrs : {}).map(([k, v]) => ` ${k}="${escAttr4(v)}"`).join("");
+  var escAttr4 = (v2) => String(v2).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  var attrString = (attrs) => Object.entries(isMap(attrs) ? attrs : {}).map(([k, v2]) => ` ${k}="${escAttr4(v2)}"`).join("");
   function shapesSvg(shapes) {
     return (Array.isArray(shapes) ? shapes : []).map((s) => {
       if (!isMap(s) || !ICON_TAGS.includes(s.tag)) return "";
@@ -13318,11 +13591,11 @@ ${SKILL_BOX_CSS}`;
   var CTA_LAYOUT_NAMES = Object.freeze({ below: "Image below", first: "Image first", compact: "Compact", image: "Image only", html: "HTML block", text: "Text only" });
   var ctaLayoutOf = (cta) => CTA_LAYOUTS.includes(cta?.layout) ? cta.layout : "text";
   function layoutUses(layout) {
-    const L = CTA_LAYOUTS.includes(layout) ? layout : "text";
-    const words = L === "below" || L === "first" || L === "compact" || L === "text";
-    return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
+    const L2 = CTA_LAYOUTS.includes(layout) ? layout : "text";
+    const words = L2 === "below" || L2 === "first" || L2 === "compact" || L2 === "text";
+    return { line: words, button: words, icon: words, link: L2 !== "html", image: L2 === "below" || L2 === "first" || L2 === "compact" || L2 === "image", html: L2 === "html" };
   }
-  var esc3 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc4 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function destinationHost(destination) {
     try {
@@ -13332,33 +13605,33 @@ ${SKILL_BOX_CSS}`;
     }
   }
   function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
-    const L = ctaLayoutOf(cta);
-    const uses = layoutUses(L);
-    const href = esc3(hrefOverride || cta?.destination);
+    const L2 = ctaLayoutOf(cta);
+    const uses = layoutUses(L2);
+    const href = esc4(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
-    const dim = (k, v) => Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : "";
-    const img = (alt) => image && image.url ? `<img src="${esc3(image.url)}" alt="${esc3(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
-    if (L === "image") {
-      return `${linkOpen("pcta-io", ` aria-label="${esc3(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc3(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+    const dim = (k, v2) => Number.isInteger(v2) && v2 > 0 ? ` ${k}="${v2}"` : "";
+    const img = (alt) => image && image.url ? `<img src="${esc4(image.url)}" alt="${esc4(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    if (L2 === "image") {
+      return `${linkOpen("pcta-io", ` aria-label="${esc4(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc4(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
     }
     const parts = [];
-    if (L === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
-    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc3(cta?.label)}</p><p class="pcta-line">${esc3(cta?.line)}</p></div></div>`);
-    const showTitle = L === "below" || L === "first" || L === "text" || L === "html" && cta?.showTitle !== false;
-    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc3(cta?.label)}</p>`);
-    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc3(cta?.line)}</p>`);
-    if (L === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
-    if (L === "html") {
+    if (L2 === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
+    if (L2 === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc4(cta?.label)}</p><p class="pcta-line">${esc4(cta?.line)}</p></div></div>`);
+    const showTitle = L2 === "below" || L2 === "first" || L2 === "text" || L2 === "html" && cta?.showTitle !== false;
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc4(cta?.label)}</p>`);
+    if (L2 === "below" || L2 === "first" || L2 === "text") parts.push(`<p class="pcta-line">${esc4(cta?.line)}</p>`);
+    if (L2 === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
+    if (L2 === "html") {
       const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
       if (preview) {
-        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc3(h)}</span>`).join("");
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc4(h)}</span>`).join("");
         parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
       } else {
         parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
       }
     }
-    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc3(cta?.button)}</span>${ARROW}${linkClose}`);
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc4(cta?.button)}</span>${ARROW}${linkClose}`);
     return parts.join("");
   }
   var CTA_CARD_CSS = `
@@ -13400,20 +13673,20 @@ ${SKILL_BOX_CSS}`;
   var CTA_IMAGE_MAX_BYTES = 4e5;
   var CTA_IMAGE_FILE_RE = /^[a-z0-9][a-z0-9-]*\.webp$/;
   var METADATA_CHUNKS = { EXIF: "EXIF (camera) data", "XMP ": "XMP metadata", ICCP: "an ICC colour profile" };
-  var fourcc = (b, at) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
-  var u32 = (b, at) => (b[at] | b[at + 1] << 8 | b[at + 2] << 16 | b[at + 3] << 24) >>> 0;
-  var u24 = (b, at) => b[at] | b[at + 1] << 8 | b[at + 2] << 16;
+  var fourcc = (b, at2) => String.fromCharCode(b[at2], b[at2 + 1], b[at2 + 2], b[at2 + 3]);
+  var u32 = (b, at2) => (b[at2] | b[at2 + 1] << 8 | b[at2 + 2] << 16 | b[at2 + 3] << 24) >>> 0;
+  var u24 = (b, at2) => b[at2] | b[at2 + 1] << 8 | b[at2 + 2] << 16;
   function webpInfo(bytes) {
     const b = bytes instanceof Uint8Array ? bytes : null;
     if (!b) return { ok: false, problem: "the image is not binary data" };
     if (b.length > CTA_IMAGE_MAX_BYTES) return { ok: false, problem: `the image is ${Math.ceil(b.length / 1024)} KB; the limit is ${Math.floor(CTA_IMAGE_MAX_BYTES / 1e3)} KB` };
     if (b.length < 20 || fourcc(b, 0) !== "RIFF" || fourcc(b, 8) !== "WEBP") return { ok: false, problem: "the image is not a WebP file" };
     if (u32(b, 4) + 8 > b.length) return { ok: false, problem: "the WebP file is truncated" };
-    let at = 12, width = 0, height = 0, image = false;
-    while (at + 8 <= b.length) {
-      const id = fourcc(b, at);
-      const size = u32(b, at + 4);
-      const body = at + 8;
+    let at2 = 12, width = 0, height = 0, image = false;
+    while (at2 + 8 <= b.length) {
+      const id = fourcc(b, at2);
+      const size = u32(b, at2 + 4);
+      const body = at2 + 8;
       if (body + size > b.length) return { ok: false, problem: `the WebP ${id.trim()} chunk is truncated` };
       if (METADATA_CHUNKS[id]) return { ok: false, problem: `the image still carries ${METADATA_CHUNKS[id]}; re-encode it so it is removed` };
       if (id === "ANIM" || id === "ANMF") return { ok: false, problem: "animated images are not supported on a card" };
@@ -13440,7 +13713,7 @@ ${SKILL_BOX_CSS}`;
         }
         image = true;
       }
-      at = body + size + size % 2;
+      at2 = body + size + size % 2;
     }
     if (!image) return { ok: false, problem: "the WebP file has no image data" };
     if (!width || !height) return { ok: false, problem: "the WebP file has no dimensions" };
@@ -13452,21 +13725,21 @@ ${SKILL_BOX_CSS}`;
     const end = u32(b, 4) + 8;
     if (end > b.length) return null;
     const keep = [];
-    let at = 12;
-    while (at + 8 <= end) {
-      const size = u32(b, at + 4);
-      if (at + 8 + size > end) return null;
-      const next = Math.min(at + 8 + size + size % 2, end);
-      if (!METADATA_CHUNKS[fourcc(b, at)]) keep.push([at, next]);
-      at = next;
+    let at2 = 12;
+    while (at2 + 8 <= end) {
+      const size = u32(b, at2 + 4);
+      if (at2 + 8 + size > end) return null;
+      const next = Math.min(at2 + 8 + size + size % 2, end);
+      if (!METADATA_CHUNKS[fourcc(b, at2)]) keep.push([at2, next]);
+      at2 = next;
     }
     const out = new Uint8Array(12 + keep.reduce((n, [s, e]) => n + e - s, 0));
     out.set(b.subarray(0, 12));
-    let w = 12;
+    let w2 = 12;
     for (const [s, e] of keep) {
-      out.set(b.subarray(s, e), w);
-      if (fourcc(out, w) === "VP8X") out[w + 8] &= ~44;
-      w += e - s;
+      out.set(b.subarray(s, e), w2);
+      if (fourcc(out, w2) === "VP8X") out[w2 + 8] &= ~44;
+      w2 += e - s;
     }
     new DataView(out.buffer).setUint32(4, out.length - 8, true);
     return out;
@@ -13476,14 +13749,14 @@ ${SKILL_BOX_CSS}`;
   // membership/cta-edits.mjs
   var CTA_ITEM_TYPES = Object.freeze(["prompt", "post", "project", "share"]);
   var CTA_LIMITS = Object.freeze({ id: 64, label: 80, line: 200, button: 40, destination: 500, partner: 24, note: 1e3, ref: 160, html: 2e4, image: 80, hosts: 8, host: 200, trackedPath: 200 });
-  var ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+  var ID_RE2 = /^[a-z0-9][a-z0-9-]*$/;
   var SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
   var SHARE_REF_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
   var TRACKED_PATH_RE = /^\/[A-Za-z0-9/_-]*$/;
   var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
   var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
-  var str3 = (v) => typeof v === "string" ? v.trim() : "";
+  var str3 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   function validRef(type, ref) {
     const r = str3(ref);
     if (!r || r.length > CTA_LIMITS.ref) return false;
@@ -13501,12 +13774,12 @@ ${SKILL_BOX_CSS}`;
     return null;
   }
   function trackedPathProblem(trackedPath) {
-    const v = str3(trackedPath);
-    if (!v) return null;
-    if (v.length > CTA_LIMITS.trackedPath) return `trackedPath is too long (max ${CTA_LIMITS.trackedPath} chars)`;
-    if (!v.startsWith("/")) return `trackedPath must be a site path beginning with / (a tracked link is served by this site), got ${JSON.stringify(trackedPath)}`;
-    if (!TRACKED_PATH_RE.test(v)) return `trackedPath must be a plain site path with no query, fragment or whitespace, got ${JSON.stringify(trackedPath)}`;
-    if (!v.startsWith("/outbound/") || v === "/outbound/") return `trackedPath must be an /outbound/ path, got ${JSON.stringify(trackedPath)}`;
+    const v2 = str3(trackedPath);
+    if (!v2) return null;
+    if (v2.length > CTA_LIMITS.trackedPath) return `trackedPath is too long (max ${CTA_LIMITS.trackedPath} chars)`;
+    if (!v2.startsWith("/")) return `trackedPath must be a site path beginning with / (a tracked link is served by this site), got ${JSON.stringify(trackedPath)}`;
+    if (!TRACKED_PATH_RE.test(v2)) return `trackedPath must be a plain site path with no query, fragment or whitespace, got ${JSON.stringify(trackedPath)}`;
+    if (!v2.startsWith("/outbound/") || v2 === "/outbound/") return `trackedPath must be an /outbound/ path, got ${JSON.stringify(trackedPath)}`;
     return null;
   }
   function htmlHrefs(html) {
@@ -13537,7 +13810,7 @@ ${SKILL_BOX_CSS}`;
     const problems = [];
     if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
     const id = str3(e.id);
-    if (!id || !ID_RE.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
+    if (!id || !ID_RE2.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
     if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
     const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
     const uses = layoutUses(layout);
@@ -13546,10 +13819,10 @@ ${SKILL_BOX_CSS}`;
         problems.push(`${where}: ${k} must be text`);
         continue;
       }
-      const v = str3(e[k]);
-      if (!v) {
+      const v2 = str3(e[k]);
+      if (!v2) {
         if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
-      } else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
+      } else if (v2.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
     }
     const dest = str3(e.destination);
     let u = null;
@@ -13587,7 +13860,7 @@ ${SKILL_BOX_CSS}`;
       }
     }
     const partner = str3(e.partner);
-    if (!partner || !ID_RE.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
+    if (!partner || !ID_RE2.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
     if (partner === "amazon" && u) {
       const why = amazonDestinationProblem(dest);
       if (why) problems.push(`${where}: ${why}`);
@@ -13604,22 +13877,22 @@ ${SKILL_BOX_CSS}`;
     if (e.note !== void 0 && e.note !== null && (typeof e.note !== "string" || e.note.length > CTA_LIMITS.note)) problems.push(`${where}: note must be a string (max ${CTA_LIMITS.note} chars)`);
     if (e.items !== void 0 && !Array.isArray(e.items)) problems.push(`${where}: items must be a list of { type, ref }`);
     const seen = /* @__PURE__ */ new Set();
-    for (const [i, it] of (Array.isArray(e.items) ? e.items : []).entries()) {
-      const at = `${where}.items[${i}]`;
-      if (!it || typeof it !== "object") {
-        problems.push(`${at}: must be a map of { type, ref }`);
+    for (const [i, it2] of (Array.isArray(e.items) ? e.items : []).entries()) {
+      const at2 = `${where}.items[${i}]`;
+      if (!it2 || typeof it2 !== "object") {
+        problems.push(`${at2}: must be a map of { type, ref }`);
         continue;
       }
-      if (!CTA_ITEM_TYPES.includes(it.type)) {
-        problems.push(`${at}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it.type ?? null)}`);
+      if (!CTA_ITEM_TYPES.includes(it2.type)) {
+        problems.push(`${at2}: type must be one of ${CTA_ITEM_TYPES.join(", ")}, got ${JSON.stringify(it2.type ?? null)}`);
         continue;
       }
-      if (!validRef(it.type, it.ref)) {
-        problems.push(`${at}: ref must be a ${it.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it.ref ?? null)}`);
+      if (!validRef(it2.type, it2.ref)) {
+        problems.push(`${at2}: ref must be a ${it2.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it2.ref ?? null)}`);
         continue;
       }
-      const key = `${it.type}:${str3(it.ref)}`;
-      if (seen.has(key)) problems.push(`${at}: ${key} is assigned to this CTA twice`);
+      const key = `${it2.type}:${str3(it2.ref)}`;
+      if (seen.has(key)) problems.push(`${at2}: ${key} is assigned to this CTA twice`);
       seen.add(key);
     }
     return problems;
@@ -13649,8 +13922,8 @@ ${SKILL_BOX_CSS}`;
     text: "Title, sentence, button"
   });
   var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
-  var ID_RE2 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  var str4 = (v) => typeof v === "string" ? v : "";
+  var ID_RE3 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  var str4 = (v2) => typeof v2 === "string" ? v2 : "";
   var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
   function draftFromCta(c, { imageUrl = null } = {}) {
     return {
@@ -13667,7 +13940,7 @@ ${SKILL_BOX_CSS}`;
       html: str4(c?.html),
       showTitle: c?.showTitle !== false,
       hosts: Array.isArray(c?.hosts) ? c.hosts.filter((h) => typeof h === "string") : [],
-      items: (Array.isArray(c?.items) ? c.items : []).filter((it) => it && typeof it === "object").map((it) => ({ type: it.type, ref: str4(it.ref) })),
+      items: (Array.isArray(c?.items) ? c.items : []).filter((it2) => it2 && typeof it2 === "object").map((it2) => ({ type: it2.type, ref: str4(it2.ref) })),
       image: typeof c?.image === "string" ? { kind: "stored", file: c.image, url: imageUrl } : { kind: "none" }
     };
   }
@@ -13693,7 +13966,7 @@ ${SKILL_BOX_CSS}`;
     const live = {};
     const uses = layoutUses(d.layout);
     if (isNew) {
-      if (!ID_RE2.test(d.id.trim()) || d.id.trim().length > CTA_LIMITS.id) errors.id = "Use lowercase words joined by hyphens.";
+      if (!ID_RE3.test(d.id.trim()) || d.id.trim().length > CTA_LIMITS.id) errors.id = "Use lowercase words joined by hyphens.";
       else if (taken.has(d.id.trim())) errors.id = "Another call-to-action already uses this id.";
     }
     if (!d.label.trim()) errors.label = d.layout === "image" ? "A title is required. It becomes the image description." : "A title is required.";
@@ -13738,8 +14011,8 @@ ${SKILL_BOX_CSS}`;
     const o = original || {};
     const fields = { id: o.id };
     const changed = [];
-    const set = (k, v) => {
-      fields[k] = v;
+    const set = (k, v2) => {
+      fields[k] = v2;
       changed.push(k);
     };
     for (const k of ["label", "line", "button", "destination", "partner", "note", "html"]) {
@@ -13751,7 +14024,7 @@ ${SKILL_BOX_CSS}`;
     if (o.showTitle !== false !== (d.showTitle !== false)) set("showTitle", d.showTitle === false ? false : null);
     const oHosts = Array.isArray(o.hosts) ? o.hosts : [];
     if (!sameJson(d.hosts, oHosts)) set("hosts", d.hosts.length ? d.hosts : null);
-    const oItems = (Array.isArray(o.items) ? o.items : []).map((it) => ({ type: it.type, ref: str4(it.ref) }));
+    const oItems = (Array.isArray(o.items) ? o.items : []).map((it2) => ({ type: it2.type, ref: str4(it2.ref) }));
     if (!sameJson(d.items, oItems)) set("items", d.items);
     if (o.enabled === true !== (d.enabled === true)) set("enabled", d.enabled === true);
     if (d.image.kind === "upload") set("imageBase64", d.image.base64);
@@ -13759,9 +14032,9 @@ ${SKILL_BOX_CSS}`;
     return { fields, changed };
   }
   function normalizeHost(raw) {
-    const v = String(raw ?? "").trim().replace(/\/+$/, "").toLowerCase();
-    if (!CTA_HOST_RE.test(v)) return { ok: false, problem: "Enter an address like https://widgets.partner.com, with no path." };
-    return { ok: true, host: v };
+    const v2 = String(raw ?? "").trim().replace(/\/+$/, "").toLowerCase();
+    if (!CTA_HOST_RE.test(v2)) return { ok: false, problem: "Enter an address like https://widgets.partner.com, with no path." };
+    return { ok: true, host: v2 };
   }
   function foundHosts(html, hosts = []) {
     const found = [];
@@ -13777,10 +14050,10 @@ ${SKILL_BOX_CSS}`;
     return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str4(p.ref)).map((p) => ({ type: p.type, ref: str4(p.ref), title: str4(p.title) || str4(p.ref) }));
   }
   function pageCandidates(pages, query, items = [], limit = 6) {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return [];
-    const taken = new Set(items.map((it) => `${it.type}:${it.ref}`));
-    return (Array.isArray(pages) ? pages : []).filter((p) => !taken.has(`${p.type}:${p.ref}`) && (p.title.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q))).slice(0, limit);
+    const q2 = String(query || "").trim().toLowerCase();
+    if (!q2) return [];
+    const taken = new Set(items.map((it2) => `${it2.type}:${it2.ref}`));
+    return (Array.isArray(pages) ? pages : []).filter((p) => !taken.has(`${p.type}:${p.ref}`) && (p.title.toLowerCase().includes(q2) || p.ref.toLowerCase().includes(q2))).slice(0, limit);
   }
   function rowSummary2(c) {
     if (c?.layout === "html") {
@@ -13795,7 +14068,7 @@ ${SKILL_BOX_CSS}`;
   }
 
   // client-ui/src/cta-manager-view.mjs
-  var esc4 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc5 = (v2) => String(v2 ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var SVG = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -13818,23 +14091,23 @@ ${SKILL_BOX_CSS}`;
     return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
   }
   var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
-  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc4(problem)}).</p>
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc5(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
     const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
-      return `<li class="${on ? "c" : "c off"}" data-cta="${esc4(c.id)}">
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc5(c.id)}">
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
-        <div class="top"><span class="label">${esc4(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc4(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc4(rowSummary2(c))}</p>
-        <p class="sub mono">${esc4(c.partner || "no partner")} · on ${plural(n)}</p>
-        ${clicks ? `<p class="sub mono tracked">${esc4(clicks)}</p>` : ""}
+        <div class="top"><span class="label">${esc5(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc5(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc5(rowSummary2(c))}</p>
+        <p class="sub mono">${esc5(c.partner || "no partner")} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc5(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
-        <button class="lk" type="button" data-act="edit" data-id="${esc4(c.id)}"${busy ? " disabled" : ""}>Edit</button>
-        <button class="lk" type="button" data-act="toggle" data-id="${esc4(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+        <button class="lk" type="button" data-act="edit" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc5(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
       </div>
     </li>`;
     }).join("");
@@ -13843,130 +14116,130 @@ ${SKILL_BOX_CSS}`;
       <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
       <button class="btn" type="button" data-act="new">New call-to-action</button>
     </div>
-    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc4(msg)}</p>` : ""}
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc5(msg)}</p>` : ""}
     <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
   </div>`;
   }
-  var editTitle = (st) => st.isNew ? "New call-to-action" : `Edit: ${st.d.label.trim() || "call-to-action"}`;
-  var shownError = (st, k) => st.v.errors[k] && (st.tried || st.v.live[k]) ? st.v.errors[k] : "";
-  function field(st, k, label, { wide = false, area: area2 = false, placeholder = "" } = {}) {
-    const err = shownError(st, k);
+  var editTitle = (st2) => st2.isNew ? "New call-to-action" : `Edit: ${st2.d.label.trim() || "call-to-action"}`;
+  var shownError = (st2, k) => st2.v.errors[k] && (st2.tried || st2.v.live[k]) ? st2.v.errors[k] : "";
+  function field(st2, k, label, { wide = false, area: area2 = false, placeholder = "" } = {}) {
+    const err = shownError(st2, k);
     const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
-    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc4(placeholder)}">${esc4(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc4(st.d[k])}" placeholder="${esc4(placeholder)}">`;
-    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc4(err)}</span></label>`;
+    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc5(placeholder)}">${esc5(st2.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc5(st2.d[k])}" placeholder="${esc5(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc5(err)}</span></label>`;
   }
-  function layoutSection(st) {
-    const tiles = CTA_LAYOUTS.map((k) => `<button class="${st.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st.d.layout === k}">
-    ${SKETCH[k]}<div><p class="tile-n">${esc4(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc4(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
-    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc4(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+  function layoutSection(st2) {
+    const tiles = CTA_LAYOUTS.map((k) => `<button class="${st2.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st2.d.layout === k}">
+    ${SKETCH[k]}<div><p class="tile-n">${esc5(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc5(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc5(LAYOUT_HINT[st2.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
   }
-  function wordsSection(st) {
-    const u = layoutUses(st.d.layout);
+  function wordsSection(st2) {
+    const u = layoutUses(st2.d.layout);
     return `<div class="sec"><div class="sec-h"><h4>Words and link</h4></div><div class="form">
-    ${st.isNew ? field(st, "id", "Id, set once", { placeholder: "stranger-in-a-strange-land" }) : ""}
-    ${field(st, "label", "Title", { placeholder: "Stranger in a Strange Land" })}
-    ${field(st, "partner", "Partner", { placeholder: "amazon" })}
-    ${u.line ? field(st, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
-    ${u.button ? field(st, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
-    ${u.link ? field(st, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
-    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc4(st.d.note)}</textarea></label>
-    <label class="check fld wide"><input type="checkbox" data-f="enabled"${st.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
+    ${st2.isNew ? field(st2, "id", "Id, set once", { placeholder: "stranger-in-a-strange-land" }) : ""}
+    ${field(st2, "label", "Title", { placeholder: "Stranger in a Strange Land" })}
+    ${field(st2, "partner", "Partner", { placeholder: "amazon" })}
+    ${u.line ? field(st2, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
+    ${u.button ? field(st2, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
+    ${u.link ? field(st2, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc5(st2.d.note)}</textarea></label>
+    <label class="check fld wide"><input type="checkbox" data-f="enabled"${st2.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
   </div></div>`;
   }
-  function imageBody(st) {
-    const img = st.d.image;
-    const err = shownError(st, "image");
+  function imageBody(st2) {
+    const img = st2.d.image;
+    const err = shownError(st2, "image");
     let body;
     if (img.kind === "none") {
-      body = `<div class="${st.drag ? "drop on" : err ? "drop err" : "drop"}" data-drop>
+      body = `<div class="${st2.drag ? "drop on" : err ? "drop err" : "drop"}" data-drop>
       <span class="drop-ic">${SVG.upload}</span>
       <div class="imgmeta"><p class="drop-t">Drop an image here, or choose one</p>
         <p class="imginfo">JPEG, PNG, WebP, GIF or AVIF. Saved as WebP, with camera and location data removed before it leaves your browser.</p></div>
       <label class="lk pick-file">Choose image<input type="file" accept="${ACCEPT}" data-file></label>
     </div>`;
     } else {
-      const name = img.kind === "upload" ? `${st.d.id.trim() || "new-call-to-action"}.webp` : img.file;
+      const name = img.kind === "upload" ? `${st2.d.id.trim() || "new-call-to-action"}.webp` : img.file;
       const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
       const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
       body = `<div class="imgrow">
-      ${img.url ? `<img src="${esc4(img.url)}" alt="" data-stored-img>` : ""}
-      <div class="imgmeta"><p class="imgname">${esc4(name)}</p>
+      ${img.url ? `<img src="${esc5(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc5(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
         <p class="imginfo"><span class="shield">${SVG.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
         <button class="lk danger" type="button" data-act="remove-image">Remove</button></div>
     </div>`;
     }
-    return `${body}${st.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
-    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc4(err)}</p>
-    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc4(st.imageMsg)}</p>` : ""}`;
+    return `${body}${st2.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc5(err)}</p>
+    ${st2.imageMsg ? `<p class="et" style="margin-top: 6px">${esc5(st2.imageMsg)}</p>` : ""}`;
   }
-  function iconResults(st) {
-    const ic3 = st.icons;
-    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc4(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+  function iconResults(st2) {
+    const ic3 = st2.icons;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc5(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
     if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
-    const q = st.iconQuery.trim();
-    const count2 = !q ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
-    const sel = st.d.icon;
-    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc4(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc4(i.name)}</span></button>`).join("");
+    const q2 = st2.iconQuery.trim();
+    const count2 = !q2 ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
+    const sel = st2.d.icon;
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc5(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc5(i.name)}</span></button>`).join("");
     return `<p class="ip-count">${count2}</p><div class="ip-grid">${cells}</div>`;
   }
-  function iconSection(st) {
-    const sel = st.d.icon;
-    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc4(s.id)}">${esc4(s.name)}</button>`).join("") : "";
-    const pop = st.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc4(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+  function iconSection(st2) {
+    const sel = st2.d.icon;
+    const chips = st2.icons.status === "ready" ? [{ id: "", name: "All" }, ...st2.icons.sets].map((s) => `<button class="${st2.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc5(s.id)}">${esc5(s.name)}</button>`).join("") : "";
+    const pop = st2.pickerOpen ? `<div class="ip-pop">
+      <label class="srch">${SVG.search}<input type="text" data-q="icons" value="${esc5(st2.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
-      <div data-region="icons">${iconResults(st)}</div>
+      <div data-region="icons">${iconResults(st2)}</div>
     </div>` : "";
     return `<div class="sec"><div class="sec-h"><h4>Button icon</h4><span class="hint">Optional. Shown left of the button text.</span></div>
     <div class="ip-row">
-      <button class="${st.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st.pickerOpen}">
+      <button class="${st2.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st2.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc4(sel ? sel.name : "Choose an icon")}</b><span>${esc4(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
+        <span class="ip-name"><b>${esc5(sel ? sel.name : "Choose an icon")}</b><span>${esc5(sel ? sel.set : "No icon on the button")}</span></span>${SVG.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
   }
   function foundLine(found) {
     if (!found.length) return "";
-    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc4(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc4(h)}">Allow</button>`).join("")}</div>`;
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc5(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc5(h)}">Allow</button>`).join("")}</div>`;
   }
-  function htmlSection(st, found) {
-    const d = st.d;
-    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc4(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc4(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
-    const err = shownError(st, "html");
+  function htmlSection(st2, found) {
+    const d = st2.d;
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc5(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc5(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const err = shownError(st2, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
     <div class="warnbox">${SVG.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
-        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc4(d.html)}</textarea>
-        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc4(err)}</span></label>
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc5(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc5(err)}</span></label>
     </div>
     <div style="margin-top: 16px">
       <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
       ${hosts}
       <div data-region="found">${foundLine(found)}</div>
-      <div class="hostadd"><input type="text" data-q="host" value="${esc4(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
-      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc4(st.hostErr)}</p>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc5(st2.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st2.hostErr ? "" : " hidden"}>${esc5(st2.hostErr)}</p>
     </div></div>`;
   }
-  function candidateList(st) {
-    if (!st.pageQuery.trim()) return "";
-    if (!st.cands.length) return '<p class="empty">No pages match.</p>';
-    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc4(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc4(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+  function candidateList(st2) {
+    if (!st2.pageQuery.trim()) return "";
+    if (!st2.cands.length) return '<p class="empty">No pages match.</p>';
+    return `<ul class="results">${st2.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc5(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc5(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
   }
-  function pagesSection(st) {
-    const d = st.d;
-    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc4(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc4(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+  function pagesSection(st2) {
+    const d = st2.d;
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it2, n) => `<li class="it"><span class="ty">${esc5(TYPE_LABEL4[it2.type] || it2.type)}</span><span class="t">${esc5(st2.titleOf(it2))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc4(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
-    <div data-region="cands">${candidateList(st)}</div></div>`;
+    <label class="srch">${SVG.search}<input type="text" data-q="pages" value="${esc5(st2.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <div data-region="cands">${candidateList(st2)}</div></div>`;
   }
-  function previewCard(st) {
-    const d = st.d;
+  function previewCard(st2) {
+    const d = st2.d;
     const u = layoutUses(d.layout);
     const card = {
       id: d.id,
@@ -13982,39 +14255,39 @@ ${SKILL_BOX_CSS}`;
     };
     const img = d.image;
     const image = u.image && img.kind !== "none" && img.url ? { url: img.url, width: img.width, height: img.height } : null;
-    return cardPreview(card, { image, dark: st.pvDark, phone: st.pvPhone });
+    return cardPreview(card, { image, dark: st2.pvDark, phone: st2.pvPhone });
   }
-  function previewAside(st) {
+  function previewAside(st2) {
     const seg = (on, act, text2) => `<button class="${on ? "seg on" : "seg"}" type="button" data-act="${act}" aria-pressed="${on}">${text2}</button>`;
     return `<aside class="ed-prev">
     <div class="pv-bar"><h4>Preview</h4>
-      <div class="segs">${seg(!st.pvDark, "pv-light", "Light")}${seg(st.pvDark, "pv-dark", "Dark")}</div>
-      <div class="segs">${seg(!st.pvPhone, "pv-side", "Sidebar")}${seg(st.pvPhone, "pv-phone", "Phone")}</div>
+      <div class="segs">${seg(!st2.pvDark, "pv-light", "Light")}${seg(st2.pvDark, "pv-dark", "Dark")}</div>
+      <div class="segs">${seg(!st2.pvPhone, "pv-side", "Sidebar")}${seg(st2.pvPhone, "pv-phone", "Phone")}</div>
     </div>
-    <div class="${st.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st)}</div>
-    <p class="pv-note" data-region="pvnote">${esc4(previewNote(st.d))}</p>
+    <div class="${st2.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st2)}</div>
+    <p class="pv-note" data-region="pvnote">${esc5(previewNote(st2.d))}</p>
   </aside>`;
   }
-  function editorView(st, found = []) {
-    const u = layoutUses(st.d.layout);
+  function editorView(st2, found = []) {
+    const u = layoutUses(st2.d.layout);
     return `<div class="mgr">
     <div class="ed-head">
       <button class="lk" type="button" data-act="back">${SVG.back}All call-to-actions</button>
-      <h3 class="ed-title" data-region="title">${esc4(editTitle(st))}</h3>
+      <h3 class="ed-title" data-region="title">${esc5(editTitle(st2))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
-        <button class="btn" type="button" data-act="save"${st.saving ? " disabled" : ""}>${st.saving ? "Saving…" : st.isNew ? "Add call-to-action" : "Save"}</button></div>
+        <button class="btn" type="button" data-act="save"${st2.saving ? " disabled" : ""}>${st2.saving ? "Saving…" : st2.isNew ? "Add call-to-action" : "Save"}</button></div>
     </div>
-    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc4(st.msg)}</p>
+    <p class="${st2.msgKind === "err" || st2.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st2.msg ? "" : " hidden"}>${esc5(st2.msg)}</p>
     <div class="ed-grid">
       <div class="ed-form">
-        ${layoutSection(st)}
-        ${wordsSection(st)}
-        ${u.image ? `<div class="sec"><div class="sec-h"><h4>Image</h4><span class="hint">Tall images are capped in height on the card.</span></div><div data-region="image">${imageBody(st)}</div></div>` : ""}
-        ${u.icon ? iconSection(st) : ""}
-        ${u.html ? htmlSection(st, found) : ""}
-        ${pagesSection(st)}
+        ${layoutSection(st2)}
+        ${wordsSection(st2)}
+        ${u.image ? `<div class="sec"><div class="sec-h"><h4>Image</h4><span class="hint">Tall images are capped in height on the card.</span></div><div data-region="image">${imageBody(st2)}</div></div>` : ""}
+        ${u.icon ? iconSection(st2) : ""}
+        ${u.html ? htmlSection(st2, found) : ""}
+        ${pagesSection(st2)}
       </div>
-      ${previewAside(st)}
+      ${previewAside(st2)}
     </div>
   </div>`;
   }
@@ -14051,12 +14324,12 @@ ${SKILL_BOX_CSS}`;
   async function encodeWebp(file, edge, quality) {
     const bmp = await createImageBitmap(file);
     const scale = Math.min(1, edge / Math.max(bmp.width, bmp.height));
-    const w = Math.max(1, Math.round(bmp.width * scale));
+    const w2 = Math.max(1, Math.round(bmp.width * scale));
     const h = Math.max(1, Math.round(bmp.height * scale));
     const canvas = document.createElement("canvas");
-    canvas.width = w;
+    canvas.width = w2;
     canvas.height = h;
-    canvas.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, w2, h);
     try {
       bmp.close?.();
     } catch {
@@ -14081,19 +14354,19 @@ ${SKILL_BOX_CSS}`;
     return parts.slice(1).join(" ").toLowerCase();
   }
   function searchIcons(index, query, { setId = "", limit = 48 } = {}) {
-    const q = String(query || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const q2 = String(query || "").trim().toLowerCase().replace(/\s+/g, " ");
     const sets = (Array.isArray(index?.sets) ? index.sets : []).filter((s) => !setId || s.id === setId);
     const ranked = [];
     sets.forEach((s, si) => {
       (Array.isArray(s.names) ? s.names : []).forEach((name, i) => {
         let rank = 4;
-        if (q) {
+        if (q2) {
           const words = iconWords(name);
           const flat2 = words.replace(/ /g, "");
-          const qFlat = q.replace(/ /g, "");
-          if (words === q) rank = 0;
-          else if (words.split(" ").includes(q) || ` ${words} `.includes(` ${q} `)) rank = 1;
-          else if (words.startsWith(q) || words.split(" ").some((w) => w.startsWith(q))) rank = 2;
+          const qFlat = q2.replace(/ /g, "");
+          if (words === q2) rank = 0;
+          else if (words.split(" ").includes(q2) || ` ${words} `.includes(` ${q2} `)) rank = 1;
+          else if (words.startsWith(q2) || words.split(" ").some((w2) => w2.startsWith(q2))) rank = 2;
           else if (flat2.includes(qFlat) || name.toLowerCase().includes(qFlat)) rank = 3;
           else return;
         }
@@ -14343,7 +14616,7 @@ ${SKILL_BOX_CSS}`;
 `;
 
   // client-ui/src/elements/gbti-cta-manager.mjs
-  var SITE10 = "https://gbti.network";
+  var SITE11 = "https://gbti.network";
   var SUBMITTED = "Submitted. It merges automatically and appears shortly. Track it in your WorkBench.";
   var FIELD_KEYS = ["id", "label", "partner", "line", "button", "destination", "image", "html"];
   var GbtiCtaManager = class extends GbtiElement {
@@ -14363,7 +14636,7 @@ ${SKILL_BOX_CSS}`;
     get site() {
       const o = this.dataset?.siteOrigin;
       if (o === "page" && typeof location !== "undefined") return location.origin;
-      return SITE10;
+      return SITE11;
     }
     get icons() {
       if (!this._icons) this._icons = createIconLibrary({ base: this.site });
@@ -14408,11 +14681,11 @@ ${SKILL_BOX_CSS}`;
       return path ? `${this.site}${path}` : null;
     }
     /** A card's page title: the public page list, then the built registry's resolution, then the reference itself. */
-    _titleOf(ctaId, it) {
-      const page = (this._pages || []).find((p) => p.type === it.type && p.ref === it.ref);
+    _titleOf(ctaId, it2) {
+      const page = (this._pages || []).find((p) => p.type === it2.type && p.ref === it2.ref);
       if (page) return page.title;
-      const hit = (this._built?.get(ctaId)?.items || []).find((x) => x.type === it.type && x.ref === it.ref);
-      return hit?.title || it.ref;
+      const hit = (this._built?.get(ctaId)?.items || []).find((x) => x.type === it2.type && x.ref === it2.ref);
+      return hit?.title || it2.ref;
     }
     render() {
       if (!this.client) {
@@ -14484,7 +14757,7 @@ ${SKILL_BOX_CSS}`;
         imageWork: false,
         pvDark: false,
         pvPhone: false,
-        titleOf: (it) => this._titleOf(d.id, it)
+        titleOf: (it2) => this._titleOf(d.id, it2)
       };
       this._revalidate();
       this._view = "edit";
@@ -14497,29 +14770,29 @@ ${SKILL_BOX_CSS}`;
       this.render();
     }
     _revalidate() {
-      const st = this._st;
-      st.v = validateDraft(st.d, { isNew: st.isNew, taken: new Set(this._ctas.map((c) => c.id)) });
-      if (st.msgKind === "err" && st.tried && !st.saving) {
-        st.msg = st.v.ok ? "" : Object.keys(st.v.errors).length ? "Fix the highlighted fields to save." : st.v.banner;
-        if (!st.msg) st.msgKind = "";
+      const st2 = this._st;
+      st2.v = validateDraft(st2.d, { isNew: st2.isNew, taken: new Set(this._ctas.map((c) => c.id)) });
+      if (st2.msgKind === "err" && st2.tried && !st2.saving) {
+        st2.msg = st2.v.ok ? "" : Object.keys(st2.v.errors).length ? "Fix the highlighted fields to save." : st2.v.banner;
+        if (!st2.msg) st2.msgKind = "";
       }
     }
     /** Any edit clears a sent or failed save's message (the draft now differs from what was sent), then revalidates. */
     _touched() {
-      const st = this._st;
-      if (st.msg && st.msgKind !== "err") {
-        st.msg = "";
-        st.msgKind = "";
+      const st2 = this._st;
+      if (st2.msg && st2.msgKind !== "err") {
+        st2.msg = "";
+        st2.msgKind = "";
       }
       this._revalidate();
     }
     /** Redraw only what a keystroke changes, so the field under the cursor keeps its focus and selection. */
     _refreshLive({ found = false } = {}) {
-      const st = this._st;
+      const st2 = this._st;
       const title = this.$('[data-region="title"]');
-      if (title) title.textContent = editTitle(st);
+      if (title) title.textContent = editTitle(st2);
       for (const k of FIELD_KEYS) {
-        const msg = shownError(st, k);
+        const msg = shownError(st2, k);
         this.$$(`[data-err="${k}"]`).forEach((el2) => {
           el2.textContent = msg;
           el2.hidden = !msg;
@@ -14528,20 +14801,20 @@ ${SKILL_BOX_CSS}`;
       }
       const banner = this.$('[data-region="banner"]');
       if (banner) {
-        banner.textContent = st.msg;
-        banner.hidden = !st.msg;
-        banner.className = st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg";
+        banner.textContent = st2.msg;
+        banner.hidden = !st2.msg;
+        banner.className = st2.msgKind === "err" || st2.msgKind === "server" ? "msg bad" : "msg";
       }
       const stage = this.$('[data-region="stage"]');
-      if (stage) stage.innerHTML = previewCard(st);
+      if (stage) stage.innerHTML = previewCard(st2);
       const note = this.$('[data-region="pvnote"]');
-      if (note) note.textContent = previewNote(st.d);
+      if (note) note.textContent = previewNote(st2.d);
       this.$$("[data-count]").forEach((el2) => {
-        el2.textContent = plural(st.d.items.length);
+        el2.textContent = plural(st2.d.items.length);
       });
       if (found) {
         const f = this.$('[data-region="found"]');
-        if (f) f.innerHTML = foundLine(foundHosts(st.d.html, st.d.hosts));
+        if (f) f.innerHTML = foundLine(foundHosts(st2.d.html, st2.d.hosts));
       }
     }
     _afterEditorPaint() {
@@ -14559,19 +14832,19 @@ ${SKILL_BOX_CSS}`;
       }
     }
     async _setImage(file) {
-      const st = this._st;
-      st.imageWork = true;
-      st.imageMsg = "";
-      st.drag = false;
+      const st2 = this._st;
+      st2.imageWork = true;
+      st2.imageMsg = "";
+      st2.drag = false;
       this._redrawImage();
       const r = await encodeCtaImage(file);
-      if (this._st !== st) return;
-      st.imageWork = false;
+      if (this._st !== st2) return;
+      st2.imageWork = false;
       if (r.ok) {
-        st.d.image = { kind: "upload", base64: r.base64, url: r.dataUrl, width: r.width, height: r.height, bytes: r.bytes };
+        st2.d.image = { kind: "upload", base64: r.base64, url: r.dataUrl, width: r.width, height: r.height, bytes: r.bytes };
         this._touched();
       } else {
-        st.imageMsg = r.problem;
+        st2.imageMsg = r.problem;
       }
       this.render();
     }
@@ -14583,10 +14856,10 @@ ${SKILL_BOX_CSS}`;
       }
     }
     _addHost(raw) {
-      const st = this._st;
-      const n = normalizeHost(raw ?? st.hostDraft);
+      const st2 = this._st;
+      const n = normalizeHost(raw ?? st2.hostDraft);
       if (!n.ok) {
-        st.hostErr = n.problem;
+        st2.hostErr = n.problem;
         const el2 = this.$('[data-region="hosterr"]');
         if (el2) {
           el2.textContent = n.problem;
@@ -14594,77 +14867,77 @@ ${SKILL_BOX_CSS}`;
         }
         return;
       }
-      if (!st.d.hosts.includes(n.host)) st.d.hosts = [...st.d.hosts, n.host];
-      if (raw === void 0) st.hostDraft = "";
-      st.hostErr = "";
+      if (!st2.d.hosts.includes(n.host)) st2.d.hosts = [...st2.d.hosts, n.host];
+      if (raw === void 0) st2.hostDraft = "";
+      st2.hostErr = "";
       this._touched();
       this.render();
     }
     // ---- icons ------------------------------------------------------------------------------------------------------
     async _searchIcons() {
-      const st = this._st;
+      const st2 = this._st;
       const token = this._iconToken = (this._iconToken || 0) + 1;
       try {
-        if (st.icons.status !== "ready") st.icons.sets = await this.icons.sets();
-        const { total, icons } = await this.icons.search(st.iconQuery, { setId: st.iconSet });
-        if (this._st !== st || token !== this._iconToken) return;
-        const first = st.icons.status !== "ready";
-        st.icons = { ...st.icons, status: "ready", total, results: icons };
+        if (st2.icons.status !== "ready") st2.icons.sets = await this.icons.sets();
+        const { total, icons } = await this.icons.search(st2.iconQuery, { setId: st2.iconSet });
+        if (this._st !== st2 || token !== this._iconToken) return;
+        const first = st2.icons.status !== "ready";
+        st2.icons = { ...st2.icons, status: "ready", total, results: icons };
         if (first) this.render();
         else {
           const el2 = this.$('[data-region="icons"]');
-          if (el2) el2.innerHTML = iconResults(st);
+          if (el2) el2.innerHTML = iconResults(st2);
         }
       } catch (e) {
-        if (this._st !== st || token !== this._iconToken) return;
-        st.icons = { ...st.icons, status: "failed", problem: e?.message || "unknown error" };
+        if (this._st !== st2 || token !== this._iconToken) return;
+        st2.icons = { ...st2.icons, status: "failed", problem: e?.message || "unknown error" };
         const el2 = this.$('[data-region="icons"]');
-        if (el2) el2.innerHTML = iconResults(st);
+        if (el2) el2.innerHTML = iconResults(st2);
         else this.render();
       }
     }
     // ---- save -------------------------------------------------------------------------------------------------------
     async _save() {
-      const st = this._st;
-      if (st.saving) return;
-      st.tried = true;
+      const st2 = this._st;
+      if (st2.saving) return;
+      st2.tried = true;
       this._revalidate();
-      if (!st.v.ok) {
-        st.msg = Object.keys(st.v.errors).length ? "Fix the highlighted fields to save." : st.v.banner;
-        st.msgKind = "err";
+      if (!st2.v.ok) {
+        st2.msg = Object.keys(st2.v.errors).length ? "Fix the highlighted fields to save." : st2.v.banner;
+        st2.msgKind = "err";
         this.render();
         return;
       }
-      const { fields, changed } = savePayload(st.d, st.original, { isNew: st.isNew });
-      if (!st.isNew && !changed.length) {
-        st.msg = "Nothing to save: this card already reads this way.";
-        st.msgKind = "";
+      const { fields, changed } = savePayload(st2.d, st2.original, { isNew: st2.isNew });
+      if (!st2.isNew && !changed.length) {
+        st2.msg = "Nothing to save: this card already reads this way.";
+        st2.msgKind = "";
         this.render();
         return;
       }
-      st.saving = true;
-      st.msg = "";
-      st.msgKind = "";
+      st2.saving = true;
+      st2.msg = "";
+      st2.msgKind = "";
       this.render();
       try {
-        const r = st.isNew ? await this.client.addCta(fields) : await this.client.updateCta(fields);
-        const saved = cardFromDraft(st.d);
-        if (st.d.image.kind === "upload") {
+        const r = st2.isNew ? await this.client.addCta(fields) : await this.client.updateCta(fields);
+        const saved = cardFromDraft(st2.d);
+        if (st2.d.image.kind === "upload") {
           saved.image = `${saved.id}.webp`;
-          st.d.image = { kind: "stored", file: saved.image, url: st.d.image.url, width: st.d.image.width, height: st.d.image.height };
+          st2.d.image = { kind: "stored", file: saved.image, url: st2.d.image.url, width: st2.d.image.width, height: st2.d.image.height };
         }
-        const at = this._ctas.findIndex((c) => c.id === saved.id);
-        if (at >= 0) this._ctas[at] = saved;
+        const at2 = this._ctas.findIndex((c) => c.id === saved.id);
+        if (at2 >= 0) this._ctas[at2] = saved;
         else this._ctas.push(saved);
-        st.original = structuredClone(saved);
-        st.isNew = false;
-        st.msg = r?.noop ? "Nothing to save: this card already reads this way." : SUBMITTED;
-        st.msgKind = "ok";
+        st2.original = structuredClone(saved);
+        st2.isNew = false;
+        st2.msg = r?.noop ? "Nothing to save: this card already reads this way." : SUBMITTED;
+        st2.msgKind = "ok";
       } catch (e) {
-        st.msg = e?.message || "That save failed.";
-        st.msgKind = "server";
+        st2.msg = e?.message || "That save failed.";
+        st2.msgKind = "server";
       }
-      st.saving = false;
+      st2.saving = false;
       this._revalidate();
       this.render();
     }
@@ -14717,36 +14990,36 @@ ${SKILL_BOX_CSS}`;
       });
     }
     _input(t) {
-      const st = this._st;
-      if (!st) return;
+      const st2 = this._st;
+      if (!st2) return;
       if (t.dataset.f) {
         const k = t.dataset.f;
-        st.d[k] = t.type === "checkbox" ? t.checked : t.value;
+        st2.d[k] = t.type === "checkbox" ? t.checked : t.value;
         this._touched();
         this._refreshLive({ found: k === "html" });
         return;
       }
-      const q = t.dataset.q;
-      if (q === "icons") {
-        st.iconQuery = t.value;
+      const q2 = t.dataset.q;
+      if (q2 === "icons") {
+        st2.iconQuery = t.value;
         clearTimeout(this._iconTimer);
         this._iconTimer = setTimeout(() => this._searchIcons(), 160);
-      } else if (q === "pages") {
-        st.pageQuery = t.value;
-        st.cands = pageCandidates(this._pages, st.pageQuery, st.d.items);
+      } else if (q2 === "pages") {
+        st2.pageQuery = t.value;
+        st2.cands = pageCandidates(this._pages, st2.pageQuery, st2.d.items);
         const el2 = this.$('[data-region="cands"]');
-        if (el2) el2.innerHTML = candidateList(st);
-      } else if (q === "host") {
-        st.hostDraft = t.value;
-        if (st.hostErr) {
-          st.hostErr = "";
+        if (el2) el2.innerHTML = candidateList(st2);
+      } else if (q2 === "host") {
+        st2.hostDraft = t.value;
+        if (st2.hostErr) {
+          st2.hostErr = "";
           const el2 = this.$('[data-region="hosterr"]');
           if (el2) el2.hidden = true;
         }
       }
     }
     _act(act, b) {
-      const st = this._st;
+      const st2 = this._st;
       switch (act) {
         case "retry":
           this.load();
@@ -14765,7 +15038,7 @@ ${SKILL_BOX_CSS}`;
         default:
           break;
       }
-      if (!st) return;
+      if (!st2) return;
       switch (act) {
         case "back":
           this._back();
@@ -14774,41 +15047,41 @@ ${SKILL_BOX_CSS}`;
           this._save();
           return;
         case "layout":
-          st.d.layout = b.dataset.layout;
-          st.pickerOpen = false;
+          st2.d.layout = b.dataset.layout;
+          st2.pickerOpen = false;
           break;
         case "remove-image":
-          st.d.image = { kind: "none" };
-          st.imageMsg = "";
+          st2.d.image = { kind: "none" };
+          st2.imageMsg = "";
           break;
         case "picker":
-          st.pickerOpen = !st.pickerOpen;
-          if (st.pickerOpen && st.icons.status !== "ready") {
-            st.icons = { ...st.icons, status: "loading" };
+          st2.pickerOpen = !st2.pickerOpen;
+          if (st2.pickerOpen && st2.icons.status !== "ready") {
+            st2.icons = { ...st2.icons, status: "loading" };
             this._searchIcons();
           }
           this.render();
           return;
         case "icons-retry":
-          st.icons = { ...st.icons, status: "loading" };
+          st2.icons = { ...st2.icons, status: "loading" };
           this.render();
           this._searchIcons();
           return;
         case "icon-set":
-          st.iconSet = b.dataset.set || "";
+          st2.iconSet = b.dataset.set || "";
           this.render();
           this._searchIcons();
           return;
         case "icon": {
-          const icon3 = st.icons.results[Number(b.dataset.i)];
+          const icon3 = st2.icons.results[Number(b.dataset.i)];
           if (!icon3) return;
-          st.d.icon = icon3;
-          st.pickerOpen = false;
+          st2.d.icon = icon3;
+          st2.pickerOpen = false;
           break;
         }
         case "clear-icon":
-          st.d.icon = null;
-          st.pickerOpen = false;
+          st2.d.icon = null;
+          st2.pickerOpen = false;
           break;
         case "host-add":
           this._addHost();
@@ -14817,33 +15090,33 @@ ${SKILL_BOX_CSS}`;
           this._addHost(b.dataset.host);
           return;
         case "host-remove":
-          st.d.hosts = st.d.hosts.filter((h) => h !== b.dataset.host);
+          st2.d.hosts = st2.d.hosts.filter((h) => h !== b.dataset.host);
           break;
         case "page-add": {
-          const c = st.cands[Number(b.dataset.i)];
+          const c = st2.cands[Number(b.dataset.i)];
           if (!c) return;
-          st.d.items = [...st.d.items, { type: c.type, ref: c.ref }];
-          st.pageQuery = "";
-          st.cands = [];
+          st2.d.items = [...st2.d.items, { type: c.type, ref: c.ref }];
+          st2.pageQuery = "";
+          st2.cands = [];
           break;
         }
         case "page-remove":
-          st.d.items = st.d.items.filter((_, n) => n !== Number(b.dataset.i));
+          st2.d.items = st2.d.items.filter((_, n) => n !== Number(b.dataset.i));
           break;
         case "pv-light":
-          st.pvDark = false;
+          st2.pvDark = false;
           this.render();
           return;
         case "pv-dark":
-          st.pvDark = true;
+          st2.pvDark = true;
           this.render();
           return;
         case "pv-side":
-          st.pvPhone = false;
+          st2.pvPhone = false;
           this.render();
           return;
         case "pv-phone":
-          st.pvPhone = true;
+          st2.pvPhone = true;
           this.render();
           return;
         default:
@@ -14955,10 +15228,10 @@ ${SKILL_BOX_CSS}`;
     _rows() {
       const d = this._data || {};
       const all = [];
-      for (const st of STATUSES) for (const it of Array.isArray(d[st]) ? d[st] : []) all.push({ ...it, _st: st });
+      for (const st2 of STATUSES) for (const it2 of Array.isArray(d[st2]) ? d[st2] : []) all.push({ ...it2, _st: st2 });
       all.sort((a, b) => (b.sentAt || b.cancelledAt || b.enqueuedAt || 0) - (a.sentAt || a.cancelledAt || a.enqueuedAt || 0));
-      const q = this._fQ.trim().toLowerCase();
-      return all.filter((it) => (this._fStatus === "all" || it._st === this._fStatus) && (this._fType === "all" || it.source === this._fType) && (this._fTrigger === "all" || (this._fTrigger === "manual" ? it.trigger === "manual" : it.trigger !== "manual")) && (!q || String(it.title || it.targetSlug || "").toLowerCase().includes(q)));
+      const q2 = this._fQ.trim().toLowerCase();
+      return all.filter((it2) => (this._fStatus === "all" || it2._st === this._fStatus) && (this._fType === "all" || it2.source === this._fType) && (this._fTrigger === "all" || (this._fTrigger === "manual" ? it2.trigger === "manual" : it2.trigger !== "manual")) && (!q2 || String(it2.title || it2.targetSlug || "").toLowerCase().includes(q2)));
     }
     render() {
       if (!this.client) {
@@ -14966,7 +15239,7 @@ ${SKILL_BOX_CSS}`;
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS21) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS21) + `<p class="msg err">${esc2(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -14983,17 +15256,17 @@ ${SKILL_BOX_CSS}`;
         this.load();
       }
       const rows = this._rows();
-      const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
-      const body = rows.map((it) => this._row(it)).join("");
+      const opt = (v2, label, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(label)}</option>`;
+      const body = rows.map((it2) => this._row(it2)).join("");
       this.set(this.css(CSS21) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
+      ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc2(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
       <div class="fbar">
         <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
-        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
+        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL).map(([v2, l]) => opt(v2, l, this._fType)).join("")}</select>
         <select data-f="trigger" aria-label="Filter by trigger">${opt("all", "Manual + auto", this._fTrigger)}${opt("manual", "Manual only", this._fTrigger)}${opt("auto", "Auto only", this._fTrigger)}</select>
-        <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
+        <input data-f="q" type="search" placeholder="Search titles" value="${esc2(this._fQ)}" aria-label="Search titles" />
         <span class="count">${rows.length} item${rows.length === 1 ? "" : "s"}</span>
       </div>
       <div class="twrap"><table>
@@ -15009,33 +15282,33 @@ ${SKILL_BOX_CSS}`;
         const focusQ = el2.dataset.f === "q";
         this.render();
         if (focusQ) {
-          const q = this.$('[data-f="q"]');
-          if (q) {
-            q.focus();
-            q.setSelectionRange(q.value.length, q.value.length);
+          const q2 = this.$('[data-f="q"]');
+          if (q2) {
+            q2.focus();
+            q2.setSelectionRange(q2.value.length, q2.value.length);
           }
         }
       }));
       this.$$("[data-approve]").forEach((b) => b.addEventListener("click", () => this._approve(b.dataset.approve)));
       this.$$("[data-cancel]").forEach((b) => b.addEventListener("click", () => this._cancel(b.dataset.cancel)));
     }
-    _row(it) {
-      const st = it._st;
-      const title = it.title || it.targetSlug || it.id || "(untitled)";
-      const manual = it.trigger === "manual" ? `<span class="manual">MANUAL${it.manualBy ? ` · ${esc(String(it.manualBy))}` : ""}</span>` : "";
-      const flags = Array.isArray(it.flags) && it.flags.length ? it.flags.map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join("") : "";
-      const when = it.sentAt || it.cancelledAt || it.enqueuedAt;
-      const sub = it.cancelReason || it.url || "";
+    _row(it2) {
+      const st2 = it2._st;
+      const title = it2.title || it2.targetSlug || it2.id || "(untitled)";
+      const manual = it2.trigger === "manual" ? `<span class="manual">MANUAL${it2.manualBy ? ` · ${esc2(String(it2.manualBy))}` : ""}</span>` : "";
+      const flags = Array.isArray(it2.flags) && it2.flags.length ? it2.flags.map((f) => `<span class="flag">⚠ ${esc2(f)}</span>`).join("") : "";
+      const when = it2.sentAt || it2.cancelledAt || it2.enqueuedAt;
+      const sub = it2.cancelReason || it2.url || "";
       let actions = "";
-      if (st === "pending") actions = `<button class="approve" data-approve="${esc(it.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc(it.id)}" type="button">Reject</button>`;
-      else if (st === "approved") actions = `<button class="cancel" data-cancel="${esc(it.id)}" type="button" style="margin-left:0">Cancel</button>`;
-      const t = it.url ? `<a class="t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(title)}</a>` : `<span class="t">${esc(title)}</span>`;
+      if (st2 === "pending") actions = `<button class="approve" data-approve="${esc2(it2.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc2(it2.id)}" type="button">Reject</button>`;
+      else if (st2 === "approved") actions = `<button class="cancel" data-cancel="${esc2(it2.id)}" type="button" style="margin-left:0">Cancel</button>`;
+      const t = it2.url ? `<a class="t" href="${esc2(it2.url)}" target="_blank" rel="noopener">${esc2(title)}</a>` : `<span class="t">${esc2(title)}</span>`;
       return `<tr>
-      <td><span class="st st-${esc(st)}"><span class="dot"></span>${esc(st)}</span></td>
-      <td><span class="src">${esc(SRC_LABEL[it.source] || it.source || "")}</span></td>
-      <td class="ti">${t}${manual}${flags}${sub ? `<span class="r">${esc(sub)}</span>` : ""}</td>
-      <td><span class="chs">${this._channels(it.perChannel)}</span></td>
-      <td class="wh">${when ? esc(new Date(when).toLocaleString()) : ""}</td>
+      <td><span class="st st-${esc2(st2)}"><span class="dot"></span>${esc2(st2)}</span></td>
+      <td><span class="src">${esc2(SRC_LABEL[it2.source] || it2.source || "")}</span></td>
+      <td class="ti">${t}${manual}${flags}${sub ? `<span class="r">${esc2(sub)}</span>` : ""}</td>
+      <td><span class="chs">${this._channels(it2.perChannel)}</span></td>
+      <td class="wh">${when ? esc2(new Date(when).toLocaleString()) : ""}</td>
       <td class="ac">${actions}</td>
     </tr>`;
     }
@@ -15043,7 +15316,7 @@ ${SKILL_BOX_CSS}`;
       if (!perChannel || typeof perChannel !== "object") return "";
       return Object.entries(perChannel).map(([name, r]) => {
         const status = r?.status || "pending";
-        return r?.url ? `<a class="ch ${esc(status)}" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(name)}</a>` : `<span class="ch ${esc(status)}">${esc(name)}: ${esc(status)}</span>`;
+        return r?.url ? `<a class="ch ${esc2(status)}" href="${esc2(r.url)}" target="_blank" rel="noopener">${esc2(name)}</a>` : `<span class="ch ${esc2(status)}">${esc2(name)}: ${esc2(status)}</span>`;
       }).join("");
     }
     async _approve(id) {
@@ -15606,17 +15879,17 @@ ${SKILL_BOX_CSS}`;
       const cell = (type, ch) => {
         const val = p.autoMatrix?.[type]?.[ch] ?? "off";
         const modes = AUTO_MODES.filter((m) => !(m === "on" && channelCapability(ch) === "manual"));
-        const opts = modes.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
-        return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
+        const opts = modes.map((m) => `<option value="${esc2(m)}"${m === val ? " selected" : ""}>${esc2(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
+        return `<td><select data-matrix-cell data-mtype="${esc2(type)}" data-mchan="${esc2(ch)}">${opts}</select></td>`;
       };
-      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " cannot post automatically; On-Manual queues a Social Queue task a superadmin posts by hand.")}"` : "";
-      const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join("")}</tr>`;
-      const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join("")}</tr>`).join("");
+      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc2((MATRIX_CHAN_LABEL[ch] || ch) + " cannot post automatically; On-Manual queues a Social Queue task a superadmin posts by hand.")}"` : "";
+      const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc2(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join("")}</tr>`;
+      const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc2(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join("")}</tr>`).join("");
       const delays = AUTO_CHANNELS.map((ch) => {
         const dv = p.channelHoldMinutes?.[ch];
         const dval = dv === void 0 || dv === null ? "" : String(dv);
-        return `<div class="field"><label>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</label>
-        <input class="ctrl" type="number" min="0" max="1440" data-chan-hold="${esc(ch)}" value="${esc(dval)}" placeholder="${esc(String(p.holdMinutes))}" /></div>`;
+        return `<div class="field"><label>${esc2(MATRIX_CHAN_LABEL[ch] || ch)}</label>
+        <input class="ctrl" type="number" min="0" max="1440" data-chan-hold="${esc2(ch)}" value="${esc2(dval)}" placeholder="${esc2(String(p.holdMinutes))}" /></div>`;
       }).join("");
       return `<section class="card" id="sec-pipeline" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg></span>
@@ -15638,7 +15911,7 @@ ${SKILL_BOX_CSS}`;
             </select>
             <span class="hint">What happens after the hold window passes.</span></div>
           <div class="field"><label>Hold window</label>
-            <div class="sfxwrap"><input class="ctrl" type="number" min="0" max="1440" value="${esc(String(p.holdMinutes))}" data-pipe-hold /><span class="sfx">minutes</span></div>
+            <div class="sfxwrap"><input class="ctrl" type="number" min="0" max="1440" value="${esc2(String(p.holdMinutes))}" data-pipe-hold /><span class="sfx">minutes</span></div>
             <span class="hint">The cancel window before an item auto-posts.</span></div>
         </div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
@@ -15656,27 +15929,27 @@ ${SKILL_BOX_CSS}`;
     }
     _templatesCard() {
       const cur = this._curCh;
-      const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? " on" : ""}${c.active ? "" : " soon"}" type="button" data-tile="${esc(c.id)}"${c.active ? "" : ' aria-disabled="true"'}${c.note ? ` title="${esc(c.note)}"` : ""}>
-        <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
-        <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join("");
+      const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? " on" : ""}${c.active ? "" : " soon"}" type="button" data-tile="${esc2(c.id)}"${c.active ? "" : ' aria-disabled="true"'}${c.note ? ` title="${esc2(c.note)}"` : ""}>
+        <span class="ct-i ${esc2(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc2(c.icon)}"/></svg></span>
+        <span class="ct-n">${esc2(c.name)}</span><span class="ct-s">${esc2(c.sub)}</span></button>`).join("");
       const chipVars = cur === "devto" ? [...VARS, "{body}", "{member-devto-handle}"] : VARS;
-      const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
+      const chips = chipVars.map((v2) => `<button class="varchip" type="button" data-var="${esc2(v2)}">${esc2(v2)}</button>`).join("");
       const vis = this._tmplVis || "pub";
       const work = this._work?.[`${vis}:${cur}`] || {};
       const custom = (k) => (vis === "stub" ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? " · custom" : "";
       const FULL_BODY = /* @__PURE__ */ new Set(["devto"]);
       const rows = (FULL_BODY.has(cur) ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">dev.to cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === "stub" ? "stub body is the members-only teaser" : "Body wraps the article ({body} = the full article verbatim)"}.</p>` : TMPL_TYPES.map((t) => `<div class="tmpl">
-        <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
-        <textarea class="ctrl" maxlength="500" rows="3" data-tk="${esc(t.key)}">${esc(work[t.key] || "")}</textarea></div>`).join("")) + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>
-          <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc("the brand account's first comment" + custom("reddit-comment"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("devto-intro"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work["devto-intro"] || "")}</textarea></div>
-          ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("devto-stub"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work["devto-stub"] || "")}</textarea></div>` : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc("the public post body; {body} = the full article verbatim" + custom("devto-body"))}</div></div>
-            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="devto-body">${esc(work["devto-body"] || "")}</textarea></div>`}
-          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every dev.to post" + custom("devto-footer"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "");
+        <div class="tl"><div class="nm">${esc2(t.nm)}</div><div class="df">${esc2(t.df + custom(t.key))}</div></div>
+        <textarea class="ctrl" maxlength="500" rows="3" data-tk="${esc2(t.key)}">${esc2(work[t.key] || "")}</textarea></div>`).join("")) + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc2("the description under the title" + custom("reddit-body"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc2(work["reddit-body"] || "")}</textarea></div>
+          <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc2("the brand account's first comment" + custom("reddit-comment"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc2(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc2("prepended to the crosspost" + custom("devto-intro"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc2(work["devto-intro"] || "")}</textarea></div>
+          ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc2("the members-only teaser middle" + custom("devto-stub"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc2(work["devto-stub"] || "")}</textarea></div>` : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc2("the public post body; {body} = the full article verbatim" + custom("devto-body"))}</div></div>
+            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="devto-body">${esc2(work["devto-body"] || "")}</textarea></div>`}
+          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc2("appended to every dev.to post" + custom("devto-footer"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc2(work["devto-footer"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
         <div><h2>Syndication templates</h2><p>Configured per destination channel. Blank falls back to the shared template, then the built-in.</p></div>
@@ -15703,7 +15976,7 @@ ${SKILL_BOX_CSS}`;
       const e = this._engagement;
       if (!e) return "";
       const tierLabel2 = { paid: "Paid members only", "paid-trial": "Trial + paid", "signed-in": "Any signed-in member" };
-      const tierOpts = (this._tiers || []).map((t) => `<option value="${esc(t)}"${e.tier === t ? " selected" : ""}>${esc(tierLabel2[t] || t)}</option>`).join("");
+      const tierOpts = (this._tiers || []).map((t) => `<option value="${esc2(t)}"${e.tier === t ? " selected" : ""}>${esc2(tierLabel2[t] || t)}</option>`).join("");
       return `<section class="card" id="sec-autoshare" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg></span>
         <div><h2>News auto-share</h2><p>Posts a news item to its mapped category channel once engagement crosses a threshold.</p></div>
@@ -15715,7 +15988,7 @@ ${SKILL_BOX_CSS}`;
         </div>
         <div class="fgrid">
           <div class="field"><label>Member threshold</label>
-            <div class="sfxwrap"><input class="ctrl" type="number" min="1" max="1000" value="${esc(String(e.open_threshold))}" data-eng-threshold /><span class="sfx">members</span></div>
+            <div class="sfxwrap"><input class="ctrl" type="number" min="1" max="1000" value="${esc2(String(e.open_threshold))}" data-eng-threshold /><span class="sfx">members</span></div>
             <span class="hint">Distinct members who must open the item. Banned accounts never count.</span></div>
           <div class="field"><label>Counts which members</label>
             <select class="ctrl" data-eng-tier>${tierOpts}</select>
@@ -15737,18 +16010,18 @@ ${SKILL_BOX_CSS}`;
       const names = Object.keys(this._lists || {});
       if (!names.length) return "";
       const cur = names.includes(this._termTab) ? this._termTab : names[0];
-      const tabs = names.map((n) => `<button class="termtab${n === cur ? " on" : ""}" type="button" data-tt="${esc(n)}">${esc(n[0].toUpperCase() + n.slice(1))} terms <span class="ct">${(this._lists[n] || []).length}</span></button>`).join("");
-      const q = (this._termFilter || "").toLowerCase();
-      const chips = (this._lists[cur] || []).map((w) => `<span class="term${q && !w.toLowerCase().includes(q) ? " hidden" : ""}"><span>${esc(w)}</span><button class="x" type="button" data-term-remove data-list="${esc(cur)}" data-term="${esc(w)}" aria-label="Remove ${esc(w)}"><svg viewBox="0 0 24 24"><use href="#c-x"/></svg></button></span>`).join("");
+      const tabs = names.map((n) => `<button class="termtab${n === cur ? " on" : ""}" type="button" data-tt="${esc2(n)}">${esc2(n[0].toUpperCase() + n.slice(1))} terms <span class="ct">${(this._lists[n] || []).length}</span></button>`).join("");
+      const q2 = (this._termFilter || "").toLowerCase();
+      const chips = (this._lists[cur] || []).map((w2) => `<span class="term${q2 && !w2.toLowerCase().includes(q2) ? " hidden" : ""}"><span>${esc2(w2)}</span><button class="x" type="button" data-term-remove data-list="${esc2(cur)}" data-term="${esc2(w2)}" aria-label="Remove ${esc2(w2)}"><svg viewBox="0 0 24 24"><use href="#c-x"/></svg></button></span>`).join("");
       return `<section class="card" id="sec-words" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-shield"/></svg></span>
         <div><h2>Moderation word lists</h2><p>A title or blurb that hits one of these holds the item for approval.</p></div></div>
       <div class="card-b">
         <div class="termtabs">${tabs}</div>
-        <div class="searchwrap"><svg viewBox="0 0 24 24"><use href="#c-search"/></svg><input class="ctrl" data-term-filter placeholder="Filter ${esc(cur)} terms" value="${esc(this._termFilter || "")}" /></div>
+        <div class="searchwrap"><svg viewBox="0 0 24 24"><use href="#c-search"/></svg><input class="ctrl" data-term-filter placeholder="Filter ${esc2(cur)} terms" value="${esc2(this._termFilter || "")}" /></div>
         <div class="chips">${chips || '<span class="muted">No terms yet.</span>'}</div>
         <div class="addrow">
-          <input class="ctrl" maxlength="64" data-term-input placeholder="Add a ${esc(cur)} term or phrase, then press Enter" />
+          <input class="ctrl" maxlength="64" data-term-input placeholder="Add a ${esc2(cur)} term or phrase, then press Enter" />
           <button class="btn btn-primary" type="button" data-term-add><svg viewBox="0 0 24 24"><use href="#c-plus"/></svg> Add</button>
         </div>
         <p class="note-inline">Matching is case-insensitive on the posted title and blurb. Held items appear in <b>Syndication</b> for a human decision. Adds and removals apply immediately as audited house PRs.</p>
@@ -15766,7 +16039,7 @@ ${SKILL_BOX_CSS}`;
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS22) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS22) + `<p class="msg">${esc2(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -15779,11 +16052,11 @@ ${SKILL_BOX_CSS}`;
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS22) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS22) + (this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
-      const tabs = SYND_TABS.map((t) => `<a data-tab="${t.id}" role="tab"${t.id === active ? ' class="on" aria-selected="true"' : ' aria-selected="false"'}><svg viewBox="0 0 24 24"><use href="#${t.ic}"/></svg>${esc(t.nm)}</a>`).join("");
+      const tabs = SYND_TABS.map((t) => `<a data-tab="${t.id}" role="tab"${t.id === active ? ' class="on" aria-selected="true"' : ' aria-selected="false"'}><svg viewBox="0 0 24 24"><use href="#${t.ic}"/></svg>${esc2(t.nm)}</a>`).join("");
       const builders = {
         activity: () => this._activityCard(),
         pipeline: () => this._pipelineCard(),
@@ -15793,7 +16066,7 @@ ${SKILL_BOX_CSS}`;
       };
       const section = (builders[active] || builders.activity)();
       this.set(this.css(CSS22) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
-      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
       ${section}
@@ -15874,11 +16147,11 @@ ${SKILL_BOX_CSS}`;
           this._markDirty("sec-templates", this._tmplDirty.size > 0);
         });
       });
-      this.$$("[data-var]").forEach((v) => v.addEventListener("click", () => {
+      this.$$("[data-var]").forEach((v2) => v2.addEventListener("click", () => {
         const f = this._lastField || this.$("[data-tk]");
         if (!f) return;
         const s = f.selectionStart ?? f.value.length;
-        f.value = f.value.slice(0, s) + v.dataset.var + f.value.slice(f.selectionEnd ?? s);
+        f.value = f.value.slice(0, s) + v2.dataset.var + f.value.slice(f.selectionEnd ?? s);
         f.dispatchEvent(new Event("input"));
         f.focus();
       }));
@@ -15932,10 +16205,10 @@ ${SKILL_BOX_CSS}`;
       const filter = this.$("[data-term-filter]");
       if (filter) filter.addEventListener("input", () => {
         this._termFilter = filter.value;
-        const q = filter.value.trim().toLowerCase();
+        const q2 = filter.value.trim().toLowerCase();
         this.$$(".term").forEach((el2) => {
-          const w = el2.querySelector("span")?.textContent || "";
-          el2.classList.toggle("hidden", Boolean(q) && !w.toLowerCase().includes(q));
+          const w2 = el2.querySelector("span")?.textContent || "";
+          el2.classList.toggle("hidden", Boolean(q2) && !w2.toLowerCase().includes(q2));
         });
       });
       const addTerm = () => {
@@ -15961,9 +16234,9 @@ ${SKILL_BOX_CSS}`;
     /** Re-render without the viewport drifting: a tile/visibility switch replaces the whole shadow tree
      *  (which re-creates the nested Publishing Activity), so pin the scroll position across it. */
     _renderKeepingScroll() {
-      const y = window.scrollY;
+      const y2 = window.scrollY;
       this.render();
-      window.scrollTo({ top: y });
+      window.scrollTo({ top: y2 });
     }
     _captureTmpl() {
       const wk = `${this._tmplVis}:${this._curCh}`;
@@ -16243,8 +16516,8 @@ ${SKILL_BOX_CSS}`;
   // client-ui/src/elements/gbti-locked-content.mjs
   function lockedTargets(raw) {
     try {
-      const v = JSON.parse(String(raw || "[]"));
-      return Array.isArray(v) ? v.filter((t) => typeof t === "string") : [];
+      const v2 = JSON.parse(String(raw || "[]"));
+      return Array.isArray(v2) ? v2.filter((t) => typeof t === "string") : [];
     } catch {
       return [];
     }
@@ -16353,7 +16626,7 @@ ${SKILL_BOX_CSS}`;
         this.set(css + '<div class="state">The install steps could not be loaded right now.</div>');
         return;
       }
-      this.set(css + `${box.html}<pre data-skill-raw hidden>${esc(box.text)}</pre>`);
+      this.set(css + `${box.html}<pre data-skill-raw hidden>${esc2(box.text)}</pre>`);
       wireSkillPage(this.root);
       this.emit("gbti-unlocked", { encPath });
     }
@@ -16438,13 +16711,13 @@ ${SKILL_BOX_CSS}`;
       collections: Array.isArray(a?.collections) ? a.collections : []
     };
   }
-  var same = (it, t) => it && it.type === t.type && it.slug === t.slug;
+  var same = (it2, t) => it2 && it2.type === t.type && it2.slug === t.slug;
   function isFavorited(activity, target) {
     return !!target?.type && !!target?.slug && (activity?.favorites || []).some((f) => same(f, target));
   }
   function collectionsHolding(activity, target) {
     if (!target?.type || !target?.slug) return 0;
-    return (activity?.collections || []).filter((c) => (c?.items || []).some((it) => same(it, target))).length;
+    return (activity?.collections || []).filter((c) => (c?.items || []).some((it2) => same(it2, target))).length;
   }
   function collectionPill(n) {
     if (!(n > 0)) return { text: "Save", label: "Save to a collection" };
@@ -16582,7 +16855,7 @@ ${SKILL_BOX_CSS}`;
     }
     _inAny() {
       const t = this._target();
-      return (this._collections || []).some((c) => (c.items || []).some((it) => it.type === t.type && it.slug === t.slug));
+      return (this._collections || []).some((c) => (c.items || []).some((it2) => it2.type === t.type && it2.slug === t.slug));
     }
     _target() {
       return { type: this.dataset?.gbtiTargetType, slug: this.dataset?.gbtiTargetSlug };
@@ -16631,7 +16904,7 @@ ${SKILL_BOX_CSS}`;
     _renderPop() {
       const t = this._target();
       const rows = (this._collections || []).map((c) => {
-        const inIt = (c.items || []).some((it) => it.type === t.type && it.slug === t.slug);
+        const inIt = (c.items || []).some((it2) => it2.type === t.type && it2.slug === t.slug);
         return `<div class="row ${inIt ? "in" : ""}" data-id="${c.id}"><span class="box">${inIt ? "✓" : ""}</span><span class="nm">${escapeHtml2(c.name)}</span></div>`;
       }).join("");
       return `<div class="pop ${this._busy ? "busy" : ""}"><h4>Save to collection</h4>${rows || '<div class="empty">No collections yet. Create one below.</div>'}<div class="new"><input type="text" placeholder="New collection" maxlength="80" /><button type="button">Create</button></div></div>`;
@@ -16649,7 +16922,7 @@ ${SKILL_BOX_CSS}`;
       const t = this._target();
       const c = (this._collections || []).find((x) => x.id === id);
       if (!c) return;
-      const on = !(c.items || []).some((it) => it.type === t.type && it.slug === t.slug);
+      const on = !(c.items || []).some((it2) => it2.type === t.type && it2.slug === t.slug);
       this._busy = true;
       this.render();
       try {
@@ -16699,8 +16972,8 @@ ${SKILL_BOX_CSS}`;
   var NOTIFY_CHANNELS = ["api", "email"];
   var SYSTEM_NOTIFY_DEFAULT = Object.freeze({ api: true, email: false });
   var EMAIL_NOTIFICATIONS_ENABLED = false;
-  function isBool(v) {
-    return v === true || v === false;
+  function isBool(v2) {
+    return v2 === true || v2 === false;
   }
   function bagFor(pref, event) {
     if (!pref || typeof pref !== "object") return {};
@@ -16810,12 +17083,12 @@ ${SKILL_BOX_CSS}`;
 
   // client-ui/src/elements/notify-pill.mjs
   function notifyPillHtml({ rowKey, channel, label, on = false, disabled = false, paid = true } = {}) {
-    const cell = `${esc(rowKey)}:${esc(channel)}`;
+    const cell = `${esc2(rowKey)}:${esc2(channel)}`;
     const tip = cellBlockedTip(rowKey, channel, { paid });
     if (tip) {
-      return `<button type="button" class="pill blocked" data-cell="${cell}" aria-pressed="false" aria-disabled="true" data-tip="${esc(tip)}" aria-label="${esc(label)}. ${esc(tip)}">${esc(label)}</button>`;
+      return `<button type="button" class="pill blocked" data-cell="${cell}" aria-pressed="false" aria-disabled="true" data-tip="${esc2(tip)}" aria-label="${esc2(label)}. ${esc2(tip)}">${esc2(label)}</button>`;
     }
-    return `<button type="button" class="pill${on ? " on" : ""}" data-cell="${cell}" aria-pressed="${!!on}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+    return `<button type="button" class="pill${on ? " on" : ""}" data-cell="${cell}" aria-pressed="${!!on}"${disabled ? " disabled" : ""}>${esc2(label)}</button>`;
   }
   var BLOCKED_PILL_CSS = `
   .pill.blocked, .pill.blocked:hover, .pill.blocked:focus-visible {
@@ -16854,7 +17127,7 @@ ${SKILL_BOX_CSS}`;
     max-height:calc(100vh - 48px); overflow:auto; background:var(--panel); color:var(--fg); border:1.5px solid var(--line);
     border-radius:18px; box-shadow:0 20px 60px rgba(0,0,0,.35); font-family:var(--font-body); }
   .hd { display:flex; align-items:center; gap:12px; padding:18px 20px 14px; border-bottom:1.5px solid var(--line); }
-  .hd .av { width:40px; height:40px; border-radius:50%; flex:none; background:var(--hover); object-fit:cover; }
+  .hd .av { position:relative; overflow:hidden; display:block; width:40px; height:40px; border-radius:50%; flex:none; background:var(--hover); }
   .hd .mtx { flex:1; min-width:0; }
   .hd .mtx .t { font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .hd .mtx .d { color:var(--muted); font-size:13px; margin-top:2px; }
@@ -16986,8 +17259,7 @@ ${BLOCKED_PILL_CSS}
         this.set(this.css(CSS25));
         return;
       }
-      const u = esc(this._username || "");
-      const av = `https://github.com/${u}.png?size=80`;
+      const u = esc2(this._username || "");
       if (!this._loaded) {
         this.set(this.css(CSS25) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
@@ -16998,14 +17270,14 @@ ${BLOCKED_PILL_CSS}
       const rowHtml2 = PERSON_ROWS.map((r) => {
         const cell = shown[r.key] || {};
         const pills = CHANNELS2.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key] })).join("");
-        return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
+        return `<div class="grow"><div class="rl">${esc2(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
       this.set(this.css(CSS25) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
-          <img class="av" src="${av}" alt="" width="40" height="40" loading="lazy" />
+          <span class="av">${avatarLayers(this._username || "")}</span>
           <div class="mtx"><div class="t">@${u}</div><div class="d">What this follow sends you</div></div>
           <button class="x" type="button" data-close aria-label="Close">&times;</button>
         </div>
@@ -17016,7 +17288,7 @@ ${BLOCKED_PILL_CSS}
           </div>
           <div class="grid"${custom ? "" : " data-locked"}>${rowHtml2}</div>
         </div>
-        <div class="msg" aria-live="polite">${esc(this._err || "")}</div>
+        <div class="msg" aria-live="polite">${esc2(this._err || "")}</div>
         <div class="ft">
           <button class="act unfollow" type="button" data-unfollow ${this._saving ? "disabled" : ""}>Unfollow</button>
           <span class="sp"></span>
@@ -17248,7 +17520,7 @@ ${BLOCKED_PILL_CSS}
     return "composer";
   }
   function composerHoldsWork({ editing = false, values = [] } = {}) {
-    return editing === true || values.some((v) => String(v ?? "").trim() !== "");
+    return editing === true || values.some((v2) => String(v2 ?? "").trim() !== "");
   }
   function canSharePublicly({ membership, role = null, editingPublic = false } = {}) {
     if (SHARE_LOCKED_STATES.has(membership) || membership === "trialing") return false;
@@ -17263,8 +17535,8 @@ ${BLOCKED_PILL_CSS}
     const input = { id, createdAt: share.createdAt || stamp, updatedAt: stamp };
     if (fields.removeUrl !== true && typeof share.url === "string" && share.url) input.url = share.url;
     for (const k of ["title", "shortDescription", "category", "image"]) {
-      const v = fields[k];
-      if (typeof v === "string" && v.trim()) input[k] = v.trim();
+      const v2 = fields[k];
+      if (typeof v2 === "string" && v2.trim()) input[k] = v2.trim();
     }
     if (input.image && input.image === share.image && typeof share.imageSource === "string" && share.imageSource) {
       input.imageSource = share.imageSource;
@@ -17276,8 +17548,8 @@ ${BLOCKED_PILL_CSS}
     if (Array.isArray(fields.tags) && fields.tags.length) input.tags = fields.tags;
     const vis = fields.visibility ?? share.visibility;
     input.visibility = vis === "public" ? "public" : "members";
-    const st = status ?? share.status ?? "published";
-    input.status = st === "draft" ? "draft" : "published";
+    const st2 = status ?? share.status ?? "published";
+    input.status = st2 === "draft" ? "draft" : "published";
     return input;
   }
   function encRemovalFor({ share, visibility, username = null } = {}) {
@@ -17287,10 +17559,10 @@ ${BLOCKED_PILL_CSS}
     return enc;
   }
   function shareAuthorTarget(selected, current = "") {
-    const v = String(selected || "").trim().toLowerCase();
+    const v2 = String(selected || "").trim().toLowerCase();
     const c = String(current || "").trim().toLowerCase();
-    if (!v || v === c) return void 0;
-    return /^[a-z0-9][a-z0-9-]*$/.test(v) ? v : void 0;
+    if (!v2 || v2 === c) return void 0;
+    return /^[a-z0-9][a-z0-9-]*$/.test(v2) ? v2 : void 0;
   }
   function authorMoveRemovals({ share, authorTarget } = {}) {
     const from = String(share?.author || authorFromPath(share?.path) || "").toLowerCase();
@@ -17309,8 +17581,8 @@ ${BLOCKED_PILL_CSS}
     return t === "members" ? "Moving this share to members only: its public page goes away at the next deploy and the note is encrypted." : "Making this share public: anyone can read it and it can be indexed. Its discussion stays members only.";
   }
   function shareRowState(share) {
-    const st = String(share?.status ?? "published").toLowerCase();
-    if (st === "draft") return { label: "Removed", tone: "muted", published: false };
+    const st2 = String(share?.status ?? "published").toLowerCase();
+    if (st2 === "draft") return { label: "Removed", tone: "muted", published: false };
     return { label: "Published", tone: "ok", published: true };
   }
   function sharePublicUrl(share, origin = "https://gbti.network") {
@@ -17500,7 +17772,7 @@ ${BLOCKED_PILL_CSS}
     // sow-421: a re-render rebuilds the wizard empty, so an edit or a typed share declines the page-wide broadcast.
     _holdsWork() {
       if (!this.$(".card.wizard")) return false;
-      const values = ["input[type=url]", "input.title", "input.desc", "textarea", "input.tags"].map((q) => this.$(q)?.value);
+      const values = ["input[type=url]", "input.title", "input.desc", "textarea", "input.tags"].map((q2) => this.$(q2)?.value);
       return composerHoldsWork({ editing: Boolean(this._edit), values });
     }
     skipClientRender() {
@@ -17523,7 +17795,7 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _noticeHtml(title, body, glyph2) {
-      return `<div class="notice"><span class="lock">${glyph2}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
+      return `<div class="notice"><span class="lock">${glyph2}</span><div><h3>${esc2(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
       this.set(this.css(CSS27) + this._noticeHtml(
@@ -17619,7 +17891,7 @@ ${BLOCKED_PILL_CSS}
           <span class="msg" aria-live="polite"></span>
           <div class="navbtns">
             <button class="back" type="button" data-back hidden>${IC.back} Back</button>
-            <button class="next" type="button" data-next>${esc(NEXT_LABEL[1])} ${IC.fwd}</button>
+            <button class="next" type="button" data-next>${esc2(NEXT_LABEL[1])} ${IC.fwd}</button>
             <button class="post" type="button" hidden>Post Share</button>
             <button class="unpub" type="button" data-unpublish hidden>Remove from the network</button>
           </div>
@@ -17661,9 +17933,9 @@ ${BLOCKED_PILL_CSS}
         this._go(this._step - 1);
         return;
       }
-      const nt = t.closest("[data-note-tab]");
-      if (nt) {
-        this._setNoteTab(nt.dataset.noteTab);
+      const nt2 = t.closest("[data-note-tab]");
+      if (nt2) {
+        this._setNoteTab(nt2.dataset.noteTab);
         return;
       }
       const vis = t.closest("[data-vis]");
@@ -17708,7 +17980,7 @@ ${BLOCKED_PILL_CSS}
         if (post) post.hidden = true;
         if (next) {
           next.hidden = false;
-          next.innerHTML = `${esc(this._edit && step === 1 ? "Next" : NEXT_LABEL[step])} ${IC.fwd}`;
+          next.innerHTML = `${esc2(this._edit && step === 1 ? "Next" : NEXT_LABEL[step])} ${IC.fwd}`;
         }
       }
       this._syncPostReady();
@@ -17798,9 +18070,9 @@ ${BLOCKED_PILL_CSS}
           decryptNote = "The note could not be read right now; saving keeps the fields above and an empty note.";
         }
       }
-      const set = (sel, v) => {
+      const set = (sel, v2) => {
         const el2 = this.$(sel);
-        if (el2) el2.value = v == null ? "" : String(v);
+        if (el2) el2.value = v2 == null ? "" : String(v2);
       };
       set("input[type=url]", item.url || "");
       set("input.title", item.title || "");
@@ -17817,7 +18089,7 @@ ${BLOCKED_PILL_CSS}
       const box = this.$("[data-og]");
       if (box) {
         box.hidden = !this._image;
-        box.innerHTML = this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove preview</button>` : "";
+        box.innerHTML = this._image ? `<img class="ogimg" src="${esc2(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove preview</button>` : "";
         const clr = box.querySelector("[data-ogclear]");
         if (clr) clr.addEventListener("click", () => {
           this._image = null;
@@ -17939,15 +18211,15 @@ ${BLOCKED_PILL_CSS}
         case "callout":
           return `<blockquote>${String(b.text || "").split("\n").map((l) => inlineMdToHtml(l)).join("<br>")}</blockquote>`;
         case "code":
-          return `<pre><code>${esc(b.code || "")}</code></pre>`;
+          return `<pre><code>${esc2(b.code || "")}</code></pre>`;
         case "list": {
-          const items = (Array.isArray(b.items) ? b.items : []).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join("");
+          const items = (Array.isArray(b.items) ? b.items : []).map((it2) => `<li>${inlineMdToHtml(it2)}</li>`).join("");
           return b.ordered ? `<ol>${items}</ol>` : `<ul>${items}</ul>`;
         }
         case "image":
-          return b.url && !isDangerousUrl(b.url) ? `<p><img src="${esc(b.url)}" alt="${esc(b.alt || "")}" /></p>` : "";
+          return b.url && !isDangerousUrl(b.url) ? `<p><img src="${esc2(b.url)}" alt="${esc2(b.alt || "")}" /></p>` : "";
         case "embed":
-          return b.url && !isDangerousUrl(b.url) ? `<p><a href="${esc(b.url)}">${esc(b.url)}</a></p>` : "";
+          return b.url && !isDangerousUrl(b.url) ? `<p><a href="${esc2(b.url)}">${esc2(b.url)}</a></p>` : "";
         case "table":
           return "";
         // rare in a note; the light preview omits tables
@@ -17985,7 +18257,7 @@ ${BLOCKED_PILL_CSS}
       }
       const current = this._edit ? String(this._edit.author || "") : "";
       const members = this._authorMembers.includes(current) || !current ? this._authorMembers : [current, ...this._authorMembers];
-      sel.innerHTML = (current ? "" : '<option value="">You</option>') + members.map((u) => `<option value="${esc(u)}">@${esc(u)}</option>`).join("");
+      sel.innerHTML = (current ? "" : '<option value="">You</option>') + members.map((u) => `<option value="${esc2(u)}">@${esc2(u)}</option>`).join("");
       sel.value = current;
       const note = this.$("[data-author-note]");
       if (note) {
@@ -18075,7 +18347,7 @@ ${BLOCKED_PILL_CSS}
           domain = new URL(url).hostname.replace(/^www\./, "");
         } catch {
         }
-        box.innerHTML = `<div class="ogcard">` + (this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : "") + `<div class="ogtxt">` + (og?.title ? `<span class="ogtitle">${esc(og.title)}</span>` : "") + (og?.description ? `<span class="ogdesc">${esc(og.description)}</span>` : "") + (domain ? `<span class="ogdomain">${esc(domain)}</span>` : "") + `</div></div><button class="ogclear" type="button" data-ogclear>Remove preview</button>`;
+        box.innerHTML = `<div class="ogcard">` + (this._image ? `<img class="ogimg" src="${esc2(this._image)}" alt="" />` : "") + `<div class="ogtxt">` + (og?.title ? `<span class="ogtitle">${esc2(og.title)}</span>` : "") + (og?.description ? `<span class="ogdesc">${esc2(og.description)}</span>` : "") + (domain ? `<span class="ogdomain">${esc2(domain)}</span>` : "") + `</div></div><button class="ogclear" type="button" data-ogclear>Remove preview</button>`;
         const clr = box.querySelector("[data-ogclear]");
         if (clr) clr.addEventListener("click", () => {
           this._image = null;
@@ -18094,7 +18366,7 @@ ${BLOCKED_PILL_CSS}
         this._suggested = null;
         this._suggestedTags = [];
       }
-      box.innerHTML = `<span class="ogmsg${state.kind === "error" ? " err" : ""}">${esc(state.message)}</span>` + (state.retry ? ` <button class="ogclear" type="button" data-ogretry>Try again</button>` : "");
+      box.innerHTML = `<span class="ogmsg${state.kind === "error" ? " err" : ""}">${esc2(state.message)}</span>` + (state.retry ? ` <button class="ogclear" type="button" data-ogretry>Try again</button>` : "");
       const again = box.querySelector("[data-ogretry]");
       if (again) again.addEventListener("click", () => {
         this._lastOgUrl = null;
@@ -18215,10 +18487,10 @@ ${BLOCKED_PILL_CSS}
   function canSeeShares(membership) {
     return SHARE_OK.has(String(membership || "").toLowerCase());
   }
-  function toMs(v) {
-    if (v == null) return 0;
-    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-    const t = Date.parse(v);
+  function toMs(v2) {
+    if (v2 == null) return 0;
+    if (typeof v2 === "number") return Number.isFinite(v2) ? v2 : 0;
+    const t = Date.parse(v2);
     return Number.isNaN(t) ? 0 : t;
   }
   function hostOf2(u) {
@@ -18228,18 +18500,18 @@ ${BLOCKED_PILL_CSS}
       return "link";
     }
   }
-  function shareTitle(it) {
-    return it.title || it.shortDescription || (it.url ? `Link: ${hostOf2(it.url)}` : "Member share");
+  function shareTitle(it2) {
+    return it2.title || it2.shortDescription || (it2.url ? `Link: ${hostOf2(it2.url)}` : "Member share");
   }
-  function shareToItem(it) {
+  function shareToItem(it2) {
     return {
-      ...it,
+      ...it2,
       type: "share",
-      title: shareTitle(it),
-      excerpt: it.title ? it.shortDescription || "" : "",
-      thumb: it.image || null,
+      title: shareTitle(it2),
+      excerpt: it2.title ? it2.shortDescription || "" : "",
+      thumb: it2.image || null,
       // SOW-057: the featured image drives the unified card thumbnail
-      createdAt: it.createdAt
+      createdAt: it2.createdAt
     };
   }
   function mergeAll({ items = [], shares = null, membership = "unknown" } = {}) {
@@ -18270,7 +18542,7 @@ ${BLOCKED_PILL_CSS}
     if (typeof link !== "string" || !link) return "";
     try {
       const u = new URL(link);
-      for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+      for (const [k, v2] of Object.entries(params)) u.searchParams.set(k, v2);
       return u.toString();
     } catch {
       return link;
@@ -18438,11 +18710,11 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/target-slug.mjs
-  function targetSlugFor(it) {
-    if (!it) return "";
-    if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
-    if (it.slug) return String(it.slug);
-    const m = String(it.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
+  function targetSlugFor(it2) {
+    if (!it2) return "";
+    if (it2.type === "share") return it2.author && it2.id ? `${it2.author}/${it2.id}` : "";
+    if (it2.slug) return String(it2.slug);
+    const m = String(it2.path || "").match(/\/(?:posts|projects|products|prompts)\/([^/]+)\/index\.md$/);
     return m ? m[1] : "";
   }
   var SAVABLE_TYPES = /* @__PURE__ */ new Set(["post", "project", "prompt", "share"]);
@@ -18465,11 +18737,11 @@ ${BLOCKED_PILL_CSS}
   }
   function avatarFor(item = {}) {
     if (lc2(item.type) === "news") {
-      return { src: faviconFor(item.link || item.openHref), title: item.source || item.author || "News" };
+      const title = item.source || item.author || "News";
+      return { src: faviconFor(item.link || item.openHref), title, seed: title };
     }
-    const a = lc2(item.author);
-    const login = a === "gbti" || a === "house" ? "gbti-network" : item.author;
-    return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : "", title: authorName2(item.author) };
+    const folder2 = lc2(item.author);
+    return { src: memberAvatarUrl(folder2), title: authorName2(item.author), seed: folder2 || authorName2(item.author) };
   }
   function thumbRaw(item = {}, isCard2 = false) {
     return (isCard2 && item.thumbCard ? item.thumbCard : item.thumb || item.thumbCard) || null;
@@ -18510,10 +18782,8 @@ ${BLOCKED_PILL_CSS}
   .meta .who { color:var(--fg); font-weight:500; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
   .meta .dot { width:3px; height:3px; border-radius:50%; background:var(--line); flex:none; }
   /* SOW-049: the meta avatar (member github avatar / news publisher favicon). The name/source is the title tooltip. */
-  .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center;
-    background:var(--hover); color:var(--muted); font-size:10px; font-weight:700; line-height:1; }
-  .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .av .ini { user-select:none; }
+  .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:block;
+    background:var(--hover); }
   .meta .ago { color:var(--muted); }
   /* sow-296: the display face and the website's title weight, so a feed row reads the same on both hosts. */
   .title { font-family:var(--font-display, var(--font-body)); font-weight:700; color:var(--fg); letter-spacing:-.01em; overflow-wrap:anywhere; }
@@ -18630,15 +18900,15 @@ ${BLOCKED_PILL_CSS}
   }
 `;
   var GbtiCardList = class extends GbtiElement {
-    set items(v) {
-      this._items = Array.isArray(v) ? v : [];
+    set items(v2) {
+      this._items = Array.isArray(v2) ? v2 : [];
       this.render();
     }
     get items() {
       return this._items || [];
     }
-    set mode(v) {
-      this._mode = MODES.has(v) ? v : "detailed";
+    set mode(v2) {
+      this._mode = MODES.has(v2) ? v2 : "detailed";
       this.render();
     }
     get mode() {
@@ -18657,43 +18927,41 @@ ${BLOCKED_PILL_CSS}
       if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
       const glyph2 = this.mode === "detailed" ? "" : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
-      const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
-      return `<span class="media" style="--ka:${esc(g.accent)}">${glyph2}${img}</span>`;
+      const img = thumb ? `<img class="cimg" src="${esc2(thumb)}" alt="" loading="lazy">` : "";
+      return `<span class="media" style="--ka:${esc2(g.accent)}">${glyph2}${img}</span>`;
     }
     _chip(item) {
       const t = lc2(item.type);
       if (t === "prompt" && item.kind === "skill") return '<span class="chip k-skill">Skill</span>';
       const k = ["post", "project", "prompt", "share", "news"].includes(t) ? ` k-${t}` : "";
-      return `<span class="chip${k}">${esc(TYPE_LABEL5[item.type] || item.type)}</span>`;
+      return `<span class="chip${k}">${esc2(TYPE_LABEL5[item.type] || item.type)}</span>`;
     }
     // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
     // sow-423 (owner, 2026-09-29): news gets the pill too. A news item carries its category as a readable name already
     // ("AI/ML", "Hardware", "Other"), not a taxonomy path, so it is shown as it is, "Other" included (owner's call).
     _categoryChip(item) {
       const leaf = lc2(item.type) === "news" ? String(item.category ?? "").trim() : categoryLeaf(item.categoryLabels);
-      return leaf ? `<span class="catchip">${esc(leaf)}</span>` : "";
+      return leaf ? `<span class="catchip">${esc2(leaf)}</span>` : "";
     }
     // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
     _lock(item) {
       return item.visibility === "members" && lc2(item.type) !== "news" ? `<span class="lock">${lockIco}Members</span>` : "";
     }
-    // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
-    // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
+    // SOW-049: the meta leads with a small avatar (member -> their photo; news -> publisher favicon); the name/source
+    // is the avatar's hover tooltip (title), not a persistent label. A missing or broken image leaves the blobatar.
     _meta(item, { named = true } = {}) {
       const ago = relTime(item.createdAt ?? item.publishedAt);
       const av = avatarFor(item);
-      const ini = esc((av.title || "?").trim().charAt(0).toUpperCase() || "?");
-      const img = av.src ? `<img class="avimg" src="${esc(av.src)}" alt="" loading="lazy">` : "";
-      const who = named && av.title ? `<span class="who">${esc(av.title)}</span>` : "";
+      const who = named && av.title ? `<span class="who">${esc2(av.title)}</span>` : "";
       const sep = who && ago ? '<span class="dot"></span>' : "";
-      return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${who}${sep}${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
+      return `<span class="meta"><span class="av" title="${esc2(av.title)}">${avatarLayers(av.seed, av.src)}</span>${who}${sep}${ago ? `<span class="ago">${esc2(ago)}</span>` : ""}</span>`;
     }
     _open(item, i, cls) {
       const t = lc2(item.type);
-      const accent = t && t !== "news" ? ` style="--cbar:${esc(typeAccent(t))}"` : "";
+      const accent = t && t !== "news" ? ` style="--cbar:${esc2(typeAccent(t))}"` : "";
       const nomedia = t === "news" && cls !== "card-i" || cls === "row-d" && !this._thumbUrl(item) ? " no-media" : "";
-      const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
-      return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
+      const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc2(t)}"${accent}`;
+      return item.openHref ? `<a ${attrs} href="${esc2(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
     }
     _close(item) {
       return item.openHref ? "</a>" : "</div>";
@@ -18704,7 +18972,7 @@ ${BLOCKED_PILL_CSS}
       const t = lc2(item.type);
       const slug = SAVABLE_TYPES.has(t) ? targetSlugFor({ ...item, type: t }) : "";
       if (!slug) return "";
-      const a = `data-gbti-target-type="${esc(t)}" data-gbti-target-slug="${esc(slug)}"`;
+      const a = `data-gbti-target-type="${esc2(t)}" data-gbti-target-slug="${esc2(slug)}"`;
       return `<div class="acts"><gbti-favorite ${a} data-gbti-region="favorite"></gbti-favorite><gbti-collection ${a}></gbti-collection></div>`;
     }
     // The wrapper that lets the controls sit beside the card link rather than inside it.
@@ -18713,13 +18981,13 @@ ${BLOCKED_PILL_CSS}
       return `<div class="it${acts ? " has-acts" : ""}">${inner}${acts}</div>`;
     }
     _compact(items) {
-      return `<div class="compact">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it, { named: false })}</span>${this._close(it)}`)).join("") + `</div>`;
+      return `<div class="compact">` + items.map((it2, i) => this._wrap(it2, `${this._open(it2, i, "row-c")}${this._media(it2)}${this._chip(it2)}<span class="title">${esc2(it2.title)}</span><span class="right">${this._lock(it2)}${this._meta(it2, { named: false })}</span>${this._close(it2)}`)).join("") + `</div>`;
     }
     _detailed(items) {
-      return `<div class="detailed">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._meta(it)}${this._chip(it)}${this._categoryChip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}</div>${this._close(it)}`)).join("") + `</div>`;
+      return `<div class="detailed">` + items.map((it2, i) => this._wrap(it2, `${this._open(it2, i, "row-d")}${this._media(it2)}<div class="body"><div class="top">${this._meta(it2)}${this._chip(it2)}${this._categoryChip(it2)}${this._lock(it2)}</div><div class="title">${esc2(it2.title)}</div>${it2.excerpt ? `<span class="ex">${esc2(it2.excerpt)}</span>` : ""}</div>${this._close(it2)}`)).join("") + `</div>`;
     }
     _card(items) {
-      return `<div class="card">` + items.map((it, i) => this._wrap(it, `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`)).join("") + `</div>`;
+      return `<div class="card">` + items.map((it2, i) => this._wrap(it2, `${this._open(it2, i, "card-i")}${this._media(it2)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it2)}${this._categoryChip(it2)}</span>${this._lock(it2)}</div><div class="title">${esc2(it2.title)}</div>${this._meta(it2)}</div>${this._close(it2)}`)).join("") + `</div>`;
     }
     render() {
       if (!this._items) return;
@@ -18732,7 +19000,7 @@ ${BLOCKED_PILL_CSS}
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
-          if (t?.tagName !== "IMG" || !(t.classList?.contains("cimg") || t.classList?.contains("avimg"))) return;
+          if (t?.tagName !== "IMG" || !t.classList?.contains("cimg")) return;
           const card = t.classList.contains("cimg") ? t.closest('[data-card][data-type="news"]') : null;
           if (card) {
             (card.closest(".it") || card).remove();
@@ -18970,9 +19238,9 @@ ${BLOCKED_PILL_CSS}
       if (!quiet) this.set(this.css(CSS29) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
-        const st = await this.client.status();
-        membership = st?.membership ?? "unknown";
-        this._role = st?.role ?? "member";
+        const st2 = await this.client.status();
+        membership = st2?.membership ?? "unknown";
+        this._role = st2?.role ?? "member";
       } catch {
         membership = "unknown";
         this._role = "member";
@@ -19007,7 +19275,7 @@ ${BLOCKED_PILL_CSS}
     _renderList() {
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       const items = this._items || [];
-      const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
+      const pending = dropPublished(items.map((it2) => `${it2.author}/${it2.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
         this.set(this.css(CSS29) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
@@ -19021,11 +19289,11 @@ ${BLOCKED_PILL_CSS}
       if (items.length) {
         const list = document.createElement("gbti-card-list");
         list.mode = "detailed";
-        list.items = items.map((it) => shareToItem(it));
+        list.items = items.map((it2) => shareToItem(it2));
         list.addEventListener("card-open", (e) => {
-          const it = e.detail?.item;
-          if (it) {
-            this._reading = it;
+          const it2 = e.detail?.item;
+          if (it2) {
+            this._reading = it2;
             this.render();
           }
         });
@@ -19033,8 +19301,8 @@ ${BLOCKED_PILL_CSS}
       }
     }
     /** sow-224: one pending stub card (amber "Queued" and the shared copy; sow-404 removed its Pull requests link). */
-    _pendingStubHtml(v) {
-      return `<article class="pstub"><span class="pstub-tag">Queued</span><div class="pstub-title">${esc(v.title)}</div><p class="pstub-note">${esc(v.note)}</p></article>`;
+    _pendingStubHtml(v2) {
+      return `<article class="pstub"><span class="pstub-tag">Queued</span><div class="pstub-title">${esc2(v2.title)}</div><p class="pstub-note">${esc2(v2.note)}</p></article>`;
     }
     /** Append the next older page (website cookie adapter only; feature-detected by the nextBefore cursor). */
     async _loadOlder() {
@@ -19064,22 +19332,22 @@ ${BLOCKED_PILL_CSS}
     _renderReading(share) {
       const slug = share.author && share.id ? `${share.author}/${share.id}` : "";
       const badge = share.visibility === "members" ? `<span class="badge">Members</span>` : "";
-      const title = share.title ? `<div class="title">${esc(share.title)}</div>` : "";
-      const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
-      const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc(hostOf2(share.url))}</a>` : "";
+      const title = share.title ? `<div class="title">${esc2(share.title)}</div>` : "";
+      const desc = share.shortDescription ? `<div class="desc">${esc2(share.shortDescription)}</div>` : "";
+      const link = share.url ? `<a class="link" href="${esc2(utmLink(share.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow">${shareLinkVerb(share.url)} on ${esc2(hostOf2(share.url))}</a>` : "";
       const shareEmbed = share.url ? embedUrl(share.url) : null;
       const heroUrl = share.image ? resolveAsset(share.image) : "";
-      const hero = shareEmbed ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
-      const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
+      const hero = shareEmbed ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : heroUrl ? `<img class="share-hero" src="${esc2(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
+      const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc2(t)}</span>`).join("")}</div>` : "";
       const actions = slug ? `<div class="actions">
-      <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-favorite>
-      <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-collection>
+      <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-favorite>
+      <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-collection>
     </div>` : "";
-      const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
+      const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
+      const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc2(share.author)}" data-gbti-id="${esc2(share.id)}"></gbti-mod-actions>` : "";
       this.set(this.css(CSS29) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
-        <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
+        <div class="who"><span class="name">${esc2(authorName3(share.author))}</span><span class="when">${esc2(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
         <div class="body" data-body><p class="empty">Loading…</p></div>
         ${link}${hero}${tags}${discussion}
@@ -19105,12 +19373,12 @@ ${BLOCKED_PILL_CSS}
       if (html && html.locked) el2.innerHTML = `<div class="locked">This Share is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`;
       else el2.innerHTML = typeof html === "string" && html ? html : `<p class="muted">No note.</p>`;
     }
-    async _resolveBody(it) {
+    async _resolveBody(it2) {
       try {
-        if (it.body) return (await this.client.preview({ body: it.body }))?.html ?? "";
-        if (it.visibility === "members") {
-          if (!it.encryptedBody) return "";
-          const { text: text2 } = await this.client.decrypt({ encPath: it.encryptedBody });
+        if (it2.body) return (await this.client.preview({ body: it2.body }))?.html ?? "";
+        if (it2.visibility === "members") {
+          if (!it2.encryptedBody) return "";
+          const { text: text2 } = await this.client.decrypt({ encPath: it2.encryptedBody });
           return (await this.client.preview({ body: text2 }))?.html ?? "";
         }
         return "";
@@ -21583,9 +21851,9 @@ ${BLOCKED_PILL_CSS}
         const c = lockedAccountCopy(membership);
         this.set(this.css(CSS31) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
-        <h2>${esc(c.heading)}</h2>
-        <p>${esc(c.body)}</p>
-        ${c.cta ? `<a class="cta" href="${esc(c.cta.href)}">${esc(c.cta.label)}</a>` : ""}
+        <h2>${esc2(c.heading)}</h2>
+        <p>${esc2(c.body)}</p>
+        ${c.cta ? `<a class="cta" href="${esc2(c.cta.href)}">${esc2(c.cta.label)}</a>` : ""}
       </div>`);
         return;
       }
@@ -21658,13 +21926,13 @@ ${BLOCKED_PILL_CSS}
       }
       const cards = this._rows.map(({ c, html, outcome }) => {
         const note = echoNote({ outcome, prNumber: c.prNumber });
-        const ini = esc(String(c.author || "?").trim().charAt(0).toUpperCase() || "?");
-        return `<li class="card" data-echo="${esc(String(c.id))}">
-        <span class="cav">${this._avatar ? `<img src="${esc(this._avatar)}" alt="">` : ini}</span>
+        const ini = esc2(String(c.author || "?").trim().charAt(0).toUpperCase() || "?");
+        return `<li class="card" data-echo="${esc2(String(c.id))}">
+        <span class="cav">${this._avatar ? `<img src="${esc2(this._avatar)}" alt="">` : ini}</span>
         <div class="main">
-          <div class="meta"><span class="name">${esc(String(c.author || ""))}</span><span>${esc(relTime(c.createdAt))}</span><span class="badge">Yours, posting</span></div>
+          <div class="meta"><span class="name">${esc2(String(c.author || ""))}</span><span>${esc2(relTime(c.createdAt))}</span><span class="badge">Yours, posting</span></div>
           <div class="body">${html}</div>
-          <div class="note ${note.tone}" data-note><span class="dot" aria-hidden="true"></span><span>${esc(note.text)}</span></div>
+          <div class="note ${note.tone}" data-note><span class="dot" aria-hidden="true"></span><span>${esc2(note.text)}</span></div>
         </div>
       </li>`;
       }).join("");
@@ -21680,8 +21948,8 @@ ${BLOCKED_PILL_CSS}
       try {
         if (this._avatar === void 0) {
           try {
-            const st = await this.client.status?.();
-            this._avatar = st?.identity?.avatar || st?.identity?.avatarUrl || null;
+            const st2 = await this.client.status?.();
+            this._avatar = st2?.identity?.avatar || st2?.identity?.avatarUrl || null;
           } catch {
             this._avatar = null;
           }
@@ -21701,7 +21969,7 @@ ${BLOCKED_PILL_CSS}
       try {
         return (await this.client.preview({ body: body || "", autoEmbed: true }))?.html || "";
       } catch {
-        return `<p>${esc(body || "")}</p>`;
+        return `<p>${esc2(body || "")}</p>`;
       }
     }
     // The static page around this element: the built heading count and the empty-state card.
@@ -21796,16 +22064,16 @@ ${BLOCKED_PILL_CSS}
     _consumePendingEdit() {
       const want = this.getAttribute("edit-id");
       if (!want || !Array.isArray(this._items)) return null;
-      const it = this._items.find((s) => String(s.id) === want);
+      const it2 = this._items.find((s) => String(s.id) === want);
       this.removeAttribute("edit-id");
-      if (!it) return null;
-      this.emit("gbti-edit-share", { ...it });
+      if (!it2) return null;
+      this.emit("gbti-edit-share", { ...it2 });
       return want;
     }
     render() {
       const items = this._items;
-      const w = pageWindow(items?.length || 0, this._page, WORKSPACE_PAGE_SIZE);
-      const body = items === null ? `<p class="muted">${this.getAttribute("edit-id") ? "Opening your share for editing..." : "Loading your shares..."}</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.slice(w.start, w.end).map((it, j) => this.rowHtml(it, w.start + j)).join("")}</ul>` + this.pagerHtml(w);
+      const w2 = pageWindow(items?.length || 0, this._page, WORKSPACE_PAGE_SIZE);
+      const body = items === null ? `<p class="muted">${this.getAttribute("edit-id") ? "Opening your share for editing..." : "Loading your shares..."}</p>` : items.length === 0 ? `<p class="muted">${this._error ? esc2(this._error) : "No shares yet. Use the share bar above to post your first one."}</p>` : `<ul class="list">${items.slice(w2.start, w2.end).map((it2, j2) => this.rowHtml(it2, w2.start + j2)).join("")}</ul>` + this.pagerHtml(w2);
       this.set(this.css(`
       .row { align-items: flex-start; gap: 10px; }
       .sh-main { min-width: 0; flex: 1 1 auto; }
@@ -21828,8 +22096,8 @@ ${BLOCKED_PILL_CSS}
            ${body}
          </div>`);
       this.$$("button[data-i]").forEach((b) => b.addEventListener("click", () => {
-        const it = items?.[Number(b.dataset.i)];
-        if (it) this.emit("gbti-edit-share", { ...it });
+        const it2 = items?.[Number(b.dataset.i)];
+        if (it2) this.emit("gbti-edit-share", { ...it2 });
       }));
       this.$$("button[data-view]").forEach((b) => b.addEventListener("click", () => {
         const url = b.dataset.view;
@@ -21847,17 +22115,17 @@ ${BLOCKED_PILL_CSS}
       if (pages <= 1) return "";
       return `<div class="pager"><button class="pgb" data-page="${page - 1}" type="button"${page === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page + 1} of ${pages}</span><button class="pgb" data-page="${page + 1}" type="button"${page >= pages - 1 ? " disabled" : ""}>Next &rarr;</button></div>`;
     }
-    rowHtml(it, i) {
-      const state = shareRowState(it);
-      const vis = String(it.visibility ?? "members") === "public" ? "public" : "members";
-      const url = sharePublicUrl(it);
-      const title = it.title || (it.shortDescription ? String(it.shortDescription) : "") || (it.body ? String(it.body).split("\n")[0] : "") || (it.url ? String(it.url) : "") || it.id;
-      const when = it.createdAt ? `<time datetime="${esc(it.createdAt)}" title="${esc(absTime(it.createdAt))}">${esc(relTime(it.createdAt))}</time>` : "";
-      const edited = it.updatedAt ? ` <span class="muted">(edited ${esc(relTime(it.updatedAt))})</span>` : "";
-      const view = url ? `<button class="ghost" data-view="${esc(url)}" title="Open the live public page in a new tab">View</button>` : "";
-      const who = this._network() && it.author ? `<span class="tag who">@${esc(String(it.author))}</span> ` : "";
+    rowHtml(it2, i) {
+      const state = shareRowState(it2);
+      const vis = String(it2.visibility ?? "members") === "public" ? "public" : "members";
+      const url = sharePublicUrl(it2);
+      const title = it2.title || (it2.shortDescription ? String(it2.shortDescription) : "") || (it2.body ? String(it2.body).split("\n")[0] : "") || (it2.url ? String(it2.url) : "") || it2.id;
+      const when = it2.createdAt ? `<time datetime="${esc2(it2.createdAt)}" title="${esc2(absTime(it2.createdAt))}">${esc2(relTime(it2.createdAt))}</time>` : "";
+      const edited = it2.updatedAt ? ` <span class="muted">(edited ${esc2(relTime(it2.updatedAt))})</span>` : "";
+      const view = url ? `<button class="ghost" data-view="${esc2(url)}" title="Open the live public page in a new tab">View</button>` : "";
+      const who = this._network() && it2.author ? `<span class="tag who">@${esc2(String(it2.author))}</span> ` : "";
       return `<li class="row">
-      <span class="sh-main"><span class="sh-t">${esc(title)}</span><span class="sh-m">${who}${when}${edited} <span class="tag ${state.tone}">${esc(state.label)}</span> <span class="tag">${vis}</span></span></span>
+      <span class="sh-main"><span class="sh-t">${esc2(title)}</span><span class="sh-m">${who}${when}${edited} <span class="tag ${state.tone}">${esc2(state.label)}</span> <span class="tag">${vis}</span></span></span>
       <span class="rowacts">${view}<button class="ghost" data-i="${i}">Edit</button></span>
     </li>`;
     }
@@ -21865,7 +22133,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-share-list", GbtiShareList);
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE11 = "https://gbti.network";
+  var SITE12 = "https://gbti.network";
   var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
@@ -21930,7 +22198,7 @@ ${BLOCKED_PILL_CSS}
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE11}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE12}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -21964,15 +22232,15 @@ ${BLOCKED_PILL_CSS}
       const idx = this._index || buildItemIndex({});
       const chips = savedTypeChips(this._activity);
       if (!chips.some((c) => c.type === this._filter)) this._filter = "all";
-      const chipsHtml = chips.length > 1 ? `<div class="chips">${chips.map((c) => `<button class="chip ${c.type === this._filter ? "on" : ""}" type="button" data-chip="${esc(c.type)}">${esc(c.label)} <span class="n">${c.count}</span></button>`).join("")}</div>` : "";
+      const chipsHtml = chips.length > 1 ? `<div class="chips">${chips.map((c) => `<button class="chip ${c.type === this._filter ? "on" : ""}" type="button" data-chip="${esc2(c.type)}">${esc2(c.label)} <span class="n">${c.count}</span></button>`).join("")}</div>` : "";
       const view = filterSavedByType(this._activity, this._filter);
       const favGroups = groupFavoritesByType(view.favorites);
-      const favHtml = favGroups.length ? favGroups.map((g) => `<div class="grp"><h4>${esc(typeLabel(g.type))}</h4><ul class="rows">${g.items.map((f) => this._itemRow(resolveItem(idx, f.type, f.slug), { fav: true })).join("")}</ul></div>`).join("") : `<p class="muted">No favorites yet. Tap the heart on any article, product, prompt, or Share to save it here.</p>`;
+      const favHtml = favGroups.length ? favGroups.map((g) => `<div class="grp"><h4>${esc2(typeLabel(g.type))}</h4><ul class="rows">${g.items.map((f) => this._itemRow(resolveItem(idx, f.type, f.slug), { fav: true })).join("")}</ul></div>`).join("") : `<p class="muted">No favorites yet. Tap the heart on any article, product, prompt, or Share to save it here.</p>`;
       const colls = view.collections;
       const collHtml = colls.length ? colls.map((c) => `<div class="coll">
-          <div class="coll-h"><b class="coll-nm">${esc(c.name)}</b><span class="coll-ct">${(c.items || []).length} item${(c.items || []).length === 1 ? "" : "s"}</span>
-            <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
-          <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
+          <div class="coll-h"><b class="coll-nm">${esc2(c.name)}</b><span class="coll-ct">${(c.items || []).length} item${(c.items || []).length === 1 ? "" : "s"}</span>
+            <span class="coll-act"><button class="lk" data-rename data-cid="${esc2(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc2(c.id)}" type="button">Delete</button></span></div>
+          <ul class="rows">${(c.items || []).length ? (c.items || []).map((it2) => this._itemRow(resolveItem(idx, it2.type, it2.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
       this.set(this.css(CSS33) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
@@ -21996,10 +22264,10 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _itemRow(item, { fav, cid } = {}) {
-      const title = esc(item.title);
-      const t = item.url ? `<a class="t" href="${SITE11}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
-      const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
-      return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
+      const title = esc2(item.title);
+      const t = item.url ? `<a class="t" href="${SITE12}${esc2(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc2(cid)}" data-type="${esc2(item.type)}" data-slug="${esc2(item.slug)}" type="button">Remove</button>`;
+      return `<li class="row"><span class="badge">${esc2(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
     _wire() {
       this.$$("[data-chip]").forEach((b) => b.addEventListener("click", () => {
@@ -22042,7 +22310,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-topic-picker.mjs
-  var SITE12 = "https://gbti.network";
+  var SITE13 = "https://gbti.network";
   var MAX_TOPICS = 200;
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
@@ -22082,7 +22350,7 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       try {
-        const data = await (await fetch(`${SITE12}/topics.json`, { cache: "no-cache" })).json();
+        const data = await (await fetch(`${SITE13}/topics.json`, { cache: "no-cache" })).json();
         this._topics = topicsFromJson(data);
         this._groupOrder = groupOrderFromJson(data);
       } catch {
@@ -22175,9 +22443,9 @@ ${BLOCKED_PILL_CSS}
         const on = all.filter((t) => sel.has(t.key)).length;
         return on ? `${on} of ${all.length}` : `${all.length}`;
       };
-      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${sel.has(t.key) ? CHECK3 : ""}${esc(t.label)}</button>`).join("");
+      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc2(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${sel.has(t.key) ? CHECK3 : ""}${esc2(t.label)}</button>`).join("");
       list.className = `list ${this._busy ? "busy" : ""}`;
-      list.innerHTML = groups.length ? groups.map((g) => `${g.group ? `<div class="gh"><h4 class="grp">${esc(g.group)}</h4><span class="tally">${tally(g.group)}</span></div>` : ""}<div class="chips">${chipsFor(g.topics)}</div>`).join("") : '<p class="muted">No topic matches that filter.</p>';
+      list.innerHTML = groups.length ? groups.map((g) => `${g.group ? `<div class="gh"><h4 class="grp">${esc2(g.group)}</h4><span class="tally">${tally(g.group)}</span></div>` : ""}<div class="chips">${chipsFor(g.topics)}</div>`).join("") : '<p class="muted">No topic matches that filter.</p>';
       const cnt = this.$("[data-cnt]");
       if (cnt) cnt.textContent = `${this._selected.length} selected (max ${MAX_TOPICS})`;
       this.$$("[data-topic]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.topic)));
@@ -22206,7 +22474,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE13 = "https://gbti.network";
+  var SITE14 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS35 = `
@@ -22219,7 +22487,7 @@ ${BLOCKED_PILL_CSS}
   ul.rows { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:11px; padding:9px 2px; border-top:1px solid var(--line); }
   .row:first-child { border-top:0; }
-  .av { width:30px; height:30px; border-radius:50%; flex:none; object-fit:cover; background:var(--hover); }
+  .av { position:relative; overflow:hidden; display:block; width:30px; height:30px; border-radius:50%; flex:none; background:var(--hover); }
   .ico { width:30px; height:30px; border-radius:8px; flex:none; display:flex; align-items:center; justify-content:center; background:var(--hover); color:var(--muted); font-weight:800; font-size:13px; }
   .row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; font-size:14px; color:var(--fg); text-decoration:none; }
   .row .nm .d { display:block; font-weight:500; font-size:12px; color:var(--muted); }
@@ -22281,10 +22549,10 @@ ${BLOCKED_PILL_CSS}
       }
       if (rerender) this.render();
     }
-    _setView(v) {
-      if (this._view === v) return;
-      this._view = v;
-      if (v === "channels" && this._channels === null && !this._channelsError) {
+    _setView(v2) {
+      if (this._view === v2) return;
+      this._view = v2;
+      if (v2 === "channels" && this._channels === null && !this._channelsError) {
         this._reloadChannels(true);
         return;
       }
@@ -22309,28 +22577,25 @@ ${BLOCKED_PILL_CSS}
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
-      this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
-        img.style.visibility = "hidden";
-      }, { once: true }));
       this.$$("[data-unfollow]").forEach((b) => b.addEventListener("click", () => this._unfollow(b.dataset.unfollow)));
       this.$$("[data-unfollowchan]").forEach((b) => b.addEventListener("click", () => this._unfollowChannel(b.dataset.unfollowchan)));
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
-        const u = esc(f.username);
+        const u = esc2(f.username);
         return `<li class="row">
-        <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
-        <a class="nm" href="${SITE13}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <span class="av">${avatarLayers(f.username)}</span>
+        <a class="nm" href="${SITE14}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE13}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE14}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -22349,12 +22614,12 @@ ${BLOCKED_PILL_CSS}
         return `<p class="muted">You are not following any news channels yet. Open <b>News &rarr; Channels</b> to follow sources, and they show up here.</p>`;
       }
       const rows = this._channels.map((c) => {
-        const id = esc(c.id);
-        const ini = esc((c.name || "?").trim().charAt(0).toUpperCase() || "#");
-        const meta = c.meta ? `<span class="d">${esc(c.meta)}</span>` : "";
+        const id = esc2(c.id);
+        const ini = esc2((c.name || "?").trim().charAt(0).toUpperCase() || "#");
+        const meta = c.meta ? `<span class="d">${esc2(c.meta)}</span>` : "";
         return `<li class="row">
         <span class="ico">${ini}</span>
-        <span class="nm">${esc(c.name)}${meta}</span>
+        <span class="nm">${esc2(c.name)}${meta}</span>
         <button class="lk" data-unfollowchan="${id}" type="button">Unfollow</button>
       </li>`;
       }).join("");
@@ -22407,21 +22672,21 @@ ${BLOCKED_PILL_CSS}
   var MAX_NETWORK_FOLLOWS = 40;
   var MAX_SOCIALS = 30;
   var MAX_HANDLE = 200;
-  var isOnboardingKey = (v) => typeof v === "string" && KEY.test(v);
-  function cleanKeys(v, max, allow = null) {
+  var isOnboardingKey = (v2) => typeof v2 === "string" && KEY.test(v2);
+  function cleanKeys(v2, max, allow = null) {
     const out = [];
-    for (const x of Array.isArray(v) ? v : []) {
+    for (const x of Array.isArray(v2) ? v2 : []) {
       if (!isOnboardingKey(x) || allow && !allow.includes(x) || out.includes(x)) continue;
       out.push(x);
       if (out.length >= max) break;
     }
     return out;
   }
-  function cleanSocials(v) {
+  function cleanSocials(v2) {
     const out = {};
-    if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+    if (!v2 || typeof v2 !== "object" || Array.isArray(v2)) return out;
     let n = 0;
-    for (const [k, raw] of Object.entries(v)) {
+    for (const [k, raw] of Object.entries(v2)) {
       if (!isOnboardingKey(k) || typeof raw !== "string") continue;
       const s = raw.trim();
       if (!s || s.length > MAX_HANDLE || /[\x00-\x1f\x7f]/.test(s)) continue;
@@ -22430,13 +22695,13 @@ ${BLOCKED_PILL_CSS}
     }
     return out;
   }
-  function normalizeOnboarding(v) {
-    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  function normalizeOnboarding(v2) {
+    if (!v2 || typeof v2 !== "object" || Array.isArray(v2)) return null;
     const out = {
-      skipped: cleanKeys(v.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
-      networkFollows: cleanKeys(v.networkFollows, MAX_NETWORK_FOLLOWS),
-      socials: cleanSocials(v.socials),
-      socialsSaved: v.socialsSaved === true
+      skipped: cleanKeys(v2.skipped, ONBOARDING_STEP_KEYS.length, ONBOARDING_STEP_KEYS),
+      networkFollows: cleanKeys(v2.networkFollows, MAX_NETWORK_FOLLOWS),
+      socials: cleanSocials(v2.socials),
+      socialsSaved: v2.socialsSaved === true
     };
     return isEmptyOnboarding(out) ? null : out;
   }
@@ -22445,9 +22710,9 @@ ${BLOCKED_PILL_CSS}
   }
   function profileHasSocials(links, allowed = null) {
     if (!links || typeof links !== "object" || Array.isArray(links)) return false;
-    return Object.entries(links).some(([k, v]) => (!allowed || allowed.includes(k)) && typeof v === "string" && v.trim() !== "");
+    return Object.entries(links).some(([k, v2]) => (!allowed || allowed.includes(k)) && typeof v2 === "string" && v2.trim() !== "");
   }
-  var count = (v) => Number.isFinite(v) ? v : Array.isArray(v) ? v.length : null;
+  var count = (v2) => Number.isFinite(v2) ? v2 : Array.isArray(v2) ? v2.length : null;
   var emptyRecord = () => ({ skipped: [], networkFollows: [], socials: {}, socialsSaved: false });
   function onboardingProgress({ discordLinked = null, follows = null, topics = null, profileSocials = null, record, discordAvailable = true, canPublish: canPublish2 = true } = {}) {
     const rec = record === void 0 ? void 0 : normalizeOnboarding(record) ?? emptyRecord();
@@ -22658,7 +22923,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/onboarding-card-core.mjs
   var WELCOME_SITE_URL = "https://gbti.network/welcome/";
-  var answer = (p) => Promise.resolve().then(p).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e }));
+  var answer = (p) => Promise.resolve().then(p).then((v2) => ({ ok: true, v: v2 }), (e) => ({ ok: false, e }));
   async function loadOnboardingState(client) {
     if (!client) return {};
     const status = await answer(() => client.status());
@@ -22706,9 +22971,9 @@ ${BLOCKED_PILL_CSS}
     const done = total - progress.outstanding;
     const rows = progress.steps.map((s) => {
       const href = `${welcomeUrl}?step=${encodeURIComponent(s.key)}`;
-      if (s.state === "done") return `<li class="st done" data-state="done"><span class="mk" aria-hidden="true">&#10003;</span><span>${esc(s.title)}</span></li>`;
+      if (s.state === "done") return `<li class="st done" data-state="done"><span class="mk" aria-hidden="true">&#10003;</span><span>${esc2(s.title)}</span></li>`;
       const tag = s.state === "skipped" ? '<span class="tag">Skipped</span>' : "";
-      return `<li class="st ${esc(s.state)}" data-state="${esc(s.state)}"><span class="mk" aria-hidden="true"></span><a href="${esc(href)}"${target}>${esc(s.title)}</a>${tag}</li>`;
+      return `<li class="st ${esc2(s.state)}" data-state="${esc2(s.state)}"><span class="mk" aria-hidden="true"></span><a href="${esc2(href)}"${target}>${esc2(s.title)}</a>${tag}</li>`;
     }).join("");
     return `<section class="ob" aria-label="Finish setting up">
     <div class="ob-head"><b>Finish setting up your membership</b><span class="ob-count">${done} of ${total} done</span></div>
@@ -22767,11 +23032,11 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/profile-fields.mjs
   var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
   function isSanctionedAvatar(url) {
-    const v = String(url == null ? "" : url).trim();
-    if (!v) return true;
+    const v2 = String(url == null ? "" : url).trim();
+    if (!v2) return true;
     let u;
     try {
-      u = new URL(v);
+      u = new URL(v2);
     } catch {
       return false;
     }
@@ -22782,11 +23047,11 @@ ${BLOCKED_PILL_CSS}
     const out = { ...links || {} };
     if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
     const ok = Array.isArray(allowed) ? new Set(allowed) : null;
-    for (const [k, v] of Object.entries(staged)) {
+    for (const [k, v2] of Object.entries(staged)) {
       if (ok && !ok.has(k)) continue;
-      if (typeof v !== "string" || !v.trim()) continue;
+      if (typeof v2 !== "string" || !v2.trim()) continue;
       if (typeof out[k] === "string" && out[k].trim() !== "") continue;
-      out[k] = v.trim();
+      out[k] = v2.trim();
     }
     return out;
   }
@@ -22799,7 +23064,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-profile-editor.mjs
-  var SITE14 = "https://gbti.network";
+  var SITE15 = "https://gbti.network";
   var STATUS_LABEL2 = {
     paid: "Paid member",
     trialing: "Free trial",
@@ -22811,7 +23076,7 @@ ${BLOCKED_PILL_CSS}
     unknown: "Unknown"
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
@@ -22950,9 +23215,9 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _modelFromFm(fm, body) {
-      const str6 = (v) => v == null ? "" : String(v);
+      const str6 = (v2) => v2 == null ? "" : String(v2);
       const links = {};
-      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str6(v);
+      for (const [k, v2] of Object.entries(fm.links || {})) links[k] = str6(v2);
       return {
         displayName: str6(fm.displayName),
         headline: str6(fm.headline),
@@ -23004,7 +23269,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS37) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE14}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS37) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE15}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
@@ -23022,17 +23287,17 @@ ${BLOCKED_PILL_CSS}
       this._wire();
     }
     _identity(m) {
-      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc(STATUS_LABEL2[this._membership] || this._membership)}</span>`;
+      const badge = this._paid ? '<span class="badge paid">Paid</span>' : `<span class="badge">${esc2(STATUS_LABEL2[this._membership] || this._membership)}</span>`;
       return `<section class="sec">
-      <div class="sec-h"><h3>Profile ${badge}</h3><p>How you appear across gbti.network: your public profile page, the member directory, and content you author. Signed in as <b>@${esc(this._login || "")}</b>.</p></div>
+      <div class="sec-h"><h3>Profile ${badge}</h3><p>How you appear across gbti.network: your public profile page, the member directory, and content you author. Signed in as <b>@${esc2(this._login || "")}</b>.</p></div>
       <div class="body">
-        <div class="fld"><label for="pf-name">Display name</label><div class="d">Your name as it shows on your profile and cards.</div><input id="pf-name" type="text" data-field="displayName" value="${esc(m.displayName)}" maxlength="80" /></div>
-        <div class="fld"><label for="pf-headline">Headline</label><div class="d">A short line under your name (a role, a company, or a tagline).</div><input id="pf-headline" type="text" data-field="headline" value="${esc(m.headline)}" maxlength="120" /></div>
+        <div class="fld"><label for="pf-name">Display name</label><div class="d">Your name as it shows on your profile and cards.</div><input id="pf-name" type="text" data-field="displayName" value="${esc2(m.displayName)}" maxlength="80" /></div>
+        <div class="fld"><label for="pf-headline">Headline</label><div class="d">A short line under your name (a role, a company, or a tagline).</div><input id="pf-headline" type="text" data-field="headline" value="${esc2(m.headline)}" maxlength="120" /></div>
         <div class="fld"><label for="pf-avatar">Avatar</label><div class="d">Your profile picture. Leave blank to use your GitHub avatar, or paste a Gravatar image URL. Other image hosts are not allowed.</div>
           <div class="avrow">
-            <img class="avprev" data-avatar-preview alt="Avatar preview" src="${esc(this._avatarSrc(m.avatar))}" />
+            <img class="avprev" data-avatar-preview alt="Avatar preview" src="${esc2(this._avatarSrc(m.avatar))}" />
             <div class="avfield">
-              <input id="pf-avatar" type="url" data-field="avatar" data-avatar-input value="${esc(m.avatar)}" placeholder="Blank = GitHub avatar, or https://gravatar.com/avatar/…" />
+              <input id="pf-avatar" type="url" data-field="avatar" data-avatar-input value="${esc2(m.avatar)}" placeholder="Blank = GitHub avatar, or https://gravatar.com/avatar/…" />
               <div class="averr" data-avatar-err></div>
             </div>
           </div>
@@ -23041,15 +23306,15 @@ ${BLOCKED_PILL_CSS}
     </section>`;
     }
     // The preview src: the entered avatar when it is a sanctioned https URL, else the member's GitHub avatar default.
-    _avatarSrc(v) {
-      const val = String(v || "").trim();
+    _avatarSrc(v2) {
+      const val = String(v2 || "").trim();
       if (val && isSanctionedAvatar(val)) return val;
       return githubAvatarUrl(this._login);
     }
     _bio(m) {
       return `<section class="sec">
       <div class="sec-h"><h3>Bio</h3><p>Your longer introduction, in Markdown. It renders below your name on your profile page.</p></div>
-      <div class="body"><div class="fld"><textarea data-field="body" placeholder="Write a few lines about yourself…">${esc(m.body)}</textarea></div></div>
+      <div class="body"><div class="fld"><textarea data-field="body" placeholder="Write a few lines about yourself…">${esc2(m.body)}</textarea></div></div>
     </section>`;
     }
     _presence(m) {
@@ -23063,7 +23328,7 @@ ${BLOCKED_PILL_CSS}
     </section>`;
     }
     _skills(m) {
-      const tags = m.skills.map((s, i) => `<span class="tag">${esc(s)}<button type="button" data-rm-skill="${i}" aria-label="Remove ${esc(s)}">×</button></span>`).join("");
+      const tags = m.skills.map((s, i) => `<span class="tag">${esc2(s)}<button type="button" data-rm-skill="${i}" aria-label="Remove ${esc2(s)}">×</button></span>`).join("");
       return `<section class="sec">
       <div class="sec-h"><h3>Skills</h3><p>Technologies and tools you work with. They render as tags on your profile.</p></div>
       <div class="body">
@@ -23073,7 +23338,7 @@ ${BLOCKED_PILL_CSS}
     </section>`;
     }
     _roles(m) {
-      const tags = m.roles.map((r, i) => `<span class="tag role">${esc(prettyRole(r))}<button type="button" data-rm-role="${i}" aria-label="Remove ${esc(r)}">×</button></span>`).join("");
+      const tags = m.roles.map((r, i) => `<span class="tag role">${esc2(prettyRole(r))}<button type="button" data-rm-role="${i}" aria-label="Remove ${esc2(r)}">×</button></span>`).join("");
       return `<section class="sec">
       <div class="sec-h"><h3>Specialties</h3><p>Your developer specialties (for example MCP Developer). They render as badges on your profile.</p></div>
       <div class="body">
@@ -23086,11 +23351,11 @@ ${BLOCKED_PILL_CSS}
       const setKeys = SOCIAL_KEYS.filter((k) => typeof m.links[k] === "string" && m.links[k].trim() !== "" || Object.prototype.hasOwnProperty.call(m.links, k) && m.links[k] === "");
       const rows = setKeys.map((k) => `<div class="lrow">
       <span class="lico" aria-hidden="true">${socialIcon(k, 16)}</span>
-      <span class="lv"><span class="llabel">${esc(SOCIAL_LABELS[k] || k)}</span><input type="text" data-link-key="${esc(k)}" value="${esc(m.links[k] || "")}" placeholder="${esc(this._placeholder(k))}" /></span>
-      <button type="button" class="lrm" data-rm-link="${esc(k)}" aria-label="Remove ${esc(SOCIAL_LABELS[k] || k)}">×</button>
+      <span class="lv"><span class="llabel">${esc2(SOCIAL_LABELS[k] || k)}</span><input type="text" data-link-key="${esc2(k)}" value="${esc2(m.links[k] || "")}" placeholder="${esc2(this._placeholder(k))}" /></span>
+      <button type="button" class="lrm" data-rm-link="${esc2(k)}" aria-label="Remove ${esc2(SOCIAL_LABELS[k] || k)}">×</button>
     </div>`).join("");
       const unused = SOCIAL_KEYS.filter((k) => !setKeys.includes(k));
-      const picker = this._addingLink && unused.length ? `<div class="picker">${unused.map((k) => `<button type="button" class="pk" data-add-link="${esc(k)}">${socialIcon(k, 15)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
+      const picker = this._addingLink && unused.length ? `<div class="picker">${unused.map((k) => `<button type="button" class="pk" data-add-link="${esc2(k)}">${socialIcon(k, 15)}${esc2(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
       const addBtn = unused.length ? `<button type="button" class="addbtn" data-add-toggle>${this._addingLink ? "Close" : "+ Add a link"}</button>` : "";
       return `<section class="sec">
       <div class="sec-h"><h3>Social links</h3><p>Your profiles across the web. Paste a full URL or a handle; we build the link. These also credit you when your content is shared to X and Bluesky.</p></div>
@@ -23112,8 +23377,8 @@ ${BLOCKED_PILL_CSS}
       const note = this._paid ? "Publishing updates your public profile on gbti.network within a couple of minutes." : "Publishing your profile needs a paid membership. Your changes save privately and publish when you upgrade.";
       return `<div class="savebar">
       <button class="save" type="button" data-save ${this._saving ? "disabled" : ""}>${label}</button>
-      <span class="note">${esc(note)}</span>
-      <span class="msg ${this._msgKind}" data-msg aria-live="polite">${esc(this._msg)}</span>
+      <span class="note">${esc2(note)}</span>
+      <span class="msg ${this._msgKind}" data-msg aria-live="polite">${esc2(this._msg)}</span>
     </div>`;
     }
     _wire() {
@@ -23176,10 +23441,10 @@ ${BLOCKED_PILL_CSS}
       const avPrev = this.$("[data-avatar-preview]");
       const avErr = this.$("[data-avatar-err]");
       if (avInput) avInput.addEventListener("input", () => {
-        const v = avInput.value.trim();
-        const bad = v && !isSanctionedAvatar(v);
+        const v2 = avInput.value.trim();
+        const bad = v2 && !isSanctionedAvatar(v2);
         if (avErr) avErr.textContent = bad ? "Use your GitHub or Gravatar image only. Other hosts are not allowed." : "";
-        if (avPrev) avPrev.src = this._avatarSrc(bad ? "" : v);
+        if (avPrev) avPrev.src = this._avatarSrc(bad ? "" : v2);
       });
       if (avPrev) avPrev.addEventListener("error", () => {
         const fb = githubAvatarUrl(this._login);
@@ -23197,7 +23462,8 @@ ${BLOCKED_PILL_CSS}
         if (raw) links[k] = buildSocialUrl(k, raw);
       }
       Object.assign(input, {
-        displayName: (m.displayName || "").trim() || this._login || "Member",
+        displayName: (m.displayName || "").trim() || this._status?.identity?.username || this._login || "Member",
+        // sow-428: the GBTI name before the login
         forHire: m.forHire === true,
         directory: m.directory === true,
         skills: m.skills,
@@ -23262,7 +23528,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-workspace.mjs
   var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "project"]);
-  var SITE15 = "https://gbti.network";
+  var SITE16 = "https://gbti.network";
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts; PRs needing attention for a superadmin, sow-404)
@@ -23488,7 +23754,7 @@ ${BLOCKED_PILL_CSS}
           if (this._tab === "overview" && !this._editing) this.render();
         }
       }
-      const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null);
+      const num = (p) => Promise.resolve(p).then((v2) => v2).catch(() => null);
       const [post, prompt2, project, activity, follows, status, shares] = await Promise.all([
         num(this.client?.listContent?.({ type: "post" })),
         num(this.client?.listContent?.({ type: "prompt" })),
@@ -23509,7 +23775,7 @@ ${BLOCKED_PILL_CSS}
         const prs = await num(this.client?.listPRs?.());
         this._prs = Array.isArray(prs?.prs) ? prs.prs : this._prs || [];
       }
-      const drafts = [...items(post), ...items(prompt2), ...items(project)].filter((it) => it.status === "draft").length;
+      const drafts = [...items(post), ...items(prompt2), ...items(project)].filter((it2) => it2.status === "draft").length;
       const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
       const followN = Array.isArray(follows) ? follows.length : follows?.following?.length || 0;
       const attention = superadmin ? prAttention(this._prs) : [];
@@ -23592,11 +23858,11 @@ ${BLOCKED_PILL_CSS}
       const ps = e.payoutSetup || { connected: false, ready: false };
       const setup = ps.ready ? "" : `<p class="empty" style="margin-bottom:12px">${ps.connected ? "Your Stripe payout account is not finished. Complete setup" : "Set up Stripe payouts"} under <a href="account.html">Settings</a> to receive your earnings.</p>`;
       const t = e.totals || {};
-      const stat = (n, l) => `<div style="flex:1;min-width:110px"><div style="font:600 22px/1.1 var(--f-display,inherit)">${money(n)}</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc(l)}</div></div>`;
+      const stat = (n, l) => `<div style="flex:1;min-width:110px"><div style="font:600 22px/1.1 var(--f-display,inherit)">${money(n)}</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc2(l)}</div></div>`;
       const totals = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;padding:16px;border:1px solid var(--line-2,#ddd);border-radius:var(--r,8px)">${stat(t.lifetime, "Lifetime")}${stat(t.paid, "Paid")}${stat(t.payable, "Ready")}${stat(t.held, "Accruing")}</div>`;
       const roleLabel = { first: "First touch", last: "Last touch", invite: "Invite", collab: "Collaboration" };
       const stateLabel = { paid: "Paid", payable: "Ready", held: "Accruing" };
-      const label = (m, k) => esc(m[k] || String(k).replace(/\+/g, " + "));
+      const label = (m, k) => esc2(m[k] || String(k).replace(/\+/g, " + "));
       const rows = e.entries.map((r) => `<tr><td style="padding:6px 8px">${label(roleLabel, r.role)}</td><td style="padding:6px 8px">${label(stateLabel, r.state)}</td><td style="padding:6px 8px;text-align:right">${money(r.amount)}</td></tr>`).join("");
       return hero + setup + totals + `<table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;color:var(--fg-mute,#888)"><th style="padding:6px 8px;font-weight:600">Source</th><th style="padding:6px 8px;font-weight:600">Status</th><th style="padding:6px 8px;font-weight:600;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
@@ -23893,7 +24159,7 @@ ${BLOCKED_PILL_CSS}
         const notes = [];
         if (e.staged) notes.push("You are editing your saved draft. It is not live until you Publish.");
         if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
-        if (notes.length && ed?.out) ed.out(esc(notes.join(" ")), e.invalidNote ? "danger" : "muted");
+        if (notes.length && ed?.out) ed.out(esc2(notes.join(" ")), e.invalidNote ? "danger" : "muted");
         ed?.addEventListener("gbti-published", () => {
           if (this._editing) this._editing.staged = false;
           this._onPublished(e.type);
@@ -23905,8 +24171,8 @@ ${BLOCKED_PILL_CSS}
       this._tab = resolveTab(this._tab, TABS, this._authoring(), this._role()) ?? this._tab;
       const tabs = shown.map((t) => {
         const n = this._tabCount(t);
-        const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
-        return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
+        const badge = n ? `<span class="tbadge">${esc2(n)}</span>` : "";
+        return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc2(t.label)}${badge}</button>`;
       }).join("");
       this.set(this.css(CSS38) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
@@ -23933,7 +24199,7 @@ ${BLOCKED_PILL_CSS}
     }
     _profileHtml() {
       const p = profileStrip(this._ownProfile, this._tab);
-      return p ? `<div class="profile"><span class="lbl">Profile</span> <b>${esc(p.name)}</b><button class="btn" data-profile type="button">${esc(p.action)}</button></div>` : "";
+      return p ? `<div class="profile"><span class="lbl">Profile</span> <b>${esc2(p.name)}</b><button class="btn" data-profile type="button">${esc2(p.action)}</button></div>` : "";
     }
     // sow-346
     _body() {
@@ -23942,7 +24208,7 @@ ${BLOCKED_PILL_CSS}
       if (this._tab === "earnings") return this._renderEarnings();
       if (this._tab === "share") {
         const scopeBar = this._canScope() ? `<div class="lc-bar">${this._scopeSwitchHtml()}</div>` : "";
-        return `${scopeBar}<gbti-share-list${this._scopeNow() === "house" ? ' scope="network"' : ""}${this._editShareId ? ` edit-id="${esc(this._editShareId)}"` : ""}></gbti-share-list>`;
+        return `${scopeBar}<gbti-share-list${this._scopeNow() === "house" ? ' scope="network"' : ""}${this._editShareId ? ` edit-id="${esc2(this._editShareId)}"` : ""}></gbti-share-list>`;
       }
       if (this._tab === "profile") return "<div data-profile-slot></div>";
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
@@ -23954,10 +24220,10 @@ ${BLOCKED_PILL_CSS}
         const { page: page2, pages: pages2, start: start2, end: end2 } = pageWindow(prs.length, this._page, WORKSPACE_PAGE_SIZE);
         const rows2 = prs.slice(start2, end2).map((pr) => {
           const ev = prEvent(pr);
-          const when = ev.at ? ` <span class="when" title="${esc(absTime(ev.at))}">${esc(ev.verb)} ${esc(relTime(ev.at))}</span>` : "";
+          const when = ev.at ? ` <span class="when" title="${esc2(absTime(ev.at))}">${esc2(ev.verb)} ${esc2(relTime(ev.at))}</span>` : "";
           return `<li class="row">
-        <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub${when}</span><span class="why" data-n="${esc(pr.number)}" hidden></span></span>
-        <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`;
+        <span class="t"><b>${esc2(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc2(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc2(pr.number)}</a> on GitHub${when}</span><span class="why" data-n="${esc2(pr.number)}" hidden></span></span>
+        <span class="right"><span class="gate tag" data-n="${esc2(pr.number)}">checking...</span></span></li>`;
         }).join("");
         const pager2 = pages2 > 1 ? `<div class="pager"><button class="btn" data-page="${page2 - 1}" type="button"${page2 === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page2 + 1} of ${pages2}</span><button class="btn" data-page="${page2 + 1}" type="button"${page2 >= pages2 - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
         return `<ul class="rows">${rows2}</ul>${pager2}`;
@@ -23970,17 +24236,17 @@ ${BLOCKED_PILL_CSS}
       const view = filterByStatus(sortItems(mergeTypeItems(scoped, typeDrafts), this._sort), this._statusFilter);
       this._viewList = view;
       const controls = this._listControls();
-      const note = this._msg || this._draftMsg ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : "";
+      const note = this._msg || this._draftMsg ? `<p class="empty">${esc2(this._msg || this._draftMsg)}</p>` : "";
       const draftNote = this._statusFilter === "draft" ? this._scopeNow() === "house" ? `<p class="muted draft-intro">Unpublished items across the network. Republish restores one to the site.</p>` : `<p class="muted draft-intro">Drafts are saved privately. Save work here, then publish it to the network when you are ready.</p>` : "";
       if (view.length === 0) {
-        const empty = this._statusFilter === "all" ? `No ${esc(tab.label.toLowerCase())} yet.` : this._statusFilter === "draft" ? `No drafts in ${esc(tab.label)}.` : `No published ${esc(tab.label.toLowerCase())}.`;
+        const empty = this._statusFilter === "all" ? `No ${esc2(tab.label.toLowerCase())} yet.` : this._statusFilter === "draft" ? `No drafts in ${esc2(tab.label)}.` : `No published ${esc2(tab.label.toLowerCase())}.`;
         return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
       }
       const paid = this._overview ? this._overview.membership === "paid" : true;
       const { page, pages, start, end } = pageWindow(view.length, this._page, WORKSPACE_PAGE_SIZE);
-      const rows = view.slice(start, end).map((it, j) => {
-        const i = start + j;
-        return it.isDraft ? this._draftRow(it, i, paid) : this._contentRow(it, i);
+      const rows = view.slice(start, end).map((it2, j2) => {
+        const i = start + j2;
+        return it2.isDraft ? this._draftRow(it2, i, paid) : this._contentRow(it2, i);
       }).join("");
       const pager = pages > 1 ? `<div class="pager"><button class="btn" data-page="${page - 1}" type="button"${page === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page + 1} of ${pages}</span><button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
       return `${controls}${draftNote}${note}<ul class="rows">${rows}</ul>${pager}`;
@@ -24006,14 +24272,14 @@ ${BLOCKED_PILL_CSS}
     /** SOW-145: the My content / Network content switch, one markup for the content tabs and the Shares tab. */
     _scopeSwitchHtml() {
       const now = this._scopeNow();
-      const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? "on" : ""}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
+      const scopeBtn = (v2, label) => `<button class="lc-scope ${now === v2 ? "on" : ""}" data-scope="${v2}" type="button" aria-pressed="${now === v2}">${label}</button>`;
       return `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn("member", "My content")}${scopeBtn("house", "Network content")}</div>`;
     }
     // SOW-145: a superadmin also gets a scope switch (My content / Network content) on the far left; a non-superadmin
     // never sees it (and the server re-checks the house gate regardless).
     _listControls() {
-      const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? "on" : ""}" data-filter="${v}" type="button">${label}</button>`;
-      const opt = (v, label) => `<option value="${v}"${this._sort === v ? " selected" : ""}>${label}</option>`;
+      const f = (v2, label) => `<button class="lc-f ${this._statusFilter === v2 ? "on" : ""}" data-filter="${v2}" type="button">${label}</button>`;
+      const opt = (v2, label) => `<option value="${v2}"${this._sort === v2 ? " selected" : ""}>${label}</option>`;
       const now = this._scopeNow();
       const scopeSwitch = this._canScope() ? this._scopeSwitchHtml() : "";
       let authorPick = "";
@@ -24021,7 +24287,7 @@ ${BLOCKED_PILL_CSS}
         const tab = TABS.find((t) => t.id === this._tab);
         const authors = authorsIn(this._cache?.[this._ck(tab?.type)] || []);
         const cur = this._authorFilter || "";
-        authorPick = `<label class="lc-sort lc-author"><span class="lc-sl">Author</span><select data-author aria-label="Filter by author"><option value=""${cur ? "" : " selected"}>All members</option>` + authors.map((a) => `<option value="${esc(a)}"${cur === a ? " selected" : ""}>@${esc(a)}</option>`).join("") + `</select></label>`;
+        authorPick = `<label class="lc-sort lc-author"><span class="lc-sl">Author</span><select data-author aria-label="Filter by author"><option value=""${cur ? "" : " selected"}>All members</option>` + authors.map((a) => `<option value="${esc2(a)}"${cur === a ? " selected" : ""}>@${esc2(a)}</option>`).join("") + `</select></label>`;
       }
       return `<div class="lc-bar">` + scopeSwitch + authorPick + `<div class="lc-filter" role="group" aria-label="Filter by status">${f("all", "All")}${f("published", "Published")}${f("draft", "Drafts")}</div><label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt("newest", "Newest")}${opt("oldest", "Oldest")}${opt("updated", "Recently updated")}${opt("title-asc", "Title A-Z")}${opt("title-desc", "Title Z-A")}</select></label></div>`;
     }
@@ -24046,18 +24312,18 @@ ${BLOCKED_PILL_CSS}
     }
     // SOW-085: a canonical content row (its index is into this._viewList). SOW-062 glyph + Manage; SOW-106 the
     // staged-edits chip + the reversible self-unpublish/republish flip.
-    _contentRow(it, i) {
-      const g = glyphFor(null, it.type);
-      const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
-      const aud = audienceTag(it);
-      const vis = aud ? `<span class="tag" title="${esc(aud.title)}">${esc(aud.label)}</span>` : "";
-      const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : "";
-      const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
-      const pub = it.status === "published" ? publicPathFor({ type: it.type, path: it.path }) : null;
+    _contentRow(it2, i) {
+      const g = glyphFor(null, it2.type);
+      const status = it2.status ? `<span class="tag ${it2.status === "published" ? "ok" : ""}">${esc2(it2.status)}</span>` : "";
+      const aud = audienceTag(it2);
+      const vis = aud ? `<span class="tag" title="${esc2(aud.title)}">${esc2(aud.label)}</span>` : "";
+      const stagedTag = (this._drafts || []).some((d) => d.path === it2.path) ? `<span class="tag">staged edits</span>` : "";
+      const flip = it2.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it2.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
+      const pub = it2.status === "published" ? publicPathFor({ type: it2.type, path: it2.path }) : null;
       const isExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const view = pub ? `<a class="btn" href="${esc(isExt ? SITE15 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
-      const who = this._scopeNow() === "house" && authorOf(it) ? `<span class="tag who">@${esc(authorOf(it))}</span>` : "";
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+      const view = pub ? `<a class="btn" href="${esc2(isExt ? SITE16 + pub : pub)}"${isExt ? ' target="_blank" rel="noopener"' : ""} title="View the live page">View</a>` : "";
+      const who = this._scopeNow() === "house" && authorOf(it2) ? `<span class="tag who">@${esc2(authorOf(it2))}</span>` : "";
+      return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(it2.title)}</b><span class="meta">${esc2(it2.type || "")}</span></span><span class="right">${who}${status} ${stagedTag} ${vis}${view}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
     // and (superadmins only, sow-404) the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
@@ -24087,13 +24353,13 @@ ${BLOCKED_PILL_CSS}
         { nm: "Settings", href: settingsHref, n: null },
         ...isStaff ? [{ nm: "Admin tools", href: adminHref, n: null }] : []
       ];
-      const tileHtml = visibleTiles(tiles, TABS, this._authoring(), this._role()).map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
-      const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
+      const tileHtml = visibleTiles(tiles, TABS, this._authoring(), this._role()).map((t) => `<a class="ov-tile" href="${esc2(t.href)}"><span class="ov-n">${t.n == null ? "" : esc2(t.n)}</span><span class="ov-nm">${esc2(t.nm)}</span></a>`).join("");
+      const draft = c.drafts ? `<span class="ov-draft">${esc2(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
       const tb = trialBanner(ov.membership, this._authoring()) || curatorBanner(ov.membership, ov.paidTier, this._authoring());
-      const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div><a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
-      const att = this._role() !== "superadmin" ? "" : '<h3 class="ov-h3">Pull requests</h3>' + (ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`);
+      const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc2(tb.headline)}</b><br/><span>${esc2(tb.body)}</span></div><a class="ov-up" href="${esc2(tb.ctaHref)}" target="_blank" rel="noopener">${esc2(tb.ctaLabel)}</a></div>`;
+      const att = this._role() !== "superadmin" ? "" : '<h3 class="ov-h3">Pull requests</h3>' + (ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc2(a.tone)}">${esc2(a.label)}</span> <a href="${esc2(a.url || "#")}" target="_blank" rel="noopener">${esc2(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`);
       return `<div class="ov">
-      <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
+      <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc2(mLabel)}</span></div>${draft}</div>
       ${trialHtml}<gbti-onboarding-progress></gbti-onboarding-progress>
       <div class="ov-tiles">${tileHtml}</div>
       ${att}
@@ -24108,10 +24374,10 @@ ${BLOCKED_PILL_CSS}
       const { label, tone } = classifyDraft({ pull: d.pull, store: d.store });
       const vis = d.visibility === "members" ? `<span class="tag">members</span>` : "";
       const repoNote = isRepo ? `<span class="tag" title="Committed to the public repository, so it is readable on GitHub even though it is not published on the site.">public repo</span>` : "";
-      const bad = d.valid === false ? `<span class="tag bad" title="${esc(d.invalidReason || "no longer matches the current schema")}">Invalid</span>` : "";
+      const bad = d.valid === false ? `<span class="tag bad" title="${esc2(d.invalidReason || "no longer matches the current schema")}">Invalid</span>` : "";
       const pub = label === "Published" ? "" : paid ? `<button class="btn" data-drow-publish="${i}" type="button">Publish</button>` : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
       const discard = isRepo ? "" : `<button class="btn" data-drow-discard="${i}" type="button">Discard</button>`;
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · draft${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ""}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${repoNote}${d.pendingSlug ? `<span class="tag">rename pending</span>` : ""}${bad}${vis}<button class="btn" data-drow-edit="${i}" type="button">Manage</button>${pub}${discard}</span></li>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc2(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc2(d.title)}</b><span class="meta">${esc2(d.type)} · draft${d.pendingSlug ? ` (renames to ${esc2(d.pendingSlug)} on publish)` : ""}</span></span><span class="right"><span class="tag ${esc2(tone)}">${esc2(label)}</span>${repoNote}${d.pendingSlug ? `<span class="tag">rename pending</span>` : ""}${bad}${vis}<button class="btn" data-drow-edit="${i}" type="button">Manage</button>${pub}${discard}</span></li>`;
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => {
@@ -24127,12 +24393,12 @@ ${BLOCKED_PILL_CSS}
       if (tab?.type) {
         const view = () => this._viewList || [];
         this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
-          const it = view()[Number(b.dataset.edit)];
-          if (it) this._openItem(it.path, it.type);
+          const it2 = view()[Number(b.dataset.edit)];
+          if (it2) this._openItem(it2.path, it2.type);
         }));
         this.$$("[data-status]").forEach((b) => b.addEventListener("click", () => {
-          const it = view()[Number(b.dataset.status)];
-          if (it) this._setItemStatus(it, b.dataset.to, b, this._ck(tab.type));
+          const it2 = view()[Number(b.dataset.status)];
+          if (it2) this._setItemStatus(it2, b.dataset.to, b, this._ck(tab.type));
         }));
         this.$$("[data-drow-edit]").forEach((b) => b.addEventListener("click", () => {
           const d = view()[Number(b.dataset.drowEdit)];
@@ -24175,9 +24441,9 @@ ${BLOCKED_PILL_CSS}
     }
     // SOW-106 Phase B: member self-unpublish/republish. A reversible status flip on the member's OWN canonical
     // item, via the normal gated PR (auto-merges like any own-folder change; live at the next deploy).
-    async _setItemStatus(it, to, btn, cacheType) {
-      if (!it?.path || to !== "draft" && to !== "published") return;
-      const ask = to === "draft" ? `Unpublish "${it.title}"? It is set to draft and removed from public view (reversible; the file stays in the repo).` : `Republish "${it.title}"? It returns to public view.`;
+    async _setItemStatus(it2, to, btn, cacheType) {
+      if (!it2?.path || to !== "draft" && to !== "published") return;
+      const ask = to === "draft" ? `Unpublish "${it2.title}"? It is set to draft and removed from public view (reversible; the file stays in the repo).` : `Republish "${it2.title}"? It returns to public view.`;
       if (typeof confirm === "function" && !confirm(ask)) return;
       const orig = btn?.textContent;
       if (btn) {
@@ -24185,7 +24451,7 @@ ${BLOCKED_PILL_CSS}
         btn.textContent = to === "draft" ? "Unpublishing..." : "Republishing...";
       }
       try {
-        const r = await this.client.setContentStatus({ path: it.path, status: to });
+        const r = await this.client.setContentStatus({ path: it2.path, status: to });
         this._msg = r?.noop ? "Already in that state." : submitAck({ prNumber: r?.prNumber, autoMerge: true });
         if (this._cache) this._cache[cacheType] = null;
         this._overview = null;
@@ -24232,8 +24498,8 @@ ${BLOCKED_PILL_CSS}
         this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null, authorNote: typeof full.authorNote === "string" ? full.authorNote : null, skillFile: typeof full.skillFile === "string" ? full.skillFile : null };
         this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
-          const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
-          this._editing.invalidNote = v && v.valid === false ? v.error || "This draft no longer matches the current schema." : null;
+          const v2 = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
+          this._editing.invalidNote = v2 && v2.valid === false ? v2.error || "This draft no longer matches the current schema." : null;
         } catch {
           this._editing.invalidNote = null;
         }
@@ -24299,8 +24565,8 @@ ${BLOCKED_PILL_CSS}
   var MAX_FUTURE_MS = 24 * 60 * 60 * 1e3;
   function normGroup(raw) {
     if (!raw || typeof raw !== "object") return null;
-    const at = Number(raw.at);
-    if (!Number.isFinite(at) || at <= 0) return null;
+    const at2 = Number(raw.at);
+    if (!Number.isFinite(at2) || at2 <= 0) return null;
     const ids = [];
     const have = /* @__PURE__ */ new Set();
     for (const id of Array.isArray(raw.ids) ? raw.ids : []) {
@@ -24309,7 +24575,7 @@ ${BLOCKED_PILL_CSS}
       ids.push(id);
       if (ids.length >= MAX_IDS_PER_GROUP) break;
     }
-    return { at, ids };
+    return { at: at2, ids };
   }
   function normalizeSeen(raw) {
     const out = { groups: {} };
@@ -24329,10 +24595,10 @@ ${BLOCKED_PILL_CSS}
   }
   function mergeSeen(a, b, { now = null } = {}) {
     const x = normalizeSeen(a);
-    const y = normalizeSeen(b);
+    const y2 = normalizeSeen(b);
     const out = { groups: {} };
     for (const key of BELL_SEEN_GROUPS) {
-      const g = mergeGroup(x.groups[key] || null, y.groups[key] || null);
+      const g = mergeGroup(x.groups[key] || null, y2.groups[key] || null);
       if (!g) continue;
       if (Number.isFinite(now) && g.at > now + MAX_FUTURE_MS) g.at = now + MAX_FUTURE_MS;
       out.groups[key] = g;
@@ -24343,7 +24609,7 @@ ${BLOCKED_PILL_CSS}
     const s = normalizeSeen(seen);
     if (!BELL_SEEN_GROUPS.includes(group)) return s;
     const floor = now - LATE_WINDOW_MS;
-    const ids = (Array.isArray(items) ? items : []).filter((it) => it && typeof it.id === "string" && it.id && (Number(it.ts) || 0) > floor).map((it) => it.id);
+    const ids = (Array.isArray(items) ? items : []).filter((it2) => it2 && typeof it2.id === "string" && it2.id && (Number(it2.ts) || 0) > floor).map((it2) => it2.id);
     const g = mergeGroup({ at: now, ids }, s.groups[group] || null);
     if (g) s.groups[group] = g;
     return s;
@@ -24359,7 +24625,7 @@ ${BLOCKED_PILL_CSS}
     const s = normalizeSeen(seen);
     const mark = Number(watermark) || 0;
     if (!BELL_SEEN_GROUPS.includes(group) || s.groups[group] || mark <= 0) return s;
-    const ids = (Array.isArray(items) ? items : []).filter((it) => it && typeof it.id === "string" && it.id && (Number(it.ts) || 0) <= mark && (Number(it.ts) || 0) > mark - LATE_WINDOW_MS).map((it) => it.id);
+    const ids = (Array.isArray(items) ? items : []).filter((it2) => it2 && typeof it2.id === "string" && it2.id && (Number(it2.ts) || 0) <= mark && (Number(it2.ts) || 0) > mark - LATE_WINDOW_MS).map((it2) => it2.id);
     const g = normGroup({ at: mark, ids });
     if (g) s.groups[group] = g;
     return s;
@@ -24382,15 +24648,15 @@ ${BLOCKED_PILL_CSS}
     const list = Array.isArray(items) ? items : [];
     if (seen && typeof seen === "object" && seen.groups && typeof seen.groups === "object") {
       const isUnread = unreadPredicate(seen.groups[group] ?? null);
-      return list.filter((it) => isUnread({ id: it?.id, ts: toMs(it?.ts) }));
+      return list.filter((it2) => isUnread({ id: it2?.id, ts: toMs(it2?.ts) }));
     }
     const since = Number(seen?.[group]) || 0;
-    return list.filter((it) => toMs(it.ts) > since);
+    return list.filter((it2) => toMs(it2.ts) > since);
   }
   function markAllGroups(seen, sources = {}, now = Date.now()) {
     let next = seen;
     for (const g of BELL_GROUPS) {
-      const items = (Array.isArray(sources[g.key]) ? sources[g.key] : []).map((it) => ({ id: String(it?.id ?? ""), ts: toMs(it?.ts) }));
+      const items = (Array.isArray(sources[g.key]) ? sources[g.key] : []).map((it2) => ({ id: String(it2?.id ?? ""), ts: toMs(it2?.ts) }));
       next = markGroup(next, g.key, items, now);
     }
     return next;
@@ -24405,14 +24671,14 @@ ${BLOCKED_PILL_CSS}
   var SYNDICATION_OVERDUE_MS = 30 * 60 * 1e3;
   function approvalsNeeded(pending, now = Date.now()) {
     const out = [];
-    for (const it of Array.isArray(pending) ? pending : []) {
-      if (!it || typeof it !== "object") continue;
-      if (Array.isArray(it.flags) && it.flags.length) {
-        out.push({ item: it, why: "flagged" });
+    for (const it2 of Array.isArray(pending) ? pending : []) {
+      if (!it2 || typeof it2 !== "object") continue;
+      if (Array.isArray(it2.flags) && it2.flags.length) {
+        out.push({ item: it2, why: "flagged" });
         continue;
       }
-      const at = toMs(it.availableAt);
-      if (at && now - at > SYNDICATION_OVERDUE_MS) out.push({ item: it, why: "overdue" });
+      const at2 = toMs(it2.availableAt);
+      if (at2 && now - at2 > SYNDICATION_OVERDUE_MS) out.push({ item: it2, why: "overdue" });
     }
     return out;
   }
@@ -24552,7 +24818,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
-  var SITE16 = "https://gbti.network";
+  var SITE17 = "https://gbti.network";
   var POLL_MS2 = 12e4;
   var LEGACY_SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
@@ -24661,13 +24927,15 @@ ${BLOCKED_PILL_CSS}
       try {
         let membership = "unknown";
         try {
-          const st = await this.client?.status?.();
-          membership = st?.membership ?? "unknown";
-          this._login = st?.identity?.login || null;
-          this._role = st?.role || "member";
+          const st2 = await this.client?.status?.();
+          membership = st2?.membership ?? "unknown";
+          this._login = st2?.identity?.login || null;
+          this._folder = String(st2?.identity?.username || st2?.identity?.login || "").toLowerCase() || null;
+          this._role = st2?.role || "member";
         } catch {
           membership = "unknown";
           this._login = null;
+          this._folder = null;
           this._role = "member";
         }
         if (!canSeeShares(membership) || !this._login) {
@@ -24678,13 +24946,13 @@ ${BLOCKED_PILL_CSS}
         }
         this._gated = false;
         this._listenForSeen(this._login);
-        const [sources, account] = await Promise.all([this._fetchSources(this._login), fetchAccountSeen(this.client)]);
+        const [sources, account] = await Promise.all([this._fetchSources(this._folder || this._login), fetchAccountSeen(this.client)]);
         this._sources = sources;
         let seen = mergeSeen(mergeSeen(this._seen, readLocalSeen(this._login)), account);
         const legacy = loadLegacySeen();
         let seeded = seen;
         for (const key of ["approvals", "replies", "following"]) {
-          const items = (sources[key] || []).map((it) => ({ id: String(it?.id ?? ""), ts: toMs(it?.ts) }));
+          const items = (sources[key] || []).map((it2) => ({ id: String(it2?.id ?? ""), ts: toMs(it2?.ts) }));
           seeded = seedFromWatermark(seeded, key, items, Number(legacy?.[key]) || 0);
         }
         if (!sameSeen(seeded, seen)) {
@@ -24713,17 +24981,17 @@ ${BLOCKED_PILL_CSS}
     // waits for approval, and an OVERDUE one did not go out on its own. An ordinary item still in its hour is left out,
     // because it posts by itself; the website's Syndication page lists the whole queue.
     async _approvals() {
-      const q = await this.client.syndicationQueue() || {};
+      const q2 = await this.client.syndicationQueue() || {};
       const TYPE = { share: "Share", post: "Article", project: "Project", prompt: "Prompt" };
-      return approvalsNeeded(q.pending).map(({ item: it, why }) => {
-        const type = TYPE[it.source] || "Item";
+      return approvalsNeeded(q2.pending).map(({ item: it2, why }) => {
+        const type = TYPE[it2.source] || "Item";
         return {
-          id: `syn:${it.id}`,
-          ts: toMs(it.enqueuedAt),
-          title: it.title || it.targetSlug || "Untitled",
+          id: `syn:${it2.id}`,
+          ts: toMs(it2.enqueuedAt),
+          title: it2.title || it2.targetSlug || "Untitled",
           sub: why === "flagged" ? `Flagged ${type.toLowerCase()}: approve or cancel it` : `${type} did not post on its own: approve to send it`,
           // sow-399: syndication moved to the website, so the notice opens its Publishing Activity there.
-          href: `${SITE16}/admin/#tab=syndication&sub=activity`
+          href: `${SITE17}/admin/#tab=syndication&sub=activity`
         };
       });
     }
@@ -24733,7 +25001,7 @@ ${BLOCKED_PILL_CSS}
     // everything (the system default), and a refused news read (a free account) means no news rows.
     async _siteList(path) {
       try {
-        const res = await fetch(`${SITE16}${path}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE17}${path}`, { cache: "no-cache" });
         const data = res.ok ? await res.json() : {};
         return Array.isArray(data?.entries) ? data.entries : [];
       } catch {
@@ -24761,7 +25029,7 @@ ${BLOCKED_PILL_CSS}
         ts: r.ts,
         title: r.target || "New activity",
         sub: r.kind === "news" ? r.actor : `@${r.actor}`,
-        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE16}${r.url || ""}`
+        href: r.kind === "news" ? r.url : r.path ? `newtab.html#${buildReadHash(r.type, r.path)}` : `${SITE17}${r.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -24849,20 +25117,20 @@ ${BLOCKED_PILL_CSS}
       const groups = (this._bell?.groups || []).filter((g) => g.items.length);
       const unreadSet = /* @__PURE__ */ new Map();
       for (const g of this._bell?.groups || []) {
-        unreadSet.set(g.key, new Set(unreadItems(g.key, g.items, seen).map((it) => it.id)));
+        unreadSet.set(g.key, new Set(unreadItems(g.key, g.items, seen).map((it2) => it2.id)));
       }
       const body = groups.length ? groups.map((g) => {
         const un = unreadSet.get(g.key) || /* @__PURE__ */ new Set();
-        const rows = g.items.slice(0, 8).map((it) => {
-          const cls = un.has(it.id) ? "it unread" : "it";
-          const ext = /^https?:\/\//.test(it.href) ? ' target="_blank" rel="noopener"' : "";
-          const when = relTime(it.ts);
-          const abs = when ? absTime(it.ts) : "";
-          const sub = `${esc(it.sub || "")}${when ? `${it.sub ? " · " : ""}${esc(when)}` : ""}`;
-          return `<a class="${cls}" href="${esc(it.href)}"${ext}${abs ? ` title="${esc(abs)}"` : ""}><span class="t">${esc(it.title)}</span><span class="s">${sub}</span></a>`;
+        const rows = g.items.slice(0, 8).map((it2) => {
+          const cls = un.has(it2.id) ? "it unread" : "it";
+          const ext = /^https?:\/\//.test(it2.href) ? ' target="_blank" rel="noopener"' : "";
+          const when = relTime(it2.ts);
+          const abs = when ? absTime(it2.ts) : "";
+          const sub = `${esc2(it2.sub || "")}${when ? `${it2.sub ? " · " : ""}${esc2(when)}` : ""}`;
+          return `<a class="${cls}" href="${esc2(it2.href)}"${ext}${abs ? ` title="${esc2(abs)}"` : ""}><span class="t">${esc2(it2.title)}</span><span class="s">${sub}</span></a>`;
         }).join("");
         const moreN = g.items.length - Math.min(g.items.length, 8);
-        return `<div class="grp"><div class="grp-h">${esc(g.label)}${g.unread ? `<span class="n">${g.unread}</span>` : ""}</div>${rows}${moreN > 0 ? `<div class="it s" style="color:var(--muted)">+${moreN} more</div>` : ""}</div>`;
+        return `<div class="grp"><div class="grp-h">${esc2(g.label)}${g.unread ? `<span class="n">${g.unread}</span>` : ""}</div>${rows}${moreN > 0 ? `<div class="it s" style="color:var(--muted)">+${moreN} more</div>` : ""}</div>`;
       }).join("") : `<div class="empty">You are all caught up.</div>`;
       return `<div class="panel"><div class="phead"><b>Activity</b>${this._clrBtn()}</div>${body}</div>`;
     }
@@ -24901,7 +25169,7 @@ ${BLOCKED_PILL_CSS}
   .it:hover { background:var(--hover); }
   .it.unread { background:color-mix(in srgb, var(--brand) 8%, transparent); }
   .it.unread:hover { background:color-mix(in srgb, var(--brand) 13%, transparent); }
-  .av { width:28px; height:28px; border-radius:50%; flex:none; background:var(--hover); object-fit:cover; margin-top:1px; }
+  .av { position:relative; overflow:hidden; display:block; width:28px; height:28px; border-radius:50%; flex:none; background:var(--hover); margin-top:1px; }
   .av.nav { display:flex; align-items:center; justify-content:center; color:var(--muted); }
   .av.nav svg { width:16px; height:16px; }
   .it .body { flex:1; min-width:0; }
@@ -25093,11 +25361,11 @@ ${BLOCKED_PILL_CSS}
       const rows = this._bell.rows.slice(0, 12).map((r) => {
         const when = relTime(r.ts);
         const abs = when ? absTime(r.ts) : "";
-        const av = r.kind === "person" && r.actor ? `https://github.com/${encodeURIComponent(r.actor)}.png?size=56` : "";
+        const person = r.kind === "person" && r.actor;
         const href = r.url || SETTINGS_URL;
         const internal = /^\//.test(href);
         const ext = internal ? "" : ' target="_blank" rel="noopener nofollow"';
-        return `<a class="it${r.unread ? " unread" : ""}" href="${esc(href)}"${ext}${abs ? ` title="${esc(abs)}"` : ""}>` + (av ? `<img class="av" src="${esc(av)}" alt="" width="28" height="28" decoding="async" loading="lazy" />` : `<span class="av nav">${I_NEWS}</span>`) + `<span class="body"><span class="line"><b>${esc(r.actor)}</b> ${esc(r.action)} <span class="tg">${esc(r.target)}</span></span>${when ? `<span class="when">${esc(when)}</span>` : ""}</span>${r.unread ? '<span class="dot"></span>' : ""}</a>`;
+        return `<a class="it${r.unread ? " unread" : ""}" href="${esc2(href)}"${ext}${abs ? ` title="${esc2(abs)}"` : ""}>` + (person ? `<span class="av">${avatarLayers(r.actor)}</span>` : `<span class="av nav">${I_NEWS}</span>`) + `<span class="body"><span class="line"><b>${esc2(r.actor)}</b> ${esc2(r.action)} <span class="tg">${esc2(r.target)}</span></span>${when ? `<span class="when">${esc2(when)}</span>` : ""}</span>${r.unread ? '<span class="dot"></span>' : ""}</a>`;
       }).join("");
       return `<div class="list">${rows}</div>`;
     }
@@ -25109,13 +25377,13 @@ ${BLOCKED_PILL_CSS}
       if (n === 0) {
         return `<div class="empty"><span class="ic">${I_PERSON}</span><div class="h">Nothing here yet</div><div class="p">Follow members to see what they publish, right here.</div><div class="nudge">${I_PERSON}<span class="t">You are not following anyone yet.</span><a class="go" href="${FIND_URL}">Find members</a></div></div>`;
       }
-      return `<div class="empty"><span class="ic">${I_CHECK}</span><div class="h">You are all caught up</div><div class="p">When someone you follow publishes, it lands here.</div><div class="nudge">${I_PERSON}<span class="t">Following ${esc(String(n))} member${n === 1 ? "" : "s"}.</span><a class="go" href="${FIND_URL}">Find more</a></div></div>`;
+      return `<div class="empty"><span class="ic">${I_CHECK}</span><div class="h">You are all caught up</div><div class="p">When someone you follow publishes, it lands here.</div><div class="nudge">${I_PERSON}<span class="t">Following ${esc2(String(n))} member${n === 1 ? "" : "s"}.</span><a class="go" href="${FIND_URL}">Find more</a></div></div>`;
     }
   };
   define("gbti-notification-bell", GbtiNotificationBell);
 
   // client-ui/src/elements/gbti-notifications-settings.mjs
-  var SITE17 = "https://gbti.network";
+  var SITE18 = "https://gbti.network";
   var CHANNELS3 = [
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
@@ -25141,7 +25409,7 @@ ${BLOCKED_PILL_CSS}
   .frow { display:grid; grid-template-columns:auto 1fr auto auto; gap:14px; align-items:center; padding:14px 24px; width:100%; border:0; background:transparent; color:var(--fg); font:inherit; text-align:left; cursor:pointer; }
   .frow + .frow { border-top:1px solid var(--line); }
   .frow:hover { background:var(--hover); }
-  .frow .av { width:38px; height:38px; border-radius:50%; background:var(--hover); object-fit:cover; }
+  .frow .av { position:relative; overflow:hidden; display:block; flex:none; width:38px; height:38px; border-radius:50%; background:var(--hover); }
   .frow .ft { min-width:0; }
   /* sow-386: the name and its summary are two stacked lines. As bare spans they ran together ("@nameEverything...")
      and, on a phone, the summary slid under the Default/Custom tag, since an inline span ignores its own overflow. */
@@ -25169,14 +25437,14 @@ ${BLOCKED_PILL_CSS}
     }
     async _load() {
       const guard = (p) => Promise.race([
-        Promise.resolve(p).then((v) => v, () => null),
+        Promise.resolve(p).then((v2) => v2, () => null),
         new Promise((res) => {
           setTimeout(() => res(null), 8e3);
         })
       ]);
       try {
-        const [prefs, follows, st] = await Promise.all([guard(this.client.getPrefs?.()), guard(this.client.getFollows?.()), guard(this.client.status?.())]);
-        this._paid = st?.membership === "paid";
+        const [prefs, follows, st2] = await Promise.all([guard(this.client.getPrefs?.()), guard(this.client.getFollows?.()), guard(this.client.status?.())]);
+        this._paid = st2?.membership === "paid";
         this._global = prefs?.notify;
         this._matrix = defaultMatrix(this._global, { paid: this._paid });
         const list = Array.isArray(follows) ? follows : follows?.following ?? [];
@@ -25225,7 +25493,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE17}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE18}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
@@ -25236,21 +25504,21 @@ ${BLOCKED_PILL_CSS}
       const matrixRows = MATRIX_ROWS.map((r) => {
         const cell = matrix[r.key] || {};
         const pills = CHANNELS3.map((c) => notifyPillHtml({ rowKey: r.key, channel: c.key, label: c.label, on: !!cell[c.key], disabled: !this._prefsOk, paid: this._paid })).join("");
-        return `<div class="mrow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
+        return `<div class="mrow"><div class="rl">${esc2(r.label)}</div>${pills}</div>`;
       }).join("");
       const follows = this._follows || [];
       const customCount = follows.filter((f) => isCustomFollow(f)).length;
       const listHtml2 = follows.length ? follows.map((f) => {
-        const u = esc(f.username);
+        const u = esc2(f.username);
         const custom = isCustomFollow(f);
         return `<button type="button" class="frow" data-follow="${u}">
-            <img class="av" src="https://github.com/${u}.png?size=76" alt="" width="38" height="38" loading="lazy" />
-            <span class="ft"><span class="t">@${u}</span><span class="d">${esc(summarizeFollow(f, this._global))}</span></span>
+            <span class="av">${avatarLayers(f.username)}</span>
+            <span class="ft"><span class="t">@${u}</span><span class="d">${esc2(summarizeFollow(f, this._global))}</span></span>
             <span class="tag${custom ? " custom" : ""}">${custom ? "Custom" : "Default"}</span>
             ${CHEV2}
           </button>`;
-      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE17}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
-      const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
+      }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE18}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
+      const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc2(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
       this.set(this.css(CSS41) + `
       <section class="sec">
@@ -25287,10 +25555,10 @@ ${BLOCKED_PILL_CSS}
       const cats = [];
       for (const c of list) {
         if (typeof c !== "string") continue;
-        const v = c.trim();
-        if (!v || seen.has(v)) continue;
-        seen.add(v);
-        cats.push(v);
+        const v2 = c.trim();
+        if (!v2 || seen.has(v2)) continue;
+        seen.add(v2);
+        cats.push(v2);
       }
       out[topic] = cats;
     }
@@ -25316,12 +25584,12 @@ ${BLOCKED_PILL_CSS}
     if (!set.size) return [...list];
     const followed = [];
     const rest = [];
-    for (const it of list) (set.has(it && it.category) ? followed : rest).push(it);
+    for (const it2 of list) (set.has(it2 && it2.category) ? followed : rest).push(it2);
     return [...followed, ...rest];
   }
 
   // membership/news-source-name.mjs
-  var str5 = (v) => typeof v === "string" ? v.trim() : "";
+  var str5 = (v2) => typeof v2 === "string" ? v2.trim() : "";
   function sourceNameMap(sources) {
     const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
     const map = /* @__PURE__ */ new Map();
@@ -25340,8 +25608,8 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE18 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE18}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE19 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc2(msg)} <a href="${SITE19}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc4 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -25415,10 +25683,10 @@ ${BLOCKED_PILL_CSS}
       this._open = null;
       this._canCurate = false;
       this._onComment = (e) => {
-        const it = this._open;
-        if (!it?.guid || !this.client?.newsDiscussed) return;
-        if (e?.detail?.targetSlug !== newsTargetSlug(it.guid)) return;
-        Promise.resolve(this.client.newsDiscussed(it.guid)).catch(() => {
+        const it2 = this._open;
+        if (!it2?.guid || !this.client?.newsDiscussed) return;
+        if (e?.detail?.targetSlug !== newsTargetSlug(it2.guid)) return;
+        Promise.resolve(this.client.newsDiscussed(it2.guid)).catch(() => {
         });
       };
       document.addEventListener("gbti-comment-posted", this._onComment);
@@ -25446,7 +25714,7 @@ ${BLOCKED_PILL_CSS}
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE18}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE19}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -25472,11 +25740,11 @@ ${BLOCKED_PILL_CSS}
       }
       this.render();
     }
-    _setView(v) {
-      if (v === this._view) return;
-      this._view = v;
+    _setView(v2) {
+      if (v2 === this._view) return;
+      this._view = v2;
       this._open = null;
-      if (v === "channels" && !this._chanState) {
+      if (v2 === "channels" && !this._chanState) {
         this._loadChannels();
         return;
       }
@@ -25559,9 +25827,9 @@ ${BLOCKED_PILL_CSS}
       list.mode = "detailed";
       list.items = items.map(({ openHref, ...rest }) => rest);
       list.addEventListener("card-open", (e) => {
-        const it = e.detail?.item;
-        if (!it) return;
-        this._open = items.find((x) => x.guid === it.guid) || it;
+        const it2 = e.detail?.item;
+        if (!it2) return;
+        this._open = items.find((x) => x.guid === it2.guid) || it2;
         this._postNote = null;
         this.render();
       });
@@ -25570,14 +25838,14 @@ ${BLOCKED_PILL_CSS}
     _renderReader() {
       const host = this.$("[data-body]");
       if (!host) return;
-      const it = this._open;
-      const by = [newsSourceName(it.source, this._sources || []), it.category].filter(Boolean).map((s) => esc(String(s))).join(" · ");
-      const src = it.openHref ? `<a class="src" href="${esc(it.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : "";
+      const it2 = this._open;
+      const by = [newsSourceName(it2.source, this._sources || []), it2.category].filter(Boolean).map((s) => esc2(String(s))).join(" · ");
+      const src = it2.openHref ? `<a class="src" href="${esc2(it2.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : "";
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
-      const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
-      const slug = it.guid ? newsTargetSlug(it.guid) : "";
-      const discussion = slug ? `<div class="disc-wrap"><h5>Discussion</h5><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      host.innerHTML = `<div class="rd"><button class="back" data-back type="button">← Back to feed</button><h4>${esc(it.title)}</h4>` + (by ? `<p class="by">${by}</p>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${src}${disc}</div>${note}${discussion}</div>`;
+      const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc2(this._postNote.msg)}</p>` : "";
+      const slug = it2.guid ? newsTargetSlug(it2.guid) : "";
+      const discussion = slug ? `<div class="disc-wrap"><h5>Discussion</h5><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
+      host.innerHTML = `<div class="rd"><button class="back" data-back type="button">← Back to feed</button><h4>${esc2(it2.title)}</h4>` + (by ? `<p class="by">${by}</p>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${src}${disc}</div>${note}${discussion}</div>`;
       this.$("[data-back]")?.addEventListener("click", () => {
         this._open = null;
         this._postNote = null;
@@ -25618,8 +25886,8 @@ ${BLOCKED_PILL_CSS}
         const count2 = s.count != null ? `${s.count} items` : "";
         const inline4 = [domain, count2].filter(Boolean).join(" · ");
         const showDesc = s.description && lc4(s.description) !== lc4(domain);
-        const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc(count2)}</span>` : "") + `</div>`;
-        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline4 ? `<span class="d">${esc(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+        const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc2(name)}</b>` + (domain ? `<span class="hc-dom">${esc2(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc2(s.description)}</p>` : "") + (count2 ? `<span class="hc-n">${esc2(count2)}</span>` : "") + `</div>`;
+        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc2(name)}</b>${inline4 ? `<span class="d">${esc2(inline4)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc2(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
       host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
       this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
@@ -25778,7 +26046,7 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS43) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS43) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc2(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc2(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc2(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc2(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc2(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc2(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc2(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc2(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
@@ -25838,10 +26106,10 @@ ${BLOCKED_PILL_CSS}
     connectedCallback() {
       super.connectedCallback?.();
       this._onComment = (e) => {
-        const it = this._item;
-        if (!it?.guid || !this.client?.newsDiscussed) return;
-        if (e?.detail?.targetSlug !== newsTargetSlug(it.guid)) return;
-        Promise.resolve(this.client.newsDiscussed(it.guid)).catch(() => {
+        const it2 = this._item;
+        if (!it2?.guid || !this.client?.newsDiscussed) return;
+        if (e?.detail?.targetSlug !== newsTargetSlug(it2.guid)) return;
+        Promise.resolve(this.client.newsDiscussed(it2.guid)).catch(() => {
         });
       };
       document.addEventListener("gbti-comment-posted", this._onComment);
@@ -25929,16 +26197,16 @@ ${BLOCKED_PILL_CSS}
       this.render();
     }
     async _publishToDiscord(btn) {
-      const it = this._item;
-      if (!it) return;
+      const it2 = this._item;
+      if (!it2) return;
       if (btn) {
         btn.disabled = true;
         btn.textContent = "Posting…";
       }
       this._postNote = null;
       try {
-        const r = await this.client.publishNews(it);
-        const cat = it.category ? ` (category: ${it.category})` : "";
+        const r = await this.client.publishNews(it2);
+        const cat = it2.category ? ` (category: ${it2.category})` : "";
         this._postNote = r?.posted ? { ok: true, msg: "Posted to Discord." } : r?.alreadyPosted ? { ok: true, msg: "Already posted to Discord." } : { ok: false, msg: `${r?.reason || "No Discord channel is mapped for this category yet."}${cat}` };
       } catch (err) {
         this._postNote = { ok: false, msg: err?.message || "Could not post to Discord." };
@@ -25950,27 +26218,27 @@ ${BLOCKED_PILL_CSS}
         this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
-      const it = this._item;
-      if (!it) {
+      const it2 = this._item;
+      if (!it2) {
         this.set(this.css(CSS44) + `<p class="muted">No item selected.</p>`);
         return;
       }
-      const fav = faviconFor(it.link || it.openHref);
+      const fav = faviconFor(it2.link || it2.openHref);
       const pub = this._publisher;
-      const followable = Boolean(this.client?.setPrefs && it.source && this._followed);
-      const followed = followable && this._followed.has(lc5(it.source));
-      const open = it.openHref || (it.link ? utmLink(it.link) : "");
+      const followable = Boolean(this.client?.setPrefs && it2.source && this._followed);
+      const followed = followable && this._followed.has(lc5(it2.source));
+      const open = it2.openHref || (it2.link ? utmLink(it2.link) : "");
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
-      const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
-      const slug = it.guid ? newsTargetSlug(it.guid) : "";
-      const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      const heroSrc = it.thumb || it.image || "";
-      const hero = heroSrc ? `<img class="hero" src="${esc(heroSrc)}" alt="" loading="lazy">` : "";
-      const chanDesc = pub?.description ? `<p class="cc-desc">${esc(pub.description)}</p>` : "";
-      const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
+      const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc2(this._postNote.msg)}</p>` : "";
+      const slug = it2.guid ? newsTargetSlug(it2.guid) : "";
+      const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc2(slug)}"></gbti-discussion></div>` : "";
+      const heroSrc = it2.thumb || it2.image || "";
+      const hero = heroSrc ? `<img class="hero" src="${esc2(heroSrc)}" alt="" loading="lazy">` : "";
+      const chanDesc = pub?.description ? `<p class="cc-desc">${esc2(pub.description)}</p>` : "";
+      const chanCount = pub?.count != null ? `<span class="cc-count">${esc2(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
-      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}`;
+      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc2(fav)}" alt="">` : ""}</span><div class="cc-name">${esc2(pub?.name || it2.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
+      const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc2(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc2(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc2(it2.title || "News")}</h2>` + (it2.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc2(it2.category)}</span></div>` : "") + `<p class="sum">${esc2(it2.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc2(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}`;
       this.set(this.css(CSS44) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (!this._wiredErr) {
@@ -26117,7 +26385,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/members-index.mjs
-  var SITE19 = "https://gbti.network";
+  var SITE20 = "https://gbti.network";
   var lc6 = (s) => String(s || "").toLowerCase();
   function directoryMap(json) {
     const members = json && Array.isArray(json.members) ? json.members : [];
@@ -26126,7 +26394,7 @@ ${BLOCKED_PILL_CSS}
   var _directory = null;
   function loadMembersDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE19}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => directoryMap(j)).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE20}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j2) => directoryMap(j2)).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
 
@@ -26135,7 +26403,7 @@ ${BLOCKED_PILL_CSS}
   var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE20 = "https://gbti.network";
+  var SITE21 = "https://gbti.network";
   var KIND_ICON = {
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -26147,8 +26415,6 @@ ${BLOCKED_PILL_CSS}
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
-  var githubLogin = (a) => lc7(a) === "gbti" || lc7(a) === "house" ? "gbti-network" : a;
-  var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   var TYPE_LABEL6 = { post: "Article", project: "Project", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
@@ -26157,8 +26423,8 @@ ${BLOCKED_PILL_CSS}
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE20}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  var lockNotice = (what) => `<div class="locked">${esc2(what)} is for members. <a href="${SITE21}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var prettyRole2 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var loadDirectory = loadMembersDirectory;
   var SOCIALS = [
     ["github", "GitHub", "https://github.com/"],
@@ -26195,11 +26461,11 @@ ${BLOCKED_PILL_CSS}
     ["telegram", "Telegram", "https://t.me/"]
   ];
   function linkUrl(value, base) {
-    const v = String(value || "").trim();
-    if (!v) return "";
-    if (/^https?:\/\//i.test(v)) return v;
-    if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
-    return `${base}${v.replace(/^@/, "")}`;
+    const v2 = String(value || "").trim();
+    if (!v2) return "";
+    if (/^https?:\/\//i.test(v2)) return v2;
+    if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v2) ? `https://${v2}` : "";
+    return `${base}${v2.replace(/^@/, "")}`;
   }
   var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -26211,8 +26477,7 @@ ${BLOCKED_PILL_CSS}
 
   .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .meta .who { display:inline-flex; align-items:center; gap:8px; }
-  .meta .av { width:24px; height:24px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-size:11px; font-weight:700; }
-  .meta .av img { width:100%; height:100%; object-fit:cover; }
+  .meta .av { position:relative; width:24px; height:24px; border-radius:50%; overflow:hidden; flex:none; display:block; background:var(--hover); }
   .meta .who b { color:var(--fg); font-weight:600; }
   .meta .m-actions { margin-left:auto; display:inline-flex; align-items:center; gap:8px; }
   .meta gbti-favorite, .meta gbti-collection { display:inline-flex; }
@@ -26288,8 +26553,7 @@ ${BLOCKED_PILL_CSS}
   .side { display:flex; flex-direction:column; gap:22px; }
   .author { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .author .a-top { display:flex; align-items:center; gap:12px; }
-  .author .a-av { width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-weight:700; }
-  .author .a-av img { width:100%; height:100%; object-fit:cover; }
+  .author .a-av { position:relative; width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:block; background:var(--hover); }
   .author .a-name { font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; }
   .author .a-user { font-size:12px; color:var(--muted); }
   .author .a-note { font-size:13.5px; line-height:1.5; color:var(--fg); margin:12px 0 0; }
@@ -26302,7 +26566,7 @@ ${BLOCKED_PILL_CSS}
   /* the share meta stack: source favicon large, member avatar as the badge */
   .av.srcstack { position: relative; overflow: visible; }
   .av.srcstack .src-big { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; background: #fff; padding: 3px; box-sizing: border-box; }
-  .av.srcstack .src-mini { position: absolute; right: -5px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card, #1c1a21); object-fit: cover; }
+  .av.srcstack .src-mini { position: absolute; right: -5px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card, #1c1a21); overflow: hidden; display: block; background: var(--hover); }
   /* the sidebar source card (favicon + domain + credit + the open action) */
   .side-src { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .side-src .ss-fav { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; padding: 4px; box-sizing: border-box; }
@@ -26364,29 +26628,29 @@ ${BLOCKED_PILL_CSS}
       this._resolve();
     }
     async _resolve() {
-      const it = this._item || {};
-      const minimal = it.type !== "share" && (!it.author || !it.title);
+      const it2 = this._item || {};
+      const minimal = it2.type !== "share" && (!it2.author || !it2.title);
       if (minimal) {
-        this._html = await this._resolveBody(it);
-        this._backfillFromFrontmatter(it);
-        this._author = await this._resolveAuthor(this._item || it);
+        this._html = await this._resolveBody(it2);
+        this._backfillFromFrontmatter(it2);
+        this._author = await this._resolveAuthor(this._item || it2);
       } else {
-        const [html, author] = await Promise.all([this._resolveBody(it), this._resolveAuthor(it)]);
+        const [html, author] = await Promise.all([this._resolveBody(it2), this._resolveAuthor(it2)]);
         this._html = html;
         this._author = author;
       }
-      this._skill = await this._resolveSkill(this._item || it);
+      this._skill = await this._resolveSkill(this._item || it2);
       this.render();
-      this._applyDo(this._item || it);
+      this._applyDo(this._item || it2);
     }
     // sow-109: prompt or skill. The feed item carries it (the indexes do); a deep link has only the frontmatter.
-    _kind(it) {
-      if (it?.type !== "prompt") return null;
-      return (it.kind || this._fm?.kind) === "skill" ? "skill" : "prompt";
+    _kind(it2) {
+      if (it2?.type !== "prompt") return null;
+      return (it2.kind || this._fm?.kind) === "skill" ? "skill" : "prompt";
     }
     // sow-109: a PUBLIC skill gets the website's install box, from its public steps and file. Download saves a local
     // copy of the fetched file, because a page ignores `download` on a link to another origin (this is an extension page).
-    async _resolveSkill(it) {
+    async _resolveSkill(it2) {
       if (this._skillUrl) {
         try {
           URL.revokeObjectURL(this._skillUrl);
@@ -26395,8 +26659,8 @@ ${BLOCKED_PILL_CSS}
         this._skillUrl = null;
       }
       const fm = this._fm || {};
-      if (this._kind(it) !== "skill") return null;
-      const targets = Array.isArray(it.targets) ? it.targets : Array.isArray(fm.targets) ? fm.targets : [];
+      if (this._kind(it2) !== "skill") return null;
+      const targets = Array.isArray(it2.targets) ? it2.targets : Array.isArray(fm.targets) ? fm.targets : [];
       const fileHref = (text2) => {
         try {
           this._skillUrl = URL.createObjectURL(new Blob([text2], { type: "text/markdown" }));
@@ -26405,28 +26669,28 @@ ${BLOCKED_PILL_CSS}
         }
         return this._skillUrl || "";
       };
-      if (String(it.visibility || fm.visibility || "public") !== "public") {
+      if (String(it2.visibility || fm.visibility || "public") !== "public") {
         if (typeof fm.encryptedSkill !== "string" || !fm.encryptedSkill || typeof this.client?.decrypt !== "function") return null;
         try {
-          return await loadMembersSkillBox({ site: SITE20, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
+          return await loadMembersSkillBox({ site: SITE21, targets, fileHref, decrypt: async () => (await this.client.decrypt({ encPath: fm.encryptedSkill }))?.text });
         } catch {
           return null;
         }
       }
-      return loadSkillBox({ site: SITE20, slug: fm.slug || promptSlugOf(it.url), targets, fileHref });
+      return loadSkillBox({ site: SITE21, slug: fm.slug || promptSlugOf(it2.url), targets, fileHref });
     }
     // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
-    _backfillFromFrontmatter(it) {
+    _backfillFromFrontmatter(it2) {
       const fm = this._fm;
       if (!fm) return;
       const URL_BASE = { post: "/articles", project: "/projects", product: "/projects", prompt: "/prompts" };
       this._item = {
-        ...it,
-        title: it.title || fm.title || "",
-        author: it.author || fm.author || "",
-        shortDescription: it.shortDescription || fm.shortDescription || "",
-        url: it.url || (fm.slug && URL_BASE[it.type] ? `${URL_BASE[it.type]}/${fm.slug}/` : ""),
-        publishedAt: it.publishedAt ?? (fm.publishedAt ? Date.parse(fm.publishedAt) : null)
+        ...it2,
+        title: it2.title || fm.title || "",
+        author: it2.author || fm.author || "",
+        shortDescription: it2.shortDescription || fm.shortDescription || "",
+        url: it2.url || (fm.slug && URL_BASE[it2.type] ? `${URL_BASE[it2.type]}/${fm.slug}/` : ""),
+        publishedAt: it2.publishedAt ?? (fm.publishedAt ? Date.parse(fm.publishedAt) : null)
       };
     }
     // SOW-114: honor a deep-link force-action (item.doAction = 'favorite' | 'collect') ONCE per open. The
@@ -26434,16 +26698,16 @@ ${BLOCKED_PILL_CSS}
     // favorite = ensure-ON (applyFavorite treats `on` as the desired state, so this is idempotent and never
     // removes an existing favorite); collect = open the collection picker. Fail closed: with no signed-in
     // client the call fails and the reader's normal state stands (the one-shot guard is set first, no retry).
-    async _applyDo(it) {
-      const act = it?.doAction;
+    async _applyDo(it2) {
+      const act = it2?.doAction;
       if (!act || this._doDone) return;
       this._doDone = true;
       if (!this.client) return;
-      const slug = targetSlugFor(it);
+      const slug = targetSlugFor(it2);
       if (!slug) return;
       if (act === "favorite") {
         try {
-          const res = await this.client.toggleFavorite({ targetType: it.type, targetSlug: slug, on: true });
+          const res = await this.client.toggleFavorite({ targetType: it2.type, targetSlug: slug, on: true });
           const fav = this.$("gbti-favorite");
           if (fav) {
             fav._faved = res?.favorited !== false;
@@ -26455,15 +26719,15 @@ ${BLOCKED_PILL_CSS}
         this.$("gbti-collection")?._toggleOpen?.();
       }
     }
-    async _resolveBody(it) {
+    async _resolveBody(it2) {
       try {
-        if (it.type === "share") {
-          let body2 = it.body;
-          let enc = it.encryptedBody;
-          if (!body2 && !enc && String(it.visibility || "members") === "members") {
+        if (it2.type === "share") {
+          let body2 = it2.body;
+          let enc = it2.encryptedBody;
+          if (!body2 && !enc && String(it2.visibility || "members") === "members") {
             try {
               const { items } = await this.client.listShares({ limit: 100 }) ?? {};
-              const hit = (items ?? []).find((s) => it.id && s.id === it.id || s.author === it.author && (s.createdAt === it.createdAt || it.url && s.url === it.url));
+              const hit = (items ?? []).find((s) => it2.id && s.id === it2.id || s.author === it2.author && (s.createdAt === it2.createdAt || it2.url && s.url === it2.url));
               if (hit) {
                 body2 = hit.body;
                 enc = hit.encryptedBody;
@@ -26472,22 +26736,22 @@ ${BLOCKED_PILL_CSS}
             }
           }
           if (!enc) return body2 ? (await this.client.preview({ body: body2 }))?.html ?? "" : "";
-          return await this._body(it.visibility, body2, enc);
+          return await this._body(it2.visibility, body2, enc);
         }
-        const { frontmatter, body } = await this.client.readItem({ path: it.path });
+        const { frontmatter, body } = await this.client.readItem({ path: it2.path });
         this._rawBody = typeof body === "string" ? body : null;
-        this._itemPath = it.path;
+        this._itemPath = it2.path;
         this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
         this._fm = frontmatter ?? null;
-        return await this._body(it.visibility, body, frontmatter?.encryptedBody);
+        return await this._body(it2.visibility, body, frontmatter?.encryptedBody);
       } catch {
         return { error: true };
       }
     }
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
-    async _resolveAuthor(it) {
-      const username = lc7(it.author);
+    async _resolveAuthor(it2) {
+      const username = lc7(it2.author);
       if (isHouse(username)) return { house: true };
       const [dir, status] = await Promise.all([
         loadDirectory(),
@@ -26523,93 +26787,92 @@ ${BLOCKED_PILL_CSS}
       if (!html && visibility === "members") html = lockNotice("This");
       return html;
     }
-    _metaHtml(it, when) {
-      const t = TYPE_LABEL6[it.type] || it.type || "";
-      const name = authorName4(it.author);
-      const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
-      const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
-      const srcFav = it.type === "share" && it.url ? faviconFor(it.url) : "";
-      const av = srcFav ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt="">${avUrl ? `<img class="src-mini" src="${esc(avUrl)}" alt="">` : ""}</span>` : `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
-      const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join("")}</span>` : "";
-      const slug = targetSlugFor(it);
+    _metaHtml(it2, when) {
+      const t = TYPE_LABEL6[it2.type] || it2.type || "";
+      const name = authorName4(it2.author);
+      const folder2 = lc7(it2.author) || "gbti";
+      const avUrl = this._author?.entry?.avatar || memberAvatarUrl(folder2);
+      const srcFav = it2.type === "share" && it2.url ? faviconFor(it2.url) : "";
+      const av = srcFav ? `<span class="av srcstack"><img class="src-big" src="${esc2(srcFav)}" alt=""><span class="src-mini">${avatarLayers(folder2, avUrl)}</span></span>` : `<span class="av">${avatarLayers(folder2, avUrl)}</span>`;
+      const cats = Array.isArray(it2.categoryLabels) && it2.categoryLabels.length ? `<span class="cats">${it2.categoryLabels.map((c) => `<span class="cat">${esc2(c)}</span>`).join("")}</span>` : "";
+      const slug = targetSlugFor(it2);
       const HEART = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20.3S3.6 15.2 3.6 9.5A4 4 0 0 1 12 7.3a4 4 0 0 1 8.4 2.2c0 5.7-8.4 10.8-8.4 10.8z"/></svg>';
       const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
-      const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || "")}" data-gbti-slug="${esc(slug)}"${it.type === "share" ? ` data-gbti-id="${esc(it.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
-      const kind2 = this._kind(it);
-      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON[kind2]}${esc(KIND_LABEL[kind2])}</span>` : `<span class="badge">${esc(t)}</span>`;
-      return `<div class="meta">${badge}<span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
+      const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection><gbti-mod-actions data-gbti-type="${esc2(it2.type)}" data-gbti-author="${esc2(it2.author || "")}" data-gbti-slug="${esc2(slug)}"${it2.type === "share" ? ` data-gbti-id="${esc2(it2.id || "")}"` : ""}></gbti-mod-actions></span>` : "";
+      const kind2 = this._kind(it2);
+      const badge = kind2 ? `<span class="badge kind-badge kind-${kind2}">${KIND_ICON[kind2]}${esc2(KIND_LABEL[kind2])}</span>` : `<span class="badge">${esc2(t)}</span>`;
+      return `<div class="meta">${badge}<span class="who">${av}<b>${esc2(name)}</b></span>${when ? `<span>· ${esc2(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
     }
-    _authorCardHtml(it) {
+    _authorCardHtml(it2) {
       const a = this._author;
       if (!a || a.house) {
-        return `<div class="author"><div class="a-top"><span class="a-av"><img src="${esc(githubAvatar("gbti"))}" alt=""></span><div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div><p class="a-note">Articles, projects, and prompts from the GBTI Network co-op.</p></div>`;
+        return `<div class="author"><div class="a-top"><span class="a-av">${avatarLayers("gbti")}</span><div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div><p class="a-note">Articles, projects, and prompts from the GBTI Network co-op.</p></div>`;
       }
       const e = a.entry || {};
-      const name = e.displayName || it.author;
-      const avUrl = e.avatar || githubAvatar(it.author);
-      const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
-      const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
+      const name = e.displayName || it2.author;
+      const avUrl = e.avatar || memberAvatarUrl(it2.author);
+      const note = e.headline ? `<p class="a-note">${esc2(e.headline)}</p>` : "";
       let follow = "";
       const inExt = typeof location !== "undefined" && location.protocol === "chrome-extension:";
-      const wsBase = inExt ? `${SITE20}/workbench/` : "/workbench/";
+      const wsBase = inExt ? `${SITE21}/workbench/` : "/workbench/";
       const wsOut = inExt ? ' target="_blank" rel="noopener"' : "";
-      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc(it.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : it.type === "share" && it.id ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it.id)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit share"}</a>` : "";
+      if (a.isSelf) follow = ["post", "project", "prompt"].includes(it2.type) ? `<a class="follow edit" href="${wsBase}#tab=${esc2(it2.type)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit in workspace"}</a>` : it2.type === "share" && it2.id ? `<a class="follow edit" href="${wsBase}#tab=share&edit-share=${encodeURIComponent(it2.id)}"${wsOut}>${inExt ? "Edit on gbti.network" : "Edit share"}</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE20}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE21}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
         const url = linkUrl(links[key], base);
         const ico2 = socialIcon(key);
-        if (url && ico2) chips.push(`<a class="soc" href="${esc(url)}" target="_blank" rel="noopener nofollow" aria-label="${esc(label)}">${ico2}<span class="tip" role="tooltip">${esc(label)}</span></a>`);
+        if (url && ico2) chips.push(`<a class="soc" href="${esc2(url)}" target="_blank" rel="noopener nofollow" aria-label="${esc2(label)}">${ico2}<span class="tip" role="tooltip">${esc2(label)}</span></a>`);
       }
       if (links.discord) {
         const handle = String(links.discord).trim();
-        chips.push(`<span class="soc discord" tabindex="0" role="img" aria-label="Discord: ${esc(handle)}">${socialIcon("discord")}<span class="tip" role="tooltip">Discord: ${esc(handle)}</span></span>`);
+        chips.push(`<span class="soc discord" tabindex="0" role="img" aria-label="Discord: ${esc2(handle)}">${socialIcon("discord")}<span class="tip" role="tooltip">Discord: ${esc2(handle)}</span></span>`);
       }
       const socials = chips.length ? `<div class="socials">${chips.join("")}</div>` : "";
       const tagPills = [];
-      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole2(r))}</span>`);
-      for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
-      const tags = tagPills.length && it.type !== "share" ? `<div class="tags">${tagPills.join("")}</div>` : "";
-      return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div>${it.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
+      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc2(prettyRole2(r))}</span>`);
+      for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag skill">${esc2(String(s))}</span>`);
+      const tags = tagPills.length && it2.type !== "share" ? `<div class="tags">${tagPills.join("")}</div>` : "";
+      return `<div class="author"><div class="a-top"><span class="a-av">${avatarLayers(lc7(it2.author), avUrl)}</span><div>${it2.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc2(name)}</div><div class="a-user">@${esc2(it2.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
     }
     render() {
-      const it = this._item;
-      if (!it) {
+      const it2 = this._item;
+      if (!it2) {
         this.set(this.css(READER_CSS()));
         return;
       }
-      const shareOut = it.type === "share" && it.url ? utmLink(it.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it.url)} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE20 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
-      const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
-      const meta = this._metaHtml(it, when);
-      const copyAll = it.type === "prompt" && this._rawBody && this._kind(it) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
-      const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
-      const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
-      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE20}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
+      const shareOut = it2.type === "share" && it2.url ? utmLink(it2.url, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }) : "";
+      const view = it2.type === "share" ? it2.url ? `<a class="view" href="${esc2(shareOut)}" target="_blank" rel="noopener nofollow">${shareLinkVerb(it2.url)} on ${esc2(hostOf2(it2.url))}</a>` : "" : it2.url ? `<a class="view" href="${esc2(SITE21 + it2.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const when = it2.publishedAt ?? (it2.createdAt ? Date.parse(it2.createdAt) : null);
+      const meta = this._metaHtml(it2, when);
+      const copyAll = it2.type === "prompt" && this._rawBody && this._kind(it2) !== "skill" ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
+      const shareEmbed = it2.type === "share" && it2.url ? embedUrl(it2.url) : null;
+      const coverUrl = resolveAsset(it2.thumbWide || it2.thumbCard || it2.thumb);
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc2(`${SITE21}/embed/?u=${encodeURIComponent(it2.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc2(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
-      else if (it.type === "share") {
-        const authorDisplay = this._author?.entry?.displayName || authorName4(it.author);
-        const sumRaw = String(it.shortDescription || "").trim();
-        const sumHost = hostOf2(it.url || "");
-        const summary = sumRaw ? `<p class="share-summary"><em>"${esc(sumRaw)}${/[.!?]["')\]]?$/.test(sumRaw) ? "" : "..."}"</em>${sumHost ? ` <span class="share-cite">- ${esc(sumHost)}</span>` : ""}</p>` : "";
-        const note = typeof this._html === "string" && this._html.trim() ? `<div class="author-note"><p class="an-eyebrow">Comment by ${esc(authorDisplay)}</p><div class="body quoted">${this._html}</div></div>` : "";
+      else if (it2.type === "share") {
+        const authorDisplay = this._author?.entry?.displayName || authorName4(it2.author);
+        const sumRaw = String(it2.shortDescription || "").trim();
+        const sumHost = hostOf2(it2.url || "");
+        const summary = sumRaw ? `<p class="share-summary"><em>"${esc2(sumRaw)}${/[.!?]["')\]]?$/.test(sumRaw) ? "" : "..."}"</em>${sumHost ? ` <span class="share-cite">- ${esc2(sumHost)}</span>` : ""}</p>` : "";
+        const note = typeof this._html === "string" && this._html.trim() ? `<div class="author-note"><p class="an-eyebrow">Comment by ${esc2(authorDisplay)}</p><div class="body quoted">${this._html}</div></div>` : "";
         body = `${summary}${note}`;
       } else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
       const resolved = this._html !== null;
-      const slug = targetSlugFor(it);
-      const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
-      const srcCard = it.type === "share" && it.url ? sourceCardModel({ url: it.url, memberName: this._author?.entry?.displayName || authorName4(it.author), creatorUrl: it.creatorUrl, creatorName: it.creatorName }) : null;
-      const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(srcCard.name)}</div><p class="ss-note">${esc(srcCard.credit)}</p><a class="side-open" href="${esc(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc(srcCard.action.text)}</a></div>` : "";
-      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
-      const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc(this._skill.text)}</pre>` : "";
-      this.set(this.css(READER_CSS()) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${skillBox}${body}${view}${copyAll}</article>${side}</div></div>`);
+      const slug = targetSlugFor(it2);
+      const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc2(it2.type)}" data-gbti-target-slug="${esc2(slug)}"${Array.isArray(it2.aliases) && it2.aliases.length ? ` data-gbti-target-aliases="${esc2(it2.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
+      const srcCard = it2.type === "share" && it2.url ? sourceCardModel({ url: it2.url, memberName: this._author?.entry?.displayName || authorName4(it2.author), creatorUrl: it2.creatorUrl, creatorName: it2.creatorName }) : null;
+      const sideLink = srcCard ? `<div class="side-src"><img class="ss-fav" src="${esc2(faviconFor(it2.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc2(srcCard.name)}</div><p class="ss-note">${esc2(srcCard.credit)}</p><a class="side-open" href="${esc2(utmLink(srcCard.action.href, { ...UTM, utm_medium: "extension", utm_campaign: "shares" }))}" target="_blank" rel="noopener nofollow" title="${esc2(srcCard.action.title)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>${esc2(srcCard.action.text)}</a></div>` : "";
+      const side = resolved ? `<aside class="side">${this._authorCardHtml(it2)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+      const skillBox = this._skill ? `${this._skill.html}<pre data-skill-raw hidden>${esc2(this._skill.text)}</pre>` : "";
+      this.set(this.css(READER_CSS()) + `<div class="wrap"><div class="cols"><article><h1>${esc2(it2.title || "")}</h1>${meta}${cover}${skillBox}${body}${view}${copyAll}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
-        this._wireFollow(it);
+        this._wireFollow(it2);
         this._wireCopyAll();
         this._wireFootnotes();
         if (this._skill) wireSkillPage(this.root);
@@ -26683,7 +26946,7 @@ ${BLOCKED_PILL_CSS}
       });
     }
     // Toggle follow in place (no full re-render, which would remount the discussion). Optimistic; reverts on error.
-    _wireFollow(it) {
+    _wireFollow(it2) {
       const btn = this.$("[data-follow]");
       if (!btn || !this.client.setFollow) return;
       btn.addEventListener("click", async () => {
@@ -26692,7 +26955,7 @@ ${BLOCKED_PILL_CSS}
         btn.classList.toggle("on", want);
         btn.textContent = want ? "Following" : "Follow";
         try {
-          await this.client.setFollow({ username: it.author, on: want });
+          await this.client.setFollow({ username: it2.author, on: want });
           if (this._author) this._author.following = want;
         } catch {
           btn.classList.toggle("on", !want);
@@ -26715,7 +26978,7 @@ ${BLOCKED_PILL_CSS}
   function memberContent(items, username, cap = 24) {
     const u = lc8(username);
     if (!u || u === "gbti" || u === "house" || !Array.isArray(items)) return [];
-    const mine = items.filter((it) => it && lc8(it.author) === u);
+    const mine = items.filter((it2) => it2 && lc8(it2.author) === u);
     mine.sort((a, b) => {
       const av = Number.isFinite(a?.publishedAt) ? a.publishedAt : -Infinity;
       const bv = Number.isFinite(b?.publishedAt) ? b.publishedAt : -Infinity;
@@ -26726,18 +26989,16 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-member-view.mjs
-  var SITE21 = "https://gbti.network";
+  var SITE22 = "https://gbti.network";
   var lc9 = (s) => String(s || "").toLowerCase();
-  var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
-  var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w2) => w2.length <= 3 ? w2.toUpperCase() : w2.charAt(0).toUpperCase() + w2.slice(1)).join(" ");
   var USERNAME_RE = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
   var CSS46 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
-  .av { flex:0 0 auto; width:96px; height:96px; border-radius:50%; overflow:hidden; display:grid; place-items:center;
-    background:var(--panel, #f2f2f5); border:1px solid var(--line, #e5e5ea); font-weight:800; font-size:34px; color:var(--muted, #6c6976); }
-  .av img { width:100%; height:100%; object-fit:cover; }
+  .av { position:relative; flex:0 0 auto; width:96px; height:96px; border-radius:50%; overflow:hidden; display:block;
+    background:var(--panel, #f2f2f5); border:1px solid var(--line, #e5e5ea); }
   .id { flex:1 1 auto; min-width:0; }
   .name { font-family:var(--font-display, inherit); font-weight:800; font-size:24px; line-height:1.15; color:var(--fg, #25232b); }
   .user { color:var(--muted, #6c6976); font-size:13.5px; margin-top:1px; }
@@ -26795,12 +27056,12 @@ ${BLOCKED_PILL_CSS}
         this._loading = false;
         return;
       }
-      const guard = (p) => Promise.resolve(p).then((v) => v, () => null);
+      const guard = (p) => Promise.resolve(p).then((v2) => v2, () => null);
       try {
         const [dir, status, ...idx] = await Promise.all([
           guard(loadMembersDirectory()),
           guard(this.client.status?.()),
-          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE21}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
+          ...MEMBER_SECTIONS.map((s) => guard(fetch(`${SITE22}/${s.json}`, { cache: "no-cache" }).then((r) => r.ok ? r.json() : null)))
         ]);
         this._entry = dir && dir.get ? dir.get(username) || null : null;
         const me = lc9(status?.identity?.username || status?.identity?.login || "");
@@ -26817,12 +27078,11 @@ ${BLOCKED_PILL_CSS}
     _heroHtml() {
       const username = this._username;
       const e = this._entry || {};
-      const login = e.username || username;
-      const avUrl = resolveAsset(e.avatar) || githubAvatar2(login);
+      const folder2 = String(e.username || username || "").toLowerCase();
+      const avUrl = resolveAsset(e.avatar) || memberAvatarUrl(folder2);
       const name = e.displayName || username;
-      const ini = esc((name || "?").charAt(0).toUpperCase());
-      const headline = e.headline ? `<p class="headline">${esc(e.headline)}</p>` : "";
-      const bio = e.bio ? `<p class="bio">${esc(e.bio)}</p>` : "";
+      const headline = e.headline ? `<p class="headline">${esc2(e.headline)}</p>` : "";
+      const bio = e.bio ? `<p class="bio">${esc2(e.bio)}</p>` : "";
       let since = "";
       if (e.joinedAt) {
         try {
@@ -26831,12 +27091,12 @@ ${BLOCKED_PILL_CSS}
           since = "";
         }
       }
-      const action = this._isSelf ? `<a class="edit" href="${SITE21}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc(username)}"></gbti-subscribe>`;
-      const siteLink = utmLink(`${SITE21}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
-      const actions = `<div class="actions">${action}<a class="site" href="${esc(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
+      const action = this._isSelf ? `<a class="edit" href="${SITE22}/workbench/" target="_blank" rel="noopener">Edit your profile</a>` : `<gbti-subscribe data-gbti-username="${esc2(username)}"></gbti-subscribe>`;
+      const siteLink = utmLink(`${SITE22}/members/${username}/`, { utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "member-profile" });
+      const actions = `<div class="actions">${action}<a class="site" href="${esc2(siteLink)}" target="_blank" rel="noopener">View on gbti.network</a></div>`;
       const tagPills = [];
-      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole3(r))}</span>`);
-      for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag">${esc(String(s))}</span>`);
+      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc2(prettyRole3(r))}</span>`);
+      for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag">${esc2(String(s))}</span>`);
       const tags = tagPills.length ? `<div class="tags">${tagPills.join("")}</div>` : "";
       const links = e.links || {};
       const chips = [];
@@ -26844,15 +27104,15 @@ ${BLOCKED_PILL_CSS}
         if (key === "discord" || !links[key]) continue;
         const url = buildSocialUrl(key, links[key]);
         const ico2 = socialIcon(key);
-        if (url && ico2) chips.push(`<a class="soc" href="${esc(url)}" target="_blank" rel="noopener nofollow" aria-label="${esc(SOCIAL_LABELS[key] || key)}">${ico2}</a>`);
+        if (url && ico2) chips.push(`<a class="soc" href="${esc2(url)}" target="_blank" rel="noopener nofollow" aria-label="${esc2(SOCIAL_LABELS[key] || key)}">${ico2}</a>`);
       }
       if (links.discord) {
         const handle = String(links.discord).trim();
-        chips.push(`<span class="soc" tabindex="0" role="img" title="Discord: ${esc(handle)}" aria-label="Discord: ${esc(handle)}">${socialIcon("discord")}</span>`);
+        chips.push(`<span class="soc" tabindex="0" role="img" title="Discord: ${esc2(handle)}" aria-label="Discord: ${esc2(handle)}">${socialIcon("discord")}</span>`);
       }
       const socials = chips.length ? `<div class="socials">${chips.join("")}</div>` : "";
       const note = !this._entry && this._loaded ? `<div class="note">This member has not published a public profile. You can still follow them.</div>` : "";
-      return `<div class="hero"><span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div class="id"><div class="name">${esc(name)}</div><div class="user">@${esc(username)}</div>${headline}${bio}${since}${actions}${tags}${socials}</div></div>${note}`;
+      return `<div class="hero"><span class="av">${avatarLayers(folder2 || name, avUrl)}</span><div class="id"><div class="name">${esc2(name)}</div><div class="user">@${esc2(username)}</div>${headline}${bio}${since}${actions}${tags}${socials}</div></div>${note}`;
     }
     render() {
       const username = this._username;
@@ -26864,7 +27124,7 @@ ${BLOCKED_PILL_CSS}
         this._loading = true;
         this._load();
       }
-      const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
+      const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc2(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc2(username)}…</div>`;
       this.set(this.css(CSS46) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
@@ -26872,15 +27132,15 @@ ${BLOCKED_PILL_CSS}
           if (!host) continue;
           const items = this._sections[s.type] || [];
           if (!items.length) {
-            host.innerHTML = `<div class="empty">No published ${esc(s.label.toLowerCase())} yet.</div>`;
+            host.innerHTML = `<div class="empty">No published ${esc2(s.label.toLowerCase())} yet.</div>`;
             continue;
           }
           const list = document.createElement("gbti-card-list");
           list.mode = "detailed";
           list.items = items;
           list.addEventListener("card-open", (e) => {
-            const it = e.detail?.item;
-            if (it) this.emit("member-open-item", { item: it, username });
+            const it2 = e.detail?.item;
+            if (it2) this.emit("member-open-item", { item: it2, username });
           });
           host.replaceChildren(list);
         }
@@ -26890,7 +27150,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-member-view", GbtiMemberView);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE22 = "https://gbti.network";
+  var SITE23 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -27003,7 +27263,7 @@ ${BLOCKED_PILL_CSS}
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE22}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE23}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -27016,8 +27276,8 @@ ${BLOCKED_PILL_CSS}
       await Promise.all(CONTENT_TYPES.map((t) => this._ensure(t)));
       if (this._shares === null) {
         try {
-          const st = await this.client?.status?.();
-          this._membership = st?.membership ?? "unknown";
+          const st2 = await this.client?.status?.();
+          this._membership = st2?.membership ?? "unknown";
         } catch {
           this._membership = "unknown";
         }
@@ -27043,7 +27303,7 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS47) + `<button class="btn" data-back type="button">&larr; Back to ${esc2(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -27055,7 +27315,7 @@ ${BLOCKED_PILL_CSS}
         r.open(this._reading);
         return;
       }
-      const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
+      const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc2(t.label)}</button>`).join("");
       this.set(this.css(CSS47) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
@@ -27087,7 +27347,7 @@ ${BLOCKED_PILL_CSS}
       const cat = this._cat || [];
       const primaries = primaryChips(items);
       const primaryLabel = (primaries.find((p) => p.key === cat[0]) || {}).label || cat[0] || "";
-      const chipRow = (chips, depth, allLabel) => `<div class="cchips${depth ? " sub" : ""}"><button class="cchip ${cat.length === depth ? "on" : ""}" data-cat="${depth}" type="button">${esc(allLabel)}</button>` + chips.map((c) => `<button class="cchip ${cat[depth] === c.key ? "on" : ""}" data-cat="${depth}" data-key="${esc(c.key)}" type="button">${esc(c.label)}<span class="n">${c.count}</span></button>`).join("") + `</div>`;
+      const chipRow = (chips, depth, allLabel) => `<div class="cchips${depth ? " sub" : ""}"><button class="cchip ${cat.length === depth ? "on" : ""}" data-cat="${depth}" type="button">${esc2(allLabel)}</button>` + chips.map((c) => `<button class="cchip ${cat[depth] === c.key ? "on" : ""}" data-cat="${depth}" data-key="${esc2(c.key)}" type="button">${esc2(c.label)}<span class="n">${c.count}</span></button>`).join("") + `</div>`;
       let chrome2 = "";
       if (primaries.length) {
         chrome2 += chipRow(primaries, 0, "All");
@@ -27104,9 +27364,9 @@ ${BLOCKED_PILL_CSS}
       list.mode = "detailed";
       list.items = filterByCategoryPath(items, cat);
       list.addEventListener("card-open", (e) => {
-        const it = e.detail?.item;
-        if (it) {
-          this._reading = it;
+        const it2 = e.detail?.item;
+        if (it2) {
+          this._reading = it2;
           this.render();
         }
       });
@@ -27156,7 +27416,7 @@ ${BLOCKED_PILL_CSS}
       `) + `<div class="wrap">
            <header><h1>GBTI <span>Network</span> · local CMS</h1></header>
            <gbti-auth></gbti-auth>
-           <nav>${tabs.map((t) => `<button data-id="${t.id}" class="${t.id === active ? "active" : ""}">${esc(t.label)}</button>`).join("")}</nav>
+           <nav>${tabs.map((t) => `<button data-id="${t.id}" class="${t.id === active ? "active" : ""}">${esc2(t.label)}</button>`).join("")}</nav>
            <div id="pane"></div>
          </div>`
       );
@@ -27209,7 +27469,7 @@ ${BLOCKED_PILL_CSS}
     }
     const qs = (params) => {
       const p = new URLSearchParams();
-      for (const [k, v] of Object.entries(params)) if (v != null && v !== "") p.set(k, String(v));
+      for (const [k, v2] of Object.entries(params)) if (v2 != null && v2 !== "") p.set(k, String(v2));
       const s = p.toString();
       return s ? `?${s}` : "";
     };
@@ -27523,8 +27783,8 @@ ${BLOCKED_PILL_CSS}
     for (const list2 of LISTS) next[list2] = Array.isArray(data[list2]) ? [...data[list2]] : [];
     if (undo.added) {
       const arr = next[undo.added.list];
-      const at = arr.findIndex((r) => r && r.id === undo.added.id);
-      if (at !== -1) arr.splice(at, 1);
+      const at2 = arr.findIndex((r) => r && r.id === undo.added.id);
+      if (at2 !== -1) arr.splice(at2, 1);
     }
     const { list, index, row } = undo.removed;
     const target = next[list];
@@ -27599,7 +27859,7 @@ ${BLOCKED_PILL_CSS}
   var MASK = "\0";
   var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
   var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
-  function esc5(s) {
+  function esc6(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function safeHref(url) {
@@ -27729,11 +27989,11 @@ ${BLOCKED_PILL_CSS}
         continue;
       }
       if (b.kind === "ul") {
-        parts.push(b.items.map((it) => `- ${render2(it)}`).join("\n"));
+        parts.push(b.items.map((it2) => `- ${render2(it2)}`).join("\n"));
         continue;
       }
       if (b.kind === "ol") {
-        parts.push(b.items.map((it, n) => `${n + 1}. ${render2(it)}`).join("\n"));
+        parts.push(b.items.map((it2, n) => `${n + 1}. ${render2(it2)}`).join("\n"));
         continue;
       }
       parts.push(b.lines.map(render2).join("\n"));
@@ -27744,7 +28004,7 @@ ${BLOCKED_PILL_CSS}
     const render2 = (text2) => {
       const store2 = [];
       const masked = maskRuns(text2, store2);
-      const safe = esc5(masked);
+      const safe = esc6(masked);
       const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
       const done = inline3(safe, {
         bold: (t) => `<strong>${t}</strong>`,
@@ -27752,14 +28012,14 @@ ${BLOCKED_PILL_CSS}
         strike: (t) => `<del>${t}</del>`,
         link: (label, url) => {
           const href = safeHref(resolve(url));
-          const inner = String(label || "").trim() || esc5(resolve(url));
-          return href ? `<a href="${esc5(href)}">${inner}</a>` : inner;
+          const inner = String(label || "").trim() || esc6(resolve(url));
+          return href ? `<a href="${esc6(href)}">${inner}</a>` : inner;
         }
       });
       return done.replace(MASK_RE, (_m, i) => {
         const run = store2[Number(i)];
         if (!run) return "";
-        return run.kind === "code" ? `<code>${esc5(run.raw)}</code>` : esc5(run.raw);
+        return run.kind === "code" ? `<code>${esc6(run.raw)}</code>` : esc6(run.raw);
       });
     };
     const out = [];
@@ -27770,7 +28030,7 @@ ${BLOCKED_PILL_CSS}
         continue;
       }
       if (b.kind === "fence") {
-        out.push(`<pre><code>${esc5(b.lines.join("\n"))}</code></pre>`);
+        out.push(`<pre><code>${esc6(b.lines.join("\n"))}</code></pre>`);
         continue;
       }
       if (b.kind === "heading") {
@@ -27783,7 +28043,7 @@ ${BLOCKED_PILL_CSS}
       }
       if (b.kind === "ul" || b.kind === "ol") {
         const tag = b.kind === "ul" ? "ul" : "ol";
-        out.push(`<${tag}>${b.items.map((it) => `<li>${render2(it)}</li>`).join("")}</${tag}>`);
+        out.push(`<${tag}>${b.items.map((it2) => `<li>${render2(it2)}</li>`).join("")}</${tag}>`);
         continue;
       }
       out.push(`<p>${b.lines.map(render2).join(" ")}</p>`);
@@ -27912,8 +28172,8 @@ ${BLOCKED_PILL_CSS}
     async _loadAuto() {
       if (this._auto || !this.client) return;
       try {
-        const q = await this.client.syndicationQueue();
-        this._auto = Array.isArray(q?.sent) ? q.sent : [];
+        const q2 = await this.client.syndicationQueue();
+        this._auto = Array.isArray(q2?.sent) ? q2.sent : [];
       } catch {
         this._auto = [];
       }
@@ -27928,8 +28188,8 @@ ${BLOCKED_PILL_CSS}
       return this._tab === "auto" ? Object.keys(row.perChannel || {}) : [row.channel];
     }
     _filtered() {
-      const q = this._fQ.trim().toLowerCase();
-      return this._rawList().filter((r) => (this._fType === "all" || (r.source || "") === this._fType) && (this._fChannel === "all" || this._chansOf(r).includes(this._fChannel)) && (!q || String(r.title || r.targetSlug || "").toLowerCase().includes(q)));
+      const q2 = this._fQ.trim().toLowerCase();
+      return this._rawList().filter((r) => (this._fType === "all" || (r.source || "") === this._fType) && (this._fChannel === "all" || this._chansOf(r).includes(this._fChannel)) && (!q2 || String(r.title || r.targetSlug || "").toLowerCase().includes(q2)));
     }
     _channelOptions() {
       const set = /* @__PURE__ */ new Set();
@@ -27945,7 +28205,7 @@ ${BLOCKED_PILL_CSS}
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS48) + this._shell(`<p class="msg err">${esc(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
+        this.set(this.css(CSS48) + this._shell(`<p class="msg err">${esc2(this._msg)}</p><button class="btn" data-reload type="button">Retry</button>`));
         this._wire();
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
@@ -27964,15 +28224,15 @@ ${BLOCKED_PILL_CSS}
       if (this._page >= pages) this._page = pages - 1;
       const paged = filtered.slice(this._page * PAGE_SIZE, this._page * PAGE_SIZE + PAGE_SIZE);
       const rows = paged.length ? paged.map((r) => this._tab === "todo" ? this._todoRow(r) : this._tab === "manual" ? this._doneRow(r) : this._autoRow(r)).join("") : `<p class="empty">${this._rawList().length ? "Nothing matches the filters." : this._tab === "todo" ? "Nothing to post by hand right now." : this._tab === "manual" ? "No manual posts yet." : "No automated posts yet."}</p>`;
-      const opt = (v, l, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(l)}</option>`;
+      const opt = (v2, l, cur) => `<option value="${esc2(v2)}"${cur === v2 ? " selected" : ""}>${esc2(l)}</option>`;
       const chOpts = this._channelOptions();
       this.set(this.css(CSS48) + this._shell(`
       <div class="tabs">${tabBtn("todo", "To do", nPending)}${tabBtn("manual", "Manual done", nDone)}${tabBtn("auto", "Auto done", nAuto || "")}</div>
-      <p class="hint">${esc(hint)}</p>
+      <p class="hint">${esc2(hint)}</p>
       <div class="fbar">
-        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL2).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
+        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL2).map(([v2, l]) => opt(v2, l, this._fType)).join("")}</select>
         <select data-f="channel" aria-label="Filter by channel">${opt("all", "All channels", this._fChannel)}${chOpts.map((c) => opt(c, CH_LABEL[c] || c, this._fChannel)).join("")}</select>
-        <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
+        <input data-f="q" type="search" placeholder="Search titles" value="${esc2(this._fQ)}" aria-label="Search titles" />
         <span class="count">${filtered.length} item${filtered.length === 1 ? "" : "s"}</span>
       </div>
       <div>${rows}</div>
@@ -27998,10 +28258,10 @@ ${BLOCKED_PILL_CSS}
         const focusQ = el2.dataset.f === "q";
         this.render();
         if (focusQ) {
-          const q = this.$('[data-f="q"]');
-          if (q) {
-            q.focus();
-            q.setSelectionRange(q.value.length, q.value.length);
+          const q2 = this.$('[data-f="q"]');
+          if (q2) {
+            q2.focus();
+            q2.setSelectionRange(q2.value.length, q2.value.length);
           }
         }
       }));
@@ -28021,7 +28281,7 @@ ${BLOCKED_PILL_CSS}
       this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
     }
     _shell(inner, msg = "") {
-      return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>${msg ? `<p class="msg msgbar" role="status">${esc(msg)}</p>` : ""}<div class="body">${inner}</div>`;
+      return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div>${msg ? `<p class="msg msgbar" role="status">${esc2(msg)}</p>` : ""}<div class="body">${inner}</div>`;
     }
     _wire() {
       this.$("[data-close]")?.addEventListener("click", () => this.dispatchEvent(new CustomEvent("gbti-social-close", { bubbles: true, composed: true })));
@@ -28030,7 +28290,7 @@ ${BLOCKED_PILL_CSS}
       return (this._data?.pending || []).find((t) => t.id === id) || (this._data?.done || []).find((t) => t.id === id) || null;
     }
     _chip(channel, status, big) {
-      return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ""}</span>`;
+      return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc2(CH_LABEL[channel] || channel)}${status ? ` ${esc2(status)}` : ""}</span>`;
     }
     // sow-260: a Reddit task carries a SECOND thing to paste. Since 2026-08-27 that is the author note as a
     // first COMMENT (a manual Reddit submission is a link post, which earns the preview card but has no body).
@@ -28045,21 +28305,21 @@ ${BLOCKED_PILL_CSS}
       const label = CH_LABEL[t.channel] || t.channel;
       const url = composeUrl(t);
       const x = this._extra(t);
-      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
+      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc2(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc2(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc2(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc2(label)}</button>` : `<button class="btn copy" data-copy="${esc2(t.id)}" type="button">Copy text</button>`;
       return `<div class="task${this._rowBusy === t.id ? " busy" : ""}">
-      <div class="top"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate2(t.createdAt)) : ""}</span></div>
-      <div class="txt">${esc(this._pasteText(t, "text"))}</div>
-      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(this._pasteText(t, x.field))}</div>` : ""}
-      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? " title" : ""}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      <div class="top"><span class="src">${esc2(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc2(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc2(fmtDate2(t.createdAt)) : ""}</span></div>
+      <div class="txt">${esc2(this._pasteText(t, "text"))}</div>
+      ${x ? `<div class="txt body"><span class="blabel">${esc2(x.label)}</span>${esc2(this._pasteText(t, x.field))}</div>` : ""}
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc2(t.id)}" type="button">Copy${x ? " title" : ""}</button>${x ? `<button class="btn copy" data-copybody="${esc2(t.id)}" type="button">${esc2(x.copy)}</button>` : ""}<button class="btn done" data-done="${esc2(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc2(t.id)}" type="button">Delete</button></div>
     </div>`;
     }
     _doneRow(t) {
-      return `<div class="row"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "sent")}<span class="ti">${esc(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc(fmtDate2(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>`;
+      return `<div class="row"><span class="src">${esc2(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "sent")}<span class="ti">${esc2(t.title || "(untitled)")}</span><span class="when">${t.doneAt ? esc2(fmtDate2(t.doneAt)) : ""}</span><button class="btn del" data-del="${esc2(t.id)}" type="button">Delete</button></div>`;
     }
-    _autoRow(it) {
-      const chans = Object.entries(it.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || "sent")).join("");
-      const title = it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title || it.targetSlug || "(untitled)")}</a>` : esc(it.title || it.targetSlug || "(untitled)");
-      return `<div class="row"><span class="src">${esc(SRC_LABEL2[it.source] || it.source || "")}</span><span class="ti">${title}</span><span class="chans">${chans}</span><span class="when">${it.sentAt ? esc(fmtDate2(it.sentAt)) : ""}</span></div>`;
+    _autoRow(it2) {
+      const chans = Object.entries(it2.perChannel || {}).map(([n, r]) => this._chip(n, r?.status || "sent")).join("");
+      const title = it2.url ? `<a href="${esc2(it2.url)}" target="_blank" rel="noopener">${esc2(it2.title || it2.targetSlug || "(untitled)")}</a>` : esc2(it2.title || it2.targetSlug || "(untitled)");
+      return `<div class="row"><span class="src">${esc2(SRC_LABEL2[it2.source] || it2.source || "")}</span><span class="ti">${title}</span><span class="chans">${chans}</span><span class="when">${it2.sentAt ? esc2(fmtDate2(it2.sentAt)) : ""}</span></div>`;
     }
     _assist(id) {
       const t = this._byId(id);
@@ -28276,17 +28536,17 @@ ${BLOCKED_PILL_CSS}
       return ["all", ...[...set].sort()];
     }
     _filtered() {
-      const q = this._q.trim().toLowerCase();
-      return this._entries.filter((e) => (this._area === "all" || e.area === this._area) && (!q || fmtLine(e).toLowerCase().includes(q))).slice().sort((a, b) => a.t - b.t);
+      const q2 = this._q.trim().toLowerCase();
+      return this._entries.filter((e) => (this._area === "all" || e.area === this._area) && (!q2 || fmtLine(e).toLowerCase().includes(q2))).slice().sort((a, b) => a.t - b.t);
     }
     render() {
       const rows = this._filtered();
-      const areaOpts = this._areas().map((a) => `<option value="${esc(a)}"${a === this._area ? " selected" : ""}>${esc(AREA_LABEL[a] || a)}</option>`).join("");
+      const areaOpts = this._areas().map((a) => `<option value="${esc2(a)}"${a === this._area ? " selected" : ""}>${esc2(AREA_LABEL[a] || a)}</option>`).join("");
       const table = rows.length ? `<table><thead><tr><th>Time</th><th>Realm</th><th>Area</th><th>Message</th><th>Data</th></tr></thead><tbody>${rows.map((e) => `
-          <tr><td class="t">${esc(fmtTime(e.t))}</td>
-            <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc(e.realm || "app")}</span></td>
-            <td>${esc(e.area)}</td><td class="msg">${esc(e.msg)}</td>
-            <td class="data">${esc(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
+          <tr><td class="t">${esc2(fmtTime(e.t))}</td>
+            <td><span class="badge ${e.realm === "bg" ? "bg" : e.realm === "page" ? "page" : ""}">${esc2(e.realm || "app")}</span></td>
+            <td>${esc2(e.area)}</td><td class="msg">${esc2(e.msg)}</td>
+            <td class="data">${esc2(fmtData(e.data))}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">${this._enabled ? "No log lines yet. Reproduce the action you want to inspect." : "Debug logging is off. Turn it on, then reproduce the issue."}</p>`;
       this.set(this.css(CSS49) + `
       <div class="hd">
         <h2>Debug</h2>
@@ -28297,13 +28557,13 @@ ${BLOCKED_PILL_CSS}
         <div class="bar">
           <button class="btn toggle ${this._enabled ? "on" : ""}" data-toggle type="button">${this._enabled ? "Logging: ON" : "Logging: OFF"}</button>
           <select data-area>${areaOpts}</select>
-          <input data-q type="search" placeholder="Filter lines" value="${esc(this._q)}" />
+          <input data-q type="search" placeholder="Filter lines" value="${esc2(this._q)}" />
           <button class="btn" data-refresh type="button">Refresh</button>
           <button class="btn" data-copy type="button">Copy</button>
           <button class="btn" data-clear type="button">Clear</button>
           <span class="count">${rows.length} lines</span>
         </div>
-        ${this._flash ? `<p class="flash">${esc(this._flash)}</p>` : ""}
+        ${this._flash ? `<p class="flash">${esc2(this._flash)}</p>` : ""}
         ${table}
       </div>`);
       this.$("[data-close]")?.addEventListener("click", () => this.emit("gbti-debug-close"));
@@ -28324,7 +28584,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-debug-panel", GbtiDebugPanel);
 
   // client-ui/src/elements/gbti-signin-splash.mjs
-  var SITE23 = "https://gbti.network";
+  var SITE24 = "https://gbti.network";
   var check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
   var CSS50 = `
@@ -28373,7 +28633,7 @@ ${BLOCKED_PILL_CSS}
       const action = this._waiting ? `<div class="waitbox">
            <p class="sub">Finish signing in using the GitHub window that just opened. It closes by itself when you are done.</p>
            <p class="note">Waiting for GitHub&hellip;</p>
-         </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc(who)}` : "Sign in with GitHub"}</button>`;
+         </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} ${who ? `Continue as @${esc2(who)}` : "Sign in with GitHub"}</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
       this.set(this.css(CSS50) + `<div class="splashwrap">
       <div class="head">
@@ -28382,8 +28642,8 @@ ${BLOCKED_PILL_CSS}
         <p>The developer co-op. Sign in with your GitHub account to publish articles, projects, and prompts, follow members, read the members-only news, and join the community.</p>
       </div>
       <div class="card">
-        ${expired}${this._note ? `<p class="problem" role="alert">${esc(this._note)}</p>` : ""}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE23}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
+        ${expired}${this._note ? `<p class="problem" role="alert">${esc2(this._note)}</p>` : ""}${action}
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE24}/membership/" target="_blank" rel="noopener">Become a member</a>. Reading is free, and an account costs nothing.</p>
       </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:signin-start", { method: "web" }));
     }
@@ -28483,14 +28743,14 @@ ${BLOCKED_PILL_CSS}
     if (t === "function") return `[fn ${value.name || "anonymous"}]`;
     if (t !== "object") return String(value);
     if (depth >= MAX_DEPTH) return Array.isArray(value) ? `[array(${value.length})]` : "[object]";
-    if (Array.isArray(value)) return value.slice(0, 20).map((v) => redactDeep(v, depth + 1));
+    if (Array.isArray(value)) return value.slice(0, 20).map((v2) => redactDeep(v2, depth + 1));
     const out = {};
-    for (const [k, v] of Object.entries(value)) {
+    for (const [k, v2] of Object.entries(value)) {
       if (SECRET_KEY.test(k)) {
-        out[k] = v == null || v === "" ? "<empty>" : "<redacted>";
+        out[k] = v2 == null || v2 === "" ? "<empty>" : "<redacted>";
         continue;
       }
-      out[k] = redactDeep(v, depth + 1);
+      out[k] = redactDeep(v2, depth + 1);
     }
     return out;
   }
@@ -28621,13 +28881,13 @@ ${BLOCKED_PILL_CSS}
     return m ? m[0].toUpperCase() : "?";
   }
   function groupSort(items) {
-    return items.map((it, i) => [it, i]).sort((a, b) => GROUP_RANK[a[0].group] - GROUP_RANK[b[0].group] || a[1] - b[1]).map(([it]) => it);
+    return items.map((it2, i) => [it2, i]).sort((a, b) => GROUP_RANK[a[0].group] - GROUP_RANK[b[0].group] || a[1] - b[1]).map(([it2]) => it2);
   }
   function mergeState(stored) {
-    const st = stored && typeof stored === "object" ? stored : {};
+    const st2 = stored && typeof stored === "object" ? stored : {};
     const customs = [];
     const seen = /* @__PURE__ */ new Set();
-    for (const c of Array.isArray(st.custom) ? st.custom : []) {
+    for (const c of Array.isArray(st2.custom) ? st2.custom : []) {
       if (customs.length >= QL_MAX_CUSTOM) break;
       const id = String(c?.id || "");
       const url = normalizeUrl(c?.url);
@@ -28637,80 +28897,80 @@ ${BLOCKED_PILL_CSS}
     }
     const known = new Map([...DEFAULTS.map((d) => [d.id, { ...d, custom: false }]), ...customs.map((c) => [c.id, c])]);
     const order = [];
-    for (const id of Array.isArray(st.order) ? st.order : []) if (known.has(id) && !order.includes(id)) order.push(id);
+    for (const id of Array.isArray(st2.order) ? st2.order : []) if (known.has(id) && !order.includes(id)) order.push(id);
     for (const id of known.keys()) if (!order.includes(id)) order.push(id);
-    const on = new Set((Array.isArray(st.on) ? st.on : []).filter((id) => known.has(id)));
+    const on = new Set((Array.isArray(st2.on) ? st2.on : []).filter((id) => known.has(id)));
     const items = groupSort(order.map((id) => ({ ...known.get(id), on: on.has(id) })));
-    return { items, dailydevAuto: st.dailydevAuto === true };
+    return { items, dailydevAuto: st2.dailydevAuto === true };
   }
   function toStored(state) {
     return {
       v: 1,
-      order: state.items.map((it) => it.id),
-      on: state.items.filter((it) => it.on).map((it) => it.id),
-      custom: state.items.filter((it) => it.custom).map(({ id, name, url }) => ({ id, name, url })),
+      order: state.items.map((it2) => it2.id),
+      on: state.items.filter((it2) => it2.on).map((it2) => it2.id),
+      custom: state.items.filter((it2) => it2.custom).map(({ id, name, url }) => ({ id, name, url })),
       dailydevAuto: state.dailydevAuto === true
     };
   }
   function barItems(state) {
-    return state.items.filter((it) => it.on).slice(0, QL_CAP);
+    return state.items.filter((it2) => it2.on).slice(0, QL_CAP);
   }
   function overflowItems(state) {
-    return state.items.filter((it) => it.on).slice(QL_CAP);
+    return state.items.filter((it2) => it2.on).slice(QL_CAP);
   }
   var withItems = (state, items) => ({ ...state, items: groupSort(items) });
   function setOn(state, id, on) {
-    return withItems(state, state.items.map((it) => it.id === id ? { ...it, on: on === true } : it));
+    return withItems(state, state.items.map((it2) => it2.id === id ? { ...it2, on: on === true } : it2));
   }
   function move(state, id, delta) {
     const items = [...state.items];
-    const i = items.findIndex((it) => it.id === id);
+    const i = items.findIndex((it2) => it2.id === id);
     if (i < 0) return state;
-    const j = i + (delta < 0 ? -1 : 1);
-    if (j < 0 || j >= items.length || items[j].group !== items[i].group) return state;
-    [items[i], items[j]] = [items[j], items[i]];
+    const j2 = i + (delta < 0 ? -1 : 1);
+    if (j2 < 0 || j2 >= items.length || items[j2].group !== items[i].group) return state;
+    [items[i], items[j2]] = [items[j2], items[i]];
     return withItems(state, items);
   }
   function moveBefore(state, id, beforeId) {
-    const it = state.items.find((x) => x.id === id);
-    if (!it || id === beforeId) return state;
+    const it2 = state.items.find((x) => x.id === id);
+    if (!it2 || id === beforeId) return state;
     const rest = state.items.filter((x) => x.id !== id);
-    let at;
+    let at2;
     if (beforeId == null) {
-      const lastOfGroup = rest.map((x) => x.group).lastIndexOf(it.group);
-      at = lastOfGroup + 1;
+      const lastOfGroup = rest.map((x) => x.group).lastIndexOf(it2.group);
+      at2 = lastOfGroup + 1;
     } else {
-      at = rest.findIndex((x) => x.id === beforeId);
-      if (at < 0 || rest[at].group !== it.group) return state;
+      at2 = rest.findIndex((x) => x.id === beforeId);
+      if (at2 < 0 || rest[at2].group !== it2.group) return state;
     }
-    rest.splice(at, 0, it);
+    rest.splice(at2, 0, it2);
     return withItems(state, rest);
   }
   function addCustom(state, { url, name } = {}, newId = () => `c-${Math.random().toString(36).slice(2, 12)}`) {
     const href = normalizeUrl(url);
     if (!href) return { error: "invalid-url" };
-    const customs = state.items.filter((it) => it.custom);
+    const customs = state.items.filter((it2) => it2.custom);
     if (customs.length >= QL_MAX_CUSTOM) return { error: "too-many" };
-    if (customs.some((it) => it.url === href)) return { error: "duplicate" };
+    if (customs.some((it2) => it2.url === href)) return { error: "duplicate" };
     let id = newId();
-    while (state.items.some((it) => it.id === id) || !CUSTOM_ID_RE.test(id)) id = `c-${Math.random().toString(36).slice(2, 12)}`;
+    while (state.items.some((it2) => it2.id === id) || !CUSTOM_ID_RE.test(id)) id = `c-${Math.random().toString(36).slice(2, 12)}`;
     const item = { id, name: cleanName(name) || displayHost(href), url: href, group: "custom", custom: true, on: true };
     return { state: withItems(state, [...state.items, item]), item };
   }
   function updateCustom(state, id, { url, name } = {}) {
-    const cur = state.items.find((it) => it.id === id && it.custom);
+    const cur = state.items.find((it2) => it2.id === id && it2.custom);
     if (!cur) return { error: "not-found" };
     const href = url === void 0 ? cur.url : normalizeUrl(url);
     if (!href) return { error: "invalid-url" };
-    if (state.items.some((it) => it.custom && it.id !== id && it.url === href)) return { error: "duplicate" };
+    if (state.items.some((it2) => it2.custom && it2.id !== id && it2.url === href)) return { error: "duplicate" };
     const next = { ...cur, url: href, name: cleanName(name ?? cur.name) || displayHost(href) };
-    return { state: withItems(state, state.items.map((it) => it.id === id ? next : it)) };
+    return { state: withItems(state, state.items.map((it2) => it2.id === id ? next : it2)) };
   }
   function removeCustom(state, id) {
-    return withItems(state, state.items.filter((it) => !(it.id === id && it.custom)));
+    return withItems(state, state.items.filter((it2) => !(it2.id === id && it2.custom)));
   }
   function restoreDefaults(state) {
-    const customs = state.items.filter((it) => it.custom);
+    const customs = state.items.filter((it2) => it2.custom);
     return withItems(state, [...DEFAULTS.map((d) => ({ ...d, custom: false, on: false })), ...customs]);
   }
   function applyDailydevDetection(state, detected) {
@@ -28750,7 +29010,7 @@ ${BLOCKED_PILL_CSS}
   };
 
   // extension/src/quick-launch.mjs
-  var esc6 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc7 = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var GLYPH = {
     gear: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
     x: '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
@@ -28767,7 +29027,7 @@ ${BLOCKED_PILL_CSS}
     if (m) return `<span class="ql-ic" style="--ql-c:${m.hex}" aria-hidden="true"><svg viewBox="${m.viewBox}" focusable="false">${m.paths.map((d) => `<path d="${d}"/>`).join("")}</svg></span>`;
     const icon3 = icons[item.id];
     if (typeof icon3 === "string" && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(icon3)) return `<span class="ql-ic ql-img" aria-hidden="true"><img src="${icon3}" alt="" /></span>`;
-    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc6(letterFor(item.name))}</span>`;
+    return `<span class="ql-ic ql-letter" aria-hidden="true">${esc7(letterFor(item.name))}</span>`;
   }
   var area = (name) => {
     try {
@@ -28827,7 +29087,7 @@ ${BLOCKED_PILL_CSS}
     }
   }
   function barHtml() {
-    const links = barItems(STATE).map((it) => `<a class="nt-app ql-go" href="${esc6(it.url)}" target="_blank" rel="noopener noreferrer" title="${esc6(it.name)}" aria-label="${esc6(it.name)}, opens in a new tab">${markHtml(it, ICONS3)}</a>`).join("");
+    const links = barItems(STATE).map((it2) => `<a class="nt-app ql-go" href="${esc7(it2.url)}" target="_blank" rel="noopener noreferrer" title="${esc7(it2.name)}" aria-label="${esc7(it2.name)}, opens in a new tab">${markHtml(it2, ICONS3)}</a>`).join("");
     return `<span class="ql-more"><button class="ql-gear" type="button" data-ql-settings aria-label="Quick launch settings" title="Quick launch settings" aria-haspopup="dialog">${glyph("gear")}</button><span class="ql-sep" aria-hidden="true"></span></span>${links}`;
   }
   function renderBars() {
@@ -28879,39 +29139,39 @@ ${BLOCKED_PILL_CSS}
     "too-many": "You have added as many of your own sites as the bar can keep. Remove one to add another.",
     duplicate: "That site is already in your list."
   };
-  function rowHtml(it, rank) {
-    const inBar = it.on && rank < QL_CAP;
-    const left = it.on && !inBar;
-    const tools = it.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc6(it.id)}" aria-label="Edit ${esc6(it.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc6(it.id)}" aria-label="Remove ${esc6(it.name)}" title="Remove">${glyph("trash")}</button>` : "";
-    const open = left ? `<a class="ql-tool" href="${esc6(it.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc6(it.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
-    return `<li class="ql-row" data-ql-row="${esc6(it.id)}" data-group="${esc6(it.group)}" draggable="true">
-    <button class="ql-grip" type="button" data-ql-grip="${esc6(it.id)}" aria-label="Move ${esc6(it.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
-    ${markHtml(it, ICONS3)}
-    <span class="ql-txt"><b>${esc6(it.name)}</b><small>${esc6(displayHost(it.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
+  function rowHtml(it2, rank) {
+    const inBar = it2.on && rank < QL_CAP;
+    const left = it2.on && !inBar;
+    const tools = it2.custom ? `<button class="ql-tool" type="button" data-ql-edit="${esc7(it2.id)}" aria-label="Edit ${esc7(it2.name)}" title="Edit">${glyph("pencil")}</button><button class="ql-tool" type="button" data-ql-remove="${esc7(it2.id)}" aria-label="Remove ${esc7(it2.name)}" title="Remove">${glyph("trash")}</button>` : "";
+    const open = left ? `<a class="ql-tool" href="${esc7(it2.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc7(it2.name)} in a new tab" title="Open">${glyph("open")}</a>` : "";
+    return `<li class="ql-row" data-ql-row="${esc7(it2.id)}" data-group="${esc7(it2.group)}" draggable="true">
+    <button class="ql-grip" type="button" data-ql-grip="${esc7(it2.id)}" aria-label="Move ${esc7(it2.name)}. Use the up and down arrow keys." title="Drag to reorder">${glyph("grip")}</button>
+    ${markHtml(it2, ICONS3)}
+    <span class="ql-txt"><b>${esc7(it2.name)}</b><small>${esc7(displayHost(it2.url))}${left ? " · not in the bar, which holds 8" : ""}</small></span>
     ${open}${tools}
-    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc6(it.id)}" aria-checked="${it.on ? "true" : "false"}" aria-label="Show ${esc6(it.name)} in the bar"><span></span></button>
+    <button class="ql-sw" type="button" role="switch" data-ql-toggle="${esc7(it2.id)}" aria-checked="${it2.on ? "true" : "false"}" aria-label="Show ${esc7(it2.name)} in the bar"><span></span></button>
   </li>`;
   }
   function listsHtml() {
-    const onRank = new Map(STATE.items.filter((it) => it.on).map((it, i) => [it.id, i]));
+    const onRank = new Map(STATE.items.filter((it2) => it2.on).map((it2, i) => [it2.id, i]));
     return GROUPS.map((g) => {
-      const rows = STATE.items.filter((it) => it.group === g.key);
-      const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it) => rowHtml(it, onRank.get(it.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
-      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc6(g.label)}</h3>${body}</section>`;
+      const rows = STATE.items.filter((it2) => it2.group === g.key);
+      const body = rows.length ? `<ul class="ql-list" data-ql-group="${g.key}">${rows.map((it2) => rowHtml(it2, onRank.get(it2.id) ?? -1)).join("")}</ul>` : '<p class="ql-empty">Sites you add show here.</p>';
+      return `<section class="ql-sec"><h3 class="ql-eyebrow">${esc7(g.label)}</h3>${body}</section>`;
     }).join("");
   }
   function previewHtml() {
     const items = barItems(STATE);
-    const icons = items.map((it) => `<span class="ql-pv" title="${esc6(it.name)}">${markHtml(it, ICONS3)}</span>`).join("");
+    const icons = items.map((it2) => `<span class="ql-pv" title="${esc7(it2.name)}">${markHtml(it2, ICONS3)}</span>`).join("");
     return icons;
   }
   function formHtml({ id = "", url = "", name = "" } = {}) {
-    return `<form class="ql-form" data-ql-form="${esc6(id)}" novalidate>
+    return `<form class="ql-form" data-ql-form="${esc7(id)}" novalidate>
     <b class="ql-form-h">${id ? "Edit destination" : "Add a destination"}</b>
-    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc6(url)}" required /></label>
+    <label class="ql-field"><span>Address</span><input type="url" name="url" inputmode="url" autocomplete="url" placeholder="https://" value="${esc7(url)}" required /></label>
     <div class="ql-form-row">
       <span class="ql-form-ic" data-ql-form-ic>${markHtml({ id: id || "new", name: name || displayHost(url) || "?", custom: true }, ICONS3)}</span>
-      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc6(name)}" placeholder="Found from the site" /></label>
+      <label class="ql-field ql-grow"><span>Name</span><input type="text" name="name" maxlength="40" value="${esc7(name)}" placeholder="Found from the site" /></label>
     </div>
     <p class="ql-status" data-ql-status aria-live="polite"></p>
     <div class="ql-form-acts"><button class="ql-btn" type="button" data-ql-cancel>Cancel</button><button class="ql-btn ql-primary" type="submit">${id ? "Save" : "Add to your bar"}</button></div>
@@ -28955,11 +29215,11 @@ ${BLOCKED_PILL_CSS}
       editing = null;
       $("[data-ql-add]").innerHTML = `<button class="ql-addbtn" type="button" data-ql-add-open>${glyph("plus")}Add a destination</button>`;
     };
-    const openForm = (it = null) => {
-      editing = it ? it.id : "";
+    const openForm = (it2 = null) => {
+      editing = it2 ? it2.id : "";
       const slot = $("[data-ql-add]");
-      slot.innerHTML = formHtml(it || {});
-      wireForm(slot.querySelector("form"), it);
+      slot.innerHTML = formHtml(it2 || {});
+      wireForm(slot.querySelector("form"), it2);
       slot.querySelector('input[name="url"]').focus();
     };
     function wireForm(form, current) {
@@ -29046,10 +29306,10 @@ ${BLOCKED_PILL_CSS}
       }
       const tog = hit("data-ql-toggle");
       if (tog != null) {
-        const it = STATE.items.find((x) => x.id === tog);
-        commit(setOn(STATE, tog, !it.on));
+        const it2 = STATE.items.find((x) => x.id === tog);
+        commit(setOn(STATE, tog, !it2.on));
         const now = barItems(STATE).some((x) => x.id === tog);
-        say(it.on ? `${it.name} is off.` : now ? `${it.name} is in your bar.` : `${it.name} is on, but the bar holds ${QL_CAP}.`);
+        say(it2.on ? `${it2.name} is off.` : now ? `${it2.name} is in your bar.` : `${it2.name} is on, but the bar holds ${QL_CAP}.`);
         return;
       }
       const ed = hit("data-ql-edit");
@@ -29059,10 +29319,10 @@ ${BLOCKED_PILL_CSS}
       }
       const rm = hit("data-ql-remove");
       if (rm != null) {
-        const it = STATE.items.find((x) => x.id === rm);
+        const it2 = STATE.items.find((x) => x.id === rm);
         commit(removeCustom(STATE, rm));
         await saveIcon(rm, null);
-        say(`${it?.name || "The site"} removed.`);
+        say(`${it2?.name || "The site"} removed.`);
         $("[data-ql-add-open]")?.focus();
         return;
       }
@@ -29087,9 +29347,9 @@ ${BLOCKED_PILL_CSS}
       const next = move(STATE, id, e.key === "ArrowUp" ? -1 : 1);
       if (next === STATE) return;
       commit(next);
-      const it = STATE.items.find((x) => x.id === id);
-      const group = STATE.items.filter((x) => x.group === it.group);
-      say(`${it.name}, position ${group.findIndex((x) => x.id === id) + 1} of ${group.length}.`);
+      const it2 = STATE.items.find((x) => x.id === id);
+      const group = STATE.items.filter((x) => x.group === it2.group);
+      say(`${it2.name}, position ${group.findIndex((x) => x.id === id) + 1} of ${group.length}.`);
       overlay.querySelector(`[data-ql-grip="${CSS.escape(id)}"]`)?.focus();
     });
     let dragId = null;
@@ -29156,9 +29416,9 @@ ${BLOCKED_PILL_CSS}
   }
 
   // extension/src/shell.mjs
-  var SITE24 = "https://gbti.network";
+  var SITE25 = "https://gbti.network";
   var RANK6 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc7 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc8 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG2 = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -29208,12 +29468,12 @@ ${BLOCKED_PILL_CSS}
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="${SITE24}/workbench/" target="_blank" rel="noopener">Workbench</a>
+        <a class="mi" role="menuitem" href="${SITE25}/workbench/" target="_blank" rel="noopener">Workbench</a>
         <a class="mi" role="menuitem" href="saved.html#favorites" data-me-saved="favorites">Favorites</a>
         <a class="mi" role="menuitem" href="saved.html#collections" data-me-saved="collections">Collections</a>
-        <a class="mi" role="menuitem" href="${SITE24}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
-        <a class="mi" role="menuitem" href="${SITE24}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
-        <a class="mi" role="menuitem" href="${SITE24}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
+        <a class="mi" role="menuitem" href="${SITE25}/workbench/#tab=subs" target="_blank" rel="noopener">Following</a>
+        <a class="mi" role="menuitem" href="${SITE25}/workbench/#tab=earnings" target="_blank" rel="noopener">Earnings</a>
+        <a class="mi" role="menuitem" href="${SITE25}/members/" data-me-profile target="_blank" rel="noopener">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
@@ -29249,10 +29509,10 @@ ${BLOCKED_PILL_CSS}
       });
       const folder2 = status.identity.username || String(login).toLowerCase();
       root.querySelectorAll("[data-me-profile]").forEach((a) => {
-        a.href = `${SITE24}/members/${encodeURIComponent(folder2)}/`;
+        a.href = `${SITE25}/members/${encodeURIComponent(folder2)}/`;
       });
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc7(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc8(login)}</b>`;
       const showAdmin = (RANK6[status.role] ?? 0) >= RANK6.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el2) => {
         el2.hidden = !showAdmin;

@@ -383,7 +383,7 @@ class GbtiProfileEditor extends GbtiElement {
       if (raw) links[k] = buildSocialUrl(k, raw);
     }
     Object.assign(input, {
-      displayName: (m.displayName || '').trim() || this._login || 'Member',
+      displayName: (m.displayName || '').trim() || this._status?.identity?.username || this._login || 'Member', // sow-428: the GBTI name before the login
       forHire: m.forHire === true,
       directory: m.directory === true,
       skills: m.skills,

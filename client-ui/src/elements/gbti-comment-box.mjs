@@ -67,7 +67,7 @@ class GbtiCommentBox extends GbtiElement {
   _fullRow(on) { this.style.flex = on ? '1 1 100%' : ''; this.style.width = on ? '100%' : ''; }
   _renderEditAffordance() {
     this._fullRow(false);
-    if (!this._identity || this._identity.username !== this._editAuthor) { this.set(this.css(CSS) + ''); return; } // not the author: invisible
+    if (!this._identity || String(this._identity.username || '').toLowerCase() !== String(this._editAuthor || '').toLowerCase()) { this.set(this.css(CSS) + ''); return; } // not the author: invisible
     this.set(this.css(CSS) + `<button class="edit" type="button">Edit</button>`);
     this.on('.edit', 'click', () => this._openEdit());
   }
