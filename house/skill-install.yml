@@ -1,0 +1,39 @@
+# sow-109: the install steps a skill page shows, one set per tool a skill can be made for.
+#
+# Owner, 2026-09-29: "we expect GPT skills too (maybe openclaw, paperclip, etc). So we need broad support based on
+# the model the skill is being created for." A skill names the tools it is made for in its `targets` (checked
+# against house/ai-tools.yml). Its page shows one tab for each of them that has an entry here, and a reader picks
+# theirs. Authors never write install steps; they are written once, here.
+#
+# Every box has the same three steps, so an entry holds only what differs by tool:
+#   folder  where the skill file goes. {name} is the skill's own name, from the name: line of its SKILL.md.
+#   run     how to start using it. `Backticks` mark a command, shown as code.
+#   local   optional: how to install it for one project only.
+# Step 1 is always "make the skill's folder" and step 2 is always "save the skill file into it as SKILL.md".
+#
+# A key must be a tool key in house/ai-tools.yml. A tool with no entry here (Paperclip, for now) still counts as a
+# tool a skill can be made for; its page shows the author's own text in place of the steps.
+#
+# Checked against each tool's own documentation on 2026-09-29:
+#   Claude Code  ~/.claude/skills/<name>/SKILL.md, per project .claude/skills/<name>/, run with /<name>
+#   Codex        learn.chatgpt.com/docs/build-skills: $HOME/.agents/skills, per repository .agents/skills;
+#                changes are picked up automatically, "if an update doesn't appear, restart Codex";
+#                a skill is called with $<name> (github.com/openai/skills)
+#   OpenClaw     docs.openclaw.ai/tools/skills: reads ~/.agents/skills and <workspace>/skills;
+#                loads skills when a session starts
+#
+# No notes beside a key: the admin screen rewrites this file and keeps only this top comment block.
+# No em or en dashes.
+tools:
+  claude-code:
+    folder: "~/.claude/skills/{name}"
+    run: "Open a new Claude Code session and type `/{name}`."
+    local: "Only want it in one project? Use `.claude/skills/{name}/` inside that project instead."
+  codex:
+    folder: "~/.agents/skills/{name}"
+    run: "Start Codex and type `${name}`. Codex notices new skills on its own; if it does not, restart it."
+    local: "Only want it in one repository? Use `.agents/skills/{name}/` inside that repository instead."
+  openclaw:
+    folder: "~/.agents/skills/{name}"
+    run: "Start a new OpenClaw session. It loads new skills when a session starts."
+    local: "Only want it in one workspace? Use the workspace's `skills/{name}/` folder instead."

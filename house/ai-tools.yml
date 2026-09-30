@@ -27,6 +27,8 @@ tools:
   copilot: { label: GitHub Copilot }
   cursor: { label: Cursor }
   codex: { label: Codex }
+  openclaw: { label: OpenClaw }
+  paperclip: { label: Paperclip }
 
   # Image and media
   nano-banana: { label: Nano Banana }

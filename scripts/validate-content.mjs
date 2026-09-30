@@ -18,6 +18,7 @@ import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the
 import { shareCategoryProblem } from '../membership/share-category.mjs'; // a published share needs a category
 import { targetProblems, aiToolEntries } from '../membership/ai-tools.mjs'; // sow-368: the controlled AI-tool list
 import { promptKindProblems } from '../membership/prompt-kind.mjs'; // sow-109: every prompt item says prompt or skill
+import { skillInstallProblems } from '../membership/skill-install.mjs'; // sow-109: the install steps per tool
 import { licenseProblems, licenseEntries } from '../membership/licenses.mjs'; // sow-305: the controlled license list
 import { normalizeBanword, BANWORD_LIMIT, BANWORD_MIN, BANWORD_MAX } from '../membership/news-banwords.mjs'; // sow-372: the blocked-word list
 import { validateTierDisplay } from '../membership/tiers-display.mjs'; // sow-185: the membership tier display data
@@ -685,6 +686,19 @@ function validateAiToolsVocabulary() {
   }
 }
 validateAiToolsVocabulary();
+
+// sow-109: the install steps a skill page shows, per tool (house/skill-install.yml). Every key must be a tool in
+// house/ai-tools.yml, every folder must hold {name}, and every entry needs a run step. Unreadable is an error, not a
+// pass: a skill page with no steps file would show none, and nothing else would say why.
+function validateSkillInstall() {
+  const rel = 'house/skill-install.yml';
+  if (!has(path.join(ROOT, rel))) { errors.push(`${rel}: missing, so no skill page can show install steps`); return; }
+  let doc = null;
+  try { doc = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); } catch { /* reported below */ }
+  if (!doc || typeof doc !== 'object') { errors.push(`${rel}: not valid YAML, so no skill page can show install steps`); return; }
+  for (const problem of skillInstallProblems(doc, AI_TOOLS_DOC)) errors.push(`${rel}: ${problem}`);
+}
+validateSkillInstall();
 
 // sow-305 + sow-245: the licence list has to be READABLE for the per-project check above to mean anything.
 function validateLicenseVocabulary() {
