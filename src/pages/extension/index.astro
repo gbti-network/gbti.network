@@ -11,8 +11,10 @@ import { EXTENSION } from '../../lib/extension';
 // package zip is still built and served for the MCP guide, which is the only page that links it.
 const feats = [
   { icon: 'i-gh', title: 'Sign in with GitHub', body: 'Click the GBTI icon in your toolbar and sign in with GitHub. There is no code to copy, and it signs you in on the website too.' },
-  { icon: 'i-pencil', title: 'Edit in place', body: 'Open any page you can edit and change it where it lives. No separate dashboard, no copy-paste between tabs.' },
-  { icon: 'i-publish', title: 'Publish through the network', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
+  // sow-426: the extension reads, saves and shares; writing moved to the website's Workbench (sow-204), so the old
+  // "Edit in place" and "Publish through the network" cards described an extension that no longer exists.
+  { icon: 'i-plus', title: 'The network in every new tab', body: 'Each new tab opens on the network: what members are making across articles, projects, prompts and skills, and shares, next to a curated developer news feed.' },
+  { icon: 'i-publish', title: 'Read, save and share', body: 'Open anything in the built-in reader, save it to your favorites and collections, and share a link with the network as a member. Writing happens in the Workbench on gbti.network, one click from your avatar menu.' },
 ];
 const faqs = [
   { q: 'How do I update it?', a: 'You do not have to. The Chrome Web Store updates the extension on its own.' },
@@ -27,7 +29,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
 ---
 <BaseLayout
   title="Install the GBTI extension"
-  description="Install the GBTI Network browser extension from the Chrome Web Store in one click. Sign in, edit your work in place, and publish through the network."
+  description="Install the GBTI Network browser extension from the Chrome Web Store in one click. Every new tab opens on the network: what members are making, curated developer news, and a reader for all of it."
 >
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
     <g id="i-dl"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
@@ -44,7 +46,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
   <div class="trial-ribbon" data-trial-ribbon hidden>
     <div class="wrap trial-ribbon-row">
       <span class="trial-ribbon-dot" aria-hidden="true">&#127881;</span>
-      <p data-trial-copy>Welcome to GBTI Network. Download and install the extension below to start authoring and join the community.</p>
+      <p data-trial-copy>Welcome to GBTI Network. Install the extension below to bring the network to every new tab, and join the community.</p>
       <button type="button" class="trial-ribbon-x" data-trial-close aria-label="Dismiss welcome">&times;</button>
     </div>
   </div>
@@ -72,7 +74,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
       // SOW-119: a coupon signup is a full membership from day one, so the ribbon says so.
       if (couponApplied) {
         const copy = el.querySelector('[data-trial-copy]');
-        if (copy) copy.textContent = 'Welcome to GBTI Network. Your coupon is applied and your membership is active. Download and install the extension below to start authoring and join the community.';
+        if (copy) copy.textContent = 'Welcome to GBTI Network. Your coupon is applied and your membership is active. Install the extension below to bring the network to every new tab, and join the community.';
       }
       if (show) el.hidden = false;
       el.querySelector('[data-trial-close]')?.addEventListener('click', () => {
@@ -87,7 +89,7 @@ import { mcpPrompt } from '../../lib/mcp-guide';
     <div class="wrap">
       <span class="chip chip-green"><span class="chip-dot"></span> Free · v{EXTENSION.version}</span>
       <h1 class="h1 mt20">Install the GBTI extension</h1>
-      <p class="lead">The extension is how you sign in, edit your work in place, and publish through the network. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
+      <p class="lead">The extension turns every new tab into the network: what members are making, a curated developer news feed, and a reader for all of it. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
       <div class="dl-btns">
         <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="blogo blogo-chrome"></span> Add to Chrome</a>
       </div>
@@ -130,16 +132,16 @@ import { mcpPrompt } from '../../lib/mcp-guide';
             <div class="ea-brand"><span class="ea-logo">G</span> GBTI</div>
             <nav class="ea-nav">
               <span class="ea-nav-i on"><svg viewBox="0 0 24 24"><use href="#ico-list"/></svg> Activity</span>
-              <span class="ea-nav-i"><svg viewBox="0 0 24 24"><use href="#ico-pencil"/></svg> Blog</span>
+              <span class="ea-nav-i"><svg viewBox="0 0 24 24"><use href="#ico-pencil"/></svg> Articles</span>
               <span class="ea-nav-i"><svg viewBox="0 0 24 24"><use href="#ico-box"/></svg> Projects</span>
-              <span class="ea-nav-i"><svg viewBox="0 0 24 24"><use href="#ico-spark"/></svg> AI Prompts</span>
+              <span class="ea-nav-i"><svg viewBox="0 0 24 24"><use href="#ico-spark"/></svg> Prompts &amp; Skills</span>
               <span class="ea-nav-i"><svg viewBox="0 0 24 24"><use href="#ico-mega"/></svg> Shares</span>
             </nav>
-            <div class="ea-rail-foot"><span class="ea-av">A</span> @atwellpub</div>
+            <div class="ea-rail-foot"><span class="ea-av">G</span> @gbtilabs</div>
           </aside>
           <!-- main column: the latest-activity feed -->
           <div class="ea-main">
-            <div class="ea-greet">Welcome back, atwellpub</div>
+            <div class="ea-greet">Welcome back, gbtilabs</div>
             <div class="ea-date">Latest activity</div>
             <div class="ea-feed">
               <div class="ea-row">

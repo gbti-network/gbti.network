@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkExtensionCta, CTA_MARKERS, MUST_NOT_CLAIM, CLAIM_EXEMPT_PATHS } from '../scripts/check-extension-cta.mjs';
+import { checkExtensionCta, CTA_MARKERS, MUST_NOT_CLAIM, CLAIM_EXEMPT_PATHS, INSTALL_PAGE, INSTALL_PAGE_MUST_NOT_CLAIM } from '../scripts/check-extension-cta.mjs';
 
 // sow-271: the phrase the guard now BANS outside the exempt pages (it used to be required to survive).
 const CAP = '<div>Extension required</div>';
@@ -151,4 +151,29 @@ test('an exempt PAGE does not exempt the bundles, because a bundle is not a page
   assert.equal(errors.length, 1, 'the exempt page must stay exempt and the bundle must still fail');
   assert.ok(errors[0].includes(label));
   assert.match(errors[0], /_astro/, 'the failure must name the bundle, not the exempt page');
+});
+
+// sow-426: the install page may describe the extension, but not one that edits or publishes (that moved to the website).
+test('the install page fails on each authoring claim the old page made, in either toggle position', () => {
+  const OLD = [
+    '<p class="lead">The extension is how you sign in, edit your work in place, and publish through the network.</p>',
+    '<h3>Edit in place</h3>',
+    '<h3>Publish through the network</h3>',
+    '<p>Download and install the extension below to start authoring and join the community.</p>',
+  ];
+  assert.equal(OLD.length, INSTALL_PAGE_MUST_NOT_CLAIM.length);
+  for (const [i, line] of OLD.entries()) {
+    for (const ctaEnabled of [false, true]) {
+      const dist = mkDist({ 'a.html': ctaEnabled ? CTA_MARKERS.map(([, m]) => `<div>${m}</div>`).join('') : '<nav></nav>', [INSTALL_PAGE]: `<main>${line}</main>` });
+      const { errors } = checkExtensionCta({ distDir: dist, ctaEnabled });
+      assert.equal(errors.length, 1, `${line} (${ctaEnabled ? 'ON' : 'OFF'}): ${errors.join(' | ')}`);
+      assert.match(errors[0], new RegExp(INSTALL_PAGE_MUST_NOT_CLAIM[i][0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+  }
+});
+
+test('the corrected install page passes, and the same words on another page are not this check\'s business', () => {
+  const NEW = '<p class="lead">The extension turns every new tab into the network.</p><h3>Read, save and share</h3>';
+  const dist = mkDist({ 'a.html': '<p>Publish through the network</p>', [INSTALL_PAGE]: `<main>${NEW}</main>` });
+  assert.deepEqual(checkExtensionCta({ distDir: dist, ctaEnabled: false }).errors, []);
 });

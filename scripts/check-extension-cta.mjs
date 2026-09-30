@@ -53,6 +53,18 @@ export const MUST_NOT_CLAIM = [
 // page and the brand page exist to talk about it.
 export const CLAIM_EXEMPT_PATHS = ['/extension/', '/brand/'];
 
+// sow-426: the install page is exempt from the list above because describing the extension is its job, but it may not
+// describe an extension that no longer exists. Writing moved to the website's Workbench (sow-204), and the page kept
+// telling people the extension is how they "edit in place" and "publish through the network" until the CTAs that send
+// people there came back on. Checked on the install page only, in BOTH toggle positions.
+export const INSTALL_PAGE = 'extension/index.html';
+export const INSTALL_PAGE_MUST_NOT_CLAIM = [
+  ['a claim that the extension edits content in place', 'edit your work in place'],
+  ['an "Edit in place" feature card', '>Edit in place<'],
+  ['a claim that the extension publishes', 'Publish through the network'],
+  ['a welcome telling the reader the extension is where they start authoring', 'to start authoring'],
+];
+
 /** Walk dist for .html files. Pure over the directory so it is testable against a hand-built temp dist. */
 function htmlFiles(dir, out = []) {
   let entries;
@@ -152,6 +164,17 @@ export function checkExtensionCta({ distDir, ctaEnabled }) {
       );
     } else {
       notes.push(`${label}: absent, as it should be (the website does this itself).`);
+    }
+  }
+
+  // sow-426: the install page's own claims (see INSTALL_PAGE_MUST_NOT_CLAIM).
+  const install = path.join(distDir, INSTALL_PAGE);
+  if (fs.existsSync(install)) {
+    const html = fs.readFileSync(install, 'utf8');
+    for (const [label, marker] of INSTALL_PAGE_MUST_NOT_CLAIM) {
+      if (html.includes(marker)) {
+        errors.push(`${label} is on the install page (${INSTALL_PAGE}). The extension reads, saves and shares; writing happens in the Workbench on the website. Correct the copy.`);
+      }
     }
   }
 

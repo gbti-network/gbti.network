@@ -17,6 +17,7 @@
 #                   Add-to-Chrome banner, the sign-in modal footnote, and the archived v1 homepage button.
 #                   This does NOT hide the "Extension required" explainers that appear after a member clicks a
 #                   control the extension implements, and it does not take the /extension/ install page down.
-#                   Disabled 2026-08-23 at the owner's request (temporary).
+#                   Disabled 2026-08-23 at the owner's request (temporary); re-enabled 2026-09-30 once 0.5.2
+#                   was live on the Chrome Web Store (sow-400, sow-426).
 settings:
-  extension_cta: false
+  extension_cta: true
