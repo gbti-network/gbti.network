@@ -256,7 +256,7 @@ class GbtiDocEditor extends GbtiElement {
         const rows = Array.isArray(b.rows) ? b.rows : [];
         const cols = Math.max(1, head.length);
         const alignStyle = (c) => aligns[c] ? ` style="text-align:${aligns[c]}"` : '';
-        const alignLabel = (c) => ({ '': '–', left: 'L', center: 'C', right: 'R' }[aligns[c] || '']);
+        const alignLabel = (c) => ({ '': 'None', left: 'L', center: 'C', right: 'R' }[aligns[c] || '']);
         const cell = (r, c, v) => `<div class="tc" contenteditable="true" data-edit="cell" data-id="${b._id}" data-r="${r}" data-c="${c}" data-ph="">${inlineMdToHtml(v || '')}</div>`;
         const headCells = Array.from({ length: cols }, (_, c) =>
           `<th${alignStyle(c)}>${cell(-1, c, head[c])}<div class="th-ctl">`

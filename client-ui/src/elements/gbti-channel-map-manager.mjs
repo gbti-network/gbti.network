@@ -586,7 +586,7 @@ class GbtiChannelMapManager extends GbtiElement {
     this.set(this.css(CSS) + ICONS + `<div class="${this._busy ? 'busy' : ''}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
-      <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
+      <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b>, with ${this._mapCount ?? 0} categories mapped.</p>
       ${section}
     </div>`);
     this._wire();

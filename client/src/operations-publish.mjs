@@ -333,7 +333,7 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
   const renameFiles = [];
   if (renaming) {
     const onMain = (await ctx.reader?.readFile?.(origin.oldPath)) != null;
-    if (!onMain) throw new OperationError('bad-request', 'the original item could not be found on the network — refresh and try the rename again');
+    if (!onMain) throw new OperationError('bad-request', 'the original item could not be found on the network; refresh and try the rename again');
     renameFiles.push({ path: origin.oldPath, content: null });
     if (typeof oldFm?.encryptedBody === 'string' && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
     if (!introFile) {

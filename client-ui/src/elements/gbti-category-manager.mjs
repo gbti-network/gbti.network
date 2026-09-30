@@ -168,7 +168,7 @@ class GbtiCategoryManager extends GbtiElement {
     this._busy = true; this._msg = ''; this.render();
     try {
       await this.client.adminOp('category-migrate', { action, from: ps, ...extra, apply: true });
-      this._msg = `Migration triggered (${action} ${ps}). A review-gated PR opens via CI (merge it once content-check is green; it is not auto-merged). A would-orphan remove is refused — see the repo Actions tab. The tree updates after the PR merges.`;
+      this._msg = `Migration triggered (${action} ${ps}). A review-gated PR opens via CI (merge it once content-check is green; it is not auto-merged). A would-orphan remove is refused: see the repo Actions tab. The tree updates after the PR merges.`;
     } catch (err) {
       this._msg = err?.message || 'Could not trigger the migration.';
     }

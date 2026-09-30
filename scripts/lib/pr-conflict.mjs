@@ -62,7 +62,7 @@ export function conflictComment(login) {
   return (
     `${who}heads up: this pull request has a merge conflict, so it cannot auto-publish yet. A change landed on the ` +
     `same file after you started editing. First, open this item in the GBTI client or extension and **publish it ` +
-    `again** — that reloads the latest version and usually clears the conflict (no git or rebase needed). If this ` +
+    `again**. That reloads the latest version and usually clears the conflict (no git or rebase needed). If this ` +
     `pull request still shows a conflict after re-publishing, a maintainer resolves it in the GitHub web editor ` +
     `(choose the pull request's version of your file).`
   );

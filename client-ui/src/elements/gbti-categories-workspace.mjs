@@ -415,7 +415,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
         <div style="min-width:0"><a href="${SITE}${esc(it.url || '')}" target="_blank" rel="noopener">${esc(it.title || it.slug || '')}</a>
         <div class="sub">@${esc(it.author || '')}${it.publishedAt ? ` · ${esc(relAge(Number(it.publishedAt), now))}` : ''}</div></div>
       </div>`).join('');
-    const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
+    const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from} to ${pg.to} of ${pg.total}</span>
         <button class="pgb" type="button" data-cbpage="${pg.page - 1}" ${pg.page === 1 ? 'disabled' : ''}>‹</button>
         ${pageWindow(pg.page, pg.pages).map((n) => (n === '…' ? `<span class="dots">…</span>` : `<button class="pgb${n === pg.page ? ' on' : ''}" type="button" data-cbpage="${n}">${n}</button>`)).join('')}
         <button class="pgb" type="button" data-cbpage="${pg.page + 1}" ${pg.page === pg.pages ? 'disabled' : ''}>›</button>
@@ -535,7 +535,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
     try {
       const res = await this.client.admin('category-batch', { ops: [...this._pending.values()], descriptions: plan.descriptions });
       this._pending.clear();
-      this._msg = res?.noop ? 'Everything in the batch was already applied.' : `Published as PR #${res?.prNumber ?? '?'} — the changes reach the site about 2 to 3 minutes after it merges.`;
+      this._msg = res?.noop ? 'Everything in the batch was already applied.' : `Published as PR #${res?.prNumber ?? '?'}. The changes reach the site about 2 to 3 minutes after it merges.`;
       await this.load();
     } catch (err) { this._msg = esc(err?.message || 'The batch could not be opened.'); this.render(); }
   }
@@ -583,7 +583,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
     ui.querySelector('#mergego')?.addEventListener('click', () => {
       const into = ui.querySelector('#mergesel')?.value || '';
       if (!into) return;
-      this._migrate('merge', { into }, `Merge "${this.labelOf(this._sel)}" into ${into}? Its filed content refiles there, its subcategories move under it, and "${this.labelOf(this._sel)}" is removed — one review-gated migration PR.`);
+      this._migrate('merge', { into }, `Merge "${this.labelOf(this._sel)}" into ${into}? Its filed content refiles there, its subcategories move under it, and "${this.labelOf(this._sel)}" is removed, all in one review-gated migration PR.`);
     });
   }
 

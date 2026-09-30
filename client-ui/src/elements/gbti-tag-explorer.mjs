@@ -173,7 +173,7 @@ class GbtiTagExplorer extends GbtiElement {
         this._sel = to;
       } else this._sel = null;
       this._action = null;
-      this._note = { cls: 'ok', text: res?.noop ? 'Nothing carried that tag.' : `Published as PR #${res?.prNumber ?? '?'} — live in about 2 to 3 minutes.` };
+      this._note = { cls: 'ok', text: res?.noop ? 'Nothing carried that tag.' : `Published as PR #${res?.prNumber ?? '?'}. Live in about 2 to 3 minutes.` };
       this.render();
     } catch (err) {
       this._note = { cls: 'err', text: err?.message || 'The tag edit failed.' };
@@ -258,7 +258,7 @@ class GbtiTagExplorer extends GbtiElement {
     const firstDupe = this._dupes?.[0];
     const dupe = firstDupe && !this._dupeHidden ? `<div class="dupe">
         <span class="dot"></span>
-        <span class="txt"><b>${this._dupes.length} likely duplicate${this._dupes.length === 1 ? '' : 's'}.</b> ${firstDupe.map((r) => `<code>${esc(r.tag)}</code>`).join(' and ')} read as the same label — consider merging.</span>
+        <span class="txt"><b>${this._dupes.length} likely duplicate${this._dupes.length === 1 ? '' : 's'}.</b> ${firstDupe.map((r) => `<code>${esc(r.tag)}</code>`).join(' and ')} read as the same label. Consider merging them.</span>
         <button id="reviewdupe" type="button">Review</button>
         <button class="dismiss" id="dismissdupe" type="button">Dismiss</button>
       </div>` : '';

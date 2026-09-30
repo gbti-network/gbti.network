@@ -357,7 +357,7 @@ export const SOURCES = [
   },
   {
     "id": "articles-on-smashing-magazine-for-web-de",
-    "name": "Articles on Smashing Magazine — For Web Designers And Developers",
+    "name": "Smashing Magazine",
     "description": "www.smashingmagazine.com",
     "url": "https://www.smashingmagazine.com/feed/"
   },

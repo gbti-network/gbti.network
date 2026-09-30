@@ -34,7 +34,7 @@ export function shellHtml() {
 <html lang="en"><head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GBTI Network — local CMS</title>
+<title>GBTI Network: local CMS</title>
 <style>html,body{margin:0;background:#25232b;color:#e8e6ee;font:15px/1.5 "Open Sans",system-ui,sans-serif}main{padding:22px}</style>
 </head><body>
 <main id="app">Loading…</main>

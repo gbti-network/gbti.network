@@ -254,9 +254,9 @@ class GbtiSuperadminDashboard extends GbtiElement {
         const pu = m.pendingGrant.until ? ` · until ${esc(String(m.pendingGrant.until).slice(0, 10))}` : '';
         tags.push(`<span class="tag pending" title="Redeemed but not yet recorded in git. Reconcile folds it within a day.">pending${pt ? ' ' + esc(pt) : ''}${pc}${pu}</span>`);
       }
-      if (!tags.length) tags.push(`<span class="dash">—</span>`);
+      if (!tags.length) tags.push(`<span class="dash">none</span>`);
       const n = this._counts && m.username ? (this._counts[m.username.toLowerCase()] || 0) : null;
-      const content = n == null ? `<span class="dash">—</span>` : esc(n);
+      const content = n == null ? `<span class="dash">n/a</span>` : esc(n);
       const manage = canManage ? `<button class="manage${this._managing === m.githubId ? ' on' : ''}" type="button" data-manage="${esc(m.githubId)}">Manage</button>` : '';
       const main = `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join('')}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td><td class="act-cell">${manage}</td></tr>`;
       const panel = (canManage && this._managing === m.githubId) ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : '';

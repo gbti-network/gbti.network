@@ -9,7 +9,7 @@ export const UI_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GBTI Network — local CMS</title>
+<title>GBTI Network: local CMS</title>
 <style>
   :root { --bg:#25232b; --panel:#2f2d37; --ink:#1f1f1e; --brand:#45c08d; --brand-dark:#37a074; --text:#e8e6ee; --muted:#a8a5b2; --line:#3a3743; }
   * { box-sizing:border-box; }

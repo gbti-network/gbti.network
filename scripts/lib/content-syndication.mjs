@@ -92,7 +92,7 @@ export function formatPublishMessage(item, { mention, siteOrigin = 'https://gbti
   const url = publicUrlFor(item, siteOrigin);
   if (url) return trunc(`📣 New ${label} published by network member ${who} 🎉${title}\n${url}`);
   // members-only / Mode A: title only, never the body, no public link.
-  return trunc(`📣 New members-only ${label} by network member ${who} 🎉${title}\n_Members-only — open it in the GBTI client to read._`);
+  return trunc(`📣 New members-only ${label} by network member ${who} 🎉${title}\n_Members-only: open it in the GBTI client to read._`);
 }
 
 /**

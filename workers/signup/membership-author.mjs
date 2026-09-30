@@ -127,7 +127,7 @@ export async function membershipAuthor(request, env, deps = {}) {
         dispatchToken: env?.REGATE_DISPATCH_TOKEN, contentRepo: env?.GITHUB_CONTENT_REPO || upstream,
       }, fetchImpl);
     }
-    return { status: 409, body: { error: 'folder_not_provisioned', provisioning, message: 'your member folder is being provisioned — try publishing again in a few minutes' } };
+    return { status: 409, body: { error: 'folder_not_provisioned', provisioning, message: 'your member folder is being provisioned; try publishing again in a few minutes' } };
   }
 
   // sow-183: a SUPERADMIN caller may target a file set outside their own folder (house/, or another

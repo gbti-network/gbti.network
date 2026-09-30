@@ -187,7 +187,7 @@ export function mergeCategory(taxonomy, { fromPath, intoPath } = {}, ctx = {}) {
   if (Object.keys(kids).length) {
     if (!dest.children || typeof dest.children !== 'object') dest.children = {};
     for (const k of Object.keys(kids)) {
-      if (dest.children[k]) throw new TaxonomyEditError(`the destination already has a subcategory "${k}" — merge or rename it first`);
+      if (dest.children[k]) throw new TaxonomyEditError(`the destination already has a subcategory "${k}"; merge or rename it first`);
     }
     for (const [k, v] of Object.entries(kids)) dest.children[k] = v;
   }
