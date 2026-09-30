@@ -35,6 +35,7 @@ export const WORKER_ADMIN_ACTIONS = Object.freeze(new Set([
   'outbound-add', 'outbound-update', 'outbound-status', // sow-359: the tracked partner links, forwarded unchanged
   'flag-term-add', 'flag-term-remove',
   'syndication-templates-set', 'news-engagement-set', 'syndication-settings-set',
+  'skill-install-set', 'skill-install-tool-add', // sow-109: superadmin, the install steps per tool and adding a tool
   // content moderation, and the multi-file batches
   'deplatform', 'remove', 'republish',
   'category-batch', 'tag-edit',

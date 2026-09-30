@@ -59,6 +59,9 @@
 # publications we read, superadmins own what we refuse to republish. A word added here silences every story
 # carrying it, in the feed and in the digest, so it is pinned at the top tier and mirrored in SUPERADMIN_HOUSE_FILES.
 /house/news-banwords.yml     @atwellpub @gbtilabs
+# sow-109: the install steps every skill page shows, which readers copy into a terminal. Superadmin, the tier the owner
+# named for the Skill install screen; mirrored in SUPERADMIN_HOUSE_FILES and in the Worker's two write actions.
+/house/skill-install.yml     @atwellpub @gbtilabs
 # sow-337: the call-to-action card images, committed beside house/ctas.yml in the same PR. An image shows on every
 # page its card is assigned to, so it is pinned at the registry's tier. membership/path-rank.mjs carries the row.
 /house/images/ctas/          @atwellpub @gbtilabs

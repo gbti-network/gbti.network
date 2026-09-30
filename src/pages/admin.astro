@@ -30,6 +30,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
           <button type="button" role="tab" data-tab="categories" data-min="admin" aria-selected="false" hidden>Categories</button>
           <button type="button" role="tab" data-tab="tags" data-min="admin" aria-selected="false" hidden>Tags</button>
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
+          <button type="button" role="tab" data-tab="skill-install" data-min="superadmin" aria-selected="false" hidden>Skill install</button>{/* sow-109 */}
           <button type="button" role="tab" data-tab="syndication" data-min="superadmin" aria-selected="false" hidden>Syndication</button>{/* sow-399: was Channels */}
           <button type="button" role="tab" data-tab="editorial" data-min="superadmin" aria-selected="false" hidden>Editorial review</button>{/* sow-323 */}
           <button type="button" role="tab" data-tab="member-lookup" data-min="superadmin" aria-selected="false" hidden>Member lookup</button>{/* sow-331 */}
@@ -86,6 +87,12 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         <div class="adm-card" data-panel="digest" hidden>
           <h2 class="h2">Weekly email</h2>
           <gbti-digest-manager></gbti-digest-manager>
+        </div>
+        {/* sow-109: SUPERADMIN. The install steps every skill page shows, per tool, and adding a tool. The module
+            below is imported only for superadmin, and both writes are superadmin house PRs. */}
+        <div class="adm-card" data-panel="skill-install" hidden>
+          <h2 class="h2">Skill install</h2>
+          <gbti-skill-install-manager></gbti-skill-install-manager>
         </div>
         {/* sow-161 B: SUPERADMIN. The shared channel-map manager (channels x auto-share matrix, syndication
             templates + settings, engagement thresholds, moderation flag lists). The tab carries
@@ -174,6 +181,7 @@ import MemberLookup from '../components/admin/MemberLookup.astro'; // sow-331
         await import('../../client-ui/src/elements/gbti-cta-manager.mjs'); // sow-281: the CTA registry manager
         await import('../../client-ui/src/elements/gbti-editorial-manager.mjs'); // sow-323: the editorial review queue
         await import('../../client-ui/src/elements/gbti-digest-manager.mjs'); // sow-266: the digest pitch + sponsor slot
+        await import('../../client-ui/src/elements/gbti-skill-install-manager.mjs'); // sow-109: the install steps per tool
       }
       setupTabs(rank);
     }

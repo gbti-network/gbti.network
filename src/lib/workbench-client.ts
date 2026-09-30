@@ -939,6 +939,10 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     // off every time somebody saved only the wording. The Worker rejects a non-boolean switch regardless, so
     // passing the value through unchanged is both safe and the only correct thing.
     digestConfig() { return workerGet('/membership/admin/digest-config'); }, // { ok, cta, sponsor, defaults, limits }
+    // sow-109: Admin tools > Skill install (superadmin; the Worker checks the role on both routes).
+    skillInstallPool() { return workerGet('/membership/admin/skill-install'); }, // { ok, tools: [{ key, label, steps }] }
+    async setSkillInstallSteps(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'skill-install-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async addSkillInstallTool(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'skill-install-tool-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setDigestCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-cta-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setDigestSponsor(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-sponsor-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     // sow-270: the double opt-in switch. Forwarded as sent, like the two above: the core rejects a missing

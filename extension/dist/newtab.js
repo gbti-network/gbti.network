@@ -4644,9 +4644,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const rawHref = decodeEnt(attrOf(attrs, "href"));
     const href = isDangerousUrl(rawHref) ? "" : rawHref;
     const rel = sanitizeRel(attrOf(attrs, "rel"));
-    const blank = attrOf(attrs, "target").toLowerCase() === "_blank";
-    if (blank && !rel.includes("noopener")) rel.push("noopener");
-    return { href, rel, blank, attributed: rel.length > 0 || blank };
+    const blank2 = attrOf(attrs, "target").toLowerCase() === "_blank";
+    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
+    return { href, rel, blank: blank2, attributed: rel.length > 0 || blank2 };
   }
   var SAFE_INNER_TAG = /^(?:strong|b|em|i|code|s|del|br)$/i;
   function sanitizeInner(html) {
@@ -4655,9 +4655,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       (_m, slash, tag) => SAFE_INNER_TAG.test(tag) ? `<${slash}${tag.toLowerCase()}>` : ""
     );
   }
-  function rawAnchor(href, rel, blank, inner) {
+  function rawAnchor(href, rel, blank2, inner) {
     const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
-    const tgtAttr = blank ? ' target="_blank"' : "";
+    const tgtAttr = blank2 ? ' target="_blank"' : "";
     return `<a href="${escAttr(href)}"${relAttr}${tgtAttr}>${sanitizeInner(inner)}</a>`;
   }
   var FN_REF_ID = "[A-Za-z0-9_-]+";
@@ -4836,10 +4836,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!href || isDangerousAnchorHref(href)) return emphasis(sanitizeAnchorInner(inner));
     const rel = [];
     for (const tok of attrOf2(attrs, "rel").toLowerCase().split(/\s+/)) if (REL_ALLOWED2.has(tok) && !rel.includes(tok)) rel.push(tok);
-    const blank = attrOf2(attrs, "target").toLowerCase() === "_blank";
-    if (blank && !rel.includes("noopener")) rel.push("noopener");
+    const blank2 = attrOf2(attrs, "target").toLowerCase() === "_blank";
+    if (blank2 && !rel.includes("noopener")) rel.push("noopener");
     const relAttr = rel.length ? ` rel="${rel.join(" ")}"` : "";
-    const tgtAttr = blank ? ' target="_blank"' : "";
+    const tgtAttr = blank2 ? ' target="_blank"' : "";
     return `<a href="${escAttr3(href)}"${relAttr}${tgtAttr}>${emphasis(sanitizeAnchorInner(inner))}</a>`;
   }
   function escapeKeepingLinks(s, keep) {
@@ -9410,20 +9410,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     el.textContent = SELECTION_TOOLBAR_CSS;
     target.appendChild(el);
   }
-  function linkRel({ nofollow = false, blank = false } = {}) {
-    return [nofollow ? "nofollow" : null, blank ? "noopener" : null].filter(Boolean).join(" ");
+  function linkRel({ nofollow = false, blank: blank2 = false } = {}) {
+    return [nofollow ? "nofollow" : null, blank2 ? "noopener" : null].filter(Boolean).join(" ");
   }
-  function planLinkEdit({ url = "", text: text2 = "", nofollow = false, blank = false, hasExisting = false, existingText = "", remove = false } = {}) {
+  function planLinkEdit({ url = "", text: text2 = "", nofollow = false, blank: blank2 = false, hasExisting = false, existingText = "", remove = false } = {}) {
     const href = String(url ?? "").trim();
     if (remove || !href) return hasExisting ? { action: "remove" } : { action: "none" };
     if (isDangerousUrl(href)) return { action: "reject" };
-    const rel = linkRel({ nofollow, blank });
+    const rel = linkRel({ nofollow, blank: blank2 });
     const wanted = String(text2 ?? "").trim();
     return {
       action: hasExisting ? "update" : "create",
       href,
       rel: rel || null,
-      target: blank ? "_blank" : null,
+      target: blank2 ? "_blank" : null,
       text: wanted && wanted !== String(existingText ?? "") ? wanted : null
     };
   }
@@ -9642,12 +9642,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const text2 = String(lp.querySelector("[data-lk-text]").value || "").trim();
       const url = String(lp.querySelector("[data-lk-url]").value || "").trim();
       const nofollow = lp.querySelector("[data-lk-nofollow]").checked;
-      const blank = lp.querySelector("[data-lk-blank]").checked;
+      const blank2 = lp.querySelector("[data-lk-blank]").checked;
       const plan = planLinkEdit({
         url,
         text: text2,
         nofollow,
-        blank,
+        blank: blank2,
         hasExisting: !!lk.existing,
         existingText: lk.existing ? lk.existing.textContent || "" : String(lk.range.toString() || ""),
         remove
@@ -19122,6 +19122,495 @@ ${listStyleProseCss(".doc-blocks")}
   };
   define("gbti-digest-manager", GbtiDigestManager);
 
+  // membership/skill-install.mjs
+  var str2 = (v) => typeof v === "string" ? v.trim() : "";
+  var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  function skillNameFrom(skillMd) {
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
+    if (!m) return "";
+    const line = m[1].split(/\r?\n/).find((l) => /^name:\s*/.test(l));
+    const name = line ? line.replace(/^name:\s*/, "").replace(/^['"]|['"]$/g, "").trim() : "";
+    return SKILL_NAME_RE.test(name) ? name : "";
+  }
+  var fillName = (text2, name) => String(text2 ?? "").split("{name}").join(name);
+  function codeRuns(text2) {
+    const out = [];
+    const parts = String(text2 ?? "").split("`");
+    parts.forEach((p, i) => {
+      if (p) out.push({ code: i % 2 === 1, text: p });
+    });
+    return out;
+  }
+  function installTabsFromTools({ tools, targets, name }) {
+    const byLabel = new Map((Array.isArray(tools) ? tools : []).filter((t) => t && str2(t.key) && str2(t.label) && str2(t.folder) && str2(t.run)).map((t) => [str2(t.label), t]));
+    const tabs = [];
+    const without = [];
+    const okName = SKILL_NAME_RE.test(String(name ?? "")) ? name : "";
+    for (const label of Array.isArray(targets) ? targets : []) {
+      const e = byLabel.get(label);
+      if (!e || !okName) {
+        without.push(label);
+        continue;
+      }
+      const folder2 = fillName(str2(e.folder), okName);
+      tabs.push({
+        key: str2(e.key),
+        label,
+        folder: folder2,
+        mkdir: `mkdir -p ${folder2}`,
+        run: codeRuns(fillName(str2(e.run), okName)),
+        local: codeRuns(fillName(str2(e.local), okName))
+      });
+    }
+    return { tabs, without };
+  }
+
+  // client/src/image-models.mjs
+  var IMAGE_GEN_MODELS = Object.freeze([
+    "Nano Banana",
+    "MidJourney",
+    "DALL-E",
+    "Stable Diffusion",
+    "Flux",
+    "Imagen",
+    "Ideogram",
+    "Leonardo",
+    "Firefly",
+    "Recraft",
+    "Qwen Image",
+    "Seedream"
+  ]);
+  var MODEL_TOKENS = Object.freeze([
+    "nanobanana",
+    "midjourney",
+    "dalle",
+    "stablediffusion",
+    "flux",
+    "imagen",
+    "ideogram",
+    "leonardo",
+    "firefly",
+    "recraft",
+    "qwenimage",
+    "seedream"
+  ]);
+
+  // src/lib/prompt-page.mjs
+  var PROMPT_SHELL = Object.freeze({
+    section: "band tint",
+    wrap: "wrap",
+    head: "detail-head",
+    headTop: "detail-head-top",
+    crumbs: "eyebrow detail-crumbs",
+    title: "h1 mt12",
+    meta: "mt16 flex items-center g12 wrap-w",
+    lead: "lead mt20",
+    grid: "detail-grid mt32",
+    main: "detail-main",
+    aside: "detail-aside flex col g20",
+    result: "prompt-result",
+    block: "prompt-block",
+    blockBar: "prompt-block-bar",
+    blockLabel: "prompt-block-label",
+    blockActions: "prompt-actions",
+    modes: "prompt-modes",
+    body: "prompt-body",
+    view: "prompt-view",
+    raw: "prompt-view prompt-raw"
+  });
+
+  // src/lib/skill-page.mjs
+  function esc5(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+  var SKILL_SHELL = Object.freeze({
+    install: "skill-install",
+    installHead: "skill-install-head",
+    toolsRow: "skill-tools-row",
+    tools: "skill-tools",
+    panel: "skill-panel",
+    steps: "skill-steps",
+    cmd: "skill-cmd",
+    note: "skill-note",
+    local: "skill-local",
+    notes: "skill-notes",
+    file: "skill-file",
+    fileBody: "skill-file-body"
+  });
+  var SKILL_TOOL_KEY = "gbti-skill-tool";
+  var ICON_PATHS = {
+    "ico-kind-skill": '<path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    "ico-copy": '<rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
+  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc5(r.text)}</code>` : esc5(r.text)).join("");
+  var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+  function sharedFolderNote(tab, tabs) {
+    const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
+    if (!others.length) return "";
+    if (others.length === 1) return `${others[0]} reads this folder too, so one copy serves both.`;
+    return `${andList(others)} read this folder too, so one copy serves them all.`;
+  }
+  function withoutNote(without) {
+    const xs = (without || []).filter(Boolean);
+    if (!xs.length) return "";
+    return `Also made for ${andList(xs)}. ${xs.length === 1 ? "Its" : "Their"} install steps are not listed here yet, so follow the author's notes below.`;
+  }
+  function buildSkillInstallHtml({ tabs = [], without = [], fileHref = "" } = {}) {
+    if (!tabs.length) return "";
+    const s = SKILL_SHELL;
+    const many = tabs.length > 1;
+    const tabId = (t) => `skill-tab-${t.key}`;
+    const panelId = (t) => `skill-panel-${t.key}`;
+    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc5(t.key)}">${esc5(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc5(tabs[0].label)}</p>`;
+    const download = fileHref ? `<a class="skill-btn" href="${esc5(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
+    const panels = tabs.map((t, i) => {
+      const shared = sharedFolderNote(t, tabs);
+      const local = runsHtml(t.local);
+      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc5(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc5(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc5(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc5(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
+    }).join("");
+    const also = withoutNote(without);
+    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc5(also)}</p>` : "") + `</section>`;
+  }
+  function wireSkillPage(root = document, storage = globalThis.localStorage) {
+    const box = root.querySelector("[data-skill-install]");
+    if (box) {
+      const tabs = Array.from(box.querySelectorAll("[data-skill-tool]"));
+      const panels = Array.from(box.querySelectorAll("[data-skill-panel]"));
+      const pick = (key, remember) => {
+        if (!panels.some((p) => p.dataset.skillPanel === key)) return false;
+        tabs.forEach((t) => {
+          const on = t.dataset.skillTool === key;
+          t.setAttribute("aria-selected", on ? "true" : "false");
+          t.tabIndex = on ? 0 : -1;
+        });
+        panels.forEach((p) => {
+          p.hidden = p.dataset.skillPanel !== key;
+        });
+        if (remember) {
+          try {
+            storage?.setItem(SKILL_TOOL_KEY, key);
+          } catch {
+          }
+        }
+        return true;
+      };
+      tabs.forEach((t, i) => {
+        t.addEventListener("click", () => pick(t.dataset.skillTool, true));
+        t.addEventListener("keydown", (e) => {
+          const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+          if (!step) return;
+          e.preventDefault();
+          const next = tabs[(i + step + tabs.length) % tabs.length];
+          pick(next.dataset.skillTool, true);
+          next.focus();
+        });
+      });
+      let saved = null;
+      try {
+        saved = storage?.getItem(SKILL_TOOL_KEY) ?? null;
+      } catch {
+        saved = null;
+      }
+      if (saved) pick(saved, false);
+    }
+    const copy = async (btn, text2) => {
+      const label = btn.querySelector("[data-label]") || btn;
+      const was = label.textContent;
+      try {
+        await navigator.clipboard.writeText(text2);
+        label.textContent = "Copied";
+      } catch {
+        label.textContent = "Copy failed";
+      }
+      setTimeout(() => {
+        label.textContent = was;
+      }, 1500);
+    };
+    const raw = root.querySelector("[data-skill-raw]");
+    root.querySelectorAll("[data-skill-copy-text]").forEach((b) => b.addEventListener("click", () => copy(b, b.getAttribute("data-skill-copy-text") || "")));
+    root.querySelectorAll("[data-skill-copy-file]").forEach((b) => b.addEventListener("click", () => copy(b, raw?.textContent ?? "")));
+    const file = root.querySelector("[data-skill-file]");
+    const toggle = file?.querySelector("[data-skill-file-toggle]");
+    toggle?.addEventListener("click", () => {
+      const open = file.dataset.open !== "true";
+      file.dataset.open = String(open);
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Show less" : "Show the whole file";
+    });
+  }
+
+  // client-ui/src/skill-reader.mjs
+  var READER_TOKEN_ALIASES = "--f-mono: var(--font-mono, ui-monospace, monospace); --f-display: var(--font-display); --r-lg: 12px; --fg-soft: var(--muted); --green: var(--brand); --green-600: var(--brand-dark);";
+  var SKILL_READER_CSS = `:host { ${READER_TOKEN_ALIASES} ${skillTokenDecls("light")} }
+:host-context([data-theme="dark"]) { ${skillTokenDecls("dark")} }
+${SKILL_BOX_CSS}`;
+  function promptSlugOf(url) {
+    const m = /^\/prompts\/([a-z0-9][a-z0-9-]*)\/?$/.exec(String(url || ""));
+    return m ? m[1] : "";
+  }
+  var steps = null;
+  async function loadSteps(site, fetchImpl) {
+    if (steps) return steps;
+    const res = await fetchImpl(`${site}/skill-install.json`, { cache: "no-cache" });
+    if (!res.ok) throw new Error(String(res.status));
+    const json = await res.json();
+    steps = Array.isArray(json?.tools) ? json.tools : [];
+    return steps;
+  }
+  async function loadSkillBox({ site, slug, targets, fileHref, fetchImpl = globalThis.fetch }) {
+    if (!slug) return null;
+    try {
+      const [tools, fileRes] = await Promise.all([
+        loadSteps(site, fetchImpl),
+        fetchImpl(`${site}/prompts/${slug}/SKILL.md`, { cache: "no-cache" })
+      ]);
+      if (!fileRes.ok) return null;
+      const text2 = await fileRes.text();
+      const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text2) });
+      return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text2) : "" }), text: text2 };
+    } catch {
+      return null;
+    }
+  }
+
+  // membership/skill-install-edits.mjs
+  var SKILL_STEP_LIMITS = Object.freeze({ folder: 200, run: 400, local: 400, label: 40 });
+  function toolKeyFor(label) {
+    return String(label ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+  }
+
+  // client-ui/src/elements/gbti-skill-install-manager.mjs
+  var PREVIEW_NAME = "farley";
+  var NEW = "__new__";
+  var blank = () => ({ label: "", folder: "", run: "", local: "" });
+  var CSS25 = `
+  :host { display:block; }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .msg.err { color:var(--danger); }
+  .busy { opacity:.55; pointer-events:none; }
+  .muted { color:var(--muted); }
+  .lede { font-size:13px; color:var(--muted); margin:0 0 14px; line-height:1.55; }
+  .lede code, .f .note code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+  .grid { display:grid; grid-template-columns:minmax(170px, 230px) minmax(0, 1fr); gap:18px; align-items:start; }
+  @media (max-width: 760px) { .grid { grid-template-columns:1fr; } }
+  .list { display:flex; flex-direction:column; gap:4px; border-right:1px solid var(--line); padding-right:14px; }
+  @media (max-width: 760px) { .list { border-right:0; padding-right:0; } }
+  button.tool { display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:8px 10px; border:1px solid transparent;
+    border-radius:8px; background:transparent; color:var(--fg); font:inherit; cursor:pointer; }
+  button.tool:hover { background:transparent; border-color:var(--line); }
+  button.tool.on { border-color:var(--accent); background:transparent; }
+  .tl { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .tn { font-size:14px; font-weight:700; }
+  .ts { font-size:12px; color:var(--muted); }
+  button.add { margin-top:6px; padding:8px 10px; border:1px dashed var(--line); border-radius:8px; background:transparent;
+    color:var(--fg); font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  button.add:hover, button.add.on { background:transparent; border-color:var(--accent); color:var(--accent); }
+  .pane { min-width:0; }
+  .cols { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:18px; align-items:start; }
+  @media (max-width: 1000px) { .cols { grid-template-columns:1fr; } }
+  .f { margin:0 0 12px; }
+  .f label { display:block; font-size:12.5px; font-weight:600; color:var(--fg); margin:0 0 5px; }
+  .f input { display:block; width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; color:var(--fg);
+    background:var(--paper, transparent); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .f input.code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; }
+  .f input[readonly] { color:var(--muted); }
+  .f .note { display:block; font-size:12px; color:var(--muted); margin-top:5px; line-height:1.45; }
+  .pv-h { font-size:12.5px; font-weight:600; color:var(--fg); margin:0 0 6px; }
+  .pv { pointer-events:none; }
+  .pv .skill-install { margin:0; }
+  .none { border:1px dashed var(--line); border-radius:10px; padding:14px 16px; }
+  .none b { display:block; font-size:14px; margin:0 0 4px; color:var(--fg); }
+  .none span { font-size:13px; color:var(--muted); line-height:1.55; }
+  .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+  button.save, button.lk { font:inherit; font-size:13px; font-weight:600; border-radius:8px; padding:7px 14px; cursor:pointer; }
+  .save { border:1px solid var(--accent); background:var(--accent); color:var(--paper, #fff); }
+  .save:hover { background:var(--accent); filter:brightness(1.08); }
+  .save[disabled] { cursor:default; opacity:.5; filter:none; }
+  .lk { border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); }
+  .lk:hover { background:var(--paper, transparent); border-color:var(--accent); color:var(--accent); }
+  .lk.rm:hover { border-color:var(--danger); color:var(--danger); }
+  .hint { font-size:12.5px; color:var(--muted); margin:0; line-height:1.5; }
+  [hidden] { display:none !important; } /* an explicit display beats the UA [hidden] rule inside a shadow root */
+`;
+  var GbtiSkillInstallManager = class extends GbtiElement {
+    constructor() {
+      super();
+      this._status = "idle";
+      this._tools = [];
+      this._sel = null;
+      this._draft = blank();
+    }
+    /** Typing is not saved anywhere, so a client re-render must not rebuild the boxes under a cursor. */
+    skipClientRender() {
+      return this._status === "ready" && this._dirty();
+    }
+    _savedFor(key) {
+      const t = this._tools.find((x) => x.key === key);
+      return t ? { label: t.label, folder: t.steps?.folder || "", run: t.steps?.run || "", local: t.steps?.local || "" } : blank();
+    }
+    _dirty() {
+      if (this._sel === NEW) return Object.values(this._draft).some((v) => v.trim());
+      return JSON.stringify(this._draft) !== JSON.stringify(this._savedFor(this._sel));
+    }
+    _pick(key) {
+      this._sel = key;
+      this._draft = key === NEW ? blank() : this._savedFor(key);
+      this._msg = "";
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      this._status = "loading";
+      this.render();
+      try {
+        const r = await this.client.skillInstallPool();
+        this._tools = Array.isArray(r?.tools) ? r.tools : [];
+        const keep = this._tools.some((t) => t.key === this._sel) ? this._sel : (this._tools.find((t) => t.steps) || this._tools[0])?.key;
+        this._pick(keep ?? NEW);
+        this._status = "ready";
+      } catch (e) {
+        this._status = "failed";
+        this._loadError = e?.message || "The install steps could not be read.";
+      }
+      this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS25) + '<p class="muted">Open in the GBTI client (superadmin) to manage the install steps.</p>');
+        return;
+      }
+      if (this._status === "idle") {
+        this.load();
+        this.set(this.css(CSS25) + '<p class="muted">Loading the install steps...</p>');
+        return;
+      }
+      if (this._status === "loading") {
+        this.set(this.css(CSS25) + '<p class="muted">Loading the install steps...</p>');
+        return;
+      }
+      if (this._status === "failed") {
+        this.set(this.css(CSS25) + `<p class="msg err">${esc(this._loadError)}</p><div class="acts"><button class="lk" type="button" data-retry>Try again</button></div>`);
+        this.$("[data-retry]")?.addEventListener("click", () => {
+          this._status = "idle";
+          this.render();
+        });
+        return;
+      }
+      const isNew = this._sel === NEW;
+      const tools = this._tools.map((t) => `<button type="button" class="tool${t.key === this._sel ? " on" : ""}" aria-pressed="${t.key === this._sel}" data-tool="${esc(t.key)}">
+        <span class="tl"><span class="tn">${esc(t.label)}</span><span class="ts">${t.steps ? "3 steps" : "No steps yet"}</span></span></button>`).join("");
+      const saved = isNew ? null : this._tools.find((t) => t.key === this._sel);
+      const name = isNew ? this._draft.label.trim() || "the new tool" : saved?.label || "";
+      this.set(this.css(SKILL_READER_CSS + CSS25) + `<div class="${this._busy ? "busy" : ""}">
+      <p class="lede">The install steps for each tool a skill can be made for. An author ticks the tools their skill works with; a reader picks theirs and gets these steps. Write <code>{name}</code> where the skill's folder name goes. Superadmin only.</p>
+      ${this._msg ? `<p class="msg${this._msgErr ? " err" : ""}" role="status">${esc(this._msg)}</p>` : ""}
+      <div class="grid">
+        <nav class="list" aria-label="Tools">${tools}<button type="button" class="add${isNew ? " on" : ""}" data-add>+ Add a tool</button></nav>
+        <div class="pane">
+          <div class="cols">
+            <div>
+              <div class="f"><label for="si-label">Tool name</label>
+                <input id="si-label" data-k="label" type="text" maxlength="${SKILL_STEP_LIMITS.label}" value="${esc(this._draft.label)}"${isNew ? ' placeholder="Gemini CLI"' : " readonly"} />
+                <span class="note">${isNew ? `Filed as <code>${esc(toolKeyFor(this._draft.label) || "tool-name")}</code>. Authors and readers see the name exactly as written, and it cannot be renamed here once added.` : "Authors tick this name, and readers see it on the tabs. It is stored in every skill made for it, so it cannot be renamed here."}</span></div>
+              <div class="f"><label for="si-folder">Folder</label>
+                <input id="si-folder" class="code" data-k="folder" type="text" maxlength="${SKILL_STEP_LIMITS.folder}" value="${esc(this._draft.folder)}" placeholder="~/.agents/skills/{name}" />
+                <span class="note">Step 1 makes this folder. It must contain <code>{name}</code>.</span></div>
+              <div class="f"><label for="si-run">How to run it</label>
+                <input id="si-run" data-k="run" type="text" maxlength="${SKILL_STEP_LIMITS.run}" value="${esc(this._draft.run)}" placeholder="Start a new session and type \`/{name}\`." />
+                <span class="note">Step 3. Put a command in \`backticks\` to show it as code.</span></div>
+              <div class="f"><label for="si-local">Only in one project <span class="muted">(optional)</span></label>
+                <input id="si-local" data-k="local" type="text" maxlength="${SKILL_STEP_LIMITS.local}" value="${esc(this._draft.local)}" placeholder="Only want it in one project? Use \`.agents/skills/{name}/\` inside it instead." />
+                <span class="note">Shown under the steps.</span></div>
+            </div>
+            <div>
+              <p class="pv-h">Preview, as /${PREVIEW_NAME}</p>
+              <div data-preview>${this._previewHtml(name)}</div>
+            </div>
+          </div>
+          <div class="acts">
+            <button class="save" type="button" data-save${this._dirty() ? "" : " disabled"}>${isNew ? `Add ${esc(name)}` : `Save ${esc(name)} steps`}</button>
+            ${!isNew && saved?.steps ? '<button class="lk rm" type="button" data-clear>Remove its steps</button>' : ""}
+            <p class="hint">Each save opens a pull request that merges on its own. Skill pages show the change after the next site deploy.</p>
+          </div>
+        </div>
+      </div></div>`);
+      this.$$("[data-tool]").forEach((b) => b.addEventListener("click", () => {
+        this._pick(b.dataset.tool);
+        this.render();
+      }));
+      this.$("[data-add]")?.addEventListener("click", () => {
+        this._pick(NEW);
+        this.render();
+      });
+      this.$$("[data-k]").forEach((el) => el.addEventListener("input", () => {
+        this._draft[el.dataset.k] = el.value;
+        const pv = this.$("[data-preview]");
+        const nm = this._sel === NEW ? this._draft.label.trim() || "the new tool" : name;
+        if (pv) pv.innerHTML = this._previewHtml(nm);
+        const save = this.$("[data-save]");
+        if (save) {
+          save.disabled = !this._dirty();
+          if (this._sel === NEW) save.textContent = `Add ${nm}`;
+        }
+        if (el.dataset.k === "label") {
+          const code = el.parentElement?.querySelector(".note code");
+          if (code) code.textContent = toolKeyFor(el.value) || "tool-name";
+        }
+      }));
+      this.$("[data-save]")?.addEventListener("click", () => this._save());
+      this.$("[data-clear]")?.addEventListener("click", () => this._clear());
+    }
+    /** The website's own install box for this tool, or the no-steps card when the fields are not filled in yet. */
+    _previewHtml(name) {
+      const d = this._draft;
+      const key = this._sel === NEW ? toolKeyFor(d.label) || "new-tool" : this._sel;
+      const label = this._sel === NEW ? d.label.trim() || "New tool" : name;
+      const { tabs } = installTabsFromTools({ tools: [{ key, label, folder: d.folder, run: d.run, local: d.local }], targets: [label], name: PREVIEW_NAME });
+      const box = tabs.length && d.folder.includes("{name}") ? buildSkillInstallHtml({ tabs }) : "";
+      if (box) return `<div class="pv" inert>${box}</div>`;
+      return `<div class="none"><b>No standard steps for ${esc(label)} yet</b><span>A skill made for ${esc(label)} still lists it. Its page shows the author's own Commands and usage text in place of the install box until steps are added here.</span></div>`;
+    }
+    async _save() {
+      if (!this._dirty()) return;
+      const d = this._draft;
+      const isNew = this._sel === NEW;
+      const call = isNew ? () => this.client.addSkillInstallTool({ label: d.label, folder: d.folder, run: d.run, local: d.local }) : () => this.client.setSkillInstallSteps({ key: this._sel, folder: d.folder, run: d.run, local: d.local });
+      await this._run(call, isNew ? toolKeyFor(d.label) : this._sel);
+    }
+    async _clear() {
+      const label = this._tools.find((t) => t.key === this._sel)?.label || this._sel;
+      if (typeof confirm === "function" && !confirm(`Remove the ${label} steps? Skills made for ${label} show their author's own text instead.`)) return;
+      await this._run(() => this.client.setSkillInstallSteps({ key: this._sel, clear: true }), this._sel, { cleared: true });
+    }
+    async _run(call, key, { cleared = false } = {}) {
+      this._busy = true;
+      this._msg = "";
+      this._msgErr = false;
+      this.render();
+      try {
+        const r = await call();
+        this._msg = r?.noop ? "No change (those are already its steps)." : r?.prNumber ? houseEditAck(r) : "Submitted.";
+        const d = this._draft;
+        const steps2 = cleared ? null : { folder: d.folder.trim(), run: d.run.trim(), local: d.local.trim() };
+        const existing = this._tools.find((t) => t.key === key);
+        if (existing) existing.steps = steps2;
+        else this._tools.push({ key, label: d.label.trim(), steps: d.folder.trim() ? steps2 : null });
+        this._sel = key;
+        this._draft = this._savedFor(key);
+      } catch (e) {
+        this._msg = e?.message || "That change could not be saved.";
+        this._msgErr = true;
+      }
+      this._busy = false;
+      this.render();
+    }
+  };
+  define("gbti-skill-install-manager", GbtiSkillInstallManager);
+
   // membership/outbound-link-edits.mjs
   var LINK_STATUSES = Object.freeze(["live", "placeholder", "retired"]);
   var EDITABLE_LINK_FIELDS = Object.freeze(["destination", "partner", "note"]);
@@ -19523,7 +20012,7 @@ ${listStyleProseCss(".doc-blocks")}
     const words = L === "below" || L === "first" || L === "compact" || L === "text";
     return { line: words, button: words, icon: words, link: L !== "html", image: L === "below" || L === "first" || L === "compact" || L === "image", html: L === "html" };
   }
-  var esc5 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc6 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var ARROW = '<svg class="pcta-ar" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function destinationHost(destination) {
     try {
@@ -19535,31 +20024,31 @@ ${listStyleProseCss(".doc-blocks")}
   function renderCtaCard(cta, { image = null, preview = false, href: hrefOverride = null } = {}) {
     const L = ctaLayoutOf(cta);
     const uses = layoutUses(L);
-    const href = esc5(hrefOverride || cta?.destination);
+    const href = esc6(hrefOverride || cta?.destination);
     const linkOpen = (cls, extra = "") => preview ? `<span class="${cls}" role="link"${extra}>` : `<a class="${cls}" href="${href}" target="_blank" rel="sponsored nofollow noopener"${extra}>`;
     const linkClose = preview ? "</span>" : "</a>";
     const dim = (k, v) => Number.isInteger(v) && v > 0 ? ` ${k}="${v}"` : "";
-    const img = (alt) => image && image.url ? `<img src="${esc5(image.url)}" alt="${esc5(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
+    const img = (alt) => image && image.url ? `<img src="${esc6(image.url)}" alt="${esc6(alt)}"${dim("width", image.width)}${dim("height", image.height)} loading="lazy" decoding="async">` : '<span class="pcta-ph">No image yet</span>';
     if (L === "image") {
-      return `${linkOpen("pcta-io", ` aria-label="${esc5(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc5(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
+      return `${linkOpen("pcta-io", ` aria-label="${esc6(cta?.label)}"`)}<span class="pcta-io-img">${img(cta?.label)}</span><span class="pcta-io-foot"><span>${esc6(destinationHost(cta?.destination))}</span>${ARROW}</span>${linkClose}`;
     }
     const parts = [];
     if (L === "first") parts.push(`<div class="pcta-media pcta-top">${img("")}</div>`);
-    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc5(cta?.label)}</p><p class="pcta-line">${esc5(cta?.line)}</p></div></div>`);
+    if (L === "compact") parts.push(`<div class="pcta-cmp"><div class="pcta-cmp-img">${img("")}</div><div><p class="pcta-eyebrow">${esc6(cta?.label)}</p><p class="pcta-line">${esc6(cta?.line)}</p></div></div>`);
     const showTitle = L === "below" || L === "first" || L === "text" || L === "html" && cta?.showTitle !== false;
-    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc5(cta?.label)}</p>`);
-    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc5(cta?.line)}</p>`);
+    if (showTitle) parts.push(`<p class="pcta-eyebrow">${esc6(cta?.label)}</p>`);
+    if (L === "below" || L === "first" || L === "text") parts.push(`<p class="pcta-line">${esc6(cta?.line)}</p>`);
     if (L === "below") parts.push(`<div class="pcta-media">${img("")}</div>`);
     if (L === "html") {
       const cls = showTitle ? "pcta-html" : "pcta-html pcta-flush";
       if (preview) {
-        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc5(h)}</span>`).join("");
+        const hosts = (Array.isArray(cta?.hosts) ? cta.hosts : []).map((h) => `<span class="pcta-host">loads from ${esc6(h)}</span>`).join("");
         parts.push(`<div class="${cls}"><div class="pcta-notice"><strong>Partner code runs on the live page</strong><span>Scripts do not run in this preview.</span>${hosts}</div></div>`);
       } else {
         parts.push(`<div class="${cls}">${String(cta?.html ?? "")}</div>`);
       }
     }
-    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc5(cta?.button)}</span>${ARROW}${linkClose}`);
+    if (uses.button) parts.push(`${linkOpen("pcta-btn")}${cta?.icon ? iconSvg(cta.icon, "pcta-ic") : ""}<span>${esc6(cta?.button)}</span>${ARROW}${linkClose}`);
     return parts.join("");
   }
   var CTA_CARD_CSS = `
@@ -19684,9 +20173,9 @@ ${listStyleProseCss(".doc-blocks")}
   var AMAZON_HOST_RE = /(^|\.)amazon\.[a-z.]+$/;
   var LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   var CTA_HOST_RE = new RegExp(`^https://(?:\\*\\.)?${LABEL}(?:\\.${LABEL})+(?::\\d{1,5})?$`);
-  var str2 = (v) => typeof v === "string" ? v.trim() : "";
+  var str3 = (v) => typeof v === "string" ? v.trim() : "";
   function validRef(type, ref) {
-    const r = str2(ref);
+    const r = str3(ref);
     if (!r || r.length > CTA_LIMITS.ref) return false;
     return type === "share" ? SHARE_REF_RE.test(r) : SLUG_RE.test(r);
   }
@@ -19702,7 +20191,7 @@ ${listStyleProseCss(".doc-blocks")}
     return null;
   }
   function trackedPathProblem(trackedPath) {
-    const v = str2(trackedPath);
+    const v = str3(trackedPath);
     if (!v) return null;
     if (v.length > CTA_LIMITS.trackedPath) return `trackedPath is too long (max ${CTA_LIMITS.trackedPath} chars)`;
     if (!v.startsWith("/")) return `trackedPath must be a site path beginning with / (a tracked link is served by this site), got ${JSON.stringify(trackedPath)}`;
@@ -19737,7 +20226,7 @@ ${listStyleProseCss(".doc-blocks")}
   function validateCta(e, where = "cta") {
     const problems = [];
     if (!e || typeof e !== "object" || Array.isArray(e)) return [`${where}: must be a map`];
-    const id = str2(e.id);
+    const id = str3(e.id);
     if (!id || !ID_RE.test(id) || id.length > CTA_LIMITS.id) problems.push(`${where}: id must be kebab-case (a-z, 0-9, hyphens; max ${CTA_LIMITS.id} chars), got ${JSON.stringify(e.id ?? null)}`);
     if (e.layout !== void 0 && !CTA_LAYOUTS.includes(e.layout)) problems.push(`${where}: layout must be one of ${CTA_LAYOUTS.join(", ")}, got ${JSON.stringify(e.layout)}`);
     const layout = CTA_LAYOUTS.includes(e.layout) ? e.layout : "text";
@@ -19747,12 +20236,12 @@ ${listStyleProseCss(".doc-blocks")}
         problems.push(`${where}: ${k} must be text`);
         continue;
       }
-      const v = str2(e[k]);
+      const v = str3(e[k]);
       if (!v) {
         if (need) problems.push(`${where}: ${k} is required${k === "label" ? "" : ` for the ${layout} layout`}`);
       } else if (v.length > max) problems.push(`${where}: ${k} is too long (max ${max} chars)`);
     }
-    const dest = str2(e.destination);
+    const dest = str3(e.destination);
     let u = null;
     if (dest || uses.link) {
       try {
@@ -19773,7 +20262,7 @@ ${listStyleProseCss(".doc-blocks")}
       if (typeof e.html !== "string") problems.push(`${where}: html must be text`);
       else if (e.html.length > CTA_LIMITS.html) problems.push(`${where}: html is too long (max ${CTA_LIMITS.html} chars)`);
     }
-    if (uses.html && !str2(e.html)) problems.push(`${where}: html is required for the html layout`);
+    if (uses.html && !str3(e.html)) problems.push(`${where}: html is required for the html layout`);
     if (e.showTitle !== void 0 && typeof e.showTitle !== "boolean") problems.push(`${where}: showTitle must be true or false`);
     if (e.hosts !== void 0) {
       if (!Array.isArray(e.hosts)) problems.push(`${where}: hosts must be a list of https origins`);
@@ -19787,7 +20276,7 @@ ${listStyleProseCss(".doc-blocks")}
         });
       }
     }
-    const partner = str2(e.partner);
+    const partner = str3(e.partner);
     if (!partner || !ID_RE.test(partner) || partner.length > CTA_LIMITS.partner) problems.push(`${where}: partner must be a short kebab label (max ${CTA_LIMITS.partner} chars), got ${JSON.stringify(e.partner ?? null)}`);
     if (partner === "amazon" && u) {
       const why = amazonDestinationProblem(dest);
@@ -19819,7 +20308,7 @@ ${listStyleProseCss(".doc-blocks")}
         problems.push(`${at}: ref must be a ${it.type === "share" ? "author/id pair" : "slug"}, got ${JSON.stringify(it.ref ?? null)}`);
         continue;
       }
-      const key = `${it.type}:${str2(it.ref)}`;
+      const key = `${it.type}:${str3(it.ref)}`;
       if (seen.has(key)) problems.push(`${at}: ${key} is assigned to this CTA twice`);
       seen.add(key);
     }
@@ -19851,24 +20340,24 @@ ${listStyleProseCss(".doc-blocks")}
   });
   var TYPE_LABEL4 = Object.freeze({ prompt: "Prompt", post: "Article", project: "Project", share: "Share" });
   var ID_RE2 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  var str3 = (v) => typeof v === "string" ? v : "";
+  var str4 = (v) => typeof v === "string" ? v : "";
   var plural = (n) => n === 1 ? "1 page" : `${n} pages`;
   function draftFromCta(c, { imageUrl = null } = {}) {
     return {
-      id: str3(c?.id),
-      label: str3(c?.label),
-      line: str3(c?.line),
-      button: str3(c?.button),
-      destination: str3(c?.destination),
-      partner: str3(c?.partner),
-      note: str3(c?.note),
+      id: str4(c?.id),
+      label: str4(c?.label),
+      line: str4(c?.line),
+      button: str4(c?.button),
+      destination: str4(c?.destination),
+      partner: str4(c?.partner),
+      note: str4(c?.note),
       enabled: c?.enabled === true,
       layout: CTA_LAYOUTS.includes(c?.layout) ? c.layout : "text",
       icon: c?.icon && typeof c.icon === "object" ? structuredClone(c.icon) : null,
-      html: str3(c?.html),
+      html: str4(c?.html),
       showTitle: c?.showTitle !== false,
       hosts: Array.isArray(c?.hosts) ? c.hosts.filter((h) => typeof h === "string") : [],
-      items: (Array.isArray(c?.items) ? c.items : []).filter((it) => it && typeof it === "object").map((it) => ({ type: it.type, ref: str3(it.ref) })),
+      items: (Array.isArray(c?.items) ? c.items : []).filter((it) => it && typeof it === "object").map((it) => ({ type: it.type, ref: str4(it.ref) })),
       image: typeof c?.image === "string" ? { kind: "stored", file: c.image, url: imageUrl } : { kind: "none" }
     };
   }
@@ -19944,7 +20433,7 @@ ${listStyleProseCss(".doc-blocks")}
       changed.push(k);
     };
     for (const k of ["label", "line", "button", "destination", "partner", "note", "html"]) {
-      if (str3(card[k]) !== str3(o[k]).trim()) set(k, str3(card[k]));
+      if (str4(card[k]) !== str4(o[k]).trim()) set(k, str4(card[k]));
     }
     const oLayout = CTA_LAYOUTS.includes(o.layout) ? o.layout : "text";
     if (card.layout !== oLayout) set("layout", card.layout);
@@ -19952,7 +20441,7 @@ ${listStyleProseCss(".doc-blocks")}
     if (o.showTitle !== false !== (d.showTitle !== false)) set("showTitle", d.showTitle === false ? false : null);
     const oHosts = Array.isArray(o.hosts) ? o.hosts : [];
     if (!sameJson(d.hosts, oHosts)) set("hosts", d.hosts.length ? d.hosts : null);
-    const oItems = (Array.isArray(o.items) ? o.items : []).map((it) => ({ type: it.type, ref: str3(it.ref) }));
+    const oItems = (Array.isArray(o.items) ? o.items : []).map((it) => ({ type: it.type, ref: str4(it.ref) }));
     if (!sameJson(d.items, oItems)) set("items", d.items);
     if (o.enabled === true !== (d.enabled === true)) set("enabled", d.enabled === true);
     if (d.image.kind === "upload") set("imageBase64", d.image.base64);
@@ -19975,7 +20464,7 @@ ${listStyleProseCss(".doc-blocks")}
     return found;
   }
   function pagesFromBuilt(built) {
-    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str3(p.ref)).map((p) => ({ type: p.type, ref: str3(p.ref), title: str3(p.title) || str3(p.ref) }));
+    return (Array.isArray(built?.pages) ? built.pages : []).filter((p) => p && TYPE_LABEL4[p.type] && str4(p.ref)).map((p) => ({ type: p.type, ref: str4(p.ref), title: str4(p.title) || str4(p.ref) }));
   }
   function pageCandidates(pages, query, items = [], limit = 6) {
     const q = String(query || "").trim().toLowerCase();
@@ -19988,7 +20477,7 @@ ${listStyleProseCss(".doc-blocks")}
       const hosts = Array.isArray(c.hosts) ? c.hosts : [];
       return `Partner code${hosts.length ? `, loads from ${hosts.map((h) => h.replace(/^https:\/\//, "")).join(", ")}` : ""}`;
     }
-    return str3(c?.line);
+    return str4(c?.line);
   }
   function previewNote(d) {
     if (!d.enabled) return "Disabled: this card shows on no page.";
@@ -19996,7 +20485,7 @@ ${listStyleProseCss(".doc-blocks")}
   }
 
   // client-ui/src/cta-manager-view.mjs
-  var esc6 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  var esc7 = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   var SVG2 = {
     back: '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -20019,23 +20508,23 @@ ${listStyleProseCss(".doc-blocks")}
     return `<div class="${cls}" style="${dark ? CTA_TOKENS.dark : CTA_TOKENS.light}">${renderCtaCard(card, { image, preview: true })}</div>`;
   }
   var loadingView = () => '<div class="mgr"><p class="hint">Loading call-to-actions&hellip;</p></div>';
-  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc6(problem)}).</p>
+  var failedView = (problem) => `<div class="mgr"><p class="msg bad">Could not load the call-to-actions (${esc7(problem)}).</p>
   <button class="lk" type="button" data-act="retry">Try again</button></div>`;
   function listView({ rows, msg = "", msgBad = false, dark = false }) {
     const items = rows.map(({ cta: c, image, busy, clicks = null }) => {
       const on = c.enabled === true;
       const n = Array.isArray(c.items) ? c.items.length : 0;
-      return `<li class="${on ? "c" : "c off"}" data-cta="${esc6(c.id)}">
+      return `<li class="${on ? "c" : "c off"}" data-cta="${esc7(c.id)}">
       <div class="thumb"><div class="thumb-in">${cardPreview(c, { image, dark })}</div></div>
       <div class="meta">
-        <div class="top"><span class="label">${esc6(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc6(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
-        <p class="line">${esc6(rowSummary2(c))}</p>
-        <p class="sub mono">${esc6(c.partner || "no partner")} · on ${plural(n)}</p>
-        ${clicks ? `<p class="sub mono tracked">${esc6(clicks)}</p>` : ""}
+        <div class="top"><span class="label">${esc7(c.label || c.id)}</span><span class="${on ? "badge on" : "badge"}">${on ? "Enabled" : "Disabled"}</span><span class="badge">${esc7(CTA_LAYOUT_NAMES[c.layout] || CTA_LAYOUT_NAMES.text)}</span></div>
+        <p class="line">${esc7(rowSummary2(c))}</p>
+        <p class="sub mono">${esc7(c.partner || "no partner")} · on ${plural(n)}</p>
+        ${clicks ? `<p class="sub mono tracked">${esc7(clicks)}</p>` : ""}
       </div>
       <div class="acts-r">
-        <button class="lk" type="button" data-act="edit" data-id="${esc6(c.id)}"${busy ? " disabled" : ""}>Edit</button>
-        <button class="lk" type="button" data-act="toggle" data-id="${esc6(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
+        <button class="lk" type="button" data-act="edit" data-id="${esc7(c.id)}"${busy ? " disabled" : ""}>Edit</button>
+        <button class="lk" type="button" data-act="toggle" data-id="${esc7(c.id)}"${busy ? " disabled" : ""}>${busy ? "Saving…" : on ? "Disable" : "Enable"}</button>
       </div>
     </li>`;
     }).join("");
@@ -20044,7 +20533,7 @@ ${listStyleProseCss(".doc-blocks")}
       <p class="hint">Partner cards in the sidebar of articles, prompts, projects and shares. Each change opens a pull request that merges on its own. Disable a card to retire it.</p>
       <button class="btn" type="button" data-act="new">New call-to-action</button>
     </div>
-    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc6(msg)}</p>` : ""}
+    ${msg ? `<p class="${msgBad ? "msg bad" : "msg"}">${esc7(msg)}</p>` : ""}
     <ul class="list">${items || '<li class="empty">No call-to-actions yet.</li>'}</ul>
   </div>`;
   }
@@ -20053,13 +20542,13 @@ ${listStyleProseCss(".doc-blocks")}
   function field(st, k, label, { wide = false, area: area2 = false, placeholder = "" } = {}) {
     const err = shownError(st, k);
     const cls = `fld${wide ? " wide" : ""}${err ? " err" : ""}`;
-    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc6(placeholder)}">${esc6(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc6(st.d[k])}" placeholder="${esc6(placeholder)}">`;
-    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc6(err)}</span></label>`;
+    const control = area2 ? `<textarea data-f="${k}" placeholder="${esc7(placeholder)}">${esc7(st.d[k])}</textarea>` : `<input type="text" data-f="${k}" value="${esc7(st.d[k])}" placeholder="${esc7(placeholder)}">`;
+    return `<label class="${cls}" data-fld="${k}">${label}${control}<span class="et" data-err="${k}"${err ? "" : " hidden"}>${esc7(err)}</span></label>`;
   }
   function layoutSection(st) {
     const tiles = CTA_LAYOUTS.map((k) => `<button class="${st.d.layout === k ? "tile on" : "tile"}" type="button" data-act="layout" data-layout="${k}" aria-pressed="${st.d.layout === k}">
-    ${SKETCH[k]}<div><p class="tile-n">${esc6(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc6(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
-    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc6(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
+    ${SKETCH[k]}<div><p class="tile-n">${esc7(CTA_LAYOUT_NAMES[k])}</p><p class="tile-d">${esc7(LAYOUT_TILE_TEXT[k])}</p></div></button>`).join("");
+    return `<div class="sec"><div class="sec-h"><h4>Layout</h4><span class="hint">${esc7(LAYOUT_HINT[st.d.layout])}</span></div><div class="tiles">${tiles}</div></div>`;
   }
   function wordsSection(st) {
     const u = layoutUses(st.d.layout);
@@ -20070,7 +20559,7 @@ ${listStyleProseCss(".doc-blocks")}
     ${u.line ? field(st, "line", "Sentence", { wide: true, area: true, placeholder: "The one sentence the card shows" }) : ""}
     ${u.button ? field(st, "button", "Button text", { placeholder: "Get the book on Amazon" }) : ""}
     ${u.link ? field(st, "destination", "Link", { placeholder: "https://www.amazon.com/dp/...?tag=..." }) : ""}
-    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc6(st.d.note)}</textarea></label>
+    <label class="fld wide">Note<textarea data-f="note" placeholder="Where the link came from, whose referral tag it carries">${esc7(st.d.note)}</textarea></label>
     <label class="check fld wide"><input type="checkbox" data-f="enabled"${st.d.enabled ? " checked" : ""}> Enabled: show this card on its pages</label>
   </div></div>`;
   }
@@ -20090,8 +20579,8 @@ ${listStyleProseCss(".doc-blocks")}
       const dims = img.width && img.height ? ` · ${img.width} × ${img.height}` : "";
       const size = img.bytes ? ` · ${Math.max(1, Math.round(img.bytes / 1024))} KB` : "";
       body = `<div class="imgrow">
-      ${img.url ? `<img src="${esc6(img.url)}" alt="" data-stored-img>` : ""}
-      <div class="imgmeta"><p class="imgname">${esc6(name)}</p>
+      ${img.url ? `<img src="${esc7(img.url)}" alt="" data-stored-img>` : ""}
+      <div class="imgmeta"><p class="imgname">${esc7(name)}</p>
         <p class="imginfo"><span data-region="imginfo">WebP${dims}${size}</span></p>
         <p class="imginfo"><span class="shield">${SVG2.shield}Camera and location data removed</span></p></div>
       <div class="acts-r"><label class="lk pick-file">Replace<input type="file" accept="${ACCEPT}" data-file></label>
@@ -20099,24 +20588,24 @@ ${listStyleProseCss(".doc-blocks")}
     </div>`;
     }
     return `${body}${st.imageWork ? '<p class="imgwork">Preparing the image…</p>' : ""}
-    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc6(err)}</p>
-    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc6(st.imageMsg)}</p>` : ""}`;
+    <p class="et" style="margin-top: 6px" data-err="image"${err ? "" : " hidden"}>${esc7(err)}</p>
+    ${st.imageMsg ? `<p class="et" style="margin-top: 6px">${esc7(st.imageMsg)}</p>` : ""}`;
   }
   function iconResults(st) {
     const ic3 = st.icons;
-    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc6(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
+    if (ic3.status === "failed") return `<p class="ip-count">Could not load the icon library (${esc7(ic3.problem)}).</p><button class="lk" type="button" data-act="icons-retry">Try again</button>`;
     if (ic3.status !== "ready") return '<p class="ip-count">Loading icons…</p>';
     const q = st.iconQuery.trim();
     const count2 = !q ? `${ic3.total.toLocaleString("en-US")} icons` : ic3.total === 0 ? "No icons match." : ic3.total === 1 ? "1 icon matches" : `${ic3.total.toLocaleString("en-US")} icons match`;
     const sel = st.d.icon;
-    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc6(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc6(i.name)}</span></button>`).join("");
+    const cells = ic3.results.map((i, n) => `<button class="${sel && sel.name === i.name && sel.set === i.set ? "ic-cell on" : "ic-cell"}" type="button" data-act="icon" data-i="${n}" title="${esc7(`${i.name}, ${i.set}`)}">${iconSvg(i)}<span>${esc7(i.name)}</span></button>`).join("");
     return `<p class="ip-count">${count2}</p><div class="ip-grid">${cells}</div>`;
   }
   function iconSection(st) {
     const sel = st.d.icon;
-    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc6(s.id)}">${esc6(s.name)}</button>`).join("") : "";
+    const chips = st.icons.status === "ready" ? [{ id: "", name: "All" }, ...st.icons.sets].map((s) => `<button class="${st.iconSet === s.id ? "chip on" : "chip"}" type="button" data-act="icon-set" data-set="${esc7(s.id)}">${esc7(s.name)}</button>`).join("") : "";
     const pop = st.pickerOpen ? `<div class="ip-pop">
-      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc6(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
+      <label class="srch">${SVG2.search}<input type="text" data-q="icons" value="${esc7(st.iconQuery)}" placeholder="Search about 50,000 icons, for example amazon" aria-label="Search icons"></label>
       <div class="chips">${chips}</div>
       <div data-region="icons">${iconResults(st)}</div>
     </div>` : "";
@@ -20124,46 +20613,46 @@ ${listStyleProseCss(".doc-blocks")}
     <div class="ip-row">
       <button class="${st.pickerOpen ? "ip-trig open" : "ip-trig"}" type="button" data-act="picker" aria-expanded="${st.pickerOpen}">
         <span class="ip-sw">${sel ? iconSvg(sel) : ""}</span>
-        <span class="ip-name"><b>${esc6(sel ? sel.name : "Choose an icon")}</b><span>${esc6(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
+        <span class="ip-name"><b>${esc7(sel ? sel.name : "Choose an icon")}</b><span>${esc7(sel ? sel.set : "No icon on the button")}</span></span>${SVG2.chev}
       </button>
       ${sel ? '<button class="lk" type="button" data-act="clear-icon">No icon</button>' : ""}
     </div>${pop}</div>`;
   }
   function foundLine(found) {
     if (!found.length) return "";
-    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc6(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc6(h)}">Allow</button>`).join("")}</div>`;
+    return `<div class="found">Found in the code: ${found.map((h) => `<span class="mono">${esc7(h)}</span><button class="lk" type="button" data-act="host-allow" data-host="${esc7(h)}">Allow</button>`).join("")}</div>`;
   }
   function htmlSection(st, found) {
     const d = st.d;
-    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc6(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc6(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
+    const hosts = d.hosts.length ? `<ul class="hosts">${d.hosts.map((h) => `<li class="host"><span class="mono">${esc7(h)}</span><button class="lk danger" type="button" data-act="host-remove" data-host="${esc7(h)}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">None. Code that loads from another site will be blocked.</p>';
     const err = shownError(st, "html");
     return `<div class="sec"><div class="sec-h"><h4>HTML block</h4></div>
     <div class="warnbox">${SVG2.warn}<span><b>This code runs on every page this card is on (<span data-count>${plural(d.items.length)}</span>).</b> Scripts run for every visitor to those pages, so a mistake here affects all of them.</span></div>
     <div class="form" style="margin-top: 14px">
       <label class="check fld wide"><input type="checkbox" data-f="showTitle"${d.showTitle ? " checked" : ""}> Show the title above the code</label>
       <label class="${err ? "fld wide err" : "fld wide"}" data-fld="html">Partner code
-        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc6(d.html)}</textarea>
-        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc6(err)}</span></label>
+        <textarea class="code" data-f="html" spellcheck="false" placeholder="Paste the partner's HTML, including any script tags">${esc7(d.html)}</textarea>
+        <span class="et" data-err="html"${err ? "" : " hidden"}>${esc7(err)}</span></label>
     </div>
     <div style="margin-top: 16px">
       <div class="sec-h" style="margin-bottom: 8px"><h4>Outside addresses</h4><span class="hint">Only these load, and only on this card's pages.</span></div>
       ${hosts}
       <div data-region="found">${foundLine(found)}</div>
-      <div class="hostadd"><input type="text" data-q="host" value="${esc6(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
-      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc6(st.hostErr)}</p>
+      <div class="hostadd"><input type="text" data-q="host" value="${esc7(st.hostDraft)}" placeholder="https://widgets.partner.com" aria-label="Outside address"><button class="lk" type="button" data-act="host-add">Add</button></div>
+      <p class="et" style="margin-top: 6px" data-region="hosterr"${st.hostErr ? "" : " hidden"}>${esc7(st.hostErr)}</p>
     </div></div>`;
   }
   function candidateList(st) {
     if (!st.pageQuery.trim()) return "";
     if (!st.cands.length) return '<p class="empty">No pages match.</p>';
-    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc6(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc6(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
+    return `<ul class="results">${st.cands.map((c, n) => `<li><button class="res" type="button" data-act="page-add" data-i="${n}"><span class="ty">${esc7(TYPE_LABEL4[c.type] || c.type)}</span><span>${esc7(c.title)}</span><span class="add">Add</span></button></li>`).join("")}</ul>`;
   }
   function pagesSection(st) {
     const d = st.d;
-    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc6(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc6(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
+    const assigned = d.items.length ? `<ul class="items">${d.items.map((it, n) => `<li class="it"><span class="ty">${esc7(TYPE_LABEL4[it.type] || it.type)}</span><span class="t">${esc7(st.titleOf(it))}</span><button class="lk danger" type="button" data-act="page-remove" data-i="${n}">Remove</button></li>`).join("")}</ul>` : '<p class="empty">Not on any page yet.</p>';
     return `<div class="sec"><div class="sec-h"><h4>Pages showing this card</h4><span class="hint" data-count>${plural(d.items.length)}</span></div>
     ${assigned}
-    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc6(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
+    <label class="srch">${SVG2.search}<input type="text" data-q="pages" value="${esc7(st.pageQuery)}" placeholder="Add a page: search articles, prompts, projects and shares" aria-label="Search pages"></label>
     <div data-region="cands">${candidateList(st)}</div></div>`;
   }
   function previewCard(st) {
@@ -20193,7 +20682,7 @@ ${listStyleProseCss(".doc-blocks")}
       <div class="segs">${seg(!st.pvPhone, "pv-side", "Sidebar")}${seg(st.pvPhone, "pv-phone", "Phone")}</div>
     </div>
     <div class="${st.pvDark ? "pv-stage dk" : "pv-stage"}" data-region="stage">${previewCard(st)}</div>
-    <p class="pv-note" data-region="pvnote">${esc6(previewNote(st.d))}</p>
+    <p class="pv-note" data-region="pvnote">${esc7(previewNote(st.d))}</p>
   </aside>`;
   }
   function editorView(st, found = []) {
@@ -20201,11 +20690,11 @@ ${listStyleProseCss(".doc-blocks")}
     return `<div class="mgr">
     <div class="ed-head">
       <button class="lk" type="button" data-act="back">${SVG2.back}All call-to-actions</button>
-      <h3 class="ed-title" data-region="title">${esc6(editTitle(st))}</h3>
+      <h3 class="ed-title" data-region="title">${esc7(editTitle(st))}</h3>
       <div class="acts-r"><button class="lk" type="button" data-act="back">Cancel</button>
         <button class="btn" type="button" data-act="save"${st.saving ? " disabled" : ""}>${st.saving ? "Saving…" : st.isNew ? "Add call-to-action" : "Save"}</button></div>
     </div>
-    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc6(st.msg)}</p>
+    <p class="${st.msgKind === "err" || st.msgKind === "server" ? "msg bad" : "msg"}" data-region="banner"${st.msg ? "" : " hidden"}>${esc7(st.msg)}</p>
     <div class="ed-grid">
       <div class="ed-form">
         ${layoutSection(st)}
@@ -21057,7 +21546,7 @@ ${listStyleProseCss(".doc-blocks")}
   define("gbti-cta-manager", GbtiCtaManager);
 
   // client-ui/src/elements/gbti-syndication-tracker.mjs
-  var CSS25 = `
+  var CSS26 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -21163,11 +21652,11 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS25) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS25) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS26) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -21176,7 +21665,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS25) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS26) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && Date.now() - QUEUE_TRIED_AT > CACHE_FRESH_MS) {
@@ -21186,7 +21675,7 @@ ${listStyleProseCss(".doc-blocks")}
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS26) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${QUEUE_REFRESH_FAILED && QUEUE_CACHE ? `<p class="msg err" data-stale>Could not refresh. Showing results from ${esc(new Date(QUEUE_CACHE.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}.</p>` : ""}
@@ -21283,7 +21772,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS26 = `
+  var CSS27 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -21782,7 +22271,7 @@ ${listStyleProseCss(".doc-blocks")}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS26) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -21791,7 +22280,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._msg = "";
         }
         if (this._loadFailed) {
-          this.set(this.css(CSS26) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
+          this.set(this.css(CSS27) + `<p class="msg">${esc(this._msg)}</p><button class="btn btn-ghost" type="button" data-retry-load>Try again</button>`);
           this.$("[data-retry-load]")?.addEventListener("click", () => {
             this._loadFailed = false;
             this._msg = "";
@@ -21804,7 +22293,7 @@ ${listStyleProseCss(".doc-blocks")}
           this.load();
           if (!this._loading) return;
         }
-        this.set(this.css(CSS26) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS27) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
       const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
@@ -21817,7 +22306,7 @@ ${listStyleProseCss(".doc-blocks")}
         words: () => this._wordlistsCard()
       };
       const section = (builders[active] || builders.activity)();
-      this.set(this.css(CSS26) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS27) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -22425,7 +22914,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS27 = `
+  var CSS28 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -22464,7 +22953,7 @@ ${listStyleProseCss(".doc-blocks")}
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       const full = `${label}${c > 0 ? `, ${c} so far` : ""}`;
       this.set(
-        this.css(CSS27) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS28) + `<button class="pill ${rail ? "rail" : ""} ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${full}" data-tooltip="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -22501,7 +22990,7 @@ ${listStyleProseCss(".doc-blocks")}
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS28 = `
+  var CSS29 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -22545,7 +23034,7 @@ ${listStyleProseCss(".doc-blocks")}
       }
       const pill = collectionPill(collectionsHolding({ collections: this._collections }, this._target()));
       const label = !this.client ? "Sign in to save to a collection" : pill.label;
-      this.set(this.css(CSS28) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
+      this.set(this.css(CSS29) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}" data-tooltip="${label}">${folder}<span>${pill.text}</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -22778,7 +23267,7 @@ ${listStyleProseCss(".doc-blocks")}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS29 = `
+  var CSS30 = `
   :host { position:fixed; inset:0; z-index:2147483000; display:none; }
   :host([open]) { display:block; }
   .scrim { position:absolute; inset:0; background:rgba(12,10,16,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
@@ -22842,7 +23331,7 @@ ${BLOCKED_PILL_CSS}
     close() {
       this.removeAttribute("open");
       this._open = false;
-      this.set(this.css(CSS29));
+      this.set(this.css(CSS30));
       this.emit("gbti:notify-closed");
     }
     async _load() {
@@ -22915,13 +23404,13 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.hasAttribute("open")) {
-        this.set(this.css(CSS29));
+        this.set(this.css(CSS30));
         return;
       }
       const u = esc(this._username || "");
       const av = `https://github.com/${u}.png?size=80`;
       if (!this._loaded) {
-        this.set(this.css(CSS29) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
+        this.set(this.css(CSS30) + `<div class="scrim" data-close></div><div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences"><div class="load">Loading preferences…</div></div>`);
         this._wire();
         return;
       }
@@ -22933,7 +23422,7 @@ ${BLOCKED_PILL_CSS}
         return `<div class="grow"><div class="rl">${esc(r.label)}</div>${pills}</div>`;
       }).join("");
       const modeCard = (mode, t, d) => `<button type="button" class="mode${this._mode === mode ? " on" : ""}" data-mode="${mode}"><div class="mt">${t}</div><div class="md">${d}</div></button>`;
-      this.set(this.css(CSS29) + `
+      this.set(this.css(CSS30) + `
       <div class="scrim" data-close></div>
       <div class="card" role="dialog" aria-modal="true" aria-label="Notification preferences for ${u}">
         <div class="hd">
@@ -23020,7 +23509,7 @@ ${BLOCKED_PILL_CSS}
   }
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
   var tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
-  var CSS30 = `
+  var CSS31 = `
   /* sow-362: FILL whatever the host was given. The host is inline-flex, so on a page that leaves it alone this
      is still content width; on a page that stretches it (the share page's sidebar card sets width:100% on
      .subscribe-wrap) the button stretches with it. Before this the wrap was content-width inside a stretched
@@ -23082,7 +23571,7 @@ ${BLOCKED_PILL_CSS}
       const onCls = following ? "on" : "";
       const tuneBtn = following && this._canFollow !== false ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>` : "";
       this.set(
-        this.css(CSS30) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
+        this.css(CSS31) + `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`
       );
       this.on(".btn", "click", () => this._onClick());
       this.on("[data-tune]", "click", () => {
@@ -23278,7 +23767,7 @@ ${BLOCKED_PILL_CSS}
     return a.length ? String(a[a.length - 1] || "").trim() : "";
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS31 = `
+  var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -23523,11 +24012,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS31) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS32) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS31) + body);
+      this.set(this.css(CSS32) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -23632,7 +24121,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS32 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -23757,10 +24246,10 @@ ${BLOCKED_PILL_CSS}
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS33) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS33) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -23777,7 +24266,7 @@ ${BLOCKED_PILL_CSS}
         this._items = r?.items ?? [];
         this._nextBefore = r?.nextBefore ?? null;
       } catch {
-        if (!quiet) this.set(this.css(CSS32) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS33) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -23803,12 +24292,12 @@ ${BLOCKED_PILL_CSS}
       const pending = dropPublished(items.map((it) => `${it.author}/${it.id}`), {});
       const stubs = pending.map((p) => this._pendingStubHtml(pendingStubView(p))).join("");
       if (!items.length && !pending.length) {
-        this.set(this.css(CSS32) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS33) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
       const pager = this._nextBefore ? `<div class="pager"><button class="load-older" type="button" data-load-older>Load older</button></div>` : "";
-      this.set(this.css(CSS32) + head + stubs + `<div data-list></div>${pager}`);
+      this.set(this.css(CSS33) + head + stubs + `<div data-list></div>${pager}`);
       this.on(".refresh", "click", () => this.reload());
       if (this._nextBefore) this.on("[data-load-older]", "click", () => this._loadOlder());
       if (items.length) {
@@ -23870,7 +24359,7 @@ ${BLOCKED_PILL_CSS}
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS32) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS33) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -23913,21 +24402,21 @@ ${BLOCKED_PILL_CSS}
       }
     }
     _splash() {
-      this.set(this.css(CSS32) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS33) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS33 = `
+  var CSS34 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS33) + `<div class="stack">
+      this.set(this.css(CSS34) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -23937,7 +24426,7 @@ ${BLOCKED_PILL_CSS}
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS34 = `
+  var CSS35 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -23955,7 +24444,7 @@ ${BLOCKED_PILL_CSS}
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS34) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS35) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -23964,7 +24453,7 @@ ${BLOCKED_PILL_CSS}
       }
       if (isLockedMembership(membership)) {
         const c = lockedAccountCopy(membership);
-        this.set(this.css(CSS34) + `<div class="splash">
+        this.set(this.css(CSS35) + `<div class="splash">
         <div class="lock">${c.kind === "restricted" ? "&#9888;&#65039;" : "&#128274;"}</div>
         <h2>${esc(c.heading)}</h2>
         <p>${esc(c.body)}</p>
@@ -23972,7 +24461,7 @@ ${BLOCKED_PILL_CSS}
       </div>`);
         return;
       }
-      this.set(this.css(CSS34) + `<slot></slot>`);
+      this.set(this.css(CSS35) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -23980,7 +24469,7 @@ ${BLOCKED_PILL_CSS}
   // client-ui/src/elements/gbti-comment-echoes.mjs
   var POLL_MS2 = 15e3;
   var POLL_MAX = 20;
-  var CSS35 = `
+  var CSS36 = `
   /* No :host(:empty) here: the light DOM is ALWAYS empty (everything renders into the shadow root), so that
      rule hid the element permanently. The harness DOM probe passed while the screenshot showed nothing
      (2026-09-11). With no rows the shadow root is empty and the block has no height, which is the hidden state. */
@@ -24051,7 +24540,7 @@ ${BLOCKED_PILL_CSS}
         </div>
       </li>`;
       }).join("");
-      this.set(this.css(CSS35) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
+      this.set(this.css(CSS36) + `<ul class="rows" aria-label="Your comments still posting">${cards}</ul>`);
       wireEmbedPosters(this.root);
       this._syncPage(this._rows.length);
     }
@@ -24249,7 +24738,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE14 = "https://gbti.network";
-  var CSS36 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -24333,15 +24822,15 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS36) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS36) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS37) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -24357,7 +24846,7 @@ ${BLOCKED_PILL_CSS}
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS36) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS37) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec" data-sec="favorites"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec" data-sec="collections"><h3>Collections</h3>${collHtml}
@@ -24430,7 +24919,7 @@ ${BLOCKED_PILL_CSS}
   var SEEDED_KEY = "gbti-welcome-topics-seeded";
   var MONO2 = `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace`;
   var CHECK4 = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var CSS37 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 6px; }
   .sw { position:relative; flex:1; min-width:220px; }
@@ -24520,14 +25009,14 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS37) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS37) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS38) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS37) + `
+      this.set(this.css(CSS38) + `
       <div class="bar">
         <div class="sw"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" /></div>
         <span class="cnt" data-cnt></span>
@@ -24592,7 +25081,7 @@ ${BLOCKED_PILL_CSS}
   var SITE16 = "https://gbti.network";
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS38 = `
+  var CSS39 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -24675,11 +25164,11 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS38) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS38) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS39) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -24688,7 +25177,7 @@ ${BLOCKED_PILL_CSS}
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS38) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS39) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -24948,7 +25437,7 @@ ${BLOCKED_PILL_CSS}
   }
 
   // client-ui/src/elements/gbti-onboarding-progress.mjs
-  var CSS39 = `
+  var CSS40 = `
   :host { display:block; }
   .ob { border:1px solid var(--accent); border-radius:var(--radius); padding:13px 16px; margin:0 0 16px;
     background:color-mix(in srgb, var(--accent) 7%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
@@ -24989,7 +25478,7 @@ ${BLOCKED_PILL_CSS}
     _paint(progress) {
       const external = typeof location !== "undefined" && location.protocol === "chrome-extension:";
       const html = onboardingCardHtml(progress, { welcomeUrl: external ? WELCOME_SITE_URL : "/welcome/", external });
-      this.set(html ? this.css(CSS39) + html : "");
+      this.set(html ? this.css(CSS40) + html : "");
     }
   };
   define("gbti-onboarding-progress", GbtiOnboardingProgress);
@@ -25042,7 +25531,7 @@ ${BLOCKED_PILL_CSS}
   };
   var slugifyRole = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-  var CSS40 = `
+  var CSS41 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec-h { padding:20px 24px 16px; }
@@ -25226,19 +25715,19 @@ ${BLOCKED_PILL_CSS}
       if (this._moved) return;
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS40) + `<div class="nudge">Sign in to edit your profile.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Sign in to edit your profile.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS40) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
+        this.set(this.css(CSS41) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your profile…</p></div></section>`);
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS40) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE17}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS41) + `<div class="nudge">Sign in to edit your profile. <a href="${SITE17}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (this._readState === "failed") {
-        this.set(this.css(CSS40) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
+        this.set(this.css(CSS41) + `<section class="sec" data-read-failed><div class="sec-h"><h3>Profile</h3><p>Your profile could not be read just now, so it cannot be edited safely. Reload the page to try again.</p></div></section>`);
         return;
       }
       const m = this._model || this._modelFromFm({}, "");
@@ -25248,7 +25737,7 @@ ${BLOCKED_PILL_CSS}
       } catch {
         sections = `<section class="sec"><div class="sec-h"><h3>Profile</h3><p>Your profile could not load. Reopen this page to retry.</p></div></section>`;
       }
-      this.set(this.css(CSS40) + sections);
+      this.set(this.css(CSS41) + sections);
       this._wire();
     }
     _identity(m) {
@@ -25516,7 +26005,7 @@ ${BLOCKED_PILL_CSS}
   ];
   var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS41 = `
+  var CSS42 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); container-type:inline-size; } /* sow-168: the phone rules below are container queries */
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:var(--radius); padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* sow-163: the homepage radius (was the SOW-052 squared 2px) aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:8px; cursor:pointer; }
@@ -26102,7 +26591,7 @@ ${BLOCKED_PILL_CSS}
       if (this.client && !this._ownProfileAsked) this._loadProfile();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS41) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS42) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -26138,7 +26627,7 @@ ${BLOCKED_PILL_CSS}
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS41) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
+      this.set(this.css(CSS42) + `${this._profileHtml()}<div class="wb"><div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div></div>`);
       if (this._tab === "profile") this.$("[data-profile-slot]")?.append(this._profileEd ||= document.createElement("gbti-profile-editor"));
       this._revealTab();
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -26533,7 +27022,7 @@ ${BLOCKED_PILL_CSS}
   var I_TUNE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>';
   var I_NEWS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>';
   var I_ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-  var CSS42 = `
+  var CSS43 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   :host([hidden]) { display:none; }
   .btn { position:relative; width:32px; height:32px; border-radius:7px; border:0; background:transparent; color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:background .15s,color .15s; }
@@ -26717,7 +27206,7 @@ ${BLOCKED_PILL_CSS}
       const badge = unread > 0 ? `<span class="badge">${unreadLabel(unread)}</span>` : "";
       const btnCls = this._open ? "btn open" : "btn";
       const panel = this._open ? this._panelHtml(loading) : "";
-      this.set(this.css(CSS42) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
+      this.set(this.css(CSS43) + `<button class="${btnCls}" type="button" data-bell aria-label="Notifications${unread ? `, ${unread} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${I_BELL}${badge}</button>` + panel);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -26772,7 +27261,7 @@ ${BLOCKED_PILL_CSS}
     { key: "api", label: "In app" },
     { key: "email", label: "Email" }
   ];
-  var CSS43 = `
+  var CSS44 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; }
   .sec-h { padding:20px 24px 16px; }
@@ -26877,11 +27366,11 @@ ${BLOCKED_PILL_CSS}
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS43) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE19}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS44) + `<div class="nudge">Open this in the GBTI client or extension to manage notifications. <a href="${SITE19}/membership/">Become a member</a>.</div>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS43) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
+        this.set(this.css(CSS44) + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your notifications…</p></div></section>`);
         return;
       }
       const matrix = this._matrix || defaultMatrix(this._global, { paid: this._paid });
@@ -26904,7 +27393,7 @@ ${BLOCKED_PILL_CSS}
       }).join("") : `<div class="empty">You are not following anyone yet. <a href="${SITE19}/members/">Find members to follow</a>, then choose what each one sends you here.</div>`;
       const msg = this._msg ? `<div class="msg ${this._msg.kind}" aria-live="polite">${esc(this._msg.text)}</div>` : `<div class="msg" aria-live="polite"></div>`;
       const prefsNote = this._prefsOk ? "" : `<div class="msg err">Could not load your default settings right now. Reopen this page to retry.</div>`;
-      this.set(this.css(CSS43) + `
+      this.set(this.css(CSS44) + `
       <section class="sec">
         <div class="sec-h"><h3>Default for everyone you follow</h3><p>What arrives in the header bell when someone you follow publishes. These apply to every follow unless you set one separately below.</p></div>
         <div class="rows">${matrixRows}</div>
@@ -26973,19 +27462,19 @@ ${BLOCKED_PILL_CSS}
   }
 
   // membership/news-source-name.mjs
-  var str4 = (v) => typeof v === "string" ? v.trim() : "";
+  var str5 = (v) => typeof v === "string" ? v.trim() : "";
   function sourceNameMap(sources) {
     const list = Array.isArray(sources) ? sources : Array.isArray(sources?.sources) ? sources.sources : [];
     const map = /* @__PURE__ */ new Map();
     for (const s of list) {
-      const id = str4(s?.id);
-      const name = str4(s?.name);
+      const id = str5(s?.id);
+      const name = str5(s?.name);
       if (id && name) map.set(id, name);
     }
     return map;
   }
   function newsSourceName(id, names) {
-    const key = str4(id);
+    const key = str5(id);
     if (!key) return "";
     const map = names instanceof Map ? names : sourceNameMap(names);
     return map.get(key) || key;
@@ -27005,7 +27494,7 @@ ${BLOCKED_PILL_CSS}
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS44 = `
+  var CSS45 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -27165,12 +27654,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS44) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS45) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS44) + head + `<div data-body></div>`);
+      this.set(this.css(CSS45) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -27304,7 +27793,7 @@ ${BLOCKED_PILL_CSS}
   var savedWeightNote = (weight) => weight === 0 ? C.backToNormal : `Saved. We will take ${weightLabel(weight).toLowerCase()} from this source on the next deploy.`;
   var removeQuestion = (title) => `Remove ${title ? `"${title}"` : "this story"} from the news index? You can put it back from this page.`;
   var HELD = pendingEdits();
-  var CSS45 = `
+  var CSS46 = `
   :host { display:block; }
   .card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .na-eyebrow { margin:0 0 12px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
@@ -27430,7 +27919,7 @@ ${BLOCKED_PILL_CSS}
       const canDown = this._loaded && stepToward(this._step, -1) !== this._step;
       const canUp = this._loaded && stepToward(this._step, 1) !== this._step;
       const removeLabel = this._removal === "removing" ? C.removing : this._removal === "removed" ? C.removed : C.remove;
-      this.set(this.css(CSS45) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc(this._removeNote)}</p></div></div>`);
+      this.set(this.css(CSS46) + `<div class="card" data-news-admin><p class="na-eyebrow">${esc(C.eyebrow)}</p><div class="na-block"><div class="na-label">${esc(C.weightLabel)}</div><div class="na-steps"><button type="button" class="na-arrow" data-na-down aria-label="${esc(C.down)}"${canDown ? "" : " disabled"}>&minus;</button><span class="na-step" data-na-step>${esc(this._loaded ? weightLabel(this._step) : "...")}</span><button type="button" class="na-arrow" data-na-up aria-label="${esc(C.up)}"${canUp ? "" : " disabled"}>+</button></div><p class="na-note" data-na-weight-note>${esc(this._weightNote)}</p></div><div class="na-block"><button type="button" class="na-remove" data-na-remove${this._removal === "idle" ? "" : " disabled"}>${esc(removeLabel)}</button><p class="na-note" data-na-remove-note>${esc(this._removeNote)}</p></div></div>`);
       this.$("[data-na-down]")?.addEventListener("click", () => this._move(-1));
       this.$("[data-na-up]")?.addEventListener("click", () => this._move(1));
       this.$("[data-na-remove]")?.addEventListener("click", () => this._remove());
@@ -27440,7 +27929,7 @@ ${BLOCKED_PILL_CSS}
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc5 = (s) => String(s ?? "").toLowerCase();
-  var CSS46 = `
+  var CSS47 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -27599,12 +28088,12 @@ ${BLOCKED_PILL_CSS}
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS46) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS47) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS46) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS47) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -27623,7 +28112,7 @@ ${BLOCKED_PILL_CSS}
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
       const story = this._removed ? `<div class="news-removed" data-news-removed><p>${esc(this._restore === "restored" ? NEWS_ADMIN_COPY.restoredNotice : this._restoreErr || NEWS_ADMIN_COPY.removedNotice)}</p>` + (this._restore === "restored" ? "" : `<button type="button" class="nr-undo" data-nr-undo${this._restore === "restoring" ? " disabled" : ""}>${esc(this._restore === "restoring" ? NEWS_ADMIN_COPY.restoring : NEWS_ADMIN_COPY.undo)}</button>`) + `</div>` : hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}`;
-      this.set(this.css(CSS46) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS47) + `<div class="wrap"><div class="cols"><div class="main">` + story + `</div><aside class="side">${chanCard}${this._admin ? "<div data-admin-slot></div>" : ""}${discussion}</aside></div></div>`);
       if (this._admin) this.$("[data-admin-slot]")?.replaceWith(this._admin);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
@@ -27782,259 +28271,6 @@ ${BLOCKED_PILL_CSS}
     return _directory;
   }
 
-  // membership/skill-install.mjs
-  var str5 = (v) => typeof v === "string" ? v.trim() : "";
-  var SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-  function skillNameFrom(skillMd) {
-    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(skillMd ?? ""));
-    if (!m) return "";
-    const line = m[1].split(/\r?\n/).find((l) => /^name:\s*/.test(l));
-    const name = line ? line.replace(/^name:\s*/, "").replace(/^['"]|['"]$/g, "").trim() : "";
-    return SKILL_NAME_RE.test(name) ? name : "";
-  }
-  var fillName = (text2, name) => String(text2 ?? "").split("{name}").join(name);
-  function codeRuns(text2) {
-    const out = [];
-    const parts = String(text2 ?? "").split("`");
-    parts.forEach((p, i) => {
-      if (p) out.push({ code: i % 2 === 1, text: p });
-    });
-    return out;
-  }
-  function installTabsFromTools({ tools, targets, name }) {
-    const byLabel = new Map((Array.isArray(tools) ? tools : []).filter((t) => t && str5(t.key) && str5(t.label) && str5(t.folder) && str5(t.run)).map((t) => [str5(t.label), t]));
-    const tabs = [];
-    const without = [];
-    const okName = SKILL_NAME_RE.test(String(name ?? "")) ? name : "";
-    for (const label of Array.isArray(targets) ? targets : []) {
-      const e = byLabel.get(label);
-      if (!e || !okName) {
-        without.push(label);
-        continue;
-      }
-      const folder2 = fillName(str5(e.folder), okName);
-      tabs.push({
-        key: str5(e.key),
-        label,
-        folder: folder2,
-        mkdir: `mkdir -p ${folder2}`,
-        run: codeRuns(fillName(str5(e.run), okName)),
-        local: codeRuns(fillName(str5(e.local), okName))
-      });
-    }
-    return { tabs, without };
-  }
-
-  // client/src/image-models.mjs
-  var IMAGE_GEN_MODELS = Object.freeze([
-    "Nano Banana",
-    "MidJourney",
-    "DALL-E",
-    "Stable Diffusion",
-    "Flux",
-    "Imagen",
-    "Ideogram",
-    "Leonardo",
-    "Firefly",
-    "Recraft",
-    "Qwen Image",
-    "Seedream"
-  ]);
-  var MODEL_TOKENS = Object.freeze([
-    "nanobanana",
-    "midjourney",
-    "dalle",
-    "stablediffusion",
-    "flux",
-    "imagen",
-    "ideogram",
-    "leonardo",
-    "firefly",
-    "recraft",
-    "qwenimage",
-    "seedream"
-  ]);
-
-  // src/lib/prompt-page.mjs
-  var PROMPT_SHELL = Object.freeze({
-    section: "band tint",
-    wrap: "wrap",
-    head: "detail-head",
-    headTop: "detail-head-top",
-    crumbs: "eyebrow detail-crumbs",
-    title: "h1 mt12",
-    meta: "mt16 flex items-center g12 wrap-w",
-    lead: "lead mt20",
-    grid: "detail-grid mt32",
-    main: "detail-main",
-    aside: "detail-aside flex col g20",
-    result: "prompt-result",
-    block: "prompt-block",
-    blockBar: "prompt-block-bar",
-    blockLabel: "prompt-block-label",
-    blockActions: "prompt-actions",
-    modes: "prompt-modes",
-    body: "prompt-body",
-    view: "prompt-view",
-    raw: "prompt-view prompt-raw"
-  });
-
-  // src/lib/skill-page.mjs
-  function esc7(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  }
-  var SKILL_SHELL = Object.freeze({
-    install: "skill-install",
-    installHead: "skill-install-head",
-    toolsRow: "skill-tools-row",
-    tools: "skill-tools",
-    panel: "skill-panel",
-    steps: "skill-steps",
-    cmd: "skill-cmd",
-    note: "skill-note",
-    local: "skill-local",
-    notes: "skill-notes",
-    file: "skill-file",
-    fileBody: "skill-file-body"
-  });
-  var SKILL_TOOL_KEY = "gbti-skill-tool";
-  var ICON_PATHS = {
-    "ico-kind-skill": '<path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
-    "ico-copy": '<rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
-    "ico-download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
-  };
-  var icon2 = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${ICON_PATHS[id]}</svg>`;
-  var runsHtml = (runs) => (runs || []).map((r) => r.code ? `<code>${esc7(r.text)}</code>` : esc7(r.text)).join("");
-  var andList = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
-  function sharedFolderNote(tab, tabs) {
-    const others = (tabs || []).filter((t) => t !== tab && t.folder === tab.folder).map((t) => t.label);
-    if (!others.length) return "";
-    if (others.length === 1) return `${others[0]} reads this folder too, so one copy serves both.`;
-    return `${andList(others)} read this folder too, so one copy serves them all.`;
-  }
-  function withoutNote(without) {
-    const xs = (without || []).filter(Boolean);
-    if (!xs.length) return "";
-    return `Also made for ${andList(xs)}. ${xs.length === 1 ? "Its" : "Their"} install steps are not listed here yet, so follow the author's notes below.`;
-  }
-  function buildSkillInstallHtml({ tabs = [], without = [], fileHref = "" } = {}) {
-    if (!tabs.length) return "";
-    const s = SKILL_SHELL;
-    const many = tabs.length > 1;
-    const tabId = (t) => `skill-tab-${t.key}`;
-    const panelId = (t) => `skill-panel-${t.key}`;
-    const chooser = many ? `<div class="${s.toolsRow}"><span id="skill-tools-l" class="skill-tools-label">Your tool</span><div class="${s.tools}" role="tablist" aria-labelledby="skill-tools-l">` + tabs.map((t, i) => `<button type="button" role="tab" id="${tabId(t)}" aria-controls="${panelId(t)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-skill-tool="${esc7(t.key)}">${esc7(t.label)}</button>`).join("") + `</div></div>` : `<p class="skill-tools-label">For ${esc7(tabs[0].label)}</p>`;
-    const download = fileHref ? `<a class="skill-btn" href="${esc7(fileHref)}" download="SKILL.md">${icon2("ico-download", 16)}<span>Download SKILL.md</span></a>` : "";
-    const panels = tabs.map((t, i) => {
-      const shared = sharedFolderNote(t, tabs);
-      const local = runsHtml(t.local);
-      return `<div class="${s.panel}" id="${panelId(t)}" data-skill-panel="${esc7(t.key)}"` + (many ? ` role="tabpanel" aria-labelledby="${tabId(t)}"` : "") + (i === 0 ? "" : " hidden") + `><ol class="${s.steps}"><li><span class="skill-step-n" aria-hidden="true">1</span><div class="skill-step"><p class="skill-step-t">Make the skill's folder.</p><div class="${s.cmd}"><code>${esc7(t.mkdir)}</code><button type="button" class="skill-btn skill-btn-sm" data-skill-copy-text="${esc7(t.mkdir)}">${icon2("ico-copy", 14)}<span data-label>Copy</span></button></div>` + (shared ? `<p class="${s.note}">${esc7(shared)}</p>` : "") + `</div></li><li><span class="skill-step-n" aria-hidden="true">2</span><div class="skill-step"><p class="skill-step-t">Save the skill file into it as <code>SKILL.md</code>.</p><div class="skill-file-btns"><button type="button" class="skill-btn skill-btn-primary" data-skill-copy-file>${icon2("ico-copy", 16)}<span data-label>Copy SKILL.md</span></button>` + download + `</div></div></li><li><span class="skill-step-n" aria-hidden="true">3</span><div class="skill-step"><p class="skill-step-t">${runsHtml(t.run)}</p></div></li></ol>` + (local ? `<p class="${s.local}">${local}</p>` : "") + `</div>`;
-    }).join("");
-    const also = withoutNote(without);
-    return `<section class="${s.install}" data-skill-install aria-labelledby="skill-install-h"><div class="${s.installHead}"><span class="skill-install-ico">${icon2("ico-kind-skill", 22)}</span><h2 id="skill-install-h">Install this skill</h2></div>` + chooser + panels + (also ? `<p class="${s.note} skill-without">${esc7(also)}</p>` : "") + `</section>`;
-  }
-  function wireSkillPage(root = document, storage = globalThis.localStorage) {
-    const box = root.querySelector("[data-skill-install]");
-    if (box) {
-      const tabs = Array.from(box.querySelectorAll("[data-skill-tool]"));
-      const panels = Array.from(box.querySelectorAll("[data-skill-panel]"));
-      const pick = (key, remember) => {
-        if (!panels.some((p) => p.dataset.skillPanel === key)) return false;
-        tabs.forEach((t) => {
-          const on = t.dataset.skillTool === key;
-          t.setAttribute("aria-selected", on ? "true" : "false");
-          t.tabIndex = on ? 0 : -1;
-        });
-        panels.forEach((p) => {
-          p.hidden = p.dataset.skillPanel !== key;
-        });
-        if (remember) {
-          try {
-            storage?.setItem(SKILL_TOOL_KEY, key);
-          } catch {
-          }
-        }
-        return true;
-      };
-      tabs.forEach((t, i) => {
-        t.addEventListener("click", () => pick(t.dataset.skillTool, true));
-        t.addEventListener("keydown", (e) => {
-          const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-          if (!step) return;
-          e.preventDefault();
-          const next = tabs[(i + step + tabs.length) % tabs.length];
-          pick(next.dataset.skillTool, true);
-          next.focus();
-        });
-      });
-      let saved = null;
-      try {
-        saved = storage?.getItem(SKILL_TOOL_KEY) ?? null;
-      } catch {
-        saved = null;
-      }
-      if (saved) pick(saved, false);
-    }
-    const copy = async (btn, text2) => {
-      const label = btn.querySelector("[data-label]") || btn;
-      const was = label.textContent;
-      try {
-        await navigator.clipboard.writeText(text2);
-        label.textContent = "Copied";
-      } catch {
-        label.textContent = "Copy failed";
-      }
-      setTimeout(() => {
-        label.textContent = was;
-      }, 1500);
-    };
-    const raw = root.querySelector("[data-skill-raw]");
-    root.querySelectorAll("[data-skill-copy-text]").forEach((b) => b.addEventListener("click", () => copy(b, b.getAttribute("data-skill-copy-text") || "")));
-    root.querySelectorAll("[data-skill-copy-file]").forEach((b) => b.addEventListener("click", () => copy(b, raw?.textContent ?? "")));
-    const file = root.querySelector("[data-skill-file]");
-    const toggle = file?.querySelector("[data-skill-file-toggle]");
-    toggle?.addEventListener("click", () => {
-      const open = file.dataset.open !== "true";
-      file.dataset.open = String(open);
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Show less" : "Show the whole file";
-    });
-  }
-
-  // client-ui/src/skill-reader.mjs
-  var READER_TOKEN_ALIASES = "--f-mono: var(--font-mono, ui-monospace, monospace); --f-display: var(--font-display); --r-lg: 12px; --fg-soft: var(--muted); --green: var(--brand); --green-600: var(--brand-dark);";
-  var SKILL_READER_CSS = `:host { ${READER_TOKEN_ALIASES} ${skillTokenDecls("light")} }
-:host-context([data-theme="dark"]) { ${skillTokenDecls("dark")} }
-${SKILL_BOX_CSS}`;
-  function promptSlugOf(url) {
-    const m = /^\/prompts\/([a-z0-9][a-z0-9-]*)\/?$/.exec(String(url || ""));
-    return m ? m[1] : "";
-  }
-  var steps = null;
-  async function loadSteps(site, fetchImpl) {
-    if (steps) return steps;
-    const res = await fetchImpl(`${site}/skill-install.json`, { cache: "no-cache" });
-    if (!res.ok) throw new Error(String(res.status));
-    const json = await res.json();
-    steps = Array.isArray(json?.tools) ? json.tools : [];
-    return steps;
-  }
-  async function loadSkillBox({ site, slug, targets, fileHref, fetchImpl = globalThis.fetch }) {
-    if (!slug) return null;
-    try {
-      const [tools, fileRes] = await Promise.all([
-        loadSteps(site, fetchImpl),
-        fetchImpl(`${site}/prompts/${slug}/SKILL.md`, { cache: "no-cache" })
-      ]);
-      if (!fileRes.ok) return null;
-      const text2 = await fileRes.text();
-      const { tabs, without } = installTabsFromTools({ tools, targets, name: skillNameFrom(text2) });
-      return { html: buildSkillInstallHtml({ tabs, without, fileHref: fileHref ? fileHref(text2) : "" }), text: text2 };
-    } catch {
-      return null;
-    }
-  }
-
   // membership/prompt-kind.mjs
   var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
   var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
@@ -28045,7 +28281,7 @@ ${SKILL_BOX_CSS}`;
     prompt: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
     skill: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
-  var READER_CSS = () => CSS47 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
+  var READER_CSS = () => CSS48 + SKILL_READER_CSS + "\n[data-skill-raw][hidden] { display:none !important; }";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -28106,7 +28342,7 @@ ${SKILL_BOX_CSS}`;
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS47 = `
+  var CSS48 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -28632,7 +28868,7 @@ ${SKILL_BOX_CSS}`;
   var githubAvatar2 = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
   var prettyRole3 = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var USERNAME_RE2 = /^[a-z0-9](?:-?[a-z0-9]){0,38}$/;
-  var CSS48 = `
+  var CSS49 = `
   :host { display:block; }
   .wrap { max-width:820px; margin:0 auto; padding:4px 2px 40px; }
   .hero { display:flex; gap:18px; align-items:flex-start; padding:6px 2px 18px; border-bottom:1px solid var(--line, #e5e5ea); margin-bottom:20px; }
@@ -28758,7 +28994,7 @@ ${SKILL_BOX_CSS}`;
     render() {
       const username = this._username;
       if (!username) {
-        this.set(this.css(CSS48) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
+        this.set(this.css(CSS49) + `<div class="wrap"><div class="note">No member selected.</div></div>`);
         return;
       }
       if (this.client && !this._loaded && !this._loading) {
@@ -28766,7 +29002,7 @@ ${SKILL_BOX_CSS}`;
         this._load();
       }
       const sections = this._loaded ? MEMBER_SECTIONS.map((s) => `<section class="work" data-section="${s.type}"><h3>${esc(s.label)}</h3><div data-list="${s.type}"></div></section>`).join("") : `<div class="skeleton">Loading ${esc(username)}…</div>`;
-      this.set(this.css(CSS48) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
+      this.set(this.css(CSS49) + `<div class="wrap">${this._heroHtml()}${sections}</div>`);
       if (this._loaded) {
         for (const s of MEMBER_SECTIONS) {
           const host = this.$(`[data-list="${s.type}"]`);
@@ -28810,7 +29046,7 @@ ${SKILL_BOX_CSS}`;
     } catch {
     }
   }
-  var CSS49 = `
+  var CSS50 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -28944,7 +29180,7 @@ ${SKILL_BOX_CSS}`;
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS49) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS50) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -28957,7 +29193,7 @@ ${SKILL_BOX_CSS}`;
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS49) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS50) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -29289,6 +29525,13 @@ ${SKILL_BOX_CSS}`;
       // sow-266
       setDigestOptin: (p) => request("POST", "/api/admin", { action: "digest-optin-set", ...p }),
       // sow-270: { double: boolean }
+      // sow-109: Admin tools > Skill install (superadmin). The read lists every tool with its steps or null.
+      skillInstallPool: () => request("GET", "/api/skill-install-pool"),
+      // { ok, tools: [{ key, label, steps }] }
+      setSkillInstallSteps: (p) => request("POST", "/api/admin", { action: "skill-install-set", ...p }),
+      // { key, folder, run, local } or { key, clear: true }
+      addSkillInstallTool: (p) => request("POST", "/api/admin", { action: "skill-install-tool-add", ...p }),
+      // { label, folder?, run?, local? }
       sponsorInquiries: () => request("GET", "/api/sponsor-inquiries"),
       // sow-266 Phase 4: what came in through the sponsorship form (superadmin)
       setSiteToggle: ({ key, enabled }) => request("POST", "/api/admin", { action: "site-setting-set", key, enabled: enabled === true }),

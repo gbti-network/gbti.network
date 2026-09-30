@@ -1993,8 +1993,8 @@ var require_dumper = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   function generateNextLine(state, level) {
     return "\n" + common.repeat(" ", state.indent * level);
   }
-  function testImplicitResolving(state, str) {
-    for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str)) return true;
+  function testImplicitResolving(state, str2) {
+    for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) if (state.implicitTypes[index].resolve(str2)) return true;
     return false;
   }
   function isWhitespace(c) {
@@ -3172,14 +3172,14 @@ function promiseAllObject(promisesObj) {
 }
 function randomString(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str = "";
+  let str2 = "";
   for (let i = 0; i < length; i++) {
-    str += chars[Math.floor(Math.random() * chars.length)];
+    str2 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str;
+  return str2;
 }
-function esc(str) {
-  return JSON.stringify(str);
+function esc(str2) {
+  return JSON.stringify(str2);
 }
 function slugify(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -3293,8 +3293,8 @@ var primitiveTypes = /* @__PURE__ */ new Set([
   "symbol",
   "undefined"
 ]);
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(str2) {
+  return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -17950,8 +17950,8 @@ var SECRET_KEY = /token|secret|authorization|bearer|password|refresh|api[_-]?key
 var MAX_STRING = 200;
 var MAX_DEPTH = 3;
 function clip(s) {
-  const str = String(s);
-  return str.length > MAX_STRING ? `${str.slice(0, MAX_STRING)}…(${str.length})` : str;
+  const str2 = String(s);
+  return str2.length > MAX_STRING ? `${str2.slice(0, MAX_STRING)}…(${str2.length})` : str2;
 }
 function redactDeep(value, depth = 0) {
   if (value == null) return value;
@@ -18298,6 +18298,37 @@ function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unkno
   }
   const comments = [...Array.isArray(deployed) ? deployed : [], ...kept].sort(byTime);
   return { comments, reap, pending };
+}
+
+// membership/ai-tools.mjs
+var isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+function aiToolEntries(doc) {
+  const tools = isObj(doc) ? doc.tools : null;
+  if (!isObj(tools)) return [];
+  const out = [];
+  for (const [key, value] of Object.entries(tools)) {
+    const label = isObj(value) ? String(value.label ?? "").trim() : "";
+    if (!key || !label) continue;
+    out.push({ key: String(key), label });
+  }
+  return out;
+}
+
+// membership/skill-install.mjs
+var isObj2 = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+var str = (v) => typeof v === "string" ? v.trim() : "";
+function skillInstallEntries(doc) {
+  const tools = isObj2(doc) ? doc.tools : null;
+  if (!isObj2(tools)) return [];
+  const out = [];
+  for (const [key, v] of Object.entries(tools)) {
+    if (!isObj2(v)) continue;
+    const folder = str(v.folder);
+    const run = str(v.run);
+    if (!key || !folder || !run) continue;
+    out.push({ key: String(key), folder, run, local: str(v.local) });
+  }
+  return out;
 }
 
 // client/src/skill-file.mjs
@@ -20663,6 +20694,9 @@ var WORKER_ADMIN_ACTIONS = Object.freeze(/* @__PURE__ */ new Set([
   "syndication-templates-set",
   "news-engagement-set",
   "syndication-settings-set",
+  "skill-install-set",
+  "skill-install-tool-add",
+  // sow-109: superadmin, the install steps per tool and adding a tool
   // content moderation, and the multi-file batches
   "deplatform",
   "remove",
@@ -20749,12 +20783,12 @@ var CTA_FIELDS = Object.freeze([
   ["linkLabel", "link_label", DIGEST_LIMITS.linkLabel],
   ["linkUrl", "link_url", DIGEST_LIMITS.linkUrl]
 ]);
-var isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+var isObj3 = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 function clean2(doc) {
-  const d = structuredClone(isObj(doc) ? doc : {});
-  if (!isObj(d.cta)) d.cta = {};
-  if (!isObj(d.sponsor)) d.sponsor = {};
-  if (!isObj(d.optin)) d.optin = {};
+  const d = structuredClone(isObj3(doc) ? doc : {});
+  if (!isObj3(d.cta)) d.cta = {};
+  if (!isObj3(d.sponsor)) d.sponsor = {};
+  if (!isObj3(d.optin)) d.optin = {};
   return d;
 }
 function readDigestConfig(doc) {
@@ -20787,6 +20821,13 @@ var CTA_RULES = Object.freeze({
   maxLinks: 1,
   forbiddenClaims: Object.freeze(["collections", "favorites", "favourites"])
 });
+
+// membership/skill-install-edits.mjs
+var SKILL_STEP_LIMITS = Object.freeze({ folder: 200, run: 400, local: 400, label: 40 });
+function skillInstallPool(doc, aiToolsDoc) {
+  const steps = new Map(skillInstallEntries(doc).map((e) => [e.key, { folder: e.folder, run: e.run, local: e.local }]));
+  return aiToolEntries(aiToolsDoc).map((t) => ({ key: t.key, label: t.label, steps: steps.get(t.key) ?? null }));
+}
 
 // membership/cta-icon.mjs
 var ICON_TAGS = Object.freeze(["path", "circle", "ellipse", "line", "polyline", "polygon", "rect", "g"]);
@@ -21137,6 +21178,10 @@ async function getSponsorInquiries2(ctx) {
     throw new OperationError("admin-op-failed", err?.message || "could not read the sponsorship inquiries");
   }
 }
+async function getSkillInstallPool(ctx) {
+  const [steps, tools] = await Promise.all([readYaml(ctx, "house/skill-install.yml"), readYaml(ctx, "house/ai-tools.yml")]);
+  return { ok: true, tools: skillInstallPool(steps, tools) };
+}
 async function getCtaPool(ctx) {
   const parsed = await readYaml(ctx, CTAS_PATH);
   return { ctas: ctasOf(parsed), types: [...CTA_ITEM_TYPES] };
@@ -21210,6 +21255,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/coupon-pool") return ok(await getCouponPool2(ctx));
     if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
     if (pathname === "/api/digest-config") return ok(await getDigestConfig(ctx));
+    if (pathname === "/api/skill-install-pool") return ok(await getSkillInstallPool(ctx));
     if (pathname === "/api/cta-pool") return ok(await getCtaPool(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");

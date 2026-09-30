@@ -156,6 +156,7 @@ const PRE_AUTH = new Set([
   // to a PUBLIC repository, so a read gate here would protect nothing a person could not read on GitHub. The
   // writes are superadmin, and that is where the boundary actually is.
   '/api/digest-config',
+  '/api/skill-install-pool', // sow-109: public git data, like the digest settings
 ]);
 
 test('pre-auth positioning: the routes above the ext-dispatch identity gate are EXACTLY the declared pre-auth set', () => {

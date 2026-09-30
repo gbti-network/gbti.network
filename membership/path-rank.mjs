@@ -52,6 +52,9 @@ export const SUPERADMIN_HOUSE_FILES = new Set([
   // sow-266: the digest's membership pitch and its sponsor slot. Same tier as mail-settings.yml beside it: it
   // decides what reaches other people's inboxes, and the sponsor block is a paid third-party placement.
   'house/digest-config.yml',
+  // sow-109: the install steps every skill page shows. A reader copies these commands into a terminal, so what they
+  // say is a superadmin decision, at the tier the owner named for the Skill install screen.
+  'house/skill-install.yml',
 ]);
 // sow-337: directories pinned the same way. A call-to-action card image renders on every page the card is
 // assigned to, so writing one is the same decision as writing house/ctas.yml. Kept in lockstep with CODEOWNERS by

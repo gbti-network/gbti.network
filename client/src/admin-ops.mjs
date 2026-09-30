@@ -28,6 +28,7 @@ import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async 
 import { readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { readDigestConfig, DIGEST_LIMITS } from '../../membership/digest-config-edits.mjs'; // sow-266: the digest pitch + sponsor slot, as stored
 import { DEFAULT_CTA, DEFAULT_SPONSOR } from '../../membership/digest-config.mjs'; // sow-266: what an empty field falls back to
+import { skillInstallPool } from '../../membership/skill-install-edits.mjs'; // sow-109: the Skill install manager's read
 import { ctasOf, CTA_ITEM_TYPES } from '../../membership/cta-edits.mjs'; // sow-281
 import { readBanwords } from '../../membership/news-banwords.mjs'; // sow-372: the words that keep a story out
 import { readWeights } from '../../membership/news-source-weight-edits.mjs'; // sow-338/sow-374: the per-source weights
@@ -155,6 +156,13 @@ export async function getSponsorInquiries(ctx) {
   } catch (err) {
     throw new OperationError('admin-op-failed', err?.message || 'could not read the sponsorship inquiries');
   }
+}
+
+/** sow-109: every tool a skill can be made for, with its install steps, for the Skill install manager. Public git
+ *  data (the site publishes /skill-install.json); mirrors membershipAdminSkillInstallPool in the Worker. */
+export async function getSkillInstallPool(ctx) {
+  const [steps, tools] = await Promise.all([readYaml(ctx, 'house/skill-install.yml'), readYaml(ctx, 'house/ai-tools.yml')]);
+  return { ok: true, tools: skillInstallPool(steps, tools) };
 }
 
 /** Read the call-to-action registry for the manager UI. Public git data (the site publishes /ctas.json). */

@@ -43,6 +43,7 @@ import { ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput, ctaImageFi
 import { addOutboundLink, updateOutboundLink, setOutboundLinkStatus } from '../../membership/outbound-link-edits.mjs'; // sow-359
 import { outboundAddInput, outboundUpdateInput, outboundStatusInput } from './membership-admin-outbound.mjs'; // sow-359: the validators (this file is at the size cap)
 import { contentFlagOps } from './membership-admin-flags.mjs'; // sow-274: the content-flag ops (this file is at the size cap)
+import { skillInstallMultiOps } from './membership-admin-skills.mjs'; // sow-109: Skill install, superadmin (this file is past the size cap)
 import { applyFile, decodeContent } from './membership-admin-files.mjs'; // sow-337: moved out for the size cap; writes a binary entry too
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
@@ -351,10 +352,13 @@ const CONFIG_OP = {
 // maxRankForPaths over the RESOLVED file set (see the dispatch), which is why category-batch becomes superadmin
 // the moment it carries a channel op even though its floor is admin. The build fn reads the affected files and
 // applies the shared pure cores, returning { files } or a { response } short-circuit (error or clean no-op).
-const MULTI_ACTIONS = new Set(['tag-edit', 'category-batch']);
+// sow-109: the two Skill install names are spelled out rather than imported, because the rows arrive through a
+// circular import and a const read at load time would not exist yet (the function below is hoisted, so it does).
+const MULTI_ACTIONS = new Set(['tag-edit', 'category-batch', 'skill-install-set', 'skill-install-tool-add']);
 const MULTI_OP = {
   'tag-edit': { rank: ROLE_RANK.admin, build: buildTagEdit },
   'category-batch': { rank: ROLE_RANK.admin, build: buildCategoryBatch },
+  ...skillInstallMultiOps(ROLE_RANK.superadmin), // sow-109: house/skill-install.yml (+ house/ai-tools.yml to add a tool)
 };
 
 // sow-274: every action name this endpoint serves, DERIVED from the live tables rather than restated beside
@@ -373,7 +377,7 @@ const requiredRank = (action) =>
 
 // Preserve the leading comment block (a run of `#`/blank lines at the top) of a config file across a re-serialize,
 // mirroring client/src/admin-ops.mjs leadingComment. Governance files have none, so this is config-only.
-function leadingComment(raw) {
+export function leadingComment(raw) { // sow-109: exported for the Skill install writes
   const out = [];
   for (const line of String(raw || '').split('\n')) {
     if (/^\s*#/.test(line) || line.trim() === '') out.push(line);

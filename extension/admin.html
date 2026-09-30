@@ -85,6 +85,7 @@
         <button class="admin-tab" type="button" data-tab="coupons">Coupons</button>
         <button class="admin-tab" type="button" data-tab="editorial" data-min="superadmin">Editorial review</button>
         <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
+        <button class="admin-tab" type="button" data-tab="skill-install" data-min="superadmin">Skill install</button>
         <button class="admin-tab" type="button" data-tab="outbound-links">Outbound links</button>
         <button class="admin-tab" type="button" data-tab="ctas">CTAs</button>
         <button class="admin-tab" type="button" data-tab="digest" data-min="superadmin">Weekly email</button>
@@ -158,6 +159,12 @@
                tab gets a 403 from the endpoint. The settings are not secret: they sit in a public repository. -->
           <div class="admin-card-h"><h2>Weekly email</h2><p>The membership note in the weekly digest, and the sponsor slot. Superadmin only. A save opens a house PR that merges on its own.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-digest-manager></gbti-digest-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="skill-install">
+          <!-- sow-109: the install steps every skill page shows, per tool (house/skill-install.yml), and adding a tool
+               (house/ai-tools.yml). Both writes carry ROLE_RANK.superadmin and the steps file is superadmin-CODEOWNED. -->
+          <div class="admin-card-h"><h2>Skill install</h2><p>What a reader copies to install a skill, per tool.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-skill-install-manager></gbti-skill-install-manager></div></div>
         </section>
       </div>
       </template>

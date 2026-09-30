@@ -169,6 +169,10 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setDigestCta: (p) => request('POST', '/api/admin', { action: 'digest-cta-set', ...p }), // sow-266
     setDigestSponsor: (p) => request('POST', '/api/admin', { action: 'digest-sponsor-set', ...p }), // sow-266
     setDigestOptin: (p) => request('POST', '/api/admin', { action: 'digest-optin-set', ...p }), // sow-270: { double: boolean }
+    // sow-109: Admin tools > Skill install (superadmin). The read lists every tool with its steps or null.
+    skillInstallPool: () => request('GET', '/api/skill-install-pool'), // { ok, tools: [{ key, label, steps }] }
+    setSkillInstallSteps: (p) => request('POST', '/api/admin', { action: 'skill-install-set', ...p }), // { key, folder, run, local } or { key, clear: true }
+    addSkillInstallTool: (p) => request('POST', '/api/admin', { action: 'skill-install-tool-add', ...p }), // { label, folder?, run?, local? }
     sponsorInquiries: () => request('GET', '/api/sponsor-inquiries'), // sow-266 Phase 4: what came in through the sponsorship form (superadmin)
     setSiteToggle: ({ key, enabled }) => request('POST', '/api/admin', { action: 'site-setting-set', key, enabled: enabled === true }), // sow-271
     ctaPool: () => request('GET', '/api/cta-pool'), // sow-281: the CTA registry { ctas, types } for the manager
