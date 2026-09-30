@@ -12,7 +12,7 @@ const MARK = '<!-- gbti-wired -->';
 
 const TOOLS = {
   'email-signature-generator': {
-    css: ['css/common.css', 'css/form.css', 'css/icons.css'],
+    css: ['css/common.css', 'css/template-ui.css', 'css/form.css', 'css/icons.css'],
     // template-selector falls back to relative paths when this is absent/empty.
     headScript: 'window.EmailSignatureGeneratorConfig = { toolBaseUrl: "" };',
     js: [
@@ -20,13 +20,13 @@ const TOOLS = {
       'js/social-media-repeater.js', 'js/social-icons.js', 'js/dark-mode.js', 'js/image-handlers.js',
       'js/exporting/image-processing.js', 'js/exporting/social-media-handlers.js', 'js/exporting/usage-tracking.js',
       'js/exporting/download-buttons.js', 'js/exporting/export-file-html.js', 'js/exporting/preview-export.js',
-      'js/jzip.min.js', 'js/download-utils.js', 'js/reset-handler.js', 'js/controls.js',
+      'js/jzip.min.js', 'js/download-utils.js', 'js/reset-handler.js', 'js/controls.js', 'js/controls-render.js',
       'templates/classic/register.js', 'templates/modern/register.js', 'templates/minimalist/register.js',
       'templates/banner-top/register.js', 'templates/professional/register.js', 'templates/sidebar/register.js',
     ],
   },
   'js-animate-hue': {
-    css: ['styles/main.css'],
+    css: ['styles/main.css', 'styles/sponsor-social.css'],
     headScript: '',
     js: [
       'inline-modules/colorUtils.js', 'inline-modules/imageProcessor.js', 'inline-modules/animator.js',
