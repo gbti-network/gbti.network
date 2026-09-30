@@ -17,6 +17,7 @@ import { promptKindProblems } from '../membership/prompt-kind.mjs'; // sow-109: 
 import { skillNameFrom } from '../membership/skill-install.mjs'; // sow-109: the name a skill file declares
 import { licenseProblems } from '../membership/licenses.mjs'; // sow-305: the controlled license list
 import { validateHouseConfig } from './lib/validate-house-config.mjs'; // the house/*.yml settings checks
+import { withoutSystemOnlyChanges } from './lib/system-only-change.mjs'; // a system-only change is not an author's edit
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
@@ -444,6 +445,28 @@ if (has(membersDir)) {
   }
 }
 
+// The files a pull request or push changed, for the rules below that check changed files only (the author note,
+// tag shape, tracking parameters), which is how older content is grandfathered. CHANGED_BASE, when the workflow sets
+// it, is the revision they are compared against: a file whose change is system-only (a retrofitted `kind`, say) is
+// dropped, so a retrofit never re-checks content nobody edited (owner, 2026-09-29; scripts/lib/system-only-change.mjs).
+const CHANGED = withoutSystemOnlyChanges((process.env.CHANGED_FILES || '').trim().split(/[\s,]+/).filter(Boolean), {
+  base: (process.env.CHANGED_BASE || '').trim(),
+  root: ROOT,
+  readAfter: (f) => fs.readFileSync(path.join(ROOT, f), 'utf8'),
+});
+
+// Items the owner excused from the from-the-author note rule, as "<type>:<slug>" (house/author-note-exempt.yml).
+// Owner-controlled: only the author can write their note, so an item published before the rule existed can be
+// excused here rather than stay unpublished. Validated in scripts/lib/validate-house-config.mjs.
+const AUTHOR_NOTE_EXEMPT = (() => {
+  try {
+    const doc = yaml.load(fs.readFileSync(path.join(ROOT, 'house/author-note-exempt.yml'), 'utf8'));
+    return new Set(Array.isArray(doc?.items) ? doc.items.map(String) : []);
+  } catch {
+    return new Set();
+  }
+})();
+
 // SOW-014: a published project/prompt requires a from-the-author introduction comment (a published
 // comment by the content author targeting it). Enforced ONLY over the files changed in the PR
 // (CHANGED_FILES, set by .github/workflows/content-check.yml), so already-published content is
@@ -478,9 +501,8 @@ function buildCommentIndex() {
 }
 
 function validateAuthorIntro() {
-  const raw = (process.env.CHANGED_FILES || '').trim();
-  if (!raw) return; // no PR diff => grandfather existing content (local + push runs skip this rule)
-  const changed = raw.split(/\s+/).filter(Boolean);
+  if (!CHANGED.length) return; // no PR diff => grandfather existing content (local + push runs skip this rule)
+  const changed = CHANGED;
   const idx = buildCommentIndex();
   for (const rel of changed) {
     const m = /^(?:house|members\/[^/]+)\/(projects|prompts)\/[^/]+\/index\.md$/.exec(rel.replace(/^\.?\//, ''));
@@ -492,6 +514,7 @@ function validateAuthorIntro() {
     if (field(txt, 'status') !== 'published') continue; // only published content needs an intro
     const author = field(txt, 'author');
     const slug = field(txt, 'slug');
+    if (AUTHOR_NOTE_EXEMPT.has(`${type}:${slug}`)) continue; // excused by the owner
     const count = idx.get(`${type}:${slug}`)?.get(author) ?? 0;
     if (!author || count < 1) {
       errors.push(`${rel}: a published ${type} requires a from-the-author note by "${author}" in the same pull request (a published comment with authorNote: true, targetType:${type}, targetSlug:${slug}). See SOW-014.`);
@@ -520,11 +543,10 @@ validateAuthorIntro();
 // so existing content is grandfathered; the client normalizes member input at build time, making this the
 // backstop for hand-authored PRs.
 function validateTagShape() {
-  const raw = (process.env.CHANGED_FILES || '').trim();
-  if (!raw) return;
+  if (!CHANGED.length) return;
   const TAG_RE = /^[a-z0-9][a-z0-9.-]*$/;
   const errors = [];
-  for (const rel of raw.split(/[\s,]+/).filter(Boolean)) {
+  for (const rel of CHANGED) {
     // sow-303: SHARES join the check. They were exempt because their path has a different shape (one flat
     // file, not a folder with an index.md), not because a share's tags were meant to be unpoliced. They are
     // now generated programmatically from an AI suggestion, so the backstop matters more than it did when
@@ -555,10 +577,9 @@ validateTagShape();
 // alone (a url inside a code fence, a url whose parentheses cut the run short) is something this cannot then
 // reject, so a body the client cannot clean can never be refused here either.
 function validateBodyTracking() {
-  const raw = (process.env.CHANGED_FILES || '').trim();
-  if (!raw) return;
+  if (!CHANGED.length) return;
   const found = [];
-  for (const rel of raw.split(/[\s,]+/).filter(Boolean)) {
+  for (const rel of CHANGED) {
     const isShare = /^members\/[^/]+\/shares\/[^/]+\.md$/.test(rel);
     const isComment = /^(?:house|members\/[^/]+)\/comments\/[^/]+\.mdx?$/.test(rel);
     if (!isShare && !isComment) continue;

@@ -318,6 +318,35 @@ function validateCtaRegistry() {
   }
 }
 
+// The items the owner excused from the from-the-author note rule (house/author-note-exempt.yml, 2026-09-29). Every
+// entry must be <project|prompt>:<slug> and name a content file that exists, so a typo cannot excuse nothing and look
+// as if it worked. Absent or empty means nothing is excused.
+function validateAuthorNoteExempt() {
+  const rel = 'house/author-note-exempt.yml';
+  const file = path.join(ROOT, rel);
+  if (!has(file)) return;
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(file, 'utf8')); } catch { errors.push(`${rel}: not valid YAML`); return; }
+  const items = parsed && typeof parsed === 'object' ? parsed.items : null;
+  if (items == null) return;
+  if (!Array.isArray(items)) { errors.push(`${rel}: items must be a list of "<project|prompt>:<slug>" entries`); return; }
+  const dirOf = { project: 'projects', prompt: 'prompts' };
+  const exists = (type, slug) => {
+    const dir = dirOf[type];
+    if (has(path.join(ROOT, 'house', dir, slug, 'index.md'))) return true;
+    const members = path.join(ROOT, 'members');
+    return has(members) && fs.readdirSync(members).some((u) => has(path.join(members, u, dir, slug, 'index.md')));
+  };
+  const seen = new Set();
+  for (const entry of items) {
+    const m = /^(project|prompt):([a-z0-9][a-z0-9-]*)$/.exec(String(entry));
+    if (!m) { errors.push(`${rel}: "${entry}" is not <project|prompt>:<slug>`); continue; }
+    if (seen.has(entry)) errors.push(`${rel}: "${entry}" is listed twice`);
+    seen.add(entry);
+    if (!exists(m[1], m[2])) errors.push(`${rel}: "${entry}" names no content file (members/*/${dirOf[m[1]]}/${m[2]}/index.md or house/${dirOf[m[1]]}/${m[2]}/index.md)`);
+  }
+}
+
 /**
  * Runs every house settings check, in the order validate-content.mjs always ran them.
  * @param {{ root: string, errors: string[], aiToolsDoc: unknown, licensesDoc: unknown }} ctx
@@ -338,4 +367,5 @@ export function validateHouseConfig(ctx) {
   validateContentFlags();
   validateTiersConfig();
   validateCtaRegistry();
+  validateAuthorNoteExempt();
 }

@@ -5,10 +5,10 @@ title: "PDF/UA-1 Remediation Assistant"
 slug: pdf-ua-1-remediation-assistant
 shortDescription: "Guide Claude through remediating a tagged PDF to PDF/UA-1, inspecting before editing and validating each fix with veraPDF."
 author: nareshdevineni
-status: draft
+status: published
 visibility: public
 categories: ["devops", "accessibility"]
-tags: ["PDF", "pikepdf", "veraPDF"]
+tags: ["pdf", "pikepdf", "verapdf"]
 targets: ["Claude"]
 exampleOutput: "Remediate a tagged PDF against PDF/UA-1 (ISO 14289-1) with veraPDF validation. The assistant inspects before proposing, shows the diff before every edit, prefers the smallest correct fix, and defaults to pikepdf for inspection and patching."
 publishedAt: 2026-06-06

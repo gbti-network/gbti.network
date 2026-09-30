@@ -37,7 +37,10 @@ jobs:
       # only on added/edited content (grandfathering everything already published). Push runs skip it.
       - name: Compute changed files (pull requests only)
         if: github.event_name == 'pull_request'
-        run: echo "CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | tr '\n' ' ')" >> "$GITHUB_ENV"
+        run: |
+          echo "CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | tr '\n' ' ')" >> "$GITHUB_ENV"
+          # The base the changed files are compared against: a system-only change is not an edit (scripts/lib/system-only-change.mjs).
+          echo "CHANGED_BASE=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
       - run: node scripts/validate-content.mjs
       # SOW-015: fail the PR if a plaintext is committed beside a .enc, or a .enc is not a valid v1 envelope.
       # Secret-free (the repo-hygiene + envelope checks need no key); safe on pull_request. The dist key-scan

@@ -49,6 +49,9 @@ jobs:
         run: node scripts/remediate-published.mjs --apply
         env:
           CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          # The revision the changed files are compared against, so a system-only change (a retrofitted field, say)
+          # is not treated as an edit and does not re-check older content (owner, 2026-09-29; scripts/lib/system-only-change.mjs).
+          CHANGED_BASE: HEAD~1
           # GitHub forbids a GITHUB_-prefixed secret, so the gbtilabs PAT is stored as GH_BOT_TOKEN and injected into
           # GITHUB_BOT_TOKEN; the bot is an admin in roles.yml so its content-flip PR auto-merges (the repo is a constant).
           GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}

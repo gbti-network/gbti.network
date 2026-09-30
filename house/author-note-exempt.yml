@@ -1,0 +1,14 @@
+# Items excused from the from-the-author note rule (SOW-014), owner-controlled.
+#
+# A published project or prompt needs a note from its author. Only the author can write that note, so an item that
+# was published before the rule existed, and that the author has not annotated, would otherwise have to stay offline.
+# An entry here lets it stay published without one. The author can still add a note at any time; the entry can then
+# be removed.
+#
+# Each entry is <project|prompt>:<slug> and must name an existing item (the content check refuses one that does not).
+#
+# prompt:pdf-ua-1-remediation-assistant: published 2026-06-06 without a note. A system-only change (sow-109 added
+# `kind` to every prompt) made the after-publish check unpublish it; the owner restored it and excused it on
+# 2026-09-29.
+items:
+  - prompt:pdf-ua-1-remediation-assistant
