@@ -297,7 +297,9 @@ test('sow-270: the read shows what is STORED, so an unset switch reads as unset 
 });
 
 test('WIRING sow-270: the switch reaches the Worker from every host, and its branch is its own', () => {
-  const worker = read('../workers/signup/membership-admin-author.mjs');
+  // The CONFIG_OP row stays in the author file; the pool read (with its defaults) moved to
+  // membership-admin-pools.mjs at the 900-line split. Read both, so each assertion finds its half.
+  const worker = read('../workers/signup/membership-admin-author.mjs') + '\n' + read('../workers/signup/membership-admin-pools.mjs');
   assert.match(worker, /'digest-optin-set':.*slug: \(\) => 'confirmation-mode'/,
     'a fixed branch of its own: sharing one with the copy lets whichever saved second reset the first');
 

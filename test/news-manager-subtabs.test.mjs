@@ -32,7 +32,9 @@ test('sow-374: the weight write reaches the Worker from BOTH hosts, not just the
 test('sow-374: both pool reads carry the weights back, or the manager renders every source as neutral', () => {
   // A manager that cannot see the current weights shows "Normal" for all 126, and the first click on a weighted
   // source moves it from the value it never displayed. Silent, and wrong in a way a screenshot cannot show.
-  const worker = fs.readFileSync(new URL('workers/signup/membership-admin-author.mjs', ROOT), 'utf8');
+  // The pool reads moved to membership-admin-pools.mjs at the 900-line split, so read both halves of the route.
+  const worker = ['workers/signup/membership-admin-author.mjs', 'workers/signup/membership-admin-pools.mjs']
+    .map((p) => fs.readFileSync(new URL(p, ROOT), 'utf8')).join('\n');
   assert.match(worker, /body: \{ ok: true, sources, banwords, weights \}/, 'the Worker pool read must return weights');
   assert.match(worker, /readWeights/, 'and read them through the shared core, not by hand');
   const host = fs.readFileSync(new URL('client/src/admin-ops.mjs', ROOT), 'utf8');

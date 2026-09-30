@@ -12,7 +12,7 @@
 // requires is the core's call, so add requires only the id, label and partner here.
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
-import { loadHouseYaml } from './membership-admin-author.mjs';
+import { loadHouseYaml } from './membership-admin-files.mjs';
 import { CTA_ITEM_TYPES, CTA_LIMITS, validRef, ctasOf } from '../../membership/cta-edits.mjs';
 import { ctaImageUpload, ctaImageFileChanges } from '../../membership/cta-image.mjs';
 import { ICON_LIMITS } from '../../membership/cta-icon.mjs';

@@ -14,7 +14,7 @@
 import yaml from 'js-yaml';
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
-import { loadHouseYaml, leadingComment } from './membership-admin-author.mjs';
+import { loadHouseYaml, leadingComment } from './membership-admin-files.mjs';
 import { skillStepsInput, setSkillSteps, aiToolInput, addAiToolText, skillInstallPool } from '../../membership/skill-install-edits.mjs';
 import { skillInstallProblems } from '../../membership/skill-install.mjs';
 import { aiToolEntries } from '../../membership/ai-tools.mjs';

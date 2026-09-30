@@ -162,7 +162,9 @@ const readEnv = { ...env };
 const readDeps = (over = {}) => ({ fetchImpl: ghFetch([]), signJwt, ...over });
 
 test('the six pool reads DEFAULT to authorizeSuperadmin (source guard: a moderation blocklist must not be admin-readable)', () => {
-  const src = fs.readFileSync(fileURLToPath(new URL('../workers/signup/membership-admin-author.mjs', import.meta.url)), 'utf8');
+  // The pool reads moved to membership-admin-pools.mjs at the 900-line split; read the author file and the pools together.
+  const src = ['../workers/signup/membership-admin-author.mjs', '../workers/signup/membership-admin-pools.mjs']
+    .map((p) => fs.readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8')).join('\n');
   // All six reads route through loadForSuperadminRead; its authorize default is the single point of enforcement.
   const start = src.indexOf('async function loadForSuperadminRead(');
   assert.ok(start > -1, 'loadForSuperadminRead moved or was renamed');

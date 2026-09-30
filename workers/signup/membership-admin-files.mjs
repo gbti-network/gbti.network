@@ -6,6 +6,8 @@
 // `content: null` deletes. The security is not here: the route authorizes, picks the paths, and re-checks their
 // rank before calling this.
 
+import yaml from 'js-yaml'; // already in the Worker bundle (content-ops)
+
 const GH = 'https://api.github.com';
 const GH_HEADERS = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
 
@@ -50,4 +52,45 @@ export async function applyFile(fetchImpl, instToken, upstream, branch, f, attem
   });
   if (res.status === 409 && attempt === 0) return applyFile(fetchImpl, instToken, upstream, branch, f, 1);
   return { ok: res.ok };
+}
+
+// The house-file READ helpers of the admin routes, moved here from membership-admin-author.mjs at the 900-line
+// limit. The CTA and Skill install modules import them from here, which keeps them out of an import cycle with
+// the author file; the author file re-exports leadingComment and loadHouseYaml for its existing importers.
+
+// Preserve the leading comment block (a run of `#`/blank lines at the top) of a config file across a re-serialize,
+// mirroring client/src/admin-ops.mjs leadingComment. Governance files have none, so this is config-only.
+export function leadingComment(raw) { // sow-109: exported for the Skill install writes
+  const out = [];
+  for (const line of String(raw || '').split('\n')) {
+    if (/^\s*#/.test(line) || line.trim() === '') out.push(line);
+    else break;
+  }
+  const block = out.join('\n').replace(/\s+$/, '');
+  return block ? `${block}\n` : '';
+}
+
+// Read + parse a house YAML file from canonical main, FAIL CLOSED. Shared by the governance + config branches so
+// they cannot disagree about "malformed = 502, not a silent reset". Returns { ok:true, parsed, raw } (raw kept for
+// the config leading-comment preserve), or { ok:false, status, body }. A 404 is a legitimate empty fresh start.
+export async function loadHouseYaml(fetchImpl, instToken, upstream, path) {
+  const cur = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=main`, { headers: GH_HEADERS(instToken) });
+  if (cur.status === 404) return { ok: true, parsed: {}, raw: '' };
+  if (!cur.ok) return { ok: false, status: 502, body: { error: 'read_failed', message: `GitHub returned ${cur.status}` } };
+  const raw = decodeContent((await cur.json().catch(() => ({})))?.content) ?? '';
+  let loaded;
+  try { loaded = raw ? yaml.load(raw) : {}; }
+  catch { return { ok: false, status: 502, body: { error: 'parse_failed', message: 'the governance file is malformed' } }; }
+  if (loaded === undefined || loaded === null) return { ok: true, parsed: {}, raw };
+  if (typeof loaded !== 'object' || Array.isArray(loaded)) return { ok: false, status: 502, body: { error: 'parse_failed', message: 'the governance file is malformed' } };
+  return { ok: true, parsed: loaded, raw };
+}
+
+// sow-161 A: read a RAW file (a content .md, which is not YAML). 404 -> { ok, raw: null } so a stale path in a
+// batch is skipped, not fatal. Same contents API + App token loadHouseYaml uses.
+export async function loadRawFile(fetchImpl, instToken, upstream, path) {
+  const cur = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=main`, { headers: GH_HEADERS(instToken) });
+  if (cur.status === 404) return { ok: true, raw: null };
+  if (!cur.ok) return { ok: false, status: 502, body: { error: 'read_failed', message: `GitHub returned ${cur.status}` } };
+  return { ok: true, raw: decodeContent((await cur.json().catch(() => ({})))?.content) ?? '' };
 }
