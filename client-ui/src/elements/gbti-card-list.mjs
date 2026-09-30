@@ -11,7 +11,6 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { glyphFor, typeAccent } from '../cat-glyph.mjs';
 import { resolveAsset } from '../assets.mjs';
-import { newsFeatureImage } from '../news-feature-image.mjs'; // sow-149: the branded stand-in for a news item with no image
 // sow-398 (owner, 2026-09-24): heart + Save on the cards, as the website's feed cards carry them.
 import { targetSlugFor, SAVABLE_TYPES } from '../target-slug.mjs';
 import './gbti-favorite.mjs';
@@ -240,13 +239,10 @@ class GbtiCardList extends GbtiElement {
     if (this.mode === 'detailed' && !thumb) return '';
     const g = glyphFor(item.category, item.type);
     const glyph = this.mode === 'detailed' ? '' : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
-    // sow-149, now in the extension too (owner report, 2026-09-30: news cards showing a bare newspaper icon): a news
-    // card with no image of its own shows its category's branded banner, exactly as the website's news page does, and
-    // a story image that fails to load falls back to that banner (data-fb) before the glyph.
-    const banner = lc(item.type) === 'news' ? resolveAsset(newsFeatureImage(item.category)) : null;
-    const src = thumb || banner;
-    const fb = thumb && banner ? ` data-fb="${esc(banner)}"` : '';
-    const img = src ? `<img class="cimg" src="${esc(src)}" alt="" loading="lazy"${fb}>` : '';
+    // Owner, 2026-09-30: a news card with no image of its own keeps the category glyph. A branded stand-in banner was
+    // tried here the same day and taken out ("Lets not add our own default OG images"); the card shows the story's
+    // own picture or nothing of ours.
+    const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : '';
     return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
   }
   _chip(item) {
@@ -329,14 +325,7 @@ class GbtiCardList extends GbtiElement {
     // A content image (.cimg) or a meta avatar/favicon (.avimg) that 404s drops out so the glyph / initial disc
     // shows through (CSP-safe capture-phase; img error does not bubble).
     if (!this._wiredErr) {
-      this.root?.addEventListener('error', (e) => {
-        const t = e.target;
-        if (t?.tagName !== 'IMG' || !(t.classList?.contains('cimg') || t.classList?.contains('avimg'))) return;
-        // A news image that fails swaps to its category banner once; anything else (or a failed banner) drops out.
-        const fb = t.getAttribute('data-fb');
-        if (fb) { t.removeAttribute('data-fb'); t.src = fb; return; }
-        t.remove();
-      }, true);
+      this.root?.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && (t.classList?.contains('cimg') || t.classList?.contains('avimg'))) t.remove(); }, true);
       this._wiredErr = true;
     }
     // A card without an openHref opens IN PLACE: emit card-open for the host to handle.

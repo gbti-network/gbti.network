@@ -4,7 +4,8 @@
 //      feeds write `&#038;` inside theirs);
 //   2. the article read stopping at 60 KB (JetBrains carries its og:image about 66 KB in);
 //   3. stories the old scraper gave up on never being tried again;
-//   4. the extension's news card showing a bare glyph instead of the branded banner the website shows (sow-149).
+// A fourth change, a branded stand-in banner on the extension's news cards, was taken out the same day: "Lets not add
+// our own default OG images." The card keeps the glyph; the last test holds that.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -104,10 +105,8 @@ test('a recent story the old scraper gave up on gets one more try; an old one do
   assert.deepEqual(tried, []);
 });
 
-test('the extension\'s news card falls back to the category banner, and a failed story image swaps to it', () => {
+test('the extension\'s news card shows the story\'s own picture or the glyph, never a stand-in of ours', () => {
   const src = fs.readFileSync(new URL('../client-ui/src/elements/gbti-card-list.mjs', import.meta.url), 'utf8');
-  assert.match(src, /import \{ newsFeatureImage \} from '\.\.\/news-feature-image\.mjs'/);
-  assert.match(src, /const banner = lc\(item\.type\) === 'news' \? resolveAsset\(newsFeatureImage\(item\.category\)\) : null;/);
-  assert.match(src, /const src = thumb \|\| banner;/);
-  assert.match(src, /if \(fb\) \{ t\.removeAttribute\('data-fb'\); t\.src = fb; return; \}/);
+  assert.doesNotMatch(src, /newsFeatureImage|news-feature-image|brand\/feature/, 'owner, 2026-09-30: no default images of our own');
+  assert.match(src, /const img = thumb \? `<img class="cimg" src="\$\{esc\(thumb\)\}" alt="" loading="lazy">` : '';/);
 });
