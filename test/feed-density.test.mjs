@@ -14,11 +14,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
-const CSS = fs.readFileSync(
-  path.resolve(fileURLToPath(import.meta.url), '../../src/styles/gbti-v3.css'),
-  'utf8',
-);
+const CSS = siteCss();
 
 /** The declaration block for exactly this selector, or null when the selector is not in the sheet. */
 function blockFor(selector) {

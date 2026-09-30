@@ -15,6 +15,7 @@ import { parseTierDisplay, offeredTiers, revenueFragments } from '../membership/
 import { TIER, TIER_LABEL, tierLabel } from '../membership/tiers.mjs';
 import { tierCta } from '../src/lib/tier-cta.mjs';
 import { audienceControl, AUDIENCE_MODES } from '../client-ui/src/one-click-public-core.mjs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -91,7 +92,7 @@ test('the homepage carries no pricing block, and the membership plans sit one co
   // styles with it. This also stops a rebuild from a stale clone quietly bringing it back.
   assert.ok(!fs.existsSync(path.join(ROOT, 'src/components/home/PricingAccordion.astro')), 'the accordion component is gone');
   assert.doesNotMatch(read('src/pages/index.astro'), /PricingAccordion/, 'the homepage does not mount it');
-  assert.doesNotMatch(read('src/styles/gbti-v3.css'), /\.price-(acc|grid|card|sum)\b/, 'its styles are gone');
+  assert.doesNotMatch(siteCss(), /\.price-(acc|grid|card|sum)\b/, 'its styles are gone');
   // The membership grid was three fixed columns, so two plans filled two thirds of the row and left the right
   // third empty. The column count now comes from the offered list the cards are drawn from.
   const card = read('src/components/membership/MembershipTiers.astro');

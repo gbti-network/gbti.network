@@ -12,6 +12,7 @@ import yaml from 'js-yaml';
 import { treeNodesFromJson, highlightParts, pickerRows, valueDisplay, moveActive, categoryFieldHtml, PATH_SEP } from '../client-ui/src/category-picker-core.mjs';
 import { GbtiCategoryPicker } from '../client-ui/src/elements/gbti-category-picker.mjs';
 import { TOKENS } from '../client-ui/src/tokens.mjs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const REAL_TREE = yaml.load(read('house/taxonomy.yml')).tree;
@@ -240,7 +241,7 @@ test('the three website tokens the picker names are defined in both themes, with
     assert.ok(light[t], `${t} light`);
     assert.ok(dark[t], `${t} dark`);
   }
-  const site = read('src/styles/gbti-v3.css');
+  const site = siteCss();
   assert.ok(site.includes(`--line-2:     ${light['--line-2']}`) && site.includes(`--green-tint: ${light['--green-tint']}`), 'light values are the site\'s');
 });
 

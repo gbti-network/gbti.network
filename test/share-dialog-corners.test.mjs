@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const src = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const COMPOSER = src('client-ui/src/elements/gbti-share-composer.mjs');
@@ -29,6 +30,6 @@ test('the extension share dialog is the website one: the composer card is the di
   const css = src('extension/shell.css');
   assert.match(css, /\.share-dialog \{ position: relative; width: 100%; max-width: 620px; margin: auto; \}/, 'the website width, centred');
   assert.match(css, /\.share-x \{[^}]*border-radius: 50%;/, 'round, like the website close button');
-  assert.match(src('src/styles/gbti-v3.css'), /\.share-modal \{ width: 620px;/, 'the website dialog it mirrors is 620px');
+  assert.match(siteCss(), /\.share-modal \{ width: 620px;/, 'the website dialog it mirrors is 620px');
   assert.match(css, /\.compose-panel \{[^}]*border-radius: var\(--r-lg\)/, 'the Membership panel keeps its own look');
 });

@@ -7,9 +7,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const src = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const css = src('src/styles/gbti-v3.css');
+const css = siteCss();
 
 // The positions of several markers, asserted to appear in the given order and each exactly once.
 function assertOrder(text, markers, label) {

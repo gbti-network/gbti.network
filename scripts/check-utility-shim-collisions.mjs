@@ -2,7 +2,7 @@
 // Build guard (sow-351): a Tailwind variant can never override the unlayered utility shim, so any element
 // carrying both is silently stuck in one state.
 //
-// WHAT WENT WRONG. src/styles/gbti-v3.css defines a small shim near the end of the file: `.flex`, `.grid`,
+// WHAT WENT WRONG. src/styles/gbti-v3.css defines a small shim early in the file: `.flex`, `.grid`,
 // `.items-center`, `.items-start`, `.items-end`, `.justify-between`, `.justify-center` and `.relative`, all
 // OUTSIDE any cascade layer. Tailwind emits its own utilities inside `@layer utilities`, and an unlayered
 // rule beats a layered one whatever the source order or media query. So on an element with `justify-center`,

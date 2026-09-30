@@ -6,8 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
-const site = readFileSync(new URL('../src/styles/gbti-v3.css', import.meta.url), 'utf8');
+const site = siteCss();
 const card = readFileSync(new URL('../client-ui/src/elements/gbti-card-list.mjs', import.meta.url), 'utf8');
 
 // the site class -> the extension chip class for the same content type

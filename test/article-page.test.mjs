@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import { buildArticleToc, coverDimensions, TOC_MIN_ENTRIES, ART_OVERVIEW_ID, ARTICLE_SHELL, articleShell, buildArticleLeadHtml } from '../src/lib/article-page.mjs';
 import fs from 'node:fs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const h = (text, slug, depth = 2) => ({ depth, slug, text });
 
@@ -208,7 +209,7 @@ test('DRIFT: the card layout carries no inline geometry, and gbti-v3.css owns it
   assert.ok(!/style="max-width:820px/.test(src), 'the card width belongs to .art-c-card in gbti-v3.css');
   assert.ok(!/style="background:var\(--paper-2\)"/.test(src), 'the band background belongs to .art-c-band');
   assert.ok(!/style="border-radius:var\(--r-lg\)"/.test(src), 'the cover radius belongs to .art-c-cover');
-  const css = fs.readFileSync(new URL('../src/styles/gbti-v3.css', import.meta.url), 'utf8');
+  const css = siteCss();
   assert.match(css, /\.art-c-card \{[^}]*max-width: 820px/);
   assert.match(css, /\.art-c-card \{[^}]*padding: clamp\(28px, 5vw, 56px\)/);
   assert.match(css, /\.art-c-band \{[^}]*background: var\(--paper-2\)/);
@@ -235,7 +236,7 @@ test('DRIFT: the contract agrees with each component about rails and the body id
 // The three-column grid is the reason the preview emits an empty actions strip. If the CSS ever collapses to
 // two columns the spacer becomes a visible empty gap, so the contract and the stylesheet are pinned together.
 test('DRIFT: art-e-grid is still three columns, which is what the spacer exists for', () => {
-  const css = fs.readFileSync(new URL('../src/styles/gbti-v3.css', import.meta.url), 'utf8');
+  const css = siteCss();
   const rule = css.match(/\.art-e-grid \{[^}]*\}/)?.[0] ?? '';
   const cols = rule.match(/grid-template-columns:([^;]*);/)?.[1] ?? '';
   assert.equal(cols.split(/\s+(?![^(]*\))/).filter(Boolean).length, 3, `art-e-grid is no longer 3 columns: "${cols}"`);
@@ -267,7 +268,7 @@ test('DRIFT: the Journal rail follows the article in the source and is placed le
   const closing = src.indexOf('<slot name="closing" />');
   assert.ok(col >= 0 && article > col && rail > article && close > rail && closing > close,
     `expected column, article, rail, then the closing wrapper; got ${JSON.stringify({ col, article, rail, close, closing })}`);
-  const css = fs.readFileSync(new URL('../src/styles/gbti-v3.css', import.meta.url), 'utf8');
+  const css = siteCss();
   assert.match(css, /\n\.art-j-rail \{ grid-column: 1; grid-row: 1 \/ span 2;/, 'the two-column page pins the rail to the left, beside both rows');
   assert.match(css, /\n\.art-j-col, \.art-j-close \{ grid-column: 2; min-width: 0; max-width: 660px; \}/, 'the article and the closing sections share the right column');
   assert.match(css, /\.art-j-grid \{[^}]*gap: 0 clamp\(/, 'no row gap between the article and the closing sections on the two-column page');

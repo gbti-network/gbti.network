@@ -14,6 +14,7 @@ import path from 'node:path';
 import yaml from 'js-yaml';
 import { PROJECT_CATEGORIES, OTHER_CATEGORY, categoryOf, categoryStyle } from '../src/lib/project-categories.mjs';
 import { BANNER_PRESETS } from '../src/lib/banner-presets.mjs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -64,7 +65,7 @@ function drift({ categories, presets, css, taxonomyKeys }) {
 const real = () => ({
   categories: PROJECT_CATEGORIES,
   presets: BANNER_PRESETS,
-  css: read('src/styles/gbti-v3.css'),
+  css: siteCss(),
   taxonomyKeys: taxonomyLeaves(yaml.load(read('house/taxonomy.yml')).tree),
 });
 

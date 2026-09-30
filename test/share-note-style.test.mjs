@@ -5,9 +5,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { isNetworkAuthor } from '../src/lib/network-authors.mjs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const CSS = read('src/styles/gbti-v3.css');
+const CSS = siteCss();
 const rules = (selector) => CSS.split('\n').filter((l) => l.startsWith(selector));
 
 test('the network accounts are recognised, a member is not', () => {

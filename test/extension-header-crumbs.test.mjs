@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const PAGES = { 'account.html': 'Settings', 'saved.html': 'Favorites and collections', 'admin.html': 'Admin tools', 'shares.html': 'Shares' };
@@ -47,7 +48,7 @@ test('the breadcrumb looks like the site\'s: mono, tracked, uppercase, a 35% und
   assert.match(css, /\.crumbs \.cc-crumb:hover, \.crumbs \.cc-crumb:focus-visible \{ border-bottom-color: currentColor; \}/);
   assert.match(css, /\.crumbs \.cc-sep \{ opacity: \.55; \}/);
   // The same values the site uses (src/styles/gbti-v3.css, sow-174).
-  const site = read('src/styles/gbti-v3.css');
+  const site = siteCss();
   assert.match(site, /border-bottom: 1px solid color-mix\(in srgb, currentColor 35%, transparent\);/);
   assert.match(site, /\.cc-sep \{ opacity: \.55; \}/);
 });

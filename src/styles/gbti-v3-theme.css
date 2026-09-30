@@ -1,0 +1,175 @@
+/* PART 2 OF THE GBTI V3 DESIGN SYSTEM: dark mode, the theme toggle and tooltips.
+   Split out of gbti-v3.css (the 900-line limit, owner 2026-09-30). The parts load IN ORDER from global.css, and
+   the order is the cascade: the dark token block beats :root only because it comes after it. Move a rule between parts only if its position in that order is unchanged. */
+
+/* ============================================================================
+   DARK MODE (SOW-010). Light is the default (the homepage direction); dark is the
+   SAME design system with the surface/text/line/link tokens remapped, so every
+   token-driven page works in both modes with no per-page duplication. The toggle
+   sets data-theme on <html> (header button + the no-FOUC head script). We do NOT
+   remap --ink / --ink-2 / --green (they are structural: dark surfaces + the brand),
+   only the page surfaces + foreground + a few components that hardcode white.
+   ========================================================================== */
+[data-theme="dark"] {
+  --paper:       #2d2a34;   /* raised surface / cards */
+  --paper-2:     #1c1a21;   /* page base (a touch deeper than ink for layering) */
+  --tint:        #34313c;
+  --tint-warm:   #25232b;   /* tinted band -> ink */
+  --green-tint:  rgba(31,158,95,.13);   /* green band on dark */
+  --green-tint-2:rgba(95,212,154,.22);
+
+  --fg:          #f3f2f0;
+  --fg-soft:     rgba(243,242,240,.72);
+  --fg-mute:     rgba(243,242,240,.50);
+
+  --line:        rgba(255,255,255,.12);
+  --line-2:      rgba(255,255,255,.20);
+
+  /* links + green text need the mint on dark surfaces */
+  --green-700:   #5fd49a;
+  --green-600:   #46c089;
+
+  --blue-700:    #8fb0ee;   /* sow-366: lifted for dark, as amber is */
+
+  /* amber lifts to the design's lighter tone so it reads on dark surfaces (sow-172) */
+  --amber:       #e0a94b;
+  --amber-text:  #f0c883;
+  --amber-tint:  rgba(224,169,75,.09);
+
+  /* tooltip flips to a light bubble on dark surfaces */
+  --tooltip-bg:     #f3f2f0;
+  --tooltip-fg:     #24222a;
+  --tooltip-border: rgba(0,0,0,.12);
+
+  color-scheme: dark;
+}
+
+/* components that hardcode a light surface need a dark-mode variant */
+[data-theme="dark"] .site-head { background: rgba(28,26,33,.85); border-bottom-color: var(--line); }
+[data-theme="dark"] .site-head .brand-word { color: var(--fg); }
+[data-theme="dark"] .nav a:hover { color: var(--fg); }
+[data-theme="dark"] .btn-gh { background: transparent; color: var(--fg); border-color: var(--line-2); }
+[data-theme="dark"] .btn-gh:hover { background: var(--fg); color: var(--ink); }
+[data-theme="dark"] .btn-white { background: var(--paper); color: var(--fg); }
+[data-theme="dark"] .btn-ghost { color: var(--fg); border-color: var(--line-2); }
+[data-theme="dark"] .btn-ghost:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.4); }
+[data-theme="dark"] .chip { background: transparent; border-color: var(--line-2); color: var(--fg-soft); }
+[data-theme="dark"] .chip-green { background: rgba(31,158,95,.16); border-color: var(--green); color: var(--green-mint); }
+/* category pills (.pchip + a .c-* palette) hardcode a light tint; in dark mode flip to an outlined
+   chip in the category's lighter shade so it reads on dark cards. Higher specificity than the scoped
+   component .pchip rule so it wins regardless of stylesheet order. */
+html[data-theme="dark"] .pchip { background: rgba(255,255,255,.05); border-color: var(--cb); color: var(--cb); }
+/* homepage: the Featured-projects spotlight gets the standard band rhythm (104px) above it; the
+   space below comes from the #product-directory band's own bottom padding (also 104px), so the gap
+   above == below == the gap above the Prompt Directory headline. */
+#product-directory .spot-band { padding-top: 104px; padding-bottom: 0; }
+@media (max-width: 760px) { #product-directory .spot-band { padding-top: 64px; } }
+[data-theme="dark"] .itile { background: rgba(95,212,154,.12); border-color: rgba(95,212,154,.2); color: var(--green-mint); }
+[data-theme="dark"] .av { border-color: var(--paper); }
+[data-theme="dark"] .lav { border-color: var(--paper); }
+[data-theme="dark"] .filter.on { background: rgba(31,158,95,.16); color: var(--green-mint); border-color: var(--green); }
+[data-theme="dark"] .tbl-grid .col-hi,
+[data-theme="dark"] .cta-col.member { background: rgba(31,158,95,.12); }
+[data-theme="dark"] .tbl-grid .no { color: var(--line-2); }
+/* The browser/new-tab mock is a light "screen" in BOTH themes: its inner surfaces are hardcoded #fff, so in
+   dark mode pin the page + cards to a light screen with fixed dark ink and light hairlines, while the outer
+   browser chrome (.nt-bar / inactive .nt-tab) stays dark and adaptive. Without this, the near-white dark-mode
+   --fg / --fg-mute text lands on the white surfaces and is unreadable. */
+[data-theme="dark"] .nt-browser { border-color: var(--line); }
+[data-theme="dark"] .nt-page { background: radial-gradient(120% 110% at 50% -10%, #fff 0%, #faf9f8 70%); }
+[data-theme="dark"] .nt-top,
+[data-theme="dark"] .nt-greet,
+[data-theme="dark"] .nt-tile,
+[data-theme="dark"] .nt-tab.on,
+[data-theme="dark"] .nt-fr .t { color: var(--ink); }
+[data-theme="dark"] .nt-omni,
+[data-theme="dark"] .nt-search,
+[data-theme="dark"] .nt-feed-head,
+[data-theme="dark"] .nt-top .muted,
+[data-theme="dark"] .nt-fr .w { color: #84818c; }
+[data-theme="dark"] .nt-tab.on,
+[data-theme="dark"] .nt-omni,
+[data-theme="dark"] .nt-search,
+[data-theme="dark"] .nt-tile,
+[data-theme="dark"] .nt-feed,
+[data-theme="dark"] .nt-fr { border-color: #e7e4e0; }
+
+/* the theme toggle button in the header */
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: var(--r); cursor: pointer;
+  background: transparent; border: 1.5px solid var(--line-2); color: var(--fg-soft);
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.theme-toggle:hover { color: var(--fg); border-color: var(--fg-mute); }
+.theme-toggle svg { width: 19px; height: 19px; }
+/* show the correct glyph per mode (both are in the button; CSS reveals one) */
+.theme-toggle .ico-sun { display: none; }
+.theme-toggle .ico-moon { display: block; }
+[data-theme="dark"] .theme-toggle .ico-sun { display: block; }
+[data-theme="dark"] .theme-toggle .ico-moon { display: none; }
+
+/* ==========================================================================
+   Tooltips — custom, theme-aware hover/focus labels that replace native
+   `title=` tooltips so the bubble matches our light/dark scheme (an OS tooltip
+   is always a system-gray box). Usage: add `data-tooltip="..."` to any
+   focusable control AND keep an `aria-label` (data-tooltip is presentational
+   and is NOT announced to assistive tech). CSS-only, no JS. Default bubble is
+   ABOVE the control; add `data-tooltip-pos="below"` near a top edge (e.g. the
+   header toggle) so it does not clip. Recorded in
+   .data/ops/design-ops/design-brief.md.
+   ========================================================================== */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after,
+[data-tooltip]::before {
+  position: absolute;
+  left: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+  z-index: 60;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  border: 1px solid var(--tooltip-border);
+  font-family: var(--f-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: .1px;
+  text-align: center;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-md);
+}
+[data-tooltip]::before {            /* arrow */
+  content: "";
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%) translateY(4px);
+  border: 5px solid transparent;
+  border-top-color: var(--tooltip-bg);
+}
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after,
+[data-tooltip]:hover::before, [data-tooltip]:focus-visible::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+/* below-variant: flip the bubble + arrow under the control (top-edge controls) */
+[data-tooltip-pos="below"]::after { bottom: auto; top: calc(100% + 8px); }
+[data-tooltip-pos="below"]::before {
+  bottom: auto; top: calc(100% + 3px);
+  border-top-color: transparent;
+  border-bottom-color: var(--tooltip-bg);
+}
+/* coarse pointers (touch) have no hover; never reserve space or flash a tooltip */
+@media (hover: none) {
+  [data-tooltip]::after, [data-tooltip]::before { display: none; }
+}
+

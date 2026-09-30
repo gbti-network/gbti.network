@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { shareCardHtml } from '../src/lib/feed-share-cards.mjs';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -34,11 +35,11 @@ test('the live share card the feed merges in carries no follow control', () => {
 });
 
 test('the stylesheet keeps no card-view follow rules', () => {
-  assert.doesNotMatch(read('src/styles/gbti-v3.css'), /follow-pill|follow-t\b/);
+  assert.doesNotMatch(siteCss(), /follow-pill|follow-t\b/);
 });
 
 test('the card-view feed card does not clip, and the cover rounds its own top corners', () => {
-  const css = read('src/styles/gbti-v3.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = siteCss().replace(/\/\*[\s\S]*?\*\//g, '');
   const item = css.match(/\.feed-page\[data-view="card"\] \.feed-item \{([^}]*)\}/);
   assert.ok(item, 'found the card-view feed item rule');
   assert.match(item[1], /border-radius: var\(--r-lg\)/, 'control: this is the rounded card rule');

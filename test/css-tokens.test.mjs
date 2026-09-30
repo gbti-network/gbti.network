@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { siteCss } from './lib/site-css.mjs'; // the whole design system, in load order (gbti-v3.css was split)
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const EXT = new Set(['.astro', '.css', '.ts', '.mjs', '.js']);
@@ -55,7 +56,7 @@ test('sow-366: no stylesheet reads a custom property that nothing defines', () =
 });
 
 test('sow-366: a surface token that flips with the theme is defined in BOTH themes', () => {
-  const css = fs.readFileSync(path.join(ROOT, 'src/styles/gbti-v3.css'), 'utf8');
+  const css = siteCss();
   const dark = css.slice(css.indexOf('[data-theme="dark"]'));
   assert.ok(dark.length > 500, 'found the dark block');
   // The tokens a card is built from. A card that keeps a light surface under dark text is the sow-366 defect.
