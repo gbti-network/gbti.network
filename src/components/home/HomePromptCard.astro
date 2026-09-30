@@ -1,13 +1,15 @@
 ---
-// sow-192 QA (owner, 2026-08-07, v2): the homepage Prompts & Skills card. NO background image (the branded
-// placeholder read weak); instead a clean, wide ONE-PER-ROW card led by the robot glyph (#ico-bot) on a brand
-// tile, with the substance of the prompt beside it: category + title + the models it runs on + the "from the
-// author" note (or the short description) + author and the favorite/save actions. The directory PromptCard is
-// untouched.
+// sow-431 (owner, 2026-09-30, design B on the canvas "Homepage Prompts & Skills"): the homepage Prompts & Skills card,
+// shaped like the Articles card above it. The image on top is the item's own cover; an item without one gets a tile in
+// its kind's colours (a skill: the terminal glyph and its command, a prompt: the prompt glyph), never the robot the
+// sow-192 row used. The Skill or Prompt label sits on the image's corner. Under it: what it is made for or runs on, the
+// title, the short description (the owner's choice over the author's note), then the author and the favorite and save
+// actions. The directory PromptCard is untouched.
+import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
 import { authorDisplay, authorAvatar } from '../../lib/authors';
-import { leafKey, leafLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
+import { skillFileOf } from '../../lib/skill-install';
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
 import CollectionButton from '../CollectionButton.astro';
@@ -15,53 +17,43 @@ import { KIND_LABEL } from '../../../membership/prompt-kind.mjs'; // sow-109: PR
 
 interface Props {
   prompt: CollectionEntry<'prompt'>;
-  comments: CollectionEntry<'comment'>[];
   profiles: CollectionEntry<'profile'>[];
 }
-const { prompt, comments, profiles } = Astro.props;
+const { prompt, profiles } = Astro.props;
 const d = prompt.data;
 const models = (d.targets ?? []).slice(0, 3);
+const href = `/prompts/${d.slug}/`;
 
-// SOW-014 "from the author" note: the owner's published, public, authorNote-flagged comment for this prompt.
-// Falls back to the short description so the card always says something about the prompt's power.
-const note = comments.find(
-  (c) =>
-    c.data.targetType === 'prompt' &&
-    c.data.targetSlug === d.slug &&
-    c.data.author === d.author &&
-    c.data.authorNote === true &&
-    c.data.status === 'published' &&
-    c.data.visibility === 'public',
-);
-const noteText = (note?.body ?? '')
-  .replace(/```[\s\S]*?```/g, ' ')
-  .replace(/[#>*_`~\[\]()]/g, '')
-  .replace(/\s+/g, ' ')
-  .trim();
-const body = (noteText || d.shortDescription || '').slice(0, 220);
+// A skill's tile names its command, read from the name its own file declares. A members-only skill keeps no plain
+// file in the repository, so its tile shows the glyph alone.
+const skillName = d.kind === 'skill' && !d.image ? skillFileOf(prompt)?.name || '' : '';
 
 const profile = profiles.find((p) => p.data.username === d.author)?.data;
 const authorName = profile?.displayName ?? authorDisplay(d.author);
 const avatar = authorAvatar(d.author, profile?.avatar);
 ---
-<article class="hp-row">
-  <a class="hp-bot" href={`/prompts/${d.slug}/`} aria-hidden="true" tabindex="-1">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-bot"/></svg>
-  </a>
-  <div class="hp-main">
-    <div class="hp-metarow">
-      <span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span>
-      <a class="hp-kind" href={`/prompts/?cat=${encodeURIComponent(leafKey(d.categories))}`}>{leafLabel(d.categories)}</a>
-      {models.length > 0 && (
-        <span class="hp-runs">
-          <span class="hp-runs-l">{d.kind === 'skill' ? 'Made for' : 'Runs on'}</span>
-          {models.map((m) => <a class="hp-model" href={`/prompts/?target=${encodeURIComponent(m)}`}>{m}</a>)}
+<article class="hpc-card card card-hover" data-kind={d.kind}>
+  <a class="hpc-media" href={href} aria-hidden="true" tabindex="-1">
+    {d.image
+      ? <Image class="hpc-img" src={d.image} alt="" width={600} height={338} />
+      : (
+        <span class={`hpc-tile hpc-tile-${d.kind}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>
+          {skillName && <span class="hpc-cmd">/{skillName}</span>}
         </span>
       )}
-    </div>
-    <h3 class="hp-title"><a href={`/prompts/${d.slug}/`}>{d.title}</a></h3>
-    {body && <p class="hp-body">{body}</p>}
-    <div class="hp-foot">
+    <span class="hpc-badge"><span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span></span>
+  </a>
+  <div class="hpc-body">
+    {models.length > 0 && (
+      <span class="hp-runs">
+        <span class="hp-runs-l">{d.kind === 'skill' ? 'Made for' : 'Runs on'}</span>
+        {models.map((m) => <a class="hp-model" href={`/prompts/?target=${encodeURIComponent(m)}`}>{m}</a>)}
+      </span>
+    )}
+    <h3 class="hpc-title"><a href={href}>{d.title}</a></h3>
+    {d.shortDescription && <p class="hpc-desc">{d.shortDescription}</p>}
+    <div class="hpc-foot">
       <a class="hp-author" href={`/prompts/?author=${encodeURIComponent(d.author)}`}>
         <Avatar item={{ name: authorName, avatar, seed: d.author }} class="hp-av" size={24} />
         <span>{authorName}</span>

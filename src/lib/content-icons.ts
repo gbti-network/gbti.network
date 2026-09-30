@@ -1,6 +1,6 @@
 // sow-192: the STANDARD content-type icon (an IconSprite `#ico-*` id) shown beside a type label, e.g. the
 // Popular rail chips. One source of truth so every surface uses the same mark. Decisions recorded in
-// .data/ops/design-ops/icons.md. Prompt + Skill share the robot to match the homepage prompt card.
+// .data/ops/design-ops/icons.md. Prompt + Skill share the robot here; the homepage card uses its own kind tiles (sow-431).
 export const CONTENT_ICON: Record<string, string> = {
   article: 'ico-pencil',
   post: 'ico-pencil',
