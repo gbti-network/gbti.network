@@ -2,9 +2,9 @@
 // NUMBER. Node-free, so the site, the shared components, the Worker's digest and the build all use this one copy.
 //
 // WHY NOT github.com/<name>.png. That address looks an account up by NAME. A folder is a GBTI name, and since sow-428
-// it can differ from the member's GitHub login, so the name can belong to an unrelated GitHub account: the new
-// member `mike-conley` (GitHub login loraxian666) would have shown a stranger's face. An account NUMBER never
-// changes and never names anyone else.
+// it can differ from the member's GitHub login, so the name can belong to an unrelated GitHub account, and a member
+// given a GBTI name would have shown whoever holds that name on GitHub. An account NUMBER never changes and never
+// names anyone else.
 //
 // HOW. The build writes one redirect per enrolled member, `/avatar/<folder>` -> GitHub's picture for that member's
 // account number (scripts/compose-redirects.mjs, from house/members-index.yml). Every surface uses the one address

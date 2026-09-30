@@ -1,10 +1,10 @@
 // sow-428: a member's GBTI name is their FOLDER (members/<folder>/), from the members index, and it can differ from
-// their GitHub login. Owner, 2026-09-30: "lets give him a gbti name, drop the 666 create the member index layer"
-// (a new member's login was loraxian666; his folder is mike-conley). Then: "We can use blobatar library for anyone
-// who does not have a linked avatar."
+// their GitHub login. Owner, 2026-09-30: "lets give him a gbti name, drop the 666 create the member index layer".
+// Then: "We can use blobatar library for anyone who does not have a linked avatar."
 //
-// The fixtures use that real case: github_id 113307118, login loraxian666, folder mike-conley. Both `mike-conley`
-// and `loraxian` are unrelated accounts on GitHub, which is why nothing here may look a member up by name there.
+// The fixtures are made up: account 900000001, GitHub login oldhandle999, folder jane-doe. A GBTI name can be an
+// unrelated account on GitHub, which is why nothing here may look a member up by name there. (The real case that
+// prompted this is not named in the repository on purpose: moving a member off an off-brand login is the point.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,8 +25,8 @@ import { composeRedirects, avatarRows } from '../scripts/compose-redirects.mjs';
 import { parseMembersIndex } from '../membership/hosted-author.mjs';
 import { freshIndexAdditions, syncEnrollments } from '../scripts/lib/enroll-members.mjs';
 
-const ID = '113307118';
-const INDEX = `members:\n  "2002207": atwellpub\n  "${ID}": mike-conley\n`;
+const ID = '900000001';
+const INDEX = `members:\n  "2002207": atwellpub\n  "${ID}": jane-doe\n`;
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -47,9 +47,9 @@ const getToken = async () => 'ghs_test';
 test('the caller\'s folder comes from the members index by account number, not from the login', async () => {
   resetMemberFolderCache();
   const { fetchImpl } = indexFetch();
-  assert.equal(await memberFolderFor({}, ID, 'loraxian666', { fetchImpl, getToken }), 'mike-conley');
-  assert.equal(await githubIdForFolder({}, 'mike-conley', { fetchImpl, getToken }), ID);
-  assert.equal(await githubIdForFolder({}, 'loraxian666', { fetchImpl, getToken }), null, 'the login is not a folder');
+  assert.equal(await memberFolderFor({}, ID, 'oldhandle999', { fetchImpl, getToken }), 'jane-doe');
+  assert.equal(await githubIdForFolder({}, 'jane-doe', { fetchImpl, getToken }), ID);
+  assert.equal(await githubIdForFolder({}, 'oldhandle999', { fetchImpl, getToken }), null, 'the login is not a folder');
 });
 
 test('a member with no index entry, or an unreadable index, falls back to the lowercased login', async () => {
@@ -58,7 +58,7 @@ test('a member with no index entry, or an unreadable index, falls back to the lo
   assert.equal(await memberFolderFor({}, '42', 'NewMember', { fetchImpl: ok.fetchImpl, getToken }), 'newmember');
   resetMemberFolderCache();
   const down = indexFetch(INDEX, { fail: true });
-  assert.equal(await memberFolderFor({}, ID, 'loraxian666', { fetchImpl: down.fetchImpl, getToken }), 'loraxian666');
+  assert.equal(await memberFolderFor({}, ID, 'oldhandle999', { fetchImpl: down.fetchImpl, getToken }), 'oldhandle999');
   resetMemberFolderCache();
   const empty = indexFetch('members:\n');
   await assert.rejects(readMembersIndexCached({}, { fetchImpl: empty.fetchImpl, getToken }), /parsed empty/, 'an empty parse is a failed read');
@@ -76,18 +76,18 @@ test('the index is read once per five minutes, and an old copy beats no copy whe
   const down = indexFetch(INDEX, { fail: true });
   const map = await readMembersIndexCached({}, { fetchImpl: down.fetchImpl, getToken, now });
   assert.equal(down.calls.length, 1, 'past the window it tries again');
-  assert.equal(map.get(ID), 'mike-conley', 'and keeps the old copy when the read fails');
+  assert.equal(map.get(ID), 'jane-doe', 'and keeps the old copy when the read fails');
 });
 
 test('/membership/status returns the folder beside the login', async () => {
   const r = await membershipStatus({ headers: { get: (k) => (k.toLowerCase() === 'authorization' ? 'Bearer good' : null) }, url: 'https://s/membership/status' }, { STRIPE_SECRET_KEY: 'rk' }, {
-    fetchUser: async () => ({ githubId: ID, githubLogin: 'loraxian666' }),
+    fetchUser: async () => ({ githubId: ID, githubLogin: 'oldhandle999' }),
     makeStripe: () => ({ findCustomerByGithubId: async () => null }),
-    folderFor: async (_env, id, login) => (id === ID ? 'mike-conley' : login),
+    folderFor: async (_env, id, login) => (id === ID ? 'jane-doe' : login),
   });
   assert.equal(r.status, 200);
-  assert.equal(r.body.login, 'loraxian666');
-  assert.equal(r.body.folder, 'mike-conley');
+  assert.equal(r.body.login, 'oldhandle999');
+  assert.equal(r.body.folder, 'jane-doe');
 });
 
 test('"my shares" lists the folder, never the login', async () => {
@@ -98,14 +98,14 @@ test('"my shares" lists the folder, never the login', async () => {
     return { ok: false, status: 404, async json() { return {}; } };
   };
   const r = await listMyShares({ headers: { get: () => null } }, {}, {
-    authorize: async () => ({ ok: true, githubId: ID, login: 'loraxian666' }),
-    folderFor: async () => 'mike-conley',
+    authorize: async () => ({ ok: true, githubId: ID, login: 'oldhandle999' }),
+    folderFor: async () => 'jane-doe',
     fetchImpl, getToken, kv: {},
   });
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.items, []);
-  assert.ok(urls.some((u) => u.includes('members/mike-conley/shares')), 'the folder was listed');
-  assert.ok(!urls.some((u) => u.includes('loraxian666')), 'the login never was');
+  assert.ok(urls.some((u) => u.includes('members/jane-doe/shares')), 'the folder was listed');
+  assert.ok(!urls.some((u) => u.includes('oldhandle999')), 'the login never was');
 });
 
 test('a hosted publish for a renamed member lands in their folder, and the pull request pings nobody', async () => {
@@ -123,24 +123,24 @@ test('a hosted publish for a renamed member lands in their folder, and the pull 
   const kvStore = new Map();
   const kv = { async get(k) { return kvStore.get(k) ?? null; }, async put(k, v) { kvStore.set(k, v); }, async delete(k) { kvStore.delete(k); } };
   const env = { GITHUB_APP_ID: '1', GITHUB_APP_INSTALLATION_ID: '2', GITHUB_APP_PRIVATE_KEY: 'PEM', UPSTREAM_REPO: 'gbti-network/gbti.network', MEMBERSHIP_AUTHOR_ENABLED: 'true' };
-  const body = { itemId: 'hello', title: 'Hello', files: [{ path: 'members/mike-conley/posts/hello/index.md', content: '---\ntitle: Hello\n---\nhi' }] };
+  const body = { itemId: 'hello', title: 'Hello', files: [{ path: 'members/jane-doe/posts/hello/index.md', content: '---\ntitle: Hello\n---\nhi' }] };
   const r = await membershipAuthor({ headers: { get: () => 'Bearer tok' }, json: async () => body }, env, {
     kv, fetchImpl, signJwt: async () => 'jwt', limiter: async () => ({ allowed: true }),
     authorize: async () => ({ ok: true, githubId: ID, tier: 'creator' }),
-    fetchUser: async () => ({ githubLogin: 'loraxian666', githubId: ID }),
+    fetchUser: async () => ({ githubLogin: 'oldhandle999', githubId: ID }),
   });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   const pr = rec.find((c) => /\/pulls$/.test(c.url));
-  assert.match(pr.body.body, /on behalf of mike-conley \(github_id 113307118\)/);
+  assert.match(pr.body.body, /on behalf of jane-doe \(github_id 900000001\)/);
   assert.doesNotMatch(pr.body.body, /@/, 'no @mention: a GBTI name can be a stranger\'s GitHub account');
 });
 
 // ---- every client learns the folder ----
 
 test('the website signal names the folder as the username, and keeps the login', () => {
-  const s = memberSignalFromStatus({ ok: true, github_id: ID, login: 'loraxian666', folder: 'mike-conley', status: 'paid' });
-  assert.equal(s.username, 'mike-conley');
-  assert.equal(s.login, 'loraxian666');
+  const s = memberSignalFromStatus({ ok: true, github_id: ID, login: 'oldhandle999', folder: 'jane-doe', status: 'paid' });
+  assert.equal(s.username, 'jane-doe');
+  assert.equal(s.login, 'oldhandle999');
   const old = memberSignalFromStatus({ ok: true, github_id: '1', login: 'Alice', status: 'paid' });
   assert.equal(old.username, 'alice', 'an older Worker with no folder: the lowercased login');
   const bad = memberSignalFromStatus({ ok: true, github_id: '1', login: 'alice', folder: '../house', status: 'paid' });
@@ -148,18 +148,18 @@ test('the website signal names the folder as the username, and keeps the login',
 });
 
 test('ownership on the website is by folder', () => {
-  const me = { login: 'loraxian666', username: 'mike-conley', role: 'member' };
-  assert.equal(canEditItem(me, 'mike-conley'), true);
-  assert.equal(canEditItem(me, 'loraxian666'), false, 'the login owns nothing');
+  const me = { login: 'oldhandle999', username: 'jane-doe', role: 'member' };
+  assert.equal(canEditItem(me, 'jane-doe'), true);
+  assert.equal(canEditItem(me, 'oldhandle999'), false, 'the login owns nothing');
   assert.equal(canEditItem({ login: 'alice' }, 'alice'), true, 'an identity with no username still works by login');
-  assert.equal(isOwnProfile(me, 'mike-conley'), true);
+  assert.equal(isOwnProfile(me, 'jane-doe'), true);
 });
 
 test('the extension, command-line and agent hosts read the folder from the status', async () => {
   const oracle = (body) => async () => ({ ok: true, json: async () => body });
-  assert.equal((await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: oracle({ status: 'paid', folder: 'mike-conley' }) })).folder, 'mike-conley');
+  assert.equal((await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: oracle({ status: 'paid', folder: 'jane-doe' }) })).folder, 'jane-doe');
   assert.equal((await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: oracle({ status: 'paid', folder: 'Not A Folder' }) })).folder, null);
-  assert.equal((await resolveMembership({ githubId: ID, token: 't', signupBase: 'https://s', fetch: oracle({ status: 'paid', effectiveStatus: 'paid', folder: 'mike-conley' }) })).folder, 'mike-conley');
+  assert.equal((await resolveMembership({ githubId: ID, token: 't', signupBase: 'https://s', fetch: oracle({ status: 'paid', effectiveStatus: 'paid', folder: 'jane-doe' }) })).folder, 'jane-doe');
 });
 
 test('agent-tool sign-in: the local index wins, then the Worker\'s folder, then the login', async () => {
@@ -168,7 +168,7 @@ test('agent-tool sign-in: the local index wins, then the Worker\'s folder, then 
     const s = store({ pendingDeviceLogin: { deviceCode: 'D', clientId: 'c' } });
     const r = await confirmDeviceLogin({ store: s }, {
       pollToken: async () => ({ access_token: 'tok' }),
-      makeRepoClient: () => ({ getAuthUser: async () => ({ login: 'loraxian666', id: Number(ID) }) }),
+      makeRepoClient: () => ({ getAuthUser: async () => ({ login: 'oldhandle999', id: Number(ID) }) }),
       resolveMembershipImpl: async () => ({ stripeStatus: 'paid', membership: 'paid', folder }),
       fetchStatusImpl: async () => ({ status: 'paid', folder }),
       readFile,
@@ -176,10 +176,10 @@ test('agent-tool sign-in: the local index wins, then the Worker\'s folder, then 
     return [r.username, s.get('identity').username];
   };
   const clone = (idx) => (p) => (p === 'house/roles.yml' ? 'roles: {}\n' : p === 'house/members-index.yml' ? idx : null);
-  assert.deepEqual(await run(null, 'mike-conley'), ['mike-conley', 'mike-conley'], 'no clone: the Worker names the folder');
-  assert.deepEqual(await run(clone('members: {}\n'), 'mike-conley'), ['mike-conley', 'mike-conley'], 'a clone that does not know them yet');
-  assert.deepEqual(await run(clone(`members:\n  "${ID}": from-clone\n`), 'mike-conley'), ['from-clone', 'from-clone'], 'a clone\'s index wins');
-  assert.deepEqual(await run(null, null), ['loraxian666', 'loraxian666'], 'nothing answers: the lowercased login');
+  assert.deepEqual(await run(null, 'jane-doe'), ['jane-doe', 'jane-doe'], 'no clone: the Worker names the folder');
+  assert.deepEqual(await run(clone('members: {}\n'), 'jane-doe'), ['jane-doe', 'jane-doe'], 'a clone that does not know them yet');
+  assert.deepEqual(await run(clone(`members:\n  "${ID}": from-clone\n`), 'jane-doe'), ['from-clone', 'from-clone'], 'a clone\'s index wins');
+  assert.deepEqual(await run(null, null), ['oldhandle999', 'oldhandle999'], 'nothing answers: the lowercased login');
 });
 
 test('the extension stores the folder at sign-in and whenever membership is resolved', () => {
@@ -192,13 +192,13 @@ test('the extension stores the folder at sign-in and whenever membership is reso
 // ---- avatars ----
 
 test('a member avatar is addressed by folder and served by account number', () => {
-  assert.equal(memberAvatarUrl('Mike-Conley'), 'https://gbti.network/avatar/mike-conley');
-  assert.equal(memberAvatarUrl('mike-conley', { site: '' }), '/avatar/mike-conley');
+  assert.equal(memberAvatarUrl('Jane-Doe'), 'https://gbti.network/avatar/jane-doe');
+  assert.equal(memberAvatarUrl('jane-doe', { site: '' }), '/avatar/jane-doe');
   assert.equal(memberAvatarUrl('../etc'), '');
   assert.equal(idAvatarUrl(ID), `https://avatars.githubusercontent.com/u/${ID}?s=128&v=4`);
-  assert.equal(idAvatarUrl('mike-conley'), '', 'only a number');
+  assert.equal(idAvatarUrl('jane-doe'), '', 'only a number');
   const rows = memberAvatarRedirects(parseMembersIndex(INDEX));
-  assert.deepEqual(rows.find((r) => r[0] === '/avatar/mike-conley'), ['/avatar/mike-conley', idAvatarUrl(ID), 302]);
+  assert.deepEqual(rows.find((r) => r[0] === '/avatar/jane-doe'), ['/avatar/jane-doe', idAvatarUrl(ID), 302]);
   assert.deepEqual(rows.find((r) => r[0] === '/avatar/gbti'), ['/avatar/gbti', NETWORK_AVATAR, 302]);
   assert.ok(!rows.some((r) => /github\.com\//.test(r[1])), 'no row looks an account up by name');
   assert.ok(rows.every((r) => r[2] === 302), 'never a permanent redirect');
@@ -208,16 +208,16 @@ test('the build writes one avatar row per enrolled member, and refuses an empty 
   const real = avatarRows(new URL('..', import.meta.url).pathname);
   const index = parseMembersIndex(read('house/members-index.yml'));
   assert.ok(real.length >= index.size, `${real.length} rows for ${index.size} members`);
-  const { text } = composeRedirects('# base\n/old /new/ 301\n', [], [], [['/avatar/mike-conley', idAvatarUrl(ID), 302], ['/old', 'https://x', 302]]);
-  assert.match(text, /^\/avatar\/mike-conley https:\/\/avatars\.githubusercontent\.com\/u\/113307118\?s=128&v=4 302$/m);
+  const { text } = composeRedirects('# base\n/old /new/ 301\n', [], [], [['/avatar/jane-doe', idAvatarUrl(ID), 302], ['/old', 'https://x', 302]]);
+  assert.match(text, /^\/avatar\/jane-doe https:\/\/avatars\.githubusercontent\.com\/u\/900000001\?s=128&v=4 302$/m);
   assert.doesNotMatch(text, /^\/old https:\/\/x/m, 'a path the committed file claims keeps its rule');
 });
 
 test('the blobatar is the same creature for the same name, a different one for another, and costs no request', () => {
-  const a = memberBlob('mike-conley');
+  const a = memberBlob('jane-doe');
   assert.match(a, /^data:image\/svg\+xml,/);
-  assert.equal(memberBlob('mike-conley'), a);
-  assert.equal(memberBlob('  Mike-Conley '), a, 'blobatar trims and lowercases');
+  assert.equal(memberBlob('jane-doe'), a);
+  assert.equal(memberBlob('  Jane-Doe '), a, 'blobatar trims and lowercases');
   assert.notEqual(memberBlob('atwellpub'), a);
   assert.match(memberBlob(''), /^data:image\/svg\+xml,/, 'an empty name still draws something');
 });
@@ -233,13 +233,13 @@ test('the site serves one blobatar file per known member, and inlines one only f
   assert.match(blobSrc('Some Display Name'), /^data:image\/svg\+xml,/);
   // The file and the inline URL are the same drawing (the URL only swaps quote marks and escapes).
   const norm = (x) => x.replace(/"/g, "'");
-  assert.equal(norm(decodeURIComponent(memberBlob('mike-conley').replace('data:image/svg+xml,', ''))), norm(memberBlobSvg('mike-conley')));
+  assert.equal(norm(decodeURIComponent(memberBlob('jane-doe').replace('data:image/svg+xml,', ''))), norm(memberBlobSvg('jane-doe')));
 });
 
 test('a component avatar is the blobatar with the photo on top, and a failed photo is removed', () => {
-  const html = avatarLayers('mike-conley');
-  assert.match(html, /^<img data-blob src="data:image\/svg\+xml,[^"]+" alt="" aria-hidden="true"><img data-avphoto src="https:\/\/gbti\.network\/avatar\/mike-conley" alt="" loading="lazy">$/);
-  assert.doesNotMatch(avatarLayers('mike-conley', ''), /data-avphoto/, 'no photo: only the blobatar');
+  const html = avatarLayers('jane-doe');
+  assert.match(html, /^<img data-blob src="data:image\/svg\+xml,[^"]+" alt="" aria-hidden="true"><img data-avphoto src="https:\/\/gbti\.network\/avatar\/jane-doe" alt="" loading="lazy">$/);
+  assert.doesNotMatch(avatarLayers('jane-doe', ''), /data-avphoto/, 'no photo: only the blobatar');
   assert.match(avatarLayers('x', 'https://a/b?c=1&d="2"'), /src="https:\/\/a\/b\?c=1&amp;d=&quot;2&quot;"/);
   // The listener removes a failed PHOTO only.
   let handler = null;
@@ -277,9 +277,9 @@ test('no avatar surface falls back to a letter disc or builds github.com/<folder
 // ---- the enrollment race ----
 
 test('enrollment appends onto main\'s CURRENT index, so a hand edit merged meanwhile survives', () => {
-  const stale = `members:\n  "${ID}": loraxian666\n`;
-  const main = `members:\n  "${ID}": mike-conley\n  "5": taken\n`;
-  const adds = [{ githubId: '9', folder: 'newbie' }, { githubId: ID, folder: 'loraxian666' }, { githubId: '6', folder: 'taken' }];
+  const stale = `members:\n  "${ID}": oldhandle999\n`;
+  const main = `members:\n  "${ID}": jane-doe\n  "5": taken\n`;
+  const adds = [{ githubId: '9', folder: 'newbie' }, { githubId: ID, folder: 'oldhandle999' }, { githubId: '6', folder: 'taken' }];
   const { text, additions } = freshIndexAdditions(b64(main), adds, () => stale);
   assert.equal(text, main, 'main\'s copy, not the checkout');
   assert.deepEqual(additions, [{ githubId: '9', folder: 'newbie' }], 'an id enrolled meanwhile and a folder taken meanwhile are dropped');
@@ -290,8 +290,8 @@ test('syncEnrollments writes main\'s index plus the new entry, never the stale c
   const root = fs.mkdtempSync(`${process.env.TMPDIR || '/tmp'}/enroll-`);
   fs.mkdirSync(`${root}/house`, { recursive: true });
   fs.mkdirSync(`${root}/members`, { recursive: true });
-  fs.writeFileSync(`${root}/house/members-index.yml`, `members:\n  "${ID}": loraxian666\n`);
-  const main = `members:\n  "${ID}": mike-conley\n`;
+  fs.writeFileSync(`${root}/house/members-index.yml`, `members:\n  "${ID}": oldhandle999\n`);
+  const main = `members:\n  "${ID}": jane-doe\n`;
   let written = null;
   const github = {
     getRef: async () => ({ object: { sha: 's' } }),
@@ -302,10 +302,10 @@ test('syncEnrollments writes main\'s index plus the new entry, never the stale c
     mergePull: async () => ({}),
   };
   const members = [{ githubId: '77', githubLogin: 'newbie', effective: { status: 'paid' }, username: 'newbie' }];
-  const r = await syncEnrollments({ members, overrides: { membersIndex: parseMembersIndex(`members:\n  "${ID}": loraxian666\n`) }, root, github, dryRun: false });
+  const r = await syncEnrollments({ members, overrides: { membersIndex: parseMembersIndex(`members:\n  "${ID}": oldhandle999\n`) }, root, github, dryRun: false });
   assert.equal(r.synced, true);
-  assert.match(written, new RegExp(`"${ID}": mike-conley`), 'the hand edit on main survived');
-  assert.doesNotMatch(written, /loraxian666/);
+  assert.match(written, new RegExp(`"${ID}": jane-doe`), 'the hand edit on main survived');
+  assert.doesNotMatch(written, /oldhandle999/);
   assert.match(written, /"77": newbie/);
   fs.rmSync(root, { recursive: true, force: true });
 });
