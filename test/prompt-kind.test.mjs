@@ -68,3 +68,16 @@ test('sow-109: the site schema requires kind, and a file the authoring tools bui
   assert.match(skill.markdown ?? skill.content ?? '', /\nkind: skill\n/);
   assert.equal(promptSchema.safeParse({ title: 'T', slug: 't', shortDescription: 'd', author: 'a', kind: 'other' }).success, false);
 });
+
+test('sow-109: the content validator stays under the 900-line cap, with the house settings checks in their own file', () => {
+  // sow-109 took scripts/validate-content.mjs past 900 lines. The house/*.yml checks moved, unchanged, to
+  // scripts/lib/validate-house-config.mjs (every function byte-identical, the same output on the real tree and on
+  // broken settings files). This keeps both halves under the cap and keeps the call where the checks always ran.
+  for (const f of ['scripts/validate-content.mjs', 'scripts/lib/validate-house-config.mjs']) {
+    const lines = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n').length;
+    assert.ok(lines <= 900, `${f} is ${lines} lines; the cap is 900`);
+  }
+  const src = fs.readFileSync(path.join(ROOT, 'scripts/validate-content.mjs'), 'utf8');
+  assert.match(src, /^validateHouseConfig\(\{ root: ROOT, errors, aiToolsDoc: AI_TOOLS_DOC, licensesDoc: LICENSES_DOC \}\);$/m);
+  assert.ok(src.indexOf('validateHouseConfig({') < src.lastIndexOf('if (errors.length) {'), 'the settings checks report before the verdict');
+});

@@ -143,7 +143,8 @@ test('sow-408: the closed picker names the group, on screen and to a screen read
 
 test('the closed picker shows a full path, and never drops a value it does not know', () => {
   const tree = { kind: 'tree', nodes: treeNodesFromJson(TREE) };
-  assert.deepEqual(valueDisplay(tree, 'ai/prompts/skill'), { state: 'known', crumbs: ['AI', 'Prompts & Skills'], leaf: 'Skill' });
+  // sow-109 retired ai/prompts/skill (a skill is a kind now, not a category), so a real three-level path stands in.
+  assert.deepEqual(valueDisplay(tree, 'ai/prompts/entertainment'), { state: 'known', crumbs: ['AI', 'Prompts & Skills'], leaf: 'Entertainment' });
   assert.deepEqual(valueDisplay(tree, 'devops/kubernetes'), { state: 'unknown', crumbs: [], leaf: `devops${PATH_SEP}kubernetes` });
   assert.deepEqual(valueDisplay(null, 'ai/llms'), { state: 'loading', crumbs: [], leaf: `ai${PATH_SEP}llms` }, 'not "unknown" while loading');
   assert.equal(valueDisplay(tree, '').state, 'empty');
@@ -192,9 +193,9 @@ test('the element takes a path for the tree and a key for topics, and knows what
 // ---- the editor field ----
 
 test('the editor field keeps the stored shape: the picker plus the comma-joined hidden input gather() reads', () => {
-  const html = categoryFieldHtml(['ai', 'prompts', 'skill']);
-  assert.match(html, /<gbti-category-picker vocab="tree" data-cat-picker value="ai\/prompts\/skill"><\/gbti-category-picker>/);
-  assert.match(html, /<input data-key="categories" data-kind="array" type="hidden" value="ai, prompts, skill" \/>/);
+  const html = categoryFieldHtml(['ai', 'prompts', 'entertainment']);
+  assert.match(html, /<gbti-category-picker vocab="tree" data-cat-picker value="ai\/prompts\/entertainment"><\/gbti-category-picker>/);
+  assert.match(html, /<input data-key="categories" data-kind="array" type="hidden" value="ai, prompts, entertainment" \/>/);
   assert.match(categoryFieldHtml(['a"b']), /value="a&quot;b"/, 'escaped');
   assert.match(categoryFieldHtml([]), /value="" \/>$/);
 });

@@ -9,6 +9,7 @@ import { commentThreadCount } from '../../lib/comments';
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
 import { favoriteCount } from '../../lib/favorites';
+import { KIND_LABEL } from '../../../membership/prompt-kind.mjs'; // sow-109: PROMPT or SKILL on every card
 
 // "GBTI AI Prompts" design (handoff bundle): a unified prompt card that renders as a vertical card by default
 // (homepage / member / Latest / grid view) and as a single-row layout in the directory's Compact view.
@@ -42,13 +43,14 @@ const shownTags = tags.slice(0, 2);
 const moreTags = tags.length - shownTags.length;
 
 // Lowercased haystack so the sidebar search can match title, summary, tags, targets, and author.
-const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.targets ?? []), d.author]
+const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.targets ?? []), d.author, d.kind]
   .filter(Boolean)
   .join(' ')
   .toLowerCase();
 ---
 <article
   data-category={topSeg}
+  data-kind={d.kind}
   data-ts={(d.publishedAt ?? d.updatedAt)?.valueOf() ?? 0}
   data-title={d.title}
   data-cats={d.categories.join(' ')}
@@ -68,6 +70,7 @@ const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.tar
   <div class="va-mid">
     <h2 class="va-title"><a href={`/prompts/${d.slug}/`} class="link-title">{d.title}</a></h2>
     <div class="va-sub">
+      <span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span>
       {/* sow-287: filter by the category the chip names. The prompts list accepts any key in a card's data-cats. */}
       <a href={`/prompts/?cat=${encodeURIComponent(leafKey(d.categories))}`} class="kbadge"><span class="dot"></span>{leafLabel(d.categories)}</a>
       {model && <a href={`/prompts/?target=${encodeURIComponent(model)}`} class="mchip"><span class="md"></span>{model}</a>}

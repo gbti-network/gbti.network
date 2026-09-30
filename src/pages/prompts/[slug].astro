@@ -28,6 +28,9 @@ import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rena
 import ApprovePill from '../../components/ApprovePill.astro'; // sow-323: the superadmin approval, beside Edit
 import SyndicateNow from '../../components/SyndicateNow.astro'; // sow-399: Manually syndicate, superadmin only (moved from the extension)
 import { resolveThumb } from '../../lib/index-thumb'; // sow-399: the same image the extension reader sent
+import { skillFileOf, skillInstallTabs } from '../../lib/skill-install'; // sow-109: a skill's own file and its install steps
+import { buildSkillInstallHtml, buildSkillFileHtml } from '../../lib/skill-page.mjs';
+import { KIND_LABEL } from '../../../membership/prompt-kind.mjs';
 
 export async function getStaticPaths() {
   const prompts = (await getCollection('prompt')).filter(hasPublicPage);
@@ -56,6 +59,15 @@ const authorPublic = byAuthor.filter(isPublic).length;
 const authorStubs = byAuthor.filter(isStub).length;
 const crumbs = breadcrumb(d.categories);
 const stub = isStub(prompt); // sow-323 Phase 3: a members-only prompt page asks search engines to skip it
+
+// sow-109: a public skill shows how to install it, then the author's own text, then the skill file. A members-only
+// skill keeps the prompt layout, because its file is inside the encrypted body until it has one of its own.
+const isSkill = d.kind === 'skill';
+const skillFile = isSkill && !stub ? skillFileOf(prompt) : null;
+const install = skillFile ? skillInstallTabs(d.targets ?? [], skillFile.name) : { tabs: [], without: [] };
+const installHtml = skillFile ? buildSkillInstallHtml({ ...install, fileHref: `/prompts/${d.slug}/SKILL.md` }) : '';
+const skillFileHtml = skillFile ? buildSkillFileHtml({ text: skillFile.text }) : '';
+const skillView = !!skillFile;
 
 // SOW-014: pricing badge + Resources links (public live, member-only inert/locked).
 const paid = d.pricing && d.pricing !== 'free';
@@ -102,6 +114,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
         <h1 data-gbti-region="title" class="h1 mt12">{d.title}</h1>
         <div class="mt16 flex items-center g12 wrap-w">
           <ContentMeta author={d.author} publishedAt={d.publishedAt} />
+          <span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span>
           {paid && <span class="chip chip-green">Paid</span>}
         </div>
         {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch">{d.shortDescription || d.exampleOutput}</p>}
@@ -111,7 +124,8 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
       </header>
 
       <div class="detail-grid mt32">
-        <!-- MAIN: an optional result image, then the prompt enclosed in its own code-style block -->
+        <!-- MAIN: an optional result image, then the prompt enclosed in its own code-style block. A skill shows its
+             install box, the author's text and its skill file instead (sow-109). -->
         <div class="detail-main">
           {d.image && (
             <figure class="prompt-result">
@@ -119,41 +133,58 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
               {imageCaption && <figcaption>{imageCaption}</figcaption>}
             </figure>
           )}
-          {/* sow-016: a Mode B stub MAY carry a public teaser (the body before the members-only marker). It
-              renders here as ordinary prose, ABOVE the prompt block, because .prompt-block forces monospace on
-              its children — right for a prompt, wrong for the paragraphs explaining it. */}
-          {isStub(prompt) && rawBody && <div class="prompt-teaser"><Prose><Content /></Prose></div>}
-          <div class="prompt-block" data-mode="visual">
-            <div class="prompt-block-bar">
-              <span class="prompt-block-label"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-terminal"/></svg>Prompt</span>
-              <div class="prompt-actions">
-                {!isStub(prompt) && (
-                  <div class="prompt-modes" role="group" aria-label="Prompt format">
-                    <button type="button" class="on" data-mode-btn="visual">Visual</button>
-                    <button type="button" data-mode-btn="markdown">Markdown</button>
-                  </div>
-                )}
-                {!isStub(prompt) && <button type="button" data-copy class="btn btn-primary prompt-copy">Copy</button>}
+          {skillView ? (
+            <>
+              <Fragment set:html={installHtml} />
+              <div class="skill-notes" data-gbti-region="body">
+                {d.encryptedBody ? (
+                  <FootnotesLast wrap="prose">
+                    <Content />
+                    <Fragment slot="between"><LockedBody encPath={d.encryptedBody} kind="section" /></Fragment>
+                  </FootnotesLast>
+                ) : <Prose><Content /></Prose>}
               </div>
-            </div>
-            <div class="prompt-body" data-gbti-region="body">
-              {/* Footnotes last (owner, 2026-09-13): a members-only section goes BETWEEN the body and its footnotes. */}
-              {isStub(prompt) ? <LockedBody encPath={d.encryptedBody} kind="body" /> : d.encryptedBody ? (
-                <FootnotesLast wrap="prompt">
-                  <Content />
-                  <Fragment slot="between">
-                    <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
-                    <LockedBody encPath={d.encryptedBody} kind="section" />
-                  </Fragment>
-                </FootnotesLast>
-              ) : (
-                <>
-                  <div class="prompt-view" data-view="visual"><Prose><Content /></Prose></div>
-                  <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
-                </>
-              )}
-            </div>
-          </div>
+              <Fragment set:html={skillFileHtml} />
+            </>
+          ) : (
+            <>
+              {/* sow-016: a Mode B stub MAY carry a public teaser (the body before the members-only marker). It
+                  renders here as ordinary prose, ABOVE the prompt block, because .prompt-block forces monospace on
+                  its children — right for a prompt, wrong for the paragraphs explaining it. */}
+              {isStub(prompt) && rawBody && <div class="prompt-teaser"><Prose><Content /></Prose></div>}
+              <div class="prompt-block" data-mode="visual">
+                <div class="prompt-block-bar">
+                  <span class="prompt-block-label"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-terminal"/></svg>Prompt</span>
+                  <div class="prompt-actions">
+                    {!isStub(prompt) && (
+                      <div class="prompt-modes" role="group" aria-label="Prompt format">
+                        <button type="button" class="on" data-mode-btn="visual">Visual</button>
+                        <button type="button" data-mode-btn="markdown">Markdown</button>
+                      </div>
+                    )}
+                    {!isStub(prompt) && <button type="button" data-copy class="btn btn-primary prompt-copy">Copy</button>}
+                  </div>
+                </div>
+                <div class="prompt-body" data-gbti-region="body">
+                  {/* Footnotes last (owner, 2026-09-13): a members-only section goes BETWEEN the body and its footnotes. */}
+                  {isStub(prompt) ? <LockedBody encPath={d.encryptedBody} kind="body" /> : d.encryptedBody ? (
+                    <FootnotesLast wrap="prompt">
+                      <Content />
+                      <Fragment slot="between">
+                        <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
+                        <LockedBody encPath={d.encryptedBody} kind="section" />
+                      </Fragment>
+                    </FootnotesLast>
+                  ) : (
+                    <>
+                      <div class="prompt-view" data-view="visual"><Prose><Content /></Prose></div>
+                      <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->
@@ -209,7 +240,7 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
 
           {d.targets?.length > 0 && (
             <div class="card" style="padding:22px">
-              <p class="eyebrow">Works with</p>
+              <p class="eyebrow">{isSkill ? 'Made for' : 'Works with'}</p>
               <div class="flex wrap-w g8 mt16">
                 {d.targets.map((t) => <a href={`/prompts/?target=${encodeURIComponent(t)}`} class="chip">{t}</a>)}
               </div>
@@ -306,6 +337,10 @@ const editHref = editPath ? `/workbench/#tab=prompt&edit=${encodeURIComponent(ed
     });
 
     // (Social share copy/Substack handlers now live in the shared ShareRow component.)
+
+    // sow-109: a skill page's tool tabs, its Copy SKILL.md buttons and the show-the-whole-file toggle.
+    import { wireSkillPage } from '../../lib/skill-page.mjs';
+    wireSkillPage(document);
 
     // Visual <-> Markdown toggle for the prompt body.
     document.querySelectorAll<HTMLElement>('.prompt-block').forEach((block) => {

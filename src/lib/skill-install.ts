@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { skillInstallEntries, installTabsFor } from '../../membership/skill-install.mjs';
+import { skillInstallEntries, installTabsFor, skillNameFrom } from '../../membership/skill-install.mjs';
 import { aiToolEntries } from '../../membership/ai-tools.mjs';
 
 let cache: { doc: unknown; aiToolsDoc: unknown } | null = null;
@@ -28,4 +28,16 @@ export function skillInstallTools() {
   const { doc, aiToolsDoc } = load();
   const labels = new Map(aiToolEntries(aiToolsDoc).map((t: { key: string; label: string }) => [t.key, t.label]));
   return skillInstallEntries(doc).map((e: { key: string; folder: string; run: string; local: string }) => ({ ...e, label: labels.get(e.key) ?? e.key }));
+}
+
+/**
+ * A skill's own file, SKILL.md beside its index.md, with the name it declares. Null when there is none, which is
+ * the case for every prompt and for a members-only skill (its file never sits in the repository as plain text).
+ */
+export function skillFileOf(entry: { filePath?: string }): { text: string; name: string } | null {
+  if (!entry.filePath) return null;
+  const file = path.resolve(process.cwd(), path.dirname(entry.filePath), 'SKILL.md');
+  let text: string;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return null; }
+  return { text, name: skillNameFrom(text) };
 }

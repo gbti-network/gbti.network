@@ -61,8 +61,6 @@ tree:
       prompts:
         label: "Prompts & Skills"
         children:
-          skill:
-            label: Skill
           imagegen:
             label: ImageGen
           entertainment:

@@ -10,7 +10,6 @@ targets:
 categories:
   - ai
   - prompts
-  - skill
 tags:
   - claude-code
   - agent-skills

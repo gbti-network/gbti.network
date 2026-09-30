@@ -43,7 +43,15 @@ export type FeedItem = {
   cover: string | null; // wide feed cover (only when the item has a real image)
   srcDomain?: string; // share: the shared link's hostname
   read?: number; // article: minutes
+  // sow-109: a prompt item is a prompt or a skill, and its card says which. A separate field, because `kind` is
+  // what the feed's type filters and the favorites keys narrow on, and a skill is still a 'prompt' to both.
+  promptKind?: 'prompt' | 'skill';
 };
+
+/** sow-109: the type word a card shows: "skill" for a skill, otherwise the item's kind. */
+export function typeWord(it: Pick<FeedItem, 'kind' | 'promptKind'>): string {
+  return it.kind === 'prompt' && it.promptKind === 'skill' ? 'skill' : it.kind;
+}
 
 async function contentItem(entry: any, kind: 'article' | 'project' | 'prompt', comments: CollectionEntry<'comment'>[]): Promise<FeedItem> {
   const d = entry.data;
@@ -71,6 +79,7 @@ async function contentItem(entry: any, kind: 'article' | 'project' | 'prompt', c
     thumb: thumbs.thumb,
     cover: hasImage ? thumbs.thumbCard : null,
     read: kind === 'article' ? readMinutes(entry.body) : undefined,
+    promptKind: kind === 'prompt' ? d.kind : undefined,
   };
 }
 

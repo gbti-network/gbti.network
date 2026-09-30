@@ -2,6 +2,8 @@
 /* The GBTI V3 design system (tokens + components + light/dark theme). Loaded globally so every page
    shares the homepage's design language. SOW-010 site redesign v2. */
 @import "./gbti-v3.css";
+/* sow-109: the PROMPT / SKILL labels and a skill page's install box (its own file: gbti-v3.css is past 900 lines). */
+@import "./prompt-kind.css";
 
 /* Tailwind v4 CSS-first tokens, mapped to the V3 brand so any Tailwind utility (bg-brand, text-ink,
    font-sans, ...) resolves to a V3 value. The V3 custom properties in gbti-v3.css (--green, --fg,

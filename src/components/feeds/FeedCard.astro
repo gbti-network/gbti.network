@@ -10,7 +10,7 @@ import { authorDisplay } from '../../lib/authors';
 import { profileHref } from '../../lib/profile-pages'; // sow-362: undefined when the member has no page yet
 import { authorItem } from '../../lib/avatars';
 import type { AvatarIndex } from '../../lib/avatars';
-import type { FeedItem } from '../../lib/feed-items';
+import { typeWord, type FeedItem } from '../../lib/feed-items';
 import { relativeTime } from '../../lib/home-feed.mjs';
 import { catsAttr } from '../../lib/feed-filter.mjs';
 
@@ -22,7 +22,7 @@ interface Props {
   eager?: boolean;
 }
 const { it, avatarIndex, now: NOW, eager = false } = Astro.props;
-const kindLabel: Record<string, string> = { article: 'article', project: 'project', prompt: 'prompt' };
+const kindLabel: Record<string, string> = { article: 'article', project: 'project', prompt: 'prompt', skill: 'skill' };
 const tagsAttr = (x: FeedItem) => (x.tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
 // sow-174: every segment of the category path, so a breadcrumb at any depth can drill down here.
 // sow-382: the share's TOPIC key rides in the same token list as the content taxonomy segments, which is
@@ -48,7 +48,7 @@ const catsOf = (x: FeedItem) => catsAttr([...(x.categories ?? []), ...(x.categor
         <span class="tmeta"><a class="who" href={profileHref(it.author)}>{authorDisplay(it.author)}</a><span class="dotsep"></span>{relativeTime(it.date, NOW)}</span>
         {it.kind === 'share'
           ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
-          : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}
+          : <span class={`kind-tag kt-${typeWord(it)}`}>{kindLabel[typeWord(it)]}</span>}
         {/* sow-382: the category, beside the type, and it FILTERS. It goes to /feeds/?cat= rather than
             filtering in place, which is where the homepage trending tags already go and the only place the
             drilldown is implemented. sow-381 shipped this as plain text because a share carried no taxonomy

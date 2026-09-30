@@ -11,6 +11,7 @@ import { favoriteCount } from '../../lib/favorites';
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
 import CollectionButton from '../CollectionButton.astro';
+import { KIND_LABEL } from '../../../membership/prompt-kind.mjs'; // sow-109: PROMPT or SKILL
 
 interface Props {
   prompt: CollectionEntry<'prompt'>;
@@ -49,10 +50,11 @@ const avatar = authorAvatar(d.author, profile?.avatar);
   </a>
   <div class="hp-main">
     <div class="hp-metarow">
+      <span class={`kind-badge kind-${d.kind}`}><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href={`#ico-kind-${d.kind}`}/></svg>{KIND_LABEL[d.kind]}</span>
       <a class="hp-kind" href={`/prompts/?cat=${encodeURIComponent(leafKey(d.categories))}`}>{leafLabel(d.categories)}</a>
       {models.length > 0 && (
         <span class="hp-runs">
-          <span class="hp-runs-l">Runs on</span>
+          <span class="hp-runs-l">{d.kind === 'skill' ? 'Made for' : 'Runs on'}</span>
           {models.map((m) => <a class="hp-model" href={`/prompts/?target=${encodeURIComponent(m)}`}>{m}</a>)}
         </span>
       )}

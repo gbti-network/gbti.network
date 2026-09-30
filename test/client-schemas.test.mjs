@@ -34,7 +34,8 @@ function typeOf(rel) {
   if (/(^|\/)profile\.md$/.test(rel)) return 'profile';
   if (/\/posts\//.test(rel)) return 'post';
   if (/\/projects\//.test(rel)) return 'project';
-  if (/\/prompts\//.test(rel)) return 'prompt';
+  // sow-109: a skill's sibling SKILL.md is the skill file, not a prompt item; only a prompt folder's index.md is one.
+  if (/\/prompts\//.test(rel)) return /\/SKILL\.md$/.test(rel) ? null : 'prompt';
   return null;
 }
 

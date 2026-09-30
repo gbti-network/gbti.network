@@ -26,7 +26,7 @@ import { getCollection } from 'astro:content';
 import { isDiscoverable, byNewest } from '../lib/content'; // sow-189: stale items leave the homepage
 import { authorDisplay } from '../lib/authors';
 import { profileHref } from '../lib/profile-pages'; // sow-362: undefined when the member has no page yet
-import { loadFeedItems } from '../lib/feed-items';
+import { loadFeedItems, typeWord } from '../lib/feed-items';
 import { sortByNewest, rankNewAndPopular, aggregateTags, feedCounts, commitsHeatGrid } from '../lib/home-feed.mjs';
 import { commitsByDate, commitCount } from '../lib/git-history';
 import { loadShoptalk, shoptalkWhen, shoptalkTimeShort } from '../lib/shoptalk';
@@ -230,7 +230,7 @@ const SHOPTALK = {
                 {it.thumb && <img class="pop-thumb" src={it.thumb} alt="" loading="lazy" decoding="async" />}
                 <div class="pop-info">
                   <div class="pop-title">{it.title}</div>
-                  <div class="pop-meta"><span class={`kind-tag kt-${it.kind}`}><svg class="kt-ico" viewBox="0 0 24 24" aria-hidden="true"><use href={`#${contentIcon(it.kind)}`}/></svg>{it.kind}</span><span class="pop-by"><Avatar item={authorItem(it.author, avatarIndex)} size={18} class="pop-av" />{authorDisplay(it.author)}</span></div>
+                  <div class="pop-meta"><span class={`kind-tag kt-${typeWord(it)}`}><svg class="kt-ico" viewBox="0 0 24 24" aria-hidden="true"><use href={`#${contentIcon(typeWord(it))}`}/></svg>{typeWord(it)}</span><span class="pop-by"><Avatar item={authorItem(it.author, avatarIndex)} size={18} class="pop-av" />{authorDisplay(it.author)}</span></div>
                 </div>
               </a>
             ))}

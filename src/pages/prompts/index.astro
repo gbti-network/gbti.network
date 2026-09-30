@@ -17,6 +17,8 @@ const membersPrompts = (await getCollection('prompt')).filter(isMembersOnlyListe
 const allPrompts = [...prompts, ...membersPrompts];
 const categories = topLevelCategories(allPrompts.map((p) => p.data.categories));
 const targets = [...new Set(allPrompts.flatMap((p) => p.data.targets ?? []))].sort((a, b) => a.localeCompare(b));
+// sow-109: how many of each kind, for the All / Prompts / Skills control. Public ones only, like the count beside it.
+const kindCounts = { all: prompts.length, prompt: prompts.filter((p) => p.data.kind === 'prompt').length, skill: prompts.filter((p) => p.data.kind === 'skill').length };
 
 // Label lookups for the deep-link filter banner (?cat= / ?tag= / ?author=), so the banner reads nicely.
 const profiles = await getCollection('profile');
@@ -36,7 +38,12 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
       <div id="default-hero" class="sec-head center">
         <p class="eyebrow">AI prompt directory</p>
         <h1 class="h1 mt12">Prompts & Skills</h1>
-        <p class="lead">Reusable AI prompts shared by the network for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others.</p>
+        <p class="lead">Reusable AI prompts and agent skills shared by the network for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others.</p>
+        {/* sow-109: what the two labels mean, once, where a reader first meets them. */}
+        <div class="kind-legend">
+          <span><span class="kind-badge kind-prompt"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href="#ico-kind-prompt"/></svg>Prompt</span>Text you copy into an AI tool.</span>
+          <span><span class="kind-badge kind-skill"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><use href="#ico-kind-skill"/></svg>Skill</span>A file you install once. Your agent gains a new command.</span>
+        </div>
       </div>
 
       {/* Author hero: replaces the default hero when the directory is filtered to one member (?author=).
@@ -56,7 +63,7 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
       {/* sow-177: the one search field, under whichever hero is showing (the author hero replaces the default one),
           so it is never duplicated and never disappears when the directory is filtered to a member. Same id, so the
           filter script and the ?tag= deep link that writes into it are untouched. */}
-      {prompts.length > 0 && <DirectorySearch id="prompt-search" placeholder="Search prompts" label="Search prompts" />}
+      {prompts.length > 0 && <DirectorySearch id="prompt-search" placeholder="Search prompts and skills" label="Search prompts and skills" />}
 
       {prompts.length > 0 ? (
         <>
@@ -72,9 +79,9 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
 
             {targets.length > 0 && (
               <div class="ps-group">
-                <p class="ps-label">Models</p>
-                <ul class="ps-list" aria-label="Filter by model (select any number)">
-                  <li><button type="button" class="ps-item on" aria-pressed="true" data-filter="target" data-val="all">All models</button></li>
+                <p class="ps-label">Works with</p>
+                <ul class="ps-list" aria-label="Filter by tool (select any number)">
+                  <li><button type="button" class="ps-item on" aria-pressed="true" data-filter="target" data-val="all">Everything</button></li>
                   {targets.map((t) => <li><button type="button" class="ps-item" aria-pressed="false" data-filter="target" data-val={t}>{t}</button></li>)}
                 </ul>
               </div>
@@ -93,6 +100,12 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
           <div class="prompts-main">
             <div class="prompts-toolbar">
               <div class="ptb-left">
+                {/* sow-109: prompts, skills, or both. One choice at a time, unlike the sidebar facets. */}
+                <div class="kind-switch" role="group" aria-label="Show prompts, skills or both">
+                  <button type="button" class="on" aria-pressed="true" data-kind-val="all">All <span class="ks-n">{kindCounts.all}</span></button>
+                  <button type="button" aria-pressed="false" data-kind-val="prompt"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><use href="#ico-kind-prompt"/></svg>Prompts <span class="ks-n">{kindCounts.prompt}</span></button>
+                  <button type="button" aria-pressed="false" data-kind-val="skill"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><use href="#ico-kind-skill"/></svg>Skills <span class="ks-n">{kindCounts.skill}</span></button>
+                </div>
                 <span class="body-sm muted" id="prompt-count"></span>
                 {/* sow-174: shows when a deep-linked sub-category (leaf) crumb filters the list but has no sidebar button. */}
                 <span id="prompt-catfilter" class="pf-chip" hidden data-cat-labels={JSON.stringify(catLabels)}></span>
@@ -120,7 +133,7 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
               <MembersOnlyCards items="[data-category]" order="title" key="data-title">{membersPrompts.map((p) => <PromptCard prompt={p} />)}</MembersOnlyCards>
             </div>
             <nav id="prompt-pages" class="ppage" aria-label="Prompt directory pages" hidden></nav>
-            <p id="prompt-empty" class="body muted tcenter" hidden style="margin-top:24px">No prompts match this filter yet.</p>
+            <p id="prompt-empty" class="body muted tcenter" hidden style="margin-top:24px">Nothing matches this filter yet.</p>
           </div>
         </div>
 
@@ -216,6 +229,14 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
     .vt-btn + .vt-btn { border-left: 1px solid var(--line); }
     .vt-btn:hover { color: var(--fg); }
     .vt-btn.on { background: var(--green); color: #fff; }
+    /* sow-109: the All / Prompts / Skills switch, and the legend under the hero. */
+    .kind-switch { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); }
+    .kind-switch button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; width: auto; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-soft); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .kind-switch button:hover { background: var(--tint); color: var(--fg); }
+    .kind-switch button.on { background: var(--green); color: #fff; }
+    .kind-switch .ks-n { font-family: var(--f-mono); font-size: 11.5px; opacity: .75; }
+    .kind-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 28px; margin-top: 16px; font-size: 14.5px; color: var(--fg-soft); }
+    .kind-legend > span { display: inline-flex; align-items: center; gap: 10px; text-align: left; }
 
     /* Grid view: two columns of vertical cards. */
     #prompt-grid[data-view="grid"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -293,11 +314,13 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
       var targetItems = Array.prototype.slice.call(document.querySelectorAll('.ps-item[data-filter="target"]'));
       var visItems = Array.prototype.slice.call(document.querySelectorAll('.ps-item[data-filter="vis"]'));
       var viewBtns = Array.prototype.slice.call(document.querySelectorAll('.vt-btn'));
+      var kindBtns = Array.prototype.slice.call(document.querySelectorAll('[data-kind-val]'));
       var pageSizeEl = document.getElementById('prompt-pagesize');
       var pagesEl = document.getElementById('prompt-pages');
 
       // Multi-select facets: an object used as a set of chosen values. Empty = no restriction (all).
       var cats = {}, targets = {}, vis = {}, search = '', authorFilter = '';
+      var kind = 'all'; // sow-109: 'all' | 'prompt' | 'skill', one at a time
       var pageSize = 25, page = 0; // directory pagination: 25 default, up to 100
       function keys(o) { return Object.keys(o).filter(function (k) { return o[k]; }); }
 
@@ -308,6 +331,7 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
         cards.forEach(function (c) {
           var show = true;
           if (authorFilter) show = c.getAttribute('data-author') === authorFilter; // exact author match
+          if (show && kind !== 'all') show = c.getAttribute('data-kind') === kind;
           if (show && selCats.length) {
             var dc = (c.getAttribute('data-cats') || '').split(' ');
             show = selCats.some(function (k) { return dc.indexOf(k) !== -1; }); // OR within the facet
@@ -327,7 +351,8 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
         var start = page * pageSize, end = start + pageSize;
         cards.forEach(function (c) { c.style.display = 'none'; });
         matched.forEach(function (c, i) { if (i >= start && i < end) c.style.display = ''; });
-        if (countEl) countEl.textContent = matched.length + (matched.length === 1 ? ' prompt' : ' prompts');
+        var noun = kind === 'skill' ? ['skill', 'skills'] : kind === 'prompt' ? ['prompt', 'prompts'] : ['item', 'prompts and skills'];
+        if (countEl) countEl.textContent = matched.length + ' ' + (matched.length === 1 ? noun[0] : noun[1]);
         if (emptyEl) emptyEl.hidden = matched.length !== 0;
         renderPages(pages);
       }
@@ -381,6 +406,27 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
       wire(targetItems, targets);
       wire(visItems, vis);
 
+      // sow-109: the kind switch. It writes ?kind= into the address, so a filtered view can be shared.
+      function setKind(k, write) {
+        kind = k === 'prompt' || k === 'skill' ? k : 'all';
+        kindBtns.forEach(function (b) {
+          var on = b.getAttribute('data-kind-val') === kind;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (write) {
+          try {
+            var u = new URLSearchParams(location.search);
+            if (kind === 'all') u.delete('kind'); else u.set('kind', kind);
+            var q = u.toString();
+            history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+          } catch (e) { /* no history API: the filter still applies */ }
+        }
+      }
+      kindBtns.forEach(function (b) {
+        b.addEventListener('click', function () { setKind(b.getAttribute('data-kind-val'), true); page = 0; apply(); });
+      });
+
       if (searchEl) {
         searchEl.addEventListener('input', function () {
           search = searchEl.value.trim().toLowerCase();
@@ -429,6 +475,16 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
       var params = new URLSearchParams(location.search);
       var cat = params.get('cat'), tag = params.get('tag'), author = params.get('author'), target = params.get('target');
       var visParam = params.get('vis');
+      // sow-109: "skill" was a category until kinds existed. An old ?cat=skill link now opens the Skills view,
+      // rather than the "category not found" notice.
+      var kindParam = params.get('kind');
+      if (cat === 'skill') {
+        cat = null; kindParam = 'skill';
+        try {
+          var u0 = new URLSearchParams(location.search); u0.delete('cat'); u0.set('kind', 'skill');
+          history.replaceState(null, '', location.pathname + '?' + u0.toString() + location.hash);
+        } catch (e) { /* no history API: the view still opens on Skills */ }
+      }
       // sow-174: a breadcrumb can deep-link a SUB-category (leaf) key like ?cat=skill that has no sidebar
       // button (the sidebar is top-level only). The filter engine already matches any key in a card's
       // data-cats, so accept any ?cat= that is PRESENT IN THE DATA, not only keys that have a button. A
@@ -477,6 +533,7 @@ const authorsMeta = Object.fromEntries([...new Set(allPrompts.map((p) => p.data.
         showMissingCat(); // an unknown category: everything stays visible, and the page says why
       }
       if (target && targetItems.some(function (b) { return b.getAttribute('data-val') === target; })) targets[target] = true;
+      if (kindParam) setKind(kindParam, false);
       // 'all' never enters the store (the All button works by EMPTYING it; a stored 'all' matches no card).
       if (visParam && visParam !== 'all' && visItems.some(function (b) { return b.getAttribute('data-val') === visParam; })) vis[visParam] = true;
       if (tag && searchEl) { searchEl.value = tag; search = tag.trim().toLowerCase(); }
