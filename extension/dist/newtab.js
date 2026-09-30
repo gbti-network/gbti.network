@@ -10784,7 +10784,7 @@ ${listStyleProseCss(".doc-blocks")}
           const rows = Array.isArray(b.rows) ? b.rows : [];
           const cols = Math.max(1, head.length);
           const alignStyle = (c) => aligns[c] ? ` style="text-align:${aligns[c]}"` : "";
-          const alignLabel = (c) => ({ "": "–", left: "L", center: "C", right: "R" })[aligns[c] || ""];
+          const alignLabel = (c) => ({ "": "None", left: "L", center: "C", right: "R" })[aligns[c] || ""];
           const cell = (r, c, v2) => `<div class="tc" contenteditable="true" data-edit="cell" data-id="${b._id}" data-r="${r}" data-c="${c}" data-ph="">${inlineMdToHtml(v2 || "")}</div>`;
           const headCells = Array.from({ length: cols }, (_, c) => `<th${alignStyle(c)}>${cell(-1, c, head[c])}<div class="th-ctl"><button type="button" class="tbtn" data-talign="${b._id}" data-c="${c}" title="Cycle column alignment">${alignLabel(c)}</button><button type="button" class="tbtn del" data-tcolrm="${b._id}" data-c="${c}" title="Delete this column">${svg2("x")}</button></div></th>`).join("");
           const bodyRows = rows.map((row, r) => `<tr>` + Array.from({ length: cols }, (_, c) => `<td${alignStyle(c)}>${cell(r, c, row[c])}</td>`).join("") + `<td class="row-ctl"><button type="button" class="tbtn del" data-trowrm="${b._id}" data-r="${r}" title="Delete this row">${svg2("x")}</button></td></tr>`).join("");
@@ -15219,24 +15219,29 @@ ${listStyleProseCss(".doc-blocks")}
      * is on screen with `visibility: public` published the teaser and left the real body encrypted and
      * unreachable. The Worker decrypts it, reassembles the article and commits the whole thing.
      */
+    // Reports through the editor's own chip and banner. It called a `setStatus` that was never defined (sow-293,
+    // 2026-09-03), so the button threw before it asked for the approval and did nothing at all (sow-430).
     async _makePublic() {
       const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
       const req = makePublicRequest(this.itemPath);
       if (!req) {
-        this.setStatus("Save this item first, then it can be approved.", "err");
+        this._banner("Save this item first, then it can be approved.", "warn");
         return;
       }
       if (typeof confirm === "function" && !confirm(makePublicPrompt(title))) return;
-      this.setStatus("Approving...", "");
+      this._setChip("Approving...", "busy");
       try {
         const res = await this.client?.decideEditorial?.(req);
         if (res?.alreadyPublic) {
-          this.setStatus("This item is already public.", "ok");
+          this._setChip("");
+          this._banner("This item is already public.");
           return;
         }
-        this.setStatus("Approved. It is public within a few minutes.", "ok");
+        this._setChip(`${CHECK3} Approved`, "ok");
+        this._banner("Approved. It is public within a few minutes.");
       } catch (err) {
-        this.setStatus(err?.message || "The approval did not go through. Try again in a minute.", "err");
+        this._setChip("");
+        this._banner(esc2(err?.message || "The approval did not go through. Try again in a minute."), "danger");
       }
     }
     /**
@@ -16802,9 +16807,9 @@ ${listStyleProseCss(".doc-blocks")}
           const pu = m.pendingGrant.until ? ` · until ${esc2(String(m.pendingGrant.until).slice(0, 10))}` : "";
           tags.push(`<span class="tag pending" title="Redeemed but not yet recorded in git. Reconcile folds it within a day.">pending${pt2 ? " " + esc2(pt2) : ""}${pc}${pu}</span>`);
         }
-        if (!tags.length) tags.push(`<span class="dash">—</span>`);
+        if (!tags.length) tags.push(`<span class="dash">none</span>`);
         const n = this._counts && m.username ? this._counts[m.username.toLowerCase()] || 0 : null;
-        const content = n == null ? `<span class="dash">—</span>` : esc2(n);
+        const content = n == null ? `<span class="dash">n/a</span>` : esc2(n);
         const manage = canManage ? `<button class="manage${this._managing === m.githubId ? " on" : ""}" type="button" data-manage="${esc2(m.githubId)}">Manage</button>` : "";
         const main = `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${content}</td><td class="id">${esc2(m.githubId)}</td><td class="act-cell">${manage}</td></tr>`;
         const panel = canManage && this._managing === m.githubId ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : "";
@@ -16997,7 +17002,7 @@ ${listStyleProseCss(".doc-blocks")}
       this.render();
       try {
         await this.client.adminOp("category-migrate", { action, from: ps, ...extra, apply: true });
-        this._msg = `Migration triggered (${action} ${ps}). A review-gated PR opens via CI (merge it once content-check is green; it is not auto-merged). A would-orphan remove is refused — see the repo Actions tab. The tree updates after the PR merges.`;
+        this._msg = `Migration triggered (${action} ${ps}). A review-gated PR opens via CI (merge it once content-check is green; it is not auto-merged). A would-orphan remove is refused: see the repo Actions tab. The tree updates after the PR merges.`;
       } catch (err) {
         this._msg = err?.message || "Could not trigger the migration.";
       }
@@ -17443,7 +17448,7 @@ ${listStyleProseCss(".doc-blocks")}
         <div style="min-width:0"><a href="${SITE11}${esc2(it2.url || "")}" target="_blank" rel="noopener">${esc2(it2.title || it2.slug || "")}</a>
         <div class="sub">@${esc2(it2.author || "")}${it2.publishedAt ? ` · ${esc2(relAge(Number(it2.publishedAt), now))}` : ""}</div></div>
       </div>`).join("");
-      const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from}–${pg.to} of ${pg.total}</span>
+      const pager = pg.pages > 1 ? `<div class="cbfoot"><span class="rng">${pg.from} to ${pg.to} of ${pg.total}</span>
         <button class="pgb" type="button" data-cbpage="${pg.page - 1}" ${pg.page === 1 ? "disabled" : ""}>‹</button>
         ${pageWindow2(pg.page, pg.pages).map((n) => n === "…" ? `<span class="dots">…</span>` : `<button class="pgb${n === pg.page ? " on" : ""}" type="button" data-cbpage="${n}">${n}</button>`).join("")}
         <button class="pgb" type="button" data-cbpage="${pg.page + 1}" ${pg.page === pg.pages ? "disabled" : ""}>›</button>
@@ -17611,7 +17616,7 @@ ${listStyleProseCss(".doc-blocks")}
       try {
         const res = await this.client.admin("category-batch", { ops: [...this._pending.values()], descriptions: plan.descriptions });
         this._pending.clear();
-        this._msg = res?.noop ? "Everything in the batch was already applied." : `Published as PR #${res?.prNumber ?? "?"} — the changes reach the site about 2 to 3 minutes after it merges.`;
+        this._msg = res?.noop ? "Everything in the batch was already applied." : `Published as PR #${res?.prNumber ?? "?"}. The changes reach the site about 2 to 3 minutes after it merges.`;
         await this.load();
       } catch (err) {
         this._msg = esc2(err?.message || "The batch could not be opened.");
@@ -17664,7 +17669,7 @@ ${listStyleProseCss(".doc-blocks")}
       ui.querySelector("#mergego")?.addEventListener("click", () => {
         const into = ui.querySelector("#mergesel")?.value || "";
         if (!into) return;
-        this._migrate("merge", { into }, `Merge "${this.labelOf(this._sel)}" into ${into}? Its filed content refiles there, its subcategories move under it, and "${this.labelOf(this._sel)}" is removed — one review-gated migration PR.`);
+        this._migrate("merge", { into }, `Merge "${this.labelOf(this._sel)}" into ${into}? Its filed content refiles there, its subcategories move under it, and "${this.labelOf(this._sel)}" is removed, all in one review-gated migration PR.`);
       });
     }
     _dangerRemove() {
@@ -17842,7 +17847,7 @@ ${listStyleProseCss(".doc-blocks")}
           this._sel = to;
         } else this._sel = null;
         this._action = null;
-        this._note = { cls: "ok", text: res?.noop ? "Nothing carried that tag." : `Published as PR #${res?.prNumber ?? "?"} — live in about 2 to 3 minutes.` };
+        this._note = { cls: "ok", text: res?.noop ? "Nothing carried that tag." : `Published as PR #${res?.prNumber ?? "?"}. Live in about 2 to 3 minutes.` };
         this.render();
       } catch (err) {
         this._note = { cls: "err", text: err?.message || "The tag edit failed." };
@@ -17932,7 +17937,7 @@ ${listStyleProseCss(".doc-blocks")}
       const firstDupe = this._dupes?.[0];
       const dupe = firstDupe && !this._dupeHidden ? `<div class="dupe">
         <span class="dot"></span>
-        <span class="txt"><b>${this._dupes.length} likely duplicate${this._dupes.length === 1 ? "" : "s"}.</b> ${firstDupe.map((r) => `<code>${esc2(r.tag)}</code>`).join(" and ")} read as the same label — consider merging.</span>
+        <span class="txt"><b>${this._dupes.length} likely duplicate${this._dupes.length === 1 ? "" : "s"}.</b> ${firstDupe.map((r) => `<code>${esc2(r.tag)}</code>`).join(" and ")} read as the same label. Consider merging them.</span>
         <button id="reviewdupe" type="button">Review</button>
         <button class="dismiss" id="dismissdupe" type="button">Dismiss</button>
       </div>` : "";
@@ -22603,7 +22608,7 @@ ${SKILL_BOX_CSS}`;
       this.set(this.css(CSS27) + ICONS3 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc2(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
-      <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
+      <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b>, with ${this._mapCount ?? 0} categories mapped.</p>
       ${section}
     </div>`);
       this._wire();

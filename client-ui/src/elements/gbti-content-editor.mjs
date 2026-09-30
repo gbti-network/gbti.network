@@ -1841,19 +1841,23 @@ class GbtiContentEditor extends GbtiElement {
    * is on screen with `visibility: public` published the teaser and left the real body encrypted and
    * unreachable. The Worker decrypts it, reassembles the article and commits the whole thing.
    */
+  // Reports through the editor's own chip and banner. It called a `setStatus` that was never defined (sow-293,
+  // 2026-09-03), so the button threw before it asked for the approval and did nothing at all (sow-430).
   async _makePublic() {
     const title = this.$('input[data-key="title"]')?.value || this.preset?.input?.title;
     const req = makePublicRequest(this.itemPath);
-    if (!req) { this.setStatus('Save this item first, then it can be approved.', 'err'); return; }
+    if (!req) { this._banner('Save this item first, then it can be approved.', 'warn'); return; }
     // eslint-disable-next-line no-alert
     if (typeof confirm === 'function' && !confirm(makePublicPrompt(title))) return;
-    this.setStatus('Approving...', '');
+    this._setChip('Approving...', 'busy');
     try {
       const res = await this.client?.decideEditorial?.(req);
-      if (res?.alreadyPublic) { this.setStatus('This item is already public.', 'ok'); return; }
-      this.setStatus('Approved. It is public within a few minutes.', 'ok');
+      if (res?.alreadyPublic) { this._setChip(''); this._banner('This item is already public.'); return; }
+      this._setChip(`${CHECK} Approved`, 'ok');
+      this._banner('Approved. It is public within a few minutes.');
     } catch (err) {
-      this.setStatus(err?.message || 'The approval did not go through. Try again in a minute.', 'err');
+      this._setChip('');
+      this._banner(esc(err?.message || 'The approval did not go through. Try again in a minute.'), 'danger');
     }
   }
 
