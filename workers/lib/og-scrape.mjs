@@ -74,7 +74,10 @@ function metaMap(html) {
 export function scrapeOgImage(html, baseUrl = '') {
   const m = metaMap(html);
   const raw = m['og:image'] || m['og:image:secure_url'] || m['twitter:image'] || m['twitter:image:src'] || m._linkImg;
-  return absolutize(raw, baseUrl);
+  // The attribute is HTML, so `&amp;` in it is an escaped `&`. Kept raw, a query string such as ClickHouse's
+  // `_next/image?url=...&amp;w=1200` reached the reader as a parameter named `amp;w`, and the image answered 400
+  // (owner report, 2026-09-30: news cards without a picture).
+  return absolutize(decodeHtmlEntities(raw || ''), baseUrl);
 }
 
 // SOW-087: bound the declared-tag hints (a page can claim anything; these only feed a SUGGESTION the member confirms).
@@ -106,7 +109,7 @@ function collectTags(m) {
  */
 export function scrapeOgPreview(html, baseUrl = '') {
   const m = metaMap(html);
-  const image = absolutize(m['og:image'] || m['og:image:secure_url'] || m['twitter:image'] || m['twitter:image:src'] || m._linkImg, baseUrl);
+  const image = absolutize(decodeHtmlEntities(m['og:image'] || m['og:image:secure_url'] || m['twitter:image'] || m['twitter:image:src'] || m._linkImg || ''), baseUrl); // decoded, as in scrapeOgImage
   const title = decodeEntities(m['og:title'] || m['twitter:title'] || m._docTitle);
   const description = decodeEntities(m['og:description'] || m['twitter:description'] || m['description']);
   return { image, title, description, tags: collectTags(m) };

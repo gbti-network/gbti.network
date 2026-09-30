@@ -2,6 +2,7 @@
 
 import { CATEGORIES } from '../config/categories.mjs';
 import { SOURCES } from '../config/sources.mjs';
+import { decodeHtmlEntities } from '../../../../membership/html-entities.mjs';
 
 /** Clamp a user-supplied limit to [1, max], defaulting when absent/invalid. */
 export function clampLimit(raw, def = 50, max = 100) {
@@ -26,7 +27,8 @@ export function publicItem(i) {
     source: i.source,
     title: i.title,
     link: i.link,
-    image: i.image ?? null, // source article image (RSS enclosure/media), or null when the feed carried none
+    // Decoded on the way out as well, for stories stored before the feed reader and the scraper decoded it.
+    image: i.image ? decodeHtmlEntities(i.image) : null, // source article image (RSS enclosure/media or og:image), or null
     summary: i.summary,
     digest: i.digest, // SOW-046 A: the AI-generated one-sentence summary (sow-402: under 150 characters for new items) (absent until analyzed; falls back to summary)
     category: i.category,

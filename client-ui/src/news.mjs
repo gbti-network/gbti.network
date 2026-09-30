@@ -54,7 +54,7 @@ export function newsToItem(n = {}) {
     visibility: 'members',
     // SOW-046 F: the source article's image (RSS enclosure/media:* surfaced by the news worker's /feed). The
     // card-list resolves an absolute URL straight through (resolveAsset), so a news card shows the article image
-    // and falls back to the news glyph when the feed carried none.
+    // and falls back to its category's branded banner (sow-149) when there is none.
     thumb: n.image || n.ogImage || null,
     category: n.category ?? null,
     excerpt: n.digest || n.summary || '', // SOW-046 A: prefer the AI summary; fall back to the feed excerpt

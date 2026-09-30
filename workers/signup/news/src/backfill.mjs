@@ -13,6 +13,11 @@ import { fetchOgImage } from './og-image.mjs';
 
 const DEFAULT_CAP = 12;     // article fetches per run; a separate cron gives this its own 50-subrequest budget
 const FETCH_CONCURRENCY = 4; // polite to publishers + bounds peak CPU
+// Owner report, 2026-09-30: the scraper kept `&amp;` in image addresses and stopped reading a page at 60 KB, so some
+// stories were tried, found nothing usable, and were marked tried for good. A story tried BEFORE the fix, and
+// published within RETRY_DAYS, gets one more attempt; each is marked tried again, so this still converges.
+export const SCRAPER_FIXED_AT = Date.parse('2026-09-30T18:00:00Z') / 1000; // after the old scraper's last hourly run; a few stories may get an extra try
+const RETRY_DAYS = 3;
 
 /** Run `fn` over items with a fixed concurrency limit; preserves order. */
 async function mapLimit(items, limit, fn) {
@@ -41,7 +46,8 @@ export async function backfillImages(env, { now = Math.floor(Date.now() / 1000),
     const picks = [];
     for (const it of shard) {
       if (picked >= cap) break;
-      if (!it.image && it.link && !it.imgTried) { picks.push(it); picked += 1; }
+      const retry = it.imgTried && it.imgTried < SCRAPER_FIXED_AT && (Number(it.publishedAt ?? it.fetchedAt) || 0) > now - RETRY_DAYS * 86400;
+      if (!it.image && it.link && (!it.imgTried || retry)) { picks.push(it); picked += 1; }
     }
     if (picks.length) byDay.set(d, { shard, picks });
   }

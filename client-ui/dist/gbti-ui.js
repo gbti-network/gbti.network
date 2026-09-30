@@ -18315,7 +18315,7 @@ ${BLOCKED_PILL_CSS}
       visibility: "members",
       // SOW-046 F: the source article's image (RSS enclosure/media:* surfaced by the news worker's /feed). The
       // card-list resolves an absolute URL straight through (resolveAsset), so a news card shows the article image
-      // and falls back to the news glyph when the feed carried none.
+      // and falls back to its category's branded banner (sow-149) when there is none.
       thumb: n.image || n.ogImage || null,
       category: n.category ?? null,
       excerpt: n.digest || n.summary || "",
@@ -18462,6 +18462,32 @@ ${BLOCKED_PILL_CSS}
   }
   function typeAccent(type) {
     return TYPE_ACCENT[String(type || "").toLowerCase()] || OTHER_ACCENT;
+  }
+
+  // client-ui/src/news-feature-image.mjs
+  var NEWS_FEATURE_DIR = "/brand/feature/news/";
+  var GENERIC_FEATURE_IMAGE = "/brand/feature/feature-category.png";
+  var NEWS_CATEGORY_SLUGS = Object.freeze([
+    "ai-ml",
+    "web-dev",
+    "frameworks-libraries",
+    "open-source",
+    "security",
+    "devops-cloud",
+    "programming-languages",
+    "hardware",
+    "blockchain",
+    "energy",
+    "business-funding",
+    "other"
+  ]);
+  function newsCategorySlug(name) {
+    return String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+  function newsFeatureImage(category, { base = "" } = {}) {
+    const slug = newsCategorySlug(category);
+    const path = slug && NEWS_CATEGORY_SLUGS.includes(slug) ? `${NEWS_FEATURE_DIR}${slug}.png` : GENERIC_FEATURE_IMAGE;
+    return base ? String(base).replace(/\/$/, "") + path : path;
   }
 
   // client-ui/src/target-slug.mjs
@@ -18684,7 +18710,10 @@ ${BLOCKED_PILL_CSS}
       if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
       const glyph = this.mode === "detailed" ? "" : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
-      const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
+      const banner = lc2(item.type) === "news" ? resolveAsset(newsFeatureImage(item.category)) : null;
+      const src = thumb || banner;
+      const fb = thumb && banner ? ` data-fb="${esc(banner)}"` : "";
+      const img = src ? `<img class="cimg" src="${esc(src)}" alt="" loading="lazy"${fb}>` : "";
       return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
     }
     _chip(item) {
@@ -18759,7 +18788,14 @@ ${BLOCKED_PILL_CSS}
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
-          if (t?.tagName === "IMG" && (t.classList?.contains("cimg") || t.classList?.contains("avimg"))) t.remove();
+          if (t?.tagName !== "IMG" || !(t.classList?.contains("cimg") || t.classList?.contains("avimg"))) return;
+          const fb = t.getAttribute("data-fb");
+          if (fb) {
+            t.removeAttribute("data-fb");
+            t.src = fb;
+            return;
+          }
+          t.remove();
         }, true);
         this._wiredErr = true;
       }

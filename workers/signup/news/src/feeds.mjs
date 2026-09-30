@@ -10,6 +10,7 @@
 
 import { XMLParser } from 'fast-xml-parser';
 import { cutAtWord } from './text-fit.mjs'; // sow-402: shared word-boundary cut
+import { decodeHtmlEntities } from '../../../../membership/html-entities.mjs';
 
 // Shared parser. attributeNamePrefix '@_' so we can read Atom <link href="...">; textNodeName
 // '#text' so element text living alongside attributes is reachable. CDATA is unwrapped to text by default.
@@ -218,7 +219,8 @@ function normalize({ rawGuid, title, link, summary, content, date, image }, sour
     source: sourceId,
     title: cleanTitle,
     link: cleanLink,
-    image: (typeof image === 'string' && image) ? image : null, // source article image (RSS media), or null
+    // Decoded: some feeds escape the `&` inside an image URL (`&#038;`), which then reaches the reader literally.
+    image: (typeof image === 'string' && image) ? decodeHtmlEntities(image).trim() || null : null, // source article image (RSS media), or null
     // sow-402: tidied (sign-offs out, ends on a whole word). Cleaned wider first so the 500 cut lands on a word.
     summary: tidyExcerpt(cleanText(summary ?? content, 2000), 500),
     // TRANSIENT (stripped before persisting in ingest): the fuller article text for AI summarization at ingest.
