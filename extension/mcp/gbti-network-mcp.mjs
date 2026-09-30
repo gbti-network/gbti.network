@@ -18750,6 +18750,14 @@ function mergeRepoDrafts(existing = [], repoItems = [], { type = null } = {}) {
   return rows;
 }
 
+// membership/prompt-kind.mjs
+var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
+var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+function kindForPublish(inputKind, priorKind) {
+  if (inputKind !== void 0 && inputKind !== null && inputKind !== "") return inputKind;
+  return PROMPT_KINDS.includes(priorKind) ? priorKind : void 0;
+}
+
 // client/src/operations-publish.mjs
 var RENAME_URL_BASE = { post: "/articles", project: "/projects", product: "/projects", prompt: "/prompts" };
 var SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
@@ -18870,6 +18878,10 @@ async function publish(ctx2, { type, input, body, title, authorNote, path: path4
       effInput.updatedAt = nowIso;
     } else if (!effInput.publishedAt) {
       effInput.publishedAt = nowIso;
+    }
+    if (type === "prompt") {
+      const k = kindForPublish(effInput.kind, priorFm?.kind);
+      if (k) effInput.kind = k;
     }
   }
   let built;
@@ -19038,6 +19050,7 @@ async function saveDraft(ctx2, { type, input, body, path: path4 } = {}) {
   } catch {
     fm = {};
   }
+  if (built.type === "prompt" && (input?.kind === void 0 || input?.kind === null || input?.kind === "")) delete fm.kind;
   await workerPutDraft({
     draft: {
       type: built.type,

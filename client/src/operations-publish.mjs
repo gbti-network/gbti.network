@@ -9,6 +9,7 @@
 // Split out of operations.mjs, which re-exports the public surface unchanged.
 
 import { buildContentFile, flipContentStatus, buildCommentFile, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
+import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: an edit keeps a skill a skill
 import { SLUG_MAX, SLUG_PATTERN } from '../../membership/item-id.mjs';
 import { isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, MemberContentLockedError, MEMBER_MARKER } from './member-content.mjs';
@@ -243,6 +244,8 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
     } else if (!effInput.publishedAt) {
       effInput.publishedAt = nowIso;              // a new item, or the first publish of a draft
     }
+    // sow-109: a republish that sends no kind keeps the item's own (an existing skill stays a skill).
+    if (type === 'prompt') { const k = kindForPublish(effInput.kind, priorFm?.kind); if (k) effInput.kind = k; }
   }
   let built;
   try {

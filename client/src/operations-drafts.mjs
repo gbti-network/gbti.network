@@ -68,6 +68,9 @@ export async function saveDraft(ctx, { type, input, body, path } = {}) {
   const branch = branchName(built.type, staging ? staging.oldSlug : built.slug);
   let fm = {};
   try { fm = parseContentFile(built.markdown).frontmatter ?? {}; } catch { fm = {}; }
+  // sow-109: the draft records only the kind the author chose. The file builder writes the default (prompt) when none
+  // was sent, and a draft of an existing skill carrying that default would turn it into a prompt when published.
+  if (built.type === 'prompt' && (input?.kind === undefined || input?.kind === null || input?.kind === '')) delete fm.kind;
   await workerPutDraft({
     draft: {
       type: built.type, slug: staging ? staging.oldSlug : built.slug,

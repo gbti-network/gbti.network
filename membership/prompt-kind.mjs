@@ -14,6 +14,17 @@ export const PROMPT_KINDS = Object.freeze(['prompt', 'skill']);
 export const KIND_LABEL = Object.freeze({ prompt: 'Prompt', skill: 'Skill' });
 
 /**
+ * The kind a publish writes: the caller's when it sent one, else the kind the item already has, else undefined (the
+ * schema default, prompt, for a new item). A caller that does not know about kinds (an older client, an agent tool
+ * call without it, the editor before it offered the choice) must never turn an existing skill into a prompt, which
+ * silently takes away its install box while its SKILL.md stays behind.
+ */
+export function kindForPublish(inputKind, priorKind) {
+  if (inputKind !== undefined && inputKind !== null && inputKind !== '') return inputKind;
+  return PROMPT_KINDS.includes(priorKind) ? priorKind : undefined;
+}
+
+/**
  * What is wrong with a prompt item's kind, as plain sentences. Empty means nothing is wrong.
  * A skill must also say which tools it is made for (its `targets`), because its page shows install steps per tool.
  */

@@ -18470,6 +18470,10 @@ async function workerPutDraft({ draft, ...opts }) {
   return call2("POST", { op: "put", draft }, opts);
 }
 
+// membership/prompt-kind.mjs
+var PROMPT_KINDS = Object.freeze(["prompt", "skill"]);
+var KIND_LABEL = Object.freeze({ prompt: "Prompt", skill: "Skill" });
+
 // client/src/operations-publish.mjs
 var SLUG_RE = new RegExp(`^${SLUG_PATTERN}$`);
 function renameOriginOf({ path, username, type }) {
@@ -18539,6 +18543,7 @@ async function saveDraft(ctx, { type, input, body, path } = {}) {
   } catch {
     fm = {};
   }
+  if (built.type === "prompt" && (input?.kind === void 0 || input?.kind === null || input?.kind === "")) delete fm.kind;
   await workerPutDraft({
     draft: {
       type: built.type,

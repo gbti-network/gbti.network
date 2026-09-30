@@ -24,6 +24,7 @@
 // attempt still fails closed server-side.
 
 import { mergeCommentEchoes } from '../../membership/comment-echo.mjs'; // SOW-076 echoes, wired for the website 2026-09-11
+import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: an edit keeps a skill a skill
 import { buildContentFile, buildCommentFile, buildShareFile, shareId as makeShareId, flipContentStatus, parseContentFile, commentId } from '../../client/src/content-ops.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -286,6 +287,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
     const authorChanged = Boolean(origin) && (target.scope !== origin!.scope || target.username !== origin!.username);
     const moved = slugChanged || authorChanged;
     const effInput: any = { ...input };
+    // sow-109: until the editor offered the choice, a re-save of a skill sent no kind and wrote the default, turning
+    // its page into a prompt page while its SKILL.md stayed behind. The item's own kind wins when none is sent.
+    if (type === 'prompt') { const k = kindForPublish(input?.kind, oldFm?.kind); if (k) effInput.kind = k; }
     // The 301 redirect is only meaningful when the public URL actually changed (the slug) -- never for an
     // author-only reassignment (the public URL is type+slug only, unaffected by which folder the file lives in).
     const redirects = mergedRedirectFrom({ oldFm, inputRedirectFrom: input?.redirectFrom, renaming: slugChanged, type, oldSlug: origin?.oldSlug });
