@@ -75,7 +75,8 @@ test('sow-317: the Network scope pins: author filter + chips in the workspace, t
   for (const lit of ['data-author', 'filterByAuthor(content, this._authorFilter)', "authorOf(it)", 'scope="network"', 'Unpublished items across the network']) assert.ok(ws.includes(lit), lit);
   const sl = read('client-ui/src/elements/gbti-share-list.mjs');
   for (const lit of ["getAttribute('scope') === 'network'", 'this.client.networkShares()', 'Network shares']) assert.ok(sl.includes(lit), lit);
-  const web = read('src/lib/workbench-client.ts');
+  // The foreign-path publish lives in workbench-client-publish.ts since the 900-line split; the rest stayed here.
+  const web = read('src/lib/workbench-client.ts') + '\n' + read('src/lib/workbench-client-publish.ts');
   for (const lit of ['isForeignMemberPath(path, user)', "/membership/network-content?type=", "async networkShares()", "removeEnc.startsWith(`members/${owner}/_enc/`)"]) assert.ok(web.includes(lit), lit);
   const worker = read('workers/signup/index.mjs');
   for (const lit of ["'/membership/network-content'", "'/membership/network-shares'"]) assert.ok(worker.includes(lit), lit);

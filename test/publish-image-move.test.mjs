@@ -21,7 +21,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const client = readFileSync(new URL('../src/lib/workbench-client.ts', import.meta.url), 'utf8');
+// The website client was split at the 900-line cap: publish lives in workbench-client-publish.ts and the file reads
+// in workbench-client-transport.ts. Read every module of it as one text, so a pin cannot pass by the text moving
+// to a file this guard does not read, and the read-route count below still covers the whole client.
+const client = ['workbench-client.ts', 'workbench-client-transport.ts', 'workbench-client-publish.ts', 'workbench-client-admin.ts']
+  .map((f) => readFileSync(new URL(`../src/lib/${f}`, import.meta.url), 'utf8')).join('\n');
 const worker = readFileSync(new URL('../workers/signup/github-app.mjs', import.meta.url), 'utf8');
 
 test('publish resolves the ORIGIN images folder by the same rule it resolves the destination', () => {

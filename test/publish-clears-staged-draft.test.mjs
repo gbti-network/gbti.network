@@ -20,19 +20,23 @@ import { fileURLToPath } from 'node:url';
 
 const src = (rel) => fs.readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 const CLIENT = 'src/lib/workbench-client.ts';
+// publish() moved to its own module at the 900-line cap. The four publish pins read that module ALONE, because
+// two of them are ORDER checks inside publish: read beside the client, the first author POST found could be
+// flipStatus's rather than publish's, and the check would pass while measuring the wrong function.
+const PUBLISH = 'src/lib/workbench-client-publish.ts';
 const EDITOR = 'client-ui/src/elements/gbti-content-editor.mjs';
 const WORKSPACE = 'client-ui/src/elements/gbti-workspace.mjs';
 
 // ---------------------------------------------------------------- the record dies on publish
 
 test('publish deletes the KV draft record, which nothing used to do', () => {
-  const s = src(CLIENT);
+  const s = src(PUBLISH);
   const i = s.indexOf('op: \'delete\', type, slug: staleSlug');
   assert.ok(i > 0, 'publish() no longer deletes the published draft record, so the banner becomes immortal again');
 });
 
 test('the draft delete runs AFTER the author POST, never before it', () => {
-  const s = src(CLIENT);
+  const s = src(PUBLISH);
   const post = s.indexOf("const res = await workerPost('/membership/author'");
   const del = s.indexOf("op: 'delete', type, slug: staleSlug");
   assert.ok(post > 0 && del > post,
@@ -40,13 +44,13 @@ test('the draft delete runs AFTER the author POST, never before it', () => {
 });
 
 test('the draft delete cannot fail the publish it follows', () => {
-  const s = src(CLIENT);
+  const s = src(PUBLISH);
   const line = s.split('\n').find((l) => l.includes("op: 'delete', type, slug: staleSlug"));
   assert.match(line, /try \{.*\} catch/, 'an uncaught throw here reports a SUCCESSFUL publish to the author as a failure');
 });
 
 test('a rename sweeps the pre-rename slug too, because both tokens are walked', () => {
-  const s = src(CLIENT);
+  const s = src(PUBLISH);
   const del = s.slice(s.indexOf('for (const token of itemTokens)'), s.indexOf('    return {', s.indexOf('for (const token of itemTokens)')));
   assert.ok(del.includes('itemTokens'), 'the cleanup must iterate itemTokens, which carries the old slug on a rename');
   assert.ok(del.includes('slice(String(type).length + 1)'), 'the slug is taken off the <type>:<slug> token');

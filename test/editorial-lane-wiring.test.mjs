@@ -66,7 +66,8 @@ test('the extension dispatches both verbs', () => {
 });
 
 test('the website client calls the Worker route directly', () => {
-  const src = read('src/lib/workbench-client.ts');
+  // The editorial methods live in workbench-client-admin.ts since the 900-line split; read the client and it together.
+  const src = read('src/lib/workbench-client.ts') + '\n' + read('src/lib/workbench-client-admin.ts');
   assert.match(src, /editorialQueue\(\)/, 'workbench-client: the read is missing');
   assert.match(src, /decideEditorial\(/, 'workbench-client: the decision is missing');
   assert.ok(src.includes(`workerGet('${ROUTE}')`), 'the website read does not name the Worker route');
@@ -92,6 +93,9 @@ test('the retired application lane is gone from every host', () => {
     ['client/src/member-admin-client.mjs', 'the bearer transport still carries it'],
     ['extension/src/ext-dispatch.mjs', 'the extension still dispatches it'],
     ['src/lib/workbench-client.ts', 'the website client still calls it'],
+    ['src/lib/workbench-client-transport.ts', 'the website client transport still calls it'],
+    ['src/lib/workbench-client-publish.ts', 'the website client publish still calls it'],
+    ['src/lib/workbench-client-admin.ts', 'the website client admin methods still call it'],
     ['src/pages/admin.astro', 'the website admin page still shows the tab'],
     ['extension/admin.html', 'the extension admin still shows the tab'],
   ]) {

@@ -98,7 +98,7 @@ test('sow-420: the extension client sends removeNewsItem and restoreNewsItem to 
     { url: '/api/news-item', method: 'POST', body: { action: 'restore', guid: 'g-3' } },
   ]);
   // The website client already had these two names (sow-338); the card calls the same ones on either client.
-  const web = read('src/lib/workbench-client.ts');
+  const web = read('src/lib/workbench-client.ts') + '\n' + read('src/lib/workbench-client-admin.ts'); // admin methods, split out at the 900-line cap
   assert.match(web, /removeNewsItem\(guid/);
   assert.match(web, /restoreNewsItem\(guid/);
 });

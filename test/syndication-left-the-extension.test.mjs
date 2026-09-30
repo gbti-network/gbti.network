@@ -54,7 +54,8 @@ test('the website carries every syndication tool, each for superadmins', () => {
   const btn = read('src/components/SyndicateNow.astro');
   assert.match(btn, /identity\.role === 'superadmin' && readCookie\('gbti_csrf'\)/, 'the button reveals for a superadmin web session only');
 
-  const client = read('src/lib/workbench-client.ts');
+  // The superadmin-only block moved to workbench-client-admin.ts at the 900-line split; read the client and it together.
+  const client = read('src/lib/workbench-client.ts') + '\n' + read('src/lib/workbench-client-admin.ts');
   const superOnly = client.slice(client.indexOf('const channelMapMethods'), client.indexOf('} : {};', client.indexOf('const channelMapMethods')));
   for (const m of ['syndicationQueue', 'approveSyndication', 'cancelSyndication', 'socialQueue', 'socialQueueAction', 'getSyndicateNow', 'syndicateNow']) {
     assert.match(superOnly, new RegExp(`\\b${m}\\(`), `the website client has no ${m} in its superadmin-only methods`);

@@ -191,7 +191,9 @@ test('the Worker judges SKILL.md by its item, never by its own frontmatter', asy
 // ---- the website client ------------------------------------------------------------------------------------------
 
 test('the website publisher runs the same rule, before encrypting, and carries the file through drafts and reads', () => {
-  const w = src('src/lib/workbench-client.ts');
+  // publish moved to its own module at the 900-line cap; drafts and reads stayed in the client. Publish is read
+  // FIRST, so the planMemberFiles found below is publish's own and not a comment's or a share's.
+  const w = src('src/lib/workbench-client-publish.ts') + '\n' + src('src/lib/workbench-client.ts');
   const at = w.indexOf('const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, priorEncryptedSkill: oldFm?.encryptedSkill, moved, skillFile, readFile: readOwnFile, encrypt: encryptViaCookie });');
   assert.ok(at > 0);
   assert.ok(at < w.indexOf('const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });'), 'a refusal costs no encryption');

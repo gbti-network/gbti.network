@@ -20,90 +20,39 @@
 // PUBLISH + superadmin content-authorship REASSIGNMENT (house<->member, member<->member) now write too — the
 // Worker's hosted-authoring endpoint independently re-verifies the caller is superadmin (authorizeSuperadmin,
 // membership-admin.mjs) before accepting a write outside the caller's own folder, so this adapter's own
-// house/authorTarget handling below is UX convenience, not the security boundary; a non-superadmin's stray
+// house/authorTarget handling in publish is UX convenience, not the security boundary; a non-superadmin's stray
 // attempt still fails closed server-side.
+//
+// Split at the 900-line cap (owner ruling 2026-09-30). This file keeps the factory and most of its methods. The
+// Worker fetches live in workbench-client-transport.ts, publish in workbench-client-publish.ts, and the admin,
+// channel-map, invite and editorial methods in workbench-client-admin.ts. The object this factory returns, its
+// method names and their order are unchanged by the split.
 
 import { mergeCommentEchoes } from '../../membership/comment-echo.mjs'; // SOW-076 echoes, wired for the website 2026-09-11
-import { kindForPublish } from '../../membership/prompt-kind.mjs'; // sow-109: an edit keeps a skill a skill
-import { skillFilesForPublish, skillFileBeside } from '../../client/src/skill-file.mjs'; // sow-109: a skill's SKILL.md travels with it
+import { skillFileBeside } from '../../client/src/skill-file.mjs'; // sow-109: a skill's SKILL.md is read back with it
 import { buildContentFile, buildCommentFile, buildShareFile, shareId as makeShareId, flipContentStatus, parseContentFile, commentId } from '../../client/src/content-ops.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { partitionBodyImages, bodyImagesToResolve } from './workbench-client-core.mjs'; // sow-323
 import { coverAfterAuthorMove, redirectAfterAuthorMove } from '../../client-ui/src/share-post-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, resolvePublishedAt, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, draftRecordForEditor, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent, shareMoveDeletions, isForeignMemberPath } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, activityFavoritePayload, activityCollectionItemPayload, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, draftRecordForEditor, base64Bytes, networkContent, shareMoveDeletions } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 import { setContentRef } from '../../client-ui/src/assets.mjs'; // sow-315: pin images to the content commit
+import { WorkbenchClientError, err, readCsrf, createWorkerTransport } from './workbench-client-transport'; // the Worker fetches
+import { TYPE_LABEL, hostedItemId, createPublish } from './workbench-client-publish'; // publish, and the two names flipStatus shares with it
+import { adminMethods } from './workbench-client-admin'; // the admin, channel-map, invite and editorial methods
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
 const TYPE_INDEX: Record<string, string> = { post: 'blog-index.json', project: 'projects-index.json', prompt: 'prompts-index.json' };
-const TYPE_LABEL: Record<string, string> = { post: 'article', project: 'project', prompt: 'prompt', profile: 'profile' };
 // members/<user>/<posts|projects|products|prompts>/<slug>/index.md -> { type, slug }. Mirrors the folder->type mapping.
 const FOLDER_TYPE: Record<string, string> = { posts: 'post', projects: 'project', products: 'project', prompts: 'prompt' };
 const PATH_RE = /^members\/[^/]+\/(posts|projects|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
-
-/** A GbtiClientError-shaped error (code + message) so the editor's failHint reads it exactly like the other hosts. */
-class WorkbenchClientError extends Error {
-  code: string;
-  constructor(code: string, message?: string) {
-    super(message || code);
-    this.name = 'WorkbenchClientError';
-    this.code = code;
-  }
-}
-const err = (code: string, message?: string) => new WorkbenchClientError(code, message);
-
-/** The hosted item id (the branch's last segment; the Worker prefixes it with the verified github_id). Mirrors
- *  hosted-publish.mjs hostedItemId so a re-publish of the same item reuses one branch + PR. */
-function hostedItemId(type: string, slug: string | null): string {
-  return type === 'profile' ? 'profile' : `${type}-${slug}`;
-}
 
 function parseContentPath(path: string): { type: string; slug: string } | null {
   const m = PATH_RE.exec(String(path || ''));
   if (!m) return null;
   return { type: FOLDER_TYPE[m[1]], slug: m[2] };
-}
-
-/** Read the non-HttpOnly gbti_csrf cookie for the double-submit header (mirrors member-signal.ts). */
-function readCsrf(): string | null {
-  if (typeof document === 'undefined') return null;
-  for (const part of document.cookie.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq < 0) continue;
-    if (part.slice(0, eq).trim() === 'gbti_csrf') return part.slice(eq + 1).trim() || null;
-  }
-  return null;
-}
-
-/** Seed the from-the-author intro comment in the SAME publish PR, so the gate's diff-scoped
- *  intro check passes. Deterministic id (intro-<slug>): a re-publish updates the same comment. Mirrors
- *  operations.buildIntroCommentFile. Returns a { path, content } file, or null.
- *  sow-183: `target` is the item's TARGET { scope, username } (house or member), not always the acting caller
- *  -- a superadmin's house item gets a house/comments/ intro, exactly like its content .md. `actingUser` is
- *  ALWAYS the verified caller's own login (buildCommentFile requires a non-empty username even for scope
- *  'house', where it is inert actor context only -- resolveTarget's house branch ignores it for the frontmatter
- *  author, which is always 'gbti'). */
-function buildIntroFile(target: { scope: string; username: string | null }, actingUser: string, built: any, authorNote: string | undefined): { path: string; content: string } | null {
-  const note = String(authorNote ?? '').trim();
-  if (!note || !built?.slug || !AUTHOR_NOTE_TYPES.has(built.type)) return null;
-  const intro = buildCommentFile({
-    username: target.scope === 'house' ? actingUser : target.username,
-    scope: target.scope,
-    input: {
-      id: `intro-${built.slug}`,
-      targetType: built.type,
-      targetSlug: built.slug,
-      createdAt: new Date().toISOString(),
-      status: 'published',
-      visibility: 'public',
-      authorNote: true,
-    },
-    body: note,
-  });
-  return { path: intro.path, content: intro.markdown };
 }
 
 /** Map one KV draft record ({ type, slug, path, frontmatter, body, updatedAt }) to the workspace's list-item
@@ -175,302 +124,13 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
     }
   }
 
-  async function parseJson(res: Response) {
-    let json: any = null;
-    try { json = await res.json(); } catch { json = null; }
-    if (!res.ok) throw new WorkbenchClientError(json?.error || `http-${res.status}`, json?.message || json?.error || `request failed (${res.status})`);
-    return json;
-  }
-  // Worker GET over the cookie session (credentials ride the httpOnly gbti_session; no token, no CSRF on GET).
-  async function workerGet(path: string) {
-    return parseJson(await fetch(base + path, { credentials: 'include' }));
-  }
-  // Worker POST over the cookie session: credentials + the double-submit X-GBTI-CSRF header (resolveIdentity gates).
-  async function workerPost(path: string, body: unknown) {
-    const csrf = readCsrf();
-    return parseJson(await fetch(base + path, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-GBTI-CSRF': csrf } : {}) },
-      body: JSON.stringify(body),
-    }));
-  }
-  // sow-231 Phase 3: the same cookie-session + CSRF treatment as workerPost, for the invite PATCH route.
-  // Written as its own helper rather than a `method` parameter on workerPost so an existing POST caller
-  // cannot acquire a method by accident.
-  async function workerPatch(path: string, body: unknown) {
-    const csrf = readCsrf();
-    return parseJson(await fetch(base + path, {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-GBTI-CSRF': csrf } : {}) },
-      body: JSON.stringify(body),
-    }));
-  }
-  // sow-158 News: a status-aware GET for the news read routes. <gbti-news> drives its view from the ERROR CODE
-  // (not-authenticated -> sign-in nudge, membership-required -> locked nudge, else the feed), so map the HTTP
-  // status to those codes (mirrors operations.mapNewsErr). A signed-in member gets 200 -> the feed renders.
-  async function newsGet(path: string) {
-    const res = await fetch(base + path, { credentials: 'include' });
-    if (res.status === 401) throw err('not-authenticated', 'Sign in to read the news.');
-    if (res.status === 403) throw err('membership-required', 'News is a members-only perk.');
-    return parseJson(res);
-  }
-  // A same-origin build-artifact index JSON (public, no credentials needed).
-  async function sameOriginJson(path: string) {
-    const res = await fetch(path, { credentials: 'same-origin' });
-    if (!res.ok) throw err(`http-${res.status}`, `could not load ${path}`);
-    return res.json();
-  }
+  // The Worker transport (workbench-client-transport.ts): the cookie-session GET/POST/PATCH, the news GET, the
+  // same-origin index read, and the two own-file reads, all bound to this client's Worker origin.
+  const { workerGet, workerPost, workerPatch, newsGet, sameOriginJson, readOwnFile, readOwnFileBase64 } = createWorkerTransport(base);
 
-  async function readOwnFile(path: string): Promise<string | null> {
-    const r = await workerGet(`/membership/file?path=${encodeURIComponent(path)}&ref=main`);
-    return r?.text ?? null;
-  }
-  // sow-183: the same read, returning the RAW base64 GitHub sent rather than the decoded text. An image is
-  // binary, so `text` is mojibake for it and the bytes cannot be recovered from that; this is the only way to
-  // read a committed image back out of the repo, which a move has to do to carry it to the item's new folder.
-  // Same route, same allow-list, same auth: nothing here is reachable that readOwnFile above cannot reach.
-  async function readOwnFileBase64(path: string): Promise<string | null> {
-    const r = await workerGet(`/membership/file?path=${encodeURIComponent(path)}&ref=main`);
-    return r?.base64 ?? null;
-  }
-
-  // The core publish: build the file set from PURE builders and POST it to the hosted-authoring endpoint.
-  // sow-158 permalink rename (SOW-112 v2, owner-directed rename-at-publish): `path` names the canonical item this
-  // edit was loaded from; a submitted slug that differs makes this publish a RENAME (one hosted PR: the new path,
-  // the old path + old .enc deleted, the old URL in redirectFrom so the build 301s, the intro moved). Even without
-  // a slug change the old file's redirectFrom is merged in (a plain re-publish used to DROP it). Mirrors
-  // client/src/operations-publish.mjs publish(), which since sow-274 is network-only on every host too (the
-  // network branch is always fresh-based on live main).
-  //
-  // sow-183: `authorTarget` ({ scope: 'house'|'member', username? }), when given, reassigns an EXISTING item's
-  // author -- the shared editor's Author field only ever sends this for a superadmin and only when it differs
-  // from the loaded item's current home (gbti-content-editor.mjs). It generalizes the rename machinery above: a
-  // MOVE is now "the resolved path changed", for a slug reason, an author reason, or both, in one hosted PR.
-  async function publish({ type, input = {}, body = '', authorNote, path, scope, authorTarget, skillFile }: any) {
-    // Both triggers below (a house path, or an explicit authorTarget) are only reachable through UI already
-    // gated to role==='superadmin' (gbti-workspace.mjs _canScope, the editor's Author field) -- the Worker
-    // independently re-verifies the caller is superadmin (authorizeSuperadmin) before accepting the write, so
-    // this is UX convenience, not the security boundary; a non-superadmin's stray attempt still fails closed.
-    // sow-317: a superadmin editing ANOTHER member's item from the Network content scope loads that member's path.
-    // Without this arm the origin resolved to null and the target fell through to the caller's own folder, so a
-    // plain "save" of somebody else's article would have published a duplicate under the superadmin's name.
-    const allowAnyFolder = String(path || '').startsWith('house/') || authorTarget != null || isForeignMemberPath(path, user);
-    // Resolve the origin (the item the editor loaded) and read its frontmatter for the redirectFrom merge, the
-    // publishedAt preservation, the old .enc path, and (with authorTarget) the old owner to move away from.
-    const origin = renameOriginOf({ path, username: user, type, allowAnyFolder });
-    let oldFm: any = null;
-    // sow-165: the previously committed BODY, kept from the read that already happens here rather than paid
-    // for again. It is what makes the body-image scan below free in the common case: a reference that is
-    // already in it is already committed, so it needs no lookup at all. Null when the item is not on main
-    // yet, or when the parse fails, and both of those correctly mean "treat every reference as new".
-    // A members item's index.md carries only the PUBLIC half (the gated half lives in the sibling .enc), so a
-    // gated body image reads as new every publish. That costs one lookup that resolves to skip; it is not a
-    // correctness gap, and reading the .enc would mean decrypting it just to save a round-trip.
-    let oldBody: string | null = null;
-    if (origin) {
-      const oldText = await readOwnFile(origin.oldPath);
-      if (oldText != null) {
-        try {
-          const parsed = parseContentFile(oldText);
-          oldFm = parsed.frontmatter ?? {};
-          oldBody = parsed.body ?? '';
-        } catch { oldFm = null; oldBody = null; }
-      }
-    }
-    // The TARGET folder for this publish. An explicit authorTarget (an existing item, superadmin) wins; else the
-    // loaded origin's own folder (a plain edit, unchanged); else the workspace's create-time scope (a NEW item),
-    // falling back to the caller's own folder (the pre-sow-183 default, unchanged). buildContentFile/buildCommentFile
-    // each resolve { folder, author } from { scope, username } internally (content-ops.mjs resolveTarget), so this
-    // only needs to settle the two raw inputs.
-    const target: { scope: string; username: string | null } = authorTarget
-      ? { scope: authorTarget.scope === 'house' ? 'house' : 'member', username: authorTarget.scope === 'house' ? null : String(authorTarget.username || '') }
-      : origin ? { scope: origin.scope, username: origin.username }
-      : { scope: scope === 'house' ? 'house' : 'member', username: user };
-    const slugChanged = Boolean(origin) && typeof input?.slug === 'string' && input.slug !== origin!.oldSlug;
-    const authorChanged = Boolean(origin) && (target.scope !== origin!.scope || target.username !== origin!.username);
-    const moved = slugChanged || authorChanged;
-    const effInput: any = { ...input };
-    // sow-109: until the editor offered the choice, a re-save of a skill sent no kind and wrote the default, turning
-    // its page into a prompt page while its SKILL.md stayed behind. The item's own kind wins when none is sent.
-    if (type === 'prompt') { const k = kindForPublish(input?.kind, oldFm?.kind); if (k) effInput.kind = k; }
-    // The 301 redirect is only meaningful when the public URL actually changed (the slug) -- never for an
-    // author-only reassignment (the public URL is type+slug only, unaffected by which folder the file lives in).
-    const redirects = mergedRedirectFrom({ oldFm, inputRedirectFrom: input?.redirectFrom, renaming: slugChanged, type, oldSlug: origin?.oldSlug });
-    if (redirects) effInput.redirectFrom = redirects;
-    // A move (rename or reassignment) must not re-stamp publishedAt (feeds stay stable; the item is not new).
-    // The editor stamps it on every publish, so restore the original for the move case only.
-    if (moved && oldFm?.publishedAt) effInput.publishedAt = oldFm.publishedAt;
-    // sow-325: the PUBLISH decides the date, not the editor. resolvePublishedAt carries the reasoning; the
-    // short version is that the editor's own publishedAt is not evidence. A draft already carries one, so the
-    // old "fill it in when absent" rule never fired for a first publish and the draft-creation date went live.
-    // And for an item already live the editor may be round-tripping a STALE staged record, which overwrote a
-    // corrected date in the repository six publishes running. The committed date wins for a live item; a draft
-    // or a new item is stamped now.
-    const stampedPublishedAt = resolvePublishedAt({ oldFm, moved, type, now: new Date().toISOString() });
-    if (stampedPublishedAt) effInput.publishedAt = stampedPublishedAt;
-    // sow-165 on the website: every image()-typed value becomes the canonical `./images/<file>` BEFORE the
-    // markdown is built. Astro resolves image() relative to the item's own index.md, so the repo-rooted path
-    // the stager used to write could not resolve and reddened the site build on main. Normalizing here also
-    // repairs a draft saved before the stager was fixed, which still holds the old flat value.
-    Object.assign(effInput, normalizeImageFields(effInput, user));
-
-    // sow-109 Phase 7: the encrypted skill-file pointer is decided by the skill-file plan below, never by the caller.
-    delete effInput.encryptedSkill;
-    const build = (extra: any = {}) => {
-      try {
-        return buildContentFile({ type, username: target.username, input: { ...effInput, ...extra, status: effInput.status || 'published' }, body, scope: target.scope });
-      } catch (e: any) {
-        throw new WorkbenchClientError('invalid-content', e?.message || 'the content is invalid');
-      }
-    };
-    let built: any = build();
-    if (moved) {
-      // The new path must not already exist (the CI unique-slug guard is the backstop).
-      const collision = await readOwnFile(built.path);
-      if (collision != null) throw err('bad-request', `"${built.slug}" already exists at the target location`);
-    }
-    // sow-109: a skill's SKILL.md is written, kept, moved or removed with it (the rule is shared with the agent publisher).
-    const skillPlan = await skillFilesForPublish({ type, built, oldIndexPath: origin && oldFm ? origin.oldPath : null, priorKind: oldFm?.kind, priorEncryptedSkill: oldFm?.encryptedSkill, moved, skillFile, readFile: readOwnFile, encrypt: encryptViaCookie });
-    if (skillPlan.refusal) throw new WorkbenchClientError('invalid-content', skillPlan.refusal);
-    if (skillPlan.pointer) built = build({ encryptedSkill: skillPlan.pointer }); // a members-only skill's file, encrypted
-    // SOW-016 / Phase 3c: a whole-item members body OR a `<!-- members-only -->` section is encrypted to a sibling
-    // .enc (via the cookie /membership/encrypt), and index.md keeps only the public teaser + the encryptedBody
-    // pointer. planMemberFiles overrides any stale encryptedBody with the deterministic path, so a re-publish
-    // overwrites the same .enc (no orphan). On a move it writes the NEW-location .enc; the OLD one is deleted below.
-    const plan = await planMemberFiles({ built, body, encrypt: encryptViaCookie });
-    const files: Array<{ path: string; content?: string | null; contentBase64?: string }> = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-    const intro = buildIntroFile(target, user, built, authorNote);
-    if (intro) files.push(intro);
-    files.push(...skillPlan.files);
-    // sow-158 image upload: flush the images this item references into the SAME PR as the .md (binary base64
-    // entries the Worker commits raw), so the path resolves the moment the PR merges. Newly staged uploads always
-    // live under the ACTING caller's own folder (stageImage), regardless of the target folder. planPublishImage
-    // holds the commit / skip / REFUSE rule and the order the three sources are tried in; it is unit-tested in
-    // test/workbench-client-core.test.mjs, and the three lookups it needs are wired here.
-    //
-    // The commit folder is resolved HERE, from built.path, rather than at stage time: built.path is the real
-    // destination, so this is correct through a rename or an author reassignment that happened after the image
-    // was picked. The store is keyed by the draft's `<type>:<slug>`, which moves with a permalink edit, so a
-    // renamed item also asks under its previous slug before giving up.
-    const imagesDir = `${built.path.replace(/\/[^/]*$/, '')}/images`;
-    // sow-183 THE MOVE CASE. Images are co-located: they live in the item's OWN folder, so a rename or an
-    // author reassignment moves them too. Before this, every lookup was pointed at the destination folder,
-    // where nothing is yet, and the publish refused with "the image is no longer staged" -- which made
-    // reassigning any item that carries an image impossible, the owner's /grok prompt among them. The origin
-    // folder derives from origin.oldPath by exactly the rule imagesDir uses on built.path, so one rule
-    // resolves both ends of the move and they cannot drift apart.
-    const oldImagesDir = moved && origin ? `${origin.oldPath.replace(/\/[^/]*$/, '')}/images` : null;
-    const itemTokens = [`${type}:${built.slug}`];
-    if (origin?.oldSlug && origin.oldSlug !== built.slug) itemTokens.push(`${type}:${origin.oldSlug}`);
-    const stagedForCleanup: Array<{ name: string; item: string }> = [];
-    // sow-165: the body is scanned too, and it is the half that was missing. referencedImages reads the
-    // frontmatter only, so a body image was staged and then never committed, and the merged PR carried
-    // markdown pointing at a file that is not in the repository. Astro does not render that as a broken
-    // image: the site build fails with [ImageNotFound], so on an auto-merged publish it reds main and stops
-    // the deploy. Confirmed by building one on purpose rather than inferred.
-    //
-    // The frontmatter refs keep the sow-183 MOVE treatment and the body refs deliberately do not. A move has
-    // to carry the bytes (the hosted API has no rename primitive) and HOSTED_MAX_IMAGE_TOTAL_BYTES is 4 MB
-    // per request, while one real article already holds 9717 KB of body images and two more sit within 3% of
-    // the ceiling. Moving them would hard-fail the rename outright, which is worse than today's behaviour of
-    // leaving them orphaned at the old folder. That half needs a chunked or Worker-side move, and sow-165
-    // records the measurement.
-    // sow-323: which body images this publish has to resolve. The old rule inferred "already committed" from
-    // the previously committed BODY and never checked, which let a publish commit markdown pointing at a file
-    // that is not in the repository (two of them in a live article on 2026-09-12), red the site build, and get
-    // the article auto-drafted, with every later publish filtering the same references out again so the author
-    // could not heal it. Existence is now VERIFIED, and concurrently, so the whole body costs one round-trip of
-    // wall time instead of the ~100 sequential reads the old comment was right to avoid.
-    const bodyParts = partitionBodyImages(body, new Set(pendingImages.keys()));
-    const presentOnMain = new Set<string>(
-      (await Promise.all(bodyParts.toVerify.map(async (r: any) =>
-        ((await readOwnFile(`${imagesDir}/${r.name}`)) != null ? r.name : null)))).filter(Boolean) as string[],
-    );
-    const imageRefs: Array<{ name: string; move: boolean }> = planImageRefs(
-      referencedImages(built.frontmatter),
-      bodyImagesToResolve(body, new Set(pendingImages.keys()), presentOnMain),
-    );
-    for (const ref of imageRefs) {
-      const commitPath = `${imagesDir}/${ref.name}`;
-      const oldPath = ref.move && oldImagesDir ? `${oldImagesDir}/${ref.name}` : null;
-      // ONE read answers both halves of the move: it is the fallback bytes for the copy into the new folder,
-      // and it is the proof there is something at the old path worth deleting.
-      const oldBase64 = oldPath && oldPath !== commitPath ? await readOwnFileBase64(oldPath) : null;
-      const plan = await planPublishImageFiles({ name: ref.name, item: itemTokens[0], commitPath, oldPath, oldBase64 }, {
-        fromSession: (r: any) => pendingImages.get(r.name),
-        fromStore: async (r: any) => {
-          for (const it of itemTokens) {
-            const got = await readStagedImage(r.name, it);
-            if (got?.dataBase64) return got.dataBase64;
-          }
-          return null;
-        },
-        onMain: async (r: any) => (await readOwnFile(r.commitPath)) != null,
-      });
-      if (plan.action === 'refuse') throw err('bad-request', plan.message);
-      if (!plan.files.length) continue;
-      files.push(...plan.files);
-      if (plan.action !== 'commit') continue;
-      pendingImages.delete(ref.name);
-      for (const it of itemTokens) stagedForCleanup.push({ name: ref.name, item: it });
-    }
-    // Move cleanup: delete the old index.md + old .enc, and move the from-the-author intro (project/prompt), all
-    // in the same PR. Fail closed if the original vanished from main (never a half-move).
-    if (moved) {
-      const onMain = (await readOwnFile(origin!.oldPath)) != null;
-      if (!onMain) throw err('bad-request', 'the original item could not be found on the network; refresh and try again');
-      files.push({ path: origin!.oldPath, content: null });
-      if (typeof oldFm?.encryptedBody === 'string' && oldFm.encryptedBody) files.push({ path: oldFm.encryptedBody, content: null });
-      const fromTarget = { scope: origin!.scope, username: origin!.username };
-      if (!intro) {
-        const oldIntroText = await readOwnFile(`${introFolderFor(fromTarget)}/comments/intro-${origin!.oldSlug}.md`);
-        files.push(...renameIntroMoveFiles({ from: fromTarget, to: target, type, oldSlug: origin!.oldSlug, newSlug: built.slug, introText: oldIntroText }));
-      } else {
-        const oldIntro = `${introFolderFor(fromTarget)}/comments/intro-${origin!.oldSlug}.md`;
-        if ((await readOwnFile(oldIntro)) != null) files.push({ path: oldIntro, content: null });
-      }
-    }
-    const title = `Publish ${TYPE_LABEL[built.type] || built.type}: ${built.frontmatter?.title || built.slug || user}`;
-    const itemId = hostedItemId(built.type, moved ? origin!.oldSlug : built.slug);
-    const res = await workerPost('/membership/author', { itemId, files, title });
-    // The bytes are in the PR now, so the staging copies have done their job. Dropped AFTER the author call
-    // succeeds, never before: a failed publish must leave the image staged, or the author loses it by trying.
-    // Best effort, because a stale key is harmless (it is re-put on the next stage, swept by the SOW-024
-    // erasure step, and ignored once the real file resolves on main) while a throw here would report a
-    // successful publish as a failure.
-    for (const c of stagedForCleanup) {
-      try { await workerPost('/membership/draft-image', { op: 'delete', item: c.item, name: c.name }); } catch { /* see above */ }
-    }
-    // sow-326: THE PUBLISHED DRAFT RECORD DIES HERE, and until now nothing ever deleted it. publish() swept the
-    // staged IMAGES and left the KV draft (`drafts:<github_id>`, keyed `<type>:<slug>`) exactly as it was, so a
-    // record outlived its own publication and every later open of the item read it back instead of the file
-    // that had just been committed. That one omission is the root of three separate owner-reported defects:
-    // the "not published yet" banner that no publish could clear, a layout and an author note that reverted on
-    // every refresh of the WorkBench deep link, and two superadmins editing one article overwriting each
-    // other, because the record is per-ACCOUNT and carries no author.
-    //
-    // Same two rules as the image cleanup above, for the same reason stated there: strictly AFTER the author
-    // POST resolves, and never able to throw, or a successful publish is reported to the author as a failure.
-    // Idempotent by design (applyDraftDelete is pinned idempotent), which matters because publishDraft already
-    // deletes on its own path. Every token is swept, so a RENAME clears the pre-rename slug too.
-    for (const token of itemTokens) {
-      const staleSlug = token.startsWith(`${type}:`) ? token.slice(String(type).length + 1) : '';
-      if (!staleSlug) continue;
-      try { await workerPost('/membership/drafts', { op: 'delete', type, slug: staleSlug }); } catch { /* see above */ }
-    }
-    return {
-      prNumber: res.number, prUrl: res.html_url, branch: res.branch, updated: !!res.already, hosted: true,
-      encrypted: Boolean(plan?.encPath),
-      // sow-183: the item's CURRENT canonical path after this publish (unchanged for a plain edit; the new
-      // location for a move) -- lets the editor keep itemPath/itemScope live for a second publish in the SAME
-      // session, with no reload, whether this one moved the item or not.
-      path: built.path,
-      ...(slugChanged ? { renamed: { from: origin!.oldSlug, to: built.slug } } : {}),
-      ...(authorChanged ? { reassigned: { from: { scope: origin!.scope, username: origin!.username }, to: { scope: target.scope, username: target.username } } } : {}),
-    };
-  }
+  // The core publish (workbench-client-publish.ts). Built over this closure's state so a publish still reads
+  // and clears the same staged images, and still encrypts through the same cookie route, as it did inline.
+  const publish = createPublish({ user, pendingImages, readOwnFile, readOwnFileBase64, readStagedImage, workerPost, encryptViaCookie });
 
   async function discardDraft({ type, slug, store }: any) {
     // sow-194: a repo draft is committed to the public repo; discarding it is a delete request, not a KV delete.
@@ -621,53 +281,6 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
       ]);
     } catch { /* best-effort */ }
   }
-
-  // sow-161 B (owner-approved Option A, band seq 35): the SUPERADMIN channel-map surface, THE ROLE GATE.
-  // These methods are attached ONLY when the viewer is a superadmin. That is deliberate and load-bearing: the
-  // shared <gbti-categories-workspace> decides whether to draw its channel column with a CAPABILITY check
-  // (`typeof this.client.contentChannelPool === 'function' && typeof this.client.discordChannels === 'function'`),
-  // which cannot express a role. If these methods were present for an admin, the admin would see the channel
-  // column and every write would 403 at the Worker (writes are superadmin via the category-batch max-rank gate).
-  // Making the CAPABILITY itself superadmin-scoped is what lets the capability check reflect the role: an admin's
-  // client simply does not have the methods, so the column stays off AND the admin cannot call them at all
-  // (defense in depth over the server gate, which is still the real boundary: reads default to authorizeSuperadmin,
-  // writes re-check rank). This object is EMPTY for every non-superadmin caller and for every other host page that
-  // never passes isSuperadmin, so no other surface is affected.
-  const channelMapMethods: Record<string, any> = isSuperadmin ? {
-    // The category -> Discord channel picker source (SOW-100). authorizeAdmin server-side (shared with the
-    // extension), but only a superadmin client exposes it, so the categories channel column is superadmin-only UX.
-    discordChannels() { return workerGet('/membership/discord-channels'); }, // [{ id, name, type, parentId }]
-    // The <gbti-channel-map-manager> surface (six reads + six writes). Reads mirror admin-ops' shapes; writes land
-    // as auto-gated PRs against the superadmin-pinned moderation-flags.yml / syndication-config.yml. contentChannelPool
-    // is read here (the matrix) but the channel -> Discord map is EDITED via the categories workspace (category-batch),
-    // so no setContentChannel method is needed.
-    contentChannelPool() { return workerGet('/membership/admin/content-channel-pool'); }, // { channels }
-    moderationFlagPool() { return workerGet('/membership/admin/moderation-flag-pool'); }, // { lists }
-    syndicationTemplatePool() { return workerGet('/membership/admin/syndication-template-pool'); }, // { templates, channelTemplates, ..., types, channels }
-    newsEngagementSettings() { return workerGet('/membership/admin/news-engagement'); }, // { settings, tiers }
-    syndicationSettings() { return workerGet('/membership/admin/syndication-settings'); }, // { settings, channelNames, autoTypes, ... }
-    async addModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async removeModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setSyndicationTemplates(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-templates-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setNewsEngagement(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setSyndicationSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-settings-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-338: the news item controls. Pulling a story writes KV and takes effect within the feed's five-minute
-    // cache; weighting a source is a pull request against the superadmin-pinned weights file like its neighbours
-    // above, so it lands with the next deploy. Two different clocks, and the page says which is which.
-    removeNewsItem(guid: string) { return workerPost('/membership/admin/news-item', { action: 'remove', guid }); },
-    restoreNewsItem(guid: string) { return workerPost('/membership/admin/news-item', { action: 'restore', guid }); },
-    async setNewsSourceWeight(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-weight', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-399: the rest of syndication, moved here from the extension. Publishing Activity (the queue with approve
-    // and cancel), the Social Queue, and Manually syndicate. The same Worker routes the extension used, now
-    // cookie-enabled; a write carries the CSRF echo (workerPost) and the Worker re-checks superadmin on each one.
-    syndicationQueue() { return workerGet('/membership/syndication'); }, // { pending, approved, sent, cancelled, failed }
-    approveSyndication({ id }: { id: string }) { return workerPost('/membership/syndication/approve', { id }); },
-    cancelSyndication({ id }: { id: string }) { return workerPost('/membership/syndication/cancel', { id }); },
-    socialQueue() { return workerGet('/membership/social-queue'); }, // { pending, done }
-    socialQueueAction({ action, id, ...rest }: any = {}) { return workerPost('/membership/social-queue', { action, id, ...rest }); },
-    getSyndicateNow() { return workerGet('/membership/syndicate-now'); }, // destinations + templates + channel map
-    syndicateNow(p: any = {}) { return workerPost('/membership/syndicate-now', p); }, // every field passes through
-  } : {};
 
   return {
     // ----- identity + read -----
@@ -921,96 +534,10 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
       return { items: Array.isArray(r?.items) ? r.items : [], nextBefore: r?.nextBefore ?? null, canSeeMembers: r?.canSeeMembers ?? false };
     },
 
-    // ----- sow-161 admin surface (read): the per-member Stripe status map for the dashboard roster. Admin-gated
-    // server-side over the cookie session (authorizeAdmin + allowCookie); a non-admin session 403s. -----
-    adminStatuses() { return workerGet('/membership/admin/statuses'); }, // { ok, statuses: { <github_id>: '<status>' } }
-    // sow-161 admin mutation dispatch (increment 1: content moderation deplatform/republish/remove with { path }).
-    // The Worker computes the change server-side + gates by role; a non-staff session 403s, an unsupported action
-    // 400s (ban/role land in later increments). Cookie POST -> CSRF enforced by workerPost. Normalize the Worker's
-    // { number, html_url } to the { prNumber, prUrl } shape <gbti-admin> renders (parity with the extension host).
-    async admin(action: string, args: any = {}) {
-      const r = await workerPost('/membership/admin/author', { action, ...args });
-      return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null };
-    },
-    // sow-161 A: the categories workspace + tag explorer. taxonomy() reads house/taxonomy.yml { tree }; adminOp()
-    // fires an allow-listed operation (category-migrate) over the cookie session (the Worker enforces CSRF on the
-    // POST). category-batch + tag-edit go through admin() above (the Worker resolves their multi-file writes).
-    taxonomy() { return workerGet('/membership/admin/taxonomy'); }, // { ok, tree }
-    async adminOp(action: string, params: any = null) { return workerPost('/membership/admin/ops', params ? { action, params } : { action }); },
-    // sow-161 increment 4: the quotes config manager. Read the full pool (admin-gated) + the three write actions,
-    // each normalized to the { noop, prNumber } shape gbti-quote-manager renders.
-    quotePool() { return workerGet('/membership/admin/quote-pool'); }, // { ok, quotes }
-    async addQuote(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'quote-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async removeQuote(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'quote-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setQuoteEnabled(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'quote-toggle', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-271: the site-wide presentation toggles (superadmin). siteSettings reads house/site-settings.yml resolved;
-    // setSiteToggle lands as an auto-gated house PR. `enabled` is coerced to a real boolean on the wire so a stray
-    // "false" cannot switch a toggle ON (the Worker's siteToggleInput rejects a non-boolean regardless).
-    siteSettings() { return workerGet('/membership/admin/site-settings'); }, // { ok, settings, toggles }
-    async setSiteToggle(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'site-setting-set', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-266: the weekly digest's membership pitch + sponsor slot (superadmin). digestConfig returns what is
-    // STORED, so an empty field shows empty rather than pre-filled with the copy the renderer falls back to.
-    //
-    // NO `enabled: args?.enabled === true` HERE, deliberately, unlike the two methods above. Both writes are
-    // PATCHES: an absent key means leave it alone, and coercing an absent switch to false would turn the pitch
-    // off every time somebody saved only the wording. The Worker rejects a non-boolean switch regardless, so
-    // passing the value through unchanged is both safe and the only correct thing.
-    digestConfig() { return workerGet('/membership/admin/digest-config'); }, // { ok, cta, sponsor, defaults, limits }
-    // sow-109: Admin tools > Skill install (superadmin; the Worker checks the role on both routes).
-    skillInstallPool() { return workerGet('/membership/admin/skill-install'); }, // { ok, tools: [{ key, label, steps }] }
-    async setSkillInstallSteps(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'skill-install-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async addSkillInstallTool(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'skill-install-tool-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setDigestCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-cta-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setDigestSponsor(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-sponsor-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-270: the double opt-in switch. Forwarded as sent, like the two above: the core rejects a missing
-    // value, so coercing an absent `double` to false here would silently turn confirmation off on any other save.
-    async setDigestOptin(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'digest-optin-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-266 Phase 4: the sponsorship inquiries. Unlike the settings above, these ARE private: messages from
-    // named people, held nowhere public, so the route is superadmin for the reason it looks like.
-    sponsorInquiries() { return workerGet('/membership/admin/sponsor-inquiries'); }, // { ok, inquiries, limits }
-    // sow-281: the CTA registry (superadmin). ctaPool reads house/ctas.yml in full; the five writes land as
-    // auto-merged house PRs. `enabled` is coerced to a real boolean on the wire, as setSiteToggle does.
-    ctaPool() { return workerGet('/membership/admin/cta-pool'); }, // { ok, ctas, types }
-    async addCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-add', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async updateCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-update', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setCtaEnabled(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-toggle', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async assignCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-assign', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async unassignCta(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'cta-unassign', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-161 increment 4: the news-source config manager (full pool read + the three write actions).
-    newsSourcePool() { return workerGet('/membership/admin/news-source-pool'); }, // { ok, sources }
-    async addNewsSource(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async removeNewsSource(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setNewsSourceEnabled(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-toggle', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-372: the words that keep a story out of the news stream (superadmin; newsSourcePool carries the list).
-    async addNewsBanword(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-banword-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async removeNewsBanword(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-banword-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    // sow-161 increment 4: the coupons config manager. couponPool reads house/coupons.yml (config); couponUsage reads
-    // the KV redemption counts; add/update land as auto-gated house PRs. A coupon is deactivated, never deleted.
-    couponPool() { return workerGet('/membership/admin/coupon-pool'); }, // { ok, coupons }
-    couponUsage() { return workerGet('/membership/admin/coupon-usage'); }, // { ok, usage }
-    async addCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async updateCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-update', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-
-    // sow-161 B: the SUPERADMIN channel-map surface (six manager reads/writes + discordChannels for the categories
-    // channel column). Attached only when isSuperadmin (see channelMapMethods above): the role gate lives HERE, in
-    // the presence of the methods, so the shared elements' capability checks reflect the role and no admin ever
-    // meets a channel control that would 403. Empty spread for every non-superadmin caller.
-    ...channelMapMethods,
-
-    // sow-231 Phase 3: ISSUED INVITES. Unlike the coupon config above, these are NOT git-native and open no
-    // PR: an invite is per-person state carrying an administration note, so it lives in KV per the storage
-    // boundary. That is why these go straight to the Worker rather than through the author route.
-    inviteList() { return workerGet('/membership/admin/invites'); }, // { ok, invites }
-    inviteCreate(args: any = {}) { return workerPost('/membership/admin/invites', args); }, // { campaign, note?, expiresAt? }
-    inviteUpdate(args: any = {}) { return workerPatch('/membership/admin/invites', args); }, // { code, action: 'revoke'|'note', note? }
-
-    // sow-323: the EDITORIAL REVIEW QUEUE. Same disposition as the invites above and for the same reason: a
-    // queue record is per-person state about work in progress, so it is KV per the storage boundary. The
-    // decision opens no pull request from HERE either: the Worker does the commit, because only the Worker
-    // holds the key that can read an encrypted members-only body. Both gate at authorizeSuperadmin, because
-    // approving publishes a member's work to the open web.
-    editorialQueue() { return workerGet('/membership/admin/editorial'); }, // sow-323 { ok, items }
-    decideEditorial(args: any = {}) { return workerPost('/membership/admin/editorial', args); }, // { path, decision }
+    // The admin surface (workbench-client-admin.ts): staff reads and config writes, the superadmin-only
+    // channel-map and syndication methods (attached only when isSuperadmin, the role gate lives there), the
+    // issued invites and the editorial review queue. Spread HERE so every name keeps its place in this object.
+    ...adminMethods({ workerGet, workerPost, workerPatch, isSuperadmin }),
 
     // ----- SOW-043/046: interactive News over the cookie session (free-tier perk; authorizeSignedIn) -----
     getNews({ category, since, limit }: any = {}) {
@@ -1163,4 +690,4 @@ export function createWorkbenchClient({ signupBase, login, username = '', github
   };
 }
 
-export { WorkbenchClientError };
+export { WorkbenchClientError } from './workbench-client-transport';

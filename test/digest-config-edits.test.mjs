@@ -21,6 +21,8 @@ import { ADMIN_ACTIONS_SERVED } from '../workers/signup/membership-admin-author.
 
 const at = (rel) => fileURLToPath(new URL(rel, import.meta.url));
 const read = (rel) => fs.readFileSync(at(rel), 'utf8');
+// The website client was split at the 900-line cap; the admin methods these pins read live in its admin module.
+const readWebsiteClient = () => read('../src/lib/workbench-client.ts') + '\n' + read('../src/lib/workbench-client-admin.ts');
 
 const DOC = () => ({
   cta: { enabled: true, body: 'The stored body.', link_label: 'Stored label', link_url: '/membership/' },
@@ -183,7 +185,7 @@ test('the doc survives a round trip through the file and back', () => {
 // ---------------------------------------------------------------------------------------------------------
 
 test('WIRING: the website transport does not coerce the switch', () => {
-  const src = read('../src/lib/workbench-client.ts');
+  const src = readWebsiteClient();
   const line = src.split('\n').find((l) => l.includes("action: 'digest-cta-set'"));
   assert.ok(line, 'setDigestCta is missing from the website transport');
   assert.doesNotMatch(line, /enabled:\s*args\?\.enabled === true/,
@@ -220,7 +222,7 @@ test('WIRING: the two rows use FIXED branch names, so one file does not race its
 
 test('WIRING: the pool read is reachable on every host', () => {
   assert.match(read('../workers/signup/index.mjs'), /'\/membership\/admin\/digest-config': membershipAdminDigestConfig/);
-  assert.match(read('../src/lib/workbench-client.ts'), /workerGet\('\/membership\/admin\/digest-config'\)/);
+  assert.match(readWebsiteClient(), /workerGet\('\/membership\/admin\/digest-config'\)/);
   assert.match(read('../client/src/api.mjs'), /'\/api\/digest-config'/);
   assert.match(read('../extension/src/ext-dispatch.mjs'), /'\/api\/digest-config'/);
   assert.match(read('../client-ui/src/client.mjs'), /digestConfig: \(\) => request\('GET', '\/api\/digest-config'\)/);
@@ -303,7 +305,7 @@ test('WIRING sow-270: the switch reaches the Worker from every host, and its bra
   assert.match(worker, /'digest-optin-set':.*slug: \(\) => 'confirmation-mode'/,
     'a fixed branch of its own: sharing one with the copy lets whichever saved second reset the first');
 
-  const site = read('../src/lib/workbench-client.ts').split('\n').find((l) => l.includes("action: 'digest-optin-set'"));
+  const site = readWebsiteClient().split('\n').find((l) => l.includes("action: 'digest-optin-set'"));
   assert.ok(site, 'setDigestOptin is missing from the website transport');
   assert.doesNotMatch(site, /double:\s*args\?\.double === true/,
     'coercing an absent value to false would turn confirmation off on a save that never mentioned it');

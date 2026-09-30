@@ -178,7 +178,7 @@ test('every host reaches it, and only a superadmin sees the tab', () => {
   assert.match(client, /addSkillInstallTool: \(p\) => request\('POST', '\/api\/admin', \{ action: 'skill-install-tool-add', \.\.\.p \}\)/);
   assert.match(src('extension/src/ext-dispatch.mjs'), /if \(pathname === '\/api\/skill-install-pool'\) return ok\(await getSkillInstallPool\(ctx\)\);/);
   assert.match(src('client/src/api.mjs'), /pathname === '\/api\/skill-install-pool'\) return run\(\(\) => getSkillInstallPool\(ctx\)\)/);
-  const web = src('src/lib/workbench-client.ts');
+  const web = src('src/lib/workbench-client.ts') + '\n' + src('src/lib/workbench-client-admin.ts'); // admin methods, split out at the 900-line cap
   assert.match(web, /skillInstallPool\(\) \{ return workerGet\('\/membership\/admin\/skill-install'\); \}/);
   assert.match(web, /action: 'skill-install-set'/);
   assert.match(web, /action: 'skill-install-tool-add'/);

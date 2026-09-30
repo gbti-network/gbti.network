@@ -276,7 +276,8 @@ test('WIRING: the page posts to the route, is unindexed, and names no price', ()
 });
 
 test('WIRING: the inquiries are reachable from every host, and the manager shows them', () => {
-  assert.match(read('../src/lib/workbench-client.ts'), /workerGet\('\/membership\/admin\/sponsor-inquiries'\)/);
+  // The admin methods live in workbench-client-admin.ts since the 900-line split; read the client and it together.
+  assert.match(read('../src/lib/workbench-client.ts') + '\n' + read('../src/lib/workbench-client-admin.ts'), /workerGet\('\/membership\/admin\/sponsor-inquiries'\)/);
   assert.match(read('../client-ui/src/client.mjs'), /sponsorInquiries: \(\) => request\('GET', '\/api\/sponsor-inquiries'\)/);
   assert.match(read('../client/src/api.mjs'), /'\/api\/sponsor-inquiries'/);
   assert.match(read('../extension/src/ext-dispatch.mjs'), /case '\/api\/sponsor-inquiries'/);

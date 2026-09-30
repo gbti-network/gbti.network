@@ -207,7 +207,11 @@ test('the syndication pool reads return their documented shapes', async () => {
 // guard reds exactly that regression (the .ts adapter is the cookie transport and is deliberately not in the node
 // runtime suite, so it is checked as text, the same way the CONFIG_OP drift guard checks the Worker table).
 test('ROLE GATE: the workbench client exposes contentChannelPool + discordChannels ONLY inside the isSuperadmin block', () => {
-  const src = fs.readFileSync(fileURLToPath(new URL('../src/lib/workbench-client.ts', import.meta.url)), 'utf8');
+  // The client was split at the 900-line cap and the gated block now sits in workbench-client-admin.ts. Every
+  // module of the client is read as one text, so "defined exactly once" still counts across the WHOLE client: a
+  // copy attached unconditionally in any of its files reds this.
+  const src = ['workbench-client.ts', 'workbench-client-transport.ts', 'workbench-client-publish.ts', 'workbench-client-admin.ts']
+    .map((f) => fs.readFileSync(fileURLToPath(new URL(`../src/lib/${f}`, import.meta.url)), 'utf8')).join('\n');
   const open = src.indexOf('const channelMapMethods');
   assert.ok(open > -1, 'channelMapMethods moved or was renamed');
   // The conditional block runs from `const channelMapMethods ... isSuperadmin ? {` to its closing `} : {};`.

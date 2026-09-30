@@ -197,7 +197,8 @@ test('the five write actions reach the network, and both hosts serve the pool re
     const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     assert.match(src, /'\/api\/cta-pool'/, `${rel} serves the pool read`);
   }
-  const wb = fs.readFileSync(path.join(ROOT, 'src/lib/workbench-client.ts'), 'utf8');
+  // The admin methods live in workbench-client-admin.ts since the 900-line split; read the client and it together.
+  const wb = ['src/lib/workbench-client.ts', 'src/lib/workbench-client-admin.ts'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
   for (const fn of ['ctaPool', 'addCta', 'updateCta', 'setCtaEnabled', 'assignCta', 'unassignCta']) assert.match(wb, new RegExp(`\\b${fn}\\(`), `workbench client has ${fn}`);
   const cl = fs.readFileSync(path.join(ROOT, 'client-ui/src/client.mjs'), 'utf8');
   for (const fn of ['ctaPool', 'addCta', 'updateCta', 'setCtaEnabled', 'assignCta', 'unassignCta']) assert.match(cl, new RegExp(`\\b${fn}:`), `shared client has ${fn}`);
