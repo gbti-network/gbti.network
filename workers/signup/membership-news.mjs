@@ -1,7 +1,7 @@
 // SOW-043 / UnifiedWorker: the NEWS surface. The news ingest engine (RSS fetch + AI classify + og:image backfill)
 // is now folded into THIS Worker (workers/signup/news/), writing the polled collection to NEWS_KV. These handlers
 // serve that collection by reading NEWS_KV IN-PROCESS (no cross-worker HTTP hop, no NEWS_API_KEY): the day-sharded
-// store (news/src/store.mjs) + the pure shapers (news/src/api.mjs). The route table + gating in index.mjs is
+// store (news/src/store.mjs) + the pure shapers (news/src/api.mjs). The route table + gating (in member-routes.mjs) is
 // unchanged; only the data source moved from an authed fetch to a KV read.
 //
 // SOW-060/077: reading NEWS is a READ-only perk for ANY signed-in account, INCLUDING a banned one (a ban is a

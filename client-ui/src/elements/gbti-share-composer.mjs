@@ -66,7 +66,7 @@ export function ogPreviewState({ og = null, error = null } = {}) {
   if (error) {
     const code = String(error?.code || '');
     // A signed-out or expired session is the one failure with a specific action attached, so it gets its own
-    // sentence. Mirrors newsGet in workbench-client.ts, which already drives a view from the code not the status.
+    // sentence. Mirrors newsGet in workbench-client-transport.ts, which already drives a view from the code not the status.
     if (code === 'not_authenticated' || code === 'not-authenticated' || code === 'http-401') {
       return { kind: 'error', message: 'Sign in to fetch a link preview.', retry: false };
     }

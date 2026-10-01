@@ -99,7 +99,7 @@ export async function initWorkbenchPreview() {
   CDN = cdnBase();
   attachCdnFallback(document);
   // sow-194: read the non-HttpOnly gbti_csrf cookie for the double-submit header on the decrypt POST (mirrors
-  // workbench-client.ts readCsrf); the httpOnly session rides on `credentials: 'include'`.
+  // workbench-client-transport.ts readCsrf); the httpOnly session rides on `credentials: 'include'`.
   const readCsrf = () => {
     for (const part of document.cookie.split(';')) {
       const eq = part.indexOf('=');

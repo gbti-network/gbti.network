@@ -47,7 +47,7 @@ export const WORKER_ADMIN_ACTIONS = Object.freeze(new Set([
  * Actions the Worker serves under another name, with the payload it expects.
  *
  * Each returns `{ action, payload }`. They are one-entry batches: the batch op is the Worker's only spelling of
- * these writes, and it is the spelling the website uses (src/lib/workbench-client.ts records that decision for
+ * these writes, and it is the spelling the website uses (src/lib/workbench-client-admin.ts records that decision for
  * the channel map). Translating here keeps ONE vocabulary on the server.
  */
 const TRANSLATED = Object.freeze({

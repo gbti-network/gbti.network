@@ -348,7 +348,7 @@ export async function publish(ctx, { type, input, body, title, authorNote, path,
     token: ctx.store?.get?.('githubToken'), itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
     files, title: ttl, signupBase: SIGNUP_BASE, fetchImpl: ctx.fetch ?? globalThis.fetch,
   });
-  // sow-326: drop the staged draft record, mirroring the website host (src/lib/workbench-client.ts). Without
+  // sow-326: drop the staged draft record, mirroring the website host (src/lib/workbench-client-publish.ts). Without
   // this the extension and the npm CMS resurrect the very record the website just cleared, and the immortal
   // "not published yet" banner comes back on the next open. Best-effort and strictly after the author call,
   // so a failed publish leaves the draft intact and a cleanup miss cannot fail a successful publish; the

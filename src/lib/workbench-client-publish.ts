@@ -74,7 +74,7 @@ export function createPublish({ user, pendingImages, readOwnFile, readOwnFileBas
   // MOVE is now "the resolved path changed", for a slug reason, an author reason, or both, in one hosted PR.
   async function publish({ type, input = {}, body = '', authorNote, path, scope, authorTarget, skillFile }: any) {
     // Both triggers below (a house path, or an explicit authorTarget) are only reachable through UI already
-    // gated to role==='superadmin' (gbti-workspace.mjs _canScope, the editor's Author field) -- the Worker
+    // gated to role==='superadmin' (workspace-data.mjs _canScope, the editor's Author field) -- the Worker
     // independently re-verifies the caller is superadmin (authorizeSuperadmin) before accepting the write, so
     // this is UX convenience, not the security boundary; a non-superadmin's stray attempt still fails closed.
     // sow-317: a superadmin editing ANOTHER member's item from the Network content scope loads that member's path.

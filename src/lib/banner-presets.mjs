@@ -7,7 +7,7 @@
 // Every project family has a preset keyed by its taxonomy leaf, and its `from` is that family's `cb`
 // (sow-269 added utilities and chrome-extensions, which the family list had and this list did not). This file
 // is the one place both sides (the schema's enum and the editor's swatch picker) get the values from;
-// gbti-v3.css's `.pd-hero[data-preset]` rules restate them as literal hex because a stylesheet cannot import a
+// gbti-v3-detail.css's `.pd-hero[data-preset]` rules restate them as literal hex because a stylesheet cannot import a
 // module. This list is NOT generated from the family list on purpose: removing a family must never remove a
 // preset, or published frontmatter naming it fails the enum. test/project-categories.test.mjs holds all three
 // in agreement, so a key added here without its CSS rule fails the suite instead of rendering as ink.

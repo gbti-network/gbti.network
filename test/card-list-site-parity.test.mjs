@@ -1,6 +1,6 @@
 // sow-296: the extension's feed rows follow the WEBSITE's card look (owner, 2026-09-22: "sync style where
 // extension follows public website"). The type tag colours are the one thing that cannot be shared as code: a
-// shadow root cannot read src/styles/gbti-v3.css, so <gbti-card-list> carries its own copy of the .kt-* pairs.
+// shadow root cannot read src/styles/gbti-v3-feed.css, so <gbti-card-list> carries its own copy of the .kt-* pairs.
 // This pins the two together. A palette change on the site that is not carried across reds here, which is the
 // only signal anyone gets before the two hosts quietly drift apart again.
 import { test } from 'node:test';

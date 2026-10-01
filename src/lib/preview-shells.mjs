@@ -52,7 +52,7 @@ export async function fillSkillPreview(doc, { fm = {}, skillFile = null, readSki
  * Does this type's published page carry a Contents rail?
  *
  * A prompt page does not: it is one enclosed prompt block, and a rail over it is project chrome. The
- * reshape below hides the nav, but preview.astro's buildRail runs AFTERWARDS and ends with
+ * reshape below hides the nav, but the preview page's buildRail (preview-page.ts) runs AFTERWARDS and ends with
  * `nav.hidden = toc.length === 0`, which un-hid it again the moment a body carried two h2s. That is
  * exactly what shipped, and the drift test missed it because it asserts class names, not visibility.
  *
@@ -96,7 +96,7 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     (document.querySelector('.pd-hero'))?.setAttribute('hidden', '');
     (document.querySelector('.pd-bar'))?.setAttribute('hidden', '');
     // Adopt the real article geometry. These classes already ship on this page: .art-* lives in
-    // gbti-v3.css, which global.css imports and BaseLayout loads, so this needs no new CSS.
+    // gbti-v3-article.css, which global.css imports and BaseLayout loads, so this needs no new CSS.
     const grid = document.querySelector('.pd-grid');
     const rail = document.querySelector('.pd-rail');
     const col = document.querySelector('.pd-col');

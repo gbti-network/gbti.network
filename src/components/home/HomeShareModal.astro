@@ -7,7 +7,7 @@
 // (owner request): an accidental outside click, or a text selection that starts in an input and releases
 // outside, must never discard an in-progress draft. A successful
 // post (the composer emits gbti-share-posted, bubbling + composed) closes it too, mirroring the extension
-// shell's openComposeModal (which already made this SOW-041 decision). Styles live in gbti-v3.css (.share-modal), like PersonalizeModal. Inert for a
+// shell's openComposeModal (which already made this SOW-041 decision). Styles live in gbti-v3-feed.css (.share-modal), like PersonalizeModal. Inert for a
 // signed-out / no-JS visitor (the dialog never opens; the bar that opens it is paid-gated and ships hidden).
 ---
 <dialog class="share-modal" data-share-modal aria-label="Share with the network">

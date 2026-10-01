@@ -2733,7 +2733,7 @@
   --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
   --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
   --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
-  /* tooltips (mirrors src/styles/gbti-v3.css's own [data-tooltip] tokens) -- a dark bubble on the light surface */
+  /* tooltips (mirrors src/styles/gbti-v3.css's own [data-tooltip] tokens; the rules are in gbti-v3-theme.css) -- a dark bubble on the light surface */
   --tooltip-bg: #1c1a21; --tooltip-fg: #f5f4f2; --tooltip-border: rgba(255,255,255,.10);
 }
 :host-context([data-theme="dark"]) {
@@ -2809,7 +2809,7 @@ button[disabled] { opacity: .5; cursor: default; }
 ul.list { list-style: none; margin: 0; padding: 0; }
 ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
-/* Tooltips (mirrors src/styles/gbti-v3.css's [data-tooltip] block verbatim) -- a shadow root cannot see the
+/* Tooltips (mirrors src/styles/gbti-v3-theme.css's [data-tooltip] block verbatim) -- a shadow root cannot see the
    page's global CSS, so any component wanting the site's hover-label treatment needs this rule INSIDE its own
    tree; defined once here (BASE_CSS is included via this.css() in every component) rather than per-component.
    Usage: add data-tooltip="..." to a focusable control AND keep an aria-label (data-tooltip is presentational,
@@ -24853,7 +24853,7 @@ ${BLOCKED_PILL_CSS}
   .media .gl { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
   .media .gl svg { width:55%; height:55%; display:block; }
   .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  /* sow-296: the type tag carries the WEBSITE's per-type colours (.kt-* in src/styles/gbti-v3.css), so an article
+  /* sow-296: the type tag carries the WEBSITE's per-type colours (.kt-* in src/styles/gbti-v3-feed.css), so an article
      reads blue and a prompt purple on both hosts. The values are duplicated rather than imported because a shadow
      root cannot see the site stylesheet; test/card-list-site-parity.test.mjs pins the pairs against that file. */
   .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:4px; padding:3px 7px; white-space:nowrap; flex:none; }
@@ -30676,7 +30676,7 @@ ${BLOCKED_PILL_CSS}
       // SOW-121: superadmin manual-assist queue { pending, done }
       socialQueueAction: ({ action, id }) => request("POST", "/api/social-queue", { action, id }),
       // SOW-121: done/delete
-      // sow-420: the news reader's superadmin card. Same names as the website client (src/lib/workbench-client.ts).
+      // sow-420: the news reader's superadmin card. Same names as the website client (src/lib/workbench-client-admin.ts).
       removeNewsItem: (guid) => request("POST", "/api/news-item", { action: "remove", guid }),
       restoreNewsItem: (guid) => request("POST", "/api/news-item", { action: "restore", guid }),
       getSyndicateNow: () => request("GET", "/api/syndicate-now"),

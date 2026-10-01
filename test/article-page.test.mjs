@@ -205,9 +205,9 @@ test('DRIFT: every class in the card contract still appears in ArticleCard.astro
 // The regression this guards is specific: the card's max-width, padding and background used to be inline
 // style attributes, which the preview could only match by copying the string. They moved into gbti-v3.css so
 // both hosts get them from the class. An inline style creeping back would silently un-share the geometry.
-test('DRIFT: the card layout carries no inline geometry, and gbti-v3.css owns it instead', () => {
+test('DRIFT: the card layout carries no inline geometry, and the design system owns it instead', () => {
   const src = componentSrc('ArticleCard');
-  assert.ok(!/style="max-width:820px/.test(src), 'the card width belongs to .art-c-card in gbti-v3.css');
+  assert.ok(!/style="max-width:820px/.test(src), 'the card width belongs to .art-c-card in gbti-v3-detail.css');
   assert.ok(!/style="background:var\(--paper-2\)"/.test(src), 'the band background belongs to .art-c-band');
   assert.ok(!/style="border-radius:var\(--r-lg\)"/.test(src), 'the cover radius belongs to .art-c-cover');
   const css = siteCss();

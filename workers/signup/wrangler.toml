@@ -344,7 +344,7 @@ dataset = "gbti_ext_usage"
 # so `3` is Tuesday, and `2` (which this used to say, commented as Tuesday) was Monday.
 # test/digest-send-day.test.mjs holds the subscriber copy to it. They are the SAME job: 7 AM America/Chicago
 # is 12:00 UTC under daylight time and 13:00 UTC under standard time, and cron here is UTC with no daylight
-# handling. isCentralDigestHour (index.mjs) runs the compile on whichever one is the 07:00 hour today and
+# handling. isCentralDigestHour (WEEKLY_DIGEST_JOB in cron.mjs) runs the compile on whichever one is the 07:00 hour today and
 # no-ops the other. Do not "tidy" one away.
 crons = ["*/5 * * * *", "0 * * * *", "30 * * * *", "0 12 * * 3", "0 13 * * 3"]
 

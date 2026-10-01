@@ -21,7 +21,7 @@ export const withEditorFields = (Base) => class extends Base {
     // `"2025-06-23T00:00:00.000Z"` WITH the quote characters. Reading that back gives Invalid Date, and since
     // publishedAt is a preserved hidden field, saving ANY item with a YAML-dated frontmatter failed with
     // "invalid post: publishedAt: Invalid input" and no way for the author to see or fix the offending value.
-    // 46 published posts carry that shape. ISO date-only matches fmtD's convention in this file and round-trips
+    // 46 published posts carry that shape. ISO date-only matches fmtD's convention in render() and round-trips
     // cleanly, unlike String(date), which renders a UTC date in local time ("Jun 22" for a Jun 23 post).
     const v = value == null ? ''
       : Array.isArray(value) ? value.join(', ')

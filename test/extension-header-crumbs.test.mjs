@@ -47,7 +47,7 @@ test('the breadcrumb looks like the site\'s: mono, tracked, uppercase, a 35% und
   assert.match(css, /border-bottom: 1px solid color-mix\(in srgb, currentColor 35%, transparent\)/);
   assert.match(css, /\.crumbs \.cc-crumb:hover, \.crumbs \.cc-crumb:focus-visible \{ border-bottom-color: currentColor; \}/);
   assert.match(css, /\.crumbs \.cc-sep \{ opacity: \.55; \}/);
-  // The same values the site uses (src/styles/gbti-v3.css, sow-174).
+  // The same values the site uses (src/styles/gbti-v3-detail.css, sow-174).
   const site = siteCss();
   assert.match(site, /border-bottom: 1px solid color-mix\(in srgb, currentColor 35%, transparent\);/);
   assert.match(site, /\.cc-sep \{ opacity: \.55; \}/);

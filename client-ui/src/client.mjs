@@ -208,7 +208,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     approveSyndication: ({ id }) => request('POST', '/api/syndication/approve', { id }),
     socialQueue: () => request('GET', '/api/social-queue'), // SOW-121: superadmin manual-assist queue { pending, done }
     socialQueueAction: ({ action, id }) => request('POST', '/api/social-queue', { action, id }), // SOW-121: done/delete
-    // sow-420: the news reader's superadmin card. Same names as the website client (src/lib/workbench-client.ts).
+    // sow-420: the news reader's superadmin card. Same names as the website client (src/lib/workbench-client-admin.ts).
     removeNewsItem: (guid) => request('POST', '/api/news-item', { action: 'remove', guid }),
     restoreNewsItem: (guid) => request('POST', '/api/news-item', { action: 'restore', guid }),
     getSyndicateNow: () => request('GET', '/api/syndicate-now'), // SOW-088: destinations + templates + channel map (superadmin)

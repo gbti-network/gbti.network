@@ -2,7 +2,7 @@
    box, from the approved design (canvas "Prompts and Skills", 2026-09-29). A prompt's label is a violet tint, a
    skill's is solid violet, so the two read as the same family and as different things.
 
-   Its own file because gbti-v3.css is past the 900-line rule. Loaded globally from global.css, so every card, the
+   Its own file, beside the design system rather than inside it. Loaded globally from global.css, so every card, the
    prompt page and the workbench preview get it. Every colour is a token below, set for both themes. */
 
 :root {
@@ -126,8 +126,8 @@
 }
 .skill-file-toggle:hover { background: var(--tint); color: var(--fg); border-color: var(--line-2); }
 
-/* The feed cards' small lowercase type tag (.kind-tag in gbti-v3.css): a skill gets the skill colours. Two classes, so it
-   also beats gbti-v3.css's dark-theme .kt-* rules; the tokens above already flip with the theme. */
+/* The feed cards' small lowercase type tag (.kind-tag in gbti-v3-feed.css): a skill gets the skill colours. Two classes, so it
+   also beats gbti-v3-feed.css's dark-theme .kt-* rules; the tokens above already flip with the theme. */
 .kind-tag.kt-skill { color: var(--kind-skill-fg); background: var(--kind-skill-bg); }
 /* A file name keeps its case: the prompt bar's label is uppercased, and "SKILL.MD" is not the file a reader saves. */
 .skill-file .prompt-block-label { text-transform: none; }

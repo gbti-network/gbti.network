@@ -60,7 +60,7 @@ export function coverDimensions(layout) {
 // from the article. The editor's layout picker changed nothing on screen.
 //
 // WHAT IS SHARED AND WHAT IS NOT, because the split is not obvious and the next person deserves it stated:
-//   - The CSS is already shared. `.art-*` lives in gbti-v3.css, which global.css imports and BaseLayout
+//   - The CSS is already shared. `.art-*` lives in gbti-v3-article.css, which global.css imports and BaseLayout
 //     loads, so the preview page already ships these styles. Adopting the class names costs nothing.
 //   - The STRUCTURE is shared here: the class names, the element order, the ids.
 //   - The COVER MARKUP is injected, because the two hosts cannot produce the same element. The published

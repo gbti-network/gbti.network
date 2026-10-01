@@ -51,7 +51,7 @@ test('FAIL-SOFT: a throwing send does not throw out, it reports the error', asyn
 //
 // `house/coupons.yml` requires this control to log and surface a failure, because it is the ONLY control on the
 // uncapped codes rather than one of several. It did neither until now: it swallowed the error and returned a
-// result the caller discards (index.mjs fires it through ctx.waitUntil and never reads the resolved value), so a
+// result the caller discards (signup-routes.mjs fires it through ctx.waitUntil, never reading the result), so a
 // send Resend rejected left no email, no log and no trace. From outside, that is identical to a code that was
 // never redeemed, which is the precise state the notice was built to end.
 //

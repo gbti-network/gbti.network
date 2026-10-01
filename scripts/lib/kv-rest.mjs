@@ -88,7 +88,7 @@ export async function listKvByPrefix({ prefix, env = process.env, fetchImpl = gl
  *
  * It used to return `{written: false, reason}` instead, which is the right shape for a reporting step and the
  * wrong one for every caller whose NEXT ACTION assumes the write happened. That made safety a property of the
- * CALLER: eight erasure writers in this file are safe only because each independently returns before reaching a
+ * CALLER: eight erasure writers (erase-member.mjs, erase-prepared-listings.mjs) are safe only because each independently returns before reaching a
  * write when the creds are missing, and they do not even share a mechanism (seven gate on a prefix scan's
  * `available`, `minimizeCouponGrant` gates on a strict single-key read). Nothing enforced it, and
  * `await putKvValue(...)` looks identical at a guarded and an unguarded call site, so a ninth writer copying an

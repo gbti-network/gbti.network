@@ -76,7 +76,7 @@ const CSS = `
   .media .gl { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
   .media .gl svg { width:55%; height:55%; display:block; }
   .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  /* sow-296: the type tag carries the WEBSITE's per-type colours (.kt-* in src/styles/gbti-v3.css), so an article
+  /* sow-296: the type tag carries the WEBSITE's per-type colours (.kt-* in src/styles/gbti-v3-feed.css), so an article
      reads blue and a prompt purple on both hosts. The values are duplicated rather than imported because a shadow
      root cannot see the site stylesheet; test/card-list-site-parity.test.mjs pins the pairs against that file. */
   .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:4px; padding:3px 7px; white-space:nowrap; flex:none; }

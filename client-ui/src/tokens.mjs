@@ -28,7 +28,7 @@ export const TOKENS = `
   --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
   --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
   --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
-  /* tooltips (mirrors src/styles/gbti-v3.css's own [data-tooltip] tokens) -- a dark bubble on the light surface */
+  /* tooltips (mirrors src/styles/gbti-v3.css's own [data-tooltip] tokens; the rules are in gbti-v3-theme.css) -- a dark bubble on the light surface */
   --tooltip-bg: #1c1a21; --tooltip-fg: #f5f4f2; --tooltip-border: rgba(255,255,255,.10);
 }
 :host-context([data-theme="dark"]) {
@@ -110,7 +110,7 @@ button[disabled] { opacity: .5; cursor: default; }
 ul.list { list-style: none; margin: 0; padding: 0; }
 ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
-/* Tooltips (mirrors src/styles/gbti-v3.css's [data-tooltip] block verbatim) -- a shadow root cannot see the
+/* Tooltips (mirrors src/styles/gbti-v3-theme.css's [data-tooltip] block verbatim) -- a shadow root cannot see the
    page's global CSS, so any component wanting the site's hover-label treatment needs this rule INSIDE its own
    tree; defined once here (BASE_CSS is included via this.css() in every component) rather than per-component.
    Usage: add data-tooltip="..." to a focusable control AND keep an aria-label (data-tooltip is presentational,

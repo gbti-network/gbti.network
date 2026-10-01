@@ -604,7 +604,7 @@ const FOLDER_TYPE = { posts: 'post', projects: 'project', products: 'project', p
 // content authorship reassignment) instead of only the caller's own `members/<username>/`. The CALLER
 // (publish()) sets this ONLY when the request already shape-implies a superadmin surface (an authorTarget was
 // given, or the loaded path is already under house/) -- both of those are themselves only reachable through UI
-// gated to role==='superadmin' (gbti-workspace.mjs _canScope). This function does no authorization of its own;
+// gated to role==='superadmin' (workspace-data.mjs _canScope). This function does no authorization of its own;
 // the real fail-closed gate is the Worker's independent authorizeSuperadmin re-check (membership-admin.mjs),
 // exactly like every other client-side convenience in this file.
 /**

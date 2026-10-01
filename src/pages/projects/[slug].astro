@@ -11,7 +11,7 @@
 // the SOW-016 gating modes via hasPublicPage / isStub / LockedBody, the SOW-014 inert members-only links,
 // and the SOW-050 shared ContentMeta / ContentActions / ContentFooter cluster.
 //
-// The layout CSS lives in src/styles/gbti-v3.css (.pd-*), not here, because the WorkBench draft preview
+// The layout CSS lives in src/styles/gbti-v3-detail.css (.pd-*), not here, because the WorkBench draft preview
 // renders the same structure and must not drift from it.
 import { imageFieldSize } from '../../lib/og-image-size.mjs'; // sow-294: declare the preview image's size
 import { getCollection, render } from 'astro:content';
@@ -356,7 +356,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
 
         {/* sow-353 (owner, 2026-09-16): "on single col mobile view the sidebar arrives after the article content, not
             before." The rail follows the write-up in the source, so a phone stacks it after the column and before the
-            closing sections; the two-column page places it by grid position (gbti-v3.css, .pd-rail), either side. */}
+            closing sections; the two-column page places it by grid position (gbti-v3-detail.css, .pd-rail), either side. */}
         <aside class="pd-rail">
           <SyndicateNow type="project" slug={d.slug} author={d.author || 'gbti'} authorName={synProfile?.displayName} title={d.title} blurb={d.shortDescription} url={productUrl} visibility={d.visibility} categories={d.categories} tags={d.tags} links={synProfile?.links} image={synThumb ?? undefined} />
           {toc.length > 0 && (

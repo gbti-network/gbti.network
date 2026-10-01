@@ -10,13 +10,13 @@
 //
 // src/lib/banner-presets.mjs stays a separate explicit list ON PURPOSE: dropping a family here must never drop
 // a banner option, because published frontmatter naming it would then fail the schema enum.
-// test/project-categories.test.mjs holds the two lists (and gbti-v3.css's hero rules) in agreement.
+// test/project-categories.test.mjs holds the two lists (and gbti-v3-detail.css's hero rules) in agreement.
 export const PROJECT_CATEGORIES = [
   { leaf: 'wordpress', key: 'wp', label: 'WordPress', glyph: 'g-wp', ca: '#2f63c0', cb: '#5a8de0', ct: '#eef3fc', cl: '#bcd0f0' },
   { leaf: 'ide-plugins', key: 'ide', label: 'IDE Plugins', glyph: 'g-ide', ca: '#6b4fb0', cb: '#9277d4', ct: '#f2eefb', cl: '#d6c9ee' },
   { leaf: 'mods', key: 'mod', label: 'Mods', glyph: 'g-mod', ca: '#b3791f', cb: '#d8a847', ct: '#fbf3e3', cl: '#ecd9ad' },
   { leaf: 'utilities', key: 'util', label: 'Utilities', glyph: 'g-util', ca: '#138178', cb: '#3bb0a4', ct: '#e7f5f3', cl: '#b6e0da' },
-  // Chip text measures 5.06:1 on its light tint (AA small text is 4.5). In dark mode gbti-v3.css draws the chip in
+  // Chip text measures 5.06:1 on its light tint (AA small text is 4.5). In dark mode gbti-v3-theme.css draws the chip in
   // `cb`, which measures 3.26:1 there, level with wordpress (3.64) and ide-plugins (3.34).
   { leaf: 'chrome-extensions', key: 'chrome', label: 'Chrome Extensions', glyph: 'g-chrome', ca: '#b83a2e', cb: '#e0584a', ct: '#fdeeec', cl: '#f3c4be' },
 ];

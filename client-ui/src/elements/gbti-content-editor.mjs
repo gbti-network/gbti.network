@@ -521,7 +521,7 @@ class GbtiContentEditor extends withEditorActions(withEditorMedia(withEditorRows
 
     // sow-174: the banner swatch row -- mutually exclusive with the image side of the SAME [data-cover]
     // control (resolveHero() only ever uses one or the other). Picking a swatch clears any staged image;
-    // doCoverImage (below) clears the swatch selection back the other way when a file is chosen.
+    // doCoverImage (editor-media.mjs) clears the swatch selection back the other way when a file is chosen.
     this.$$('[data-swatches]').forEach((row) => {
       const cover = row.closest('[data-cover]');
       const hidden = row.querySelector('[data-key="bannerPreset"]');

@@ -10,7 +10,7 @@
 // page; only the content arrives at runtime.
 //
 // The layout classes (.pd-*) and the two behaviours (contents scroll-spy, carousel) are both SHARED with the
-// published page (src/styles/gbti-v3.css and src/lib/pd-enhance.mjs), which is what keeps the two in step.
+// published page (src/styles/gbti-v3-detail.css and src/lib/pd-enhance.mjs), which is what keeps the two in step.
 //
 // noindex + member-only: the draft is read with the member's own credentialed session from
 // GET /membership/drafts, so a signed-out visitor gets nothing. Live-data regions (favorite counts,
@@ -152,7 +152,7 @@ const labelOf = CATEGORY_LABELS;
     /* The footnotes section is synthesized from definitions elsewhere in the document, so it has no source
        lines to edit and carries no data-blk. It is excluded by that alone; this only removes the cursor. */
     [data-pv-body].pv-editing .md-footnotes { cursor: default; }
-    /* The published page's .pd-toc and .pd-rail-links (gbti-v3.css) apply flex-direction:column straight to
+    /* The published page's .pd-toc and .pd-rail-links (gbti-v3-detail.css) apply flex-direction:column straight to
        their <a> children, because Astro renders those as direct children. Here every rail list lands one
        level deeper, inside a [data-pv-*] wrapper the runtime script fills in, so each wrapper needs the same
        column layout or its children fall back to inline flow and wrap like text. */

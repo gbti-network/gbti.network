@@ -1,6 +1,6 @@
 // The WorkBench Preview edits a paragraph in place: it renders the body with renderMarkdownWithBlocks, lets the
 // author type into the rendered block, then reads that block back with inlineHtmlToMd and splices the result over
-// the block's source line (src/pages/workbench/preview.astro commitBlock). That only works if the SITE renderer and
+// the block's source line (src/lib/preview-edit.ts commitBlock, the preview page's edit half). That only works if the SITE renderer and
 // inlineHtmlToMd are inverses of each other. They were not, and nothing tested the pair: test/inline-md.test.mjs
 // guards inlineMdToHtml <-> inlineHtmlToMd, which is a DIFFERENT pair used by the doc editor.
 //

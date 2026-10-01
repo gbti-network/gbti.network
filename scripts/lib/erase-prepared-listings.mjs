@@ -1,5 +1,5 @@
-// sow-427: right-to-erasure for PREPARED LISTINGS. Its own module because scripts/lib/erase-member.mjs is over the
-// 900-line cap; that file carries only the import, one runStep line and one plan entry.
+// sow-427: right-to-erasure for PREPARED LISTINGS. Its own module because scripts/lib/erase-member.mjs was over the
+// 900-line cap when this was written; that file carries only the import, one runStep line and one plan entry.
 //
 // WHY A SWEEP. A prepared listing is keyed by a listing id and an invite by its code, so neither key can be computed
 // from a github_id. The member appears only INSIDE records, in four roles, and each is handled differently:

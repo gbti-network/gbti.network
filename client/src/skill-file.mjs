@@ -1,5 +1,5 @@
 // sow-109 Phase 5: a skill's own file, SKILL.md beside its index.md, travels with every publish. Node-free and pure, so
-// the website publisher (src/lib/workbench-client.ts) and the npm / agent publisher (operations-publish.mjs) decide the
+// the website publisher (src/lib/workbench-client-publish.ts) and the npm / agent publisher (operations-publish.mjs) decide the
 // same writes and deletes, and the tests exercise the decision rather than two copies of it.
 //
 // The rules mirror the content check (scripts/validate-content.mjs checkSkillFile), so a publish the client lets

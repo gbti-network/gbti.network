@@ -79,7 +79,7 @@
   --maxw: 1180px;
   --gut: 40px;
 
-  /* tooltips (custom, theme-aware hover labels — see the [data-tooltip] block below) */
+  /* tooltips (custom, theme-aware hover labels; the [data-tooltip] block is in gbti-v3-theme.css) */
   --tooltip-bg:     #1c1a21;            /* near-ink bubble on light surfaces */
   --tooltip-fg:     #f5f4f2;
   --tooltip-border: rgba(255,255,255,.10);
@@ -645,3 +645,7 @@ section { position: relative; }
   .tbl-grid > div { padding: 12px 10px; }
 }
 
+
+/* The design system continues in gbti-v3-theme.css, gbti-v3-feed.css, gbti-v3-detail.css and gbti-v3-article.css,
+   loaded in that order by global.css (split at the 900-line limit, 2026-09-30). A rule named "in gbti-v3.css"
+   elsewhere may live in one of them. */

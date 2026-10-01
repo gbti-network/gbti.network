@@ -1,7 +1,7 @@
 // SOW-053 Part B: surface auto-merge conflicts. A member content PR that GitHub marks conflicting (mergeable_state
 // "dirty") cannot auto-publish, and today that stalls SILENTLY. These PURE helpers classify a PR's merge state,
 // detect whether we have already surfaced it (idempotency), and build the one-time @-mention comment. Node-free,
-// no network, so they unit-test without a harness. The reconcile sweep (scripts/reconcile.mjs) calls them.
+// no network, so they unit-test without a harness. The reconcile sweep calls them (surfaceConflicts in scripts/lib/reconcile-enact.mjs).
 //
 // Why a member's fix is just "re-publish": the GBTI client loads the file FRESH from upstream for editing, so
 // re-publishing re-reads the latest (now-conflicting) version, re-applies the member's edit, and the updated branch

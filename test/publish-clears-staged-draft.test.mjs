@@ -77,7 +77,7 @@ test('the workspace clears ITS copy of staged, which is re-fed into load on ever
   const s = workspaceSource();
   const line = s.split('\n').find((l) => l.includes("addEventListener('gbti-published'"));
   assert.match(line, /_editing\.staged = false/,
-    'line ~641 re-feeds { staged: e.staged } into load(), so clearing only the editor would be undone');
+    'gbti-workspace.mjs re-feeds { staged: e.staged } into load() on every workspace render, so clearing only the editor would be undone');
 });
 
 // ---------------------------------------------------------------- the banner says only what it knows

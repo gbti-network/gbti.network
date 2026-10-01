@@ -3,7 +3,7 @@
 // in node without a browser.
 //
 // Why this exists: `gallery` is a `kind: 'json'` field, and the editor used to render it through the generic
-// json control. An ARRAY value is comma-joined for display (gbti-content-editor.mjs, the `v` expression), so
+// json control. An ARRAY value is comma-joined for display (editor-fields.mjs fieldHtml, the `v` expression), so
 // the textarea showed `./images/a.webp, ./images/b.webp`, and gather()'s coerceValue('json', ...) then
 // JSON.parse'd that string and threw. Every project with screenshots was unsaveable, and Preview (whose
 // gather() sits outside a try) was a dead button. The fix mirrors the links[] structured rows: a hidden json
