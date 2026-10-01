@@ -8,7 +8,7 @@ import { discordJoinEligibility } from './signup.mjs'; // sow-356: the shared Di
 import { buildEnvPriceTierMap } from '../../membership/tier-gate.mjs'; // sow-185: price -> tier map for the Creator badge
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
-import { inviteListingRead, inviteListingImage } from './prepared-claim-read.mjs'; // sow-427: the signed-out read of a prepared listing by its code
+import { inviteListingRead, inviteListingImage, inviteTitleRead } from './prepared-claim-read.mjs'; // sow-427: the signed-out read of a prepared listing by its code
 import { membershipClaimStatus, membershipClaimPost } from './membership-claim.mjs'; // sow-427: claiming a prepared listing
 import { sendListingClaimedAlert } from './listing-claimed-alert.mjs'; // sow-427: the owner notice when a claim merges
 import { sendEditorialQueueAlert } from './editorial-alert.mjs'; // sow-323
@@ -161,10 +161,13 @@ export async function handleMemberRoutes(request, env, ctx, { pathname, method }
   // sow-427: the SIGNED-OUT read of a prepared listing by the code in its link, for the claim page. Anonymous,
   // IP rate limited, and one identical 404 for every inactive case. The code is a bearer secret and the body is
   // about a person, so never cached, and varied on the bearer like the membership oracle.
-  if (pathname === '/invite/listing' || pathname === '/invite/listing-image') {
+  // sow-437: /invite/title is the personal title only, asked for by the site's edge function for the claim page head.
+  if (pathname === '/invite/listing' || pathname === '/invite/listing-image' || pathname === '/invite/title') {
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
     if (method === 'GET') {
-      const r = pathname === '/invite/listing' ? await inviteListingRead(request, env) : await inviteListingImage(request, env);
+      const r = pathname === '/invite/listing' ? await inviteListingRead(request, env)
+        : pathname === '/invite/title' ? await inviteTitleRead(request, env)
+          : await inviteListingImage(request, env);
       return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
     }
   }

@@ -249,3 +249,34 @@ export function projectUrl(siteBase, slug) {
   const base = String(siteBase || '').replace(/\/+$/, '');
   return `${base}/projects/${slug}/`;
 }
+
+// ---- the personal page title (sow-437) -------------------------------------------------------------------------
+
+/** The longest project short name the personal title carries, so a long title cannot crowd the name out of a tab. */
+export const TITLE_SHORT_NAME_MAX = 60;
+
+/**
+ * The project's short name for the personal title: its title up to the first colon ("Devote: A Distraction-Free
+ * Daily Devotional" gives "Devote"), else the whole title, cut back to a word boundary when it is too long.
+ */
+export function projectShortName(title) {
+  const full = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim() : '';
+  const head = full.split(':')[0].trim();
+  const short = head || full;
+  if (short.length <= TITLE_SHORT_NAME_MAX) return short;
+  const cut = short.slice(0, TITLE_SHORT_NAME_MAX + 1);
+  const space = cut.lastIndexOf(' ');
+  return (space > 0 ? cut.slice(0, space) : short.slice(0, TITLE_SHORT_NAME_MAX)).trim();
+}
+
+/**
+ * sow-437: the personal title of a live invitation, for the browser tab and link previews, for example "Rob, your
+ * Devote listing on GBTI Network". The owner chose name and project knowing a pasted link's preview then shows both.
+ * '' when either part is missing, so the caller keeps the generic title. Plain text: the caller escapes it for HTML.
+ */
+export function invitationTitle({ recipientName, title } = {}) {
+  const name = typeof recipientName === 'string' ? recipientName.replace(/\s+/g, ' ').trim() : '';
+  const short = projectShortName(title);
+  if (!name || !short) return '';
+  return `${name}, your ${short} listing on GBTI Network`;
+}

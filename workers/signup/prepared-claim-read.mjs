@@ -3,6 +3,8 @@
 //   GET /invite/listing?code=<CODE>                    -> 200 { ok, listing: publicListingView }  |  404 inactive
 //   GET /invite/listing-image?code=<CODE>&name=<file>  -> 200 { ok, name, dataBase64, contentType } | 404 inactive
 //
+//   GET /invite/title?code=<CODE>                      -> 200 { ok, title }                    | 404 inactive  (sow-437)
+//
 // Anyone may call these: the person the link was sent to has no account yet, and the claim page has to show them
 // the project before they decide. So the code IS the authorization (the bearer property sow-231 accepted), and the
 // route is built so that holding a wrong code teaches nothing:
@@ -29,11 +31,19 @@ import { readInvite } from './invites-store.mjs';
 import { readCouponsConfig } from './coupons.mjs';
 import { readListing, readListingImage } from './prepared-store.mjs';
 import { COUPON_CODE_RE, couponsFromParsed, normalizeCouponCode } from '../../membership/coupons.mjs';
-import { isListingId, isListingImageName, publicReadable, publicListingView } from '../../membership/prepared-listings.mjs';
+import { isListingId, isListingImageName, publicReadable, publicListingView, invitationTitle } from '../../membership/prepared-listings.mjs';
 
 /** The per-IP limits on the two public reads. An image page load asks for several images, so its limit is wider. */
 export const LISTING_READ_LIMIT = Object.freeze({ limit: 30, windowSeconds: 600, prefix: 'rl:listing-read:' });
 export const LISTING_IMAGE_LIMIT = Object.freeze({ limit: 120, windowSeconds: 600, prefix: 'rl:listing-img:' });
+/**
+ * sow-437: the personal title is asked for by the site's own edge function, whose calls may all arrive from one shared
+ * Cloudflare address, so this limit is wider than the page read's, and a call with no address is counted under one
+ * shared key instead of being refused. Going over it costs nothing but the personalization: the function then serves
+ * the generic title. The code space (about 49 bits) remains the control on guessing, as it is for the page read.
+ */
+export const LISTING_TITLE_LIMIT = Object.freeze({ limit: 60, windowSeconds: 600, prefix: 'rl:listing-title:' });
+const SHARED_EDGE_KEY = 'edge';
 
 /** The one answer for every case that is not a readable listing. A fresh object each time, never shared state. */
 export const inactiveResponse = () => ({ status: 404, body: { ok: false, error: 'inactive' } });
@@ -44,13 +54,13 @@ const msOf = (now) => (now instanceof Date ? now.getTime() : new Date(now).getTi
  * The invite and listing a public request may read, or the response to send instead. In this order: the code's
  * shape (no KV), the per-IP limit, the invite, the listing it names, then publicReadable over both.
  */
-async function readable(request, env, { kv, now, limiter, limit }) {
+async function readable(request, env, { kv, now, limiter, limit, ipFallback = '' }) {
   if (!kv) return { res: { status: 503, body: { ok: false, error: 'unavailable' } } };
   const params = new URL(request.url).searchParams;
   const code = normalizeCouponCode(params.get('code'));
   if (!COUPON_CODE_RE.test(code)) return { res: inactiveResponse() };
 
-  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const ip = request.headers.get('CF-Connecting-IP') || ipFallback;
   let rl;
   try { rl = await limiter({ kv, ip, ...limit, now: msOf(now) }); } catch { rl = null; }
   if (!rl?.allowed) return { res: { status: 429, body: { ok: false, error: 'rate_limited' } } };
@@ -88,4 +98,17 @@ export async function inviteListingImage(request, env, { kv = env?.SIGNUP_KV, no
   const img = await readListingImage(kv, r.listing.id, name);
   if (!img) return inactiveResponse();
   return { status: 200, body: { ok: true, name, dataBase64: img.dataBase64, contentType: img.contentType } };
+}
+
+/**
+ * GET /invite/title?code= (sow-437): the personal title of a live invitation, and nothing else, for the site's edge
+ * function to put in the page title and the link-preview tags. Every inactive case answers the same 404 as the page
+ * read, so a dead link keeps the generic title. Never logged.
+ */
+export async function inviteTitleRead(request, env, { kv = env?.SIGNUP_KV, now = new Date(), limiter = rateLimit } = {}) {
+  const r = await readable(request, env, { kv, now, limiter, limit: LISTING_TITLE_LIMIT, ipFallback: SHARED_EDGE_KEY });
+  if (r.res) return r.res;
+  const title = invitationTitle({ recipientName: r.listing.recipientName, title: r.listing.frontmatter?.title ?? r.listing.title });
+  if (!title) return inactiveResponse();
+  return { status: 200, body: { ok: true, title } };
 }
