@@ -18,6 +18,7 @@ import {
 } from '../membership/digest-config-edits.mjs';
 import { buildDigestConfigMirror, resolveDigestConfig } from '../membership/digest-config.mjs';
 import { ADMIN_ACTIONS_SERVED } from '../workers/signup/membership-admin-author.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 const at = (rel) => fileURLToPath(new URL(rel, import.meta.url));
 const read = (rel) => fs.readFileSync(at(rel), 'utf8');
@@ -221,7 +222,7 @@ test('WIRING: the two rows use FIXED branch names, so one file does not race its
 });
 
 test('WIRING: the pool read is reachable on every host', () => {
-  assert.match(read('../workers/signup/index.mjs'), /'\/membership\/admin\/digest-config': membershipAdminDigestConfig/);
+  assert.match(workerSource(), /'\/membership\/admin\/digest-config': membershipAdminDigestConfig/);
   assert.match(readWebsiteClient(), /workerGet\('\/membership\/admin\/digest-config'\)/);
   assert.match(read('../client/src/api.mjs'), /'\/api\/digest-config'/);
   assert.match(read('../extension/src/ext-dispatch.mjs'), /'\/api\/digest-config'/);

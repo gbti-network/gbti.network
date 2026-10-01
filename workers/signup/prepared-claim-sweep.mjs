@@ -1,6 +1,6 @@
 // sow-427 amendment 2: FINALIZE A CLAIM WITHOUT A WATCHER. A claimant can publish and close the tab, and a superadmin
 // may not open the manager for weeks, so nothing on a page is guaranteed to notice that a claim's pull request merged
-// (or closed). This sweep runs on the Worker's existing five-minute tick (drainFiveMinute in index.mjs) and brings the
+// (or closed). This sweep runs on the Worker's existing five-minute tick (drainFiveMinute in cron.mjs) and brings the
 // publishing listings up to date, a rotating batch at a time, through the same finalizeIfMerged the page and the
 // manager use.
 //

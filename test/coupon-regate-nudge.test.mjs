@@ -10,8 +10,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { workerSource } from './lib/worker-source.mjs';
 
-const SRC = readFileSync(new URL('../workers/signup/index.mjs', import.meta.url), 'utf8');
+const SRC = workerSource(); // the Worker entry and the modules split out of it (this block is in signup-routes.mjs)
 const code = (s) => s.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
 const C = code(SRC);
 

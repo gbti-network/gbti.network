@@ -17,6 +17,7 @@ import {
   INQUIRY_LIMITS, INQUIRY_TTL_SECONDS, INQUIRY_PREFIX,
 } from '../membership/sponsor-inquiry.mjs';
 import { handleSponsorInquiry, listSponsorInquiries } from '../workers/signup/sponsor-inquiry.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 const at = (rel) => fileURLToPath(new URL(rel, import.meta.url));
 const read = (rel) => fs.readFileSync(at(rel), 'utf8');
@@ -260,7 +261,7 @@ test('an unreadable store reports that rather than an empty list', async () => {
 // ---- wiring --------------------------------------------------------------------------------------------
 
 test('WIRING: both routes are registered and the read is superadmin', () => {
-  const idx = read('../workers/signup/index.mjs');
+  const idx = workerSource();
   assert.match(idx, /pathname === '\/sponsorship\/inquiry'/);
   assert.match(idx, /'\/membership\/admin\/sponsor-inquiries': listSponsorInquiries/);
   assert.match(read('../workers/signup/sponsor-inquiry.mjs'), /authorize = authorizeSuperadmin/);

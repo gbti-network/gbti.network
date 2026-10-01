@@ -9,6 +9,7 @@ import { membershipAdminAuthor } from '../workers/signup/membership-admin-author
 import { membershipAdminCtaPool, ctaAddInput, ctaUpdateInput, ctaToggleInput, ctaAssignInput } from '../workers/signup/membership-admin-ctas.mjs';
 import { CTA_LIMITS } from '../membership/cta-edits.mjs';
 import { WORKER_ADMIN_ACTIONS } from '../client/src/admin-worker-actions.mjs'; // sow-274: the one action table both hosts read
+import { workerSource } from './lib/worker-source.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const env = { GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM', UPSTREAM_REPO: 'gbti-network/gbti.network', MEMBERSHIP_AUTHOR_ENABLED: 'true' };
@@ -181,7 +182,7 @@ test('every CTA op row in the Worker is ranked superadmin and points at house/ct
     assert.ok(m, `${op} row present in CONFIG_OP with the house/ctas.yml path`);
     assert.equal(m[1], 'superadmin', `${op} must be superadmin`);
   }
-  const idx = fs.readFileSync(path.join(ROOT, 'workers/signup/index.mjs'), 'utf8');
+  const idx = workerSource();
   const at = idx.indexOf("pathname === '/membership/admin/cta-pool'");
   assert.ok(at > 0, 'the cta-pool route exists');
   assert.match(idx.slice(at, at + 600), /'Cache-Control': 'no-store'/);

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+import { workerSource } from './lib/worker-source.mjs';
 
 const NEW_MODULES = [
   'workers/signup/github-user-lookup.mjs',
@@ -39,11 +40,12 @@ test('no new module logs anything: the code is a bearer secret, and the title, g
 });
 
 test('the route lines added to the Worker log nothing either', () => {
-  const idx = read('workers/signup/index.mjs');
+  const idx = workerSource();
   for (const route of ["pathname === '/membership/admin/prepared'", "pathname === '/invite/listing'"]) {
     const at = idx.indexOf(route);
     assert.ok(at > 0, `${route} is routed`);
-    const end = idx.indexOf('      if (pathname ===', at + route.length);
+    // The route groups hold their blocks at two spaces, so the next block starts a line there.
+    const end = idx.indexOf('\n  if (pathname ===', at + route.length);
     const blockSrc = idx.slice(at, end > at ? end : at + 1200);
     assert.doesNotMatch(blockSrc, /\bconsole\.|\bwlog\(/, `${route}: no logging on this route`);
   }

@@ -12,6 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
+import { workerSource, WORKER_FILES } from './lib/worker-source.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -19,8 +20,8 @@ const ROUTE = '/membership/admin/editorial';
 const HOST_ROUTE = '/api/editorial';
 
 test('the Worker serves both verbs of the queue, superadmin only, and never caches them', () => {
-  const idx = read('workers/signup/index.mjs');
-  assert.ok(idx.includes(`pathname === '${ROUTE}'`), `index.mjs has no route for ${ROUTE}`);
+  const idx = workerSource();
+  assert.ok(idx.includes(`pathname === '${ROUTE}'`), `the Worker has no route for ${ROUTE}`);
   const block = idx.slice(idx.indexOf(`pathname === '${ROUTE}'`), idx.indexOf(`pathname === '${ROUTE}'`) + 1400);
   assert.match(block, /editorialList\(request, env/, 'the GET handler is not called');
   assert.match(block, /editorialDecide\(request, env/, 'the POST handler is not called');
@@ -86,7 +87,8 @@ test('the retired application lane is gone from every host', () => {
   ]) assert.equal(existsSync(new URL(gone, ROOT)), false, `${gone} is retired and must not be back`);
 
   for (const [file, what] of [
-    ['workers/signup/index.mjs', 'the Worker still routes the retired lane'],
+    // Every file of the Worker entry, since index.mjs was split at the 900-line limit: a route can sit in any of them.
+    ...WORKER_FILES.map((f) => [f, 'the Worker still routes the retired lane']),
     ['client-ui/src/client.mjs', 'the shared client still calls it'],
     ['client/src/api.mjs', 'the npm host still routes it'],
     ['client/src/operations-admin.mjs', 'the operations still carry it'],

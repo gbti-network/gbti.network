@@ -11,7 +11,7 @@
 //   - the cookie branch opens only because the route asks for it (allowCookie), never by default.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { workerSource } from './lib/worker-source.mjs';
 import worker from '../workers/signup/index.mjs';
 import { handleSyndicationTracker, handleSyndicationApprove, handleSyndicationCancel } from '../workers/signup/syndication-admin.mjs';
 import { handleSocialQueueGet, handleSocialQueueAction } from '../workers/signup/social-queue-admin.mjs';
@@ -149,7 +149,7 @@ test('the Worker routes answer the website with credentialed CORS and pass the s
 });
 
 test('the routes table names all five and opts every one into the cookie session', () => {
-  const idx = readFileSync(new URL('../workers/signup/index.mjs', import.meta.url), 'utf8');
+  const idx = workerSource();
   const start = idx.indexOf('const SYNDICATION_ROUTES = {');
   assert.ok(start > 0, 'the syndication routes table is missing');
   const block = idx.slice(start, start + 1400);

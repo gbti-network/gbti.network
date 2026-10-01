@@ -12,6 +12,7 @@ import { draftImageKey } from '../membership/draft-images.mjs';
 import { membershipClaimPost } from '../workers/signup/membership-claim.mjs';
 import { listingKey, listingImageKey, listingState, LISTING_STATE } from '../membership/prepared-listings.mjs';
 import * as F from './prepared-claim-fixtures.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 const NOW = new Date('2026-10-01T12:00:00.000Z');
 const LATER = new Date('2026-10-02T12:00:00.000Z');
@@ -557,7 +558,7 @@ const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8'
 const block = (src, route, len = 1300) => src.slice(src.indexOf(route), src.indexOf(route) + len);
 
 test('the admin route: both verbs, the cookie session with credentialed CORS, and never cached', () => {
-  const idx = read('workers/signup/index.mjs');
+  const idx = workerSource();
   const b = block(idx, "pathname === '/membership/admin/prepared'");
   assert.ok(b.length > 100, 'the route exists');
   // sow-427 C2 (builder 3): the GET passes the claim module's finalize hook, so the manager finalizes publishing rows.
@@ -571,7 +572,7 @@ test('the admin route: both verbs, the cookie session with credentialed CORS, an
 });
 
 test('the public read routes: wildcard CORS with no credentials, no-store and Vary on the bearer', () => {
-  const idx = read('workers/signup/index.mjs');
+  const idx = workerSource();
   const b = block(idx, "pathname === '/invite/listing'", 700);
   assert.match(b, /pathname === '\/invite\/listing-image'/);
   assert.match(b, /inviteListingRead\(request, env\)/);

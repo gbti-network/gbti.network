@@ -8,6 +8,7 @@ import { compileWeeklyIssue } from '../workers/signup/mail-compile.mjs';
 import { getIssue, putIssue } from '../workers/signup/mail-store.mjs';
 import { subscriberKey } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 test('days since the last issue are read from the issue ids, newest earlier issue only', () => {
   assert.equal(daysSinceLastIssue(['weekly-2026-09-14', 'weekly-2026-09-21'], 'weekly-2026-09-22'), 1);
@@ -79,8 +80,7 @@ test('a re-run on the day an issue already exists is still the idempotent reuse,
 });
 
 test('WIRING: the scheduled weekly job passes the hold, or none of the above reaches the cron', async () => {
-  const fs = await import('node:fs');
-  const src = fs.readFileSync(new URL('../workers/signup/index.mjs', import.meta.url), 'utf8');
+  const src = workerSource(); // the job is defined in cron.mjs since the 900-line split
   const job = src.slice(src.indexOf('const WEEKLY_DIGEST_JOB'), src.indexOf("label: 'weekly digest compile'"));
   assert.ok(job.length > 0, 'the job definition must be found, or this checks nothing');
   assert.match(job, /compileWeeklyIssue\(env, \{ minGapDays: 6 \}\)/);

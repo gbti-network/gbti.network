@@ -13,8 +13,7 @@ import { sanitizeSponsorHtml, sponsorText } from '../membership/mail-sponsor-san
 import { resolveDigestConfig, DEFAULT_CTA } from '../membership/digest-config.mjs';
 import { TIER, tierLabel } from '../membership/tiers.mjs';
 import { mailDrainDeps } from '../workers/signup/index.mjs';
-import fs from 'node:fs';
-const fsReadRoot = (rel) => fs.readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
+import { workerSource } from './lib/worker-source.mjs';
 
 const ISSUE = {
   layout: [{ key: 'articles', title: 'Articles', items: [{ title: 'A post', url: 'https://gbti.network/articles/x/' }] }],
@@ -255,7 +254,7 @@ test('sow-266 WIRING: the composition root READS the setting, or none of this re
   // clickBase, because every other test built its own ctx by hand. The same hole applies here: every case
   // above injects digestConfig directly, so without this one, deleting the KV read would change nothing that
   // any test can see and the owner's copy would silently never ship.
-  const src = fsReadRoot('workers/signup/index.mjs');
+  const src = workerSource(); // mailDrainDeps is defined in cron.mjs since the 900-line split
   assert.match(src, /env\.SIGNUP_KV\?\.get\(DIGEST_CONFIG_KV_KEY, 'json'\)/, 'it reads the mirror');
   assert.match(src, /renderMailIssue\(issue, \{ siteUrl, clickBase, webBase: clickBase, digestConfig, audience: audienceOf\(ctx\.subscriber\), \.\.\.ctx \}\)/, 'and hands it to every render');
 });

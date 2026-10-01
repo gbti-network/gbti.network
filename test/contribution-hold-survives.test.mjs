@@ -18,6 +18,7 @@ import { shouldAutoClose, shouldAutoMerge } from '../scripts/pr-gate.mjs';
 import { readFileSync } from 'node:fs';
 import { TOOLS } from '../client/src/mcp-tools.mjs';
 import { createRepoClient } from '../client/src/github-repo.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 const PAID = { status: 'paid' };
 const OTHER = ['members/someone-else/posts/x/index.md'];
@@ -76,7 +77,7 @@ test('no GBTI surface offers contribution review any more', () => {
   }
   assert.doesNotMatch(read('client-ui/src/client.mjs'), /\b(listContributions|getContribution|reviewContribution)\s*:/);
 
-  const worker = read('workers/signup/index.mjs');
+  const worker = workerSource(); // every file of the Worker entry, since index.mjs was split at the 900-line limit
   for (const route of ["'/membership/pr'", "'/membership/pr-files'"]) {
     assert.equal(worker.includes(`pathname === ${route}`), false, `the network serves ${route} again`);
   }

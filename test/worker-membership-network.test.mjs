@@ -7,6 +7,7 @@ import {
   contentPathsFromTree, sharePathsFromTree, authorFromContentPath, mergeIndexAndUnlisted, unlistedItemFrom,
   readContentTree, listNetworkContent, listNetworkShares, TREE_CACHE_KEY,
 } from '../workers/signup/membership-network.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 const TREE = [
   { path: 'members/alice/posts/hello/index.md', type: 'blob' },
@@ -143,7 +144,7 @@ test('the two network routes accept the website cookie session, and both handler
   const path = await import('node:path');
   const root = path.resolve(new URL('..', import.meta.url).pathname);
   const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
-  const idx = read('workers/signup/index.mjs');
+  const idx = workerSource();
   assert.match(idx, /await listNetworkContent\(request, env, \{ allowCookie: true \}\) : await listNetworkShares\(request, env, \{ allowCookie: true \}\)/);
   const src = read('workers/signup/membership-network.mjs');
   assert.equal((src.match(/const superadmin = await authorizeSuper\(request, env, deps\);/g) || []).length, 2, 'both handlers pass their deps (allowCookie rides in them) to authorizeSuper');

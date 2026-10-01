@@ -4,8 +4,8 @@
 // read that file as `try { load } catch { rawCoupons = {} }`. So a missing, renamed or unparseable registry did
 // not fail the job: it mirrored an EMPTY coupon list over the live one at the next six-hourly tick, on a GREEN
 // Action run, because `written` only reports that the PUT succeeded. Every invite link in circulation would go
-// quiet inside six hours, and an unredeemable coupon drops SILENTLY at signup (workers/signup/index.mjs:311),
-// so the first sign of it would be nobody converting.
+// quiet inside six hours, and an unredeemable coupon drops SILENTLY at signup (handleStart in
+// workers/signup/signup-routes.mjs), so the first sign of it would be nobody converting.
 //
 // This is sow-213's hazard on a different store, so it takes sow-213's fix: a PROPERTY RATHER THAN A
 // DISCIPLINE. Nothing here depends on anyone remembering an ordering at the moment the writers invert.

@@ -10,6 +10,7 @@ import { skillInstallProblems } from '../membership/skill-install.mjs';
 import { membershipAdminAuthor } from '../workers/signup/membership-admin-author.mjs';
 import { membershipAdminSkillInstallPool } from '../workers/signup/membership-admin-skills.mjs';
 import { rankForPath } from '../membership/path-rank.mjs';
+import { workerSource } from './lib/worker-source.mjs';
 
 const src = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 const AI_RAW = src('house/ai-tools.yml');
@@ -168,7 +169,7 @@ test('the Worker read: superadmin only, every tool with its steps', async () => 
   const ok = await membershipAdminSkillInstallPool({}, env, deps({ ok: true, githubId: '1', role: 'superadmin' }));
   assert.equal(ok.status, 200);
   assert.deepEqual(ok.body.tools, skillInstallPool(STEPS, AI));
-  assert.match(src('workers/signup/index.mjs'), /'\/membership\/admin\/skill-install': membershipAdminSkillInstallPool,/);
+  assert.match(workerSource(), /'\/membership\/admin\/skill-install': membershipAdminSkillInstallPool,/);
 });
 
 test('every host reaches it, and only a superadmin sees the tab', () => {

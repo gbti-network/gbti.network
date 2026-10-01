@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseWorkspaceTab, parseWorkspaceEditShare, planHashRoute, visibleTabs, visibleTiles } from '../client-ui/src/workspace-core.mjs';
 import { workspaceSource } from './lib/workspace-source.mjs'; // the element and the two modules it was split into
+import { workerSource } from './lib/worker-source.mjs';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -79,7 +80,7 @@ test('sow-317: the Network scope pins: author filter + chips in the workspace, t
   // The foreign-path publish lives in workbench-client-publish.ts since the 900-line split; the rest stayed here.
   const web = read('src/lib/workbench-client.ts') + '\n' + read('src/lib/workbench-client-publish.ts');
   for (const lit of ['isForeignMemberPath(path, user)', "/membership/network-content?type=", "async networkShares()", "removeEnc.startsWith(`members/${owner}/_enc/`)"]) assert.ok(web.includes(lit), lit);
-  const worker = read('workers/signup/index.mjs');
+  const worker = workerSource();
   for (const lit of ["'/membership/network-content'", "'/membership/network-shares'"]) assert.ok(worker.includes(lit), lit);
 });
 

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+import { workerSource } from './lib/worker-source.mjs';
 
 const NEW_MODULES = [
   'workers/signup/hosted-commit.mjs',
@@ -63,10 +64,11 @@ test('no new module logs, except ONE fixed sentence in the alert with nothing in
 });
 
 test('the claim route line: credentialed CORS, the cookie session, never cached, the notice through waitUntil', () => {
-  const idx = read('workers/signup/index.mjs');
+  const idx = workerSource();
   const at = idx.indexOf("pathname === '/membership/claim'");
   assert.ok(at > 0, 'the claim route is wired');
-  const b = idx.slice(at, idx.indexOf('      if (pathname ===', at + 10));
+  // The route groups hold their blocks at two spaces (member-routes.mjs), so the next block starts a line there.
+  const b = idx.slice(at, idx.indexOf('\n  if (pathname ===', at + 10));
   assert.match(b, /corsHeaders\(request, env, \{ credentials: true \}\)/);
   assert.match(b, /membershipClaimStatus\(request, env, \{ allowCookie: true \}\)/);
   assert.match(b, /membershipClaimPost\(request, env, \{ allowCookie: true \}\)/);
@@ -78,7 +80,7 @@ test('the claim route line: credentialed CORS, the cookie session, never cached,
 });
 
 test('the finalize sweep rides the existing five-minute tick (no new cron), and returns into its logged result', () => {
-  const idx = read('workers/signup/index.mjs');
+  const idx = workerSource();
   const fn = idx.slice(idx.indexOf('async function drainFiveMinute('), idx.indexOf('const WEEKLY_DIGEST_JOB'));
   assert.match(fn, /await sweepPreparedClaims\(env\)/);
   assert.match(fn, /return \{[^}]*\bprepared\b[^}]*\}/);

@@ -1,5 +1,5 @@
 // SOW-166: the weekly-digest send engine, drained on the shared `*/5` cron tick alongside the syndication drain
-// (index.mjs composes both). The deliberate twin of workers/signup/syndication-drain.mjs: claim-before-send,
+// (cron.mjs composes both). The deliberate twin of workers/signup/syndication-drain.mjs: claim-before-send,
 // a per-recipient sent marker, and an attempts cap, all over the pure core membership/mail-queue.mjs. What the
 // mail drain adds over syndication:
 //   - a HARD, FAIL-CLOSED rate budget (sends-today + sends-this-month), so a lost counter read sends NOTHING

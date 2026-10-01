@@ -555,7 +555,7 @@ export async function compileWeeklyIssue(env, {
   // sow-312: both injectable so the two-edition split is unit-tested with fakes and no network.
   readEntitlement = defaultReadEntitlement,
   readMemberShares = enumerateShares,
-  // The SCHEDULED compile passes 6 (index.mjs): an issue within that many days of the last one is held for a
+  // The SCHEDULED compile passes 6 (cron.mjs): an issue within that many days of the last one is held for a
   // week, so moving the send day never mails two issues back to back. Absent (the admin's manual compile), no hold.
   minGapDays = null,
 } = {}) {
