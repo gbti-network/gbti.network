@@ -66,10 +66,10 @@ test('sow-433: the screenshot is the shipped asset, decorative, inside the angle
   assert.ok(size > 10_000 && size < 250_000, `the screenshot is a real, optimized image (${size} bytes)`);
 });
 
-test('sow-433: the copy the owner kept', () => {
+test('sow-433: the copy the owner kept (lead line rewritten by the owner, 2026-10-01)', () => {
   assert.match(bannerMarkup, /<span class="xbn-title">Launch the Chrome Extension<\/span>/);
   assert.match(bannerMarkup, /<span class="xbn-eyebrow">Thanks for paying attention<\/span>/);
-  assert.match(bannerMarkup, /<span class="xbn-lead">Every new tab opens on the network: what members are making, curated developer news, and a reader for all of it\.<\/span>/);
+  assert.match(bannerMarkup, /<span class="xbn-lead">Stay informed and up to date by installing our Chrome extension into your new tab page experience\.<\/span>/);
   assert.match(bannerMarkup, /<span class="xbn-note">Free · one click<\/span>/);
 });
 
