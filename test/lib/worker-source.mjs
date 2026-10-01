@@ -43,3 +43,24 @@ export function workerSource() {
   }
   return texts.join('\n');
 }
+
+/**
+ * One route's own block in the Worker source: from `marker` (a pathname test, or a route table) to the brace that
+ * closes its route block at the two-space route indent. A fixed-length window reads past the block into the next
+ * route, whose text can satisfy an assertion about this one; after the 900-line split it did (2026-09-30). Returns ''
+ * when the marker is absent, so the caller's presence check fails rather than this one throwing.
+ */
+export function routeBlock(src, marker) {
+  const at = src.indexOf(marker);
+  if (at < 0) return '';
+  const end = src.indexOf('\n  }', at);
+  return end < 0 ? '' : src.slice(at, end + 4);
+}
+
+/** The block replies with the credentialed CORS it builds: on the preflight and on `replies` responses, and the
+ *  wildcard MEMBERSHIP_CORS (which carries no cookie) nowhere. A block that only BUILDS `cors` proves nothing. */
+export function usesCredentialedCors(block, replies) {
+  return /headers: cors \}/.test(block)
+    && (block.match(/\{ \.\.\.cors, /g) || []).length === replies
+    && !/MEMBERSHIP_CORS/.test(block);
+}

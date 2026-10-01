@@ -12,7 +12,7 @@ import { draftImageKey } from '../membership/draft-images.mjs';
 import { membershipClaimPost } from '../workers/signup/membership-claim.mjs';
 import { listingKey, listingImageKey, listingState, LISTING_STATE } from '../membership/prepared-listings.mjs';
 import * as F from './prepared-claim-fixtures.mjs';
-import { workerSource } from './lib/worker-source.mjs';
+import { workerSource, routeBlock, usesCredentialedCors } from './lib/worker-source.mjs';
 
 const NOW = new Date('2026-10-01T12:00:00.000Z');
 const LATER = new Date('2026-10-02T12:00:00.000Z');
@@ -555,14 +555,9 @@ test('race: a claim taken while a revoke writes the invitation keeps its lock; a
 // ---- the Worker's route lines --------------------------------------------------------------------------------
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
-// A route's own block: from its pathname test to its closing brace at the route-block indent (two spaces). This was a
-// fixed-length window, which reads past the end of the block: after the 900-line split put a credentialed neighbour
-// right after the prepared route, the neighbour's `credentials: true` satisfied this route's assertion (2026-09-30).
-const block = (src, route) => {
-  const at = src.indexOf(route);
-  const end = at < 0 ? -1 : src.indexOf('\n  }', at);
-  return at < 0 || end < 0 ? '' : src.slice(at, end + 4);
-};
+// A route's own block (routeBlock): a fixed-length window read into the next route, whose `credentials: true`
+// then satisfied this route's assertion after the 900-line split (2026-09-30).
+const block = routeBlock;
 
 test('the admin route: both verbs, the cookie session with credentialed CORS, and never cached', () => {
   const idx = workerSource();
@@ -572,6 +567,7 @@ test('the admin route: both verbs, the cookie session with credentialed CORS, an
   assert.match(b, /membershipPreparedGet\(request, env, \{ allowCookie: true, finalize: preparedFinalizeHook\(env, ctx\) \}\)/);
   assert.match(b, /membershipPreparedPost\(request, env, \{ allowCookie: true \}\)/);
   assert.match(b, /credentials: true/);
+  assert.ok(usesCredentialedCors(b, 2), 'the preflight and both replies use the credentialed CORS, never the wildcard');
   assert.equal((b.match(/'Cache-Control': 'no-store'/g) || []).length, 2, 'no-store on both verbs');
   const src = read('workers/signup/membership-prepared-admin.mjs');
   assert.match(src, /authorize = authorizeSuperadmin/);

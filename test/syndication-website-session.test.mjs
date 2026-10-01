@@ -11,7 +11,7 @@
 //   - the cookie branch opens only because the route asks for it (allowCookie), never by default.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { workerSource } from './lib/worker-source.mjs';
+import { workerSource, routeBlock, usesCredentialedCors } from './lib/worker-source.mjs';
 import worker from '../workers/signup/index.mjs';
 import { handleSyndicationTracker, handleSyndicationApprove, handleSyndicationCancel } from '../workers/signup/syndication-admin.mjs';
 import { handleSocialQueueGet, handleSocialQueueAction } from '../workers/signup/social-queue-admin.mjs';
@@ -152,11 +152,12 @@ test('the routes table names all five and opts every one into the cookie session
   const idx = workerSource();
   const start = idx.indexOf('const SYNDICATION_ROUTES = {');
   assert.ok(start > 0, 'the syndication routes table is missing');
-  const block = idx.slice(start, start + 1400);
+  const block = routeBlock(idx, 'const SYNDICATION_ROUTES = {'); // the table and its dispatch, up to the route block's end
   for (const path of ['/membership/syndication', '/membership/syndication/approve', '/membership/syndication/cancel', '/membership/social-queue', '/membership/syndicate-now']) {
     assert.ok(block.includes(`'${path}'`), `${path} is not in the table`);
   }
   assert.match(block, /allowCookie: true/);
   assert.match(block, /credentials: true/);
   assert.match(block, /'Cache-Control': 'no-store'/);
+  assert.ok(usesCredentialedCors(block, 1), 'the preflight and the reply use the credentialed CORS, never the wildcard');
 });

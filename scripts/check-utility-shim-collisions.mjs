@@ -20,9 +20,10 @@
 // guard exists because the cause is still there for the next element that meets it.
 //
 // SELF-UPDATING. The shimmed names are read from the design system itself, not copied here. Remove an entry from
-// the shim and this guard stops flagging that property, with no edit. The design system is gbti-v3.css AND the
-// parts global.css imports after it (split at the 900-line limit, 2026-09-30): reading only the first part let a bare
-// rule added to any later part ship unseen, so the parts are read from global.css's own @import lines.
+// the shim and this guard stops flagging that property, with no edit. It reads EVERY stylesheet the site loads
+// unlayered: global.css, each sheet it @imports in order (gbti-v3.css and the parts it was split into at the 900-line
+// limit on 2026-09-30, prompt-kind.css), and any other sheet in src/styles a component imports directly. Reading only
+// gbti-v3.css let a bare rule added to any of the others ship unseen.
 //
 //   node scripts/check-utility-shim-collisions.mjs
 
@@ -109,13 +110,15 @@ function walk(dir, exts) {
   return out;
 }
 
-/** The design-system stylesheets, in load order: gbti-v3.css and every `@import "./gbti-v3*.css"` global.css makes. */
-export function designSystemFiles(root) {
+/** Every stylesheet the site loads unlayered: global.css, each local sheet it @imports (in load order, gbti-v3.css
+ *  first), then any other sheet in src/styles that a component imports directly. */
+export function siteStylesheets(root) {
   const dir = path.join(root, 'src/styles');
   const global = fs.readFileSync(path.join(dir, 'global.css'), 'utf8');
-  const files = [...global.matchAll(/^@import "\.\/(gbti-v3[\w-]*\.css)";/gm)].map((m) => path.join(dir, m[1]));
-  if (path.basename(files[0] || '') !== 'gbti-v3.css') throw new Error(`global.css no longer imports gbti-v3.css first (found ${files.map((f) => path.basename(f)).join(', ') || 'nothing'}), so this guard would read no shim`);
-  return files;
+  const imported = [...global.matchAll(/^@import "\.\/([\w-]+\.css)";/gm)].map((m) => m[1]);
+  if (imported[0] !== 'gbti-v3.css') throw new Error(`global.css no longer imports gbti-v3.css first (found ${imported.join(', ') || 'nothing'}), so this guard would read no shim`);
+  const rest = fs.readdirSync(dir).filter((f) => f.endsWith('.css') && f !== 'global.css' && !imported.includes(f)).sort();
+  return ['global.css', ...imported, ...rest].map((f) => path.join(dir, f));
 }
 
 /** Scan a source tree. `cssFile` is one stylesheet or a list (the design system's parts). Returns { errors, scanned }
@@ -151,7 +154,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
   const { errors, scanned, shimmed, note } = checkTree({
     root: ROOT,
-    cssFile: designSystemFiles(ROOT),
+    cssFile: siteStylesheets(ROOT),
     srcDir: path.join(ROOT, 'src'),
   });
   if (note) { console.log('· ' + note); process.exit(0); }

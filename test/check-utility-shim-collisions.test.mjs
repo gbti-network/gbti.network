@@ -12,13 +12,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  shimmedNames, classLists, collisionsIn, baseName, checkTree, GROUPS, designSystemFiles,
+  shimmedNames, classLists, collisionsIn, baseName, checkTree, GROUPS, siteStylesheets,
 } from '../scripts/check-utility-shim-collisions.mjs';
 import os from 'node:os';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
-// The whole design system, not its first file: it was split into ordered parts at the 900-line limit (2026-09-30).
-const CSS = designSystemFiles(ROOT);
+// Every stylesheet the site loads unlayered, not only gbti-v3.css (split into ordered parts at the 900-line limit).
+const CSS = siteStylesheets(ROOT);
 
 const SHIM = '.grid { display: grid; }\n.flex { display: flex; }\n'
   + '.items-center{align-items:center}.items-start{align-items:flex-start}\n'
@@ -150,8 +150,12 @@ test('a shimmed rule in a LATER part of the design system is still seen, and the
   }
 });
 
-test('the design system is read from global.css in load order, all of its parts', () => {
-  const files = designSystemFiles(ROOT).map((f) => path.basename(f));
-  assert.equal(files[0], 'gbti-v3.css');
-  assert.ok(files.length >= 5, `only ${files.length} parts found: ${files.join(', ')}`);
+test('every stylesheet the site loads is read: global.css, its imports in load order, and the rest', () => {
+  const files = siteStylesheets(ROOT).map((f) => path.basename(f));
+  const parts = ['gbti-v3.css', 'gbti-v3-theme.css', 'gbti-v3-feed.css', 'gbti-v3-detail.css', 'gbti-v3-article.css'];
+  assert.equal(files[0], 'global.css');
+  assert.deepEqual(files.filter((f) => parts.includes(f)), parts, 'the design system parts, in the order global.css loads them');
+  for (const f of ['prompt-kind.css', 'feed-fold.css']) assert.ok(files.includes(f), `${f} is not read`);
+  const all = fs.readdirSync(path.join(ROOT, 'src/styles')).filter((f) => f.endsWith('.css'));
+  assert.deepEqual([...files].sort(), all.sort(), 'every sheet in src/styles is read exactly once');
 });

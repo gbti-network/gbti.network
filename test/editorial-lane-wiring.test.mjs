@@ -12,7 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { workerSource, WORKER_FILES } from './lib/worker-source.mjs';
+import { workerSource, WORKER_FILES, routeBlock, usesCredentialedCors } from './lib/worker-source.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -22,11 +22,12 @@ const HOST_ROUTE = '/api/editorial';
 test('the Worker serves both verbs of the queue, superadmin only, and never caches them', () => {
   const idx = workerSource();
   assert.ok(idx.includes(`pathname === '${ROUTE}'`), `the Worker has no route for ${ROUTE}`);
-  const block = idx.slice(idx.indexOf(`pathname === '${ROUTE}'`), idx.indexOf(`pathname === '${ROUTE}'`) + 1400);
+  const block = routeBlock(idx, `pathname === '${ROUTE}'`); // the route's own block, not a fixed window into the next one
   assert.match(block, /editorialList\(request, env/, 'the GET handler is not called');
   assert.match(block, /editorialDecide\(request, env/, 'the POST handler is not called');
   assert.match(block, /allowCookie: true/, 'the website admin page signs in by cookie, not by bearer token');
   assert.match(block, /credentials: true/, 'a cookie call needs credentialed CORS or the browser sends no cookie');
+  assert.ok(usesCredentialedCors(block, 2), 'the preflight and both replies must use that CORS, never the wildcard');
   assert.match(block, /'Cache-Control': 'no-store'/, 'a queue of unpublished member work must never be cached');
 
   const h = read('workers/signup/membership-editorial.mjs');

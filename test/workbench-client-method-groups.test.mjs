@@ -21,8 +21,9 @@ const CLIENT = path.join(ROOT, 'src/lib/workbench-client.ts');
 // The groups spread into the client's returned object, with the module that defines each.
 const GROUPS = { adminMethods: 'src/lib/workbench-client-admin.ts', preparedMethods: 'src/lib/workbench-prepared.ts' };
 
-/** The client's OWN method names: the non-spread keys of the object literal that spreads the groups in. */
-export function ownMethodNames(tsSource) {
+/** The client's OWN method names (the non-spread keys of the object literal that spreads the groups in), and every
+ *  spread in it that is NOT a known group: a new group, or a spread of a plain object, whose names this test cannot see. */
+export function readReturnedLiteral(tsSource) {
   const js = esbuild.transformSync(tsSource, { loader: 'ts', format: 'esm', target: 'es2022' }).code;
   const ast = acorn.parse(js, { ecmaVersion: 'latest', sourceType: 'module' });
   let found = null;
@@ -38,7 +39,11 @@ export function ownMethodNames(tsSource) {
     }
   })(ast);
   if (!found) return null;
-  return found.properties.filter((p) => p.type === 'Property').map((p) => p.key.name ?? p.key.value);
+  return {
+    own: found.properties.filter((p) => p.type === 'Property').map((p) => p.key.name ?? p.key.value),
+    unknownSpreads: found.properties.filter((p) => p.type === 'SpreadElement' && !(p.argument?.callee?.name in GROUPS))
+      .map((p) => js.slice(p.start, p.end).slice(0, 60)),
+  };
 }
 
 /** Each group's method names, by running it for a member and for a superadmin (some names exist only for one). */
@@ -73,8 +78,10 @@ export function clashes(own, groups) {
 }
 
 test('no method is defined both by the WorkBench client and by a group spread into it, or by two groups', async () => {
-  const own = ownMethodNames(fs.readFileSync(CLIENT, 'utf8'));
-  assert.ok(own && own.length > 40, `the client's own methods were not found (${own?.length ?? 'no literal'}), so this proved nothing`);
+  const lit = readReturnedLiteral(fs.readFileSync(CLIENT, 'utf8'));
+  assert.ok(lit && lit.own.length > 40, `the client's own methods were not found (${lit?.own.length ?? 'no literal'}), so this proved nothing`);
+  assert.deepEqual(lit.unknownSpreads, [], 'a spread this test does not know: add its factory to GROUPS so its names are checked');
+  const own = lit.own;
   const groups = await groupNames();
   for (const [g, names] of Object.entries(groups)) assert.ok(names.size > 3, `${g} yielded ${names.size} methods, so this proved nothing`);
   assert.deepEqual(clashes(own, groups), [], 'a later definition silently replaces an earlier one');
@@ -84,7 +91,14 @@ test('the check sees a clash between the client and a group (control)', async ()
   const groups = await groupNames();
   const adminName = [...groups.adminMethods][0];
   const planted = fs.readFileSync(CLIENT, 'utf8').replace('    ...adminMethods(', `    ${adminName}() { return null; },\n    ...adminMethods(`);
-  const own = ownMethodNames(planted);
+  const { own } = readReturnedLiteral(planted);
   assert.ok(own.includes(adminName), 'the planted method was read');
   assert.deepEqual(clashes(own, groups), [`${adminName}: the client, adminMethods`]);
+});
+
+test('a spread the test does not know is reported, not skipped (control)', () => {
+  const src = fs.readFileSync(CLIENT, 'utf8');
+  const planted = src.replace('    ...adminMethods(', '    ...newGroupMethods({ workerGet }),\n    ...EXTRA,\n    ...adminMethods(');
+  assert.deepEqual(readReturnedLiteral(planted).unknownSpreads.length, 2);
+  assert.deepEqual(readReturnedLiteral(src).unknownSpreads, []);
 });
