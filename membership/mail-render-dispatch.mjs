@@ -1,5 +1,5 @@
 // SOW-186 phase 4: the kind dispatcher for the injected `renderIssue` seam. Exported so the ONE line that runs
-// in production (workers/signup/index.mjs `mailDrainDeps`) is the SAME line the tests exercise, instead of a
+// in production (workers/signup/cron.mjs `mailDrainDeps`) is the SAME line the tests exercise, instead of a
 // hand-copy in the test that can silently drift from the real one (QAmaster, 2026-08-22).
 //
 // This is ROUTING between two independent renderers, NOT a hoist of a shared guard. The leak guard, the

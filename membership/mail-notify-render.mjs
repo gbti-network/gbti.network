@@ -1,5 +1,5 @@
 // SOW-186 phase 4 (DELIVERY): the follow-the-author notification email template, the notification-kind branch of
-// the injected `renderIssue` seam (workers/signup/index.mjs dispatches on issue.kind, so the digest renderer is
+// the injected `renderIssue` seam (the drain renderer that workers/signup/cron.mjs injects dispatches on issue.kind, so the digest renderer is
 // never touched). A notification issue announces ONE just-published item to a member who follows its author and
 // has turned the email channel on (resolveNotify, fail-closed OFF). It is a single-item message, not a weekly
 // roundup, so it ships its OWN lean shell rather than reusing the digest layout.

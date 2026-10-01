@@ -56,7 +56,7 @@ import { addFlagTerm, removeFlagTerm } from '../../membership/moderation-flags-e
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit } from '../../membership/syndication-template-edits.mjs'; // sow-161 B
 import yaml from 'js-yaml'; // already in the Worker bundle (content-ops)
 
-// Moved out at the 900-line limit and re-exported here, so workers/signup/index.mjs and the tests keep importing
+// Moved out at the 900-line limit and re-exported here, so workers/signup/admin-routes.mjs and the tests keep importing
 // them from this file: the house-file read helpers, and the read-only pool routes.
 export { leadingComment, loadHouseYaml } from './membership-admin-files.mjs';
 export {

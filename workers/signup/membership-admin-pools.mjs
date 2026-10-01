@@ -1,7 +1,7 @@
 // The read-only POOL routes of the admin surface (GET, no CSRF, fail-closed): the config pools the website
 // managers render (site settings, taxonomy, quotes, news sources, coupons) and the channel-map manager's six
 // superadmin reads. Moved here from membership-admin-author.mjs at the 900-line limit; that file re-exports
-// every route below, so workers/signup/index.mjs and the tests keep importing them from there.
+// every route below, so workers/signup/admin-routes.mjs and the tests keep importing them from there.
 
 import { authorizeAdmin, authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';

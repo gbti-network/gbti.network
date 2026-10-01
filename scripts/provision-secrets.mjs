@@ -63,7 +63,7 @@ const REGISTRY = [
   { name: 'GITHUB_APP_PRIVATE_KEY', targets: ['worker'], note: 'PEM (PKCS8 or RSA) signing key for the GitHub App JWT. Secret. Rotate by generating a new key in the App settings and revoking the old one; the App keeps working across the overlap.' },
 
   // NAME CORRECTED 2026-08-22. This row said MAIL_ADDRESS_KEY, which NOTHING READS. The Worker reads
-  // env.MAIL_EMAIL_KEY (workers/signup/mail-subscribe.mjs, workers/signup/index.mjs). A checklist that tracks a
+  // env.MAIL_EMAIL_KEY (workers/signup/mail-subscribe.mjs, workers/signup/cron.mjs). A checklist that tracks a
   // name the code does not read is worse than no row: provisioning MAIL_ADDRESS_KEY would report GREEN here while
   // the Worker still saw nothing, and subscribe would keep returning its neutral anti-enumeration response, so
   // every signup would look successful and no confirmation mail would ever arrive, with nothing going red.

@@ -174,7 +174,7 @@ test('renderNotificationEmail: a non-http(s) url is dropped to plain text, never
 });
 
 // ---------- renderMailIssue: the production dispatcher, BOTH branches through the REAL renderers ----------
-// This is the exact function workers/signup/index.mjs mailDrainDeps injects, so both branches are covered by the
+// This is the exact function workers/signup/cron.mjs mailDrainDeps injects, so both branches are covered by the
 // line that actually runs (QAmaster gap, 2026-08-22): the notification branch AND the digest branch (which nothing
 // exercised before, since the e2e only drives a notification issue).
 

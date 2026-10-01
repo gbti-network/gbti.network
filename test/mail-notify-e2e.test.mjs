@@ -51,7 +51,7 @@ function readFileFor(rel) {
   return null;
 }
 
-// The drain renders through renderMailIssue -- the EXACT dispatcher workers/signup/index.mjs mailDrainDeps
+// The drain renders through renderMailIssue -- the EXACT dispatcher workers/signup/cron.mjs mailDrainDeps
 // injects in production (exported for this reason, so the tested line is the production line, not a hand-copy).
 
 const resolveAddress = async (sub) => (sub && sub.hash ? `${sub.hash}@example.com` : null);

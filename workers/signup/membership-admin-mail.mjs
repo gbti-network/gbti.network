@@ -1,6 +1,6 @@
 // sow-166 follow-up (2026-08-23): ADMIN-GATED MANUAL MAIL TRIGGERS.
 //
-// WHY THIS EXISTS. compileWeeklyIssue and drainMail were reachable ONLY from the cron map in index.mjs
+// WHY THIS EXISTS. compileWeeklyIssue and drainMail were reachable ONLY from the cron map (CRON_JOBS, now in cron.mjs)
 // (`0 12 * * 2` / `0 13 * * 2` and `*/5 * * * *`). A deployed Worker offers no way to fire a scheduled handler by hand, so
 // the first end-to-end proof of the mail chain (compile -> enqueue -> drain -> a real message at a real
 // address) could not happen before the next weekly cron, and every subsequent re-proof, post-rotation
@@ -79,7 +79,7 @@ async function discardTestIssue(kv, issueId) {
  *   discard       delete a rehearsal issue (test- ids only).
  *
  * `drain` has NO in-module default: the drain's IO (Stripe address lookup, Resend, the renderer dispatch) is
- * composed in index.mjs, and duplicating that wiring here would create a second composition root that can
+ * composed in cron.mjs (mailDrainDeps), and duplicating that wiring here would create a second composition root that can
  * drift from the one the cron actually uses. An uninjected drain is reported as misconfigured, not improvised.
  */
 export async function membershipAdminMail(request, env, {

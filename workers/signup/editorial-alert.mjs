@@ -58,7 +58,7 @@ export async function sendEditorialQueueAlert(env, records, { sendEmail, selfTes
 
 /**
  * Tell an author their item was approved. The address comes from their Stripe customer, because the platform
- * stores no member address of its own (the same resolution the mail drain uses, mailDrainDeps in index.mjs).
+ * stores no member address of its own (the same resolution the mail drain uses, mailDrainDeps in cron.mjs).
  *
  * @param record the approved record.
  * @returns `{ sent, reason?, message? }`. Never throws.
